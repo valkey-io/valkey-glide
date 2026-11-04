@@ -4,7 +4,7 @@
 
 ### Features
 
-* Go: Add valkey-search 1.3 support — FT.SEARCH/FT.CREATE/FT.AGGREGATE additions (`InKeys`, `Count`, `FLOAT16`/`BFLOAT16` vector types, `FtCreateOptions.Filter`/`ScoreField`/`NoHighlight`, per-field `SetUnf`, typed aggregate reducers), scoring (`WithScores`/`Scorer`, `AddScores`), paged cursors (`FtAggregateWithCursor`/`FtHybridWithCursor`/`FtCursorRead`/`FtCursorDel`), `glideft.FtHybrid`/`FtHybridWithCursor` fusing a text/tag/numeric SEARCH arm with a VSIM vector-similarity arm, and `LOAD ... AS` renaming via `LoadFieldEntries` ([#7380](https://github.com/valkey-io/valkey-glide/pull/7380))
+* Go: Add valkey-search 1.3 support, including scoring, cursors, and `FT.HYBRID` ([#7380](https://github.com/valkey-io/valkey-glide/pull/7380))
 * All: Add support for Valkey 9.0 commands:
   * `DELIFEQ` ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Java, Node, Python, Go: Add support for Valkey 9.1 commands:

@@ -173,7 +173,11 @@ func (suite *GlideTestSuite) TestModuleFtSearchVectorRangeYieldDistanceAs() {
 		})
 	require.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(3), resultOr.TotalResults)
-	assert.Equal(suite.T(), map[string]bool{prefix + "0": true, prefix + "1": true, prefix + "3": true}, keySetFromDocs(resultOr.Documents))
+	assert.Equal(
+		suite.T(),
+		map[string]bool{prefix + "0": true, prefix + "1": true, prefix + "3": true},
+		keySetFromDocs(resultOr.Documents),
+	)
 
 	// Negation: everything NOT within radius 1 of the origin (excludes keys 0 and 1, leaves
 	// keys 2 and 3).
@@ -329,22 +333,43 @@ func (suite *GlideTestSuite) TestModuleFtAggregateSortByAdjacentLimitWidensRetai
 
 	// SORTBY + LIMIT 0 15, adjacent -> the 1.3 fix raises the retained window to 15 rows; below
 	// 1.3.0, the adjacent LIMIT does not widen SORTBY's own default-10 retention.
-	rows, err = glideft.ClusterFtAggregate(ctx, client, index, "*",
-		&options.FtAggregateOptions{Clauses: []options.FtAggregateClause{sortAsc, &options.FtAggregateLimit{Offset: 0, Count: 15}}})
+	rows, err = glideft.ClusterFtAggregate(
+		ctx,
+		client,
+		index,
+		"*",
+		&options.FtAggregateOptions{
+			Clauses: []options.FtAggregateClause{sortAsc, &options.FtAggregateLimit{Offset: 0, Count: 15}},
+		},
+	)
 	require.NoError(suite.T(), err)
 	assert.Len(suite.T(), rows, map[bool]int{true: 10, false: 15}[legacy])
 
 	// SORTBY MAX 5 + LIMIT 0 12, adjacent -> the 1.3 fix lets LIMIT outrank MAX; below 1.3.0,
 	// SORTBY's own MAX 5 still wins.
-	rows, err = glideft.ClusterFtAggregate(ctx, client, index, "*",
-		&options.FtAggregateOptions{Clauses: []options.FtAggregateClause{sortMax5, &options.FtAggregateLimit{Offset: 0, Count: 12}}})
+	rows, err = glideft.ClusterFtAggregate(
+		ctx,
+		client,
+		index,
+		"*",
+		&options.FtAggregateOptions{
+			Clauses: []options.FtAggregateClause{sortMax5, &options.FtAggregateLimit{Offset: 0, Count: 12}},
+		},
+	)
 	require.NoError(suite.T(), err)
 	assert.Len(suite.T(), rows, map[bool]int{true: 5, false: 12}[legacy])
 
 	// LIMIT 0 15 THEN SORTBY -- either side of the pair counts as adjacent, not just
 	// LIMIT-after-SORTBY. Same legacy-vs-fixed split as the SORTBY-then-LIMIT row above.
-	rows, err = glideft.ClusterFtAggregate(ctx, client, index, "*",
-		&options.FtAggregateOptions{Clauses: []options.FtAggregateClause{&options.FtAggregateLimit{Offset: 0, Count: 15}, sortAsc}})
+	rows, err = glideft.ClusterFtAggregate(
+		ctx,
+		client,
+		index,
+		"*",
+		&options.FtAggregateOptions{
+			Clauses: []options.FtAggregateClause{&options.FtAggregateLimit{Offset: 0, Count: 15}, sortAsc},
+		},
+	)
 	require.NoError(suite.T(), err)
 	assert.Len(suite.T(), rows, map[bool]int{true: 10, false: 15}[legacy])
 
