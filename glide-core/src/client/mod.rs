@@ -6276,11 +6276,30 @@ mod tests {
     /// client to connect and send: `PING` gets `PONG`, `INFO` reports the master
     /// role, and anything else gets `OK`.
     async fn serve_as_a_primary(listener: tokio::net::TcpListener) {
+        serve_as_a_primary_holding(listener, None).await
+    }
+
+    /// Lets a test hold one command's reply: the server signals `received` when
+    /// a command named `name` arrives, then waits for `release` before replying.
+    struct HeldReply {
+        name: &'static [u8],
+        received: std::sync::Arc<tokio::sync::Notify>,
+        release: std::sync::Arc<tokio::sync::Notify>,
+    }
+
+    /// [`serve_as_a_primary`], except that the reply to `held`'s command waits
+    /// until the test releases it.
+    async fn serve_as_a_primary_holding(
+        listener: tokio::net::TcpListener,
+        held: Option<HeldReply>,
+    ) {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let held = held.map(std::sync::Arc::new);
         loop {
             let Ok((mut socket, _)) = listener.accept().await else {
                 return;
             };
+            let held = held.clone();
             tokio::spawn(async move {
                 let mut pending = Vec::new();
                 let mut chunk = [0u8; 4096];
@@ -6288,7 +6307,12 @@ mod tests {
                     pending.extend_from_slice(&chunk[..read]);
                     while let Some((name, used)) = first_command_name(&pending) {
                         pending.drain(..used);
-                        let reply: &[u8] = match name.to_ascii_uppercase().as_slice() {
+                        let upper = name.to_ascii_uppercase();
+                        if let Some(held) = held.as_ref().filter(|h| h.name == upper) {
+                            held.received.notify_one();
+                            held.release.notified().await;
+                        }
+                        let reply: &[u8] = match upper.as_slice() {
                             b"PING" => b"+PONG\r\n",
                             b"INFO" => b"$13\r\nrole:master\r\n\r\n",
                             _ => b"+OK\r\n",
@@ -6372,6 +6396,67 @@ mod tests {
                 "a stale tracker on a reused Cmd is released by the standalone send"
             );
         }
+    }
+
+    /// The standalone request future holds its in-flight slot for as long as the
+    /// request is outstanding, not only up to the write: while the server holds
+    /// the reply one slot is taken, and it comes back once the reply arrives.
+    #[tokio::test]
+    async fn standalone_send_holds_its_slot_while_the_reply_is_outstanding() {
+        use std::sync::Arc;
+        use tokio::sync::Notify;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let received = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        tokio::spawn(serve_as_a_primary_holding(
+            listener,
+            Some(HeldReply {
+                name: b"SET",
+                received: received.clone(),
+                release: release.clone(),
+            }),
+        ));
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port,
+                unix_socket_path: None,
+            }],
+            // Far longer than the test holds the reply, so the request cannot
+            // time out and release its slot early.
+            request_timeout: Some(30_000),
+            ..Default::default()
+        };
+        let client = Client::new(request, None).await.expect("connects");
+        let limit = client.available_inflight_count();
+
+        let mut sender = client.clone();
+        let request = tokio::spawn(async move {
+            let mut cmd = redis::cmd("SET");
+            cmd.arg("key").arg("value");
+            sender.send_command(&mut cmd, None).await
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(10), received.notified())
+            .await
+            .expect("the server receives the SET");
+        assert_eq!(
+            client.available_inflight_count(),
+            limit - 1,
+            "the slot is held while the reply is outstanding"
+        );
+
+        release.notify_one();
+        let reply = tokio::time::timeout(std::time::Duration::from_secs(10), request)
+            .await
+            .expect("the reply arrives once released")
+            .expect("the request task does not panic");
+        assert_eq!(reply, Ok(redis::Value::Okay));
+        assert_eq!(
+            client.available_inflight_count(),
+            limit,
+            "the slot is released once the reply arrives"
+        );
     }
 
     /// A permit whose slot was moved onto the command (`attach_slot_to`, the RDMA
