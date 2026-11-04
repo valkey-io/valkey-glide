@@ -65,7 +65,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     pin::Pin,
     sync::{
-        atomic::{self, AtomicBool, AtomicIsize, AtomicUsize, Ordering},
+        atomic::{self, AtomicIsize, AtomicUsize, Ordering},
         Arc,
     },
     task::{self, Poll},
@@ -551,8 +551,40 @@ type ConnectionMap<C> = connections_container::ConnectionsMap<ConnectionFuture<C
 type ConnectionsContainer<C> =
     self::connections_container::ConnectionsContainer<ConnectionFuture<C>>;
 
+/// What `conn_lock` guards: the connections, and whether the client is closed. The flag is
+/// behind the lock so a refresh task can't start a reconnect after `dispose` cleared the refresh
+/// state. It isn't in the container because `refresh_slots` replaces the container.
+pub(crate) struct Connections<C> {
+    /// Set by `dispose`.
+    closed: bool,
+    container: ConnectionsContainer<C>,
+}
+
+impl<C> Connections<C> {
+    fn new(container: ConnectionsContainer<C>) -> Self {
+        Connections {
+            closed: false,
+            container,
+        }
+    }
+}
+
+impl<C> std::ops::Deref for Connections<C> {
+    type Target = ConnectionsContainer<C>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.container
+    }
+}
+
+impl<C> std::ops::DerefMut for Connections<C> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.container
+    }
+}
+
 pub(crate) struct InnerCore<C> {
-    pub(crate) conn_lock: ParkingLotRwLock<ConnectionsContainer<C>>,
+    pub(crate) conn_lock: ParkingLotRwLock<Connections<C>>,
     cluster_params: ParkingLotRwLock<ClusterParams>,
     pending_requests_tx: mpsc::UnboundedSender<PendingRequest<C>>,
     pending_requests_rx: std::sync::Mutex<mpsc::UnboundedReceiver<PendingRequest<C>>>,
@@ -564,8 +596,6 @@ pub(crate) struct InnerCore<C> {
     /// This prevents validation from removing connections that were just created
     /// during topology discovery but haven't been assigned slots yet.
     pub(crate) topology_refresh_lock: tokio::sync::Mutex<()>,
-    /// Set when the client is gone. Read and written under `conn_lock`.
-    closed: AtomicBool,
 }
 
 pub(crate) type Core<C> = Arc<InnerCore<C>>;
@@ -761,7 +791,7 @@ impl<C> Dispose for ClusterConnInner<C> {
         let mut conn_lock = self.inner.conn_lock.write();
         // A task that is mid-poll on another thread may still ask for a reconnect;
         // `closed` makes that a no-op.
-        self.inner.closed.store(true, Ordering::Relaxed);
+        conn_lock.closed = true;
         conn_lock.refresh_conn_state.clear_refresh_state();
         drop(conn_lock);
 
@@ -964,6 +994,8 @@ enum RecoverFuture {
 }
 
 impl RecoverFuture {
+    /// Stops the recovery task. Dropping a `JoinHandle` only detaches its task, which keeps
+    /// running and keeps the core alive.
     fn abort(&self) {
         match self {
             RecoverFuture::RefreshingSlots(handle) => handle.abort(),
@@ -1252,7 +1284,7 @@ mod iam_token_refresh_tests {
 
         let (pending_requests_tx, pending_requests_rx) = tokio::sync::mpsc::unbounded_channel();
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::default()),
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::default())),
             cluster_params: ParkingLotRwLock::new(params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -1262,7 +1294,6 @@ mod iam_token_refresh_tests {
             initial_nodes: Vec::new(),
             glide_connection_options: options_with_provider(provider),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
-            closed: AtomicBool::new(false),
         })
     }
 
@@ -1785,12 +1816,12 @@ where
         let slots_refresh_rate_limiter = cluster_params.slots_refresh_rate_limit;
         let (pending_tx, pending_rx) = mpsc::unbounded_channel();
         let inner = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 Default::default(),
                 connections,
                 cluster_params.read_from_replicas.clone(),
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params.clone()),
             pending_requests_tx: pending_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_rx),
@@ -1798,7 +1829,6 @@ where
             initial_nodes: initial_nodes.to_vec(),
             glide_connection_options,
             topology_refresh_lock: tokio::sync::Mutex::new(()),
-            closed: AtomicBool::new(false),
         });
         let mut connection = ClusterConnInner {
             inner,
@@ -2170,7 +2200,7 @@ where
                 continue;
             }
             let mut conn_lock = inner.conn_lock.write();
-            if inner.closed.load(Ordering::Relaxed) {
+            if conn_lock.closed {
                 log_debug_lazy!(
                     "cluster",
                     format!("Skipping refresh for {}: the client is closed", address)
@@ -3104,7 +3134,7 @@ where
         new_slots.carry_over_ips_from(&write_guard.slot_map);
         let read_from_replicas =
             inner.get_cluster_param(|params| params.read_from_replicas.clone());
-        *write_guard = ConnectionsContainer::new(
+        write_guard.container = ConnectionsContainer::new(
             new_slots,
             new_connections,
             read_from_replicas,
@@ -5677,12 +5707,12 @@ mod circular_moved_address_normalization_tests {
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
 
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(ClusterParams::default_for_test(None)),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -5692,7 +5722,6 @@ mod circular_moved_address_normalization_tests {
             initial_nodes: Vec::new(),
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
-            closed: AtomicBool::new(false),
         })
     }
 
@@ -5774,12 +5803,12 @@ mod circular_moved_address_normalization_tests {
         let (tx, rx) =
             mpsc::unbounded_channel::<PendingRequest<crate::aio::MultiplexedConnection>>();
         let core = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(ClusterParams::default_for_test(None)),
             pending_requests_tx: tx,
             pending_requests_rx: std::sync::Mutex::new(rx),
@@ -5789,7 +5818,6 @@ mod circular_moved_address_normalization_tests {
             initial_nodes: Vec::new(),
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
-            closed: AtomicBool::new(false),
         });
 
         assert_eq!(
@@ -6033,12 +6061,12 @@ pub(super) mod refresh_task_resolution_tests {
         );
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
         let core = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 connection_map,
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6048,7 +6076,6 @@ pub(super) mod refresh_task_resolution_tests {
             initial_nodes: Vec::new(),
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
-            closed: AtomicBool::new(false),
         });
         resolver.0.store(0, Ordering::SeqCst);
         assert!(core.is_circular_moved_redirect_prepared(
@@ -6206,12 +6233,12 @@ pub(super) mod refresh_task_resolution_tests {
         cluster_params.address_resolver = Some(resolver);
 
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6221,7 +6248,6 @@ pub(super) mod refresh_task_resolution_tests {
             initial_nodes: Vec::new(),
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
-            closed: AtomicBool::new(false),
         })
     }
 
@@ -6260,12 +6286,12 @@ pub(super) mod refresh_task_resolution_tests {
         cluster_params.address_resolver = Some(Arc::new(SeedAddressResolver));
 
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6275,7 +6301,6 @@ pub(super) mod refresh_task_resolution_tests {
             initial_nodes: Vec::new(),
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
-            closed: AtomicBool::new(false),
         })
     }
 
@@ -6386,12 +6411,12 @@ pub(super) mod refresh_task_resolution_tests {
         params.address_resolver = Some(Arc::new(SeedAddressResolver));
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 connections,
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6404,7 +6429,6 @@ pub(super) mod refresh_task_resolution_tests {
             ],
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
-            closed: AtomicBool::new(false),
         })
     }
 
@@ -6979,12 +7003,12 @@ pub(super) mod refresh_task_resolution_tests {
         let mut cluster_params = ClusterParams::default_for_test(None);
         cluster_params.address_resolver = Some(Arc::new(InitialRecoveryResolver));
         let core = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6994,7 +7018,6 @@ pub(super) mod refresh_task_resolution_tests {
             initial_nodes: vec!["redis://127.0.0.1:6379".parse().unwrap()],
             glide_connection_options: GlideConnectionOptions::default(),
             topology_refresh_lock: tokio::sync::Mutex::new(()),
-            closed: AtomicBool::new(false),
         });
 
         let result = get_random_connections_from_initial_nodes(&core, 1)
