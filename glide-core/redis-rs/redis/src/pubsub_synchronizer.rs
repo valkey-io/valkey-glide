@@ -74,6 +74,16 @@ pub trait PubSubSynchronizer: Send + Sync {
         None
     }
 
+    /// Cheap synchronous pre-filter for [`Self::intercept_pubsub_command`], given
+    /// the command's uppercased name (`Routable::command()` bytes; empty for a
+    /// command with no arguments). Returning `false` promises that
+    /// `intercept_pubsub_command` would return `None` for this command, so a
+    /// caller may skip the (boxed) async call. The default is `true` (always ask),
+    /// so existing implementations keep their behaviour.
+    fn may_intercept_pubsub_command(&self, _cmd_name: &[u8]) -> bool {
+        true
+    }
+
     /// Wait for subscriptions to synchronize.
     ///
     /// # Arguments
