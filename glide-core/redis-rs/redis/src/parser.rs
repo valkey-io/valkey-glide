@@ -793,6 +793,21 @@ mod aio_support {
                             "unexpected end of input".to_string(),
                         )))
                     } else {
+                        // A partial frame fills the buffer, so `FramedRead`'s
+                        // `reserve(1)` before its next read would allocate.
+                        // While split-off values still share the buffer,
+                        // `BytesMut` sizes that new buffer `len + 1` (once
+                        // `len` exceeds its original capacity): a 1-byte
+                        // read, then another reallocation. Reserving `len`
+                        // here makes it double instead. When the buffer is
+                        // not shared, `reserve(len)` on a full buffer reuses
+                        // or grows the allocation exactly as `reserve(1)`
+                        // would (both shift the data to the front when the
+                        // consumed prefix is at least `len`, else both double
+                        // the allocation).
+                        if bytes.len() == bytes.capacity() {
+                            bytes.reserve(bytes.len());
+                        }
                         Ok(None)
                     }
                 }
@@ -1246,6 +1261,130 @@ mod tests {
         for (b, s) in kept.iter().zip(&small) {
             assert_eq!(&b[..], &s[..]);
         }
+    }
+
+    /// What a `FramedRead` over [`test_io::ChunkedIo`] did while decoding.
+    #[cfg(feature = "aio")]
+    struct ReadPattern {
+        /// Read space offered to each read.
+        offered: Vec<usize>,
+        /// Times the read buffer moved to a new allocation or was resized
+        /// between two reads (its allocation's end address changed).
+        buffer_changes: usize,
+        /// Replies split off the read buffer rather than copied.
+        split: usize,
+    }
+
+    /// Decodes all of `wire` through `FramedRead`, in socket reads of at most
+    /// `chunk` bytes, holding every decoded value until the end (as callers
+    /// do while a pipeline is in flight).
+    #[cfg(feature = "aio")]
+    fn framed_read_pattern(wire: Vec<u8>, chunk: usize) -> ReadPattern {
+        use futures_util::StreamExt;
+        let (io, offered) = test_io::ChunkedIo::new(wire.clone(), chunk);
+        let mut framed = tokio_util::codec::FramedRead::new(io, ValueCodec::default());
+        let (values, split) = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let mut values = Vec::new();
+                let mut split = 0;
+                while let Some(v) = framed.next().await {
+                    let v = v.unwrap().unwrap();
+                    // A split payload ends right before the read buffer's
+                    // next unread byte (only its CRLF in between).
+                    if let Value::BulkString(b) = &v {
+                        if b.as_ptr() as usize + b.len() + 2
+                            == framed.read_buffer().as_ptr() as usize
+                        {
+                            split += 1;
+                        }
+                    }
+                    values.push(v);
+                }
+                (values, split)
+            });
+        // Every value decoded intact.
+        let mut reencoded = Vec::new();
+        for v in &values {
+            let Value::BulkString(b) = v else {
+                panic!("expected a bulk string, got {v:?}")
+            };
+            reencoded.extend_from_slice(&bulk_frame(b));
+        }
+        assert_eq!(reencoded, wire);
+        let reads = offered.lock().unwrap().clone();
+        ReadPattern {
+            split,
+            offered: reads.iter().map(|&(n, _)| n).collect(),
+            buffer_changes: reads.windows(2).filter(|w| w[0].1 != w[1].1).count(),
+        }
+    }
+
+    /// Mixed small and mid-size replies through a real `FramedRead`, with
+    /// the caller holding values. A mid-size reply that fills a read buffer
+    /// still shared with split values must not get a 1-byte read: when the
+    /// codec returns on a partial frame in a full buffer it reserves the
+    /// buffer's length, so the replacement doubles like a `Vec` instead of
+    /// being sized `len + 1` by `FramedRead`'s `reserve(1)`.
+    ///
+    /// Also pins how often the read buffer changes allocation. Splitting
+    /// small frames shares the buffer, so a refill while values are held
+    /// allocates a new one (8 KiB, or twice a partial frame that filled the
+    /// old one), and the next mid-size reply grows it again: about 2 changes
+    /// per round of 10 small replies and one 20 KiB reply here, and about
+    /// one per 8 KiB of small-only traffic. Copying every frame (the
+    /// behaviour before splitting) changed the buffer twice in total for
+    /// the mixed workload and never for the small-only one, measured with
+    /// the same workloads.
+    #[cfg(feature = "aio")]
+    #[test]
+    fn framed_read_mixed_reply_sizes_read_pattern() {
+        let _g = crate::buf_pool::TEST_POOL_SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let rounds = 20;
+        let mut wire = Vec::new();
+        for r in 0..rounds {
+            for i in 0..10u8 {
+                wire.extend_from_slice(&bulk_frame(&[i; 100]));
+            }
+            wire.extend_from_slice(&bulk_frame(&vec![r as u8; 20 * 1024]));
+        }
+        let p = framed_read_pattern(wire, 16 * 1024);
+        let smallest = p.offered.iter().copied().min().unwrap();
+        println!(
+            "mixed: {} reads, smallest offered {smallest}, {} buffer changes, {} split, over {rounds} rounds",
+            p.offered.len(),
+            p.buffer_changes,
+            p.split,
+        );
+        let mut wire = Vec::new();
+        for i in 0..2000u32 {
+            wire.extend_from_slice(&bulk_frame(&[i as u8; 100]));
+        }
+        let s = framed_read_pattern(wire, 16 * 1024);
+        println!(
+            "small: {} reads, smallest offered {}, {} buffer changes, {} split",
+            s.offered.len(),
+            s.offered.iter().min().unwrap(),
+            s.buffer_changes,
+            s.split,
+        );
+        assert!(
+            smallest >= 1024,
+            "a read was offered {smallest} bytes: {:?}",
+            p.offered
+        );
+        assert_eq!(p.split, rounds * 10, "every small reply is split");
+        assert!(
+            p.buffer_changes <= 2 * rounds + 1,
+            "{} buffer changes",
+            p.buffer_changes
+        );
+        assert!(s.offered.iter().all(|&n| n >= 1024), "{:?}", s.offered);
+        assert_eq!(s.split, 2000);
+        assert!(s.buffer_changes <= s.offered.len(), "{}", s.buffer_changes);
     }
 
     /// The split/copy boundary is the whole encoded frame length: a frame of
