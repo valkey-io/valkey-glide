@@ -656,9 +656,10 @@ impl Cmd {
         let mut out = SegmentedBytes::default();
         let mut scratch = Vec::new();
         self.write_packed_segments(&mut out, &mut scratch);
-        // from_owner: Bytes::from(Vec) shrinks-to-fit when capacity > len
-        // (the framing reserve over-estimates), which reallocs + copies the
-        // whole packed command. from_owner keeps the Vec as-is.
+        // from_owner: the framing reserve over-estimates, so `scratch`
+        // usually has spare capacity. For such a Vec, `Bytes::from` on the
+        // locked bytes 1.12 allocates a `Shared` header, and from_owner
+        // allocates one owner box; both keep the Vec's buffer as-is.
         out.push(bytes::Bytes::from_owner(scratch));
         out
     }
