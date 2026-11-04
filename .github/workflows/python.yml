@@ -272,7 +272,9 @@ jobs:
                   elif [ "$RUN_SYNC_ONLY" = "true" ]; then
                       python3 dev.py test --args -m serial_only tests/sync_tests --html=pytest_report_serial.html --self-contained-html
                   else
-                      python3 dev.py test --args -m serial_only --async-backend=asyncio --html=pytest_report_serial.html --self-contained-html "${filter[@]}"
+                      # pytest exits 5 when a filter matches no serial tests, which is fine.
+                      python3 dev.py test --args -m serial_only --async-backend=asyncio --html=pytest_report_serial.html --self-contained-html "${filter[@]}" \
+                          || { rc=$?; [ "$rc" -eq 5 ] && [ -n "$TEST_FILTER" ] || exit "$rc"; }
                   fi
 
             - uses: ./.github/workflows/test-benchmark

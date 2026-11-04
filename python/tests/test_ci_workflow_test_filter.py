@@ -37,11 +37,11 @@ def _run_block(step_name):
     return textwrap.dedent("\n".join(body))
 
 
-def _pytest_args(step_name, test_filter, tmp_path):
-    """Run the step script with a fake python3 and return the args it got."""
+def _run_step(step_name, test_filter, tmp_path, pytest_rc=0):
+    """Run the step script with a fake python3 that exits with pytest_rc."""
     out = tmp_path / "argv"
     shim = tmp_path / "python3"
-    shim.write_text(f"#!/bin/sh\nprintf '%s\\0' \"$@\" > '{out}'\n")
+    shim.write_text(f"#!/bin/sh\nprintf '%s\\0' \"$@\" > '{out}'\nexit {pytest_rc}\n")
     shim.chmod(shim.stat().st_mode | stat.S_IEXEC)
     env = dict(
         os.environ,
@@ -51,10 +51,15 @@ def _pytest_args(step_name, test_filter, tmp_path):
         RUN_ASYNC_ONLY="false",
         RUN_SYNC_ONLY="false",
     )
-    subprocess.run(
-        ["bash", "-eo", "pipefail", "-c", _run_block(step_name)], env=env, check=True
-    )
-    return out.read_text().split("\0")[:-1]
+    return subprocess.run(
+        ["bash", "-eo", "pipefail", "-c", _run_block(step_name)], env=env
+    ).returncode
+
+
+def _pytest_args(step_name, test_filter, tmp_path):
+    """Run the step script and return the args the fake python3 got."""
+    assert _run_step(step_name, test_filter, tmp_path) == 0
+    return (tmp_path / "argv").read_text().split("\0")[:-1]
 
 
 def _addopts_k_expression():
@@ -86,6 +91,18 @@ def test_filter_keeps_pytest_ini_exclusions(step_name, tmp_path):
     expression = args[args.index("-k") + 1]
     assert expression == f"{_addopts_k_expression()} and (test_ping or test_info)"
     Expression.compile(expression)
+
+
+@pytest.mark.parametrize(
+    "test_filter, pytest_rc, step_rc",
+    [("test_ping", 5, 0), ("", 5, 5), ("test_ping", 1, 1)],
+)
+def test_serial_step_allows_filter_with_no_serial_tests(
+    test_filter, pytest_rc, step_rc, tmp_path
+):
+    # pytest exits 5 when nothing is selected; only a filter may cause that.
+    step = "Test with pytest (serial-only tests)"
+    assert _run_step(step, test_filter, tmp_path, pytest_rc) == step_rc
 
 
 def test_uploaded_reports_match_written_reports():
