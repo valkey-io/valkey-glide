@@ -19,7 +19,10 @@ pub struct PushInfo {
 pub struct PushManager {
     sender: Arc<ArcSwap<Option<mpsc::UnboundedSender<PushInfo>>>>,
     pubsub_synchronizer: Option<Arc<dyn PubSubSynchronizer>>,
-    address: Option<String>,
+    // Shared, not owned: every `MultiplexedConnection` clone clones its `PushManager`, and the
+    // cluster path clones the node connection once per request, so an owned `String` here was
+    // one allocation per cluster request (freed on another thread most of the time).
+    address: Option<Arc<str>>,
 }
 
 impl PushManager {
@@ -32,7 +35,7 @@ impl PushManager {
         PushManager {
             sender: Arc::new(ArcSwap::new(Arc::new(sender))),
             pubsub_synchronizer: synchronizer,
-            address,
+            address: address.map(Arc::from),
         }
     }
 
@@ -60,7 +63,7 @@ impl PushManager {
             }
 
             if let Some(sync) = &self.pubsub_synchronizer {
-                Self::handle_pubsub_push(sync, kind, data, self.address.clone());
+                Self::handle_pubsub_push(sync, kind, data, self.get_address());
             }
         }
     }
@@ -112,7 +115,7 @@ impl PushManager {
 
     /// Get the address associated with this PushManager
     pub fn get_address(&self) -> Option<String> {
-        self.address.clone()
+        self.address.as_deref().map(str::to_owned)
     }
 
     /// Get the PubSub synchronizer if one is configured
@@ -125,7 +128,7 @@ impl PushManager {
         PushManager {
             sender: self.sender.clone(),
             pubsub_synchronizer: self.pubsub_synchronizer.clone(),
-            address: Some(address),
+            address: Some(Arc::from(address)),
         }
     }
 }
@@ -305,5 +308,23 @@ mod tests {
 
         assert_eq!(count1 + count2 + count3 + count4, 1000);
         assert_eq!(received_sum, expected_sum);
+    }
+
+    #[test]
+    fn test_push_manager_address_is_shared_by_clones() {
+        let push_manager = PushManager::new(None, None, Some("node-a:6379".to_owned()));
+        assert_eq!(push_manager.get_address().as_deref(), Some("node-a:6379"));
+
+        // A clone (one per cluster request) shares the address instead of copying it.
+        let clone = push_manager.clone();
+        assert!(Arc::ptr_eq(
+            push_manager.address.as_ref().unwrap(),
+            clone.address.as_ref().unwrap()
+        ));
+
+        let moved = push_manager.with_address("node-b:6379".to_owned());
+        assert_eq!(moved.get_address().as_deref(), Some("node-b:6379"));
+        assert_eq!(push_manager.get_address().as_deref(), Some("node-a:6379"));
+        assert_eq!(PushManager::new(None, None, None).get_address(), None);
     }
 }
