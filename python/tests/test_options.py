@@ -5,6 +5,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Mapping
 
 import pytest
+from glide_shared.commands.batch import Batch
+from glide_shared.commands.bitmap import BitmapIndexType, OffsetOptions
 from glide_shared.commands.command_args import OrderBy
 from glide_shared.commands.core_options import (
     ConditionalChange,
@@ -19,6 +21,8 @@ from glide_shared.commands.core_options import (
 from glide_shared.commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateOptions,
     FtAggregateReducer,
+    FtAggregateSortBy,
+    FtAggregateSortProperty,
     FtWithCursor,
 )
 from glide_shared.commands.server_modules.ft_options.ft_create_options import (
@@ -36,8 +40,10 @@ from glide_shared.commands.server_modules.ft_options.ft_search_options import (
     FtSearchLimit,
     FtSearchOptions,
 )
+from glide_shared.commands.server_modules.json_options import JsonGetOptions
 from glide_shared.commands.stream import (
     ExclusiveIdBound,
+    StreamClaimOptions,
     TrimByMaxLen,
     TrimByMinId,
 )
@@ -975,3 +981,89 @@ class TestClassifyInkeysProbeError:
     def test_unrelated_error_does_not_classify_as_pre_1_3(self):
         assert classify_inkeys_probe_error("WRONGTYPE Operation against a key") is False
         assert classify_inkeys_probe_error("OOM command not allowed") is False
+
+
+class TestZeroValuedArgsAreForwarded:
+    """
+    A legal numeric 0 must reach the wire. Option/argument builders must test `is not None`
+    rather than truthiness, otherwise 0 is silently dropped and the server runs a different
+    command (e.g. `ZPOPMIN k 0` becomes `ZPOPMIN k`, which pops and removes a member).
+    """
+
+    @pytest.mark.parametrize(
+        "expiry_type, cmd_arg",
+        [
+            (ExpiryType.SEC, "EX"),
+            (ExpiryType.MILLSEC, "PX"),
+            (ExpiryType.UNIX_SEC, "EXAT"),
+            (ExpiryType.UNIX_MILLSEC, "PXAT"),
+        ],
+    )
+    def test_expiry_set_zero(self, expiry_type: ExpiryType, cmd_arg: str):
+        assert ExpirySet(expiry_type, 0).get_cmd_args() == [cmd_arg, "0"]
+
+    @pytest.mark.parametrize(
+        "expiry_type, cmd_arg",
+        [
+            (ExpiryTypeGetEx.SEC, "EX"),
+            (ExpiryTypeGetEx.MILLSEC, "PX"),
+            (ExpiryTypeGetEx.UNIX_SEC, "EXAT"),
+            (ExpiryTypeGetEx.UNIX_MILLSEC, "PXAT"),
+        ],
+    )
+    def test_expiry_get_ex_zero(self, expiry_type: ExpiryTypeGetEx, cmd_arg: str):
+        assert ExpiryGetEx(expiry_type, 0).get_cmd_args() == [cmd_arg, "0"]
+
+    def test_valueless_expiry_types_still_have_no_value(self):
+        assert ExpirySet(ExpiryType.KEEP_TTL, None).get_cmd_args() == ["KEEPTTL"]
+        assert ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None).get_cmd_args() == ["PERSIST"]
+
+    def test_offset_options_end_zero(self):
+        assert OffsetOptions(0, 0).to_args() == ["0", "0"]
+        assert OffsetOptions(0, 0, BitmapIndexType.BIT).to_args() == ["0", "0", "BIT"]
+        # `end` is still optional.
+        assert OffsetOptions(1).to_args() == ["1"]
+
+    def test_stream_claim_options_zero(self):
+        assert StreamClaimOptions(idle=0).to_args() == ["IDLE", "0"]
+        assert StreamClaimOptions(idle_unix_time=0).to_args() == ["TIME", "0"]
+        assert StreamClaimOptions(retry_count=0).to_args() == ["RETRYCOUNT", "0"]
+        assert StreamClaimOptions().to_args() == []
+
+    def test_ft_search_timeout_zero(self):
+        args = FtSearchOptions(timeout=0).to_args()
+        assert args[args.index("TIMEOUT") + 1] == "0"
+        assert "TIMEOUT" not in FtSearchOptions().to_args()
+
+    def test_ft_aggregate_timeout_zero(self):
+        assert FtAggregateOptions(timeout=0).to_args() == ["TIMEOUT", "0"]
+        assert FtAggregateOptions().to_args() == []
+
+    def test_ft_aggregate_sort_by_max_zero(self):
+        sort_by = FtAggregateSortBy([FtAggregateSortProperty("@a", OrderBy.ASC)], max=0)
+        assert sort_by.to_args()[-2:] == ["MAX", "0"]
+        no_max = FtAggregateSortBy([FtAggregateSortProperty("@a", OrderBy.ASC)])
+        assert "MAX" not in no_max.to_args()
+
+    def test_json_get_options_empty_strings(self):
+        assert JsonGetOptions(indent="", newline="", space="").get_options() == [
+            "INDENT",
+            "",
+            "NEWLINE",
+            "",
+            "SPACE",
+            "",
+        ]
+        assert JsonGetOptions().get_options() == []
+
+    @pytest.mark.parametrize("command", ["zpopmin", "zpopmax"])
+    def test_batch_zpop_count_zero(self, command: str):
+        batch = Batch(is_atomic=False)
+        getattr(batch, command)("key", 0)
+        getattr(batch, command)("key")
+        getattr(batch, command)("key", 2)
+        assert [cmd[1] for cmd in batch.commands] == [
+            ["key", "0"],
+            ["key"],
+            ["key", "2"],
+        ]
