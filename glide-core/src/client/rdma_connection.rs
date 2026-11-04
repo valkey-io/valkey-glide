@@ -61,7 +61,7 @@ mod with_rdma {
         /// Open the session if needed and not already open.
         async fn open_session_if_needed(
             &self,
-            connection: &mut MultiplexedConnection,
+            connection: &MultiplexedConnection,
             command: &Cmd,
         ) -> RedisResult<()> {
             if self.session.initialized() || !needs_session(command) {
@@ -91,13 +91,17 @@ mod with_rdma {
         /// its side of the session, or the connection failed.
         async fn handshake_once(
             &self,
-            connection: &mut MultiplexedConnection,
+            connection: &MultiplexedConnection,
         ) -> RedisResult<glide_rdma::RdmaSession> {
             if self.unsettled.load(Ordering::Acquire) {
                 return Err(crate::rdma::handshake_unsettled(&self.node));
             }
             self.unsettled.store(true, Ordering::Release);
-            let result = handshake(connection, &self.fabric, &self.node).await;
+            // `query_async` needs `&mut`, and the connection is shared. A clone
+            // shares the same pipeline and socket, so the handshake still runs on
+            // this RESP connection; the clone is made once per handshake attempt.
+            let mut connection = connection.clone();
+            let result = handshake(&mut connection, &self.fabric, &self.node).await;
             if matches!(&result, Err(HandshakeFailure::Refused(_)) | Ok(_)) {
                 self.unsettled.store(false, Ordering::Release);
             }
@@ -134,14 +138,14 @@ mod with_rdma {
 
         /// Send one command, opening this connection's RDMA session first if the
         /// command is a transfer and no session is open yet.
-        pub async fn send_packed_command(&mut self, cmd: &Cmd) -> RedisResult<Value> {
-            // The session is read through `rdma` while the handshake
-            // it may run needs `inner` mutably.
-            let Self { inner, rdma } = self;
-            if let Some(rdma) = rdma.as_ref() {
-                rdma.open_session_if_needed(inner, cmd).await?;
+        ///
+        /// Takes `&self`, like [`MultiplexedConnection::send_packed_command`], so
+        /// the standalone client can send through a shared `Arc<GlideConnection>`.
+        pub async fn send_packed_command(&self, cmd: &Cmd) -> RedisResult<Value> {
+            if let Some(rdma) = self.rdma.as_ref() {
+                rdma.open_session_if_needed(&self.inner, cmd).await?;
             }
-            inner.send_packed_command(cmd).await
+            self.inner.send_packed_command(cmd).await
         }
     }
 
