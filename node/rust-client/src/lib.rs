@@ -2658,7 +2658,10 @@ fn resp_value_to_js<'a>(val: Value, js_env: &'a Env, string_decoder: bool) -> Re
                     .create_string(str)
                     .and_then(|val| val.into_unknown(js_env))
             } else {
-                BufferSlice::from_data(js_env, data)?.into_unknown(js_env)
+                // `from_data` takes a `Vec<u8>`. `bytes_into_vec` keeps a small
+                // value split off the read buffer from taking that whole
+                // buffer over for the lifetime of the JS `Buffer`.
+                BufferSlice::from_data(js_env, redis::bytes_into_vec(data))?.into_unknown(js_env)
             }
         }
         Value::Array(array) => {
