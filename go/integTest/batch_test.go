@@ -551,6 +551,11 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	batch.Append(multiKey1, "3")
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(7), TestName: "Append(multiKey1, 3)"})
 
+	if compareServerVersions(serverVer, "9.0.0") >= 0 {
+		batch.DelIfEq(atomicKey1, "wrong-value")
+		testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "DelIfEq(atomicKey1, wrong-value)"})
+	}
+
 	batch.Set(multiKey2, "val")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(multiKey2, val)"})
 
@@ -572,6 +577,76 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 					Matches:     []models.LCSMatchedPosition{},
 				},
 				TestName: "LCSWithOptions(multiKey1, multiKey2, opts)",
+			},
+		)
+	}
+
+	// TODO #5368: Compare versions semantically, not as strings.
+	if serverVer >= "8.1.0" {
+		atomicKey2 := atomicKeyPrefix + "4-" + uuid.NewString()
+
+		batch.SetWithOptions(atomicKey2, "value", *options.NewSetOptions().SetOnlyIfEquals("other"))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: nil,
+				TestName:         "SetWithOptions(atomicKey2, value, OnlyIfEquals(other)) non-existent key",
+			},
+		)
+
+		batch.Set(atomicKey2, "value")
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey2, value)"})
+
+		batch.SetWithOptions(atomicKey2, "other", *options.NewSetOptions().SetOnlyIfEquals("other"))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: nil,
+				TestName:         "SetWithOptions(atomicKey2, other, OnlyIfEquals(other)) value not equal",
+			},
+		)
+
+		batch.SetWithOptions(atomicKey2, "other", *options.NewSetOptions().SetOnlyIfEquals("value"))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: "OK",
+				TestName:         "SetWithOptions(atomicKey2, other, OnlyIfEquals(value)) value equal",
+			},
+		)
+	}
+
+	// TODO #5368: Compare versions semantically, not as strings.
+	if serverVer >= "9.2.0" {
+		atomicKey3 := atomicKeyPrefix + "5-" + uuid.NewString()
+
+		batch.SetWithOptions(atomicKey3, "value", *options.NewSetOptions().SetOnlyIfNotEquals("other"))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: "OK",
+				TestName:         "SetWithOptions(atomicKey3, value, OnlyIfNotEquals(other)) non-existent key",
+			},
+		)
+
+		batch.Set(atomicKey3, "value")
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(atomicKey3, value)"})
+
+		batch.SetWithOptions(atomicKey3, "other", *options.NewSetOptions().SetOnlyIfNotEquals("value"))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: nil,
+				TestName:         "SetWithOptions(atomicKey3, other, OnlyIfNotEquals(value)) value equal",
+			},
+		)
+
+		batch.SetWithOptions(atomicKey3, "other", *options.NewSetOptions().SetOnlyIfNotEquals("other"))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: "OK",
+				TestName:         "SetWithOptions(atomicKey3, other, OnlyIfNotEquals(other)) value not equal",
 			},
 		)
 	}
@@ -1007,8 +1082,7 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 			TestName:         "CopyWithOptions(slotHashedKey1, slotHashedKey2, ReplaceDestination)",
 		},
 	)
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "9.0.0" {
+	if compareServerVersions(serverVer, "9.0.0") >= 0 {
 		batch.CopyWithOptions(slotHashedKey1, slotHashedKey2, *options.NewCopyOptions().SetDBDestination(1))
 		testData = append(
 			testData,
@@ -1263,8 +1337,7 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 	)
 
 	// Hash field expiration commands (Valkey 9.0+)
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "9.0.0" {
+	if compareServerVersions(serverVer, "9.0.0") >= 0 {
 		// Test HSetEx - Set fields with expiration
 		expiryKey := prefix + "expiry-" + uuid.NewString()
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
@@ -1364,9 +1437,10 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 		)
 	}
 
-	// HGETDEL command (Valkey 9.1+)
+	// HGETDEL command and HSETEX key conditional change (NX/XX) (Valkey 9.1+)
 	// TODO #5368: Compare versions semantically, not as strings.
 	if serverVer >= "9.1.0" {
+		// HGETDEL command
 		getdelKey := prefix + "getdel-" + uuid.NewString()
 		batch.HSet(getdelKey, map[string]string{"field1": "value1", "field2": "value2"})
 		testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "HSet(getdelKey, 2 fields)"})
@@ -1381,6 +1455,27 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 				},
 				TestName: "HGetDel(getdelKey, [field1, nonexistent])",
 			},
+		)
+
+		// HSETEX command with key conditional change (NX/XX)
+		hsetexKey := prefix + "hsetex-key-cond-" + uuid.NewString()
+		nxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfDoesNotExist)
+		xxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfExists)
+
+		batch.HSetEx(hsetexKey, map[string]string{"field1": "value1"}, nxOptions)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(1), TestName: "HSetEx(hsetexKey, field1=value1, NX) - key absent"},
+		)
+		batch.HSetEx(hsetexKey, map[string]string{"field1": "value2"}, nxOptions)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(0), TestName: "HSetEx(hsetexKey, field1=value2, NX) - key exists"},
+		)
+		batch.HSetEx(hsetexKey, map[string]string{"field1": "value2"}, xxOptions)
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: int64(1), TestName: "HSetEx(hsetexKey, field1=value2, XX) - key exists"},
 		)
 	}
 

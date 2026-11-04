@@ -18,7 +18,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Loads a library to Valkey.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @param replace Whether the given library should overwrite a library with the same name if it
@@ -36,7 +36,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Loads a library to Valkey.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @param replace Whether the given library should overwrite a library with the same name if it
@@ -54,7 +54,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @return Info about all libraries and their functions.
@@ -79,7 +79,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @return Info about all libraries and their functions.
@@ -104,7 +104,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @param withCode Specifies whether to request the library code from the server or not.
@@ -130,7 +130,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @param withCode Specifies whether to request the library code from the server or not.
@@ -157,7 +157,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Deletes all function libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @return <code>OK</code>.
      * @example
@@ -171,7 +171,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Deletes all function libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
@@ -187,7 +187,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Deletes a library and all its functions.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-delete/">valkey.io</a> for details.
      * @param libName The library name to delete.
      * @return <code>OK</code>.
@@ -202,7 +202,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Deletes a library and all its functions.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-delete/">valkey.io</a> for details.
      * @param libName The library name to delete.
      * @return <code>OK</code>.
@@ -217,7 +217,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Returns the serialized payload of all loaded libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-dump/">valkey.io</a> for details.
      * @return The serialized payload of all loaded libraries.
      * @example
@@ -231,7 +231,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Restores libraries from the serialized payload returned by {@link #functionDump()}.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @return <code>OK</code>.
@@ -246,7 +246,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Restores libraries from the serialized payload returned by {@link #functionDump()}..
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param policy A policy for handling existing libraries.
@@ -264,7 +264,7 @@ public interface ScriptingAndFunctionsCommands {
      * This command is routed to primary nodes only.<br>
      * To route to a replica please refer to {@link #fcallReadOnly}.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @return The invoked function's return value.
@@ -281,7 +281,7 @@ public interface ScriptingAndFunctionsCommands {
      * This command is routed to primary nodes only.<br>
      * To route to a replica please refer to {@link #fcallReadOnly}.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @return The invoked function's return value.
@@ -297,7 +297,7 @@ public interface ScriptingAndFunctionsCommands {
      * Invokes a previously loaded read-only function.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @return The invoked function's return value.
@@ -313,7 +313,7 @@ public interface ScriptingAndFunctionsCommands {
      * Invokes a previously loaded read-only function.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @return The invoked function's return value.
@@ -330,7 +330,7 @@ public interface ScriptingAndFunctionsCommands {
      * <code>FUNCTION KILL</code> terminates read-only functions only. <code>FUNCTION KILL</code> runs
      * on all nodes of the server, including primary and replicas.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-kill/">valkey.io</a> for details.
      * @return <code>OK</code> if function is terminated. Otherwise, throws an error.
      * @example
@@ -347,7 +347,7 @@ public interface ScriptingAndFunctionsCommands {
      * <code>FUNCTION STATS</code> runs on all nodes of the server, including primary and replicas.
      * The response includes a mapping from node address to the command response for that node.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
      * @return A <code>Map</code> from node address to the command response for that node, where the
      *     command contains a <code>Map</code> with two keys:
@@ -383,7 +383,7 @@ public interface ScriptingAndFunctionsCommands {
      * <code>FUNCTION STATS</code> runs on all nodes of the server, including primary and replicas.
      * The response includes a mapping from node address to the command response for that node.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
      * @return A <code>Map</code> from node address to the command response for that node, where the
      *     command contains a <code>Map</code> with two keys:

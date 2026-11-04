@@ -136,8 +136,9 @@ libfabric on the runtime machine.
 5. **The `cargo:warning` lines listing the include paths are removed.** Upstream
    prints them on every build, and cargo repeats them for everyone who depends on
    the crate. They read as debug output left behind. For the same reason,
-   `wrapper.c` is compiled with `-Wno-deprecated-declarations`, which silences
-   the warnings for the deprecated functions it wraps, such as `fi_poll`.
+   `wrapper.c` has no wrappers for the functions libfabric marks deprecated, such
+   as `fi_poll` and `fi_rx_size_left`. Each one printed a compiler warning on
+   every build, and `glide-rdma` calls none of them.
 
 6. **Upstream's `asan` feature and unit tests are removed.**  The bindings are
    exercised through `glide-rdma`'s tests instead.

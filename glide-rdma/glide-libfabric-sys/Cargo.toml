@@ -6,13 +6,32 @@
 # Divergence from upstream:
 #   1. The crate's metadata is inlined rather than inherited from libfabric's workspace.
 #   2. No hard reference to libfabric; glide-rdma resolves the few libfabric
-#      symbols it needs at run time. For the same reason there is no
-#      `links = "libfabric"` key.
-#   3. libfabric's public headers are vendored under `include/` and the bindgen
+#      symbols it needs at run time. `build.rs` does not emit
+#      `cargo:rustc-link-lib=fabric`, so binaries carry no load-time dependency
+#      on libfabric and start on hosts that lack it. For the same reason there is
+#      no `links = "libfabric"` key.
+#   3. libfabric's exported functions (`SHIMMED` in `build.rs`) are renamed with
+#      a `glide_` prefix. glide-rdma defines each prefixed function itself,
+#      forwarding to the libfabric it loads at run time. Without the prefix, this
+#      crate would export its own `fi_getinfo` and friends, and a process that
+#      also loads the real libfabric could bind calls to the wrong copy. The Rust
+#      bindings link to the prefixed names, and `wrapper.c` renames its calls with
+#      function-like macros, which leave fi_prov.h's struct field `fi_version`
+#      alone. The two lists must match, which a test in glide-rdma checks.
+#   4. Link names in the bindings are written for the target OS, not the machine
+#      running the build: macOS adds a leading underscore to C symbols and Linux
+#      does not.
+#   5. libfabric's public headers are vendored under `include/` and the bindgen
 #      output is generated once and kept as `src/bindings.rs`. Together these mean
 #      a build needs neither libfabric nor libclang on the machine.
-#   4. Upstream's `asan` feature and its tests are removed.
-#   5. Renamed from `ofi-libfabric-sys`, which upstream publishes on crates.io,
+#   6. The build prints no warnings: the `cargo:warning` lines listing include
+#      paths are removed, and `wrapper.c` has no wrappers for the functions
+#      libfabric marks deprecated, which glide-rdma does not use.
+#      See #7408 for more details.
+#   7. Clippy runs on this crate in CI. Lints that only fire on the generated
+#      bindings are allowed on the `bindgen` module rather than the whole crate.
+#   8. Upstream's `asan` feature and its tests are removed.
+#   9. Renamed from `ofi-libfabric-sys`, which upstream publishes on crates.io,
 #      so that this copy can be published alongside glide-rdma.
 #
 # This software is available to you under a choice of one of two

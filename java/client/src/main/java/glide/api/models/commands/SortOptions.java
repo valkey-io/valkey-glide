@@ -14,7 +14,7 @@ import lombok.experimental.SuperBuilder;
  * GenericBaseCommands#sortStore(String, String, SortOptions)}
  *
  * @apiNote In cluster mode, {@link #byPattern} and {@link #getPatterns} must map to the same hash
- *     slot as the key, and this is supported only since Valkey version 8.0.
+ *     slot as the key, and this is supported only since Valkey 8.0.0.
  * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> and <a
  *     href="https://valkey.io/commands/sort/">valkey.io</a>
  */
@@ -22,13 +22,13 @@ import lombok.experimental.SuperBuilder;
 public class SortOptions extends SortBaseOptions {
     /**
      * <code>BY</code> subcommand string to include in the <code>SORT</code> and <code>SORT_RO</code>
-     * commands. Supported in cluster mode since Valkey version 8.0 and above.
+     * commands. Supported in cluster mode since Valkey 8.0.0.
      */
     public static final String BY_COMMAND_STRING = "BY";
 
     /**
      * <code>GET</code> subcommand string to include in the <code>SORT</code> and <code>SORT_RO</code>
-     * commands. Supported in cluster mode since Valkey version 8.0 and above.
+     * commands. Supported in cluster mode since Valkey 8.0.0.
      */
     public static final String GET_COMMAND_STRING = "GET";
 
@@ -38,7 +38,7 @@ public class SortOptions extends SortBaseOptions {
      * from the key replaces the asterisk to create the key name. For example, if <code>key</code>
      * contains IDs of objects, <code>byPattern</code> can be used to sort these IDs based on an
      * attribute of the objects, like their weights or timestamps. Supported in cluster mode since
-     * Valkey version 8.0 and above.
+     * Valkey 8.0.0.
      */
     private final String byPattern;
 
@@ -54,7 +54,7 @@ public class SortOptions extends SortBaseOptions {
      * arguments can be provided to retrieve multiple attributes. The special value <code>#</code> can
      * be used to include the actual element from <code>key</code> being sorted. If not provided, only
      * the sorted elements themselves are returned.<br>
-     * Supported in cluster mode since Valkey version 8.0 and above.
+     * Supported in cluster mode since Valkey 8.0.0.
      *
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for more information.
      */

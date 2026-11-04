@@ -74,6 +74,14 @@ class CircuitBreakerError(RequestError):
     pass
 
 
+class RdmaError(RequestError):
+    """
+    Thrown when an RDMA transfer cannot be completed or RDMA is not supported.
+    """
+
+    pass
+
+
 class LoggerError(GlideError):
     """
     Errors that are thrown when the logger has an error initializing.

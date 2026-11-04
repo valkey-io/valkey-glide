@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use std::collections::HashMap;
+use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -126,11 +127,55 @@ impl RdmaFabric {
     ///
     /// Waits first for every region this fabric is still closing, so the pages of
     /// a buffer dropped just before are no longer pinned.
+    ///
+    /// `memory` must own its bytes, as a `Vec<u8>` or `Box<[u8]>` does, so that
+    /// nothing outside it can reach them. `memory.as_mut()` is called once, here,
+    /// and every later access goes through the slice it returns. A write through
+    /// any other pointer to the same bytes invalidates that slice, and then every
+    /// later transfer is undefined behavior. So an `AsMut` wrapper around a raw
+    /// pointer the owner keeps using, such as memory a C caller allocated, is
+    /// unsound here, even with an `unsafe impl Send`. Use [`Self::register_raw`]
+    /// for that.
     pub fn register(
         &self,
         memory: impl AsMut<[u8]> + Send + 'static,
     ) -> Result<RdmaBuffer, RdmaError> {
-        let host = HostMemory::new(memory);
+        self.register_host(HostMemory::new(memory))
+    }
+
+    /// Register memory owned outside Rust, such as memory a C caller allocated,
+    /// by its address.
+    ///
+    /// Use this instead of [`Self::register`] when the owner keeps its own pointer to
+    /// the memory and reads or writes through it between transfers: to fill a window
+    /// before a set, or read one after a get. Any `&mut [u8]` the owner could hand to
+    /// [`Self::register`] would be invalidated by such a write, and every later
+    /// transfer would read through an invalid pointer. This forms a reference only
+    /// for the moment a transfer, [`RdmaBuffer::as_host`] or
+    /// [`RdmaBuffer::as_host_mut`] reads or writes the memory.
+    ///
+    /// `owner` is dropped once the fabric is done with the memory, exactly when a
+    /// value passed to [`Self::register`] would be. That is when the memory may be
+    /// freed, and never before. It is dropped at once if registration fails.
+    ///
+    /// # Safety
+    ///
+    /// * `memory` must be valid for reads and writes, stay at the same address,
+    ///   and be safe to use from any thread, until `owner` is dropped.
+    /// * Nothing else may read or write the memory while a transfer of it is in
+    ///   flight, or while a slice returned by [`RdmaBuffer::as_host`] or
+    ///   [`RdmaBuffer::as_host_mut`] is alive.
+    pub unsafe fn register_raw(
+        &self,
+        memory: NonNull<[u8]>,
+        owner: impl Send + 'static,
+    ) -> Result<RdmaBuffer, RdmaError> {
+        // SAFETY: the caller upholds `register_raw`'s contract, which is
+        // `from_raw`'s.
+        self.register_host(unsafe { HostMemory::from_raw(memory, owner) })
+    }
+
+    fn register_host(&self, host: HostMemory) -> Result<RdmaBuffer, RdmaError> {
         if host.len() == 0 {
             return Err(RdmaError::Configuration("cannot register 0 bytes".into()));
         }

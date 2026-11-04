@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import gc
 import math
 import os
 import platform
 import sys
 import time
+import warnings
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union, cast, get_type_hints
 
@@ -19,6 +21,7 @@ else:
 import anyio
 import pytest
 from glide import GlideClient, GlideClusterClient, Script, TGlideClient
+from glide.glide_client import _client_registry
 from glide_shared import ClosingError, RequestError
 from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
@@ -184,6 +187,46 @@ class TestGlideClients:
             )
 
         assert client._is_closed
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("resource_warning_filter", ["always", "error"])
+    async def test_unreferenced_client_releases_connection(
+        self, request, cluster_mode, protocol, resource_warning_filter
+    ):
+        """A client dropped without close() is collected and its connection closed,
+        whether its ResourceWarning is reported or raised."""
+        observer = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol
+        )
+        client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            client_name="gc_dropped",
+        )
+
+        async def dropped_client_gone() -> bool:
+            client_list = await observer.custom_command(["CLIENT", "LIST"])
+            assert isinstance(client_list, bytes)
+            return b"name=gc_dropped" not in client_list
+
+        assert not await dropped_client_gone()
+        pipe_client_id = client._pipe_client_id
+        # Under "error" the warning raises inside the finalizer and reaches
+        # sys.unraisablehook, so only the closed connection proves it still ran.
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter(resource_warning_filter, ResourceWarning)
+            del client
+            gc.collect()
+        if resource_warning_filter == "always":
+            assert any(issubclass(w.category, ResourceWarning) for w in caught)
+        assert pipe_client_id not in _client_registry
+        await wait_for(
+            dropped_client_gone,
+            "the dropped client's connection was not closed",
+        )
+        await observer.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -819,14 +862,17 @@ class TestCommands:
         key = get_random_string(10)
         assert await glide_client.set(key, "value") == OK
 
+        # Value not equal
         cond = OnlyIfEqual("other")
         assert await glide_client.set(key, "other", conditional_set=cond) is None
         assert await glide_client.get(key) == b"value"
 
+        # Value equal
         cond = OnlyIfEqual("value")
         assert await glide_client.set(key, "other", conditional_set=cond) == OK
         assert await glide_client.get(key) == b"other"
 
+        # Non-existent key
         missing = get_random_string(10)
         assert await glide_client.set(missing, "value", conditional_set=cond) is None
         assert await glide_client.exists([missing]) == 0
@@ -838,14 +884,17 @@ class TestCommands:
         key = get_random_string(10)
         assert await glide_client.set(key, "value") == OK
 
+        # Value equal
         cond = OnlyIfNotEqual("value")
         assert await glide_client.set(key, "other", conditional_set=cond) is None
         assert await glide_client.get(key) == b"value"
 
+        # Value not equal
         cond = OnlyIfNotEqual("other")
         assert await glide_client.set(key, "other", conditional_set=cond) == OK
         assert await glide_client.get(key) == b"other"
 
+        # Non-existent key
         missing = get_random_string(10)
         assert await glide_client.set(missing, "value", conditional_set=cond) == OK
         assert await glide_client.get(missing) == b"value"
@@ -12124,6 +12173,70 @@ class TestScripts:
 
         ttl_results = await glide_client.httl(multi_key, list(multi_fields.keys()))
         assert all(0 < ttl <= 20 for ttl in ttl_results)
+
+    @pytest.mark.skip_if_version_below("9.1.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hsetex_with_key_conditional_change(self, glide_client: TGlideClient):
+        key = f"test_hsetex_key_conditional_{get_random_string(10)}"
+        field_value_map = {"field1": "value1"}
+
+        # NX: key does not exist, so the hash is created
+        result = await glide_client.hsetex(
+            key,
+            field_value_map,
+            key_conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+        )
+        assert result == 1
+        assert await glide_client.hget(key, "field1") == b"value1"
+
+        # NX: key now exists, so a second NX call should not modify the hash
+        result = await glide_client.hsetex(
+            key,
+            {"field1": "should_not_be_set"},
+            key_conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+        )
+        assert result == 0
+        assert await glide_client.hget(key, "field1") == b"value1"
+
+        # XX: key exists, so the field is updated
+        result = await glide_client.hsetex(
+            key,
+            {"field1": "updated_value1"},
+            key_conditional_change=ConditionalChange.ONLY_IF_EXISTS,
+        )
+        assert result == 1
+        assert await glide_client.hget(key, "field1") == b"updated_value1"
+
+        # XX: key does not exist, so the hash is not created
+        missing_key = f"test_hsetex_key_conditional_missing_{get_random_string(10)}"
+        result = await glide_client.hsetex(
+            missing_key,
+            field_value_map,
+            key_conditional_change=ConditionalChange.ONLY_IF_EXISTS,
+        )
+        assert result == 0
+        assert await glide_client.exists([missing_key]) == 0
+
+    @pytest.mark.skip_if_version_below("9.1.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hsetex_with_all(self, glide_client: TGlideClient):
+        field_value_map = {"field1": "value1"}
+
+        # Key conditional change can be combined with field conditional change and expiry
+        combined_key = f"test_hsetex_key_and_field_conditional_{get_random_string(10)}"
+        result = await glide_client.hsetex(
+            combined_key,
+            field_value_map,
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+            expiry=ExpirySet(ExpiryType.SEC, 60),
+            key_conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+        )
+        assert result == 1
+        ttl_result = await glide_client.httl(combined_key, ["field1"])
+        assert len(ttl_result) == 1
+        assert 0 < ttl_result[0] <= 60
 
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])

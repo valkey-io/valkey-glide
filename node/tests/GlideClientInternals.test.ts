@@ -11,8 +11,11 @@ import {
     BaseClient,
     BaseClientConfiguration,
     AZ_AFFINITY_READ_FROM_STRATEGIES,
+    ConditionalChange,
     ConfigurationError,
     GlideClusterClientConfiguration,
+    HashFieldConditionalChange,
+    HSetExOptions,
     Logger,
     MAX_REQUEST_ARGS_LEN,
     ReadFrom,
@@ -30,7 +33,13 @@ import {
     command_request,
     connection_request,
 } from "../build-ts/ProtobufMessage";
-import { createMigrate } from "../build-ts/Commands";
+import {
+    createHSetEx,
+    createMigrate,
+    createSet,
+    SetOptions,
+    TimeUnit,
+} from "../build-ts/Commands";
 import { convertStringArrayToBuffer } from "./TestUtilities";
 const { RequestType } = command_request;
 
@@ -602,6 +611,134 @@ describe("createMigrate (multi-key) validation", () => {
                 "KEYS",
                 "k",
             ]),
+        );
+    });
+});
+
+describe("createHSetEx option arguments", () => {
+    const fields = [{ field: "field1", value: "value1" }];
+    const keyConditions: [ConditionalChange | undefined, string[]][] = [
+        [undefined, []],
+        [ConditionalChange.ONLY_IF_DOES_NOT_EXIST, ["NX"]],
+        [ConditionalChange.ONLY_IF_EXISTS, ["XX"]],
+    ];
+    const fieldConditions: [
+        HashFieldConditionalChange | undefined,
+        string[],
+    ][] = [
+        [undefined, []],
+        [HashFieldConditionalChange.ONLY_IF_NONE_EXIST, ["FNX"]],
+        [HashFieldConditionalChange.ONLY_IF_ALL_EXIST, ["FXX"]],
+    ];
+    const expiries: [HSetExOptions["expiry"], string[]][] = [
+        [undefined, []],
+        [{ type: TimeUnit.Seconds, count: 60 }, ["EX", "60"]],
+    ];
+    const fieldsArgs = ["FIELDS", "1", "field1", "value1"];
+
+    // Arguments follow the HSETEX order: [NX | XX] [FNX | FXX] [expiry].
+    const cases = keyConditions.flatMap(([keyCondition, keyArgs]) =>
+        fieldConditions.flatMap(([fieldCondition, fieldArgs]) =>
+            expiries.map(
+                ([expiry, expiryArgs]) =>
+                    [
+                        {
+                            keyConditionalChange: keyCondition,
+                            fieldConditionalChange: fieldCondition,
+                            expiry,
+                        },
+                        ["key", ...keyArgs, ...fieldArgs, ...expiryArgs],
+                    ] as [HSetExOptions, string[]],
+            ),
+        ),
+    );
+
+    it.each(cases)("builds arguments for %j", (options, expectedArgs) => {
+        const cmd = createHSetEx("key", fields, options);
+        expect(cmd.requestType).toEqual(RequestType.HSetEx);
+        expect(cmd.argsArray?.args).toEqual(
+            convertStringArrayToBuffer([...expectedArgs, ...fieldsArgs]),
+        );
+    });
+
+    it("builds KEEPTTL expiry", () => {
+        expect(
+            createHSetEx("key", fields, { expiry: "KEEPTTL" }).argsArray?.args,
+        ).toEqual(
+            convertStringArrayToBuffer(["key", "KEEPTTL", ...fieldsArgs]),
+        );
+    });
+});
+
+describe("createSet", () => {
+    function expectArgs(options: SetOptions | undefined, expected: string[]) {
+        const cmd = createSet("key", "value", options);
+        expect(cmd.requestType).toEqual(RequestType.Set);
+        expect(cmd.argsArray?.args).toEqual(
+            convertStringArrayToBuffer(["key", "value", ...expected]),
+        );
+    }
+
+    it("builds command without options", () => {
+        expectArgs(undefined, []);
+    });
+
+    it("builds command with XX and NX", () => {
+        expectArgs({ conditionalSet: "onlyIfExists" }, ["XX"]);
+        expectArgs({ conditionalSet: "onlyIfDoesNotExist" }, ["NX"]);
+    });
+
+    it("builds command with IFEQ and IFNE", () => {
+        expectArgs(
+            { conditionalSet: "onlyIfEqual", comparisonValue: "other" },
+            ["IFEQ", "other"],
+        );
+        expectArgs(
+            { conditionalSet: "onlyIfNotEqual", comparisonValue: "other" },
+            ["IFNE", "other"],
+        );
+    });
+
+    it("throws when IFEQ or IFNE has no comparison value", () => {
+        for (const conditionalSet of ["onlyIfEqual", "onlyIfNotEqual"]) {
+            for (const comparisonValue of [null, undefined]) {
+                expect(() =>
+                    createSet("key", "value", {
+                        conditionalSet,
+                        comparisonValue,
+                    } as unknown as SetOptions),
+                ).toThrow(
+                    `Received conditionalSet '${conditionalSet}' without a comparisonValue`,
+                );
+            }
+        }
+    });
+
+    it("builds command with KEEPTTL and expiry", () => {
+        expectArgs({ expiry: "keepExisting" }, ["KEEPTTL"]);
+        expectArgs({ expiry: { type: TimeUnit.Seconds, count: 10 } }, [
+            "EX",
+            "10",
+        ]);
+    });
+
+    it("throws when expiry is not an integer", () => {
+        expect(() =>
+            createSet("key", "value", {
+                expiry: { type: TimeUnit.Seconds, count: 1.5 },
+            }),
+        ).toThrow("Count must be an integer");
+    });
+
+    it("builds command with all options", () => {
+        expectArgs(
+            {
+                conditionalSet: "onlyIfNotEqual",
+                comparisonValue: "other",
+                returnOldValue: true,
+                expiry: { type: TimeUnit.Seconds, count: 10 },
+            },
+            ["IFNE", "other", "GET", "EX", "10"],
         );
     });
 });

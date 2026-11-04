@@ -523,6 +523,7 @@ public class CommandManager {
         try {
             // Extract cursor information
             String cursorId = getCursorId(cursor);
+            // TODO #7447: Pass the match pattern over JNI as bytes, not as a lossy `String`.
             String matchPattern =
                     options.getMatchPattern() != null ? options.getMatchPattern().toString() : null;
             Long count = options.getCount() != null ? options.getCount() : null;
