@@ -5929,7 +5929,7 @@ class TestCommands:
             await glide_client.xadd(
                 key,
                 [(field, "foo4"), (field2, "bar4")],
-                StreamAddOptions(trim=TrimByMinId(exact=True, threshold=id.decode())),
+                StreamAddOptions(trim=TrimByMinId(exact=True, threshold=id)),
             )
             is not None
         )
@@ -5994,6 +5994,50 @@ class TestCommands:
         assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
             await glide_client.xdel(string_key, [stream_id3])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xtrim_minid_bytes_like_threshold(self, glide_client: TGlideClient):
+        """TrimByMinId must accept the bytes stream ID returned by xadd."""
+        key = get_random_string(10)
+        ids = [await glide_client.xadd(key, [("f", str(i))]) for i in range(3)]
+        last_id = ids[-1]
+        assert isinstance(last_id, bytes)
+
+        assert await glide_client.xtrim(key, TrimByMinId(True, last_id)) == 2
+        assert await glide_client.xlen(key) == 1
+
+        for i in range(2):
+            await glide_client.xadd(key, [("f", str(i))])
+        newest = await glide_client.xrevrange(key, MaxId(), MinId(), count=1)
+        assert newest is not None
+        newest_id = next(iter(newest))
+        assert (
+            await glide_client.xtrim(key, TrimByMinId(True, memoryview(newest_id))) == 2
+        )
+        assert await glide_client.xlen(key) == 1
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xrange_exclusive_bound_bytes_like(self, glide_client: TGlideClient):
+        """ExclusiveIdBound must accept bytes, bytearray and memoryview IDs."""
+        key = get_random_string(10)
+        for stream_id in ["0-1", "0-2", "0-3"]:
+            assert (
+                await glide_client.xadd(
+                    key, [("f", "v")], StreamAddOptions(id=stream_id)
+                )
+                == stream_id.encode()
+            )
+
+        for start in [b"0-1", bytearray(b"0-1"), memoryview(b"0-1")]:
+            result = await glide_client.xrange(key, ExclusiveIdBound(start), MaxId())
+            assert result is not None
+            assert list(result) == [b"0-2", b"0-3"]
+
+            result = await glide_client.xrevrange(key, MaxId(), ExclusiveIdBound(start))
+            assert result is not None
+            assert list(result) == [b"0-3", b"0-2"]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
