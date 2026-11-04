@@ -641,6 +641,45 @@ impl TimerSlot {
 struct DeadlineEntry {
     deadline: Instant,
     slot: Arc<TimerSlot>,
+    /// Inbox shard of the registering thread: a retired slot goes back to this shard's free
+    /// list, so it is reused (not freed) by the thread that allocated it.
+    shard: u8,
+}
+
+/// Max pooled slots per inbox shard; surplus retired slots are freed normally.
+const FREE_CAP: usize = 8192;
+
+/// How often slots whose receiver went away while still in the deadline buckets are swept out
+/// (and returned to their shard's pool).
+const SWEEP_INTERVAL: Duration = Duration::from_millis(10);
+
+fn new_slot() -> Arc<TimerSlot> {
+    Arc::new(TimerSlot {
+        state: AtomicU8::new(SLOT_PENDING),
+        waker: AtomicWaker::new(),
+    })
+}
+
+/// Watchdog side: release our reference to a slot. If it was the last one (the receiver is
+/// gone), reset the slot and queue it for its shard's pool instead of freeing it here — so the
+/// allocation is neither re-made by the next `register()` nor freed on this thread (a
+/// cross-thread free of memory a worker allocated).
+fn retire(recycle: &mut [Vec<Arc<TimerSlot>>], e: DeadlineEntry) {
+    let mut slot = e.slot;
+    if let Some(s) = Arc::get_mut(&mut slot) {
+        s.state = AtomicU8::new(SLOT_PENDING);
+        s.waker = AtomicWaker::new();
+        recycle[e.shard as usize].push(slot);
+    }
+}
+
+/// Per-shard state behind the shard mutex.
+#[derive(Default)]
+struct ShardInner {
+    /// New registrations, drained by the watchdog once per tick.
+    pending: Vec<DeadlineEntry>,
+    /// Retired slots handed back by the watchdog, reused by `register()`.
+    free: Vec<Arc<TimerSlot>>,
 }
 
 /// Error returned by a [`TimeoutReceiver`] when the watchdog thread is gone before the deadline
@@ -721,7 +760,7 @@ impl Drop for TimeoutReceiver {
 
 /// Cache-line padded inbox shard.
 #[repr(align(128))]
-struct InboxShard(Mutex<Vec<DeadlineEntry>>);
+struct InboxShard(Mutex<ShardInner>);
 
 struct WatchdogShared {
     inbox: [InboxShard; INBOX_SHARDS],
@@ -757,8 +796,11 @@ impl Drop for HandleToken {
 /// Handle to the watchdog thread. Register deadlines and receive a signal
 /// when the timeout fires.
 ///
-/// Design (perf/proto-hotpath): `register()` allocates one small shared slot, pushes it into a
-/// per-thread-sharded inbox under an uncontended mutex, and returns. It does not signal the
+/// Design (perf/proto-hotpath): `register()` takes a small shared slot from its shard's pool
+/// (allocating only when the pool is empty), pushes it into a per-thread-sharded inbox under an
+/// uncontended mutex, and returns. Retired slots go back to the pool of the shard that
+/// allocated them, so in steady state a registration neither allocates nor causes a free on
+/// the watchdog thread. It does not signal the
 /// watchdog thread except when that thread is parked idle. The thread drains the inboxes once
 /// per [`WATCHDOG_TICK`], drops entries whose receiver already went away without ever indexing
 /// them, and keeps the rest in coarse per-tick buckets — so a command that completes within a
@@ -908,7 +950,7 @@ impl TimeoutWatchdog {
 
     fn spawn(publish_count: bool) -> Self {
         let shared = Arc::new(WatchdogShared {
-            inbox: std::array::from_fn(|_| InboxShard(Mutex::new(Vec::new()))),
+            inbox: std::array::from_fn(|_| InboxShard(Mutex::new(ShardInner::default()))),
             sleeping: AtomicBool::new(false),
             shutdown: AtomicBool::new(false),
             thread: OnceLock::new(),
@@ -929,7 +971,7 @@ impl TimeoutWatchdog {
                 std::sync::atomic::fence(Ordering::SeqCst);
                 wheel.kill_all();
                 for shard in shared.inbox.iter() {
-                    let drained = std::mem::take(&mut *lock(&shard.0));
+                    let drained = std::mem::take(&mut lock(&shard.0).pending);
                     for e in drained {
                         e.slot.resolve(SLOT_DEAD);
                     }
@@ -954,15 +996,12 @@ impl TimeoutWatchdog {
     /// the latency tracking timer to avoid a redundant clock read.
     #[inline]
     pub fn register(&self, timeout: Duration, submitted_at: Instant) -> TimeoutReceiver {
-        let slot = Arc::new(TimerSlot {
-            state: AtomicU8::new(SLOT_PENDING),
-            waker: AtomicWaker::new(),
-        });
-        let rx = TimeoutReceiver { slot: slot.clone() };
         let deadline = submitted_at + timeout;
         let shard = SHARD.with(|s| *s);
-        {
+        let rx = {
             let mut inbox = lock(&self.shared.inbox[shard].0);
+            let slot = inbox.free.pop().unwrap_or_else(new_slot);
+            let rx = TimeoutReceiver { slot: slot.clone() };
             // Checked under the shard lock: the exiting thread sets `shutdown` before it takes
             // each shard lock for its final drain, so an entry pushed here (shutdown unset) is
             // always drained and resolved, and none is pushed once that drain may have passed.
@@ -972,8 +1011,13 @@ impl TimeoutWatchdog {
                 rx.slot.resolve(SLOT_DEAD);
                 return rx;
             }
-            inbox.push(DeadlineEntry { deadline, slot });
-        }
+            inbox.pending.push(DeadlineEntry {
+                deadline,
+                slot,
+                shard: shard as u8,
+            });
+            rx
+        };
         // Pairs with the thread's fence between `sleeping = true` and its final inbox scan:
         // either the thread sees this entry, or we see `sleeping` and unpark it.
         std::sync::atomic::fence(Ordering::SeqCst);
@@ -1004,13 +1048,15 @@ impl TimeoutWatchdog {
             for shard in shared.inbox.iter() {
                 {
                     let mut guard = lock(&shard.0);
-                    if guard.is_empty() {
+                    if guard.pending.is_empty() {
                         continue;
                     }
-                    std::mem::swap(&mut *guard, &mut spare);
+                    std::mem::swap(&mut guard.pending, &mut spare);
                 }
                 for e in spare.drain(..) {
-                    if !e.slot.is_cancelled() {
+                    if e.slot.is_cancelled() {
+                        retire(&mut wheel.recycle, e);
+                    } else {
                         wheel.insert(e);
                     }
                 }
@@ -1021,11 +1067,15 @@ impl TimeoutWatchdog {
             wheel.fire_due(now);
 
             // Periodic cleanup of entries whose receivers were dropped (command completed).
-            // Run at most once per second to amortize cost.
-            if now.duration_since(last_cleanup) > Duration::from_secs(1) {
+            // Every SWEEP_INTERVAL (was 1 s): frequent enough that their slots return to the
+            // pools quickly; the resident set it walks is small.
+            if now.duration_since(last_cleanup) > SWEEP_INTERVAL {
                 wheel.sweep_cancelled();
                 last_cleanup = now;
             }
+
+            // Hand retired slots back to the shards that allocated them.
+            wheel.flush_recycled(shared);
 
             // Publish the local count once per iteration (no contention on write side)
             if shared.publish_count {
@@ -1045,7 +1095,7 @@ impl TimeoutWatchdog {
                 None => {
                     shared.sleeping.store(true, Ordering::SeqCst);
                     std::sync::atomic::fence(Ordering::SeqCst);
-                    let inbox_empty = shared.inbox.iter().all(|s| lock(&s.0).is_empty());
+                    let inbox_empty = shared.inbox.iter().all(|s| lock(&s.0).pending.is_empty());
                     if inbox_empty && !shared.shutdown.load(Ordering::SeqCst) {
                         std::thread::park();
                     }
@@ -1069,6 +1119,8 @@ struct Wheel {
     /// Entries resident in `buckets` (same semantics as the old `local_count`: registered and
     /// not yet fired or swept).
     count: usize,
+    /// Retired slots per shard, waiting to be returned to that shard's pool.
+    recycle: Vec<Vec<Arc<TimerSlot>>>,
 }
 
 impl Default for Wheel {
@@ -1077,6 +1129,7 @@ impl Default for Wheel {
             epoch: Instant::now(),
             buckets: BTreeMap::new(),
             count: 0,
+            recycle: (0..INBOX_SHARDS).map(|_| Vec::new()).collect(),
         }
     }
 }
@@ -1120,18 +1173,45 @@ impl Wheel {
             for e in entries {
                 // Cancelled slots are skipped inside `resolve`.
                 e.slot.resolve(SLOT_FIRED);
+                retire(&mut self.recycle, e);
             }
         }
     }
 
     fn sweep_cancelled(&mut self) {
-        let count = &mut self.count;
-        self.buckets.retain(|_, entries| {
-            let before = entries.len();
-            entries.retain(|e| !e.slot.is_cancelled());
-            *count -= before - entries.len();
-            !entries.is_empty()
-        });
+        let Wheel {
+            buckets,
+            count,
+            recycle,
+            ..
+        } = self;
+        for entries in buckets.values_mut() {
+            let mut i = 0;
+            while i < entries.len() {
+                if entries[i].slot.is_cancelled() {
+                    retire(recycle, entries.swap_remove(i));
+                    *count -= 1;
+                } else {
+                    i += 1;
+                }
+            }
+        }
+        buckets.retain(|_, entries| !entries.is_empty());
+    }
+
+    fn flush_recycled(&mut self, shared: &WatchdogShared) {
+        for (i, slots) in self.recycle.iter_mut().enumerate() {
+            if slots.is_empty() {
+                continue;
+            }
+            let mut g = lock(&shared.inbox[i].0);
+            let room = FREE_CAP.saturating_sub(g.free.len());
+            let n = room.min(slots.len());
+            g.free.extend(slots.drain(..n));
+            drop(g);
+            // Pools full: free the surplus here (bounded memory over perfect locality).
+            slots.clear();
+        }
     }
 
     /// Time from `now` until the earliest non-empty bucket is due (zero if already due), or
@@ -1249,7 +1329,11 @@ mod tests {
             assert_eq!(rx.await, Err(RecvError));
         }
         assert!(
-            watchdog.shared.inbox.iter().all(|s| lock(&s.0).is_empty()),
+            watchdog
+                .shared
+                .inbox
+                .iter()
+                .all(|s| lock(&s.0).pending.is_empty()),
             "registrations after exit must not accumulate"
         );
     }
@@ -1310,13 +1394,11 @@ mod tests {
         assert!(boundary >= far, "clamped early: {boundary:?} < {far:?}");
         assert!(boundary < far + WATCHDOG_TICK);
 
-        let slot = Arc::new(TimerSlot {
-            state: AtomicU8::new(SLOT_PENDING),
-            waker: AtomicWaker::new(),
-        });
+        let slot = new_slot();
         wheel.insert(DeadlineEntry {
             deadline: wheel.epoch + far,
             slot: slot.clone(),
+            shard: 0,
         });
         // Days later (well past any u32-millisecond clamp of ~49.7 days) it is still pending.
         wheel.fire_due(wheel.epoch + Duration::from_secs(60 * 24 * 3600));
@@ -1377,6 +1459,85 @@ mod tests {
             0,
             "child watchdog failed (2=early, 3=closed, 4=never fired)"
         );
+    }
+
+    #[test]
+    fn slot_still_held_by_a_receiver_is_not_pooled() {
+        let mut recycle: Vec<Vec<Arc<TimerSlot>>> = (0..INBOX_SHARDS).map(|_| Vec::new()).collect();
+        let held = new_slot();
+        let rx = TimeoutReceiver { slot: held.clone() };
+        held.resolve(SLOT_FIRED);
+        retire(
+            &mut recycle,
+            DeadlineEntry {
+                deadline: Instant::now(),
+                slot: held,
+                shard: 3,
+            },
+        );
+        assert!(
+            recycle.iter().all(Vec::is_empty),
+            "a slot whose receiver is alive must not be reused"
+        );
+        drop(rx);
+
+        // Receiver gone: the slot is reset to PENDING and queued for its own shard.
+        let slot = new_slot();
+        drop(TimeoutReceiver { slot: slot.clone() });
+        retire(
+            &mut recycle,
+            DeadlineEntry {
+                deadline: Instant::now(),
+                slot,
+                shard: 3,
+            },
+        );
+        assert_eq!(recycle[3].len(), 1);
+        assert_eq!(recycle[3][0].state.load(Ordering::Acquire), SLOT_PENDING);
+    }
+
+    #[test]
+    fn slot_pool_is_capped_per_shard() {
+        let watchdog = TimeoutWatchdog::start();
+        let mut wheel = Wheel::default();
+        wheel.recycle[0] = (0..FREE_CAP + 10).map(|_| new_slot()).collect();
+        wheel.flush_recycled(&watchdog.shared);
+        assert_eq!(lock(&watchdog.shared.inbox[0].0).free.len(), FREE_CAP);
+        assert!(
+            wheel.recycle[0].is_empty(),
+            "surplus slots must be freed, not kept"
+        );
+    }
+
+    #[tokio::test]
+    async fn retired_slots_are_pooled_and_reused_cleanly() {
+        let watchdog = TimeoutWatchdog::start();
+        // Cancelled slots (receiver dropped before the deadline) must come back. A fired slot is
+        // pooled only if its receiver was already gone at fire time; awaited receivers below
+        // still hold theirs then, so those slots are freed by the receiver instead.
+        for _ in 0..50 {
+            let rx = watchdog.register(Duration::from_millis(2), Instant::now());
+            rx.await.unwrap();
+        }
+        for _ in 0..50 {
+            drop(watchdog.register(Duration::from_secs(60), Instant::now()));
+        }
+        tokio::time::sleep(Duration::from_millis(60)).await;
+        let pooled: usize = watchdog
+            .shared
+            .inbox
+            .iter()
+            .map(|s| lock(&s.0).free.len())
+            .sum();
+        assert!(pooled > 0, "retired slots must be pooled, got {pooled}");
+        // A reused slot starts PENDING: it must neither be pre-fired nor fire early.
+        for _ in 0..pooled.min(20) {
+            let start = Instant::now();
+            let mut rx = watchdog.register(Duration::from_millis(5), start);
+            assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+            rx.await.unwrap();
+            assert!(start.elapsed() >= Duration::from_millis(5));
+        }
     }
 
     // ── Pending Count ────────────────────────────────────────────────────

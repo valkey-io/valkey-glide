@@ -97,7 +97,7 @@ The timeout watchdog provides structured diagnostic information when command tim
 
 The watchdog is a **pure timer** — `register()` returns a `TimeoutReceiver` future that resolves to `Ok(())` when the deadline fires (or `Err(RecvError)` if the watchdog thread is gone). All diagnostic enrichment (cause classification, latency percentiles, inflight counts, RSS) happens on the consumer side (`send_command`) at fire time. This keeps the hot path minimal:
 
-- **Register**: `Instant::now()` + one small shared timer slot pushed into the calling thread's inbox shard (16 shards, an uncontended mutex). The watchdog thread is not woken unless it is parked idle.
+- **Register**: `Instant::now()` + one small shared timer slot pushed into the calling thread's inbox shard (16 shards, an uncontended mutex). Slots are pooled per shard (up to 8192 each): the watchdog returns a slot to the shard that allocated it once it holds the last reference, so in steady state a registration does not allocate. The watchdog thread is not woken unless it is parked idle.
 - **Watchdog thread**: drains the inboxes once per `WATCHDOG_TICK` (1 ms) while any deadline is outstanding, drops entries whose request already completed without indexing them, and keeps the rest in per-tick buckets.
 - **Phase tracking** (zero-alloc): `AtomicU8` on `Cmd` set by routing layer after connection resolution
 - **Fire path** (rare): builds `TimeoutEvent` with classified cause, p99 latency, inflight trend, and process RSS
