@@ -30,6 +30,32 @@ const STANDALONE_SUBSCRIPTION_KINDS: &[PubSubSubscriptionKind] = &[
     PubSubSubscriptionKind::Pattern,
 ];
 
+/// The commands `GlidePubSubSynchronizer::intercept_pubsub_command` answers
+/// locally, by uppercased name. Gates both that method and its synchronous
+/// pre-filter `may_intercept_pubsub_command`; a new intercepted command needs an
+/// entry here as well as a match arm there.
+const INTERCEPTED_PUBSUB_COMMANDS: &[&[u8]] = &[
+    b"SUBSCRIBE",
+    b"PSUBSCRIBE",
+    b"SSUBSCRIBE",
+    b"UNSUBSCRIBE",
+    b"PUNSUBSCRIBE",
+    b"SUNSUBSCRIBE",
+    b"SUBSCRIBE_BLOCKING",
+    b"PSUBSCRIBE_BLOCKING",
+    b"SSUBSCRIBE_BLOCKING",
+    b"UNSUBSCRIBE_BLOCKING",
+    b"PUNSUBSCRIBE_BLOCKING",
+    b"SUNSUBSCRIBE_BLOCKING",
+    b"GET_SUBSCRIPTIONS",
+];
+
+/// Whether `cmd_name` (uppercased, `Routable::command()` bytes) is in
+/// [`INTERCEPTED_PUBSUB_COMMANDS`].
+fn is_intercepted_pubsub_command(cmd_name: &[u8]) -> bool {
+    INTERCEPTED_PUBSUB_COMMANDS.contains(&cmd_name)
+}
+
 /// Result of checking synchronization state - avoids recomputation
 struct SyncDiff {
     is_synchronized: bool,
@@ -885,8 +911,18 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
         self.reconciliation_notify.notify_one();
     }
 
+    fn may_intercept_pubsub_command(&self, cmd_name: &[u8]) -> bool {
+        is_intercepted_pubsub_command(cmd_name)
+    }
+
     async fn intercept_pubsub_command(&self, cmd: &Cmd) -> Option<RedisResult<Value>> {
         let command_name = cmd.command().unwrap_or_default();
+        // The same gate the pre-filter uses, so the two can never disagree: a
+        // command missing from `INTERCEPTED_PUBSUB_COMMANDS` is not intercepted
+        // here either.
+        if !is_intercepted_pubsub_command(&command_name) {
+            return None;
+        }
         let command_str = std::str::from_utf8(&command_name).unwrap_or("");
 
         match command_str {
@@ -1074,6 +1110,45 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
             } else {
                 notified.await;
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod intercept_filter_tests {
+    use super::{INTERCEPTED_PUBSUB_COMMANDS, is_intercepted_pubsub_command};
+
+    #[test]
+    fn intercepted_names_are_recognized() {
+        for name in INTERCEPTED_PUBSUB_COMMANDS {
+            assert!(
+                is_intercepted_pubsub_command(name),
+                "{}",
+                String::from_utf8_lossy(name)
+            );
+        }
+    }
+
+    #[test]
+    fn ordinary_and_server_pubsub_commands_are_not_intercepted() {
+        // PUBLISH / PUBSUB ... / SPUBLISH go to the server, as do data commands.
+        for name in [
+            b"GET".as_slice(),
+            b"SET",
+            b"PUBLISH",
+            b"SPUBLISH",
+            b"PUBSUB CHANNELS",
+            b"PUBSUB NUMSUB",
+            b"",
+            // The pre-filter takes the uppercased name, as `Routable::command()`
+            // produces it; lowercase input is never passed.
+            b"subscribe",
+        ] {
+            assert!(
+                !is_intercepted_pubsub_command(name),
+                "{}",
+                String::from_utf8_lossy(name)
+            );
         }
     }
 }
