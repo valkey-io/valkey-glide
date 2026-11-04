@@ -13,10 +13,12 @@
 //! discriminant, which moves when the enum's own layout does. A dependency bump or a
 //! compiler change that lays any of those out differently changes the fingerprint.
 //!
-//! What it cannot see is a build whose `Bytes` or `BigInt` keeps the same size, alignment
-//! and niche while moving a field, because those types are only ever read through their own
-//! methods here. Two libraries that must agree on a `Value` should therefore be built from
-//! one lockfile and one toolchain; this fingerprint is the cheap check, not the guarantee.
+//! What it cannot see on its own is a dependency build whose `Bytes` or `BigInt` keeps its
+//! size, alignment and niche while moving a field, which a version bump is free to do. So
+//! the token a library reports is this fingerprint folded together with the resolved
+//! versions of those crates and the compiler that produced it, both recorded at build time
+//! by the `build.rs` next to each library. Two builds agree only when they used the same
+//! `bytes`, the same `num-bigint` and the same rustc, and laid `Value` out the same way.
 
 use std::mem::{align_of, size_of};
 
@@ -61,4 +63,59 @@ pub const fn value_abi_fingerprint() -> u64 {
         size_of::<Option<BigInt>>(),
         align_of::<Option<BigInt>>(),
     )
+}
+
+/// The token a library reports about the `Value` it was built with: the layout fingerprint,
+/// plus the dependency versions and compiler its `build.rs` recorded.
+///
+/// `dependency_versions` and `rustc_version` are the two strings the build script emits;
+/// they are compared through this hash rather than as text because the token crosses an FFI
+/// boundary as a single `u64`.
+pub fn value_abi_token(dependency_versions: &str, rustc_version: &str) -> u64 {
+    let mut hash = value_abi_fingerprint();
+    for part in [dependency_versions, rustc_version] {
+        for byte in part.as_bytes() {
+            hash = (hash ^ u64::from(*byte)).wrapping_mul(PRIME);
+        }
+    }
+    hash
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const VERSIONS: &str = "bytes=1.12.1;num-bigint=0.4.8";
+    const RUSTC: &str = "rustc 1.99.0 (b940084d7 2026-09-28)";
+
+    /// A dependency bump keeps `Value` the same size and still has to move the token, which
+    /// is the drift no size or alignment probe can see on its own.
+    #[test]
+    fn a_dependency_version_moves_the_token() {
+        assert_ne!(
+            value_abi_token(VERSIONS, RUSTC),
+            value_abi_token("bytes=2.0.0;num-bigint=0.4.8", RUSTC)
+        );
+        assert_ne!(
+            value_abi_token(VERSIONS, RUSTC),
+            value_abi_token("bytes=1.12.1;num-bigint=0.5.0", RUSTC)
+        );
+    }
+
+    #[test]
+    fn a_compiler_version_moves_the_token() {
+        assert_ne!(
+            value_abi_token(VERSIONS, RUSTC),
+            value_abi_token(VERSIONS, "rustc 1.98.0 (000000000 2026-06-01)")
+        );
+    }
+
+    /// The same build inputs report the same token, whichever library asks.
+    #[test]
+    fn the_same_inputs_report_the_same_token() {
+        assert_eq!(
+            value_abi_token(VERSIONS, RUSTC),
+            value_abi_token(VERSIONS, RUSTC)
+        );
+    }
 }

@@ -628,14 +628,13 @@ pub unsafe extern "C" fn set_sync_value_results(client_ptr: *const c_void, enabl
         .store(enabled, std::sync::atomic::Ordering::Relaxed);
 }
 
-/// Fingerprint of the memory layout of `Value` in this build: its size and alignment, the
-/// size and alignment of the private types it embeds (`bytes::Bytes` inside `BulkString`,
-/// `num_bigint::BigInt` inside `BigNumber`), and how `Option<Value>` packs its
-/// discriminant. A consumer of `CommandResult.value` must have been compiled against the
-/// same layout, so it compares this with its own token before opting in.
+/// Fingerprint of the `Value` this build was made for: its layout, the resolved versions of
+/// the crates whose private layout it embeds, and the compiler that laid it out. A consumer
+/// of `CommandResult.value` must have been built against the same, so it compares this with
+/// its own token before opting in.
 #[unsafe(no_mangle)]
 pub extern "C" fn value_abi_token() -> u64 {
-    redis::value_abi::value_abi_fingerprint()
+    redis::value_abi::value_abi_token(env!("VALUE_ABI_DEPS"), env!("VALUE_ABI_RUSTC"))
 }
 
 /// Specifies the type of client used to execute commands.

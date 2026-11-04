@@ -120,12 +120,13 @@ def vendor_dependencies():
         print(f"[INFO] Copying {folder.source} → {folder.dist}")
         shutil.copytree(folder.source, folder.dist, ignore=ignore_dirs)
 
-    # Vendor only the Rust build files for glide-shared (Cargo.toml, Cargo.lock
-    # + src/); --locked needs the lockfile present in the vendored copy.
+    # Vendor only the Rust build files for glide-shared (Cargo.toml, Cargo.lock,
+    # build.rs + src/); --locked needs the lockfile present in the vendored copy, and
+    # build.rs reads it to record the versions value_abi_token compares.
     if GLIDE_SHARED_RS_DIST.parent.exists():
         remove_existing(GLIDE_SHARED_RS_DIST.parent)
     GLIDE_SHARED_RS_DIST.mkdir(parents=True)
-    for build_file in ("Cargo.toml", "Cargo.lock"):
+    for build_file in ("Cargo.toml", "Cargo.lock", "build.rs"):
         shutil.copy2(
             GLIDE_SHARED_RS_SOURCE / build_file, GLIDE_SHARED_RS_DIST / build_file
         )
