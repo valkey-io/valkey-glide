@@ -1151,4 +1151,36 @@ mod intercept_filter_tests {
             );
         }
     }
+
+    /// Every name in `INTERCEPTED_PUBSUB_COMMANDS` reaches a match arm of
+    /// `intercept_pubsub_command`, so a list entry without an arm (which the
+    /// pre-filter would pass and the interceptor would then send to the server)
+    /// fails here. The other direction needs no test: the interceptor returns
+    /// before its `match` for any name missing from the list, so an arm without
+    /// a list entry is never reached.
+    #[tokio::test]
+    async fn every_listed_name_is_answered_by_intercept_pubsub_command() {
+        use super::{GlidePubSubSynchronizer, PubSubSynchronizer};
+        use std::time::Duration;
+        let sync = GlidePubSubSynchronizer::new(None, false, None, Duration::from_secs(1));
+        for name in INTERCEPTED_PUBSUB_COMMANDS {
+            let mut cmd = redis::Cmd::new();
+            cmd.arg(*name).arg("channel");
+            if name.ends_with(b"_BLOCKING") {
+                // The blocking variants take a trailing timeout in milliseconds.
+                // Without an internal client nothing ever syncs, so a blocking
+                // subscribe answers with a timeout error after 1 ms; that is
+                // still an answer.
+                cmd.arg("1");
+            }
+            assert!(
+                sync.intercept_pubsub_command(&cmd).await.is_some(),
+                "{} is listed but has no match arm",
+                String::from_utf8_lossy(name)
+            );
+        }
+        let mut publish = redis::Cmd::new();
+        publish.arg("PUBLISH").arg("channel").arg("message");
+        assert!(sync.intercept_pubsub_command(&publish).await.is_none());
+    }
 }

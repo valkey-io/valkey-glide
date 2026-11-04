@@ -158,6 +158,49 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// `send_command` borrows the caller's `Cmd` instead of cloning it, and the
+    /// clone was what reset the watchdog fields the timeout diagnostics read. A
+    /// reused `Cmd` must still start every send as Queued with zero retries.
+    /// The cluster client sends from its own copy of the command, so after the
+    /// reply the caller's `Cmd` shows exactly what `send_command` reset it to.
+    /// The standalone client marks the caller's `Cmd` as Sent while sending, so
+    /// only the retry count shows the reset there.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_reused_cmd_starts_each_send_with_reset_watchdog_fields(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        use std::sync::atomic::Ordering;
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut cmd = redis::cmd("SET");
+            cmd.arg(generate_random_string(6)).arg("value");
+            let phase_after_send = if use_cluster {
+                redis::PHASE_QUEUED
+            } else {
+                redis::PHASE_SENT
+            };
+            for _ in 0..3 {
+                // Leftovers from an earlier send of the same `Cmd`.
+                cmd.watchdog_phase
+                    .store(redis::PHASE_SENT, Ordering::Release);
+                cmd.watchdog_retry_count.store(7, Ordering::Relaxed);
+                let reply = test_basics.client.send_command(&mut cmd, None).await;
+                assert_eq!(reply, Ok(Value::Okay));
+                assert_eq!(cmd.watchdog_retry_count.load(Ordering::Relaxed), 0);
+                assert_eq!(cmd.watchdog_phase.load(Ordering::Acquire), phase_after_send);
+            }
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
