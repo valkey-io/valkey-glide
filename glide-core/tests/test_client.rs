@@ -5057,7 +5057,7 @@ pub(crate) mod shared_client_tests {
             redis: RedisConnectionInfo::default(),
         })
         .unwrap();
-        let mut setup_conn = retry(|| async {
+        let setup_conn = retry(|| async {
             setup_client
                 .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
                 .await
@@ -5271,7 +5271,7 @@ pub(crate) mod shared_client_tests {
         use glide_core::scope;
 
         block_on_all(async {
-            let (_server, mut admin_conn, proto_request) =
+            let (_server, admin_conn, proto_request) =
                 setup_password_local_server("old-password").await;
             let bytes = proto_request
                 .write_to_bytes()
@@ -5335,7 +5335,7 @@ pub(crate) mod shared_client_tests {
         use glide_core::scope;
 
         block_on_all(async {
-            let (_server, mut admin_conn, proto_request) =
+            let (_server, admin_conn, proto_request) =
                 setup_password_local_server("old-password").await;
             let bytes = proto_request
                 .write_to_bytes()
@@ -5408,7 +5408,7 @@ pub(crate) mod shared_client_tests {
         use glide_core::scope;
 
         block_on_all(async {
-            let (_server, mut admin_conn, proto_request) =
+            let (_server, admin_conn, proto_request) =
                 setup_password_local_server("old-password").await;
             let bytes = proto_request
                 .write_to_bytes()
@@ -5795,7 +5795,7 @@ pub(crate) mod shared_client_tests {
                 redis: RedisConnectionInfo::default(),
             })
             .unwrap();
-            let mut admin_conn = retry(|| async {
+            let admin_conn = retry(|| async {
                 admin_client
                     .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
                     .await
@@ -6172,7 +6172,7 @@ pub(crate) mod shared_client_tests {
                 redis: RedisConnectionInfo::default(),
             })
             .unwrap();
-            let mut admin_conn = retry(|| async {
+            let admin_conn = retry(|| async {
                 admin_client
                     .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
                     .await
@@ -6259,7 +6259,7 @@ pub(crate) mod shared_client_tests {
                     redis: RedisConnectionInfo::default(),
                 })
                 .unwrap();
-                let mut conn = retry(|| async {
+                let conn = retry(|| async {
                     admin
                         .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
                         .await
