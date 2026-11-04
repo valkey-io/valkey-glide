@@ -71,7 +71,7 @@ func TestGoModulesCiSync(t *testing.T) {
 		"go-modules.yml no longer invokes the modules-test make target -- update both files to match.",
 	)
 	assert.Regexp(
-		t, regexp.MustCompile(`-testify\.m\s+"?\^?TestModule`), goArmText,
+		t, regexp.MustCompile(`-testify\.m\s+"?\^?TestModule("|\s|$)`), goArmText,
 		"utils/run-modules-ci-locally.sh's go) case arm no longer filters to ^TestModule -- it would "+
 			"run (or skip) more or fewer tests than CI's modules-test target does.",
 	)

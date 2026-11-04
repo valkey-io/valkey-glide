@@ -163,7 +163,13 @@ case "$MODULES_TEST_LANG" in
             *) GO_TARGET_TRIPLET="" ;;
         esac
         if [ -n "$GO_TARGET_TRIPLET" ]; then
-            ( cd "${REPO_ROOT}/ffi" && cargo rustc --crate-type staticlib --release )
+            # `cargo clean -p` forces this unit dirty so the following `cargo rustc` actually
+            # rebuilds and re-emits libglide_ffi.a: Cargo's own fingerprint check otherwise finds
+            # make build-glide-client's prior build still fresh (same flags, no source changes)
+            # and skips rebuilding entirely, so the `cp` below would just re-copy that build's
+            # output -- already run through the Makefile's `strip -x`, which is what this whole
+            # block exists to avoid.
+            ( cd "${REPO_ROOT}/ffi" && cargo clean -p glide-ffi --release && cargo rustc --crate-type staticlib --release )
             cp "${REPO_ROOT}/ffi/target/release/libglide_ffi.a" \
                 "${REPO_ROOT}/go/rustbin/${GO_TARGET_TRIPLET}/libglide_ffi.a"
         fi

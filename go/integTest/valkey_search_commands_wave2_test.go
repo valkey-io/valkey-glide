@@ -1133,7 +1133,12 @@ func (suite *GlideTestSuite) TestModuleFtCreateBfloat16VectorKnnReturnsRealNeigh
 				SetType(constants.VectorDataTypeBfloat16),
 		},
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
-	require.NoError(suite.T(), err)
+	if err != nil {
+		if classifyBfloat16SimdCapabilityError(err.Error()) {
+			suite.T().Skip("search module is 1.3-capable but this host's CPU lacks a SIMD-safe BF16 path: " + err.Error())
+		}
+		require.NoError(suite.T(), err)
+	}
 
 	points := map[string][2]float32{"0": {0.0, 0.0}, "1": {1.0, 0.0}, "2": {2.0, 0.0}}
 	for keySuffix, coords := range points {

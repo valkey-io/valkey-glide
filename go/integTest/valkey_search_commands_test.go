@@ -2404,6 +2404,16 @@ func classifyInkeysProbeError(msg string) bool {
 	return strings.Contains(msg, "Unexpected") && strings.Contains(msg, "INKEYS")
 }
 
+// classifyBfloat16SimdCapabilityError matches valkey-search's own error text (see
+// CheckSimsimdBf16Capability in its src/indexes/vector_base.cc) for a host whose CPU lacks a
+// SIMD-safe BF16 path -- a server-side capability gap distinct from the module being pre-1.3.
+// Matching distinctive substrings from that message (rather than the bare word "BFLOAT16", which
+// also appears in unrelated errors such as a malformed schema) keeps this from masking real
+// FT.CREATE failures as a missing-capability skip.
+func classifyBfloat16SimdCapabilityError(msg string) bool {
+	return strings.Contains(msg, "BFLOAT16") && strings.Contains(msg, "SIMD")
+}
+
 // probeSearch13CapabilityCluster probes a connected cluster client for valkey-search 1.3
 // capability using a real command plus a 1.3-only argument (INKEYS, added in rc1 / PR #967),
 // classified by error text rather than a version string -- a version string can be present
