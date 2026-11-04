@@ -34,6 +34,10 @@
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 
+### Changes
+
+* Core: Fewer allocations per reply and per command. Replies of up to 4 KiB (other than RESP3 pushes) are split off the connection's read buffer instead of copied, and a single command's packed buffer is queued for sending without an owner allocation. A retained small reply value now keeps its read buffer (typically 8 KiB, at most about 85 KiB) alive until it is dropped; `Value::detach_buffers` copies it out, and the new `bytes_into_vec` converts it to a `Vec<u8>` without keeping the read buffer ([#7531](https://github.com/valkey-io/valkey-glide/pull/7531))
+
 ## 2.6
 
 ### Features
