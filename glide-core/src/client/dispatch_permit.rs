@@ -12,7 +12,8 @@ use redis::cluster_async::InflightSlot;
 /// breaker and the in-flight limit have let it through.
 pub(super) struct DispatchPermit {
     client: ClientWrapper,
-    /// `None` once [`Self::attach_slot_to`] has moved the slot onto a command.
+    /// `None` once `attach_slot_to` (`rdma` feature only) has moved the slot
+    /// onto a command.
     slot: Option<InflightSlot>,
 }
 
@@ -72,8 +73,8 @@ impl DispatchPermit {
         }
     }
 
-    /// The client, and the slot unless [`Self::attach_slot_to`] already moved it
-    /// onto the command.
+    /// The client, and the slot unless `attach_slot_to` (`rdma` feature only)
+    /// already moved it onto the command.
     pub(super) fn into_parts(self) -> (ClientWrapper, Option<InflightSlot>) {
         (self.client, self.slot)
     }
