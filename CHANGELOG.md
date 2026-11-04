@@ -21,6 +21,7 @@
 
 ### Fixes
 
+* Python: The sync client sends a `memoryview` argument with its byte length (`nbytes`) instead of `len()`. A `memoryview` cast to a wider format (e.g. `.cast("I")`) or with more than one dimension was sent truncated, silently storing a partial value or key; this affected direct commands, batches, `custom_command`, scripts and cluster scan ([#7560](https://github.com/valkey-io/valkey-glide/issues/7560))
 * Python: `zadd` (async, sync and `Batch`/`ClusterBatch`) no longer stringifies `bytes`, `bytearray` and `memoryview` members into their Python repr; members are now passed through verbatim and only the scores are converted to strings ([#7521](https://github.com/valkey-io/valkey-glide/issues/7521))
 * Core: Scoped connections authenticate with the client's current password after `update_connection_password` (or a user-issued `AUTH`/`HELLO`), instead of the password the client was created with: a scope connection built after the rotation sends the new password, and an idle one re-authenticates before its next command once the server has accepted the new password (`immediate_auth`, `AUTH`, `HELLO`); a store-only update leaves open scope connections as they are, like the client's own connection ([#7334](https://github.com/valkey-io/valkey-glide/issues/7334))
 * Core: `GETSET` compresses value when enabled ([#7411](https://github.com/valkey-io/valkey-glide/issues/7411))
