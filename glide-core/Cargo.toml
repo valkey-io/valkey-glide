@@ -1,6 +1,6 @@
 [package]
 name = "glide-core"
-version = "0.1.1"
+version = "0.2.0"
 
 # About
 description = "Core for Valkey GLIDE. This crate isn't intended to be used directly."
@@ -18,10 +18,10 @@ edition = "2024"
 [dependencies]
 
 # GLIDE dependencies
-glide-logger = { path = "../glide-logger", version = "0.1" }
-glide-telemetry = { path = "../glide-telemetry", version = "0.1" }
-glide-core-engine = { path = "./redis-rs/redis", version = "0.1", features = ["aio", "keep-alive", "tokio-comp", "tokio-rustls-comp", "connection-manager", "cluster", "cluster-async"] }
-glide-rdma = { path = "../glide-rdma", version = "0.1", optional = true }
+glide-logger = { path = "../glide-logger", version = "0.1.1" }
+glide-telemetry = { path = "../glide-telemetry", version = "0.1.1" }
+glide-core-engine = { path = "./redis-rs/redis", version = "0.1.2", features = ["aio", "keep-alive", "tokio-comp", "tokio-rustls-comp", "connection-manager", "cluster", "cluster-async"] }
+glide-rdma = { path = "../glide-rdma", version = "0.1.0", optional = true }
 
 # External dependencies
 async-trait = { version = "0.1" }
@@ -80,7 +80,7 @@ test-util = []
 [dev-dependencies]
 
 # GLIDE dependencies
-glide-core-engine = { path = "./redis-rs/redis", version = "0.1", features = ["tls-rustls-insecure"] }
+glide-core-engine = { path = "./redis-rs/redis", version = "0.1.2", features = ["tls-rustls-insecure"] }
 glide-core = { path = ".", features = ["socket-layer", "test-util"] }
 
 # External dependencies

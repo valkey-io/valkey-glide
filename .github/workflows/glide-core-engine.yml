@@ -13,8 +13,8 @@ on:
             - glide-core/redis-rs/**
 
             # Rust dependencies
-            - glide-telemetry/**
             - glide-logger/**
+            - glide-telemetry/**
             - glide-rdma/**
             - deny.toml
 
@@ -25,15 +25,16 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
+
+            # Exclusions
             - "!**/*.md"
-            - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
             - glide-core/redis-rs/**
 
             # Rust dependencies
-            - glide-telemetry/**
             - glide-logger/**
+            - glide-telemetry/**
             - glide-rdma/**
             - deny.toml
 
@@ -44,8 +45,9 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
+
+            # Exclusions
             - "!**/*.md"
-            - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
         inputs:
             use-self-hosted-linux:
@@ -60,7 +62,7 @@ on:
                 default: false
 
 concurrency:
-    group: glide-core-engine-${{ github.head_ref || github.ref }}
+    group: glide-core-engine-${{ github.head_ref || github.ref }}-${{ github.workflow }}
     cancel-in-progress: true
 
 env:

@@ -22,6 +22,7 @@
   * `SET` with `IFNE` option ([#7237](https://github.com/valkey-io/valkey-glide/issues/7237))
 * Python/CI: Add experimental Windows AMD64 (CPython 3.9–3.14) and ARM64 (CPython 3.11–3.14) wheel builds for the async and sync clients, including Windows FFI width fixes and a threaded async response-pipe reader. Wheels remain build-only CI artifacts; Windows integration coverage is required before PyPI publishing ([#6826](https://github.com/valkey-io/valkey-glide/pull/6826)).
 * Rust: Implement `ToSingleValkeyArg` and `ToValkeyArgs` for option types ([#7381](https://github.com/valkey-io/valkey-glide/issues/7381))
+* Rust: Add `Cmd::with_arg` ([#7313](https://github.com/valkey-io/valkey-glide/issues/7313))
 * Core: Add `glide-rdma` crate, an RDMA transfer layer over libfabric (loaded at runtime), for later RDMA support ([#7177](https://github.com/valkey-io/valkey-glide/pull/7177))
 * Core: Add opt-in RDMA support to glide-core behind the `rdma` feature: `RdmaConfig` in the connection request, `Client::register_rdma_region` / `rdma_get` / `rdma_set` / `close_rdma`, and the `rdma_parked_bytes` / `rdma_leaked_bytes` counters. Transfers route to the key's primary and have no request timeout. `BLOB.RDMA_*` commands are refused when sent any other way, in every build ([#7412](https://github.com/valkey-io/valkey-glide/pull/7412))
 * Core/FFI: Add opt-in RDMA to glide-ffi behind the `rdma` feature: `rdma_available`, `rdma_usable`, `rdma_checksum`, `register_rdma_region` over caller-owned memory, `rdma_get` / `rdma_set` (blocking, with `region_closed` saying whether the region can transfer again), and `free_rdma_region` with `RdmaMemoryHold` for memory the fabric still holds (`rdma_memory_leaked` says whether it is leaked rather than parked), plus the `rdma_parked_bytes` / `rdma_leaked_bytes` counters. Sync clients only; pools refuse an RDMA configuration, and `rdma_close_regions` cancels transfers in flight without freeing the client ([#7458](https://github.com/valkey-io/valkey-glide/pull/7458))
@@ -96,6 +97,7 @@
 * Go: Remove `.gitignore` from the released module so consumers who commit `vendor/` keep the generated artifacts (`internal/protobuf/*.pb.go`, `rustbin/**`, `lib.h`) ([#6441](https://github.com/valkey-io/valkey-glide/pull/6441))
 * Core: Releasing a scope, or closing its parent client, while a blocking command is in flight now closes the scope's socket, so the server drops the blocked waiter instead of letting it consume a later push — the socket used to stay open until the server replied, which for `BLPOP key 0` is never. A reused scope connection also gets a fresh scope id, and a blocking scope command keeps the abandon monitor from reclaiming its pool-borrowed parent mid-command ([#7000](https://github.com/valkey-io/valkey-glide/issues/7000))
 * Core: Validate client library names ([#6891](https://github.com/valkey-io/valkey-glide/pull/6891))
+* Rust: Commands that take a key or argument list encode a byte slice passed as the list (e.g. `&b"key"[..]`) as one argument instead of one argument per byte ([#7313](https://github.com/valkey-io/valkey-glide/issues/7313))
 
 ### Changes
 
