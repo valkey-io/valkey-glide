@@ -95,13 +95,18 @@ The timeout watchdog provides structured diagnostic information when command tim
 
 ### Architecture
 
-The watchdog is a **pure timer** — it signals "timeout fired" with a bare `()` via a oneshot channel. All diagnostic enrichment (cause classification, latency percentiles, inflight counts, RSS) happens on the consumer side (`send_command`) at fire time. This keeps the hot path minimal:
+The watchdog is a **pure timer** — `register()` returns a `TimeoutReceiver` future that resolves to `Ok(())` when the deadline fires (or `Err(RecvError)` if the watchdog thread is gone). All diagnostic enrichment (cause classification, latency percentiles, inflight counts, RSS) happens on the consumer side (`send_command`) at fire time. This keeps the hot path minimal:
 
-- **Register** (~100ns): `Instant::now()` + oneshot channel + mpsc send
+- **Register**: `Instant::now()` + one small shared timer slot pushed into the calling thread's inbox shard (16 shards, an uncontended mutex). The watchdog thread is not woken unless it is parked idle.
+- **Watchdog thread**: drains the inboxes once per `WATCHDOG_TICK` (1 ms) while any deadline is outstanding, drops entries whose request already completed without indexing them, and keeps the rest in per-tick buckets.
 - **Phase tracking** (zero-alloc): `AtomicU8` on `Cmd` set by routing layer after connection resolution
 - **Fire path** (rare): builds `TimeoutEvent` with classified cause, p99 latency, inflight trend, and process RSS
 
-No `Arc`, `Mutex`, or heap allocation on the per-command hot path beyond the oneshot channel.
+**Timeout accuracy**: a timeout fires at the first 1 ms tick boundary at or after its deadline. It never fires early; it fires at most one tick (1 ms) late, plus OS thread wake-up jitter.
+
+**Standalone clients** rely on the watchdog alone for the request deadline (`Cmd::deadline_enforced_by_caller`); the multiplexed connection does not arm a second tokio timer. Cluster sub-requests keep their per-node timer.
+
+**Fork safety**: an instance inherited across `fork()` has no thread. `TimeoutWatchdog::global()` detects it (a `pthread_atfork` child handler bumps a fork generation) and replaces it; the FFI layer's post-fork hook also calls `TimeoutWatchdog::reinit_global()` explicitly. Either way a fresh instance (new thread and inbox shards) is installed and the inherited one is leaked without being touched.
 
 ### Enabling
 

@@ -1,18 +1,22 @@
 //! Dedicated timeout watchdog thread that fires timeouts independently of the
 //! Tokio runtime and provides structured diagnostics about timeout causes.
 //!
-//! Design: The hot path (`register()`) sends deadlines through a lock-free MPSC
-//! channel. The watchdog thread owns the deadline queue exclusively — no shared
-//! Mutex on the command path.
+//! Design: The hot path (`register()`) pushes the deadline into a per-thread-sharded
+//! inbox (an uncontended mutex) and does not wake the watchdog thread. The thread
+//! drains the inboxes once per `WATCHDOG_TICK` and owns the deadline buckets
+//! exclusively. (Previously: an std MPSC channel whose receiver slept to the next
+//! nanosecond-resolution deadline, so it woke at roughly the registration rate.)
 //!
 //! The watchdog is a pure timer — it just signals "timeout fired" with `()`.
 //! All diagnostic event construction moves to the consumer side (`client/mod.rs`).
 
+use futures::task::AtomicWaker;
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::mpsc;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
-use tokio::sync::oneshot;
 
 // ─── Public Types ────────────────────────────────────────────────────────────
 
@@ -591,20 +595,178 @@ impl LatencyTracker {
 
 // ─── Deadline Entry ──────────────────────────────────────────────────────────
 
-/// Internal entry sent from callers to the watchdog thread.
+/// Coarse tick of the watchdog's deadline buckets. A timeout fires at the first tick boundary
+/// at or after its deadline — never early, and at most one tick (plus OS wake-up jitter) late.
+/// Request timeouts are in the hundreds of milliseconds and up, so 1 ms is well inside them.
+pub const WATCHDOG_TICK: Duration = Duration::from_millis(1);
+
+/// Inbox shards. Registrations from different worker threads land in different shards, so
+/// the per-registration lock is almost always uncontended.
+const INBOX_SHARDS: usize = 16;
+
+const SLOT_PENDING: u8 = 0;
+const SLOT_FIRED: u8 = 1;
+const SLOT_CANCELLED: u8 = 2;
+/// The watchdog thread is gone (handle dropped or thread died): the receiver resolves to
+/// `Err(RecvError)`, exactly like the old `oneshot` whose sender was dropped.
+const SLOT_DEAD: u8 = 3;
+
+/// Shared state of one registration: written by the watchdog (fire/dead) and by the receiver
+/// (cancel on drop). Replaces the per-command `tokio::sync::oneshot` channel.
+struct TimerSlot {
+    state: AtomicU8,
+    waker: AtomicWaker,
+}
+
+impl TimerSlot {
+    /// Watchdog side: PENDING -> `to` (FIRED or DEAD), then wake the receiver. A slot the
+    /// receiver already cancelled is left alone.
+    fn resolve(&self, to: u8) {
+        if self
+            .state
+            .compare_exchange(SLOT_PENDING, to, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            self.waker.wake();
+        }
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.state.load(Ordering::Relaxed) == SLOT_CANCELLED
+    }
+}
+
+/// Internal entry handed from callers to the watchdog thread.
 /// Minimal struct: the watchdog is a pure timer.
 struct DeadlineEntry {
     deadline: Instant,
-    sender: oneshot::Sender<()>,
+    slot: Arc<TimerSlot>,
+}
+
+/// Error returned by a [`TimeoutReceiver`] when the watchdog thread is gone before the deadline
+/// fired (same meaning as `tokio::sync::oneshot::error::RecvError` in the previous design).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RecvError;
+
+impl std::fmt::Display for RecvError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("timeout watchdog is gone")
+    }
+}
+impl std::error::Error for RecvError {}
+
+/// Error returned by [`TimeoutReceiver::try_recv`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TryRecvError {
+    /// The deadline has not fired yet.
+    Empty,
+    /// The watchdog thread is gone.
+    Closed,
+}
+
+/// Resolves to `Ok(())` when the deadline fires, or `Err(RecvError)` if the watchdog thread is
+/// gone. Dropping it cancels the registration (the watchdog then discards the entry without
+/// firing it), exactly like dropping the old `oneshot::Receiver`.
+pub struct TimeoutReceiver {
+    slot: Arc<TimerSlot>,
+}
+
+impl TimeoutReceiver {
+    /// Non-blocking check, mirroring `oneshot::Receiver::try_recv`.
+    pub fn try_recv(&mut self) -> Result<(), TryRecvError> {
+        match self.slot.state.load(Ordering::Acquire) {
+            SLOT_FIRED => Ok(()),
+            SLOT_DEAD => Err(TryRecvError::Closed),
+            _ => Err(TryRecvError::Empty),
+        }
+    }
+}
+
+impl std::future::Future for TimeoutReceiver {
+    type Output = Result<(), RecvError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let check = |s: u8| match s {
+            SLOT_FIRED => Some(Ok(())),
+            SLOT_DEAD => Some(Err(RecvError)),
+            _ => None,
+        };
+        if let Some(r) = check(self.slot.state.load(Ordering::Acquire)) {
+            return Poll::Ready(r);
+        }
+        self.slot.waker.register(cx.waker());
+        // Re-check after registering, so a fire racing the registration is not lost.
+        match check(self.slot.state.load(Ordering::Acquire)) {
+            Some(r) => Poll::Ready(r),
+            None => Poll::Pending,
+        }
+    }
+}
+
+impl Drop for TimeoutReceiver {
+    fn drop(&mut self) {
+        // PENDING -> CANCELLED; a fired/dead slot stays as it is.
+        let _ = self.slot.state.compare_exchange(
+            SLOT_PENDING,
+            SLOT_CANCELLED,
+            Ordering::AcqRel,
+            Ordering::Relaxed,
+        );
+        // Drop the registered task waker now rather than when the watchdog drops its ref.
+        drop(self.slot.waker.take());
+    }
 }
 
 // ─── Timeout Watchdog ────────────────────────────────────────────────────────
 
+/// Cache-line padded inbox shard.
+#[repr(align(128))]
+struct InboxShard(Mutex<Vec<DeadlineEntry>>);
+
+struct WatchdogShared {
+    inbox: [InboxShard; INBOX_SHARDS],
+    /// Set by the watchdog thread when it is about to park with no deadlines outstanding;
+    /// a registration that sees it set unparks the thread. While deadlines are outstanding the
+    /// thread wakes on its own every tick, so registrations never wake it.
+    sleeping: AtomicBool,
+    /// Set when the last handle is dropped, or by the thread itself on exit.
+    shutdown: AtomicBool,
+    thread: OnceLock<std::thread::Thread>,
+    publish_count: bool,
+}
+
+impl WatchdogShared {
+    fn unpark(&self) {
+        if let Some(t) = self.thread.get() {
+            t.unpark();
+        }
+    }
+}
+
+/// Dropped when the last [`TimeoutWatchdog`] clone goes: tells the thread to resolve every
+/// outstanding receiver to `Err(RecvError)` and exit (the old design's mpsc-disconnect path).
+struct HandleToken(Arc<WatchdogShared>);
+
+impl Drop for HandleToken {
+    fn drop(&mut self) {
+        self.0.shutdown.store(true, Ordering::SeqCst);
+        self.0.unpark();
+    }
+}
+
 /// Handle to the watchdog thread. Register deadlines and receive a signal
 /// when the timeout fires.
+///
+/// Design (perf/proto-hotpath): `register()` allocates one small shared slot, pushes it into a
+/// per-thread-sharded inbox under an uncontended mutex, and returns. It does not signal the
+/// watchdog thread except when that thread is parked idle. The thread drains the inboxes once
+/// per [`WATCHDOG_TICK`], drops entries whose receiver already went away without ever indexing
+/// them, and keeps the rest in coarse per-tick buckets — so a command that completes within a
+/// tick costs the thread nothing beyond the drain.
 #[derive(Clone)]
 pub struct TimeoutWatchdog {
-    tx: mpsc::Sender<DeadlineEntry>,
+    shared: Arc<WatchdogShared>,
+    _token: Arc<HandleToken>,
     /// [`fork_generation`] when this instance (and its thread) was started.
     fork_gen: u64,
 }
@@ -646,6 +808,14 @@ fn fork_generation() -> u64 {
     {
         0
     }
+}
+
+thread_local! {
+    /// Inbox shard of the calling thread, assigned round-robin on first use.
+    static SHARD: usize = {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        NEXT.fetch_add(1, Ordering::Relaxed) % INBOX_SHARDS
+    };
 }
 
 impl TimeoutWatchdog {
@@ -696,8 +866,8 @@ impl TimeoutWatchdog {
         ) {
             Ok(_) => unsafe { &*ptr },
             Err(existing) => {
-                // Another thread won the race — drop ours (the Sender drop
-                // causes the spawned thread to exit via Disconnected).
+                // Another thread won the race — drop ours (dropping its last
+                // handle sets `shutdown` and unparks the spawned thread, which exits).
                 unsafe {
                     drop(Box::from_raw(ptr));
                     &*existing
@@ -709,9 +879,10 @@ impl TimeoutWatchdog {
     /// Reinitialize the global watchdog after fork().
     ///
     /// After fork(), the watchdog thread is dead but the AtomicPtr still points
-    /// to the old instance. This replaces it with a fresh one. The old instance
-    /// is intentionally leaked — its internal Mutex/Condvar are in undefined
-    /// state post-fork and cannot be safely dropped.
+    /// to the old instance. This replaces it with a fresh one (new inbox shards,
+    /// new thread). The old instance is intentionally leaked, never dropped or
+    /// touched: its inbox mutexes may have been held by a parent thread at fork
+    /// time, so they are in undefined state in the child.
     ///
     /// Must only be called in a forked child process where the previous
     /// watchdog thread is no longer running.
@@ -726,124 +897,260 @@ impl TimeoutWatchdog {
 
     /// Start the global watchdog instance (publishes pending count).
     fn start_global() -> Self {
-        let fork_gen = fork_generation();
-        let (tx, rx) = mpsc::channel();
-        std::thread::Builder::new()
-            .name("glide-timeout-watchdog".into())
-            .spawn(move || Self::run(rx, true))
-            .expect("Failed to spawn timeout watchdog thread");
-        Self { tx, fork_gen }
+        Self::spawn(true)
     }
 
     /// Start a watchdog instance. Spawns a dedicated OS thread.
     /// Does NOT publish to the global pending count (only the global instance does).
     pub fn start() -> Self {
-        let (tx, rx) = mpsc::channel();
-        std::thread::Builder::new()
+        Self::spawn(false)
+    }
+
+    fn spawn(publish_count: bool) -> Self {
+        let shared = Arc::new(WatchdogShared {
+            inbox: std::array::from_fn(|_| InboxShard(Mutex::new(Vec::new()))),
+            sleeping: AtomicBool::new(false),
+            shutdown: AtomicBool::new(false),
+            thread: OnceLock::new(),
+            publish_count,
+        });
+        let thread_shared = shared.clone();
+        let handle = std::thread::Builder::new()
             .name("glide-timeout-watchdog".into())
-            .spawn(move || Self::run(rx, false))
+            .spawn(move || {
+                let shared = thread_shared;
+                // Whatever ends the loop (shutdown or a panic), every outstanding receiver must
+                // resolve to Err(RecvError) so callers fall back instead of hanging.
+                let mut wheel = Wheel::default();
+                let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    Self::run(&shared, &mut wheel)
+                }));
+                shared.shutdown.store(true, Ordering::SeqCst);
+                std::sync::atomic::fence(Ordering::SeqCst);
+                wheel.kill_all();
+                for shard in shared.inbox.iter() {
+                    let drained = std::mem::take(&mut *lock(&shard.0));
+                    for e in drained {
+                        e.slot.resolve(SLOT_DEAD);
+                    }
+                }
+                if let Err(p) = res {
+                    std::panic::resume_unwind(p);
+                }
+            })
             .expect("Failed to spawn timeout watchdog thread");
+        let _ = shared.thread.set(handle.thread().clone());
         Self {
-            tx,
+            _token: Arc::new(HandleToken(shared.clone())),
+            shared,
             fork_gen: fork_generation(),
         }
     }
 
-    /// Register a timeout. Returns a `oneshot::Receiver<()>` that resolves
+    /// Register a timeout. Returns a [`TimeoutReceiver`] that resolves
     /// when the deadline fires.
     ///
     /// `submitted_at` should be the caller's `Instant::now()` — shared with
     /// the latency tracking timer to avoid a redundant clock read.
     #[inline]
-    pub fn register(&self, timeout: Duration, submitted_at: Instant) -> oneshot::Receiver<()> {
-        let (sender, rx) = oneshot::channel();
+    pub fn register(&self, timeout: Duration, submitted_at: Instant) -> TimeoutReceiver {
+        let slot = Arc::new(TimerSlot {
+            state: AtomicU8::new(SLOT_PENDING),
+            waker: AtomicWaker::new(),
+        });
+        let rx = TimeoutReceiver { slot: slot.clone() };
         let deadline = submitted_at + timeout;
-        let _ = self.tx.send(DeadlineEntry { deadline, sender });
+        let shard = SHARD.with(|s| *s);
+        {
+            let mut inbox = lock(&self.shared.inbox[shard].0);
+            // Checked under the shard lock: the exiting thread sets `shutdown` before it takes
+            // each shard lock for its final drain, so an entry pushed here (shutdown unset) is
+            // always drained and resolved, and none is pushed once that drain may have passed.
+            if self.shared.shutdown.load(Ordering::Acquire) {
+                drop(inbox);
+                // The watchdog is gone: resolve now so the caller takes its fallback.
+                rx.slot.resolve(SLOT_DEAD);
+                return rx;
+            }
+            inbox.push(DeadlineEntry { deadline, slot });
+        }
+        // Pairs with the thread's fence between `sleeping = true` and its final inbox scan:
+        // either the thread sees this entry, or we see `sleeping` and unpark it.
+        std::sync::atomic::fence(Ordering::SeqCst);
+        if self.shared.sleeping.load(Ordering::Relaxed)
+            && self.shared.sleeping.swap(false, Ordering::AcqRel)
+        {
+            self.shared.unpark();
+        }
         rx
     }
 
-    /// Watchdog thread main loop.
-    fn run(rx: mpsc::Receiver<DeadlineEntry>, publish_count: bool) {
-        let mut deadlines: BTreeMap<Instant, Vec<DeadlineEntry>> = BTreeMap::new();
+    /// Watchdog thread main loop. Returns on shutdown.
+    fn run(shared: &WatchdogShared, wheel: &mut Wheel) {
         let mut last_cleanup = Instant::now();
-        let mut local_count: usize = 0;
+        let mut spare: Vec<DeadlineEntry> = Vec::new();
 
         loop {
-            let now = Instant::now();
+            if shared.shutdown.load(Ordering::SeqCst) {
+                return;
+            }
 
-            // Periodic cleanup of entries whose receivers were dropped (command completed)
-            // Run at most once per second to amortize cost
+            // Fire what is already due before draining, so a large registration burst does not
+            // delay due timeouts by the time the drain takes.
+            wheel.fire_due(Instant::now());
+
+            // Drain new registrations; entries whose command already completed are dropped
+            // here without being indexed or counted.
+            for shard in shared.inbox.iter() {
+                {
+                    let mut guard = lock(&shard.0);
+                    if guard.is_empty() {
+                        continue;
+                    }
+                    std::mem::swap(&mut *guard, &mut spare);
+                }
+                for e in spare.drain(..) {
+                    if !e.slot.is_cancelled() {
+                        wheel.insert(e);
+                    }
+                }
+            }
+
+            // Fire all expired deadlines (including newly drained, already-due ones).
+            let now = Instant::now();
+            wheel.fire_due(now);
+
+            // Periodic cleanup of entries whose receivers were dropped (command completed).
+            // Run at most once per second to amortize cost.
             if now.duration_since(last_cleanup) > Duration::from_secs(1) {
-                deadlines.retain(|_, entries| {
-                    let before = entries.len();
-                    entries.retain(|e| !e.sender.is_closed());
-                    local_count -= before - entries.len();
-                    !entries.is_empty()
-                });
+                wheel.sweep_cancelled();
                 last_cleanup = now;
             }
 
-            // Fire all expired deadlines
-            while let Some(entry) = deadlines.first_entry() {
-                if *entry.key() > now {
-                    break;
-                }
-                let (_, entries) = entry.remove_entry();
-                local_count -= entries.len();
-                for e in entries {
-                    if e.sender.is_closed() {
-                        continue; // Command completed before timeout
-                    }
-                    let _ = e.sender.send(());
-                }
-            }
-
-            // Drain new registrations (bounded to prevent starvation of deadline firing)
-            const MAX_DRAIN_BATCH: usize = 256;
-            for _ in 0..MAX_DRAIN_BATCH {
-                match rx.try_recv() {
-                    Ok(entry) => {
-                        if entry.sender.is_closed() {
-                            // Already cancelled, don't count it
-                        } else {
-                            local_count += 1;
-                            deadlines.entry(entry.deadline).or_default().push(entry);
-                        }
-                    }
-                    Err(_) => break,
-                }
-                // If a deadline is now due, stop draining and go fire it
-                if deadlines.keys().next().is_some_and(|d| *d <= now) {
-                    break;
-                }
-            }
-
             // Publish the local count once per iteration (no contention on write side)
-            if publish_count {
-                PUBLISHED_PENDING.store(local_count, Ordering::Relaxed);
+            if shared.publish_count {
+                PUBLISHED_PENDING.store(wheel.count, Ordering::Relaxed);
             }
 
-            // Wait for next event
-            let wait_result = if let Some(next_deadline) = deadlines.keys().next() {
-                let sleep_duration = next_deadline.saturating_duration_since(Instant::now());
-                rx.recv_timeout(sleep_duration)
-            } else {
-                rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected)
-            };
-
-            match wait_result {
-                Ok(entry) => {
-                    if entry.sender.is_closed() {
-                        // Already cancelled, don't count it
-                    } else {
-                        local_count += 1;
-                        deadlines.entry(entry.deadline).or_default().push(entry);
+            match wheel.time_to_next(Instant::now()) {
+                // Deadlines outstanding: sleep to the next bucket, capped at one tick so new
+                // registrations (which do not wake us) are drained within a tick.
+                Some(until_next) => {
+                    let sleep = until_next.min(WATCHDOG_TICK);
+                    if !sleep.is_zero() {
+                        std::thread::park_timeout(sleep);
                     }
                 }
-                Err(mpsc::RecvTimeoutError::Timeout) => {}
-                Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                // Nothing outstanding: park until a registration (or shutdown) unparks us.
+                None => {
+                    shared.sleeping.store(true, Ordering::SeqCst);
+                    std::sync::atomic::fence(Ordering::SeqCst);
+                    let inbox_empty = shared.inbox.iter().all(|s| lock(&s.0).is_empty());
+                    if inbox_empty && !shared.shutdown.load(Ordering::SeqCst) {
+                        std::thread::park();
+                    }
+                    shared.sleeping.store(false, Ordering::SeqCst);
+                }
             }
         }
+    }
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// Coarse deadline buckets: one `Vec` per tick that has deadlines, keyed by tick number since
+/// `epoch`. A deadline goes into the bucket of the first tick boundary at or after it, so firing a
+/// bucket at its boundary never fires a deadline early.
+struct Wheel {
+    epoch: Instant,
+    buckets: BTreeMap<u64, Vec<DeadlineEntry>>,
+    /// Entries resident in `buckets` (same semantics as the old `local_count`: registered and
+    /// not yet fired or swept).
+    count: usize,
+}
+
+impl Default for Wheel {
+    fn default() -> Self {
+        Self {
+            epoch: Instant::now(),
+            buckets: BTreeMap::new(),
+            count: 0,
+        }
+    }
+}
+
+impl Wheel {
+    /// Bucket of `deadline`: the first tick boundary at or after it (rounds up, so never early).
+    /// A deadline at or before `epoch` has already passed and goes into tick 0.
+    fn tick_of(&self, deadline: Instant) -> u64 {
+        let nanos = deadline.saturating_duration_since(self.epoch).as_nanos();
+        nanos
+            .div_ceil(WATCHDOG_TICK.as_nanos())
+            .min(u64::MAX as u128) as u64
+    }
+
+    /// Offset of `tick`'s boundary from `epoch`. Kept as a `Duration` (not an `Instant`) so even
+    /// the longest blocking-command timeouts (up to `u32::MAX` seconds) neither overflow nor get
+    /// clamped to an earlier boundary.
+    fn tick_offset(tick: u64) -> Duration {
+        let tick_nanos = WATCHDOG_TICK.as_nanos() as u64;
+        let nanos = u128::from(tick) * u128::from(tick_nanos);
+        Duration::new(
+            (nanos / 1_000_000_000).min(u128::from(u64::MAX)) as u64,
+            (nanos % 1_000_000_000) as u32,
+        )
+    }
+
+    fn insert(&mut self, e: DeadlineEntry) {
+        let tick = self.tick_of(e.deadline);
+        self.buckets.entry(tick).or_default().push(e);
+        self.count += 1;
+    }
+
+    fn fire_due(&mut self, now: Instant) {
+        let elapsed = now.saturating_duration_since(self.epoch);
+        while let Some(first) = self.buckets.keys().next().copied() {
+            if Self::tick_offset(first) > elapsed {
+                break;
+            }
+            let entries = self.buckets.remove(&first).unwrap_or_default();
+            self.count -= entries.len();
+            for e in entries {
+                // Cancelled slots are skipped inside `resolve`.
+                e.slot.resolve(SLOT_FIRED);
+            }
+        }
+    }
+
+    fn sweep_cancelled(&mut self) {
+        let count = &mut self.count;
+        self.buckets.retain(|_, entries| {
+            let before = entries.len();
+            entries.retain(|e| !e.slot.is_cancelled());
+            *count -= before - entries.len();
+            !entries.is_empty()
+        });
+    }
+
+    /// Time from `now` until the earliest non-empty bucket is due (zero if already due), or
+    /// `None` when no deadline is outstanding.
+    fn time_to_next(&self, now: Instant) -> Option<Duration> {
+        let elapsed = now.saturating_duration_since(self.epoch);
+        self.buckets
+            .keys()
+            .next()
+            .map(|t| Self::tick_offset(*t).saturating_sub(elapsed))
+    }
+
+    fn kill_all(&mut self) {
+        for (_, entries) in std::mem::take(&mut self.buckets) {
+            for e in entries {
+                e.slot.resolve(SLOT_DEAD);
+            }
+        }
+        self.count = 0;
     }
 }
 
@@ -893,6 +1200,183 @@ mod tests {
         let rx = watchdog.register(Duration::from_millis(200), Instant::now());
         drop(rx);
         tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+
+    // ── perf/proto-hotpath: sharded-inbox + tick-bucket design ──────────
+
+    #[tokio::test]
+    async fn never_fires_early_and_within_tick_bound() {
+        let watchdog = TimeoutWatchdog::start();
+        for ms in [1u64, 3, 7, 20] {
+            let start = Instant::now();
+            let rx = watchdog.register(Duration::from_millis(ms), start);
+            rx.await.unwrap();
+            let el = start.elapsed();
+            assert!(
+                el >= Duration::from_millis(ms),
+                "fired early: {el:?} < {ms}ms"
+            );
+            // One tick of rounding plus generous scheduling slack for CI.
+            assert!(
+                el < Duration::from_millis(ms) + WATCHDOG_TICK + Duration::from_millis(50),
+                "fired too late: {el:?} for {ms}ms"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn idle_thread_is_woken_by_registration() {
+        let watchdog = TimeoutWatchdog::start();
+        // Let the thread go fully idle (no deadlines -> parked without timeout).
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let start = Instant::now();
+        let rx = watchdog.register(Duration::from_millis(10), start);
+        let r = tokio::time::timeout(Duration::from_millis(500), rx).await;
+        assert!(r.is_ok(), "parked watchdog must be unparked by register()");
+        assert!(start.elapsed() >= Duration::from_millis(10));
+    }
+
+    #[tokio::test]
+    async fn register_after_thread_exit_resolves_err_without_queueing() {
+        // Panic/exit path: once the thread has done its final drain, a registration must resolve
+        // to Err immediately and must not leave an entry nobody will ever drain.
+        let watchdog = TimeoutWatchdog::start();
+        watchdog.shared.shutdown.store(true, Ordering::SeqCst);
+        watchdog.shared.unpark();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        for _ in 0..100 {
+            let rx = watchdog.register(Duration::from_secs(60), Instant::now());
+            assert_eq!(rx.await, Err(RecvError));
+        }
+        assert!(
+            watchdog.shared.inbox.iter().all(|s| lock(&s.0).is_empty()),
+            "registrations after exit must not accumulate"
+        );
+    }
+
+    #[tokio::test]
+    async fn dropping_last_handle_resolves_pending_to_err() {
+        // Old design: dropping the last mpsc sender disconnected the thread, which dropped
+        // every oneshot sender -> receivers got Err(RecvError). Keep that contract.
+        let watchdog = TimeoutWatchdog::start();
+        let rx = watchdog.register(Duration::from_secs(60), Instant::now());
+        drop(watchdog);
+        let r = tokio::time::timeout(Duration::from_millis(500), rx).await;
+        assert_eq!(r.expect("must resolve promptly"), Err(RecvError));
+    }
+
+    #[tokio::test]
+    async fn try_recv_reports_fired() {
+        let watchdog = TimeoutWatchdog::start();
+        let mut rx = watchdog.register(Duration::from_millis(5), Instant::now());
+        assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+        tokio::time::sleep(Duration::from_millis(60)).await;
+        assert_eq!(rx.try_recv(), Ok(()));
+    }
+
+    #[test]
+    fn bucket_boundary_is_never_early_and_less_than_one_tick_late() {
+        // Deterministic check of the rounding the timing tests above can only sample:
+        // boundary(tick_of(d)) is in [d, d + WATCHDOG_TICK).
+        let wheel = Wheel::default();
+        let tick = WATCHDOG_TICK.as_nanos() as u64;
+        for offset_ns in [
+            0,
+            1,
+            tick - 1,
+            tick,
+            tick + 1,
+            7 * tick + tick / 2,
+            250_000_000,
+            250_000_001,
+        ] {
+            let offset = Duration::from_nanos(offset_ns);
+            let boundary = Wheel::tick_offset(wheel.tick_of(wheel.epoch + offset));
+            assert!(boundary >= offset, "early: {boundary:?} < {offset:?}");
+            assert!(
+                boundary < offset + WATCHDOG_TICK,
+                "a full tick late or more: {boundary:?} for {offset:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn long_blocking_timeouts_are_not_clamped_early() {
+        // Blocking commands may carry timeouts up to u32::MAX seconds (#6978). Their bucket
+        // boundary must not be clamped below the deadline, which would fire them early.
+        let mut wheel = Wheel::default();
+        let far = Duration::from_secs(u32::MAX as u64);
+        let boundary = Wheel::tick_offset(wheel.tick_of(wheel.epoch + far));
+        assert!(boundary >= far, "clamped early: {boundary:?} < {far:?}");
+        assert!(boundary < far + WATCHDOG_TICK);
+
+        let slot = Arc::new(TimerSlot {
+            state: AtomicU8::new(SLOT_PENDING),
+            waker: AtomicWaker::new(),
+        });
+        wheel.insert(DeadlineEntry {
+            deadline: wheel.epoch + far,
+            slot: slot.clone(),
+        });
+        // Days later (well past any u32-millisecond clamp of ~49.7 days) it is still pending.
+        wheel.fire_due(wheel.epoch + Duration::from_secs(60 * 24 * 3600));
+        assert_eq!(slot.state.load(Ordering::Acquire), SLOT_PENDING);
+        assert!(wheel.time_to_next(wheel.epoch).is_some_and(|d| d >= far));
+        wheel.fire_due(wheel.epoch + far + WATCHDOG_TICK);
+        assert_eq!(slot.state.load(Ordering::Acquire), SLOT_FIRED);
+    }
+
+    /// Real fork(): the child inherits the parent's global watchdog with its thread gone and its
+    /// inbox mutexes possibly held. After `reinit_global()` (what the FFI layer's post-fork hook
+    /// calls), registrations in the child must fire, without touching the stale instance.
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn fork_child_reinit_global_fires_timeouts() {
+        let old = TimeoutWatchdog::global();
+        // Held across fork(): in the child these locks are never released, exactly like a
+        // mutex some other parent thread held at fork time.
+        let guards: Vec<_> = old.shared.inbox.iter().map(|s| lock(&s.0)).collect();
+        // SAFETY: the child only spawns a thread, allocates and calls `_exit`, matching what the
+        // production post-fork path (`reinit_async_pipe`) does.
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0, "fork failed");
+        if pid == 0 {
+            // A child stuck on a stale mutex is killed by SIGALRM, failing the test instead of
+            // hanging it.
+            // SAFETY: async-signal-safe libc call.
+            unsafe { libc::alarm(10) };
+            TimeoutWatchdog::reinit_global();
+            let start = Instant::now();
+            let mut rx = TimeoutWatchdog::global().register(Duration::from_millis(20), start);
+            let code = loop {
+                match rx.try_recv() {
+                    Ok(()) if start.elapsed() >= Duration::from_millis(20) => break 0,
+                    Ok(()) => break 2, // fired early
+                    Err(TryRecvError::Closed) => break 3,
+                    Err(TryRecvError::Empty) if start.elapsed() > Duration::from_secs(5) => {
+                        break 4;
+                    }
+                    Err(TryRecvError::Empty) => std::thread::sleep(Duration::from_millis(1)),
+                }
+            };
+            // SAFETY: terminate the forked child without running the parent's test harness.
+            unsafe { libc::_exit(code) };
+        }
+        drop(guards);
+        let mut status = 0;
+        // SAFETY: `pid` is our child.
+        let waited = unsafe { libc::waitpid(pid, &mut status, 0) };
+        assert_eq!(waited, pid);
+        assert!(
+            libc::WIFEXITED(status),
+            "child did not exit cleanly: {status}"
+        );
+        assert_eq!(
+            libc::WEXITSTATUS(status),
+            0,
+            "child watchdog failed (2=early, 3=closed, 4=never fired)"
+        );
     }
 
     // ── Pending Count ────────────────────────────────────────────────────
@@ -1119,7 +1603,10 @@ mod tests {
     #[test]
     #[serial]
     fn fork_child_global_replaces_inherited_watchdog() {
-        let _ = TimeoutWatchdog::global();
+        let old = TimeoutWatchdog::global();
+        // Held across fork(): the parent's watchdog thread takes these locks every tick, so a
+        // fork can land while one is held. The child must not need them.
+        let guards: Vec<_> = old.shared.inbox.iter().map(|s| lock(&s.0)).collect();
         // SAFETY: the child only spawns a thread, allocates and calls `_exit`.
         let pid = unsafe { libc::fork() };
         assert!(pid >= 0, "fork failed");
@@ -1140,6 +1627,7 @@ mod tests {
             // SAFETY: terminate the forked child without running the parent's test harness.
             unsafe { libc::_exit(code) };
         }
+        drop(guards);
         let mut status = 0;
         // SAFETY: `pid` is our child.
         let waited = unsafe { libc::waitpid(pid, &mut status, 0) };

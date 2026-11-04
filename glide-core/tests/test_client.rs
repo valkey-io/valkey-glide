@@ -4374,6 +4374,52 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// Timeout accuracy: the watchdog fires at the first `WATCHDOG_TICK` boundary at or after the
+    /// deadline, so a request times out no earlier than its timeout and no later than
+    /// timeout + one tick (plus OS wake-up/scheduling jitter, given a generous allowance here so
+    /// the test is not flaky on loaded CI hosts). In the cluster arm the per-node connection
+    /// timer of the same duration races the watchdog, so that arm bounds whichever fires first.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_watchdog_timeout_fires_within_one_tick(#[values(false, true)] use_cluster: bool) {
+        const REQUEST_TIMEOUT_MS: u64 = 100;
+        const JITTER_ALLOWANCE: std::time::Duration = std::time::Duration::from_millis(50);
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    request_timeout: Some(REQUEST_TIMEOUT_MS as u32),
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let _ = test_basics
+                .client
+                .send_command(redis::cmd("CLIENT").arg("PAUSE").arg("2000"), None)
+                .await;
+            let timeout = std::time::Duration::from_millis(REQUEST_TIMEOUT_MS);
+            let bound = timeout + glide_core::timeout_watchdog::WATCHDOG_TICK + JITTER_ALLOWANCE;
+            for i in 0..5 {
+                let start = std::time::Instant::now();
+                let result = test_basics
+                    .client
+                    .send_command(redis::cmd("GET").arg(format!("wd_tick_{i}")), None)
+                    .await;
+                let elapsed = start.elapsed();
+                let err = result.expect_err("must time out");
+                assert!(err.is_timeout(), "expected a timeout, got: {err:?}");
+                assert!(elapsed >= timeout, "timed out early: {elapsed:?}");
+                assert!(
+                    elapsed <= bound,
+                    "timed out late: {elapsed:?} > {bound:?} (timeout + 1 tick + jitter allowance)"
+                );
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
