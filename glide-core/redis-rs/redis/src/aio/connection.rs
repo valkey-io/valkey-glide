@@ -474,8 +474,8 @@ const STREAM_READ_BUF_CAPACITY: usize = 8 * 1024;
 /// caller still holds such values allocates a new buffer of at least that
 /// original capacity. A buffer created from a short leftover remembers no
 /// capacity, and those refills would offer reads of a single byte and grow
-/// from there; one created from a long leftover would make every such refill
-/// that large.
+/// from there; one created from a leftover of 16 KiB or more would make every
+/// such refill that large (rounded down to a power of two, up to 64 KiB).
 fn read_buf_with_leftover(leftover: &[u8]) -> bytes::BytesMut {
     let mut buf = bytes::BytesMut::with_capacity(STREAM_READ_BUF_CAPACITY);
     buf.extend_from_slice(leftover);
@@ -1100,6 +1100,28 @@ mod tests {
     use super::*;
     use crate::parser::test_io::{bulk_frame, ChunkedIo};
     use futures_util::StreamExt;
+
+    /// The seeded read buffer remembers an 8 KiB original capacity whatever
+    /// the leftover's size: a refill made while split values share the
+    /// buffer allocates `max(unconsumed + 1, original capacity)`, so with
+    /// nothing unconsumed it is exactly that original capacity.
+    #[test]
+    fn seeded_read_buffer_refills_at_8_kib_for_any_leftover() {
+        for len in [0, 100, 5000, 20_000, 70_000] {
+            let mut buf = read_buf_with_leftover(&vec![b'x'; len]);
+            assert_eq!(&buf[..], &vec![b'x'; len][..]);
+            // Reads fill the buffer, then everything is decoded, split off
+            // and still held.
+            buf.resize(buf.capacity(), b'y');
+            let _held = buf.split_to(buf.len()).freeze();
+            buf.reserve(1);
+            assert_eq!(
+                buf.capacity(),
+                STREAM_READ_BUF_CAPACITY,
+                "{len}-byte leftover"
+            );
+        }
+    }
 
     /// A `PubSub`/`Monitor` stream's read buffer, seeded from the handshake
     /// leftover, must read in full chunks while the caller holds decoded
