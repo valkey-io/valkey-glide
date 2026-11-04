@@ -513,6 +513,25 @@ public class FTHybridArgSerializationTest {
     }
 
     @Test
+    public void testHybridOptions_loadFieldsAfterLoadAllOverridesLoadAll() {
+        GlideString[] args =
+                FTHybridOptions.builder().loadAll().loadFields(new String[] {"title"}).build().toArgs();
+        assertArrayEquals(new GlideString[] {gs("LOAD"), gs("1"), gs("title")}, args);
+    }
+
+    @Test
+    public void testHybridOptions_loadFieldsWithAliasAfterLoadAllOverridesLoadAll() {
+        GlideString[] args =
+                FTHybridOptions.builder()
+                        .loadAll()
+                        .loadFields(
+                                new FTAggregateOptions.LoadField[] {new FTAggregateOptions.LoadField("title")})
+                        .build()
+                        .toArgs();
+        assertArrayEquals(new GlideString[] {gs("LOAD"), gs("1"), gs("title")}, args);
+    }
+
+    @Test
     public void testHybridOptions_localOnlyEmittedFirstRegardlessOfFieldOrder() {
         GlideString[] args =
                 FTHybridOptions.builder()

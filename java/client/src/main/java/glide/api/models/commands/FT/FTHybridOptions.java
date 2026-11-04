@@ -189,12 +189,16 @@ public class FTHybridOptions {
         /** Load specified fields from the index. */
         public FTHybridOptionsBuilder loadFields(@NonNull String[] fields) {
             this.loadFields = toGlideStringArray(fields);
+            this.loadAll$value = false;
+            this.loadAll$set = true;
             return this;
         }
 
         /** Load specified fields from the index. */
         public FTHybridOptionsBuilder loadFields(@NonNull GlideString[] fields) {
             this.loadFields = fields;
+            this.loadAll$value = false;
+            this.loadAll$set = true;
             return this;
         }
 
@@ -204,6 +208,8 @@ public class FTHybridOptions {
          */
         public FTHybridOptionsBuilder loadFields(@NonNull FTAggregateOptions.LoadField[] fields) {
             this.loadFieldsWithAlias = fields;
+            this.loadAll$value = false;
+            this.loadAll$set = true;
             return this;
         }
 
