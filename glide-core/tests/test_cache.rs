@@ -1826,22 +1826,30 @@ pub(crate) mod test_cache {
                 .await
                 .unwrap();
 
-            // Populate cache
-            let mut get_cmd = redis::Cmd::new();
-            get_cmd.arg("GET").arg(&key);
-            test_basics
-                .client
-                .send_command(&mut get_cmd, None)
-                .await
-                .unwrap();
-
-            // Verify cache has the entry
-            let entry_count_before = test_basics.client.cache_entry_count().unwrap();
-            assert_eq!(
-                entry_count_before,
-                Value::Int(1),
-                "cache should have entries before flush"
-            );
+            // Populate cache. In cluster mode the key's replica also tracks this client (BCAST)
+            // and sends its own invalidation for the SET above once it has replicated it. That
+            // invalidation can arrive after the GET below was sent: it then cancels the fill, or
+            // evicts the entry, so one GET does not reliably leave an entry. How long after the
+            // SET reply it arrives depends on replication lag, not on this client. Repeat the GET
+            // until its entry is still there a little later, when the SET's invalidations have
+            // all been delivered.
+            tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                loop {
+                    let mut get_cmd = redis::Cmd::new();
+                    get_cmd.arg("GET").arg(&key);
+                    test_basics
+                        .client
+                        .send_command(&mut get_cmd, None)
+                        .await
+                        .unwrap();
+                    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                    if test_basics.client.cache_entry_count().unwrap() == Value::Int(1) {
+                        break;
+                    }
+                }
+            })
+            .await
+            .expect("cache should have entries before flush");
 
             // FLUSHDB triggers a nil invalidation push in BCAST mode, flushing the entire cache
             let mut flushdb = redis::Cmd::new();
