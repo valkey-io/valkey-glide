@@ -374,6 +374,9 @@ where
                 // Mark command as sent for watchdog diagnostics, as `try_cmd_request` does. That
                 // marks the event loop's clone of the command, which the caller never reads; this
                 // marks the caller's command, so a timeout after this point is reported as Sent.
+                // "Sent" means handed to the connection: `req_packed_command` may still wait for
+                // room in the connection's pipeline channel. glide-core's standalone
+                // `send_request` marks it at the same point (before even getting the connection).
                 cmd.watchdog_phase
                     .store(crate::cmd::PHASE_SENT, Ordering::Release);
                 match conn.req_packed_command(cmd).await {
@@ -1037,8 +1040,11 @@ struct Message<C: Sized> {
     /// path in [`ClusterConnection::route_command`]). `start_send` puts the request straight into
     /// `in_flight_requests` with this as its first attempt's result, where an attempt the event
     /// loop had dispatched would be, so retries, redirects, slot refresh and reconnects run
-    /// exactly as if the event loop had made that attempt, and the recovery queue (meant for new
-    /// requests) neither buffers, caps nor fails it.
+    /// exactly as if the event loop had made that attempt. The recovery queue (meant for new
+    /// requests) does not buffer, cap or fail this attempt; a retry that the event loop sends
+    /// back through `pending_requests_tx` (reconnects) meets it like any retry. Like any
+    /// in-flight request, it can also be the one `send_refresh_error` answers with a failed
+    /// slot refresh's error.
     first_attempt_error: Option<(OperationTarget, RedisError)>,
 }
 
@@ -4551,11 +4557,14 @@ where
         let flush_action = self.poll_complete(cx);
         // Any recovery has ended and the poll above has polled the requests drained from the
         // recovery queue: open the caller-task fast path again, unless this flush is about to
-        // enter recovery anew. Clearing only now, not when `poll_recover` leaves `Recover`, makes
-        // new fast-path requests unlikely to reach a connection before the drained ones. This is
-        // best effort, not an ordering guarantee: `FuturesUnordered` may stop early (cooperative
-        // budget), and the drained requests and the new ones come from different callers, so
-        // they are concurrent and upstream does not order them either beyond dispatch order.
+        // enter recovery anew. Clearing only now, not when `poll_recover` leaves `Recover`, lets
+        // the drained requests reach their connections first: `FuturesUnordered` polls each of
+        // them once in that poll (tokio defers the wake of a task out of cooperative budget, so
+        // running out does not end the poll early), and a request is written into its
+        // connection's pipeline channel when first polled if the channel has room. If a channel
+        // is full, a drained request polled after the budget ran out does not queue for room in
+        // that poll, so a new fast-path request may get it first. The drained and new requests
+        // come from different callers and are concurrent; nothing orders them beyond this.
         let entering_recovery = matches!(
             &flush_action,
             Poll::Ready(action) if !matches!(action, PollFlushAction::None)
