@@ -160,6 +160,39 @@ class TestSyncBatch:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_batch_memoryview_args_sent_by_byte_length(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Regression: batch arguments are sent with their byte length.
+
+        For these views len() is smaller than nbytes (it counts elements, or
+        rows of a 2-D view), so measuring the argument with len() sent only a
+        prefix of the buffer and stored a truncated value.
+        """
+        data = os.urandom(64)
+        views = [
+            memoryview(data).cast("H"),
+            memoryview(data).cast("I"),
+            memoryview(data).cast("Q"),
+            memoryview(data).cast("B", (2, 32)),
+        ]
+        keys = [get_random_string(10) for _ in views]
+
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(glide_sync_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+        for key, view in zip(keys, views):
+            assert len(view) < view.nbytes == len(data)
+            batch.set(key, view)
+        assert exec_batch(glide_sync_client, batch) == [OK] * len(views)
+
+        for key in keys:
+            assert glide_sync_client.get(key) == data
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_batch_zadd_bytes_like_members(self, glide_sync_client: TGlideClient):
         """Test that batch zadd() stores bytes and memoryview members verbatim."""
         key = get_random_string(10)
