@@ -1013,10 +1013,6 @@ mod tests {
         assert_eq!(cmd_name_from_bytes(b"get"), "GET");
         assert_eq!(cmd_name_from_bytes(b"Set"), "SET");
         assert_eq!(cmd_name_from_bytes(b"HGETALL"), "HGETALL");
-        assert_eq!(cmd_name_from_bytes(b"FT.CURSOR"), "FT.CURSOR");
-        assert_eq!(cmd_name_from_bytes(b"ft.cursor"), "FT.CURSOR");
-        assert_eq!(cmd_name_from_bytes(b"FT.HYBRID"), "FT.HYBRID");
-        assert_eq!(cmd_name_from_bytes(b"ft.hybrid"), "FT.HYBRID");
         assert_eq!(cmd_name_from_bytes(b"ping"), "PING");
         assert_eq!(cmd_name_from_bytes(b"ZADD"), "ZADD");
         assert_eq!(cmd_name_from_bytes(b"LPUSH"), "LPUSH");

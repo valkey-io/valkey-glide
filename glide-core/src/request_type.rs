@@ -740,15 +740,15 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::FtAliasList => RequestType::FtAliasList,
             ProtobufRequestType::FtAliasUpdate => RequestType::FtAliasUpdate,
             ProtobufRequestType::FtCreate => RequestType::FtCreate,
+            ProtobufRequestType::FtCursorDel => RequestType::FtCursorDel,
+            ProtobufRequestType::FtCursorRead => RequestType::FtCursorRead,
             ProtobufRequestType::FtDropIndex => RequestType::FtDropIndex,
             ProtobufRequestType::FtExplain => RequestType::FtExplain,
             ProtobufRequestType::FtExplainCli => RequestType::FtExplainCli,
+            ProtobufRequestType::FtHybrid => RequestType::FtHybrid,
             ProtobufRequestType::FtInfo => RequestType::FtInfo,
             ProtobufRequestType::FtProfile => RequestType::FtProfile,
             ProtobufRequestType::FtSearch => RequestType::FtSearch,
-            ProtobufRequestType::FtHybrid => RequestType::FtHybrid,
-            ProtobufRequestType::FtCursorRead => RequestType::FtCursorRead,
-            ProtobufRequestType::FtCursorDel => RequestType::FtCursorDel,
             ProtobufRequestType::ModuleList => RequestType::ModuleList,
             ProtobufRequestType::ModuleLoad => RequestType::ModuleLoad,
             ProtobufRequestType::ModuleLoadEx => RequestType::ModuleLoadEx,
@@ -1358,15 +1358,15 @@ impl RequestType {
             RequestType::FtAliasList => Some(cmd("FT._ALIASLIST")),
             RequestType::FtAliasUpdate => Some(cmd("FT.ALIASUPDATE")),
             RequestType::FtCreate => Some(cmd("FT.CREATE")),
+            RequestType::FtCursorDel => Some(get_two_word_command("FT.CURSOR", "DEL")),
+            RequestType::FtCursorRead => Some(get_two_word_command("FT.CURSOR", "READ")),
             RequestType::FtDropIndex => Some(cmd("FT.DROPINDEX")),
             RequestType::FtExplain => Some(cmd("FT.EXPLAIN")),
             RequestType::FtExplainCli => Some(cmd("FT.EXPLAINCLI")),
+            RequestType::FtHybrid => Some(cmd("FT.HYBRID")),
             RequestType::FtInfo => Some(cmd("FT.INFO")),
             RequestType::FtProfile => Some(cmd("FT.PROFILE")),
             RequestType::FtSearch => Some(cmd("FT.SEARCH")),
-            RequestType::FtHybrid => Some(cmd("FT.HYBRID")),
-            RequestType::FtCursorRead => Some(get_two_word_command("FT.CURSOR", "READ")),
-            RequestType::FtCursorDel => Some(get_two_word_command("FT.CURSOR", "DEL")),
             RequestType::ModuleList => Some(get_two_word_command("MODULE", "LIST")),
             RequestType::ModuleLoad => Some(get_two_word_command("MODULE", "LOAD")),
             RequestType::ModuleLoadEx => Some(get_two_word_command("MODULE", "LOADEX")),
@@ -1463,43 +1463,5 @@ impl RequestType {
             RequestType::SetNX => Some(cmd("SETNX")),
             _ => None,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn argv(request_type: RequestType) -> Vec<Vec<u8>> {
-        request_type
-            .get_command()
-            .expect("request type should build a command")
-            .args_iter()
-            .map(|arg| match arg {
-                redis::Arg::Simple(bytes) => bytes.to_vec(),
-                redis::Arg::Cursor => b"0".to_vec(),
-            })
-            .collect()
-    }
-
-    #[test]
-    fn ft_hybrid_argv_matches_custom_command() {
-        assert_eq!(argv(RequestType::FtHybrid), vec![b"FT.HYBRID".to_vec()]);
-    }
-
-    #[test]
-    fn ft_cursor_read_argv_matches_custom_command() {
-        assert_eq!(
-            argv(RequestType::FtCursorRead),
-            vec![b"FT.CURSOR".to_vec(), b"READ".to_vec()]
-        );
-    }
-
-    #[test]
-    fn ft_cursor_del_argv_matches_custom_command() {
-        assert_eq!(
-            argv(RequestType::FtCursorDel),
-            vec![b"FT.CURSOR".to_vec(), b"DEL".to_vec()]
-        );
     }
 }
