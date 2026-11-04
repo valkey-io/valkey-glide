@@ -873,10 +873,11 @@ mod tests {
         fn a_tcp_provider_is_rejected_without_the_development_feature() {
             use crate::rdma::{RdmaSetting, RdmaUnavailable};
 
-            assert!(matches!(
-                request_with_tcp_rdma().rdma,
-                RdmaSetting::Rejected(RdmaUnavailable::TcpProviderNotBuilt)
-            ));
+            let RdmaSetting::Rejected(reason) = request_with_tcp_rdma().rdma else {
+                panic!("a tcp request should be rejected without the development feature");
+            };
+            assert_eq!(reason, RdmaUnavailable::TcpProviderNotBuilt);
+            assert!(reason.to_string().contains("rdma-tcp-dev"));
         }
 
         #[cfg(feature = "rdma-tcp-dev")]

@@ -648,7 +648,8 @@ Examples:
         "--rdma",
         action="store_true",
         help="Build the FFI library with RDMA support (sync client only), including "
-        "the tcp provider the RDMA tests use. Release wheels are built without it.",
+        "the tcp provider the RDMA tests use. Release wheels are built without it; "
+        "a wheel built with --rdma carries it.",
     )
 
     subparsers.add_parser(

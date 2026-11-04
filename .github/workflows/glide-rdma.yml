@@ -88,7 +88,10 @@ jobs:
 
             - name: Run glide-rdma tests with libfabric
               working-directory: ./glide-rdma
-              run: cargo test --features tcp-dev
+              run: |
+                  cargo test --features tcp-dev
+                  # The release shape: `libfabric` alone carries no tcp provider.
+                  cargo test --features libfabric --test test_libfabric_missing
 
     lint:
         runs-on: ubuntu-24.04

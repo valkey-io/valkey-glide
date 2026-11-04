@@ -3,7 +3,10 @@
 //! How to open the local fabric endpoint.
 
 /// A libfabric provider the client can drive.
+///
+/// Non-exhaustive because `Tcp` is only there with the `tcp-dev` feature.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum Provider {
     /// Software transport, for tests and development on hosts without RDMA hardware.
     /// Only with the `tcp-dev` feature; a release build does not carry it.

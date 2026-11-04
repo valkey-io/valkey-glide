@@ -266,6 +266,22 @@ class _BlockedTransfer:
         return self.outcome
 
 
+# Matches `RdmaUnavailable::TcpProviderNotBuilt` in glide-core.
+_TCP_PROVIDER_NOT_BUILT = "no `tcp` RDMA provider"
+
+
+def _create_tcp_client(client_type, config):
+    """A client over the tcp provider, or a skip on a build with only efa-direct."""
+    try:
+        return client_type.create(config)
+    except Exception as caught:
+        if _TCP_PROVIDER_NOT_BUILT in str(caught):
+            pytest.skip(
+                "this build has no tcp RDMA provider; build with dev.py build --rdma"
+            )
+        raise
+
+
 def test_rdma_availability_is_reported_as_a_bool():
     # A binding gates its RDMA surface on this rather than probing for symbols,
     # so it must answer on every build.
@@ -1402,7 +1418,7 @@ def test_an_rdma_client_against_a_plain_server_still_works(
         ), f"unhelpful message for an unusable machine: {message}"
         return
 
-    client = type(glide_sync_client).create(config)
+    client = _create_tcp_client(type(glide_sync_client), config)
     try:
         client.set(b"plain-key", b"plain-value")
         assert client.get(b"plain-key") == b"plain-value"
@@ -1482,11 +1498,12 @@ def test_a_transfer_whose_connection_is_lost_closes_its_region(
     if not GlideClient.rdma_usable():
         pytest.skip("needs libfabric to open a tcp fabric")
     proxy = _DroppingProxy(glide_sync_client._config.addresses[0], b"BLOB.RDMA")
-    client = GlideClient.create(
+    client = _create_tcp_client(
+        GlideClient,
         GlideClientConfiguration(
             addresses=[proxy.address],
             rdma=RdmaConfiguration(provider=RdmaProvider.Tcp()),
-        )
+        ),
     )
     try:
         region = client.register_rdma_region(bytearray(REGION_BYTES))
@@ -1529,7 +1546,7 @@ def test_closing_an_idle_region_lets_go_of_the_memory_at_once(
         addresses=glide_sync_client._config.addresses,
         rdma=RdmaConfiguration(provider=RdmaProvider.Tcp()),
     )
-    client = type(glide_sync_client).create(config)
+    client = _create_tcp_client(type(glide_sync_client), config)
     try:
         memory = bytearray(REGION_BYTES)
         region = client.register_rdma_region(memory)
