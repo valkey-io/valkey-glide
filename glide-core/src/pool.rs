@@ -3768,18 +3768,21 @@ mod scope_pool_tests {
     }
 
     /// Release must discard a connection the borrow left unusable and still reuse a
-    /// clean one. `CLIENT REPLY OFF|SKIP` times out the reset DISCARD; a RESP3 `SUBSCRIBE`
-    /// answers it normally, so only `subscribe_sent` catches it. A-B: both were
+    /// clean one. `CLIENT REPLY OFF|SKIP` times out the reset DISCARD (PING in
+    /// read-only mode, which rejects DISCARD locally); a RESP3 `SUBSCRIBE` answers it
+    /// normally, so only `subscribe_sent` catches it. A-B: the dirty ones were
     /// re-idled when DISCARD errors counted only with a MULTI open.
     #[tokio::test]
     async fn release_discards_a_connection_left_unusable() {
-        let cases: [(&[&str], bool); 4] = [
-            (&["PING"], true),
-            (&["CLIENT", "REPLY", "SKIP"], false),
-            (&["CLIENT", "REPLY", "OFF"], false),
-            (&["SUBSCRIBE", "release-discard-test"], false),
+        let cases: [(bool, &[&str], bool); 6] = [
+            (false, &["PING"], true),
+            (false, &["CLIENT", "REPLY", "SKIP"], false),
+            (false, &["CLIENT", "REPLY", "OFF"], false),
+            (false, &["SUBSCRIBE", "release-discard-test"], false),
+            (true, &["PING"], true),
+            (true, &["CLIENT", "REPLY", "OFF"], false),
         ];
-        for (command, reused) in cases {
+        for (read_only, command, reused) in cases {
             let server = TestServer::start();
             wait_for_server_ready(server.port).await;
 
@@ -3790,6 +3793,7 @@ mod scope_pool_tests {
                     port: server.port,
                     unix_socket_path: None,
                 });
+                request.read_only = read_only;
                 crate::client::Client::new(request, None)
                     .await
                     .expect("client connects to the test server")
@@ -3826,7 +3830,7 @@ mod scope_pool_tests {
             assert_eq!(
                 pool.idle_count(),
                 u32::from(reused),
-                "{command:?}: reused={reused} expected"
+                "read_only={read_only} {command:?}: reused={reused} expected"
             );
             let _ = pool.drain_discarded_ids();
         }

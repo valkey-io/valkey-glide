@@ -541,6 +541,8 @@ pub struct ClientShared {
     multi_active: Arc<AtomicBool>,
     // Whether this client is in cluster mode (immutable).
     is_cluster: bool,
+    // Whether this client is in read-only mode (immutable).
+    read_only: bool,
     // TLS certificate material the live connection was built with. Scope
     // connections read it to inherit the parent's mTLS identity and trust roots.
     // A shared write-once cell because the connection is built after
@@ -3373,6 +3375,7 @@ impl Client {
                     iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                     multi_active: Arc::new(AtomicBool::new(false)),
                     is_cluster: request.cluster_mode_enabled,
+                    read_only: request.read_only,
                     cert_material: cert_material_cell.clone(),
                     address_resolver: request.address_resolver.clone(),
                     configures_cert_material: request_configures_cert_material(&request),
@@ -3562,8 +3565,9 @@ impl Client {
 
     /// Reset connection state to a clean baseline after a pool borrow is returned.
     ///
-    /// - DISCARD — always sent (not gated on the intent-tracked `multi_active`,
-    ///   which can desync under concurrent use), to `AllNodes` on cluster. A
+    /// - DISCARD (PING in read-only mode) — always sent (not gated on the
+    ///   intent-tracked `multi_active`, which can desync under concurrent use), to
+    ///   `AllNodes` on cluster. A
     ///   "DISCARD without MULTI" reply is expected and ignored; any other failure is
     ///   propagated so release discards the connection rather than reuse one it
     ///   can't reset. See the error-classification note at the call site for why
@@ -3590,8 +3594,11 @@ impl Client {
             MultipleNodeRoutingInfo::AllNodes,
             None,
         )));
+        // Read-only mode rejects DISCARD locally and can't open a MULTI, so PING is
+        // its liveness check.
+        let probe = if self.read_only { "PING" } else { "DISCARD" };
         let discard_result = self
-            .send_command(&mut redis::cmd("DISCARD"), discard_routing)
+            .send_command(&mut redis::cmd(probe), discard_routing)
             .await;
         // Classify the DISCARD outcome by message, not `is_err()`. "DISCARD without
         // MULTI" (no transaction open) is expected and ignored. On cluster it is
@@ -3698,9 +3705,16 @@ impl Client {
     fn track_subscription(&self, cmd: &Cmd) {
         // arg_idx(0) avoids cmd.command()'s allocation on the hot path.
         if cmd.arg_idx(0).is_some_and(|name| {
-            [&b"SUBSCRIBE"[..], b"PSUBSCRIBE", b"SSUBSCRIBE"]
-                .iter()
-                .any(|sub| name.eq_ignore_ascii_case(sub))
+            [
+                &b"SUBSCRIBE"[..],
+                b"PSUBSCRIBE",
+                b"SSUBSCRIBE",
+                b"SUBSCRIBE_BLOCKING",
+                b"PSUBSCRIBE_BLOCKING",
+                b"SSUBSCRIBE_BLOCKING",
+            ]
+            .iter()
+            .any(|sub| name.eq_ignore_ascii_case(sub))
         }) {
             self.subscribe_sent.store(true, Ordering::Release);
         }
@@ -3960,6 +3974,7 @@ impl Client {
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
+                read_only: false,
                 cert_material: Arc::default(),
                 address_resolver: None,
                 configures_cert_material: false,
@@ -4042,6 +4057,7 @@ pub fn create_test_glide_client() -> Client {
             iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
             multi_active: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             is_cluster: false,
+            read_only: false,
             cert_material: Arc::default(),
             address_resolver: None,
             configures_cert_material: false,
@@ -5000,6 +5016,7 @@ mod tests {
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
+                read_only: false,
                 cert_material: Arc::default(),
                 address_resolver: None,
                 configures_cert_material: false,
@@ -5288,7 +5305,7 @@ mod tests {
     #[test]
     fn track_subscription_flags_only_subscribe_commands() {
         use std::sync::atomic::Ordering;
-        for name in ["UNSUBSCRIBE", "PUBLISH", "GET"] {
+        for name in ["UNSUBSCRIBE", "UNSUBSCRIBE_BLOCKING", "PUBLISH", "GET"] {
             let client = create_test_client();
             client.track_subscription(&redis::cmd(name));
             assert!(
@@ -5296,7 +5313,14 @@ mod tests {
                 "{name}"
             );
         }
-        for name in ["subscribe", "PSUBSCRIBE", "SSUBSCRIBE"] {
+        for name in [
+            "subscribe",
+            "PSUBSCRIBE",
+            "SSUBSCRIBE",
+            "SUBSCRIBE_BLOCKING",
+            "PSUBSCRIBE_BLOCKING",
+            "SSUBSCRIBE_BLOCKING",
+        ] {
             let client = create_test_client();
             client.track_subscription(&redis::cmd(name));
             assert!(
