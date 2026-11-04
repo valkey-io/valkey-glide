@@ -98,7 +98,7 @@ jobs:
 
             - name: Run glide-ffi RDMA tests
               working-directory: ./ffi
-              run: cargo test --features rdma
+              run: cargo test --features rdma-tcp-dev
 
             - name: Run glide-ffi MIRI tests
               working-directory: ./ffi/miri-tests

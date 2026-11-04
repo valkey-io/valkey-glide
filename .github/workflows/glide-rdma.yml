@@ -88,7 +88,7 @@ jobs:
 
             - name: Run glide-rdma tests with libfabric
               working-directory: ./glide-rdma
-              run: cargo test --features libfabric
+              run: cargo test --features tcp-dev
 
     lint:
         runs-on: ubuntu-24.04

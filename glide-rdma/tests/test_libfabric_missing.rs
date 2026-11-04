@@ -2,7 +2,7 @@
 
 //! What happens on a host with no libfabric.
 
-#![cfg(feature = "libfabric")]
+#![cfg(feature = "tcp-dev")]
 
 use glide_rdma::{FabricConfig, Provider, RdmaError, RdmaFabric, ensure_loaded};
 

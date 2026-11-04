@@ -6,6 +6,8 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Provider {
     /// Software transport, for tests and development on hosts without RDMA hardware.
+    /// Only with the `tcp-dev` feature; a release build does not carry it.
+    #[cfg(any(test, feature = "tcp-dev"))]
     Tcp,
     /// EFA's `efa-direct` fabric.
     #[default]
@@ -18,6 +20,7 @@ impl Provider {
     /// The libfabric provider name, as `fabric_attr.prov_name`.
     pub(crate) fn as_str(self) -> &'static str {
         match self {
+            #[cfg(any(test, feature = "tcp-dev"))]
             Provider::Tcp => "tcp",
             Provider::EfaDirect => "efa",
         }
@@ -27,6 +30,7 @@ impl Provider {
     pub(crate) fn fabric_name(self) -> Option<&'static str> {
         match self {
             Provider::EfaDirect => Some("efa-direct"),
+            #[cfg(any(test, feature = "tcp-dev"))]
             Provider::Tcp => None,
         }
     }
