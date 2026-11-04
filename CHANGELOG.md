@@ -34,6 +34,7 @@
 * Core, Go, Java, Node, Python: Releasing a scope has finished when the release call returns, also when another thread holds the scope pool lock at that moment; before, the release was deferred to a background task and the next acquire could find the connection still borrowed ([#7514](https://github.com/valkey-io/valkey-glide/issues/7514))
 * Python: `TrimByMinId` (`xadd`/`xtrim`), `ExclusiveIdBound` (`xrange`/`xrevrange`/`xpending_range`) and the `FtHybridVsimArm` field (`ft.hybrid`) send `bytes`, `bytearray` and `memoryview` values verbatim instead of their Python repr, which the server rejected. A `bytes` stream ID returned by `xadd` can now be used as a `TrimByMinId` threshold ([#7558](https://github.com/valkey-io/valkey-glide/issues/7558))
 * Python: `zadd` (async, sync and `Batch`/`ClusterBatch`) no longer stringifies `bytes`, `bytearray` and `memoryview` members into their Python repr; members are now passed through verbatim and only the scores are converted to strings ([#7521](https://github.com/valkey-io/valkey-glide/issues/7521))
+* Java: Don't throw when `AZ_AFFINITY` or `AZ_AFFINITY_REPLICAS_AND_PRIMARY` has no `clientAZ` ([#7536](https://github.com/valkey-io/valkey-glide/pull/7536))
 * Core: Scoped connections authenticate with the client's current password after `update_connection_password` (or a user-issued `AUTH`/`HELLO`), instead of the password the client was created with: a scope connection built after the rotation sends the new password, and an idle one re-authenticates before its next command once the server has accepted the new password (`immediate_auth`, `AUTH`, `HELLO`); a store-only update leaves open scope connections as they are, like the client's own connection ([#7334](https://github.com/valkey-io/valkey-glide/issues/7334))
 * Core: `GETSET` compresses value when enabled ([#7411](https://github.com/valkey-io/valkey-glide/issues/7411))
 * Core: Reject `SET` with `IFEQ` or `IFNE` when compression is enabled ([#7365](https://github.com/valkey-io/valkey-glide/issues/7365))
@@ -141,7 +142,6 @@
 ### Breaking Changes
 
 * Rust: Require `InfoSection` enum for `info_sections` command ([#7366](https://github.com/valkey-io/valkey-glide/issues/7366))
-* Java: An AZ-affinity read strategy configured without `clientAZ` now fails at client creation. Previously the core logged a warning and downgraded the strategy to `PreferReplica`, so reads silently went to arbitrary nodes. Affects `AZ_AFFINITY` and `AZ_AFFINITY_REPLICAS_AND_PRIMARY` as well as the new `AZ_AFFINITY_ALL_NODES`, and reaches `ClientPool.create` as well as `GlideClient`/`GlideClusterClient` ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
 * Node: `clientAz` is now trimmed and validated for the `AZAffinity`, `AZAffinityReplicasAndPrimary`, and `AZAffinityAllNodes` read strategies. A whitespace-only `clientAz` now raises a `ConfigurationError`, and a padded value (e.g. `" us-east-1a "`) is trimmed before reaching the core so reads pin to that zone instead of falling back to all nodes ([#7104](https://github.com/valkey-io/valkey-glide/pull/7104))
 
 ## 2.5

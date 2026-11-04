@@ -132,8 +132,10 @@ public abstract class BaseClientConfiguration {
      *       nodes in this AZ.
      * </ul>
      *
-     * <p>Required for all three. {@code createClient} throws a {@code ConfigurationError} when it is
-     * unset or blank.
+     * <p>Needed by all three. Surrounding whitespace is trimmed. When it is unset or blank, {@code
+     * createClient} throws a {@code ConfigurationError} for {@link ReadFrom#AZ_AFFINITY_ALL_NODES};
+     * for the other two, the core logs a warning and reads use {@link ReadFrom#PREFER_REPLICA}
+     * instead.
      */
     private final String clientAZ;
 
