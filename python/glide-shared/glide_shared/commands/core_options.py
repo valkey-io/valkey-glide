@@ -335,7 +335,7 @@ class ExpirySet:
                 value = int(value.timestamp() * 1000)
         elif self.expiry_type == ExpiryType.KEEP_TTL:
             self.cmd_arg = "KEEPTTL"
-        self.value = str(value) if value else None
+        self.value = str(value) if value is not None else None
 
     def get_cmd_args(self) -> List[str]:
         return [self.cmd_arg] if self.value is None else [self.cmd_arg, self.value]
@@ -397,7 +397,7 @@ class ExpiryGetEx:
                 value = int(value.timestamp() * 1000)
         elif self.expiry_type == ExpiryTypeGetEx.PERSIST:
             self.cmd_arg = "PERSIST"
-        self.value = str(value) if value else None
+        self.value = str(value) if value is not None else None
 
     def get_cmd_args(self) -> List[str]:
         return [self.cmd_arg] if self.value is None else [self.cmd_arg, self.value]
