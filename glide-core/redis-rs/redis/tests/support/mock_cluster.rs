@@ -390,13 +390,19 @@ impl aio::ConnectionLike for MockConnection {
             }
             _ => packed,
         };
+        // The handler runs when the command is sent, as a real connection writes it into its
+        // pipeline channel. Waiting for the reply then takes a unit of the task's tokio
+        // cooperative budget, as a real connection's reply channel does, so a task that sends
+        // many commands in one poll (the cluster event loop) yields after about 128 of them.
         let result = (self.handler)(&packed, self.port);
         ASKED_IN_SAME_WRITE.with(|asked| asked.set(false));
-        Box::pin(future::ready(
+        let result = result
+            .map_err(|err| err.and_then(|v| v.extract_error()))
+            .expect_err("Handler did not specify a response");
+        Box::pin(async move {
+            tokio::task::consume_budget().await;
             result
-                .map_err(|err| err.and_then(|v| v.extract_error()))
-                .expect_err("Handler did not specify a response"),
-        ))
+        })
     }
 
     fn req_packed_commands<'a>(
