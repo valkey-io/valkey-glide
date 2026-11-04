@@ -1277,7 +1277,7 @@ dependencies = [
 
 [[package]]
 name = "glide-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "aws-config",
@@ -1334,7 +1334,7 @@ dependencies = [
 
 [[package]]
 name = "glide-core-engine"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "arc-swap",
  "async-trait",
