@@ -84,6 +84,7 @@
 * Go: Remove `.gitignore` from the released module so consumers who commit `vendor/` keep the generated artifacts (`internal/protobuf/*.pb.go`, `rustbin/**`, `lib.h`) ([#6441](https://github.com/valkey-io/valkey-glide/pull/6441))
 * Core: Releasing a scope, or closing its parent client, while a blocking command is in flight now closes the scope's socket, so the server drops the blocked waiter instead of letting it consume a later push — the socket used to stay open until the server replied, which for `BLPOP key 0` is never. A reused scope connection also gets a fresh scope id, and a blocking scope command keeps the abandon monitor from reclaiming its pool-borrowed parent mid-command ([#7000](https://github.com/valkey-io/valkey-glide/issues/7000))
 * Core: Validate client library names ([#6891](https://github.com/valkey-io/valkey-glide/pull/6891))
+* Go: A server `NOSCRIPT` error now reads as the server sent it (`NOSCRIPT No matching script.`) instead of glide-core's `An error was signalled by the server: - NoScriptError: No matching script.`, so an `EVALSHA` caller that falls back to `EVAL` or `SCRIPT LOAD` on a `NOSCRIPT` prefix recovers after a failover empties the script cache. This applies to command errors and to errors in batch results; code that matched on `NoScriptError` should match the `NOSCRIPT` prefix ([#7527](https://github.com/valkey-io/valkey-glide/issues/7527))
 
 ### Changes
 
