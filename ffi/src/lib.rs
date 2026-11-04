@@ -5182,7 +5182,7 @@ unsafe fn execute_command(
         }
     };
 
-    // Inflight tracking is handled by send_command() via InflightRequestTracker on Cmd.
+    // Inflight tracking is handled by send_command(), which reserves its own slot.
     let mut client = client_adapter.core.client.clone();
 
     // Abandon monitor integration: for pool-borrowed clients refresh the inactivity

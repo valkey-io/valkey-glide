@@ -703,8 +703,8 @@ fn get_route(
 
 fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer>) {
     task::spawn_local(async move {
-        // send_command() manages its own inflight tracking via InflightRequestTracker
-        // on the Cmd. All other paths (batch, pipeline, cluster_scan, script,
+        // send_command() reserves its own inflight slot (held by the request for a
+        // standalone client, by the Cmd for a cluster client). All other paths (batch, pipeline, cluster_scan, script,
         // update_password, refresh_iam) need inflight reservation at this level.
         // The tracker's Drop releases the slot automatically.
         let _inflight_guard = if !matches!(
