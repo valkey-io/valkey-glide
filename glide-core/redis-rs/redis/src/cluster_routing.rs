@@ -1339,20 +1339,41 @@ pub fn is_readonly_cmd(cmd: &[u8]) -> bool {
     )
 }
 
+/// Whether `primary` (an ASCII-uppercased first argument) names a container
+/// command, for which [`Routable::command`] appends the subcommand
+/// (`CLIENT SETNAME`, `CONFIG GET`, ...). Exposed so callers that build the same
+/// name without allocating share this one list.
+pub fn is_container_command(primary: &[u8]) -> bool {
+    matches!(
+        primary,
+        b"XGROUP"
+            | b"OBJECT"
+            | b"SLOWLOG"
+            | b"FUNCTION"
+            | b"MODULE"
+            | b"COMMAND"
+            | b"PUBSUB"
+            | b"CONFIG"
+            | b"MEMORY"
+            | b"XINFO"
+            | b"CLIENT"
+            | b"ACL"
+            | b"SCRIPT"
+            | b"CLUSTER"
+            | b"LATENCY"
+            | b"SENTINEL"
+    )
+}
+
 /// Objects that implement this trait define a request that can be routed by a cluster client to different nodes in the cluster.
 pub trait Routable {
     /// Convenience function to return ascii uppercase version of the
     /// the first argument (i.e., the command).
     fn command(&self) -> Option<Vec<u8>> {
-        let primary_command = self.arg_idx(0).map(|x| x.to_ascii_uppercase())?;
-        let mut primary_command = match primary_command.as_slice() {
-            b"XGROUP" | b"OBJECT" | b"SLOWLOG" | b"FUNCTION" | b"MODULE" | b"COMMAND"
-            | b"PUBSUB" | b"CONFIG" | b"MEMORY" | b"XINFO" | b"CLIENT" | b"ACL" | b"SCRIPT"
-            | b"CLUSTER" | b"LATENCY" | b"SENTINEL" => primary_command,
-            _ => {
-                return Some(primary_command);
-            }
-        };
+        let mut primary_command = self.arg_idx(0).map(|x| x.to_ascii_uppercase())?;
+        if !is_container_command(&primary_command) {
+            return Some(primary_command);
+        }
 
         Some(match self.arg_idx(1) {
             Some(secondary_command) => {

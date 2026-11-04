@@ -38,7 +38,11 @@ use std::time::{Duration, Instant};
 use tokio::runtime::{Builder, Handle};
 pub use types::*;
 
-use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, get_value_type};
+use self::value_conversion::{
+    convert_to_expected_type, expected_type_for_cmd, expected_type_for_cmd_name, get_value_type,
+};
+mod cmd_name;
+use self::cmd_name::{CmdName, name_bytes};
 mod dispatch_permit;
 use dispatch_permit::{Admission, DispatchPermit};
 #[cfg(feature = "rdma")]
@@ -717,12 +721,17 @@ fn get_timeout_from_cmd_arg(
 /// Also used by the pool abandon monitor to skip clients executing blocking commands.
 pub fn is_blocking_command(cmd: &Cmd) -> bool {
     let command = cmd.command().unwrap_or_default();
-    match command.as_slice() {
+    is_blocking_cmd_named(cmd, &command)
+}
+
+/// [`is_blocking_command`] with the uppercased command name (`Routable::command()`
+/// bytes) already computed, so the `send_command` path does not allocate it again.
+fn is_blocking_cmd_named(cmd: &Cmd, upper_name: &[u8]) -> bool {
+    match upper_name {
         b"XREAD" | b"XREADGROUP" => cmd.position(b"BLOCK").is_some(),
-        // `command()` already normalizes the name to uppercase, so pass it through
-        // to the shared name-based check (empty args slice — the only arg-dependent
-        // case, XREAD/XREADGROUP, is handled above via `cmd.position`).
-        name => is_blocking_command_name(name, &[]),
+        // The only arg-dependent case, XREAD/XREADGROUP, is handled above via
+        // `cmd.position`.
+        name => is_blocking_upper_name(name),
     }
 }
 
@@ -736,6 +745,18 @@ pub fn is_blocking_command(cmd: &Cmd) -> bool {
 pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
     let upper = name.to_ascii_uppercase();
     match upper.as_slice() {
+        // BLOCK is matched case-insensitively, mirroring `Cmd::position`.
+        b"XREAD" | b"XREADGROUP" => args.iter().any(|a| a.eq_ignore_ascii_case(b"BLOCK")),
+        name => is_blocking_upper_name(name),
+    }
+}
+
+/// The argument-independent blocking commands, by uppercased name. Shared by
+/// [`is_blocking_command`] and [`is_blocking_command_name`] so the two recognize
+/// the same set; XREAD/XREADGROUP (blocking only with `BLOCK`) are handled by the
+/// callers.
+fn is_blocking_upper_name(upper_name: &[u8]) -> bool {
+    match upper_name {
         b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" | b"BLMPOP"
         | b"BZMPOP" | b"WAIT" | b"WAITAOF" => true,
         // An RDMA transfer is treated as blocking so that nothing which gives up
@@ -744,15 +765,35 @@ pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
         // A transfer cut short ends without the server's reply, which revokes its
         // region and loses the caller's buffer.
         b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET" => true,
-        // BLOCK is matched case-insensitively, mirroring `Cmd::position`.
-        b"XREAD" | b"XREADGROUP" => args.iter().any(|a| a.eq_ignore_ascii_case(b"BLOCK")),
         _ => false,
     }
 }
 
+/// Whether a command with this uppercased name (`Routable::command()` bytes) runs
+/// one of the connection-state post-hooks in `execute_command_owned`, which need a
+/// `Client` clone. Exactly the commands matched by `is_client_set_name_command`,
+/// `is_select_command`, `is_auth_command`, `is_hello_command` and
+/// `is_reset_command`.
+fn needs_post_hook(upper_name: &[u8]) -> bool {
+    matches!(
+        upper_name,
+        b"CLIENT SETNAME" | b"SELECT" | b"AUTH" | b"HELLO" | b"RESET"
+    )
+}
+
 fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Option<Duration>> {
     let command = cmd.command().unwrap_or_default();
-    let timeout = match command.as_slice() {
+    get_request_timeout_named(cmd, &command, default_timeout)
+}
+
+/// [`get_request_timeout`] with the uppercased command name (`Routable::command()`
+/// bytes) already computed, so the `send_command` path does not allocate it again.
+fn get_request_timeout_named(
+    cmd: &Cmd,
+    command: &[u8],
+    default_timeout: Duration,
+) -> RedisResult<Option<Duration>> {
+    let timeout = match command {
         b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" => {
             get_timeout_from_cmd_arg(cmd, cmd.args_iter().len() - 1, TimeUnit::Seconds)
         }
@@ -762,11 +803,7 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
             .map(|idx| get_timeout_from_cmd_arg(cmd, idx + 1, TimeUnit::Milliseconds))
             .unwrap_or(Ok(RequestTimeoutOption::ClientConfig)),
         b"WAIT" | b"WAITAOF" => {
-            let idx = if command.as_slice() == b"WAITAOF" {
-                3
-            } else {
-                2
-            };
+            let idx = if command == b"WAITAOF" { 3 } else { 2 };
             get_timeout_from_cmd_arg(cmd, idx, TimeUnit::Milliseconds)
         }
         // An RDMA transfer should not have a timeout, and neither does the
@@ -1301,15 +1338,24 @@ impl Client {
 
     /// Internal command execution logic. Takes owned data so the returned future
     /// is `Send + 'static`.
+    ///
+    /// `self_clone` is needed only by the connection-state post-hooks (CLIENT
+    /// SETNAME, SELECT, AUTH, HELLO, RESET; see [`needs_post_hook`]); the caller
+    /// passes `None` for every other command, so they skip the `Client` clone.
+    /// `cmd_name` is `Routable::command()` of `cmd` (`None` iff `cmd` has no
+    /// arguments), computed once by the caller.
     async fn execute_command_owned(
-        mut self_clone: Client,
+        self_clone: Option<Client>,
         cmd: Arc<Cmd>,
+        cmd_name: Option<&[u8]>,
         routing: Option<RoutingInfo>,
         client: ClientWrapper,
         compression_manager: Option<Arc<CompressionManager>>,
     ) -> RedisResult<Value> {
         let raw_value = match client {
-            ClientWrapper::Standalone(mut client) => client.send_command(&cmd).await,
+            ClientWrapper::Standalone(mut client) => {
+                client.send_command_with_name(&cmd, cmd_name).await
+            }
             ClientWrapper::Cluster { mut client, .. } => {
                 let final_routing = if let Some(RoutingInfo::SingleNode(
                     SingleNodeRoutingInfo::Random,
@@ -1372,23 +1418,27 @@ impl Client {
             raw_value
         };
 
-        let expected_type = expected_type_for_cmd(&cmd);
+        let expected_type = cmd_name.and_then(|name| expected_type_for_cmd_name(&cmd, name));
         let value = convert_to_expected_type(processed_value, expected_type)?;
 
-        if self_clone.is_client_set_name_command(&cmd) {
-            self_clone.handle_client_set_name_command(&cmd).await?;
-        }
-        if self_clone.is_select_command(&cmd) {
-            self_clone.handle_select_command(&cmd).await?;
-        }
-        if self_clone.is_auth_command(&cmd) {
-            self_clone.handle_auth_command(&cmd).await?;
-        }
-        if self_clone.is_hello_command(&cmd) {
-            self_clone.handle_hello_command(&cmd).await?;
-        }
-        if self_clone.is_reset_command(&cmd) {
-            self_clone.handle_reset_command().await?;
+        // Post-hooks: only the connection-state commands carry a `Client` clone
+        // (see `needs_post_hook`); the checks themselves are unchanged.
+        if let Some(mut self_clone) = self_clone {
+            if self_clone.is_client_set_name_command(&cmd) {
+                self_clone.handle_client_set_name_command(&cmd).await?;
+            }
+            if self_clone.is_select_command(&cmd) {
+                self_clone.handle_select_command(&cmd).await?;
+            }
+            if self_clone.is_auth_command(&cmd) {
+                self_clone.handle_auth_command(&cmd).await?;
+            }
+            if self_clone.is_hello_command(&cmd) {
+                self_clone.handle_hello_command(&cmd).await?;
+            }
+            if self_clone.is_reset_command(&cmd) {
+                self_clone.handle_reset_command().await?;
+            }
         }
         Ok(value)
     }
@@ -1405,14 +1455,18 @@ impl Client {
             crate::rdma::refuse_direct_command(cmd)?;
             // Refresh IAM auth before the command (see `reconcile_iam_before_dispatch`).
             self.reconcile_iam_before_dispatch().await?;
+            // The uppercased command name, computed once (on the stack) and reused
+            // by every name-based check below instead of one `Routable::command()`
+            // allocation per check.
+            let cmd_name = CmdName::of(cmd);
             // Track MULTI/EXEC/DISCARD for the borrow-time re-AUTH defer.
-            self.track_transaction_state(cmd);
+            self.track_transaction_state(name_bytes(&cmd_name));
             self.track_subscription(cmd);
             // Flag a possible db change before dispatch (see `db_maybe_dirty`).
             if self.is_select_command(cmd) {
                 self.shared.db_maybe_dirty.store(true, Ordering::Release);
             }
-            self.send_command_ungated(cmd, routing).await
+            self.send_command_ungated(cmd, cmd_name, routing).await
         })
     }
 
@@ -1421,20 +1475,31 @@ impl Client {
     /// structurally rather than via a re-entrancy flag. Kept private and off
     /// `RedisFuture`/`Box::pin` so it neither exports a gate-skipping entry point nor
     /// adds a second heap allocation on the hot path.
+    ///
+    /// `cmd_name` must be `CmdName::of(cmd)`.
     async fn send_command_ungated<'a>(
         &'a mut self,
         cmd: &'a mut Cmd,
+        cmd_name: Option<CmdName>,
         routing: Option<RoutingInfo>,
     ) -> RedisResult<Value> {
         let admission = Admission::check(self).await?;
 
         // Answered locally, so it never takes an in-flight slot.
-        if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
+        // `may_intercept_pubsub_command` is a synchronous pre-filter (default
+        // `true`); the production synchronizer answers it from the exact name list
+        // `intercept_pubsub_command` matches, so the boxed async call is skipped
+        // for every other command without changing which commands are intercepted.
+        if self
+            .pubsub_synchronizer
+            .may_intercept_pubsub_command(name_bytes(&cmd_name))
+            && let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await
+        {
             return result;
         }
 
         let permit = admission.reserve(self)?;
-        self.dispatch(permit, cmd, routing).await
+        self.dispatch(permit, cmd, cmd_name, routing).await
     }
 
     /// Send `cmd` with the client and in-flight slot in `permit`.
@@ -1443,14 +1508,18 @@ impl Client {
     /// checked when `permit` was taken. The request-timeout lookup can still refuse
     /// the command, but never an RDMA transfer's. An error from here does not prove
     /// the command reached the server: the connection layer can fail before sending.
+    ///
+    /// `cmd_name` must be `CmdName::of(cmd)`.
     async fn dispatch<'a>(
         &'a mut self,
         permit: DispatchPermit,
         cmd: &'a mut Cmd,
+        cmd_name: Option<CmdName>,
         routing: Option<RoutingInfo>,
     ) -> RedisResult<Value> {
         let (client, tracker) = permit.into_parts();
-        let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
+        let name = name_bytes(&cmd_name);
+        let request_timeout = get_request_timeout_named(cmd, name, self.request_timeout)?;
 
         // Log at debug level when inflight usage crosses a 10% threshold.
         // Only one log per threshold crossing — zero noise when stable.
@@ -1481,10 +1550,12 @@ impl Client {
         } else {
             None
         };
-        let self_clone = self.clone();
+        // Only the connection-state post-hooks need a `Client` clone (they update
+        // client-side state after the reply); every other command skips it.
+        let self_clone = needs_post_hook(name).then(|| self.clone());
 
         // Blocking commands have artificially long latencies; exclude from tracker.
-        let is_blocking_cmd = is_blocking_command(cmd);
+        let is_blocking_cmd = is_blocking_cmd_named(cmd, name);
         // Propagate the blocking flag into the Cmd BEFORE cloning owned_cmd so
         // the copy that actually travels to the multiplexed connection carries
         // it, letting that connection suppress false-positive response-wait
@@ -1521,6 +1592,7 @@ impl Client {
                 let execute = Self::execute_command_owned(
                     self_clone,
                     owned_cmd.clone(),
+                    cmd_name.as_ref().map(CmdName::as_bytes),
                     routing,
                     client,
                     compression_manager,
@@ -1625,6 +1697,7 @@ impl Client {
                 let execute = Self::execute_command_owned(
                     self_clone,
                     owned_cmd,
+                    cmd_name.as_ref().map(CmdName::as_bytes),
                     routing,
                     client,
                     compression_manager,
@@ -2207,7 +2280,7 @@ impl Client {
             // it pre-dispatch for `prepare_for_borrow`'s defer. The SELECT drift is
             // applied post-dispatch instead (see the store below).
             for cmd in pipeline.cmd_iter() {
-                self.track_transaction_state(cmd);
+                self.track_transaction_state(name_bytes(&CmdName::of(cmd)));
                 self.track_subscription(cmd);
             }
             let drifted_db = self.last_select_db(pipeline);
@@ -2444,7 +2517,9 @@ impl Client {
         cmd.arg(pass);
         // Ungated: this AUTH is itself the pool-borrow reconcile's dispatch, so it
         // must not re-enter the borrow gate.
-        self.send_command_ungated(&mut cmd, Some(routing)).await
+        let cmd_name = CmdName::of(&cmd);
+        self.send_command_ungated(&mut cmd, cmd_name, Some(routing))
+            .await
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
@@ -3701,10 +3776,11 @@ impl Client {
     /// [`prepare_for_borrow`](Self::prepare_for_borrow) can defer the re-AUTH while a
     /// transaction is in flight. `send_transaction` is not tracked: redis-rs adds its
     /// MULTI/EXEC bracket at pack time, outside `cmd_iter()`, and it always closes.
-    fn track_transaction_state(&self, cmd: &Cmd) {
-        match cmd.command().as_deref() {
-            Some(b"MULTI") => self.multi_active.store(true, Ordering::Release),
-            Some(b"EXEC") | Some(b"DISCARD") => self.multi_active.store(false, Ordering::Release),
+    /// `upper_name` is the command's `Routable::command()` bytes.
+    fn track_transaction_state(&self, upper_name: &[u8]) {
+        match upper_name {
+            b"MULTI" => self.multi_active.store(true, Ordering::Release),
+            b"EXEC" | b"DISCARD" => self.multi_active.store(false, Ordering::Release),
             _ => {}
         }
     }
@@ -5284,26 +5360,129 @@ mod tests {
         );
     }
 
+    /// `needs_post_hook` decides whether `dispatch` clones the `Client` for the
+    /// connection-state post-hooks, so it must accept exactly the commands at least
+    /// one post-hook predicate matches; a command it misses would silently skip its
+    /// post-hook.
+    #[test]
+    fn needs_post_hook_matches_the_post_hook_predicates() {
+        // A runtime context, so the mock pubsub synchronizer (`mock-pubsub`) can
+        // spawn its cleanup when the client drops.
+        let rt = borrow_test_runtime();
+        let _rt_guard = rt.enter();
+        let client = create_test_client();
+        let commands = [
+            redis::cmd("CLIENT").arg("SETNAME").arg("n").clone(),
+            redis::cmd("client").arg("setname").arg("n").clone(),
+            redis::cmd("CLIENT").arg("GETNAME").clone(),
+            redis::cmd("CLIENT").arg("INFO").clone(),
+            redis::cmd("CLIENT").clone(),
+            redis::cmd("SELECT").arg("1").clone(),
+            redis::cmd("select").arg("1").clone(),
+            redis::cmd("AUTH").arg("pw").clone(),
+            redis::cmd("auth").arg("user").arg("pw").clone(),
+            redis::cmd("HELLO").arg("3").clone(),
+            redis::cmd("hello")
+                .arg("3")
+                .arg("AUTH")
+                .arg("u")
+                .arg("p")
+                .clone(),
+            redis::cmd("RESET").clone(),
+            redis::cmd("reset").clone(),
+            redis::cmd("GET").arg("k").clone(),
+            redis::cmd("SET").arg("k").arg("v").clone(),
+            redis::cmd("PING").clone(),
+            redis::cmd("SELECTX").clone(),
+            redis::Cmd::new(),
+        ];
+        for cmd in &commands {
+            let by_predicates = client.is_client_set_name_command(cmd)
+                || client.is_select_command(cmd)
+                || client.is_auth_command(cmd)
+                || client.is_hello_command(cmd)
+                || client.is_reset_command(cmd);
+            let name = super::CmdName::of(cmd);
+            assert_eq!(
+                super::needs_post_hook(super::name_bytes(&name)),
+                by_predicates,
+                "{cmd:?}"
+            );
+        }
+    }
+
+    /// The name-taking request-timeout and blocking checks `dispatch` uses must
+    /// agree with the `Cmd`-taking ones (which compute the name themselves).
+    #[test]
+    fn named_timeout_and_blocking_checks_match_the_cmd_ones() {
+        let default = Duration::from_millis(250);
+        let commands = [
+            redis::cmd("BLPOP").arg("k").arg("1").clone(),
+            redis::cmd("blpop").arg("k").arg("0").clone(),
+            redis::cmd("BLMPOP")
+                .arg("2")
+                .arg("1")
+                .arg("k")
+                .arg("LEFT")
+                .clone(),
+            redis::cmd("XREAD")
+                .arg("BLOCK")
+                .arg("100")
+                .arg("STREAMS")
+                .arg("s")
+                .arg("0")
+                .clone(),
+            redis::cmd("xread").arg("STREAMS").arg("s").arg("0").clone(),
+            redis::cmd("WAIT").arg("1").arg("10").clone(),
+            redis::cmd("WAITAOF").arg("1").arg("0").arg("10").clone(),
+            redis::cmd("BLOB.RDMA_GET").arg("k").clone(),
+            redis::cmd("GET").arg("k").clone(),
+            redis::Cmd::new(),
+        ];
+        for cmd in &commands {
+            let name = super::CmdName::of(cmd);
+            let name = super::name_bytes(&name);
+            assert_eq!(
+                super::is_blocking_cmd_named(cmd, name),
+                is_blocking_command(cmd),
+                "{cmd:?}"
+            );
+            assert_eq!(
+                super::get_request_timeout_named(cmd, name, default).map_err(|e| e.to_string()),
+                get_request_timeout(cmd, default).map_err(|e| e.to_string()),
+                "{cmd:?}"
+            );
+        }
+    }
+
     /// `track_transaction_state` must set `multi_active` on MULTI and clear it on
     /// EXEC/DISCARD — the state `prepare_for_borrow`'s defer keys on.
     #[test]
     fn track_transaction_state_tracks_multi_open_and_close() {
         use std::sync::atomic::Ordering;
         let client = create_test_client();
+        // As `send_command` calls it: with the command's precomputed name.
+        let track = |cmd: redis::Cmd| {
+            client.track_transaction_state(super::name_bytes(&super::CmdName::of(&cmd)))
+        };
 
-        client.track_transaction_state(&redis::cmd("MULTI"));
+        track(redis::cmd("MULTI"));
         assert!(
             client.shared.multi_active.load(Ordering::Acquire),
             "MULTI must mark a transaction open"
         );
-        client.track_transaction_state(&redis::cmd("EXEC"));
+        track(redis::cmd("exec"));
         assert!(
             !client.shared.multi_active.load(Ordering::Acquire),
-            "EXEC must clear the open-transaction flag"
+            "EXEC (any case) must clear the open-transaction flag"
         );
 
-        client.track_transaction_state(&redis::cmd("MULTI"));
-        client.track_transaction_state(&redis::cmd("DISCARD"));
+        track(redis::cmd("multi"));
+        assert!(
+            client.shared.multi_active.load(Ordering::Acquire),
+            "MULTI (any case) must mark a transaction open"
+        );
+        track(redis::cmd("DISCARD"));
         assert!(
             !client.shared.multi_active.load(Ordering::Acquire),
             "DISCARD must clear the open-transaction flag"
@@ -6151,7 +6330,8 @@ mod tests {
 
         let mut sent = redis::cmd("SET");
         sent.arg("key").arg("value");
-        let reply = client.dispatch(permit, &mut sent, None).await;
+        let sent_name = super::CmdName::of(&sent);
+        let reply = client.dispatch(permit, &mut sent, sent_name, None).await;
         assert_eq!(reply, Ok(redis::Value::Okay));
     }
 
