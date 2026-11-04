@@ -476,6 +476,17 @@ pub enum ClientWrapper {
     Lazy(Box<LazyClient>),
 }
 
+impl ClientWrapper {
+    /// Whether `Client::dispatch` enforces a request's deadline itself (with the timeout
+    /// watchdog) and so tells the connection to skip its own receive timer
+    /// (`Cmd::deadline_enforced_by_caller`). True only for standalone clients: a cluster
+    /// sub-request outlives the caller's future inside the cluster event loop, so it keeps its
+    /// per-node timer.
+    fn request_deadline_enforced_by_caller(&self) -> bool {
+        matches!(self, ClientWrapper::Standalone(_))
+    }
+}
+
 /// A client wrapper that defers connection until the first command is executed.
 #[derive(Clone)]
 pub struct LazyClient {
@@ -1514,9 +1525,7 @@ impl Client {
 
                 // Standalone: the watchdog below owns this command's deadline, so tell the
                 // multiplexed connection not to arm a second, per-request tokio timer.
-                // (Cluster keeps its per-node timer: there the sub-request outlives this
-                // future inside the cluster event loop and needs its own bound.)
-                let caller_deadline = matches!(client, ClientWrapper::Standalone(_));
+                let caller_deadline = client.request_deadline_enforced_by_caller();
                 let mut owned_cmd = owned_cmd;
                 owned_cmd.set_deadline_enforced_by_caller(caller_deadline);
                 // Wrap Cmd in Arc so the timeout arm can still read watchdog fields after execute takes ownership
@@ -3935,6 +3944,17 @@ impl GlideClientForTests for ClusterConnection<GlideConnection> {
 }
 
 impl Client {
+    /// Whether requests with a request timeout sent through this client rely on the timeout
+    /// watchdog alone, with no connection-level receive timer (the decision `dispatch` makes
+    /// for the client's current connection).
+    #[cfg(feature = "test-util")]
+    pub async fn request_deadline_enforced_by_caller(&self) -> bool {
+        self.internal_client
+            .read()
+            .await
+            .request_deadline_enforced_by_caller()
+    }
+
     /// Create a Client wrapping an existing internal_client Arc and synchronizer.
     /// Used in tests to build a Client that shares state with an existing connection.
     #[cfg(feature = "test-util")]
