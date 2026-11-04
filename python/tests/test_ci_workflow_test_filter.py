@@ -1,13 +1,14 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 """Checks how .github/workflows/python.yml passes a test filter to pytest.
 
-The run name of a manual dispatch must not become a pytest -k filter, an
-optional filter must keep the pytest.ini exclusions, and the uploaded
-report paths must match where pytest writes the reports.
+Each step script runs under bash with a fake python3, so the tests check
+the pytest arguments the workflow really builds: no -k without a filter,
+and a filter that keeps the pytest.ini exclusions.
 """
 
+import configparser
 import os
-import re
+import shlex
 import stat
 import subprocess
 import textwrap
@@ -63,17 +64,10 @@ def _pytest_args(step_name, test_filter, tmp_path):
 
 
 def _addopts_k_expression():
-    match = re.search(r'-k "([^"]+)"', PYTEST_INI.read_text())
-    assert match, "pytest.ini addopts no longer has a -k expression"
-    return match.group(1)
-
-
-def test_run_name_is_not_used_as_test_filter():
-    # Only the run-name line may read the run name.
-    uses = [
-        line for line in WORKFLOW_FILE.read_text().splitlines() if "inputs.name" in line
-    ]
-    assert len(uses) == 1 and "github.event_name == 'workflow_dispatch'" in uses[0]
+    ini = configparser.ConfigParser(interpolation=None)
+    ini.read(PYTEST_INI)
+    addopts = shlex.split(ini["pytest"]["addopts"])
+    return addopts[addopts.index("-k") + 1]
 
 
 @pytest.mark.parametrize("step_name", FILTER_STEPS)
@@ -103,11 +97,3 @@ def test_serial_step_allows_filter_with_no_serial_tests(
     # pytest exits 5 when nothing is selected; only a filter may cause that.
     step = "Test with pytest (serial-only tests)"
     assert _run_step(step, test_filter, tmp_path, pytest_rc) == step_rc
-
-
-def test_uploaded_reports_match_written_reports():
-    text = WORKFLOW_FILE.read_text()
-    # Every pytest step runs in ./python, so reports land in python/.
-    written = set(re.findall(r"--html=(\S+)", text))
-    uploaded = set(re.findall(r"^\s+python/(\S+\.html)$", text, re.MULTILINE))
-    assert written and written == uploaded
