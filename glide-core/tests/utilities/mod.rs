@@ -779,7 +779,7 @@ pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionI
         redis: RedisConnectionInfo::default(),
     })
     .unwrap();
-    let mut connection = retry(|| async {
+    let connection = retry(|| async {
         client
             .get_multiplexed_async_connection(GlideConnectionOptions::default())
             .await
@@ -1066,7 +1066,7 @@ pub async fn kill_connection_via_addr(addr: &ConnectionAddr, password: Option<&s
         },
     })
     .unwrap();
-    let mut conn = retry(|| async {
+    let conn = retry(|| async {
         client
             .get_multiplexed_async_connection(GlideConnectionOptions::default())
             .await

@@ -855,7 +855,7 @@ where
 
     // `None` means that the stream was out of items causing that poll loop to shut down.
     async fn send_single(
-        &mut self,
+        &self,
         item: SinkItem,
         timeout: Duration,
         is_fenced: bool,
@@ -866,7 +866,7 @@ where
     }
 
     async fn send_recv(
-        &mut self,
+        &self,
         input: SinkItem,
         // If `None`, this is a single request, not a pipeline of multiple requests.
         pipeline_response_count: Option<usize>,
@@ -1168,7 +1168,11 @@ impl MultiplexedConnection {
 
     /// Sends an already encoded (packed) command into the TCP socket and
     /// reads the single response from it.
-    pub async fn send_packed_command(&mut self, cmd: &Cmd) -> RedisResult<Value> {
+    ///
+    /// Takes `&self`: nothing here mutates the connection (the pipeline sender is
+    /// shared by every clone), so a caller can send through a shared
+    /// `Arc<MultiplexedConnection>` without cloning it.
+    pub async fn send_packed_command(&self, cmd: &Cmd) -> RedisResult<Value> {
         let cache = self.cache.clone();
 
         if let Some(cache) = &cache {
@@ -1219,7 +1223,7 @@ impl MultiplexedConnection {
         result
     }
 
-    async fn send_packed_command_inner(&mut self, cmd: &Cmd) -> RedisResult<Value> {
+    async fn send_packed_command_inner(&self, cmd: &Cmd) -> RedisResult<Value> {
         let timeout = cmd.response_timeout().unwrap_or(self.response_timeout);
         let result = self
             .pipeline
