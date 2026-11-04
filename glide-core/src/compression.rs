@@ -101,9 +101,8 @@ impl std::error::Error for CompressionError {}
 
 /// Decompressing a reply element would exceed `max_decompressed_size`.
 ///
-/// This is the only failure the read path reports to the caller. Every other failure keeps the
-/// element's stored bytes (see `decompress_or_keep`), so a function returning this type has
-/// already made that choice and its caller has nothing left to classify.
+/// The read path returns this instead of `CompressionError` so that no caller can classify a
+/// decompression failure differently from `decompress_or_keep`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SizeLimitExceeded {
     pub backend: String,
@@ -1011,11 +1010,9 @@ pub fn decompress_single_value_response(
     }
 }
 
-/// Decompresses one reply element, or returns `None` when its stored bytes are the answer.
-///
 /// A plain value can begin with the magic header by coincidence, and the client cannot tell
 /// that from a corrupted compressed value, so a header that does not decode keeps its stored
-/// bytes.
+/// bytes (`None`).
 fn decompress_or_keep(
     bytes: &[u8],
     manager: &CompressionManager,
