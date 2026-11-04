@@ -461,6 +461,27 @@ where
     }
 }
 
+/// Original capacity of a stream codec's read buffer; the same as tokio's
+/// `FramedRead` default.
+const STREAM_READ_BUF_CAPACITY: usize = 8 * 1024;
+
+/// Builds a stream's read buffer holding `leftover`.
+///
+/// Created with [`STREAM_READ_BUF_CAPACITY`] and then filled, rather than with
+/// `BytesMut::from(leftover)`: `BytesMut` remembers the capacity it was
+/// created with (growing it later does not change that), and `ValueCodec`
+/// splits small frames off the read buffer, so each refill made while the
+/// caller still holds such values allocates a new buffer of at least that
+/// original capacity. A buffer created from a short leftover remembers no
+/// capacity, and those refills would offer reads of a single byte and grow
+/// from there; one created from a long leftover would make every such refill
+/// that large.
+fn read_buf_with_leftover(leftover: &[u8]) -> bytes::BytesMut {
+    let mut buf = bytes::BytesMut::with_capacity(STREAM_READ_BUF_CAPACITY);
+    buf.extend_from_slice(leftover);
+    buf
+}
+
 /// Builds a [`ValueCodec`] [`Framed`] over `con`, seeding its read buffer with
 /// the `leftover` bytes the connection decoder read past the handshake.
 ///
@@ -476,25 +497,6 @@ where
 ///
 /// The `Monitor` and `PubSub` stream constructors all route through here, over the
 /// borrowed `&mut con` and the moved `con` alike, so every path stays in step.
-/// Initial read-buffer capacity of a stream's codec; the same as tokio's
-/// `FramedRead` default.
-const STREAM_READ_BUF_CAPACITY: usize = 8 * 1024;
-
-/// Builds a stream's read buffer holding `leftover`.
-///
-/// Allocated with [`STREAM_READ_BUF_CAPACITY`] rather than with
-/// `BytesMut::from(leftover)`: `BytesMut` remembers the capacity it was
-/// created with, and `ValueCodec` splits small frames off the read buffer, so
-/// each refill made while the caller still holds such values allocates a new
-/// buffer of at least that original capacity. A buffer created from a short
-/// leftover remembers no capacity, and those refills would offer reads of a
-/// single byte and grow from there.
-fn read_buf_with_leftover(leftover: &[u8]) -> bytes::BytesMut {
-    let mut buf = bytes::BytesMut::with_capacity(leftover.len().max(STREAM_READ_BUF_CAPACITY));
-    buf.extend_from_slice(leftover);
-    buf
-}
-
 fn framed_with_leftover<C>(con: C, leftover: bytes::BytesMut) -> Framed<C, ValueCodec>
 where
     C: AsyncRead + AsyncWrite + Unpin,
@@ -1107,17 +1109,21 @@ mod tests {
     /// offer a single byte, then grow by doubling, one read per step.
     #[test]
     fn stream_seeded_from_leftover_reads_in_full_chunks_while_values_are_held() {
-        for leftover in [&b""[..], &b"$3\r\nab"[..]] {
-            let mut wire = Vec::new();
+        // More than the read buffer's 8 KiB of complete frames left over.
+        let long: Vec<u8> = (0..100u8).flat_map(|i| bulk_frame(&[i; 97])).collect();
+        assert!(long.len() > STREAM_READ_BUF_CAPACITY);
+        // (decoder leftover, rest of its last frame, frames in the leftover)
+        let cases: [(&[u8], &[u8], usize); 3] = [
+            (b"", b"", 0),
+            // The decoder holds "$3\r\nab"; the stream gets "c\r\n" first.
+            (b"$3\r\nab", b"c\r\n", 1),
+            (&long, b"", 100),
+        ];
+        for (leftover, rest, leftover_frames) in cases {
+            let mut wire = rest.to_vec();
             for i in 0..200u8 {
                 wire.extend_from_slice(&bulk_frame(&[i; 97]));
             }
-            // The decoder holds "$3\r\nab"; the stream gets "c\r\n" first.
-            let wire = if leftover.is_empty() {
-                wire
-            } else {
-                [&b"c\r\n"[..], &wire].concat()
-            };
             let (io, offered) = ChunkedIo::new(wire, 4096);
             let mut framed = framed_with_leftover(io, read_buf_with_leftover(leftover));
             let values: Vec<Value> = tokio::runtime::Builder::new_current_thread()
@@ -1130,12 +1136,13 @@ mod tests {
                     }
                     values
                 });
-            assert_eq!(values.len(), 200 + usize::from(!leftover.is_empty()));
+            assert_eq!(values.len(), 200 + leftover_frames);
             let offered: Vec<usize> = offered.lock().unwrap().iter().map(|&(n, _)| n).collect();
             let smallest = offered.iter().min().copied().unwrap();
             assert!(
                 smallest >= 1024,
-                "leftover {leftover:?}: a read was offered {smallest} bytes ({} reads: {offered:?})",
+                "{}-byte leftover: a read was offered {smallest} bytes ({} reads: {offered:?})",
+                leftover.len(),
                 offered.len()
             );
         }
