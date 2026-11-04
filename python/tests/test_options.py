@@ -36,6 +36,11 @@ from glide_shared.commands.server_modules.ft_options.ft_search_options import (
     FtSearchLimit,
     FtSearchOptions,
 )
+from glide_shared.commands.stream import (
+    ExclusiveIdBound,
+    TrimByMaxLen,
+    TrimByMinId,
+)
 from glide_shared.constants import TEncodable
 
 from tests.conftest import classify_inkeys_probe_error
@@ -467,6 +472,37 @@ class TestFtHybridSearchArm:
         ]
 
 
+class TestStreamBytesLikeArgs:
+    """Stream options must send bytes-like IDs verbatim, not their Python repr."""
+
+    def test_trim_by_min_id_str_threshold(self):
+        assert TrimByMinId(True, "0-1").to_args() == ["MINID", "=", "0-1"]
+
+    @pytest.mark.parametrize(
+        "threshold",
+        [b"0-1", memoryview(b"0-1")],
+        ids=["bytes", "memoryview"],
+    )
+    def test_trim_by_min_id_bytes_like_threshold(self, threshold: TEncodable):
+        args = TrimByMinId(False, threshold, limit=5).to_args()
+        assert args == ["MINID", "~", threshold, "LIMIT", "5"]
+
+    def test_trim_by_max_len_int_threshold(self):
+        assert TrimByMaxLen(True, 10).to_args() == ["MAXLEN", "=", "10"]
+
+    def test_exclusive_id_bound_str(self):
+        assert ExclusiveIdBound("0-1").to_arg() == "(0-1"
+        assert ExclusiveIdBound.from_timestamp(5).to_arg() == "(5"
+
+    @pytest.mark.parametrize(
+        "stream_id",
+        [b"0-1", bytearray(b"0-1"), memoryview(b"0-1")],
+        ids=["bytes", "bytearray", "memoryview"],
+    )
+    def test_exclusive_id_bound_bytes_like(self, stream_id: TEncodable):
+        assert ExclusiveIdBound(stream_id).to_arg() == b"(0-1"
+
+
 class TestFtHybridVsimArm:
     """Unit tests for FtHybridVsimArm.to_args(), including the raw-bytes
     vs. $param-reference vector handling (confirmed live: FT.HYBRID's
@@ -483,6 +519,15 @@ class TestFtHybridVsimArm:
             generated_param_name="$generated"
         )
         assert args == ["VSIM", "@vec", "$generated"]
+
+    @pytest.mark.parametrize(
+        "field",
+        [b"vec", bytearray(b"vec"), memoryview(b"vec")],
+        ids=["bytes", "bytearray", "memoryview"],
+    )
+    def test_bytes_like_field_is_prefixed_as_bytes(self, field: TEncodable):
+        args = FtHybridVsimArm(field, "$myvec").to_args()
+        assert args == ["VSIM", b"@vec", "$myvec"]
 
     def test_is_param_reference_detects_dollar_prefixed_string(self):
         assert FtHybridVsimArm("vec", "$myvec").is_param_reference()
