@@ -69,7 +69,7 @@ on:
             test-filter:
                 required: false
                 type: string
-                description: "(Optional) pytest -k expression to select tests in the default Tests run"
+                description: "(Optional) pytest -k expression for the default Tests jobs; pubsub and server_modules tests stay excluded"
             run_async_tests:
                 description: "Run only async tests"
                 required: false
