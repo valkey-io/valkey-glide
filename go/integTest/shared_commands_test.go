@@ -12126,7 +12126,8 @@ func (suite *GlideTestSuite) TestScriptFlush() {
 	})
 }
 
-// noScriptPattern matches the server's NOSCRIPT reply: Valkey sends the first sentence, Redis OSS 7 both.
+// noScriptPattern matches the server's NOSCRIPT reply: Valkey 8.0+ sends the first sentence only,
+// Valkey 7.2 and Redis OSS also append "Please use EVAL.".
 const noScriptPattern = `^NOSCRIPT No matching script\.( Please use EVAL\.)?$`
 
 func (suite *GlideTestSuite) TestNoScriptErrorMatchesServer() {

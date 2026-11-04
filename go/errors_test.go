@@ -45,8 +45,8 @@ func TestRestoreNoScriptMessage(t *testing.T) {
 			want: "An error was signalled by the server:- NoScriptError extra",
 		},
 		"not at the start": {
-			in:   "scope command error: An error was signalled by the server: - NoScriptError: No matching script.",
-			want: "scope command error: An error was signalled by the server: - NoScriptError: No matching script.",
+			in:   "prefix: An error was signalled by the server: - NoScriptError: No matching script.",
+			want: "prefix: An error was signalled by the server: - NoScriptError: No matching script.",
 		},
 		"extension error": {
 			in:   "WRONGTYPE: Operation against a key holding the wrong kind of value",

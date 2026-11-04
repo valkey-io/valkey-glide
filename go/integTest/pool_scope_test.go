@@ -572,6 +572,25 @@ func TestScopeAcquirePingRelease(t *testing.T) {
 	}
 }
 
+func TestScopeNoScriptErrorMatchesServer(t *testing.T) {
+	for _, tc := range scopeModes() {
+		t.Run(tc.name, func(t *testing.T) {
+			skipMode(t, tc.cluster)
+			client := newScopeClient(t, tc.cluster)
+			defer client.Close()
+
+			ctx := context.Background()
+			scope, err := client.ScopedConnection(ctx, 10*time.Second, "")
+			require.NoError(t, err)
+			defer scope.Close()
+
+			_, err = scope.ExecuteCommand(ctx, "EVALSHA", strings.Repeat("f", 40), "0")
+			require.Error(t, err)
+			assert.Regexp(t, `^scope command error: NOSCRIPT No matching script\.( Please use EVAL\.)?$`, err.Error())
+		})
+	}
+}
+
 func TestScopeGetSet(t *testing.T) {
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
