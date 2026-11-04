@@ -598,6 +598,9 @@ class BaseClient(CoreCommands):
         self._credential_provider_callback_ref = None
         self._credential_provider_callback_owner = None
         self._core_client = self._ffi.NULL
+        # Whether replies come back as the core's parsed `Value` instead of a
+        # `CommandResponse` arena. Set by `_enable_value_results`.
+        self._value_results_enabled = False
         # Lock protecting _core_client and _is_closed for free-threading safety.
         # Under GIL builds this is a no-op (GIL serializes access).
         # Under free-threaded builds this prevents use-after-free on concurrent close.
@@ -1054,9 +1057,11 @@ class BaseClient(CoreCommands):
         """Have the core return parsed values instead of CommandResponse trees.
 
         Only when both native libraries were built against the same ``Value``
-        layout; otherwise replies keep coming back through the arena.
+        layout; otherwise replies keep coming back through the arena, and
+        ``_value_results_enabled`` says which path this client is on.
         """
-        if self._lib.value_abi_token() == _value_abi_token():
+        self._value_results_enabled = self._lib.value_abi_token() == _value_abi_token()
+        if self._value_results_enabled:
             self._lib.set_sync_value_results(self._core_client, True)
 
     @staticmethod

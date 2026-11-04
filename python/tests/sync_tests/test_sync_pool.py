@@ -117,6 +117,29 @@ class TestClientPool:
             pool.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_pool_borrow_uses_value_path(self, cluster_mode):
+        """A pooled wrapper opts into value results like a client of its own.
+
+        The pool builds its adapters natively, so without an explicit opt-in every
+        borrowed client would stay on the arena path.
+        """
+        config = _get_pool_client_config(cluster_mode)
+        pool = ClientPool(
+            config, PoolConfig(max_size=5, min_idle=1, acquire_timeout_s=10.0)
+        )
+        _wait_for_pool_ready(pool, 1)
+
+        try:
+            key = _make_key(cluster_mode, "value-path")
+            with pool.borrow() as client:
+                assert client._value_results_enabled
+                client.set(key, "hello")
+                assert client.get(key) == b"hello"
+                client.delete([key])
+        finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_pool_reuse(self, cluster_mode):
         """LIFO reuse: same client_id returned after release."""
         config = _get_pool_client_config(cluster_mode)
