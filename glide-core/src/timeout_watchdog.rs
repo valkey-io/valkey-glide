@@ -605,6 +605,8 @@ struct DeadlineEntry {
 #[derive(Clone)]
 pub struct TimeoutWatchdog {
     tx: mpsc::Sender<DeadlineEntry>,
+    /// [`fork_generation`] when this instance (and its thread) was started.
+    fork_gen: u64,
 }
 
 /// Global singleton watchdog instance. Uses an atomic pointer so the read path
@@ -612,17 +614,74 @@ pub struct TimeoutWatchdog {
 static GLOBAL_WATCHDOG: std::sync::atomic::AtomicPtr<TimeoutWatchdog> =
     std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
 
+/// Bumped in every forked child by a `pthread_atfork` handler (installed when the
+/// first global watchdog starts). A global instance started under an older
+/// generation was inherited across fork(): its thread did not survive, so
+/// [`TimeoutWatchdog::global`] replaces it. This covers children whose binding
+/// never calls [`TimeoutWatchdog::reinit_global`] (e.g. the sync Python client).
+#[cfg(unix)]
+static FORK_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(unix)]
+extern "C" fn bump_fork_generation() {
+    // Runs in the child right after fork(): only an atomic store.
+    FORK_GENERATION.fetch_add(1, Ordering::Relaxed);
+}
+
+fn fork_generation() -> u64 {
+    #[cfg(unix)]
+    {
+        static ATFORK: std::sync::Once = std::sync::Once::new();
+        ATFORK.call_once(|| {
+            // SAFETY: registers a child-side handler that only does an atomic store.
+            // If registration fails, fork detection falls back to explicit
+            // `reinit_global()` calls, as before.
+            unsafe {
+                libc::pthread_atfork(None, None, Some(bump_fork_generation));
+            }
+        });
+        FORK_GENERATION.load(Ordering::Relaxed)
+    }
+    #[cfg(not(unix))]
+    {
+        0
+    }
+}
+
 impl TimeoutWatchdog {
     /// Get or initialize the global shared watchdog instance.
     pub fn global() -> &'static Self {
-        let ptr = GLOBAL_WATCHDOG.load(std::sync::atomic::Ordering::Acquire);
-        if !ptr.is_null() {
+        loop {
+            let ptr = GLOBAL_WATCHDOG.load(std::sync::atomic::Ordering::Acquire);
+            if ptr.is_null() {
+                return Self::init_global();
+            }
             // Safety: once installed as non-null, the pointer is never freed
-            // until process exit (reinit_global intentionally leaks the prior
-            // instance rather than dropping it).
-            return unsafe { &*ptr };
+            // until process exit (reinit_global and the fork replacement below
+            // intentionally leak the prior instance rather than dropping it).
+            let current = unsafe { &*ptr };
+            if current.fork_gen == fork_generation() {
+                return current;
+            }
+            // Inherited across fork(): replace it, so registrations in this child
+            // are served by a live thread. The CAS makes concurrent first callers
+            // agree on one replacement.
+            let fresh = Box::into_raw(Box::new(Self::start_global()));
+            match GLOBAL_WATCHDOG.compare_exchange(
+                ptr,
+                fresh,
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Acquire,
+            ) {
+                Ok(_) => {
+                    // The stale instance is leaked; its entries are gone.
+                    PUBLISHED_PENDING.store(0, Ordering::Relaxed);
+                    return unsafe { &*fresh };
+                }
+                // Lost the race: drop ours and re-check the winner.
+                Err(_) => unsafe { drop(Box::from_raw(fresh)) },
+            }
         }
-        Self::init_global()
     }
 
     /// Initialize the global watchdog (first call or after reinit).
@@ -667,12 +726,13 @@ impl TimeoutWatchdog {
 
     /// Start the global watchdog instance (publishes pending count).
     fn start_global() -> Self {
+        let fork_gen = fork_generation();
         let (tx, rx) = mpsc::channel();
         std::thread::Builder::new()
             .name("glide-timeout-watchdog".into())
             .spawn(move || Self::run(rx, true))
             .expect("Failed to spawn timeout watchdog thread");
-        Self { tx }
+        Self { tx, fork_gen }
     }
 
     /// Start a watchdog instance. Spawns a dedicated OS thread.
@@ -683,7 +743,10 @@ impl TimeoutWatchdog {
             .name("glide-timeout-watchdog".into())
             .spawn(move || Self::run(rx, false))
             .expect("Failed to spawn timeout watchdog thread");
-        Self { tx }
+        Self {
+            tx,
+            fork_gen: fork_generation(),
+        }
     }
 
     /// Register a timeout. Returns a `oneshot::Receiver<()>` that resolves
@@ -1047,5 +1110,48 @@ mod tests {
             "watchdog must fire after reinit_global (simulating post-fork)"
         );
         assert!(result.unwrap().is_ok());
+    }
+
+    /// Real fork() with NO explicit `reinit_global()` (the sync Python client's child path):
+    /// `global()` must notice the inherited instance and replace it, so a registration in the
+    /// child still fires. Standalone requests rely on this: they arm no other timer.
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn fork_child_global_replaces_inherited_watchdog() {
+        let _ = TimeoutWatchdog::global();
+        // SAFETY: the child only spawns a thread, allocates and calls `_exit`.
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0, "fork failed");
+        if pid == 0 {
+            // A child that hangs is killed by SIGALRM, failing the test instead of hanging it.
+            // SAFETY: async-signal-safe libc call.
+            unsafe { libc::alarm(10) };
+            let start = Instant::now();
+            let mut rx = TimeoutWatchdog::global().register(Duration::from_millis(20), start);
+            let code = loop {
+                match rx.try_recv() {
+                    Ok(()) if start.elapsed() >= Duration::from_millis(20) => break 0,
+                    Ok(()) => break 2, // fired early
+                    Err(_) if start.elapsed() > Duration::from_secs(5) => break 4,
+                    Err(_) => std::thread::sleep(Duration::from_millis(1)),
+                }
+            };
+            // SAFETY: terminate the forked child without running the parent's test harness.
+            unsafe { libc::_exit(code) };
+        }
+        let mut status = 0;
+        // SAFETY: `pid` is our child.
+        let waited = unsafe { libc::waitpid(pid, &mut status, 0) };
+        assert_eq!(waited, pid);
+        assert!(
+            libc::WIFEXITED(status),
+            "child did not exit cleanly: {status}"
+        );
+        assert_eq!(
+            libc::WEXITSTATUS(status),
+            0,
+            "child watchdog failed (2=early, 4=never fired)"
+        );
     }
 }

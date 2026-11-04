@@ -624,6 +624,21 @@ async fn run_with_timeout<T>(
     }
 }
 
+/// Fallback when the timeout watchdog is gone for a request whose connection
+/// arms no receive timer of its own (`Cmd::deadline_enforced_by_caller`): bound
+/// `future` by the request's original `deadline` (not a fresh full timeout), and
+/// fail with the same `io::ErrorKind::TimedOut` (`is_timeout()`) error the
+/// connection's own timer produced.
+async fn await_until_deadline<T>(
+    future: impl futures::Future<Output = RedisResult<T>>,
+    deadline: Instant,
+) -> RedisResult<T> {
+    match tokio::time::timeout_at(deadline.into(), future).await {
+        Ok(result) => result,
+        Err(_) => Err(io::Error::from(io::ErrorKind::TimedOut).into()),
+    }
+}
+
 /// Extension to the request timeout for blocking commands to ensure we won't return with timeout error before the server responded
 const BLOCKING_CMD_TIMEOUT_EXTENSION: f64 = 0.5; // seconds
 
@@ -1497,6 +1512,13 @@ impl Client {
                         as usize,
                 );
 
+                // Standalone: the watchdog below owns this command's deadline, so tell the
+                // multiplexed connection not to arm a second, per-request tokio timer.
+                // (Cluster keeps its per-node timer: there the sub-request outlives this
+                // future inside the cluster event loop and needs its own bound.)
+                let caller_deadline = matches!(client, ClientWrapper::Standalone(_));
+                let mut owned_cmd = owned_cmd;
+                owned_cmd.set_deadline_enforced_by_caller(caller_deadline);
                 // Wrap Cmd in Arc so the timeout arm can still read watchdog fields after execute takes ownership
                 let owned_cmd = Arc::new(owned_cmd);
 
@@ -1534,7 +1556,13 @@ impl Client {
                             Err(_) => {
                                 // Watchdog thread died — fall through to let the
                                 // command complete via Tokio's timer as fallback.
-                                execute.await
+                                if caller_deadline {
+                                    // The connection skipped its per-request timer for
+                                    // this command; enforce the original deadline here.
+                                    await_until_deadline(execute, cmd_start + duration).await
+                                } else {
+                                    execute.await
+                                }
                             }
                             Ok(()) => {
                                 // Build diagnostic event on the consumer side (rare timeout path)
@@ -5799,6 +5827,32 @@ mod tests {
             assert!(!is_blocking_command(&cmd), "{name}");
             assert!(!is_blocking_command_name(name.as_bytes(), &[]), "{name}");
         }
+    }
+
+    #[tokio::test]
+    async fn test_await_until_deadline_times_out_at_the_original_deadline() {
+        // Dead-watchdog fallback: a never-answered request must fail as a real timeout
+        // (is_timeout()), at the request's deadline — not a full timeout after the fallback starts.
+        let start = std::time::Instant::now();
+        let deadline = start + Duration::from_millis(60);
+        tokio::time::sleep(Duration::from_millis(40)).await;
+        let result: redis::RedisResult<()> =
+            super::await_until_deadline(futures::future::pending(), deadline).await;
+        let elapsed = start.elapsed();
+        let err = result.expect_err("a pending request must time out");
+        assert!(err.is_timeout(), "expected a timeout, got: {err:?}");
+        assert!(elapsed >= Duration::from_millis(60), "early: {elapsed:?}");
+        assert!(
+            elapsed < Duration::from_millis(100),
+            "the deadline must not restart: {elapsed:?}"
+        );
+
+        let ok: redis::RedisResult<i32> = super::await_until_deadline(
+            async { Ok(7) },
+            std::time::Instant::now() + Duration::from_secs(5),
+        )
+        .await;
+        assert_eq!(ok.unwrap(), 7);
     }
 
     #[test]

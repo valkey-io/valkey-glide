@@ -4326,6 +4326,54 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// With the standalone per-request tokio receive timer removed, every timed-out command
+    /// must still come back as a real timeout (`is_timeout()`), never early. Many concurrent
+    /// commands make any lost or late watchdog firing observable. The cluster arm keeps its
+    /// per-node timer and must still report `is_timeout()` too.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_watchdog_timeout_concurrent_all_are_timeouts(#[values(false, true)] use_cluster: bool) {
+        const REQUEST_TIMEOUT_MS: u64 = 50;
+        block_on_all(async move {
+            let test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    request_timeout: Some(REQUEST_TIMEOUT_MS as u32),
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut c = test_basics.client.clone();
+            // Routed to every node in cluster mode, so all keys below are stalled.
+            let _ = c
+                .send_command(redis::cmd("CLIENT").arg("PAUSE").arg("1500"), None)
+                .await;
+            let mut handles = Vec::new();
+            for i in 0..64 {
+                let mut c = test_basics.client.clone();
+                handles.push(tokio::spawn(async move {
+                    let start = std::time::Instant::now();
+                    let r = c
+                        .send_command(redis::cmd("GET").arg(format!("wd_conc_{i}")), None)
+                        .await;
+                    (r, start.elapsed())
+                }));
+            }
+            for h in handles {
+                let (r, elapsed) = h.await.expect("task");
+                let err = r.expect_err("must time out");
+                assert!(err.is_timeout(), "expected a timeout, got: {err:?}");
+                assert!(
+                    elapsed >= std::time::Duration::from_millis(REQUEST_TIMEOUT_MS),
+                    "timed out early: {elapsed:?} < {REQUEST_TIMEOUT_MS}ms"
+                );
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(1600)).await;
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
