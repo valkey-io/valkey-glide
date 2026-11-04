@@ -539,6 +539,7 @@ public abstract class BaseClient
             throw new ConfigurationError("PubSub subscriptions require RESP3 protocol");
         }
         ConnectionManager.validateClientAz(config);
+        ConnectionManager.validateUnixSocketAddresses(config);
         try {
             // Create client components using build methods
             ConnectionManager connectionManager = buildConnectionManager();
