@@ -711,18 +711,28 @@ mod aio_support {
     /// Small frames are only split off a read buffer whose visible capacity
     /// (`BytesMut::capacity`) is at most this large. A split frame shares the
     /// read buffer's allocation, so one retained small value keeps the whole
-    /// allocation alive; this caps that at about 64 KiB (the consumed prefix
-    /// of an allocation is not visible, so the bound is approximate).
+    /// allocation alive.
+    ///
+    /// The visible capacity excludes the consumed prefix of the allocation,
+    /// so the allocation itself can be larger than this. The codec checks the
+    /// visible capacity on every decode call, and the first call after
+    /// `BytesMut` grows a buffer sees at least 3/4 of the new allocation (it
+    /// only doubles the whole allocation while less than half of it is
+    /// consumed). So a split value pins at most about 4/3 of this, 85 KiB;
+    /// see `read_buffer_bound_is_on_visible_capacity`.
     ///
     /// tokio's `FramedRead` starts with an 8 KiB buffer. When it needs room
     /// while split-off values are still alive, `BytesMut` allocates a fresh
-    /// buffer of `max(unconsumed + 1, original capacity)` (8 KiB here), so
-    /// small-reply traffic stays under the bound. A reply too big for the
-    /// current buffer makes `BytesMut` grow it by doubling: 4-32 KiB replies
-    /// (copied, not split) can grow it to 16-64 KiB, which later split values
-    /// then pin. A reply that grows it past 64 KiB (a few tens of KiB or more)
-    /// turns splitting off for the rest of that connection, because
+    /// buffer of `max(unconsumed + 1, original capacity)` (8 KiB here; the
+    /// codec makes it `2 * unconsumed` for a partial frame that fills the
+    /// buffer), so small-reply traffic stays at 8 KiB. A reply too big for
+    /// the current buffer makes `BytesMut` grow it by doubling: 4-32 KiB
+    /// replies (copied, not split) can grow it to 16-64 KiB, which later
+    /// split values then pin. Once the codec sees a visible capacity above
+    /// this bound, splitting stops for the rest of that connection, because
     /// `BytesMut` never shrinks; such connections decode exactly as before.
+    /// A buffer that grows to 64-85 KiB without its visible capacity ever
+    /// exceeding the bound does not stop splitting.
     pub(crate) const ZERO_COPY_MAX_READ_BUF: usize = 64 * 1024;
 
     /// Tokio codec that decodes RESP frames zero-copy from the read
@@ -1203,6 +1213,38 @@ mod tests {
         }
     }
 
+    /// The read-buffer bound applies to the visible capacity, which excludes
+    /// the consumed prefix. When a full buffer grows while less than half of
+    /// it is consumed (`BytesMut` doubles the whole allocation and keeps the
+    /// prefix), the new allocation can be up to 4/3 of the visible bound
+    /// (about 85 KiB) without ever being seen above it. This pins that
+    /// documented worst case: a split from an 84 KiB allocation.
+    #[cfg(feature = "aio")]
+    #[test]
+    fn read_buffer_bound_is_on_visible_capacity() {
+        use bytes::Buf;
+        let limit = aio_support::ZERO_COPY_MAX_READ_BUF;
+        let (total, consumed) = (42 * 1024, 20 * 1024);
+        let mut buf = bytes::BytesMut::with_capacity(total);
+        buf.extend_from_slice(&vec![b'.'; consumed]);
+        buf.extend_from_slice(&bulk_frame(b"tiny"));
+        buf.resize(total, b'.');
+        buf.advance(consumed);
+        assert_eq!(buf.len(), buf.capacity(), "test setup: buffer is full");
+        // What `FramedRead` does before its next read.
+        buf.reserve(1);
+        let allocation_end = buf.as_ptr() as usize + buf.capacity();
+        let allocation = allocation_end - (buf.as_ptr() as usize - consumed);
+        assert_eq!(allocation, 2 * total, "test setup: doubled");
+        assert_eq!(buf.capacity(), limit, "test setup: visible at the bound");
+        let range = alloc_range(&buf);
+        let mut codec = ValueCodec::default();
+        let v = decode_bulk(&mut codec, &mut buf);
+        assert_eq!(&v[..], b"tiny");
+        assert!(range.contains(&(v.as_ptr() as usize)));
+        assert!(allocation <= limit * 4 / 3);
+    }
+
     /// End to end through tokio's `FramedRead` (its real `reserve` and read
     /// behaviour): small replies are split off the read buffer, a large reply
     /// grows the buffer past `ZERO_COPY_MAX_READ_BUF`, and small replies after
@@ -1467,8 +1509,13 @@ mod tests {
     /// Memory retention: a small frame split off a large read buffer would
     /// keep the whole allocation alive, so small frames are copied while the
     /// read buffer's allocation exceeds `ZERO_COPY_MAX_READ_BUF`, including
-    /// at its tail where the visible capacity is small. Splitting resumes
-    /// once the reader moves to a small allocation.
+    /// at its tail where the visible capacity is small.
+    ///
+    /// The last part checks that the remembered end address only matches
+    /// its own allocation: the codec splits again from a different, small
+    /// allocation. Under `FramedRead` that does not happen once a buffer is
+    /// flagged, because nothing is split from it afterwards, so it stays
+    /// unshared and `BytesMut` only grows it.
     #[cfg(feature = "aio")]
     #[test]
     fn small_frames_are_copied_out_of_a_large_read_buffer() {
