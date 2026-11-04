@@ -23,13 +23,21 @@ const (
 // Reused by validators that need to bound a value to the uint32 wire range.
 const MaxUint32 = math.MaxUint32
 
-// NodeAddress represents the host address and port of a node in the cluster.
+// NodeAddress represents the address of a node: a host and port, or a Unix domain socket.
 type NodeAddress struct {
 	Host string // If not supplied, api.DefaultHost will be used.
 	Port int    // If not supplied, api.DefaultPort will be used.
+	// UnixSocketPath is the absolute path of the server's Unix domain socket; when set, Host and Port
+	// are ignored. Standalone clients only; not supported with TLS, [NodeDiscoveryModeDiscoverAll],
+	// or mixed with TCP addresses.
+	UnixSocketPath string
 }
 
 func (addr *NodeAddress) toProtobuf() *protobuf.NodeAddress {
+	if addr.UnixSocketPath != "" {
+		return &protobuf.NodeAddress{UnixSocketPath: proto.String(addr.UnixSocketPath)}
+	}
+
 	if addr.Host == "" {
 		addr.Host = DefaultHost
 	}
@@ -331,7 +339,27 @@ type baseClientConfiguration struct {
 	clientCircuitBreaker  *ClientCircuitBreakerConfiguration
 }
 
+func (config *baseClientConfiguration) unixSocketAddressCount() int {
+	count := 0
+	for _, address := range config.addresses {
+		if address.UnixSocketPath != "" {
+			count++
+		}
+	}
+	return count
+}
+
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
+	// The monitor client connects only to the first address, so mixed addresses must fail here.
+	if sockets := config.unixSocketAddressCount(); sockets > 0 {
+		if sockets != len(config.addresses) {
+			return nil, errors.New("cannot combine Unix domain socket addresses with TCP addresses")
+		}
+		if config.useTLS {
+			return nil, errors.New("TLS is not supported over Unix domain sockets")
+		}
+	}
+
 	request := protobuf.ConnectionRequest{}
 	for _, address := range config.addresses {
 		request.Addresses = append(request.Addresses, address.toProtobuf())
@@ -892,6 +920,10 @@ func NewClusterClientConfiguration() *ClusterClientConfiguration {
 }
 
 func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, error) {
+	if config.unixSocketAddressCount() > 0 {
+		return nil, errors.New("cluster mode does not support Unix domain socket addresses")
+	}
+
 	request, err := config.baseClientConfiguration.toProtobuf()
 	if err != nil {
 		return nil, err

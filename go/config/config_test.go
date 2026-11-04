@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
+	"google.golang.org/protobuf/proto"
 )
 
 // Test certificate constants
@@ -95,7 +96,7 @@ func TestConfig_allFieldsSet(t *testing.T) {
 
 	assert.Equal(t, len(hosts), len(ports))
 	for i := 0; i < len(hosts); i++ {
-		config.WithAddress(&NodeAddress{hosts[i], ports[i]})
+		config.WithAddress(&NodeAddress{Host: hosts[i], Port: ports[i]})
 		expected.Addresses = append(
 			expected.Addresses,
 			&protobuf.NodeAddress{Host: hosts[i], Port: uint32(ports[i])},
@@ -387,7 +388,15 @@ func TestNodeAddress(t *testing.T) {
 		{NodeAddress{}, &protobuf.NodeAddress{Host: DefaultHost, Port: DefaultPort}},
 		{NodeAddress{Host: "host"}, &protobuf.NodeAddress{Host: "host", Port: DefaultPort}},
 		{NodeAddress{Port: 1234}, &protobuf.NodeAddress{Host: DefaultHost, Port: 1234}},
-		{NodeAddress{"host", 1234}, &protobuf.NodeAddress{Host: "host", Port: 1234}},
+		{NodeAddress{Host: "host", Port: 1234}, &protobuf.NodeAddress{Host: "host", Port: 1234}},
+		{
+			NodeAddress{UnixSocketPath: "/run/valkey/valkey.sock"},
+			&protobuf.NodeAddress{UnixSocketPath: proto.String("/run/valkey/valkey.sock")},
+		},
+		{
+			NodeAddress{Host: "host", Port: 1234, UnixSocketPath: "/run/valkey/valkey.sock"},
+			&protobuf.NodeAddress{UnixSocketPath: proto.String("/run/valkey/valkey.sock")},
+		},
 	}
 
 	for i, parameter := range parameters {
@@ -397,6 +406,42 @@ func TestNodeAddress(t *testing.T) {
 			assert.Equal(t, parameter.expected, result)
 		})
 	}
+}
+
+func TestConfig_UnixSocketRejectedWithTLS(t *testing.T) {
+	config := NewClientConfiguration().
+		WithAddress(&NodeAddress{UnixSocketPath: "/run/valkey/valkey.sock"}).
+		WithUseTLS(true)
+
+	_, err := config.ToProtobuf()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "TLS is not supported over Unix domain sockets")
+}
+
+func TestConfig_UnixSocketRejectedWithTCPAddresses(t *testing.T) {
+	socket := &NodeAddress{UnixSocketPath: "/run/valkey/valkey.sock"}
+	tcp := &NodeAddress{Host: "localhost", Port: 6379}
+
+	for _, config := range []*ClientConfiguration{
+		NewClientConfiguration().WithAddress(socket).WithAddress(tcp),
+		NewClientConfiguration().WithAddress(tcp).WithAddress(socket),
+	} {
+		_, err := config.ToProtobuf()
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot combine Unix domain socket addresses with TCP addresses")
+	}
+}
+
+func TestClusterConfig_UnixSocketRejected(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithAddress(&NodeAddress{UnixSocketPath: "/run/valkey/valkey.sock"})
+
+	_, err := config.ToProtobuf()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cluster mode does not support Unix domain socket addresses")
 }
 
 func TestServerCredentials(t *testing.T) {
@@ -494,7 +539,7 @@ func TestConfig_AzAffinity(t *testing.T) {
 
 	assert.Equal(t, len(hosts), len(ports))
 	for i := 0; i < len(hosts); i++ {
-		config.WithAddress(&NodeAddress{hosts[i], ports[i]})
+		config.WithAddress(&NodeAddress{Host: hosts[i], Port: ports[i]})
 		expected.Addresses = append(
 			expected.Addresses,
 			&protobuf.NodeAddress{Host: hosts[i], Port: uint32(ports[i])},
