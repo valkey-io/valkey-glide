@@ -191,12 +191,7 @@ cargo clippy --all-features --all-targets -- -D warnings
 - **Protobuf Updates:** Run `python3 dev.py protobuf` after proto changes
 - **Stale `libglide_ffi.so` after core changes:** `install_glide_shared` (in `dev.py`) only (re)builds and copies the C-ABI `libglide_ffi.*` into `glide-shared/glide_shared/` when that destination file is **absent** — so once a copy exists, a later `dev.py build` keeps using the old one even after you change `ffi/`/`glide-core` (symptom: sync tests fail with `undefined symbol: glide_scope_...` against a stale `.so`). Rebuilding `ffi` alone does **not** fix it because the copy is skipped. To force a refresh, delete the stale lib (`rm glide-shared/glide_shared/libglide_ffi.*`) or run `python3 dev.py clean`, then rebuild. Not environment-specific. CI never hits this (ephemeral runners build from scratch).
 - **Documentation Style:** Follow Google Style Python Docstrings format
-- **Test optional values with `is not None`, never truthiness:** For any `Optional[...]` parameter or attribute that can legitimately be `0`, `0.0` or `""`, write `if x is not None:`, not `if x:`, and `x if x is not None else default`, not `x or default`. A falsy-but-valid value is otherwise silently dropped: the argument vanishes from the command sent to the server (so `zpopmin(key, 0)` becomes `ZPOPMIN key` and removes a member) or is swapped for a default (so `acquire(timeout=0)` waits for `acquire_timeout_s`). This applies to command argument builders, `to_args()` / `get_cmd_args()` methods, option classes, config/pool code, and the batch, async and sync copies of the same command (keep all copies consistent).
-  - Fix: `if self.end:` → `if self.end is not None:`; `[key, str(count)] if count else [key]` → `... if count is not None else [key]`; `timeout = timeout or default` → `timeout = timeout if timeout is not None else default`.
-  - Truthiness is fine, and preferred, for real booleans (`if self.no_ack:`), and for objects or collections where empty means "not provided" (`if self.limit:`, `if sections:`).
-  - Leave truthiness alone only when `0`/`""` is invalid for the server anyway (e.g. `SCAN COUNT 0`, `FT.CREATE ... DIM 0`); say so in a short comment so a reviewer does not "fix" it later.
-  - When you add a numeric or string option, add a unit test that passes `0` (or `""`) and asserts it appears in the output args, plus a test that omitting it (`None`) emits nothing. Pure builder tests need no server (see `TestZeroValuedArgsAreForwarded` in `tests/test_options.py`).
-  - When fixing one occurrence, grep for the same pattern across `glide-shared/`, `glide-async/` and `glide-sync/` before finishing (e.g. `grep -rnE "if (not )?self\.[a-z_]+:" glide-shared/glide_shared/commands` and `grep -rnE " = [a-z_.]+ or "`).
+- **Distinguish "unset" from a falsy value:** When an optional value can legitimately be `0`, `0.0` or `""`, test it with `is not None` rather than truthiness (`if x:`, `x or default`), so a valid falsy value is not dropped or replaced by a default. Truthiness is fine for booleans and for collections/objects where empty means "not provided".
 
 ### Python Free-Threading (3.14t) Concurrency Rules
 
@@ -258,7 +253,6 @@ python/
 - [ ] DCO signoff present: `git log --format="%B" -n 1 | grep "Signed-off-by"`
 - [ ] Conventional commit format used
 - [ ] Documentation follows Google Style format
-- [ ] Optional numeric/string values are tested with `is not None` (a legal `0` / `""` is never dropped or replaced by a default)
 - [ ] Shared logic properly isolated in `glide-shared/`
 
 ## Quick Facts for Reasoners
