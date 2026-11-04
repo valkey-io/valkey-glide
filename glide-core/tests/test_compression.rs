@@ -1512,6 +1512,50 @@ mod compression_tests {
         assert!(matches!(result, Err(SizeLimitExceeded { .. })));
     }
 
+    #[test]
+    fn mget_reply_keeps_siblings_when_one_element_mimics_lz4_header() {
+        let manager = zstd_manager();
+        let original = "A".repeat(200).into_bytes();
+        let compressed = manager.compress_value(&original).into_owned();
+        // LZ4 reads the four bytes after the header as the decompressed size; keep the claim
+        // under the limit so the block itself is what fails to decode.
+        let mut plain = create_header(CompressionBackendType::Lz4.backend_id()).to_vec();
+        plain.extend_from_slice(&8u32.to_le_bytes());
+        plain.extend_from_slice(b"zzzz");
+
+        let values = mget_reply(
+            &manager,
+            vec![
+                Value::BulkString(compressed.into()),
+                Value::BulkString(plain.clone().into()),
+            ],
+        );
+        assert_eq!(values[0], Value::BulkString(original.into()));
+        assert_eq!(values[1], Value::BulkString(plain.into()));
+    }
+
+    /// The size limit is judged on the LZ4 size prefix before any decoding, so a plain value
+    /// whose four bytes after the header claim more than the limit is refused like a real
+    /// oversized value; the two are indistinguishable without decoding.
+    #[test]
+    fn mget_reply_propagates_size_limit_claimed_by_lz4_header_shaped_plain() {
+        let manager = zstd_manager();
+        let original = "A".repeat(200).into_bytes();
+        let compressed = manager.compress_value(&original).into_owned();
+        let plain = header_shaped_plain(CompressionBackendType::Lz4.backend_id());
+        assert!(u32::from_le_bytes(*b"zzzz") as usize > DEFAULT_MAX_DECOMPRESSED_SIZE);
+
+        let result = process_response_for_decompression(
+            Value::Array(vec![
+                Value::BulkString(compressed.into()),
+                Value::BulkString(plain.into()),
+            ]),
+            RequestType::MGet,
+            Some(&manager),
+        );
+        assert!(matches!(result, Err(SizeLimitExceeded { .. })));
+    }
+
     // Assertion helpers --------------------------------------------------------------------------
 
     fn assert_compression_compatible(request_type: RequestType, args: &[&str]) {
