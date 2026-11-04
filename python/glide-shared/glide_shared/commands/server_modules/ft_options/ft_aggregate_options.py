@@ -323,7 +323,7 @@ class FtAggregateSortBy(FtAggregateClause):
         ]
         for property in self.properties:
             args.extend(property.to_args())
-        if self.max:
+        if self.max is not None:
             args.extend([FtAggregateKeywords.MAX, str(self.max)])
         return args
 
@@ -601,7 +601,7 @@ class FtAggregateOptions:
             args.extend([FtAggregateKeywords.LOAD, "*"])
         else:
             args.extend(load_fields_to_args(self.loadFields))
-        if self.timeout:
+        if self.timeout is not None:
             args.extend([FtAggregateKeywords.TIMEOUT, str(self.timeout)])
         args.extend(params_to_args(self.params))
         if self.clauses:

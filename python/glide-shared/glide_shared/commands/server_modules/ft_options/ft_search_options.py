@@ -304,7 +304,7 @@ class FtSearchOptions:
         args.extend(self._in_keys_to_args())
         args.extend(self._return_fields_to_args())
         args.extend(self._sortby_to_args())
-        if self.timeout:
+        if self.timeout is not None:
             args.append(FtSearchKeywords.TIMEOUT)
             args.append(str(self.timeout))
         args.extend(self._params_to_args())

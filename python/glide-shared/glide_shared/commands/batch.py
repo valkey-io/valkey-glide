@@ -3895,7 +3895,7 @@ class BaseBatch:
             If `key` doesn't exist, it will be treated as an emtpy sorted set and the command returns an empty map.
         """
         return self.append_command(
-            RequestType.ZPopMax, [key, str(count)] if count else [key]
+            RequestType.ZPopMax, [key, str(count)] if count is not None else [key]
         )
 
     def bzpopmax(self: TBatch, keys: List[TEncodable], timeout: float) -> TBatch:
@@ -3946,7 +3946,7 @@ class BaseBatch:
             If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
         """
         return self.append_command(
-            RequestType.ZPopMin, [key, str(count)] if count else [key]
+            RequestType.ZPopMin, [key, str(count)] if count is not None else [key]
         )
 
     def bzpopmin(self: TBatch, keys: List[TEncodable], timeout: float) -> TBatch:
