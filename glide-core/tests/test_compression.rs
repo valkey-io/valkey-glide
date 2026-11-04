@@ -1591,6 +1591,55 @@ mod compression_tests {
         );
     }
 
+    #[test]
+    fn lz4_rejects_a_block_that_decodes_to_fewer_bytes_than_claimed() {
+        let backend = Lz4Backend::new();
+        // Each block decodes cleanly to fewer bytes than its claim: an empty block, and one
+        // literal run of `abc`.
+        for (claim, block) in [
+            (10u32, &[0x00][..]),
+            (200u32, &[0x30, b'a', b'b', b'c'][..]),
+        ] {
+            let mut value = create_header(CompressionBackendType::Lz4.backend_id()).to_vec();
+            value.extend_from_slice(&claim.to_le_bytes());
+            value.extend_from_slice(block);
+
+            let err = backend.decompress(&value, None).unwrap_err();
+            assert!(
+                matches!(err, CompressionError::DecompressionFailed { .. }),
+                "claim {claim} over {block:02x?}: expected DecompressionFailed, got {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn mget_reply_keeps_lz4_header_shaped_plain_that_decodes_short() {
+        let config = CompressionConfig::new(CompressionBackendType::Lz4);
+        let manager = CompressionManager::new(Box::new(Lz4Backend::new()), config).unwrap();
+        let original = "A".repeat(200).into_bytes();
+        let compressed = manager.compress_value(&original).into_owned();
+        let mut plain = create_header(CompressionBackendType::Lz4.backend_id()).to_vec();
+        plain.extend_from_slice(&200u32.to_le_bytes());
+        plain.extend_from_slice(&[0x30, b'a', b'b', b'c']);
+
+        let result = process_response_for_decompression(
+            Value::Array(vec![
+                Value::BulkString(compressed.into()),
+                Value::BulkString(plain.clone().into()),
+            ]),
+            RequestType::MGet,
+            Some(&manager),
+        )
+        .expect("MGET reply should decompress");
+        assert_eq!(
+            result,
+            Value::Array(vec![
+                Value::BulkString(original.into()),
+                Value::BulkString(plain.into()),
+            ])
+        );
+    }
+
     // Assertion helpers --------------------------------------------------------------------------
 
     fn assert_compression_compatible(request_type: RequestType, args: &[&str]) {

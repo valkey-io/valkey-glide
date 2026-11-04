@@ -874,6 +874,20 @@ pub mod lz4_backend {
                 )
             })?;
 
+            // The decoder stops at the end of the block and returns what it produced, so a
+            // block that ends early is only caught by comparing against the claim.
+            if decompressed_data.len() != original_size_u32 as usize {
+                return Err(CompressionError::decompression_failed(
+                    self.backend_name(),
+                    data.len(),
+                    format!(
+                        "block decoded to {} bytes but claimed {} bytes",
+                        decompressed_data.len(),
+                        original_size_u32
+                    ),
+                ));
+            }
+
             Ok(decompressed_data)
         }
 
