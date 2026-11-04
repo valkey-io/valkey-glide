@@ -1570,7 +1570,20 @@ mod tests {
         let rx = watchdog.register(Duration::from_millis(50), Instant::now());
         let slot = rx.slot.clone();
         drop(rx);
-        tokio::time::sleep(Duration::from_millis(150)).await;
+        // Wait for the watchdog to drain and retire the entry (bounded polling, not a fixed
+        // sleep, so a loaded host cannot make this flaky), then stay past the 50 ms deadline
+        // so a wrongly resident entry would have fired.
+        let start = Instant::now();
+        while Arc::strong_count(&slot) != 1 {
+            assert!(
+                start.elapsed() < Duration::from_secs(2),
+                "watchdog still holds the entry"
+            );
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        if let Some(rest) = Duration::from_millis(100).checked_sub(start.elapsed()) {
+            tokio::time::sleep(rest).await;
+        }
         // Well past the deadline: the watchdog released its reference (the entry was retired,
         // not left resident), counts nothing, and left the slot CANCELLED. The slot cannot be
         // pooled while this test holds it, so it is not reset either.
