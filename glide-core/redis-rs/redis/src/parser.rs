@@ -1072,6 +1072,99 @@ mod tests {
         assert!(buf.is_empty());
     }
 
+    /// Decodes `n` 4-byte bulk strings out of an 8 KiB read buffer, then
+    /// drops the buffer and returns the values: each one now shares that
+    /// 8 KiB allocation with the others.
+    #[cfg(feature = "aio")]
+    fn split_small_values(n: u8) -> Vec<Value> {
+        use tokio_util::codec::Decoder;
+        let mut codec = ValueCodec::default();
+        let mut buf = bytes::BytesMut::with_capacity(8192);
+        for i in 0..n {
+            buf.extend_from_slice(&bulk_frame(&[b'a' + i; 4]));
+        }
+        let range = alloc_range(&buf);
+        let values: Vec<Value> = (0..n)
+            .map(|_| codec.decode(&mut buf).unwrap().unwrap().unwrap())
+            .collect();
+        for v in &values {
+            let Value::BulkString(b) = v else {
+                panic!("expected a bulk string, got {v:?}")
+            };
+            assert!(range.contains(&(b.as_ptr() as usize)), "test setup: split");
+        }
+        values
+    }
+
+    /// `Vec::from(Bytes)` reuses the allocation behind a `Bytes` that holds
+    /// the only reference. For a split value that allocation is the whole
+    /// read buffer, so converting the last live value to a `Vec<u8>` must
+    /// not keep its 8 KiB capacity. Pins the `bytes` behaviour that makes
+    /// this matter, then checks every conversion this crate offers.
+    #[cfg(feature = "aio")]
+    #[test]
+    fn vec_conversions_of_a_split_value_do_not_keep_the_read_buffer() {
+        // Precondition: the raw conversion takes the read buffer over.
+        let mut values = split_small_values(2);
+        let Some(Value::BulkString(last)) = values.pop() else {
+            unreachable!()
+        };
+        drop(values);
+        let raw: Vec<u8> = last.into();
+        assert_eq!(raw, b"bbbb");
+        assert!(
+            raw.capacity() >= 8192,
+            "bytes no longer reuses the read buffer (capacity {}); revisit \
+             `bytes_into_vec`",
+            raw.capacity()
+        );
+
+        let compact = |v: &Vec<u8>| v.capacity() <= 2 * v.len() + 64;
+
+        let mut values = split_small_values(2);
+        let last = values.pop().unwrap();
+        drop(values);
+        let v: Vec<u8> = crate::from_owned_redis_value(last).unwrap();
+        assert_eq!(v, b"bbbb");
+        assert!(compact(&v), "FromRedisValue for Vec<u8>: {}", v.capacity());
+
+        let mut values = split_small_values(2);
+        let Some(Value::BulkString(last)) = values.pop() else {
+            unreachable!()
+        };
+        drop(values);
+        let v = crate::bytes_into_vec(last);
+        assert_eq!(v, b"bbbb");
+        assert!(compact(&v), "bytes_into_vec: {}", v.capacity());
+
+        // Not the last reference: a plain copy, exact size.
+        let values = split_small_values(2);
+        let Value::BulkString(shared) = values[1].clone() else {
+            unreachable!()
+        };
+        let v = crate::bytes_into_vec(shared);
+        assert_eq!((v.as_slice(), v.capacity()), (&b"bbbb"[..], 4));
+
+        // Typed results nested in collections go through the same path.
+        let values = split_small_values(3);
+        let v: Vec<Vec<u8>> = crate::from_owned_redis_value(Value::Array(values)).unwrap();
+        assert_eq!(v, [b"aaaa", b"bbbb", b"cccc"]);
+        assert!(v.iter().all(compact), "Vec<Vec<u8>>");
+    }
+
+    /// `bytes_into_vec` keeps an owned `Vec` behind a `Bytes` as it is when
+    /// it is not much larger than its contents (no copy, no realloc).
+    #[test]
+    fn bytes_into_vec_keeps_a_fitting_allocation() {
+        let mut v = Vec::with_capacity(100);
+        v.extend_from_slice(&[7u8; 90]);
+        let ptr = v.as_ptr();
+        let b = bytes::Bytes::from(v);
+        let v = crate::bytes_into_vec(b);
+        assert_eq!(v.as_ptr(), ptr);
+        assert_eq!(v.len(), 90);
+    }
+
     /// The read-buffer bound is inclusive: a small frame is split off a read
     /// buffer of exactly `ZERO_COPY_MAX_READ_BUF` bytes and copied out of
     /// one a byte larger.

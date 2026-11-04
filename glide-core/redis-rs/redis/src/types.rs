@@ -2150,7 +2150,9 @@ macro_rules! from_vec_from_redis_value {
                     // Binary data is parsed into a single-element vector, except
                     // for the element type `u8`, which directly consumes the entire
                     // array of bytes.
-                    Value::BulkString(bytes) => FromRedisValue::from_owned_byte_vec(bytes.into()).map($convert),
+                    // `bytes_into_vec`, not `bytes.into()`: a small value split
+                    // off the read buffer would otherwise keep the whole buffer.
+                    Value::BulkString(bytes) => FromRedisValue::from_owned_byte_vec(bytes_into_vec(bytes)).map($convert),
                     Value::Array(items) => FromRedisValue::from_owned_redis_values(items).map($convert),
                     Value::Set(items) => FromRedisValue::from_owned_redis_values(items).map($convert),
                     Value::Map(items) => {
@@ -2529,6 +2531,25 @@ impl FromRedisValue for bytes::Bytes {
             _ => invalid_type_error!(v, "Not a bulk string"),
         }
     }
+}
+
+/// Converts the bytes of a reply value into an owned `Vec<u8>` whose
+/// capacity is at most `2 * len + 64`.
+///
+/// Use this instead of `Vec::from(bytes)` (or `bytes.into()`) when handing
+/// reply bytes to code that keeps the `Vec`. When a `Bytes` holds the only
+/// reference to its allocation, `Vec::from` reuses that allocation with its
+/// full capacity. A small value the decoder split off the connection's read
+/// buffer shares that buffer, so `Vec::from` on the last such value keeps
+/// the whole read buffer (typically 8 KiB) behind a few bytes. This
+/// function shrinks the result in that case. A `Vec` that is not much
+/// larger than its contents is returned as is, without a copy.
+pub fn bytes_into_vec(bytes: bytes::Bytes) -> Vec<u8> {
+    let mut vec = Vec::from(bytes);
+    if vec.capacity() > 2 * vec.len() + 64 {
+        vec.shrink_to_fit();
+    }
+    vec
 }
 
 /// A shortcut function to invoke `FromRedisValue::from_redis_value`
