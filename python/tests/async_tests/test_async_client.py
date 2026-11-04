@@ -4442,6 +4442,10 @@ class TestCommands:
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await glide_client.zadd(key, members_scores=members_scores) == 3
+        # count=0 must be sent as `ZPOPMIN key 0` and pop nothing. If it were dropped (truthiness check),
+        # the server would run `ZPOPMIN key` and silently remove "a".
+        assert await glide_client.zpopmin(key, 0) == {}
+        assert await glide_client.zcard(key) == 3
         assert await glide_client.zpopmin(key) == {b"a": 1.0}
 
         zpopmin_map = await glide_client.zpopmin(key, 3)
@@ -4502,6 +4506,10 @@ class TestCommands:
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await glide_client.zadd(key, members_scores) == 3
+        # count=0 must be sent as `ZPOPMAX key 0` and pop nothing. If it were dropped (truthiness check),
+        # the server would run `ZPOPMAX key` and silently remove "c".
+        assert await glide_client.zpopmax(key, 0) == {}
+        assert await glide_client.zcard(key) == 3
         assert await glide_client.zpopmax(key) == {b"c": 3.0}
 
         zpopmax_map = await glide_client.zpopmax(key, 3)
