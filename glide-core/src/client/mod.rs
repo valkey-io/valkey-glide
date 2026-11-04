@@ -2981,6 +2981,10 @@ pub enum ConnectionError {
     Timeout,
     IoError(std::io::Error),
     Configuration(String),
+    /// The compression configuration was rejected. Kept apart from `Configuration` because
+    /// `is_configuration` must not include it: wrappers reported it like any other creation
+    /// failure before 2.6, and changing its exception type would break callers.
+    CompressionConfiguration(String),
     IAMError(String),
     Rdma(crate::rdma::RdmaUnavailable),
 }
@@ -2999,6 +3003,10 @@ impl std::fmt::Debug for ConnectionError {
             Self::IoError(arg0) => f.debug_tuple("IoError").field(arg0).finish(),
             Self::Timeout => write!(f, "Timeout"),
             Self::Configuration(arg0) => f.debug_tuple("Configuration").field(arg0).finish(),
+            Self::CompressionConfiguration(arg0) => f
+                .debug_tuple("CompressionConfiguration")
+                .field(arg0)
+                .finish(),
             Self::IAMError(arg0) => f.debug_tuple("IAMError").field(arg0).finish(),
             Self::Rdma(arg0) => f.debug_tuple("Rdma").field(arg0).finish(),
         }
@@ -3012,7 +3020,10 @@ impl std::fmt::Display for ConnectionError {
             ConnectionError::Cluster(err) => write!(f, "{err}"),
             ConnectionError::IoError(err) => write!(f, "{err}"),
             ConnectionError::Timeout => f.write_str("connection attempt timed out"),
-            ConnectionError::Configuration(msg) => write!(f, "configuration error: {msg}"),
+            ConnectionError::Configuration(msg)
+            | ConnectionError::CompressionConfiguration(msg) => {
+                write!(f, "configuration error: {msg}")
+            }
             ConnectionError::IAMError(msg) => write!(f, "IAM authentication error: {msg}"),
             ConnectionError::Rdma(reason) => write!(f, "RDMA unavailable: {reason}"),
         }
@@ -3027,6 +3038,15 @@ where
         format!("\n{name}: {value}")
     } else {
         String::new()
+    }
+}
+
+impl ConnectionError {
+    /// Whether the request was rejected by validation, before any connection was attempted.
+    ///
+    /// Excludes `CompressionConfiguration`, whose reported type predates this check.
+    pub fn is_configuration(&self) -> bool {
+        matches!(self, ConnectionError::Configuration(_))
     }
 }
 
@@ -3189,7 +3209,10 @@ fn create_compression_manager(
     };
 
     let manager = CompressionManager::new(backend, config).map_err(|e| {
-        ConnectionError::Configuration(format!("Failed to create compression manager: {}", e))
+        ConnectionError::CompressionConfiguration(format!(
+            "Failed to create compression manager: {}",
+            e
+        ))
     })?;
 
     Ok(Some(Arc::new(manager)))
@@ -4407,6 +4430,43 @@ mod tests {
 
         assert!(matches!(error, ConnectionError::Configuration(_)));
         assert!(error.to_string().contains("library name"));
+    }
+
+    #[tokio::test]
+    async fn test_new_reports_invalid_compression_outside_is_configuration() {
+        use crate::compression::{CompressionBackendType, CompressionConfig};
+
+        let mut compression_config = CompressionConfig::new(CompressionBackendType::Zstd);
+        compression_config.enabled = true;
+        compression_config.compression_level = Some(100);
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+                unix_socket_path: None,
+            }],
+            lazy_connect: true,
+            compression_config: Some(compression_config),
+            ..Default::default()
+        };
+
+        let error = match Client::new(request, None).await {
+            Ok(_) => panic!("invalid compression level should fail client creation"),
+            Err(error) => error,
+        };
+
+        // Wrappers raise this one as before 2.6, so it must stay out of is_configuration.
+        assert!(
+            matches!(error, ConnectionError::CompressionConfiguration(_)),
+            "{error:?}"
+        );
+        assert!(!error.is_configuration());
+        assert!(
+            error
+                .to_string()
+                .starts_with("configuration error: Failed to create compression manager"),
+            "{error}"
+        );
     }
 
     #[tokio::test]

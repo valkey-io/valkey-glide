@@ -223,7 +223,8 @@ static uint8_t provider(
 }}
 
 static int expect_client(const ConnectionResponse *response) {{
-    if (response == NULL || response->conn_ptr == NULL || response->connection_error_message != NULL) {{
+    if (response == NULL || response->conn_ptr == NULL || response->connection_error_message != NULL
+            || response->connection_error_type != ConnectionErrorType_Unspecified) {{
         return 0;
     }}
     const void *client = response->conn_ptr;
@@ -253,6 +254,9 @@ int main(void) {{
     }}
     if (strstr(failed->connection_error_message, "no IAM configuration") == NULL) {{
         return 13;
+    }}
+    if (failed->connection_error_type != ConnectionErrorType_Unspecified) {{
+        return 15;
     }}
     if (provider_calls != 0) {{
         return 14;
