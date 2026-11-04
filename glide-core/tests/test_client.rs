@@ -6368,7 +6368,9 @@ pub(crate) mod shared_client_tests {
     /// 1. (all versions) A MULTI opened on `AllNodes` must be cleared on every node
     ///    on release: re-acquire and assert `PING` to each primary returns `PONG`
     ///    (an open MULTI replies `QUEUED`). Fails deterministically on the pre-fix
-    ///    single-node DISCARD, which leaves ≥2 of 3 primaries dirty.
+    ///    single-node DISCARD, which leaves ≥2 of 3 primaries dirty. Releasing that
+    ///    no-MULTI borrow must also re-idle despite every node's "DISCARD without
+    ///    MULTI".
     /// 2. (all versions) A MULTI opened on a SINGLE primary must still re-idle: the
     ///    release DISCARD fans out to `AllNodes`, so the owner answers `+OK` while
     ///    the siblings answer "DISCARD without MULTI" and the aggregate is `Err` —
@@ -6490,6 +6492,18 @@ pub(crate) mod shared_client_tests {
                          every node (got {v:?} instead of PONG)"
                     );
                 }
+            }
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock().await;
+                assert_eq!(
+                    pool.idle_count(),
+                    1,
+                    "a no-MULTI cluster release must re-idle"
+                );
+                assert!(pool.drain_discarded_ids().is_empty());
+                // Keep it borrowed so section 2 starts from the same pool state.
+                assert_eq!(pool.try_acquire(), client_id as i64);
             }
 
             // ── 2. MULTI open on a SINGLE primary: release must still re-idle ──
