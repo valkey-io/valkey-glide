@@ -24,6 +24,14 @@ pub enum ValkeyValue {
     Int(i64),
 
     /// Binary-safe string data.
+    ///
+    /// The `Bytes` may share memory with the connection's buffers: a reply of
+    /// up to 4 KiB shares the connection's read buffer (typically 8 KiB, at
+    /// most about 85 KiB), and holding the value keeps that buffer alive.
+    /// Copy values you keep long-term (for example `Bytes::copy_from_slice`).
+    /// Convert with `to_vec()` rather than `Vec::from(bytes)`: on the last
+    /// value from a read buffer, `Vec::from` keeps the whole buffer as the
+    /// `Vec`'s capacity.
     BulkString(Bytes),
 
     /// An array of nested values.
@@ -480,6 +488,9 @@ impl FromValkeyValue for String {
 }
 
 /// Converts a `ValkeyValue` into bytes.
+///
+/// A `BulkString` is returned without a copy, so it can keep a connection
+/// buffer alive; see [`ValkeyValue::BulkString`].
 impl FromValkeyValue for Bytes {
     fn from_owned_valkey_value(value: ValkeyValue) -> ValkeyResult<Bytes> {
         match value {

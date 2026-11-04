@@ -724,8 +724,8 @@ mod aio_support {
     /// tokio's `FramedRead` starts with an 8 KiB buffer. When it needs room
     /// while split-off values are still alive, `BytesMut` allocates a fresh
     /// buffer of `max(unconsumed + 1, original capacity)` (8 KiB here; the
-    /// codec makes it `2 * unconsumed` for a partial frame that fills the
-    /// buffer), so small-reply traffic stays at 8 KiB. A reply too big for
+    /// codec makes it `max(2 * unconsumed, 8 KiB)` for a partial frame that
+    /// fills the buffer), so small-reply traffic stays at 8 KiB. A reply too big for
     /// the current buffer makes `BytesMut` grow it by doubling: 4-32 KiB
     /// replies (copied, not split) can grow it to 16-64 KiB, which later
     /// split values then pin. Once the codec sees a visible capacity above
@@ -806,10 +806,12 @@ mod aio_support {
                         // A partial frame fills the buffer, so `FramedRead`'s
                         // `reserve(1)` before its next read would allocate.
                         // While split-off values still share the buffer,
-                        // `BytesMut` sizes that new buffer `len + 1` (once
-                        // `len` exceeds its original capacity): a 1-byte
-                        // read, then another reallocation. Reserving `len`
-                        // here makes it double instead. When the buffer is
+                        // `BytesMut` sizes that new buffer
+                        // `max(len + 1, original capacity)`: for `len` near or
+                        // above the original 8 KiB, a read of a few bytes (one
+                        // byte above it), then another reallocation.
+                        // Reserving `len` here makes the new buffer
+                        // `max(2 * len, original capacity)`. When the buffer is
                         // not shared, `reserve(len)` on a full buffer reuses
                         // or grows the allocation exactly as `reserve(1)`
                         // would (both shift the data to the front when the
@@ -1217,8 +1219,9 @@ mod tests {
     /// the consumed prefix. When a full buffer grows while less than half of
     /// it is consumed (`BytesMut` doubles the whole allocation and keeps the
     /// prefix), the new allocation can be up to 4/3 of the visible bound
-    /// (about 85 KiB) without ever being seen above it. This pins that
-    /// documented worst case: a split from an 84 KiB allocation.
+    /// (about 85 KiB) without ever being seen above it. This pins one such
+    /// case, through `BytesMut`'s real growth: a split from an 84 KiB
+    /// allocation whose visible capacity is exactly the bound.
     #[cfg(feature = "aio")]
     #[test]
     fn read_buffer_bound_is_on_visible_capacity() {
@@ -1411,6 +1414,7 @@ mod tests {
         for i in 0..2000u32 {
             wire.extend_from_slice(&bulk_frame(&[i as u8; 100]));
         }
+        let small_wire_len = wire.len();
         let s = framed_read_pattern(wire, 16 * 1024);
         println!(
             "small: {} reads, smallest offered {}, {} buffer changes, {} split",
@@ -1425,6 +1429,7 @@ mod tests {
             p.offered
         );
         assert_eq!(p.split, rounds * 10, "every small reply is split");
+        // Deterministic (exact `Vec` growth, all values held); measured 41.
         assert!(
             p.buffer_changes <= 2 * rounds + 1,
             "{} buffer changes",
@@ -1432,7 +1437,12 @@ mod tests {
         );
         assert!(s.offered.iter().all(|&n| n >= 1024), "{:?}", s.offered);
         assert_eq!(s.split, 2000);
-        assert!(s.buffer_changes <= s.offered.len(), "{}", s.buffer_changes);
+        // One new 8 KiB buffer per 8 KiB of small replies; measured 26.
+        assert!(
+            s.buffer_changes <= small_wire_len / 8192 + 1,
+            "{} buffer changes",
+            s.buffer_changes
+        );
     }
 
     /// The split/copy boundary is the whole encoded frame length: a frame of

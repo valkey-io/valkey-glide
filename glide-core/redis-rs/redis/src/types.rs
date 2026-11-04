@@ -2548,7 +2548,7 @@ impl FromRedisValue for bytes::Bytes {
 /// buffer shares that buffer, so `Vec::from` on the last such value keeps
 /// the whole read buffer (typically 8 KiB) behind a few bytes. This
 /// function shrinks the result in that case. A `Vec` that is not much
-/// larger than its contents is returned as is, without a copy.
+/// larger than its contents is returned without a reallocation.
 pub fn bytes_into_vec(bytes: bytes::Bytes) -> Vec<u8> {
     let mut vec = Vec::from(bytes);
     if vec.capacity() > 2 * vec.len() + 64 {
