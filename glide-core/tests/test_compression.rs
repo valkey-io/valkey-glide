@@ -1509,10 +1509,7 @@ mod compression_tests {
             RequestType::MGet,
             Some(&manager),
         );
-        assert!(matches!(
-            result,
-            Err(CompressionError::SizeLimitExceeded { .. })
-        ));
+        assert!(matches!(result, Err(SizeLimitExceeded { .. })));
     }
 
     // Assertion helpers --------------------------------------------------------------------------
