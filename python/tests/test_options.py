@@ -480,12 +480,18 @@ class TestStreamBytesLikeArgs:
 
     @pytest.mark.parametrize(
         "threshold",
-        [b"0-1", memoryview(b"0-1")],
-        ids=["bytes", "memoryview"],
+        [
+            b"100-0000",
+            bytearray(b"100-0000"),
+            memoryview(b"100-0000"),
+            memoryview(b"100-0000").cast("I"),
+        ],
+        ids=["bytes", "bytearray", "memoryview", "memoryview-cast"],
     )
     def test_trim_by_min_id_bytes_like_threshold(self, threshold: TEncodable):
         args = TrimByMinId(False, threshold, limit=5).to_args()
-        assert args == ["MINID", "~", threshold, "LIMIT", "5"]
+        assert args == ["MINID", "~", b"100-0000", "LIMIT", "5"]
+        assert isinstance(args[2], bytes)
 
     def test_trim_by_max_len_int_threshold(self):
         assert TrimByMaxLen(True, 10).to_args() == ["MAXLEN", "=", "10"]

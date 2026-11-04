@@ -5921,7 +5921,7 @@ class TestCommands:
             await glide_client.xadd(
                 key,
                 [(field, "foo4"), (field2, "bar4")],
-                StreamAddOptions(trim=TrimByMinId(exact=True, threshold=id.decode())),
+                StreamAddOptions(trim=TrimByMinId(exact=True, threshold=id)),
             )
             is not None
         )

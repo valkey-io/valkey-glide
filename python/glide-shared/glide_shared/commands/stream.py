@@ -47,11 +47,14 @@ class StreamTrimOptions(ABC):
         Returns:
             List[TEncodable]: List of arguments for the command.
         """
-        # Only an int threshold is stringified; a TEncodable threshold (e.g. the bytes
-        # stream ID returned by XADD) is passed through, not turned into its Python repr.
-        threshold: TEncodable = (
-            str(self.threshold) if isinstance(self.threshold, int) else self.threshold
-        )
+        # MAXLEN thresholds are ints; MINID thresholds are passed through as bytes or str.
+        threshold: TEncodable
+        if isinstance(self.threshold, int):
+            threshold = str(self.threshold)
+        elif isinstance(self.threshold, (bytearray, memoryview)):
+            threshold = bytes(self.threshold)
+        else:
+            threshold = self.threshold
         option_args: List[TEncodable] = [
             self.method,
             "=" if self.exact else "~",
@@ -236,8 +239,6 @@ class ExclusiveIdBound(StreamRangeBound):
         """
         Creates a stream ID boundary for a range search.
         """
-        # Bytes-like IDs are prefixed as bytes so bytearray/memoryview are not
-        # turned into their Python repr.
         self.stream_id: TEncodable
         if isinstance(stream_id, str):
             self.stream_id = f"{self.EXCLUSIVE_BOUND_VALKEY_API}{stream_id}"
