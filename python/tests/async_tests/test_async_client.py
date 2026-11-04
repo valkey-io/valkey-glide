@@ -3776,6 +3776,30 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zadd_bytes_like_members(self, glide_client: TGlideClient):
+        """zadd must store bytes and memoryview members verbatim, not as their Python repr."""
+        key = get_random_string(10)
+        member_bytes = b"\x00\xffab"
+        member_other = b"\x01\xfecd"
+        member_mv = memoryview(b"\x02\xfdef")
+        members_scores: Mapping[TEncodable, float] = {
+            member_bytes: 1.0,
+            member_other: 2.0,
+            member_mv: 3.0,
+        }
+        assert await glide_client.zadd(key, members_scores) == 3
+
+        assert await glide_client.zrange(key, RangeByIndex(0, -1)) == [
+            b"\x00\xffab",
+            b"\x01\xfecd",
+            b"\x02\xfdef",
+        ]
+        assert await glide_client.zscore(key, b"\x00\xffab") == 1.0
+        assert await glide_client.zscore(key, b"\x01\xfecd") == 2.0
+        assert await glide_client.zscore(key, b"\x02\xfdef") == 3.0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zadd_nx_xx(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
