@@ -351,6 +351,8 @@ class RdmaProvider:
 
         Needs no hardware and offers no performance benefit over a normal ``GET`` or
         ``SET``: it exists so the RDMA path can be exercised on an ordinary machine.
+        Only a client built with the ``rdma-tcp-dev`` feature (``dev.py build --rdma``)
+        honors it; release wheels refuse it when the client is created.
 
         Attributes:
             bind (Optional[str]): Source address to bind to. TCP binds an IP address

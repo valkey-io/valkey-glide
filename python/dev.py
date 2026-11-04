@@ -435,7 +435,7 @@ def build_sync_client(
 
     if ffi_features:
         # setup.py reads this for the sdist/wheel path.
-        env["GLIDE_SYNC_RDMA"] = "1"
+        env["GLIDE_SYNC_RDMA_TCP"] = "1"
 
     if wheel:
         return build_sync_client_wheel(env)
@@ -647,7 +647,8 @@ Examples:
     build_parser.add_argument(
         "--rdma",
         action="store_true",
-        help="Build the FFI library with RDMA support (sync client only).",
+        help="Build the FFI library with RDMA support (sync client only), including "
+        "the tcp provider the RDMA tests use. Release wheels are built without it.",
     )
 
     subparsers.add_parser(
@@ -693,7 +694,7 @@ Examples:
         no_cache = args.no_cache
         wheel = args.wheel
         features = args.features
-        ffi_features = "rdma" if args.rdma else ""
+        ffi_features = "rdma-tcp-dev" if args.rdma else ""
         if args.client in (ClientTarget.ASYNC, ClientTarget.ALL):
             print(f"🛠 Building async client ({args.mode} mode)...")
             build_async_client(
