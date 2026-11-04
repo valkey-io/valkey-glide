@@ -3735,8 +3735,12 @@ class BaseBatch:
                     f"Cannot choose both {update_condition.value} and NX."
                 )
 
-        members_scores_list = [
-            str(item) for pair in members_scores.items() for item in pair[::-1]
+        # Only scores are stringified; members are passed through as TEncodable so
+        # bytes and memoryview members are not turned into their Python repr.
+        members_scores_list: List[TEncodable] = [
+            item
+            for member, score in members_scores.items()
+            for item in (str(score), member)
         ]
         args += members_scores_list
 

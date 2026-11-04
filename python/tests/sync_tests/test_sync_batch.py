@@ -30,6 +30,7 @@ from glide_shared.commands.core_options import (
     OnlyIfEqual,
     OnlyIfNotEqual,
 )
+from glide_shared.commands.sorted_set import RangeByIndex
 from glide_shared.commands.stream import StreamAddOptions
 from glide_shared.config import NodeAddress, ProtocolVersion
 from glide_shared.constants import OK, TResult, TSingleNodeRoute
@@ -156,6 +157,34 @@ class TestSyncBatch:
         assert glide_sync_client.get(key_mv) == data
         assert glide_sync_client.get(key_ba_key) == b"value1"
         assert glide_sync_client.get(key_mv_key) == b"value2"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_batch_zadd_bytes_like_members(self, glide_sync_client: TGlideClient):
+        """Test that batch zadd() stores bytes and memoryview members verbatim."""
+        key = get_random_string(10)
+
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(glide_sync_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+        batch.zadd(
+            key,
+            {
+                b"\x00\xffab": 1.0,
+                b"\x01\xfecd": 2.0,
+                memoryview(b"\x02\xfdef"): 3.0,
+            },
+        )
+        result = exec_batch(glide_sync_client, batch)
+        assert result == [3]
+
+        assert glide_sync_client.zrange(key, RangeByIndex(0, -1)) == [
+            b"\x00\xffab",
+            b"\x01\xfecd",
+            b"\x02\xfdef",
+        ]
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
