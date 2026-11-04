@@ -3,8 +3,9 @@
 //! Two hot paths briefly need an owned buffer of tens-to-hundreds of KB whose
 //! lifetime is tied to a refcounted [`Bytes`]:
 //!
-//! - the RESP decoder copies each complete frame out of the read buffer
-//!   (`ValueCodec::decode_stream`), and
+//! - the RESP decoder copies complete frames out of the read buffer
+//!   (`ValueCodec::decode_stream`; small frames other than pushes are split
+//!   off the read buffer instead), and
 //! - command building copies large borrowed args into shared payload segments
 //!   (`Cmd`'s `write_arg` auto-share).
 //!

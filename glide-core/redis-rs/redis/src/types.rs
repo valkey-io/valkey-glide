@@ -644,12 +644,17 @@ impl Value {
     /// decoder is a slice of its response's single frame buffer, so
     /// retaining even one small slice pins the *entire* frame (e.g. keeping
     /// one 16-byte element of a 6 MB MGET response holds all 6 MB — plus its
-    /// recycled `buf_pool` allocation — alive). Responses of up to 4 KiB are
-    /// split off the connection's read buffer instead, so retaining one of
-    /// their slices pins that read buffer allocation (typically 8 KiB, at
-    /// most about 64 KiB) for as long as it is held, including while a
-    /// language binding holds the response until its caller frees it. If you
-    /// extract and keep a subset of a response, detach it first.
+    /// recycled `buf_pool` allocation — alive). Responses of up to 4 KiB
+    /// (other than RESP3 pushes) are split off the connection's read buffer
+    /// instead, so retaining one of their slices pins that read buffer
+    /// allocation (typically 8 KiB, at most about 85 KiB) for as long as it
+    /// is held, including while a language binding holds the response until
+    /// its caller frees it. If you extract and keep a subset of a response,
+    /// detach it first.
+    ///
+    /// To turn such a slice into a `Vec<u8>`, use [`bytes_into_vec`] rather
+    /// than `Vec::from`: on the last slice of a read buffer, `Vec::from`
+    /// would keep the whole read buffer as the `Vec`'s capacity.
     pub fn detach_buffers(self) -> Value {
         match self {
             Value::BulkString(b) => Value::BulkString(bytes::Bytes::copy_from_slice(&b)),
