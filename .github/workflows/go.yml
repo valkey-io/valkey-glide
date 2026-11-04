@@ -107,8 +107,8 @@ jobs:
               with:
                   language-name: go
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
-                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
-                  run-with-macos: ${{ github.event.inputs.run-with-macos }}
+                  run-full-matrix: ${{ inputs.full-matrix == true || github.event_name == 'schedule' }}
+                  run-with-macos: ${{ inputs.run-with-macos }}
                   use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
 
     approve-self-hosted:
@@ -166,9 +166,9 @@ jobs:
 
             - name: Run patch to test with RC
               working-directory: go
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
@@ -179,7 +179,7 @@ jobs:
             - name: Install & build & test
               working-directory: go
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
                   VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
                   AWS_ACCESS_KEY_ID: test_access_key
                   AWS_SECRET_ACCESS_KEY: test_secret_key
@@ -203,7 +203,7 @@ jobs:
               # version-gated integration tests.
               working-directory: go
               # TODO #7312: Bump to 9.2.0 once released
-              if: ${{ matrix.engine.type == 'valkey' && matrix.engine.version == '9.2.0-rc1' && !github.event.inputs.rc-version }}
+              if: ${{ matrix.engine.type == 'valkey' && matrix.engine.version == '9.2.0-rc1' && !inputs.rc-version }}
               run: |
                   make -k example-test
 
@@ -229,7 +229,7 @@ jobs:
     lint:
         timeout-minutes: 10
         runs-on: ubuntu-24.04
-        if: ${{ !github.event.inputs.rc-version }}
+        if: ${{ !inputs.rc-version }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -266,7 +266,7 @@ jobs:
 
     get-containers:
         runs-on: ubuntu-24.04
-        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
+        if: ${{ inputs.full-matrix == true || github.event_name == 'schedule' }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
@@ -351,9 +351,9 @@ jobs:
 
             - name: Run patch to test with RC
               working-directory: go
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
@@ -364,7 +364,7 @@ jobs:
             - name: Install & build & test
               working-directory: go
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
                   VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
                   AWS_ACCESS_KEY_ID: test_access_key
                   AWS_SECRET_ACCESS_KEY: test_secret_key
@@ -436,16 +436,16 @@ jobs:
 
             - name: Run patch to test with RC
               working-directory: go
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
             - name: Install & build & test
               working-directory: go
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
