@@ -1491,6 +1491,30 @@ mod compression_tests {
     }
 
     #[test]
+    fn batch_reply_propagates_size_limit_from_nested_element() {
+        let config = CompressionConfig::new(CompressionBackendType::Zstd)
+            .with_min_compression_size(64)
+            .with_max_decompressed_size(Some(50));
+        let manager = CompressionManager::new(Box::new(ZstdBackend::new()), config).unwrap();
+        let too_large = manager
+            .compress_value(&"A".repeat(200).into_bytes())
+            .into_owned();
+        assert!(has_magic_header(&too_large));
+
+        let batch = Value::Array(vec![
+            Value::BulkString(b"small plain".to_vec().into()),
+            Value::Array(vec![
+                Value::BulkString(b"small plain".to_vec().into()),
+                Value::BulkString(too_large.into()),
+            ]),
+        ]);
+        assert!(matches!(
+            decompress_batch_response(batch, &manager),
+            Err(SizeLimitExceeded { .. })
+        ));
+    }
+
+    #[test]
     fn mget_reply_propagates_size_limit() {
         let config = CompressionConfig::new(CompressionBackendType::Zstd)
             .with_min_compression_size(64)
