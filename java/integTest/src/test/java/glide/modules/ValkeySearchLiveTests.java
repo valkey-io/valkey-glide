@@ -74,7 +74,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  * tests all target the 1.2 surface and don't need to tell a pre-1.3 module apart from a missing
  * one. Mirrors the Node and Python references' probe.
  */
-public class ValkeySearch13LiveTests {
+public class ValkeySearchLiveTests {
 
     private static final List<Arguments> clients = new ArrayList<>();
     private static final List<Arguments> resp2Clients = new ArrayList<>();
@@ -688,12 +688,12 @@ public class ValkeySearch13LiveTests {
                 client,
                 "{ft-float16-" + UUID.randomUUID() + "}:",
                 VectorType.FLOAT16,
-                ValkeySearch13LiveTests::packFloat16);
+                ValkeySearchLiveTests::packFloat16);
         runFloat16Bfloat16KnnQuery(
                 client,
                 "{ft-bfloat16-" + UUID.randomUUID() + "}:",
                 VectorType.BFLOAT16,
-                ValkeySearch13LiveTests::packBfloat16);
+                ValkeySearchLiveTests::packBfloat16);
     }
 
     /** Packs a single IEEE 754 half-precision (FLOAT16) float, little-endian. */
