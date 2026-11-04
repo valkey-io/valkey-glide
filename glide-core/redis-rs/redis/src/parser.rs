@@ -329,8 +329,8 @@ where
 /// straddle socket reads), we first *scan* the buffered bytes for one complete
 /// top-level frame without consuming anything. Once a full frame is buffered,
 /// we take it out of the read buffer as a refcounted [`bytes::Bytes`] (small
-/// frames are split off zero-copy unless the read buffer has grown large,
-/// other frames are copied into a pooled buffer; see
+/// frames other than RESP3 pushes are split off zero-copy unless the read
+/// buffer has grown large, other frames are copied into a pooled buffer; see
 /// `ValueCodec::decode_stream`) and build the [`Value`] tree by
 /// slicing bulk-string payloads directly out of that frame — no per-value
 /// allocation or memcpy.
@@ -852,7 +852,13 @@ mod aio_support {
                     // `ZERO_COPY_MAX_READ_BUF` (a large reply grew it). Values
                     // kept long-term should be detached
                     // (`Value::detach_buffers`, as the client-side cache does).
-                    let frame = if end <= ZERO_COPY_MAX_FRAME && !large_read_buf {
+                    //
+                    // RESP3 push frames (`>`) are always copied: pushes wait
+                    // in the push channel until the application consumes
+                    // them, and each split one would pin a read buffer for
+                    // that whole time.
+                    let frame = if end <= ZERO_COPY_MAX_FRAME && !large_read_buf && bytes[0] != b'>'
+                    {
                         bytes.split_to(end).freeze()
                     } else {
                         let frame = crate::buf_pool::pooled_bytes_from_slice(&bytes[..end]);
@@ -1421,6 +1427,41 @@ mod tests {
             max + 1
         );
         assert!(buf.is_empty());
+    }
+
+    /// RESP3 push frames are copied, not split, even when small: pushes
+    /// queue in the push channel until the application consumes them, and a
+    /// split one would pin its read buffer for that whole time. A reply
+    /// after a push is still split.
+    #[cfg(feature = "aio")]
+    #[test]
+    fn small_push_frames_are_copied_out_of_the_read_buffer() {
+        use tokio_util::codec::Decoder;
+        let mut codec = ValueCodec::default();
+        let mut buf = bytes::BytesMut::with_capacity(8192);
+        buf.extend_from_slice(b">3\r\n$7\r\nmessage\r\n$2\r\nch\r\n$4\r\nbody\r\n");
+        buf.extend_from_slice(&bulk_frame(b"reply"));
+        let range = alloc_range(&buf);
+        let Some(Ok(Value::Push { kind, data })) = codec.decode(&mut buf).unwrap() else {
+            panic!("expected a push")
+        };
+        assert_eq!(kind, PushKind::Message);
+        assert_eq!(data.len(), 2, "channel and payload");
+        for v in &data {
+            let Value::BulkString(b) = v else {
+                panic!("expected a bulk string, got {v:?}")
+            };
+            assert!(
+                !range.contains(&(b.as_ptr() as usize)),
+                "push payload split off the read buffer"
+            );
+        }
+        let reply = decode_bulk(&mut codec, &mut buf);
+        assert_eq!(&reply[..], b"reply");
+        assert!(
+            range.contains(&(reply.as_ptr() as usize)),
+            "reply not split"
+        );
     }
 
     /// Memory retention: a small frame split off a large read buffer would
