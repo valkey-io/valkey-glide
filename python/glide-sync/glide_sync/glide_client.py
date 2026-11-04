@@ -30,6 +30,7 @@ from glide_shared.exceptions import (
     ConfigurationError,
     RdmaError,
     RequestError,
+    get_connection_error_class,
     get_request_error_class,
 )
 from glide_shared.ffi_helpers import (
@@ -740,7 +741,11 @@ class BaseClient(CoreCommands):
                         if client_response.connection_error_message != self._ffi.NULL
                         else "Unknown error"
                     )
-                    raise ClosingError(error_message)
+                    error_class = get_connection_error_class(
+                        client_response.connection_error_type
+                    )
+                    self._lib.free_connection_response(client_response_ptr)
+                    raise error_class(error_message)
 
                 # Free the connection response to avoid memory leaks
                 self._lib.free_connection_response(client_response_ptr)
@@ -787,9 +792,12 @@ class BaseClient(CoreCommands):
                 if client_response.connection_error_message != self._ffi.NULL
                 else "Unknown error"
             )
+            error_class = get_connection_error_class(
+                client_response.connection_error_type
+            )
             credential_owner.close()
             self._lib.free_connection_response(client_response_ptr)
-            raise ClosingError(error_message)
+            raise error_class(error_message)
 
         core_client = client_response.conn_ptr
         self._lib.free_connection_response(client_response_ptr)

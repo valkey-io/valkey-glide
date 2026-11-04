@@ -18,9 +18,12 @@ from glide_shared.commands.core_options import (
 from glide_shared.config import (
     CompressionBackend,
     CompressionConfiguration,
+    GlideClientConfiguration,
+    NodeAddress,
     ProtocolVersion,
 )
 from glide_shared.constants import OK, TEncodable
+from glide_shared.exceptions import ClosingError
 from glide_sync import GlideClient, GlideClusterClient, TGlideClient
 from pytest import param
 
@@ -1916,3 +1919,19 @@ def assert_incompatible(exc_info: pytest.ExceptionInfo[Exception]) -> None:
     assert (
         "incompatible with compression" in error_msg
     ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+
+def test_invalid_compression_level_raises_closing_error():
+    """
+    The core rejects the level before connecting, so no server is needed. This error raised
+    ClosingError before 2.6 and must keep that type, unlike the core's newer configuration
+    checks, which raise ConfigurationError.
+    """
+    config = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1", 1)],
+        compression=CompressionConfiguration(
+            enabled=True, backend=CompressionBackend.ZSTD, compression_level=100
+        ),
+    )
+    with pytest.raises(ClosingError, match="compression"):
+        GlideClient.create(config)
