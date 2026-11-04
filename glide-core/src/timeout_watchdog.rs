@@ -1473,4 +1473,48 @@ mod tests {
             "slot was not zeroed in the child (raw wait status {status})"
         );
     }
+
+    /// Real fork() with no explicit reinit after it returns (the sync Python client's child
+    /// path): the fork reinit clears the inherited instance, so `global()` starts a fresh one
+    /// and a registration in the child still fires. Standalone requests rely on this: they arm
+    /// no other timer.
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn fork_child_global_replaces_inherited_watchdog() {
+        let _ = TimeoutWatchdog::global();
+        // SAFETY: the child only spawns a thread, allocates and calls `_exit`.
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0, "fork failed");
+        if pid == 0 {
+            // A child that hangs is killed by SIGALRM, failing the test instead of hanging it.
+            // SAFETY: async-signal-safe libc call.
+            unsafe { libc::alarm(10) };
+            let start = Instant::now();
+            let mut rx = TimeoutWatchdog::global().register(Duration::from_millis(20), start);
+            let code = loop {
+                match rx.try_recv() {
+                    Ok(()) if start.elapsed() >= Duration::from_millis(20) => break 0,
+                    Ok(()) => break 2, // fired early
+                    Err(_) if start.elapsed() > Duration::from_secs(5) => break 4,
+                    Err(_) => std::thread::sleep(Duration::from_millis(1)),
+                }
+            };
+            // SAFETY: terminate the forked child without running the parent's test harness.
+            unsafe { libc::_exit(code) };
+        }
+        let mut status = 0;
+        // SAFETY: `pid` is our child.
+        let waited = unsafe { libc::waitpid(pid, &mut status, 0) };
+        assert_eq!(waited, pid);
+        assert!(
+            libc::WIFEXITED(status),
+            "child did not exit cleanly: {status}"
+        );
+        assert_eq!(
+            libc::WEXITSTATUS(status),
+            0,
+            "child watchdog failed (2=early, 4=never fired)"
+        );
+    }
 }
