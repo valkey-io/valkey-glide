@@ -7,7 +7,7 @@ use std::borrow::Cow;
 use std::fmt;
 
 use crate::request_type::RequestType;
-use glide_logger::log_warn;
+use glide_logger::log_warn_rate_limited;
 use glide_telemetry::Telemetry;
 
 /// Detailed compression error with context for debugging
@@ -1015,7 +1015,7 @@ pub fn decompress_single_value_response(
 ///
 /// A plain value can begin with the magic header by coincidence, and the client cannot tell
 /// that from a corrupted compressed value, so a header that does not decode keeps its stored
-/// bytes. Only the size limit is an error.
+/// bytes.
 fn decompress_or_keep(
     bytes: &[u8],
     manager: &CompressionManager,
@@ -1027,9 +1027,10 @@ fn decompress_or_keep(
         Ok(decompressed) => Ok(Some(decompressed)),
         Err(CompressionError::SizeLimitExceeded(limit)) => Err(limit),
         Err(other) => {
-            log_warn(
+            log_warn_rate_limited!(
                 "decompression",
-                format!("Keeping stored bytes for a value with a compression header: {other}"),
+                5,
+                format!("Keeping stored bytes for a value with a compression header: {other}")
             );
             Ok(None)
         }
