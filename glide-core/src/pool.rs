@@ -476,9 +476,7 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
         client_id: guard_client_id,
     };
 
-    // Reset only the state the borrow dirtied: DISCARD a still-open MULTI, and
-    // SELECT back to the configured db if the borrow drifted off it. See
-    // `reset_connection_state`.
+    // Undo the borrow's state (see `reset_connection_state`); failure discards.
     let reset_result = tokio::time::timeout(
         timeout_duration,
         entry.client.reset_connection_state(configured_db),
@@ -2029,31 +2027,18 @@ mod client_pool_marking_tests {
         .expect("valid pool config")
     }
 
-    /// `reset_connection_state` must fail (so release discards the connection) when
-    /// DISCARD could not run while a MULTI was open — otherwise the connection is
-    /// reused with a still-open transaction and the next borrower's commands queue
-    /// into it. With no MULTI open, the DISCARD outcome is not load-bearing and is
-    /// ignored. Uses a lazy client to a dead port so DISCARD fails with a connection
-    /// error (not the expected "DISCARD without MULTI"), which must propagate.
+    /// A DISCARD failure other than "DISCARD without MULTI" must fail the reset, MULTI
+    /// open or not. A lazy client to a dead port makes DISCARD fail to connect.
     #[tokio::test]
-    async fn reset_fails_when_discard_fails_with_multi_open() {
-        // No MULTI open: the DISCARD outcome is not load-bearing, so reset succeeds
-        // regardless of the connection error.
-        let mut no_multi = lazy_client().await;
-        assert!(
-            no_multi.reset_connection_state(0).await.is_ok(),
-            "a DISCARD error with no MULTI open must be ignored"
-        );
-
-        // MULTI open + a connection error (not "DISCARD without MULTI") means the
-        // transaction may still be open, so reset must fail and the caller discards
-        // the connection.
-        let mut multi_open = lazy_client().await;
-        multi_open.set_multi_active_for_test(true);
-        assert!(
-            multi_open.reset_connection_state(0).await.is_err(),
-            "a DISCARD failure with MULTI open must propagate so the connection is not reused"
-        );
+    async fn reset_fails_when_discard_fails() {
+        for multi_open in [false, true] {
+            let mut client = lazy_client().await;
+            client.set_multi_active_for_test(multi_open);
+            assert!(
+                client.reset_connection_state(0).await.is_err(),
+                "multi_open={multi_open}: a DISCARD failure must propagate so the connection is not reused"
+            );
+        }
     }
 
     /// A client is not pool-managed until it enters the pool, and `add_client` must
@@ -2316,6 +2301,32 @@ mod scope_pool_tests {
                 .stderr(Stdio::null())
                 .spawn()
                 .expect("spawn redis-server for regression test");
+            Self { child, port }
+        }
+
+        /// Like [`start`], but as a replica of the server on `primary_port`.
+        fn start_replica_of(primary_port: u16) -> Self {
+            let port = get_available_port();
+            let child = Command::new("redis-server")
+                .args([
+                    "--port",
+                    &port.to_string(),
+                    "--daemonize",
+                    "no",
+                    "--save",
+                    "",
+                    "--appendonly",
+                    "no",
+                    "--bind",
+                    "127.0.0.1",
+                    "--replicaof",
+                    "127.0.0.1",
+                    &primary_port.to_string(),
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .expect("spawn redis-server replica for regression test");
             Self { child, port }
         }
 
@@ -3780,6 +3791,145 @@ mod scope_pool_tests {
             .reset_connection_state(0)
             .await
             .expect("a DISCARD-without-MULTI reply must be ignored, not propagated");
+    }
+
+    /// Release must discard a connection the borrow left unusable and still reuse a
+    /// clean one. `CLIENT REPLY OFF|SKIP` times out the reset; a RESP3 `SUBSCRIBE`
+    /// answers it normally, so only `subscribe_sent` catches it. The read-only cases
+    /// pin that read-only mode, which rejects DISCARD locally, still reuses a clean
+    /// connection. A-B: the dirty ones were re-idled when DISCARD errors counted
+    /// only with a MULTI open.
+    #[tokio::test]
+    async fn release_discards_a_connection_left_unusable() {
+        let cases: [(bool, &[&str], bool); 6] = [
+            (false, &["PING"], true),
+            (false, &["CLIENT", "REPLY", "SKIP"], false),
+            (false, &["CLIENT", "REPLY", "OFF"], false),
+            (false, &["SUBSCRIBE", "release-discard-test"], false),
+            (true, &["PING"], true),
+            (true, &["CLIENT", "REPLY", "OFF"], false),
+        ];
+        for (read_only, command, reused) in cases {
+            let server = TestServer::start();
+            wait_for_server_ready(server.port).await;
+
+            let mut client = {
+                let mut request = crate::client::ConnectionRequest::default();
+                request.addresses.push(crate::client::NodeAddress {
+                    host: "127.0.0.1".into(),
+                    port: server.port,
+                    unix_socket_path: None,
+                });
+                request.read_only = read_only;
+                crate::client::Client::new(request, None)
+                    .await
+                    .expect("client connects to the test server")
+            };
+            let pool_arc = Arc::new(TokioMutex::new(
+                super::ClientPool::new(super::PoolConfig {
+                    max_size: 1,
+                    min_idle: 0,
+                    idle_timeout: std::time::Duration::from_secs(60),
+                    request_timeout: std::time::Duration::from_secs(1),
+                    test_on_borrow: false,
+                    connection_request: Vec::new(),
+                    is_async: true,
+                    configured_database_id: 0,
+                    abandon_timeout: std::time::Duration::from_secs(300),
+                })
+                .expect("valid pool config"),
+            ));
+            let client_id = {
+                let mut pool = pool_arc.lock().await;
+                let id = pool.add_client(client.clone());
+                assert_eq!(pool.try_acquire(), id as i64);
+                id
+            };
+
+            let mut cmd = redis::cmd(command[0]);
+            for arg in &command[1..] {
+                cmd.arg(*arg);
+            }
+            let _ = client.send_command(&mut cmd, None).await;
+
+            super::release_client_async(pool_arc.clone(), client_id).await;
+            let mut pool = pool_arc.lock().await;
+            assert_eq!(
+                pool.idle_count(),
+                u32::from(reused),
+                "read_only={read_only} {command:?}: reused={reused} expected"
+            );
+            let _ = pool.drain_discarded_ids();
+        }
+    }
+
+    /// With replicas, a read-routed `CLIENT REPLY OFF` lands on a replica, but
+    /// standalone DISCARD reaches only the primary; release must still discard it.
+    /// A-B: re-idled when standalone skipped the all-nodes SELECT without db drift.
+    #[tokio::test]
+    async fn release_discards_a_replica_left_unusable() {
+        let primary = TestServer::start();
+        let replica = TestServer::start_replica_of(primary.port);
+        wait_for_server_ready(primary.port).await;
+        wait_for_server_ready(replica.port).await;
+
+        for (read_only, command, reused) in [
+            (false, &["PING"][..], true),
+            (false, &["CLIENT", "REPLY", "OFF"][..], false),
+            (true, &["PING"][..], true),
+            (true, &["CLIENT", "REPLY", "OFF"][..], false),
+        ] {
+            let mut client = {
+                let mut request = crate::client::ConnectionRequest::default();
+                for port in [primary.port, replica.port] {
+                    request.addresses.push(crate::client::NodeAddress {
+                        host: "127.0.0.1".into(),
+                        port,
+                        unix_socket_path: None,
+                    });
+                }
+                request.read_from = Some(crate::client::ReadFrom::PreferReplica);
+                request.read_only = read_only;
+                crate::client::Client::new(request, None)
+                    .await
+                    .expect("client connects to primary and replica")
+            };
+            let pool_arc = Arc::new(TokioMutex::new(
+                super::ClientPool::new(super::PoolConfig {
+                    max_size: 1,
+                    min_idle: 0,
+                    idle_timeout: std::time::Duration::from_secs(60),
+                    request_timeout: std::time::Duration::from_secs(1),
+                    test_on_borrow: false,
+                    connection_request: Vec::new(),
+                    is_async: true,
+                    configured_database_id: 0,
+                    abandon_timeout: std::time::Duration::from_secs(300),
+                })
+                .expect("valid pool config"),
+            ));
+            let client_id = {
+                let mut pool = pool_arc.lock().await;
+                let id = pool.add_client(client.clone());
+                assert_eq!(pool.try_acquire(), id as i64);
+                id
+            };
+
+            let mut cmd = redis::cmd(command[0]);
+            for arg in &command[1..] {
+                cmd.arg(*arg);
+            }
+            let _ = client.send_command(&mut cmd, None).await;
+
+            super::release_client_async(pool_arc.clone(), client_id).await;
+            let mut pool = pool_arc.lock().await;
+            assert_eq!(
+                pool.idle_count(),
+                u32::from(reused),
+                "read_only={read_only} {command:?}: reused={reused} expected"
+            );
+            let _ = pool.drain_discarded_ids();
+        }
     }
 
     /// End-to-end through the FFI entry `acquire_scope_outcome`, exercising the glue the
