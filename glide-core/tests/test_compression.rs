@@ -1534,26 +1534,37 @@ mod compression_tests {
         assert_eq!(values[1], Value::BulkString(plain.into()));
     }
 
-    /// The size limit is judged on the LZ4 size prefix before any decoding, so a plain value
-    /// whose four bytes after the header claim more than the limit is refused like a real
-    /// oversized value; the two are indistinguishable without decoding.
     #[test]
-    fn mget_reply_propagates_size_limit_claimed_by_lz4_header_shaped_plain() {
+    fn mget_reply_keeps_siblings_when_lz4_header_shaped_plain_claims_oversize() {
         let manager = zstd_manager();
         let original = "A".repeat(200).into_bytes();
         let compressed = manager.compress_value(&original).into_owned();
         let plain = header_shaped_plain(CompressionBackendType::Lz4.backend_id());
         assert!(u32::from_le_bytes(*b"zzzz") as usize > DEFAULT_MAX_DECOMPRESSED_SIZE);
 
-        let result = process_response_for_decompression(
-            Value::Array(vec![
+        let values = mget_reply(
+            &manager,
+            vec![
                 Value::BulkString(compressed.into()),
-                Value::BulkString(plain.into()),
-            ]),
-            RequestType::MGet,
-            Some(&manager),
+                Value::BulkString(plain.clone().into()),
+            ],
         );
-        assert!(matches!(result, Err(SizeLimitExceeded { .. })));
+        assert_eq!(values[0], Value::BulkString(original.into()));
+        assert_eq!(values[1], Value::BulkString(plain.into()));
+    }
+
+    #[test]
+    fn lz4_rejects_a_block_too_short_for_its_claimed_size_before_the_size_limit() {
+        let backend = Lz4Backend::new();
+        let mut value = create_header(CompressionBackendType::Lz4.backend_id()).to_vec();
+        value.extend_from_slice(&2_000u32.to_le_bytes());
+        value.extend_from_slice(b"zzzz");
+
+        let err = backend.decompress(&value, Some(1_000)).unwrap_err();
+        assert!(
+            matches!(err, CompressionError::DecompressionFailed { .. }),
+            "expected DecompressionFailed, got {err:?}"
+        );
     }
 
     // Assertion helpers --------------------------------------------------------------------------

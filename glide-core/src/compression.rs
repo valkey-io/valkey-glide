@@ -717,6 +717,11 @@ pub mod lz4_backend {
     const LZ4_MAX_LEVEL: i32 = 12; // Maximum for high compression mode
     const LZ4_DEFAULT_LEVEL: i32 = 0;
 
+    /// Upper bound on decompressed bytes per compressed byte of an LZ4 block. A match-length
+    /// extension byte adds at most 255 output bytes; every other field of a sequence (token,
+    /// literals, offset) produces fewer output bytes than it costs.
+    const LZ4_MAX_EXPANSION_RATIO: usize = 255;
+
     #[derive(Debug)]
     pub struct Lz4Backend {
         default_level: i32,
@@ -813,6 +818,25 @@ pub mod lz4_backend {
             let original_size_u32 =
                 u32::from_le_bytes([size_bytes[0], size_bytes[1], size_bytes[2], size_bytes[3]]);
             let compressed_block = &compressed_data[4..];
+
+            // A plain value that collides with the header has arbitrary bytes here. A claim no
+            // block of this length could produce is a decode failure, not an oversized value,
+            // so it is judged before the size limit.
+            let largest_possible_size = compressed_block
+                .len()
+                .saturating_mul(LZ4_MAX_EXPANSION_RATIO);
+            if original_size_u32 as usize > largest_possible_size {
+                return Err(CompressionError::decompression_failed(
+                    self.backend_name(),
+                    data.len(),
+                    format!(
+                        "claimed uncompressed size {} bytes exceeds the {} bytes a {}-byte LZ4 block can hold",
+                        original_size_u32,
+                        largest_possible_size,
+                        compressed_block.len()
+                    ),
+                ));
+            }
 
             // Validate size against max_decompressed_size BEFORE allocation
             // This prevents decompression bombs where a malicious header claims a huge size
