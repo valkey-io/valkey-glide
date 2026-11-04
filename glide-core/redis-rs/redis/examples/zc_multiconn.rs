@@ -62,7 +62,7 @@ fn main() {
         let payload = std::sync::Arc::new(vec![b'x'; size]);
 
         // Preload keys once.
-        let mut c0 = get_conn(&hostport).await;
+        let c0 = get_conn(&hostport).await;
         for i in 0..100usize {
             let mut cmd = redis::cmd("SET");
             cmd.arg(format!("zc:{i}")).arg(&payload[..]);
