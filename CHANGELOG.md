@@ -54,6 +54,10 @@
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 * Python, Go: a whitespace-only client AZ is now rejected for AZ-affinity read strategies, like an empty one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))
 
+### Changes
+
+* Core: In cluster mode, a single-node command whose primary connection is ready is sent from the caller's task instead of through the cluster event loop, outside recovery; an error from such an attempt goes through the event loop's retry handling as before. A connection's writer now waits one scheduling turn before flushing a small batch while other requests await replies, so concurrent requests share one write. `GLIDE_PIPELINE_COALESCE=0` turns that wait off ([#7532](https://github.com/valkey-io/valkey-glide/pull/7532))
+
 ## 2.6
 
 ### Features
