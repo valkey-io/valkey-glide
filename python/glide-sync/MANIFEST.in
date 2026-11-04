@@ -1,9 +1,10 @@
 include README.md
-# Ensure ffi, glide-core, glide-logger and glide-telemetry are included
+# Ensure ffi, glide-core, glide-logger, glide-telemetry and glide-rdma are included
 recursive-include ffi *
 recursive-include glide-core *
 recursive-include glide-logger *
 recursive-include glide-telemetry *
+recursive-include glide-rdma *
 recursive-include glide_shared *
 recursive-include glide-shared-rs *
 prune **/target

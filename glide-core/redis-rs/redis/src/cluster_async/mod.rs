@@ -609,6 +609,22 @@ where
             .map(|node_address| (*node_address).clone())
     }
 
+    /// Parses the redirect node of a MOVED/ASK error and resolves its address.
+    fn resolve_redirect_node(&self, redirect_node: Option<(&str, u16)>) -> Option<RedirectNode> {
+        RedirectNode::from_option_tuple(redirect_node).map(|mut redirect| {
+            redirect.address = self.resolve_address(&redirect.address);
+            redirect
+        })
+    }
+
+    /// Whether a resolved MOVED redirect points back to `address`, the node that sent it.
+    fn is_circular_moved(&self, redirect: Option<&RedirectNode>, address: &str) -> bool {
+        self.is_circular_moved_redirect_prepared(
+            redirect.map(|redirect| (redirect.address.as_str(), redirect.slot)),
+            ReadyToDialAddress::new(address.to_owned()),
+        )
+    }
+
     pub(crate) fn is_circular_moved_redirect_prepared(
         &self,
         resolved_redirect_node: Option<(&str, u16)>,
@@ -851,6 +867,17 @@ enum CmdArg<C> {
     },
     // Operational requests which are connected to the internal state of the connection and not send as a command to the server.
     OperationRequest(Operation),
+}
+
+impl<C> CmdArg<C> {
+    fn lends_memory(&self) -> bool {
+        match self {
+            CmdArg::Cmd { cmd, .. } => cmd
+                .command()
+                .is_some_and(|name| crate::cluster_routing::lends_memory(&name)),
+            _ => false,
+        }
+    }
 }
 
 // Operation requests which are connected to the internal state of the connection and not send as a command to the server.
@@ -1172,6 +1199,8 @@ mod iam_token_refresh_tests {
         provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
     ) -> GlideConnectionOptions {
         GlideConnectionOptions {
+            #[cfg(feature = "rdma")]
+            rdma_fabric: None,
             push_sender: None,
             disconnect_notifier: None,
             discover_az: false,
@@ -1285,6 +1314,46 @@ pin_project! {
     }
 }
 
+/// How a reconnect treats the existing connection to a node.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum ReconnectMode {
+    /// Keep the existing connection if it passes a health check.
+    CheckExisting,
+    /// Replace the existing connection even if it is healthy, e.g. after a circular MOVED from an
+    /// old instance kept alive behind the same endpoint.
+    Replace,
+}
+
+impl ReconnectMode {
+    /// The `(conn_type, existing_conn)` arguments for `trigger_refresh_connection_tasks`.
+    /// Replacing also replaces the management connection, which is attached to the same node.
+    pub(crate) fn refresh_args(self) -> (RefreshConnectionType, ExistingConnection) {
+        match self {
+            Self::CheckExisting => (
+                RefreshConnectionType::OnlyUserConnection,
+                ExistingConnection::HealthCheck,
+            ),
+            Self::Replace => (
+                RefreshConnectionType::AllConnections,
+                ExistingConnection::Replace,
+            ),
+        }
+    }
+}
+
+/// What a connection refresh does with the node's existing connections.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ExistingConnection {
+    /// Keep the existing connections if they pass a health check.
+    HealthCheck,
+    /// Don't reuse the existing connections, e.g. because there are none or they are closed;
+    /// join a refresh already in progress for the address.
+    Ignore,
+    /// Replace the existing connections even if they are healthy, superseding a refresh in
+    /// progress that may keep them.
+    Replace,
+}
+
 #[must_use]
 enum Next<C> {
     Retry {
@@ -1298,6 +1367,7 @@ enum Next<C> {
         // if not set, then a reconnect should happen without sending a request afterwards
         request: Option<PendingRequest<C>>,
         target: String,
+        mode: ReconnectMode,
     },
     RefreshSlots {
         // if not set, then a slot refresh should happen without sending a request afterwards
@@ -1373,16 +1443,29 @@ where
                     ) || matches!(target, OperationTarget::NotFound)
                     {
                         let core = this.core.clone();
-                        Next::RefreshSlots {
-                            request: None,
-                            sleep_duration: None,
-                            moved_redirect: RedirectNode::from_option_tuple(err.redirect_node())
-                                .map(|mut redirect| {
-                                    redirect.address = core.resolve_address(&redirect.address);
-                                    redirect
-                                }),
+                        let moved_redirect = core.resolve_redirect_node(err.redirect_node());
+                        match target {
+                            // Out of retries, but still replace the connection to the node that
+                            // redirects to itself, so that later requests don't reuse it.
+                            OperationTarget::Node { address }
+                                if matches!(retry_method, RetryMethod::MovedRedirect)
+                                    && core
+                                        .is_circular_moved(moved_redirect.as_ref(), &address) =>
+                            {
+                                Next::Reconnect {
+                                    request: None,
+                                    target: address,
+                                    mode: ReconnectMode::Replace,
+                                }
+                                .into()
+                            }
+                            _ => Next::RefreshSlots {
+                                request: None,
+                                sleep_duration: None,
+                                moved_redirect,
+                            }
+                            .into(),
                         }
-                        .into()
                     } else if matches!(retry_method, RetryMethod::Reconnect)
                         || matches!(retry_method, RetryMethod::ReconnectAndRetry)
                     {
@@ -1390,6 +1473,7 @@ where
                             Next::Reconnect {
                                 request: None,
                                 target: address,
+                                mode: ReconnectMode::CheckExisting,
                             }
                             .into()
                         } else {
@@ -1471,7 +1555,16 @@ where
                     format!("Received request error {} on node {:?}.", err, address)
                 );
 
-                match err.retry_method() {
+                let retry_method = match err.retry_method() {
+                    // The error does not say whether the server got the command. If
+                    // it did, it may still be using the client's memory, and a reply
+                    // to a second attempt would not say when the first one stops.
+                    RetryMethod::RetryImmediately if request.info.cmd.lends_memory() => {
+                        RetryMethod::NoRetry
+                    }
+                    retry_method => retry_method,
+                };
+                match retry_method {
                     RetryMethod::AskRedirect => {
                         let mut request = this.request.take().unwrap();
                         request
@@ -1483,27 +1576,19 @@ where
                     }
                     RetryMethod::MovedRedirect => {
                         let mut request = this.request.take().unwrap();
-                        let redirect_node = err.redirect_node();
                         let core = this.core.clone();
-                        let resolved_redirect_node = RedirectNode::from_option_tuple(redirect_node)
-                            .map(|mut redirect| {
-                                redirect.address = core.resolve_address(&redirect.address);
-                                redirect
-                            });
+                        let resolved_redirect_node =
+                            core.resolve_redirect_node(err.redirect_node());
 
                         // Check for circular MOVED and trigger reconnect if detected.
                         // The redirect is already resolved; normalize only the current address.
-                        if core.is_circular_moved_redirect_prepared(
-                            resolved_redirect_node
-                                .as_ref()
-                                .map(|redirect| (redirect.address.as_str(), redirect.slot)),
-                            ReadyToDialAddress::new(address.clone()),
-                        ) {
+                        if core.is_circular_moved(resolved_redirect_node.as_ref(), &address) {
                             // Reset routing and reconnect with retry
                             request.info.reset_routing();
                             return Next::Reconnect {
                                 request: Some(request),
                                 target: address,
+                                mode: ReconnectMode::Replace,
                             }
                             .into();
                         }
@@ -1553,6 +1638,7 @@ where
                         Next::Reconnect {
                             request: should_retry.then_some(request),
                             target: address,
+                            mode: ReconnectMode::CheckExisting,
                         }
                         .into()
                     }
@@ -1647,6 +1733,8 @@ where
         let connection_retry_strategy = cluster_params.reconnect_retry_strategy.unwrap_or_default();
 
         let glide_connection_options = GlideConnectionOptions {
+            #[cfg(feature = "rdma")]
+            rdma_fabric: cluster_params.rdma_fabric.clone(),
             push_sender,
             disconnect_notifier,
             discover_az,
@@ -1989,7 +2077,7 @@ where
                 inner.clone(),
                 addrs_to_refresh,
                 RefreshConnectionType::AllConnections,
-                false,
+                ExistingConnection::Ignore,
             )
             .await;
         }
@@ -2001,7 +2089,7 @@ where
         inner: Arc<InnerCore<C>>,
         addresses: HashSet<ClusterAddress>,
         conn_type: RefreshConnectionType,
-        check_existing_conn: bool,
+        existing_conn: ExistingConnection,
     ) {
         log_trace_lazy!(
             "cluster",
@@ -2011,7 +2099,7 @@ where
             inner.clone(),
             addresses,
             conn_type,
-            check_existing_conn,
+            existing_conn,
         )
         .await;
 
@@ -2035,7 +2123,7 @@ where
         inner: Arc<InnerCore<C>>,
         addresses: HashSet<ClusterAddress>,
         conn_type: RefreshConnectionType,
-        check_existing_conn: bool,
+        existing_conn: ExistingConnection,
     ) -> Vec<Arc<Notify>> {
         log_debug_lazy!(
             "cluster",
@@ -2053,10 +2141,15 @@ where
                 continue;
             }
             let mut conn_lock = inner.conn_lock.write();
+            // A request to replace the connection doesn't join a task that may keep the existing
+            // one; the new task supersedes it (dropping the old state aborts it and wakes waiters).
             let existing_task = conn_lock
                 .refresh_conn_state
                 .refresh_address_in_progress
                 .get(&address)
+                .filter(|task| {
+                    existing_conn != ExistingConnection::Replace || !task.may_keep_existing_conn
+                })
                 .map(|task| match &task.status {
                     RefreshTaskStatus::Reconnecting(notifier) => Some(notifier.get_notifier()),
                     RefreshTaskStatus::ReconnectingTooLong => {
@@ -2084,9 +2177,10 @@ where
 
             let mut node_option = conn_lock.remove_node(&address);
 
-            if !check_existing_conn {
+            if existing_conn != ExistingConnection::HealthCheck {
                 node_option = None;
             }
+            let may_keep_existing_conn = node_option.is_some();
 
             let notifier = RefreshTaskNotifier::new();
             notifiers.push(notifier.get_notifier());
@@ -2230,7 +2324,8 @@ where
             });
 
             // Keep the task handle and notifier into the RefreshState of this address
-            let refresh_task_state = RefreshTaskState::new(handle, notifier, task_identity);
+            let refresh_task_state =
+                RefreshTaskState::new(handle, notifier, task_identity, may_keep_existing_conn);
 
             conn_lock
                 .refresh_conn_state
@@ -2821,7 +2916,7 @@ where
                     inner,
                     failed,
                     RefreshConnectionType::OnlyManagementConnection,
-                    true,
+                    ExistingConnection::HealthCheck,
                 )
                 .await;
             }
@@ -3538,8 +3633,6 @@ where
                     // - For non-key-based commands, avoid attempting redirection to a random node
                     //   as it wouldn't result in MOVED hints and can lead to unwanted results
                     //   (e.g., sending management command to a different node than the user asked for); instead, raise the error.
-                    let mut conn_check = ConnectionCheck::RandomConnection;
-
                     let routable_cmd = cmd.and_then(|cmd| Routable::command(&*cmd));
                     if routable_cmd.is_some()
                         && !RoutingInfo::is_key_routing_command(&routable_cmd.unwrap())
@@ -3560,33 +3653,47 @@ where
                         )
                     );
 
-                    // Step 3: Obtain the reconnect notifier, ensuring the lock is released immediately after.
-                    let reconnect_notifier = {
-                        let conn_lock = core.conn_lock.read();
-                        conn_lock.notifier_for_route(&route).clone()
+                    // Step 3: Wait for any in-progress reconnect tasks for this route.
+                    // The node may be missing while its connection is being refreshed, e.g. replaced
+                    // after a circular MOVED or during topology reconnection. Register for each
+                    // notification under the same read guard as the lookup, so that no refresh-state
+                    // transition or superseding task can fire the notifier in between. Keep waiting
+                    // while a refresh for the route is still in progress across supersessions.
+                    let conn_option = loop {
+                        let refreshed = {
+                            let conn_lock = core.conn_lock.read();
+                            if let Some(found) = conn_lock.connection_for_route(&route) {
+                                break Some(found);
+                            }
+                            conn_lock
+                                .notifier_for_route(&route)
+                                .map(|notifier| notifier.notified_owned())
+                        };
+                        match refreshed {
+                            Some(refreshed) => {
+                                log_debug_lazy!(
+                                    "cluster",
+                                    format!("SpecificNode: Waiting on reconnect notifier for route `{route:?}`.")
+                                );
+                                refreshed.await;
+                                log_debug_lazy!(
+                                    "cluster",
+                                    format!("SpecificNode: Finished waiting on notifier for route `{route:?}`. Retrying connection lookup.")
+                                );
+                            }
+                            None => break None,
+                        }
                     };
 
-                    // Step 4: If a notifier exists, wait for it to signal completion.
-                    if let Some(notifier) = reconnect_notifier {
-                        log_debug_lazy!("cluster", format!("SpecificNode: Waiting on reconnect notifier for route `{route:?}`."));
-
-                        notifier.notified().await;
-
-                        log_debug_lazy!("cluster", format!("SpecificNode: Finished waiting on notifier for route `{route:?}`. Retrying connection lookup."));
-
-                        // Step 5: Retry the connection lookup after waiting for the reconnect task.
-                        if let Some((conn, address)) =
-                            core.conn_lock.read().connection_for_route(&route)
-                        {
-                            conn_check = ConnectionCheck::Found((conn, address));
-                        } else {
-                            log_debug_lazy!("cluster", format!("SpecificNode: No connection found for route `{route:?}` after waiting on reconnect notifier. Proceeding to random node."));
-                        }
+                    if let Some(found) = conn_option {
+                        ConnectionCheck::Found(found)
                     } else {
-                        log_debug_lazy!("cluster", format!("SpecificNode: No active reconnect task for route `{route:?}`. Proceeding to random node."));
+                        log_debug_lazy!(
+                            "cluster",
+                            format!("SpecificNode: No active reconnect task for route `{route:?}`. Proceeding to random node.")
+                        );
+                        ConnectionCheck::RandomConnection
                     }
-
-                    conn_check
                 }
             }
             InternalSingleNodeRouting::Random => ConnectionCheck::RandomConnection,
@@ -3594,7 +3701,26 @@ where
                 return Ok((address, conn.await));
             }
             InternalSingleNodeRouting::ByAddress(address) => {
-                let conn_option = core.conn_lock.read().connection_for_address(&address);
+                // The node may be missing while its connection is being refreshed, e.g. replaced
+                // after a circular MOVED. Wait for the refresh rather than failing the request,
+                // and keep waiting if a newer refresh supersedes it. Register for each
+                // notification under the same read guard as the lookup, so that no refresh-state
+                // write can fire the notifier in between.
+                let conn_option = loop {
+                    let refreshed = {
+                        let conn_lock = core.conn_lock.read();
+                        if let Some(found) = conn_lock.connection_for_address(&address) {
+                            break Some(found);
+                        }
+                        conn_lock
+                            .notifier_for_address(&address)
+                            .map(|notifier| notifier.notified_owned())
+                    };
+                    match refreshed {
+                        Some(refreshed) => refreshed.await,
+                        None => break None,
+                    }
+                };
                 if let Some((address, conn)) = conn_option {
                     return Ok((address, conn.await));
                 } else {
@@ -3619,7 +3745,7 @@ where
                     core.clone(),
                     HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
                     RefreshConnectionType::AllConnections,
-                    false,
+                    ExistingConnection::Ignore,
                 )
                 .await;
 
@@ -4109,9 +4235,13 @@ where
                         });
                     }
                 }
-                Next::Reconnect { request, target } => {
+                Next::Reconnect {
+                    request,
+                    target,
+                    mode,
+                } => {
                     poll_flush_action = poll_flush_action
-                        .change_state(PollFlushAction::Reconnect(HashSet::from_iter([target])));
+                        .change_state(PollFlushAction::Reconnect(HashMap::from([(target, mode)])));
                     if let Some(request) = request {
                         let _ = self.inner.pending_requests_tx.send(request);
                     }
@@ -4188,7 +4318,7 @@ fn prepare_initial_connection_addresses(
 enum PollFlushAction {
     None,
     RebuildSlots,
-    Reconnect(HashSet<String>),
+    Reconnect(HashMap<String, ReconnectMode>),
     ReconnectFromInitialConnections,
 }
 
@@ -4207,7 +4337,12 @@ impl PollFlushAction {
             }
 
             (PollFlushAction::Reconnect(mut addrs), PollFlushAction::Reconnect(new_addrs)) => {
-                addrs.extend(new_addrs);
+                for (address, mode) in new_addrs {
+                    let merged = addrs.entry(address).or_insert(mode);
+                    if mode == ReconnectMode::Replace {
+                        *merged = mode;
+                    }
+                }
                 Self::Reconnect(addrs)
             }
         }
@@ -4355,18 +4490,25 @@ where
                     "poll_flush: transitioning to Reconnect(addresses={:?}), in_flight_requests={}",
                     addresses, in_flight)
                 );
+                let mut addresses_by_mode = HashMap::<ReconnectMode, HashSet<_>>::new();
+                for (address, mode) in addresses {
+                    addresses_by_mode
+                        .entry(mode)
+                        .or_default()
+                        .insert(ClusterAddress::ReadyToDial(address));
+                }
                 let inner = self.inner.clone();
                 let handle = tokio::spawn(async move {
-                    ClusterConnInner::trigger_refresh_connection_tasks(
-                        inner,
-                        addresses
-                            .into_iter()
-                            .map(ClusterAddress::ReadyToDial)
-                            .collect(),
-                        RefreshConnectionType::OnlyUserConnection,
-                        true,
-                    )
-                    .await;
+                    for (mode, addresses) in addresses_by_mode {
+                        let (conn_type, existing_conn) = mode.refresh_args();
+                        ClusterConnInner::trigger_refresh_connection_tasks(
+                            inner.clone(),
+                            addresses,
+                            conn_type,
+                            existing_conn,
+                        )
+                        .await;
+                    }
                 });
                 self.state = ConnectionState::Recover(RecoverFuture::Reconnect(handle));
                 cx.waker().wake_by_ref();
@@ -4497,7 +4639,7 @@ where
                 inner.clone(),
                 addresses_needing_refresh.clone(),
                 RefreshConnectionType::AllConnections,
-                true,
+                ExistingConnection::HealthCheck,
             ),
         )
         .await;
@@ -6264,7 +6406,7 @@ pub(super) mod refresh_task_resolution_tests {
             core.clone(),
             HashSet::from([ClusterAddress::Raw(address.clone())]),
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Ignore,
         )
         .await;
 
@@ -6294,7 +6436,7 @@ pub(super) mod refresh_task_resolution_tests {
             core.clone(),
             HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Ignore,
         )
         .await;
 
@@ -6306,7 +6448,7 @@ pub(super) mod refresh_task_resolution_tests {
             core.clone(),
             HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Ignore,
         )
         .await;
 
@@ -6366,7 +6508,7 @@ pub(super) mod refresh_task_resolution_tests {
             core.clone(),
             HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Ignore,
         )
         .await;
         tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
@@ -6386,7 +6528,7 @@ pub(super) mod refresh_task_resolution_tests {
             core.clone(),
             HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Ignore,
         )
         .await;
         assert_eq!(old.len(), 1);
@@ -6454,14 +6596,7 @@ pub(super) mod refresh_task_resolution_tests {
         let _guard = gated_test_guard().await;
         let core = core_with_non_idempotent_resolver();
         let address = "resolved-node:6381".to_owned();
-        let identity = Arc::new(());
-        let state =
-            RefreshTaskState::new(tokio::spawn(async {}), RefreshTaskNotifier::new(), identity);
-        core.conn_lock
-            .write()
-            .refresh_conn_state
-            .refresh_address_in_progress
-            .insert(address.clone(), state);
+        insert_in_progress_refresh(&core, &address, false);
         core.conn_lock
             .write()
             .refresh_conn_state
@@ -6475,10 +6610,180 @@ pub(super) mod refresh_task_resolution_tests {
             core,
             HashSet::from([ClusterAddress::ReadyToDial(address)]),
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Ignore,
         )
         .await;
         assert!(notifiers.is_empty());
+    }
+
+    /// Inserts an in-progress refresh task for `address` and returns its identity.
+    fn insert_in_progress_refresh(
+        core: &Arc<InnerCore<RecordingConnection>>,
+        address: &str,
+        may_keep_existing_conn: bool,
+    ) -> Arc<()> {
+        let identity = Arc::new(());
+        let state = RefreshTaskState::new(
+            tokio::spawn(futures::future::pending()),
+            RefreshTaskNotifier::new(),
+            identity.clone(),
+            may_keep_existing_conn,
+        );
+        core.conn_lock
+            .write()
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .insert(address.to_owned(), state);
+        identity
+    }
+
+    fn refresh_is_same_generation(
+        core: &Arc<InnerCore<RecordingConnection>>,
+        address: &str,
+        identity: &Arc<()>,
+    ) -> bool {
+        core.conn_lock
+            .read()
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .get(address)
+            .expect("refresh state exists")
+            .is_same_generation(identity)
+    }
+
+    #[tokio::test]
+    async fn only_replace_supersedes_refresh_that_may_keep_existing_connection() {
+        let _guard = gated_test_guard().await;
+        let address = "resolved-node:6381";
+        for may_keep_existing_conn in [true, false] {
+            for existing_conn in [
+                ExistingConnection::HealthCheck,
+                ExistingConnection::Ignore,
+                ExistingConnection::Replace,
+            ] {
+                let core = core_with_non_idempotent_resolver();
+                let identity = insert_in_progress_refresh(&core, address, may_keep_existing_conn);
+
+                let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
+                    core.clone(),
+                    HashSet::from([ClusterAddress::ReadyToDial(address.to_owned())]),
+                    RefreshConnectionType::AllConnections,
+                    existing_conn,
+                )
+                .await;
+
+                let superseded =
+                    existing_conn == ExistingConnection::Replace && may_keep_existing_conn;
+                assert_eq!(notifiers.len(), 1);
+                assert_eq!(
+                    !refresh_is_same_generation(&core, address, &identity),
+                    superseded,
+                    "{existing_conn:?} with may_keep_existing_conn={may_keep_existing_conn}"
+                );
+            }
+        }
+    }
+
+    /// Completes an in-progress refresh: installs the connection, then drops the task state,
+    /// which wakes the waiters.
+    fn complete_refresh(core: &Arc<InnerCore<RecordingConnection>>, address: &str, port: u16) {
+        core.conn_lock
+            .read()
+            .replace_or_add_connection_for_address(address, recording_node(port));
+        core.conn_lock
+            .write()
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .remove(address);
+    }
+
+    fn get_connection_by_address(
+        core: &Arc<InnerCore<RecordingConnection>>,
+        address: &str,
+    ) -> Pin<Box<impl Future<Output = RedisResult<(String, RecordingConnection)>>>> {
+        Box::pin(ClusterConnInner::get_connection(
+            InternalSingleNodeRouting::ByAddress(address.to_owned()),
+            core.clone(),
+            None,
+        ))
+    }
+
+    #[tokio::test]
+    async fn by_address_routing_waits_for_in_progress_refresh() {
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381";
+
+        // Without a refresh in progress, a missing node fails right away.
+        let Some(Err(err)) = get_connection_by_address(&core, address).now_or_never() else {
+            panic!("expected no connection for the address");
+        };
+        assert_eq!(err.kind(), ErrorKind::ConnectionNotFoundForRoute);
+
+        // With a refresh in progress, e.g. replacing the connection after a circular MOVED,
+        // the lookup waits for it instead of failing.
+        insert_in_progress_refresh(&core, address, false);
+        let mut lookup = get_connection_by_address(&core, address);
+        assert!(
+            (&mut lookup).now_or_never().is_none(),
+            "lookup should wait for the refresh"
+        );
+
+        complete_refresh(&core, address, 6381);
+        let (found_address, connection) = lookup.await.expect("connection found after the refresh");
+        assert_eq!(found_address, address);
+        assert_eq!(connection.port, 6381);
+    }
+
+    #[tokio::test]
+    async fn by_address_routing_waits_across_superseded_refresh() {
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381";
+        insert_in_progress_refresh(&core, address, true);
+        let mut lookup = get_connection_by_address(&core, address);
+        assert!((&mut lookup).now_or_never().is_none());
+
+        // A newer refresh supersedes the first one, which wakes the waiters before the new
+        // connection exists. The lookup keeps waiting for the newer refresh.
+        insert_in_progress_refresh(&core, address, false);
+        assert!(
+            (&mut lookup).now_or_never().is_none(),
+            "lookup should wait for the superseding refresh"
+        );
+
+        complete_refresh(&core, address, 6381);
+        let (_, connection) = lookup.await.expect("connection found after the refresh");
+        assert_eq!(connection.port, 6381);
+    }
+
+    #[tokio::test]
+    async fn replace_request_supersedes_reconnecting_too_long_refresh_that_holds_node() {
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381";
+        let identity = insert_in_progress_refresh(&core, address, true);
+        core.conn_lock
+            .write()
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .get_mut(address)
+            .expect("refresh state inserted")
+            .status
+            .flip_status_to_too_long();
+
+        let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial(address.to_owned())]),
+            RefreshConnectionType::AllConnections,
+            ExistingConnection::Replace,
+        )
+        .await;
+        assert_eq!(notifiers.len(), 1);
+        assert!(
+            !refresh_is_same_generation(&core, address, &identity),
+            "a replace request must not keep a task that may reuse the stale node"
+        );
     }
 
     #[tokio::test]
@@ -6495,7 +6800,7 @@ pub(super) mod refresh_task_resolution_tests {
             core.clone(),
             addresses,
             RefreshConnectionType::AllConnections,
-            false,
+            ExistingConnection::Ignore,
         )
         .await;
         assert_eq!(
@@ -6593,5 +6898,88 @@ pub(super) mod refresh_task_resolution_tests {
                 .port,
             6390
         );
+    }
+
+    fn get_connection_by_specific_route(
+        core: &Arc<InnerCore<RecordingConnection>>,
+        route: Route,
+    ) -> Pin<Box<impl Future<Output = RedisResult<(String, RecordingConnection)>>>> {
+        Box::pin(ClusterConnInner::get_connection(
+            InternalSingleNodeRouting::SpecificNode(route),
+            core.clone(),
+            None,
+        ))
+    }
+
+    #[tokio::test]
+    async fn specific_node_routing_waits_for_in_progress_refresh() {
+        use crate::cluster_routing::{Route, SlotAddr};
+        use futures::FutureExt;
+
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381";
+        core.conn_lock.write().slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, address.to_owned(), vec![])],
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        let route = Route::new(0, SlotAddr::Master);
+
+        // Without a refresh in progress, a missing node fails right away.
+        let Some(Err(err)) = get_connection_by_specific_route(&core, route).now_or_never() else {
+            panic!("expected no connection for the route");
+        };
+        assert_eq!(err.kind(), ErrorKind::AllConnectionsUnavailable);
+
+        // With a refresh in progress for the route's address, the lookup waits for it.
+        insert_in_progress_refresh(&core, address, false);
+        let mut lookup = get_connection_by_specific_route(&core, route);
+        assert!(
+            (&mut lookup).now_or_never().is_none(),
+            "lookup should wait for the in-progress refresh"
+        );
+
+        complete_refresh(&core, address, 6381);
+        let (found_address, connection) = lookup.await.expect("connection found after refresh");
+        assert_eq!(found_address, address);
+        assert_eq!(connection.port, 6381);
+    }
+
+    #[tokio::test]
+    async fn specific_node_routing_waits_across_superseded_refresh() {
+        use crate::cluster_routing::{Route, SlotAddr};
+        use futures::FutureExt;
+
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381";
+        core.conn_lock.write().slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, address.to_owned(), vec![])],
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        let route = Route::new(0, SlotAddr::Master);
+
+        // Insert first in-progress refresh
+        insert_in_progress_refresh(&core, address, true);
+        let mut lookup = get_connection_by_specific_route(&core, route);
+        assert!((&mut lookup).now_or_never().is_none());
+
+        // A newer refresh supersedes the old one, which wakes the waiters before the new
+        // connection exists. The lookup keeps waiting for the newer refresh.
+        insert_in_progress_refresh(&core, address, false);
+        assert!(
+            (&mut lookup).now_or_never().is_none(),
+            "lookup should continue waiting for the superseding refresh"
+        );
+
+        // Complete the new refresh
+        complete_refresh(&core, address, 6381);
+        let (found_address, connection) = lookup
+            .await
+            .expect("connection found after superseding refresh");
+        assert_eq!(found_address, address);
+        assert_eq!(connection.port, 6381);
     }
 }

@@ -85,6 +85,26 @@ message CompressionConfig {
     optional uint64 max_decompressed_size = 5;
 }
 
+message EfaDirectProvider {
+}
+
+// Software-emulated transfers over TCP. For development and tests only.
+message TcpProvider {
+    // Source address to bind to. TCP binds an IP, unlike efa-direct.
+    optional string bind = 1;
+}
+
+// Direct memory access (RDMA-over-fabric) support.
+message RdmaConfig {
+    oneof provider {
+        EfaDirectProvider efa_direct = 1;
+        TcpProvider tcp = 2;
+    }
+    // Fabric domain to pin to when a host has more than one card.
+    // Unset takes the first the provider returns.
+    optional string interface = 3;
+}
+
 message PubSubChannelsOrPatterns
 {
     repeated bytes channels_or_patterns = 1;
@@ -161,6 +181,7 @@ message ConnectionRequest {
     // and the socket-listener path. Go and Python pass the callback directly
     // to create_client and do not set this field.
     optional string credential_provider_key = 35;
+    optional RdmaConfig rdma_config = 36;
 }
 
 // Configuration for automatic reloading of the mTLS client certificate and key

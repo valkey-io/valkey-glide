@@ -9,7 +9,7 @@ class BitmapIndexType(Enum):
     Enumeration specifying if index arguments are BYTE indexes or BIT indexes. Can be specified in `OffsetOptions`,
     which is an optional argument to the `BITCOUNT` command.
 
-    Since: Valkey version 7.0.0.
+    Since: Valkey 7.0.0.
     """
 
     BYTE = "BYTE"
@@ -31,7 +31,7 @@ class OffsetOptions:
 
     Attributes:
         start (int): The starting offset index.
-        end (Optional[int]): The ending offset index. Optional since Valkey version 8.0.0 and above for the BITCOUNT
+        end (Optional[int]): The ending offset index. Optional since Valkey 8.0.0 for the BITCOUNT
             command. If not provided, it will default to the end of the string.
         index_type (Optional[BitmapIndexType]): The index offset type. This option can only be specified if you are
             using Valkey version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.

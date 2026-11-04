@@ -821,6 +821,8 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<Object[]> scan(
             @NonNull GlideString cursor, @NonNull ScanOptions options) {
+        // TODO #7447: Use `options.toGlideStringArgs()`, so a binary match pattern is not converted
+        // lossily.
         GlideString[] arguments = new ArgsBuilder().add(cursor).add(options.toArgs()).toArray();
         return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponseBinary);
     }

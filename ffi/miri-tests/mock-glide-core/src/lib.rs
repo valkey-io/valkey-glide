@@ -7,6 +7,7 @@ pub mod compression;
 pub mod connection_request;
 pub mod errors;
 pub mod otel_db_semantics;
+pub mod pool;
 pub mod request_type;
 pub mod scripts_container;
 pub mod timeout_watchdog;
@@ -61,6 +62,11 @@ pub mod credential_provider_registry {
     pub fn remove(_key: &str) -> Option<CredentialsProvider> {
         None
     }
+}
+
+/// Re-exports the real rdma types that ffi/src/rdma_ffi.rs uses without the `rdma` feature.
+pub mod rdma {
+    pub use glide_core::rdma::RdmaUnavailable;
 }
 
 /// Mock iam module — minimal stubs needed by ffi/src/lib.rs for miri tests.

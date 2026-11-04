@@ -47,6 +47,7 @@ import {
     Score,
     ScoreFilter,
     Script,
+    SetOptions,
     SignedEncoding,
     SingleNodeRoute,
     SortOrder,
@@ -2629,6 +2630,113 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hsetex with key conditional changes_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.1.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const value1 = getRandomKey();
+
+                    // NX: key does not exist, so the hash is created
+                    const nxOptions = {
+                        keyConditionalChange:
+                            ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+                    };
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field1]: value1 },
+                            nxOptions,
+                        ),
+                    ).toEqual(1);
+                    expect(await client.hget(key, field1)).toEqual(value1);
+
+                    // NX: key now exists, so a second NX call should not modify the hash
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field1]: "should_not_be_set" },
+                            nxOptions,
+                        ),
+                    ).toEqual(0);
+                    expect(await client.hget(key, field1)).toEqual(value1);
+
+                    // XX: key exists, so the field is updated
+                    const xxOptions = {
+                        keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS,
+                    };
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field1]: "updated_value1" },
+                            xxOptions,
+                        ),
+                    ).toEqual(1);
+                    expect(await client.hget(key, field1)).toEqual(
+                        "updated_value1",
+                    );
+
+                    // XX: key does not exist, so the hash is not created
+                    const missingKey = getRandomKey();
+                    expect(
+                        await client.hsetex(
+                            missingKey,
+                            { [field1]: value1 },
+                            xxOptions,
+                        ),
+                    ).toEqual(0);
+                    expect(await client.exists([missingKey])).toEqual(0);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hsetex with all options_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.1.0")) {
+                        return;
+                    }
+
+                    const field1 = getRandomKey();
+                    const value1 = getRandomKey();
+
+                    // Key conditional change can be combined with field conditional change and expiry
+                    const combinedKey = getRandomKey();
+                    expect(
+                        await client.hsetex(
+                            combinedKey,
+                            { [field1]: value1 },
+                            {
+                                keyConditionalChange:
+                                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+                                fieldConditionalChange:
+                                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(1);
+                    const ttlResult = await client.httl(combinedKey, [field1]);
+                    expect(ttlResult.length).toEqual(1);
+                    expect(ttlResult[0]).toBeGreaterThan(0);
+                    expect(ttlResult[0]).toBeLessThanOrEqual(60);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hgetex basic functionality_%p`,
         async (protocol) => {
             await runTest(
@@ -2735,6 +2843,40 @@ export function runBaseTests(config: {
                     await expect(
                         client.hgetdel(stringKey, [field1]),
                     ).rejects.toThrow(RequestError);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `delifeq basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const value = getRandomKey();
+                    const wrongValue = getRandomKey();
+
+                    // Key does not exist yet
+                    expect(await client.delifeq(key, value)).toEqual(false);
+
+                    expect(await client.set(key, value)).toEqual("OK");
+
+                    // Value does not match - key remains
+                    expect(await client.delifeq(key, wrongValue)).toEqual(
+                        false,
+                    );
+                    expect(await client.get(key)).toEqual(value);
+
+                    // Value matches - key is deleted
+                    expect(await client.delifeq(key, value)).toEqual(true);
+                    expect(await client.get(key)).toEqual(null);
                 },
                 protocol,
             );
@@ -9652,30 +9794,56 @@ export function runBaseTests(config: {
 
     async function setWithOnlyIfEquals(client: BaseClient) {
         const key = getRandomKey();
-        const initialValue = getRandomKey();
-        const newValue = getRandomKey();
-        const setKey = await client.set(key, initialValue);
-        expect(setKey).toEqual("OK");
-        const getRes = await client.get(key);
-        expect(getRes).toEqual(initialValue);
+        expect(await client.set(key, "value")).toEqual("OK");
 
-        // Attempt to set with a non-matching value (should fail -> return null)
-        const conditionalSetFailResponse = await client.set(key, newValue, {
+        // Value not equal
+        expect(
+            await client.set(key, "other", {
+                conditionalSet: "onlyIfEqual",
+                comparisonValue: "other",
+            }),
+        ).toEqual(null);
+        expect(await client.get(key)).toEqual("value");
+
+        // Value equal
+        const options: SetOptions = {
             conditionalSet: "onlyIfEqual",
-            comparisonValue: newValue,
-        });
-        expect(conditionalSetFailResponse).toEqual(null);
+            comparisonValue: "value",
+        };
+        expect(await client.set(key, "other", options)).toEqual("OK");
+        expect(await client.get(key)).toEqual("other");
 
-        // Attempt to set with a matching value (should succeed -> return OK)
-        const conditionalSetSuccessResponse = await client.set(key, newValue, {
-            conditionalSet: "onlyIfEqual",
-            comparisonValue: initialValue,
-        });
-        expect(conditionalSetSuccessResponse).toEqual("OK");
+        // Non-existent key
+        const missing = getRandomKey();
+        expect(await client.set(missing, "value", options)).toEqual(null);
+        expect(await client.exists([missing])).toEqual(0);
+    }
 
-        // Retrieve the updated value of the key
-        const updatedGetResponse = await client.get(key);
-        expect(updatedGetResponse).toEqual(newValue);
+    async function setWithOnlyIfNotEquals(client: BaseClient) {
+        const key = getRandomKey();
+        expect(await client.set(key, "value")).toEqual("OK");
+
+        // Value equal
+        expect(
+            await client.set(key, "other", {
+                conditionalSet: "onlyIfNotEqual",
+                comparisonValue: "value",
+            }),
+        ).toEqual(null);
+        expect(await client.get(key)).toEqual("value");
+
+        // Value not equal
+        const options: SetOptions = {
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: "other",
+        };
+        expect(await client.set(key, "other", options)).toEqual("OK");
+        expect(await client.get(key)).toEqual("other");
+
+        // Non-existent key
+        const missing = getRandomKey();
+        expect(await client.set(missing, "value", options)).toEqual("OK");
+        expect(await client.get(missing)).toEqual("value");
     }
 
     async function setWithOnlyIfNotExistOptions(client: BaseClient) {
@@ -9783,6 +9951,47 @@ export function runBaseTests(config: {
         // current value of key should be newValue
         expect(setResFailedWithAllOptions).toEqual(newValue);
         // key should not be set. it remains the same
+        expect(await client.get(key)).toEqual(newValue);
+    }
+
+    async function setIfneWithAllOptions(client: BaseClient) {
+        const key = getRandomKey();
+        const initialValue = getRandomKey();
+        const newValue = getRandomKey();
+
+        await client.set(key, initialValue);
+        // set with multiple options:
+        // * only apply SET if the current value does not equal the comparison value
+        // * expires after 10 seconds
+        // * returns the old value
+        const wrongValue = "wrong value";
+        const setResWithAllOptions = await client.set(key, newValue, {
+            expiry: {
+                type: TimeUnit.UnixSeconds,
+                count: Math.floor(Date.now() / 1000) + 10,
+            },
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: wrongValue,
+            returnOldValue: true,
+        });
+        // initialValue is returned as the old value
+        expect(setResWithAllOptions).toEqual(initialValue);
+        // newValue is set as the key value
+        expect(await client.get(key)).toEqual(newValue);
+
+        // fail command
+        const setResFailedWithAllOptions = await client.set(key, wrongValue, {
+            expiry: {
+                type: TimeUnit.UnixSeconds,
+                count: Math.floor(Date.now() / 1000) + 10,
+            },
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: newValue,
+            returnOldValue: true,
+        });
+        // newValue is returned as the old value
+        expect(setResFailedWithAllOptions).toEqual(newValue);
+        // the key is not set, and remains newValue
         expect(await client.get(key)).toEqual(newValue);
     }
 
@@ -9896,6 +10105,11 @@ export function runBaseTests(config: {
                 if (!cluster.checkIfServerVersionLessThan("8.1.0")) {
                     await setWithOnlyIfEquals(client);
                     await setIfeqWithAllOptions(client);
+                }
+
+                if (!cluster.checkIfServerVersionLessThan("9.2.0")) {
+                    await setWithOnlyIfNotEquals(client);
+                    await setIfneWithAllOptions(client);
                 }
 
                 await testSetWithAllCombination(client, cluster);

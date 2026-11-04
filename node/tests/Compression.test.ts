@@ -12,6 +12,7 @@ import {
 } from "@jest/globals";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
+    BaseClient,
     BaseClientConfiguration,
     ClusterTransaction,
     CompressionBackend,
@@ -516,245 +517,66 @@ describe("Compression", () => {
 
     // --- Incompatible commands tests ---
 
-    it.each([false, true])(
-        "compression_append_incompatible cluster_mode=%p",
-        async (clusterMode) => {
-            client = await createCompressedClient(clusterMode, {
-                enabled: true,
-            });
-            const key = uniqueKey("append_test");
-            await client.set(key, "initial_value");
-
-            // APPEND should fail with compression enabled
-            await expect(client.append(key, "_appended")).rejects.toThrow(
-                RequestError,
-            );
-            await expect(client.append(key, "_appended")).rejects.toThrow(
-                /incompatible|compression/i,
-            );
+    /** Commands that are incompatible with compression, with their arguments after the key. */
+    const INCOMPATIBLE_COMMANDS: {
+        id: string;
+        method: keyof BaseClient;
+        args: unknown[];
+    }[] = [
+        { id: "append", method: "append", args: ["0"] },
+        { id: "bitcount", method: "bitcount", args: [] },
+        { id: "bitpos", method: "bitpos", args: [1] },
+        { id: "decr", method: "decr", args: [] },
+        { id: "decrby", method: "decrBy", args: [5] },
+        { id: "delifeq", method: "delifeq", args: ["value"] },
+        { id: "getbit", method: "getbit", args: [0] },
+        { id: "getrange", method: "getrange", args: [0, 0] },
+        { id: "incr", method: "incr", args: [] },
+        { id: "incrby", method: "incrBy", args: [5] },
+        { id: "incrbyfloat", method: "incrByFloat", args: [0.5] },
+        {
+            id: "set_ifeq",
+            method: "set",
+            args: [
+                "20",
+                { conditionalSet: "onlyIfEqual", comparisonValue: "10" },
+            ],
         },
-        TIMEOUT,
-    );
-
-    it.each([false, true])(
-        "compression_getrange_incompatible cluster_mode=%p",
-        async (clusterMode) => {
-            client = await createCompressedClient(clusterMode, {
-                enabled: true,
-            });
-            const key = uniqueKey("getrange_test");
-            await client.set(key, TEXT_1K);
-
-            // GETRANGE should fail with compression enabled
-            await expect(client.getrange(key, 0, 10)).rejects.toThrow(
-                RequestError,
-            );
-            await expect(client.getrange(key, 0, 10)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
+        {
+            id: "set_ifne",
+            method: "set",
+            args: [
+                "20",
+                { conditionalSet: "onlyIfNotEqual", comparisonValue: "20" },
+            ],
         },
-        TIMEOUT,
-    );
+        { id: "setbit", method: "setbit", args: [0, 1] },
+        { id: "setrange", method: "setrange", args: [1, "5"] },
+        { id: "strlen", method: "strlen", args: [] },
+    ];
 
-    it.each([false, true])(
-        "compression_setrange_incompatible cluster_mode=%p",
-        async (clusterMode) => {
+    it.each(
+        [false, true].flatMap((clusterMode) =>
+            INCOMPATIBLE_COMMANDS.map((command) => ({
+                clusterMode,
+                ...command,
+            })),
+        ),
+    )(
+        "compression_incompatible_command $id cluster_mode=$clusterMode",
+        async ({ clusterMode, method, args }) => {
             client = await createCompressedClient(clusterMode, {
                 enabled: true,
             });
-            const key = uniqueKey("setrange_test");
-            await client.set(key, TEXT_1K);
 
-            // SETRANGE should fail with compression enabled
-            await expect(
-                client.setrange(key, 5, "replacement"),
-            ).rejects.toThrow(RequestError);
-            await expect(
-                client.setrange(key, 5, "replacement"),
-            ).rejects.toThrow(/incompatible|compression/i);
-        },
-        TIMEOUT,
-    );
+            const command = client[method] as (
+                ...args: unknown[]
+            ) => Promise<unknown>;
+            const result = command.call(client, "key", ...args);
 
-    it.each([false, true])(
-        "compression_strlen_incompatible cluster_mode=%p",
-        async (clusterMode) => {
-            client = await createCompressedClient(clusterMode, {
-                enabled: true,
-            });
-            const key = uniqueKey("strlen_test");
-            await client.set(key, TEXT_1K);
-
-            // STRLEN should fail with compression enabled
-            await expect(client.strlen(key)).rejects.toThrow(RequestError);
-            await expect(client.strlen(key)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
-        },
-        TIMEOUT,
-    );
-
-    it.each([false, true])(
-        "compression_incr_incompatible cluster_mode=%p",
-        async (clusterMode) => {
-            client = await createCompressedClient(clusterMode, {
-                enabled: true,
-            });
-            const key = uniqueKey("incr_test");
-            await client.set(key, "100");
-
-            // INCR should fail with compression enabled
-            await expect(client.incr(key)).rejects.toThrow(RequestError);
-            await expect(client.incr(key)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
-        },
-        TIMEOUT,
-    );
-
-    it.each([false, true])(
-        "compression_incrby_incompatible cluster_mode=%p",
-        async (clusterMode) => {
-            client = await createCompressedClient(clusterMode, {
-                enabled: true,
-            });
-            const key = uniqueKey("incrby_test");
-            await client.set(key, "100");
-
-            // INCRBY should fail with compression enabled
-            await expect(client.incrBy(key, 10)).rejects.toThrow(RequestError);
-            await expect(client.incrBy(key, 10)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
-        },
-        TIMEOUT,
-    );
-
-    it.each([false, true])(
-        "compression_incrbyfloat_incompatible cluster_mode=%p",
-        async (clusterMode) => {
-            client = await createCompressedClient(clusterMode, {
-                enabled: true,
-            });
-            const key = uniqueKey("incrbyfloat_test");
-            await client.set(key, "100.5");
-
-            // INCRBYFLOAT should fail with compression enabled
-            await expect(client.incrByFloat(key, 0.5)).rejects.toThrow(
-                RequestError,
-            );
-            await expect(client.incrByFloat(key, 0.5)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
-        },
-        TIMEOUT,
-    );
-
-    it.each([false, true])(
-        "compression_decr_incompatible cluster_mode=%p",
-        async (clusterMode) => {
-            client = await createCompressedClient(clusterMode, {
-                enabled: true,
-            });
-            const key = uniqueKey("decr_test");
-            await client.set(key, "100");
-
-            // DECR should fail with compression enabled
-            await expect(client.decr(key)).rejects.toThrow(RequestError);
-            await expect(client.decr(key)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
-        },
-        TIMEOUT,
-    );
-
-    it.each([false, true])(
-        "compression_decrby_incompatible cluster_mode=%p",
-        async (clusterMode) => {
-            client = await createCompressedClient(clusterMode, {
-                enabled: true,
-            });
-            const key = uniqueKey("decrby_test");
-            await client.set(key, "100");
-
-            // DECRBY should fail with compression enabled
-            await expect(client.decrBy(key, 10)).rejects.toThrow(RequestError);
-            await expect(client.decrBy(key, 10)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
-        },
-        TIMEOUT,
-    );
-
-    it.each([false, true])(
-        "compression_getbit_incompatible cluster_mode=%p",
-        async (clusterMode) => {
-            client = await createCompressedClient(clusterMode, {
-                enabled: true,
-            });
-            const key = uniqueKey("getbit_test");
-            await client.set(key, "test_value");
-
-            // GETBIT should fail with compression enabled
-            await expect(client.getbit(key, 0)).rejects.toThrow(RequestError);
-            await expect(client.getbit(key, 0)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
-        },
-        TIMEOUT,
-    );
-
-    it.each([false, true])(
-        "compression_setbit_incompatible cluster_mode=%p",
-        async (clusterMode) => {
-            client = await createCompressedClient(clusterMode, {
-                enabled: true,
-            });
-            const key = uniqueKey("setbit_test");
-            await client.set(key, "test_value");
-
-            // SETBIT should fail with compression enabled
-            await expect(client.setbit(key, 0, 1)).rejects.toThrow(
-                RequestError,
-            );
-            await expect(client.setbit(key, 0, 1)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
-        },
-        TIMEOUT,
-    );
-
-    it.each([false, true])(
-        "compression_bitcount_incompatible cluster_mode=%p",
-        async (clusterMode) => {
-            client = await createCompressedClient(clusterMode, {
-                enabled: true,
-            });
-            const key = uniqueKey("bitcount_test");
-            await client.set(key, "test_value");
-
-            // BITCOUNT should fail with compression enabled
-            await expect(client.bitcount(key)).rejects.toThrow(RequestError);
-            await expect(client.bitcount(key)).rejects.toThrow(
-                /incompatible|compression/i,
-            );
-        },
-        TIMEOUT,
-    );
-
-    it.each([false, true])(
-        "compression_bitpos_incompatible cluster_mode=%p",
-        async (clusterMode) => {
-            client = await createCompressedClient(clusterMode, {
-                enabled: true,
-            });
-            const key = uniqueKey("bitpos_test");
-            await client.set(key, "test_value");
-
-            // BITPOS should fail with compression enabled
-            await expect(client.bitpos(key, 1)).rejects.toThrow(RequestError);
-            await expect(client.bitpos(key, 1)).rejects.toThrow(
-                /incompatible|compression/i,
+            await expect(result).rejects.toThrow(RequestError);
+            await expect(result).rejects.toThrow(
+                /incompatible with compression/i,
             );
         },
         TIMEOUT,
@@ -800,6 +622,11 @@ describe("Compression", () => {
             // SETRANGE
             expect(await client.setrange(key, 6, "WORLD")).toBe(11);
 
+            // DELIFEQ
+            if (!standaloneCluster.checkIfServerVersionLessThan("9.0.0")) {
+                await client.delifeq(key, "value");
+            }
+
             // GETBIT
             await client.set(key, "\x00");
             expect(await client.getbit(key, 0)).toBe(0);
@@ -809,6 +636,28 @@ describe("Compression", () => {
 
             // BITCOUNT
             expect(await client.bitcount(key)).toBeGreaterThanOrEqual(0);
+
+            // SET with IFEQ
+            if (!standaloneCluster.checkIfServerVersionLessThan("8.1.0")) {
+                await client.set(key, "hello");
+                expect(
+                    await client.set(key, "world", {
+                        conditionalSet: "onlyIfEqual",
+                        comparisonValue: "hello",
+                    }),
+                ).toBe("OK");
+            }
+
+            // SET with IFNE
+            if (!standaloneCluster.checkIfServerVersionLessThan("9.2.0")) {
+                await client.set(key, "hello");
+                expect(
+                    await client.set(key, "world", {
+                        conditionalSet: "onlyIfNotEqual",
+                        comparisonValue: "world",
+                    }),
+                ).toBe("OK");
+            }
         },
         TIMEOUT,
     );

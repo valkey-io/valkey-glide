@@ -21,6 +21,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -298,6 +299,12 @@ def get_random_string(length):
     letters = string.ascii_letters + string.digits
     result_str = "".join(random.choice(letters) for i in range(length))
     return result_str
+
+
+class NodeCheck(Enum):
+    READY = "ready"
+    PORT_TAKEN = "port taken"
+    NO_VERDICT = "no verdict"
 
 
 class Server:
@@ -634,17 +641,45 @@ def create_servers(
             )
         )
     # Check all servers
+    replacements_left = nodes_count
     while len(servers_to_check) > 0:
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
-        if is_address_already_in_use(server, f"{node_folder}/server.log"):
-            remove_folder(node_folder)
-            if ports is not None:
-                # The user passed a taken port, exit with an error
+        verdict = check_node_startup(server, f"{node_folder}/server.log")
+        # Only a node that reported Ready goes to --cluster create: a PING answer
+        # from the port does not prove it is this node's.
+        if verdict is not NodeCheck.READY:
+            if verdict is NodeCheck.NO_VERDICT:
+                # Still running, and would keep going with its data directory
+                # deleted underneath it.
+                if server.process_id() > 0:
+                    try:
+                        os.kill(server.process_id(), signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                else:
+                    logging.warning(
+                        f"Server {server} never logged its pid; it may still be running after {node_folder} is removed"
+                    )
+                failure = "it never reported Ready"
+            else:
+                failure = "address already in use"
+            # A failure a new port cannot fix (a bad --load-module path, a config
+            # the engine rejects) would otherwise be replaced forever, with the
+            # log that explains it deleted on every round.
+            if ports is not None or replacements_left == 0:
+                if verdict is NodeCheck.PORT_TAKEN:
+                    # The port belongs to another server now, and the failure
+                    # cleanup sends SHUTDOWN to every port it finds a node folder for.
+                    remove_folder(node_folder)
+                    detail = ""
+                else:
+                    detail = f".\nSee {node_folder}/server.log for more information"
                 raise Exception(
-                    f"Couldn't start server on {server.host}:{server.port}, address already in use"
+                    f"Couldn't start server on {server.host}:{server.port}, {failure}{detail}"
                 )
-            # The port was already taken, try to find a new free one
+            replacements_left -= 1
+            remove_folder(node_folder)
             servers_to_check.add(
                 start_server(
                     server.host,
@@ -977,12 +1012,12 @@ def wait_for_regex_in_log(
     return None
 
 
-def is_address_already_in_use(
+def check_node_startup(
     server: Server,
     log_file: str,
-    timeout: int = 10,
-):
-    logging.debug(f"checking is address already bind for: {server}")
+    timeout: float = 10,
+) -> NodeCheck:
+    logging.debug(f"reading startup log of {server}")
     timeout_start = time.time()
     address_in_use_errors = [
         "Address already in use",
@@ -999,17 +1034,17 @@ def is_address_already_in_use(
             # Check for known error message variants because different C libraries
             if any(error_msg in server_log for error_msg in address_in_use_errors):
                 logging.debug(f"Address is already bind for server {server}")
-                return True
+                return NodeCheck.PORT_TAKEN
             elif "Ready" in server_log:
                 logging.debug(f"Address is free for server {server}!")
-                return False
+                return NodeCheck.READY
             else:
                 time.sleep(0.1)
                 continue
-    logging.warn(
-        f"Timeout exceeded trying to check if address already in use for server {server}!"
+    logging.warning(
+        f"Server {server} reported neither Ready nor a bind error within {timeout}s"
     )
-    return False
+    return NodeCheck.NO_VERDICT
 
 
 def dir_path(path: str):

@@ -228,7 +228,13 @@ def copy_readme_to_package(package_dir: Path) -> None:
     copy2(source, dest)
 
 
-def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
+def install_glide_shared(
+    env: Dict[str, str], release: bool = False, ffi_features: str = ""
+) -> Path:
+    """
+    Installs glide-shared, builds the FFI library, and copies it into glide_shared.
+    Returns the path of the built FFI library.
+    """
     cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop", "--locked"]
     if release:
         cmd += ["--release"]
@@ -242,40 +248,35 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
     )
 
     # Build the FFI library and copy to glide_shared so it can be found
-    # without requiring glide-sync to be installed.
-    #
-    # Always runs the build and re-copies the result, rather than skipping
-    # it whenever `dest` already exists. Cargo's own incremental build
-    # makes a no-op rebuild cheap, and the previous
-    # exists()-only check meant any FFI/glide-core source change was
-    # silently never picked up here once a copy had been produced once --
-    # a stale cdylib that still LOOKED like it had been "installed" kept
-    # custom_command conversions running against old Rust logic (e.g. the
-    # WITHSCORES/cursor-wrapper conversions added for 1.3) while every
-    # pyo3-based signal (module path, mtime of the pyo3 .so) looked fresh,
-    # because the pyo3 extension and this cdylib are two separate build
-    # artifacts entirely.
-    #
-    # `cargo rustc --lib --crate-type cdylib --locked` (not a plain `cargo
-    # build`) matches build_sync_client's own FFI build command below --
-    # `--crate-type cdylib` selects just the dynamic library target instead
-    # of whatever the crate's Cargo.toml's default crate-type list produces
-    # (relevant because this FFI crate is also built as a staticlib for
-    # some other callers), and `--locked` keeps every build here
-    # reproducible against Cargo.lock instead of silently re-resolving.
-    ffi_output_dir = FFI_OUTPUT_DIR_RELEASE if release else FFI_OUTPUT_DIR_DEBUG
-    ffi_build_cmd = ["cargo", "rustc", "--lib", "--crate-type", "cdylib", "--locked"]
+    # without requiring glide-sync to be installed. Always rebuild so
+    # the installed library reflects the latest `glide-core` and `ffi`.
+    # `cargo` builds incrementally, so this is fast when nothing has changed.
+    ffi_build_cmd = [
+        "cargo",
+        "rustc",
+        "--lib",
+        "--crate-type",
+        "cdylib",
+        "--locked",
+    ]
+
     if release:
         ffi_build_cmd += ["--release"]
+    if ffi_features:
+        ffi_build_cmd += ["--features", ffi_features]
+
     run_command(
         ffi_build_cmd,
         cwd=FFI_DIR,
         env=shared_env,
-        label="build FFI library",
+        label=f"build FFI library{f' ({ffi_features})' if ffi_features else ''}",
     )
+
+    ffi_output_dir = FFI_OUTPUT_DIR_RELEASE if release else FFI_OUTPUT_DIR_DEBUG
     ffi_lib_path = find_libglide_ffi(ffi_output_dir)
-    dest = SHARED_PACKAGE_DIR / ffi_lib_path.name
-    copy2(ffi_lib_path, dest)
+    copy2(ffi_lib_path, SHARED_PACKAGE_DIR / ffi_lib_path.name)
+
+    return ffi_lib_path
 
 
 def build_async_client_wheel(
@@ -335,6 +336,7 @@ def build_async_client(
     no_cache: bool = False,
     wheel: bool = False,
     features: Optional[str] = None,
+    ffi_features: str = "",
 ) -> None:
     print(
         f"[INFO] Building async client with version={glide_version} in {'release' if release else 'debug'} mode..."
@@ -348,7 +350,7 @@ def build_async_client(
             "GLIDE_VERSION": glide_version,
         }
     )
-    install_glide_shared(env, release=release)
+    install_glide_shared(env, release=release, ffi_features=ffi_features)
     generate_protobuf_files()
 
     if wheel:
@@ -403,13 +405,21 @@ def build_sync_client_wheel(env: Dict[str, str]) -> None:
 
 
 def build_sync_client(
-    glide_version: str, release: bool, no_cache: bool, wheel: bool = False
+    glide_version: str,
+    release: bool,
+    no_cache: bool,
+    wheel: bool = False,
+    ffi_features: str = "",
 ) -> None:
     print(
         f"[INFO] Building sync client with version={glide_version} in {'release' if release else 'debug'} mode..."
     )
-    generate_protobuf_files()
+    # The venv comes first: protobuf generation runs protoc-gen-mypy out of it,
+    # so generating beforehand fails on a host that has no venv yet. Building
+    # every client hides this, because the async build creates the venv before
+    # this one runs.
     env = activate_venv(no_cache)
+    generate_protobuf_files()
     env["GLIDE_VERSION"] = glide_version
     if release:
         env["RELEASE_MODE"] = "1"
@@ -423,37 +433,21 @@ def build_sync_client(
             env=env,
         )
 
+    if ffi_features:
+        # setup.py reads this for the sdist/wheel path.
+        env["GLIDE_SYNC_RDMA"] = "1"
+
     if wheel:
         return build_sync_client_wheel(env)
 
-    install_glide_shared(env, release=release)
+    libglide_ffi_path = install_glide_shared(
+        env, release=release, ffi_features=ffi_features
+    )
     env.update(
         {  # Update it with your GLIDE variables
             "GLIDE_VERSION": glide_version,
         }
     )
-    # Build the FFI library
-    build_args = ["cargo", "rustc", "--lib", "--crate-type", "cdylib", "--locked"]
-    if release:
-        build_args += ["--release"]
-
-    run_command(
-        build_args,
-        cwd=FFI_DIR,
-        label="Build the FFI rust library",
-        env=env,
-    )
-
-    # Locate the FFI library output file
-    libglide_ffi_path = (
-        find_libglide_ffi(FFI_OUTPUT_DIR_RELEASE)
-        if release
-        else find_libglide_ffi(FFI_OUTPUT_DIR_DEBUG)
-    )
-    if not libglide_ffi_path.exists():
-        raise FileNotFoundError(
-            f"Expected shared object not found at {libglide_ffi_path}"
-        )
 
     # Copy to glide_sync package dir
     dest_path = SYNC_FFI_LIB
@@ -599,6 +593,7 @@ Examples:
     python dev.py build                                   # Build the async client in debug mode
     python dev.py build --client async --mode release     # Build the async client in release mode
     python dev.py build --client sync                     # Build the sync client
+    python dev.py build --client sync --rdma              # Build the sync client with RDMA
     python dev.py protobuf                                # Generate Python protobuf files (.py and .pyi)
     python dev.py lint                                    # Run Python linters
     python dev.py test                                    # Run all tests
@@ -649,6 +644,11 @@ Examples:
     build_parser.add_argument(
         "--features", help="Comma separated list of features for maturin", default=""
     )
+    build_parser.add_argument(
+        "--rdma",
+        action="store_true",
+        help="Build the FFI library with RDMA support (sync client only).",
+    )
 
     subparsers.add_parser(
         "protobuf", help="Generate Python protobuf files including .pyi stubs"
@@ -693,12 +693,15 @@ Examples:
         no_cache = args.no_cache
         wheel = args.wheel
         features = args.features
+        ffi_features = "rdma" if args.rdma else ""
         if args.client in (ClientTarget.ASYNC, ClientTarget.ALL):
             print(f"🛠 Building async client ({args.mode} mode)...")
-            build_async_client(version, release, no_cache, wheel, features)
+            build_async_client(
+                version, release, no_cache, wheel, features, ffi_features
+            )
         if args.client in (ClientTarget.SYNC, ClientTarget.ALL):
             print(f"🛠 Building sync client ({args.mode} mode)...")
-            build_sync_client(version, release, no_cache, wheel)
+            build_sync_client(version, release, no_cache, wheel, ffi_features)
 
     elif args.command == "protobuf":
         print("📦 Generating protobuf Python files...")
