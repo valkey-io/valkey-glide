@@ -392,8 +392,9 @@ impl aio::ConnectionLike for MockConnection {
         };
         // The handler runs when the command is sent, as a real connection writes it into its
         // pipeline channel. Waiting for the reply then takes a unit of the task's tokio
-        // cooperative budget, as a real connection's reply channel does, so a task that sends
-        // many commands in one poll (the cluster event loop) yields after about 128 of them.
+        // cooperative budget, as a real connection's reply channel does: a request polled after
+        // about 128 others in one task poll sends its command, then returns Pending (tokio defers
+        // its wake to the end of the task poll).
         let result = (self.handler)(&packed, self.port);
         ASKED_IN_SAME_WRITE.with(|asked| asked.set(false));
         let result = result
