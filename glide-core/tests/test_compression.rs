@@ -1386,6 +1386,135 @@ mod compression_tests {
         assert_eq!(result.unwrap(), test_data_bytes);
     }
 
+    // Multi-value replies ----------------------------------------------------------------------
+
+    /// A plain value with a valid header whose payload no backend can decode.
+    fn header_shaped_plain(backend_id: u8) -> Vec<u8> {
+        let mut bytes = create_header(backend_id).to_vec();
+        bytes.extend_from_slice(b"zzzz");
+        bytes
+    }
+
+    fn zstd_manager() -> CompressionManager {
+        let config = CompressionConfig::new(CompressionBackendType::Zstd);
+        CompressionManager::new(Box::new(ZstdBackend::new()), config).unwrap()
+    }
+
+    fn mget_reply(manager: &CompressionManager, reply: Vec<Value>) -> Vec<Value> {
+        match process_response_for_decompression(
+            Value::Array(reply),
+            RequestType::MGet,
+            Some(manager),
+        )
+        .expect("MGET reply should decompress")
+        {
+            Value::Array(values) => values,
+            other => panic!("expected array, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn mget_reply_keeps_siblings_when_one_element_mimics_header() {
+        let manager = zstd_manager();
+        let original = "A".repeat(200).into_bytes();
+        let compressed = manager.compress_value(&original).into_owned();
+        assert!(has_magic_header(&compressed));
+        let plain = header_shaped_plain(CompressionBackendType::Zstd.backend_id());
+
+        let values = mget_reply(
+            &manager,
+            vec![
+                Value::BulkString(compressed.clone().into()),
+                Value::BulkString(plain.clone().into()),
+            ],
+        );
+        assert_eq!(values[0], Value::BulkString(original.clone().into()));
+        assert_eq!(values[1], Value::BulkString(plain.clone().into()));
+
+        let values = mget_reply(
+            &manager,
+            vec![
+                Value::BulkString(plain.clone().into()),
+                Value::BulkString(compressed.into()),
+            ],
+        );
+        assert_eq!(values[0], Value::BulkString(plain.into()));
+        assert_eq!(values[1], Value::BulkString(original.into()));
+    }
+
+    #[test]
+    fn mget_reply_keeps_siblings_when_one_element_names_unknown_backend() {
+        let manager = zstd_manager();
+        let original = "A".repeat(200).into_bytes();
+        let compressed = manager.compress_value(&original).into_owned();
+        let plain = header_shaped_plain(0x7f);
+
+        let values = mget_reply(
+            &manager,
+            vec![
+                Value::BulkString(compressed.into()),
+                Value::BulkString(plain.clone().into()),
+            ],
+        );
+        assert_eq!(values[0], Value::BulkString(original.into()));
+        assert_eq!(values[1], Value::BulkString(plain.into()));
+    }
+
+    #[test]
+    fn batch_reply_keeps_siblings_when_one_element_mimics_header() {
+        let manager = zstd_manager();
+        let original = "A".repeat(200).into_bytes();
+        let compressed = manager.compress_value(&original).into_owned();
+        let plain = header_shaped_plain(CompressionBackendType::Zstd.backend_id());
+
+        let batch = Value::Array(vec![
+            Value::BulkString(plain.clone().into()),
+            Value::BulkString(compressed.clone().into()),
+            Value::Array(vec![
+                Value::BulkString(compressed.into()),
+                Value::BulkString(plain.clone().into()),
+            ]),
+        ]);
+        let result =
+            decompress_batch_response(batch, &manager).expect("batch reply should decompress");
+        assert_eq!(
+            result,
+            Value::Array(vec![
+                Value::BulkString(plain.clone().into()),
+                Value::BulkString(original.clone().into()),
+                Value::Array(vec![
+                    Value::BulkString(original.into()),
+                    Value::BulkString(plain.into()),
+                ]),
+            ])
+        );
+    }
+
+    #[test]
+    fn mget_reply_propagates_size_limit() {
+        let config = CompressionConfig::new(CompressionBackendType::Zstd)
+            .with_min_compression_size(64)
+            .with_max_decompressed_size(Some(50));
+        let manager = CompressionManager::new(Box::new(ZstdBackend::new()), config).unwrap();
+        let too_large = manager
+            .compress_value(&"A".repeat(200).into_bytes())
+            .into_owned();
+        assert!(has_magic_header(&too_large));
+
+        let result = process_response_for_decompression(
+            Value::Array(vec![
+                Value::BulkString(b"small plain".to_vec().into()),
+                Value::BulkString(too_large.into()),
+            ]),
+            RequestType::MGet,
+            Some(&manager),
+        );
+        assert!(matches!(
+            result,
+            Err(CompressionError::SizeLimitExceeded { .. })
+        ));
+    }
+
     // Assertion helpers --------------------------------------------------------------------------
 
     fn assert_compression_compatible(request_type: RequestType, args: &[&str]) {
