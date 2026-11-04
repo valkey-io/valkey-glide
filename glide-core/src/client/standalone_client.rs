@@ -54,6 +54,13 @@ struct DropWrapper {
 
 impl Drop for DropWrapper {
     fn drop(&mut self) {
+        // The client was dropped: reduce the number of clients. This lives on the
+        // shared `DropWrapper`, which drops once, when the last `StandaloneClient`
+        // clone goes. `StandaloneClient` is cloned out of the client wrapper on
+        // every command, so a decrement on `StandaloneClient` itself fired once per
+        // command, took the global telemetry write lock each time, and drove
+        // `total_clients` to zero after the first command.
+        Telemetry::decr_total_clients(1);
         for node in self.nodes.iter() {
             node.mark_as_dropped();
         }
@@ -63,13 +70,6 @@ impl Drop for DropWrapper {
 #[derive(Clone, Debug)]
 pub struct StandaloneClient {
     inner: Arc<DropWrapper>,
-}
-
-impl Drop for StandaloneClient {
-    fn drop(&mut self) {
-        // Client was dropped, reduce the number of clients
-        Telemetry::decr_total_clients(1);
-    }
 }
 
 pub enum StandaloneClientConnectionError {
