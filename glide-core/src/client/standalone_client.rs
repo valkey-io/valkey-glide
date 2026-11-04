@@ -1156,24 +1156,37 @@ impl StandaloneClient {
     }
 
     pub async fn send_command(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
-        let Some(cmd_bytes) = Routable::command(cmd) else {
+        let name = Routable::command(cmd);
+        self.send_command_with_name(cmd, name.as_deref()).await
+    }
+
+    /// [`Self::send_command`] with the uppercased command name
+    /// (`Routable::command()` bytes, `None` iff `cmd` has no arguments) already
+    /// computed by the caller, so the `Client::send_command` path does not
+    /// allocate it again.
+    pub(crate) async fn send_command_with_name(
+        &mut self,
+        cmd: &redis::Cmd,
+        cmd_name: Option<&[u8]>,
+    ) -> RedisResult<Value> {
+        let Some(cmd_bytes) = cmd_name else {
             return self.send_request_to_single_node(cmd, false).await;
         };
 
         if self.inner.read_only {
-            reject_write_command(cmd_bytes.as_slice())?;
+            reject_write_command(cmd_bytes)?;
         }
 
-        if RoutingInfo::is_all_nodes(cmd_bytes.as_slice()) {
-            let response_policy = ResponsePolicy::for_command(cmd_bytes.as_slice());
-            if matches!(cmd_bytes.as_slice(), b"SELECT" | b"RESET") {
+        if RoutingInfo::is_all_nodes(cmd_bytes) {
+            let response_policy = ResponsePolicy::for_command(cmd_bytes);
+            if matches!(cmd_bytes, b"SELECT" | b"RESET") {
                 return self
                     .send_database_change_to_all_nodes(cmd, response_policy)
                     .await;
             }
             return self.send_request_to_all_nodes(cmd, response_policy).await;
         }
-        self.send_request_to_single_node(cmd, is_readonly_cmd(cmd_bytes.as_slice()))
+        self.send_request_to_single_node(cmd, is_readonly_cmd(cmd_bytes))
             .await
     }
 
