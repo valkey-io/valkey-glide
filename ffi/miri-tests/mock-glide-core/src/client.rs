@@ -173,6 +173,14 @@ pub type MonitorLineCallback = std::sync::Arc<dyn Fn(MonitorLine) + Send + Sync>
 pub struct MonitorClient;
 
 impl MonitorClient {
+    pub fn validate(
+        _address: &NodeAddress,
+        _redis_connection_info: &redis::RedisConnectionInfo,
+        _tls_mode: TlsMode,
+    ) -> redis::RedisResult<()> {
+        Ok(())
+    }
+
     pub async fn new(
         _address: &NodeAddress,
         _redis_connection_info: redis::RedisConnectionInfo,

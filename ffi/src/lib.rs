@@ -7774,6 +7774,19 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         cache: None,
     };
 
+    // Only the request validation is a configuration error. `MonitorClient::new` can also fail
+    // with `InvalidClientConfig` while setting up the connection (for example TLS), and those
+    // failures keep the unspecified type they had before 2.6.
+    if let Err(e) = MonitorClient::validate(&address, &redis_conn_info, tls_mode) {
+        let err_msg =
+            CString::new(format!("Failed to create monitor client: {e}")).unwrap_or_default();
+        return Box::into_raw(Box::new(ConnectionResponse {
+            conn_ptr: std::ptr::null(),
+            connection_error_message: err_msg.into_raw(),
+            connection_error_type: ConnectionErrorType::Configuration,
+        }));
+    }
+
     let runtime = match Builder::new_multi_thread().enable_all().build() {
         Ok(r) => r,
         Err(e) => {
@@ -7823,19 +7836,12 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
     {
         Ok(c) => c,
         Err(e) => {
-            // MonitorClient::new reports its request validation (library name and version,
-            // Unix domain socket address) as InvalidClientConfig.
-            let connection_error_type = if e.kind() == redis::ErrorKind::InvalidClientConfig {
-                ConnectionErrorType::Configuration
-            } else {
-                ConnectionErrorType::Unspecified
-            };
             let err_msg =
                 CString::new(format!("Failed to create monitor client: {e}")).unwrap_or_default();
             return Box::into_raw(Box::new(ConnectionResponse {
                 conn_ptr: std::ptr::null(),
                 connection_error_message: err_msg.into_raw(),
-                connection_error_type,
+                connection_error_type: ConnectionErrorType::Unspecified,
             }));
         }
     };
