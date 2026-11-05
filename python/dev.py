@@ -434,8 +434,10 @@ def build_sync_client(
         )
 
     if ffi_features:
-        # setup.py reads this for the sdist/wheel path.
-        env["GLIDE_SYNC_RDMA_TCP"] = "1"
+        # setup.py reads these for the sdist/wheel path.
+        env["GLIDE_SYNC_RDMA"] = "1"
+        if "tcp-dev" in ffi_features:
+            env["GLIDE_SYNC_RDMA_TCP"] = "1"
 
     if wheel:
         return build_sync_client_wheel(env)

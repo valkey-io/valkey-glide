@@ -1415,6 +1415,7 @@ def test_an_rdma_client_against_a_plain_server_still_works(
         assert (
             "no RDMA support compiled in" in message
             or "libfabric unavailable" in message
+            or _TCP_PROVIDER_NOT_BUILT in message
         ), f"unhelpful message for an unusable machine: {message}"
         return
 
