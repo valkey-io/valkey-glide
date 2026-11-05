@@ -2590,7 +2590,7 @@ describe("GlideFt", () => {
                                 },
                                 {
                                     withCursor: { count: 1 },
-                                } as FtHybridOptions,
+                                },
                             );
                             let cursorId = page[1];
                             let rows = page[0] as unknown as {
