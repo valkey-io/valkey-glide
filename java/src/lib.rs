@@ -1589,9 +1589,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
         // is_blocking=0 in the window between spawn() and task execution.
         let batch_pre_blocking_arc: Option<Arc<AtomicU32>> = {
             let has_blocking = req_types.iter().enumerate().any(|(i, rt_int)| {
-                let proto_rt = protobuf::EnumOrUnknown::<
-                    glide_core::command_request::RequestType,
-                >::from_i32(*rt_int);
+                let proto_rt =
+                    protobuf::EnumOrUnknown::<glide_core::command_request::RequestType>::from_i32(
+                        *rt_int,
+                    );
                 let rt: glide_core::request_type::RequestType = proto_rt.into();
                 if matches!(rt, glide_core::request_type::RequestType::CustomCommand) {
                     // For CustomCommand the actual command name is all_args[i][0].
@@ -1602,7 +1603,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                 let cmd_args = args.as_slice();
                                 glide_core::client::is_blocking_command_name(
                                     name.as_slice(),
-                                    if cmd_args.len() > 1 { &cmd_args[1..] } else { &[] },
+                                    if cmd_args.len() > 1 {
+                                        &cmd_args[1..]
+                                    } else {
+                                        &[]
+                                    },
                                 )
                             })
                         })
@@ -1756,40 +1761,16 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             && let Some(entry) =
                                 crate::jni_pool::get_pool_client_map().get(&handle_id)
                         {
-                            glide_core::pool::refresh_client_activity(
-                                *entry.value(),
-                                handle_id,
-                            );
+                            glide_core::pool::refresh_client_activity(*entry.value(), handle_id);
                         }
 
-                        // Decompress if needed
-                        match exec_res {
-                            Ok(value) => {
-                                if client.is_compression_enabled() {
-                                    if let Some(manager) = client.compression_manager() {
-                                        match glide_core::compression::decompress_batch_response(
-                                            value.clone(),
-                                            manager.as_ref(),
-                                        ) {
-                                            Ok(decompressed) => Ok(decompressed),
-                                            Err(e) => {
-                                                glide_logger::log_warn_rate_limited!(
-                                                    "compression",
-                                                    5,
-                                                    format!("Failed to decompress batch response: {}, returning original", e)
-                                                );
-                                                Ok(value)
-                                            }
-                                        }
-                                    } else {
-                                        Ok(value)
-                                    }
-                                } else {
-                                    Ok(value)
-                                }
-                            }
-                            Err(e) => Err(e),
-                        }
+                        exec_res.and_then(|value| {
+                            glide_core::compression::try_decompress_batch_response(
+                                value,
+                                client.compression_manager().as_deref(),
+                            )
+                            .map_err(redis::RedisError::from)
+                        })
                     }
                     .await;
 
