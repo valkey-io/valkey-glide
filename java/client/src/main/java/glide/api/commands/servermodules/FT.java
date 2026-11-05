@@ -197,6 +197,10 @@ public class FT {
      *     document names and map of their attributes. When {@link
      *     FTSearchOptions.FTSearchOptionsBuilder#nocontent()} is set, the attribute maps will be
      *     empty.<br>
+     *     When {@link FTSearchOptions.FTSearchOptionsBuilder#withScores()} is set, each document
+     *     value is instead an {@code Object[]} of {@code [score, fieldMap]}, or {@code [score,
+     *     sortKey, fieldMap]} when {@link FTSearchOptions.FTSearchOptionsBuilder#withSortKeys()} is
+     *     also set.<br>
      *     If {@link FTSearchOptions.FTSearchOptionsBuilder#count()} or {@link
      *     FTSearchOptions.FTSearchOptionsBuilder#limit(int, int)} with values <code>0, 0</code> is
      *     set, the command returns array with only one element - the count of the documents.
@@ -248,6 +252,10 @@ public class FT {
      *     second element, which has format <code>
      *     {@literal Map<GlideString, Map<GlideString, GlideString>>}</code> - a mapping between
      *     document names and map of their attributes.<br>
+     *     When {@link FTSearchOptions.FTSearchOptionsBuilder#withScores()} is set, each document
+     *     value is instead an {@code Object[]} of {@code [score, fieldMap]}, or {@code [score,
+     *     sortKey, fieldMap]} when {@link FTSearchOptions.FTSearchOptionsBuilder#withSortKeys()} is
+     *     also set.<br>
      *     If {@link FTSearchOptions.FTSearchOptionsBuilder#count()} or {@link
      *     FTSearchOptions.FTSearchOptionsBuilder#limit(int, int)} with values <code>0, 0</code> is
      *     set, the command returns array with only one element - the count of the documents.

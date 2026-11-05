@@ -41,9 +41,9 @@ public class FTHybridOptions {
      * FT.HYBRID also applies its own default LIMIT of 10 rows when no {@link
      * FTAggregateOptions.Limit} clause is given here -- FT.AGGREGATE has no such default and returns
      * everything. {@link #toArgs} always emits {@code clauses} after {@code params}'s own serialized
-     * arguments (PARAMS is always present for FT.HYBRID, so this tail is never empty) -- emitting a
-     * leading FILTER clause right after the VSIM arm would otherwise let the server's VSIM parser
-     * claim it as a VSIM pre-filter instead.
+     * arguments (PARAMS is emitted only when the merged params map is non-empty, so this tail can be
+     * empty) -- emitting a leading FILTER clause right after the VSIM arm would otherwise let the
+     * server's VSIM parser claim it as a VSIM pre-filter instead.
      */
     private final List<FTAggregateOptions.FTAggregateClause> clauses;
 
@@ -65,8 +65,9 @@ public class FTHybridOptions {
      * in this tail BEFORE PARAMS (including after DIALECT or a LOAD clause) but is rejected
      * ("Unexpected argument `LOCALONLY`") once PARAMS has been parsed, regardless of what follows
      * PARAMS. {@link #toArgs} always emits it before {@code params} and {@code clauses} (PARAMS
-     * always follows it immediately), so this restriction is handled transparently regardless of the
-     * order its own arguments were given in.
+     * follows it once any LOAD and TIMEOUT arguments have been emitted, when the merged params map is
+     * non-empty), so this restriction is handled transparently regardless of the order its own
+     * arguments were given in.
      */
     @Builder.Default private final boolean localOnly = false;
 

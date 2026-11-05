@@ -29,6 +29,14 @@ public class JavaModulesCiSyncTest {
 
     private static final String[] ENDPOINT_FLAGS = {"-Dstandalone-endpoints", "-Dcluster-endpoints"};
 
+    // Each flag's expected bound variable name, in both files -- a flag/value swap (standalone
+    // bound to the cluster variable or vice versa) would otherwise pass the plain
+    // `contains(flag)` check above, since both flag names and both variable names are present in
+    // the text regardless of which is paired with which.
+    private static final String[] ENDPOINT_FLAG_VALUES = {
+        "MODULES_STANDALONE_ENDPOINT", "MODULES_CLUSTER_ENDPOINTS"
+    };
+
     private static String readFile(Path path) throws IOException {
         return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
     }
@@ -47,14 +55,47 @@ public class JavaModulesCiSyncTest {
                 "utils/run-modules-ci-locally.sh is missing :integTest:modulesTest, which CI's"
                         + " 'Build and run modules tests' step runs.");
 
-        for (String flag : ENDPOINT_FLAGS) {
+        for (int i = 0; i < ENDPOINT_FLAGS.length; i++) {
+            String flag = ENDPOINT_FLAGS[i];
+            String value = ENDPOINT_FLAG_VALUES[i];
             assertTrue(
                     workflowText.contains(flag),
                     "java-modules.yml no longer passes " + flag + " -- update both files to match.");
             assertTrue(
                     runnerText.contains(flag),
                     "utils/run-modules-ci-locally.sh is missing " + flag + ", which CI's step passes.");
+            // Checks the flag is bound to its own expected variable, within a short window after
+            // the flag -- not just that the flag and the variable both appear somewhere in the
+            // file (which a standalone/cluster swap would still pass).
+            assertTrue(
+                    nearby(workflowText, flag, value),
+                    "java-modules.yml's "
+                            + flag
+                            + " is not bound to "
+                            + value
+                            + " -- check for a"
+                            + " standalone/cluster swap.");
+            assertTrue(
+                    nearby(runnerText, flag, value),
+                    "utils/run-modules-ci-locally.sh's "
+                            + flag
+                            + " is not bound to "
+                            + value
+                            + " --"
+                            + " check for a standalone/cluster swap.");
         }
+    }
+
+    /**
+     * {@code true} if {@code needle} appears within 80 characters after {@code flag} in {@code text}.
+     */
+    private static boolean nearby(String text, String flag, String needle) {
+        int flagIndex = text.indexOf(flag);
+        if (flagIndex < 0) {
+            return false;
+        }
+        int windowEnd = Math.min(text.length(), flagIndex + flag.length() + 80);
+        return text.substring(flagIndex, windowEnd).contains(needle);
     }
 
     @Test
