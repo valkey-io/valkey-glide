@@ -480,7 +480,7 @@ export class GlideFt {
         indexName: GlideString,
         query: GlideString,
         options?: DecoderOption & FtAggregateOptions,
-    ): Promise<FtAggregateReturnType>;
+    ): Promise<FtAggregateReturnType | FtCursorReturnType>;
     static async aggregate(
         client: GlideClient | GlideClusterClient,
         indexName: GlideString,
@@ -677,7 +677,7 @@ export class GlideFt {
         searchArm: FtHybridSearchArm,
         vsimArm: FtHybridVsimArm,
         options?: DecoderOption & FtHybridOptions,
-    ): Promise<FtAggregateReturnType>;
+    ): Promise<FtAggregateReturnType | FtCursorReturnType>;
     static async hybrid(
         client: GlideClient | GlideClusterClient,
         indexName: GlideString,
