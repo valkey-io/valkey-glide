@@ -55,7 +55,6 @@ Installs platform-specific dependencies for valkey-glide builds. This is the pri
 #### Behavior
 
 - **Ubuntu/Debian:** Installs `git`, `gcc`, `pkg-config`, `openssl`, `libssl-dev` via `apt`
-- **macOS:** Installs nothing via `brew`. The client build doesn't use OpenSSL or `coreutils`; `install-engine` provisions `openssl@3` itself when it builds the engine
 - **Amazon Linux:** Installs `gcc`, `pkgconfig`, `openssl`, `openssl-devel`, and other build tools via `yum`
 - **Alpine/MUSL:** Installs `protobuf-dev`, `musl-dev`, `make`, `gcc`, `openssl`, `openssl-dev`, and Rust via `apk`
 - **Windows:** Sets up WSL with Ubuntu 22.04 and Python
