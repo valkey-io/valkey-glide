@@ -23,6 +23,7 @@ import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getInfo;
 import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
+import static glide.TestUtilities.killUntilUnkillable;
 import static glide.TestUtilities.parseLong;
 import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
@@ -1182,9 +1183,6 @@ public class CommandTests {
         String funcName = "deadlock_write_function";
         String key = libName;
         String code = createLuaLibWithLongRunningFunction(libName, funcName, 2, false);
-        CompletableFuture<Object> promise = new CompletableFuture<>();
-        promise.complete(null);
-
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
         // nothing to kill
@@ -1199,40 +1197,9 @@ public class CommandTests {
         try (LuaTimeLimit limit = LuaTimeLimit.set(regularClient, 100);
                 GlideClient testClient =
                         GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
-            try {
-                // call the function without await
-                promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
-
-                Thread.sleep(1000);
-
-                boolean foundUnkillable = false;
-                int timeout = 4000; // ms
-                while (timeout >= 0) {
-                    try {
-                        regularClient.functionKill().get();
-                    } catch (ExecutionException executionException) {
-                        // looking for an error with "unkillable" in the message
-                        // at that point we can break the loop
-                        if (executionException.getCause() instanceof RequestException
-                                && executionException.getMessage().toLowerCase().contains("unkillable")) {
-                            foundUnkillable = true;
-                            break;
-                        }
-                    }
-                    Thread.sleep(500);
-                    timeout -= 500;
-                }
-                assertTrue(foundUnkillable);
-
-            } finally {
-                // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-                // test to fail.
-                // wait for the function to complete (we cannot kill it)
-                try {
-                    promise.get();
-                } catch (Exception ignored) {
-                }
-            }
+            killUntilUnkillable(
+                    () -> regularClient.functionKill(),
+                    () -> testClient.fcall(funcName, new String[] {key}, new String[0]));
         }
     }
 
@@ -1248,9 +1215,6 @@ public class CommandTests {
         GlideString key = libName;
         GlideString code =
                 gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 2, false));
-        CompletableFuture<Object> promise = new CompletableFuture<>();
-        promise.complete(null);
-
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
         // nothing to kill
@@ -1265,40 +1229,9 @@ public class CommandTests {
         try (LuaTimeLimit limit = LuaTimeLimit.set(regularClient, 100);
                 GlideClient testClient =
                         GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
-            try {
-                // call the function without await
-                promise = testClient.fcall(funcName, new GlideString[] {key}, new GlideString[0]);
-
-                Thread.sleep(1000);
-
-                boolean foundUnkillable = false;
-                int timeout = 4000; // ms
-                while (timeout >= 0) {
-                    try {
-                        regularClient.functionKill().get();
-                    } catch (ExecutionException executionException) {
-                        // looking for an error with "unkillable" in the message
-                        // at that point we can break the loop
-                        if (executionException.getCause() instanceof RequestException
-                                && executionException.getMessage().toLowerCase().contains("unkillable")) {
-                            foundUnkillable = true;
-                            break;
-                        }
-                    }
-                    Thread.sleep(500);
-                    timeout -= 500;
-                }
-                assertTrue(foundUnkillable);
-
-            } finally {
-                // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-                // test to fail.
-                // wait for the function to complete (we cannot kill it)
-                try {
-                    promise.get();
-                } catch (Exception ignored) {
-                }
-            }
+            killUntilUnkillable(
+                    () -> regularClient.functionKill(),
+                    () -> testClient.fcall(funcName, new GlideString[] {key}, new GlideString[0]));
         }
     }
 

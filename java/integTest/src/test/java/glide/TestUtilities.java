@@ -37,6 +37,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.api.models.configuration.ServiceType;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
+import glide.api.models.exceptions.RequestException;
 import glide.cluster.ValkeyCluster;
 import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
@@ -644,7 +645,7 @@ public class TestUtilities {
     /**
      * Lua expression for the server clock in seconds with microsecond precision. {@code TIME} returns
      * whole seconds and microseconds separately; using only the seconds makes a loop of {@code N}
-     * seconds run anywhere between {@code N-1} and {@code N}.
+     * seconds off by up to a second in either direction.
      */
     private static final String LUA_NOW_SECONDS =
             "(function() local t = redis.pcall('time') return tonumber(t[1]) + tonumber(t[2]) / 1e6"
@@ -716,6 +717,45 @@ public class TestUtilities {
                 }
             }
         } while (isBusy);
+    }
+
+    /**
+     * Starts a write script or function and polls {@code kill} until the server reports it as
+     * unkillable, then waits for it to finish.
+     *
+     * <p>A {@code NOTBUSY} reply does not say whether the script has not started yet or has already
+     * finished, so when the current invocation is done the script is started again and polling
+     * continues. The script is waited out even when the poll fails: the server rejects commands such
+     * as the {@code CONFIG SET} that restores {@code lua-time-limit} while it is busy.
+     *
+     * @param kill Issues {@code SCRIPT KILL} or {@code FUNCTION KILL}.
+     * @param invoke Starts the write script or function without awaiting it.
+     */
+    @SneakyThrows
+    public static void killUntilUnkillable(
+            Supplier<CompletableFuture<?>> kill, Supplier<CompletableFuture<Object>> invoke) {
+        CompletableFuture<Object>[] running = new CompletableFuture[] {invoke.get()};
+        try {
+            waitFor(
+                    () -> {
+                        if (running[0].isDone()) {
+                            running[0] = invoke.get();
+                        }
+                        try {
+                            kill.get().get();
+                            return false;
+                        } catch (ExecutionException e) {
+                            return e.getCause() instanceof RequestException
+                                    && e.getMessage().toLowerCase().contains("unkillable");
+                        }
+                    },
+                    "Expected an 'unkillable' error for the write script");
+        } finally {
+            try {
+                running[0].get();
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     /**

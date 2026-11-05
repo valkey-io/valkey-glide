@@ -29,6 +29,7 @@ import static glide.TestUtilities.getReplicaCount;
 import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isWindows;
+import static glide.TestUtilities.killUntilUnkillable;
 import static glide.TestUtilities.parseLong;
 import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
@@ -2587,9 +2588,6 @@ public class CommandTests {
         Route route = new SlotKeyRoute(key, PRIMARY);
 
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
-        CompletableFuture<Object> promise = new CompletableFuture<>();
-        promise.complete(null);
-
         // nothing to kill
         ExecutionException exception =
                 assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
@@ -2604,39 +2602,9 @@ public class CommandTests {
                         GlideClusterClient.createClient(
                                         commonClusterClientConfig().requestTimeout(10000).build())
                                 .get()) {
-            try {
-                // call the function without await
-                promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
-
-                Thread.sleep(1000);
-
-                boolean foundUnkillable = false;
-                int timeout = 4000; // ms
-                while (timeout >= 0) {
-                    try {
-                        clusterClient.functionKill(route).get();
-                    } catch (ExecutionException executionException) {
-                        // looking for an error with "unkillable" in the message
-                        // at that point we can break the loop
-                        if (executionException.getCause() instanceof RequestException
-                                && executionException.getMessage().toLowerCase().contains("unkillable")) {
-                            foundUnkillable = true;
-                            break;
-                        }
-                    }
-                    Thread.sleep(500);
-                    timeout -= 500;
-                }
-                assertTrue(foundUnkillable);
-            } finally {
-                // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-                // test to fail.
-                // wait for the function to complete (we cannot kill it)
-                try {
-                    promise.get();
-                } catch (Exception ignored) {
-                }
-            }
+            killUntilUnkillable(
+                    () -> clusterClient.functionKill(route),
+                    () -> testClient.fcall(funcName, new String[] {key}, new String[0]));
         }
     }
 
@@ -2656,9 +2624,6 @@ public class CommandTests {
 
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
 
-        CompletableFuture<Object> promise = new CompletableFuture<>();
-        promise.complete(null);
-
         // nothing to kill
         ExecutionException exception =
                 assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
@@ -2673,39 +2638,9 @@ public class CommandTests {
                         GlideClusterClient.createClient(
                                         commonClusterClientConfig().requestTimeout(10000).build())
                                 .get()) {
-            try {
-                // call the function without await
-                promise = testClient.fcall(funcName, new GlideString[] {key}, new GlideString[0]);
-
-                Thread.sleep(1000);
-
-                boolean foundUnkillable = false;
-                int timeout = 4000; // ms
-                while (timeout >= 0) {
-                    try {
-                        clusterClient.functionKill(route).get();
-                    } catch (ExecutionException executionException) {
-                        // looking for an error with "unkillable" in the message
-                        // at that point we can break the loop
-                        if (executionException.getCause() instanceof RequestException
-                                && executionException.getMessage().toLowerCase().contains("unkillable")) {
-                            foundUnkillable = true;
-                            break;
-                        }
-                    }
-                    Thread.sleep(500);
-                    timeout -= 500;
-                }
-                assertTrue(foundUnkillable);
-            } finally {
-                // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-                // test to fail.
-                // wait for the function to complete (we cannot kill it)
-                try {
-                    promise.get();
-                } catch (Exception ignored) {
-                }
-            }
+            killUntilUnkillable(
+                    () -> clusterClient.functionKill(route),
+                    () -> testClient.fcall(funcName, new GlideString[] {key}, new GlideString[0]));
         }
     }
 

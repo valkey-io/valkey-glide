@@ -2,12 +2,15 @@
 package glide;
 
 import static glide.api.BaseClient.OK;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import lombok.SneakyThrows;
@@ -23,40 +26,54 @@ public final class LuaTimeLimit implements AutoCloseable {
     private static final String CONFIG = "lua-time-limit";
 
     private final BaseClient client;
-    private final String original;
 
-    private LuaTimeLimit(BaseClient client, String original) {
+    /** Original value per node address; a single entry keyed {@code null} for a standalone client. */
+    private final Map<String, String> originals;
+
+    private LuaTimeLimit(BaseClient client, Map<String, String> originals) {
         this.client = client;
-        this.original = original;
+        this.originals = originals;
     }
 
     /** Sets {@code lua-time-limit} to {@code millis} on every node reachable through the client. */
+    @SneakyThrows
     public static LuaTimeLimit set(BaseClient client, int millis) {
-        String original = Objects.requireNonNull(configGet(client).get(CONFIG), "CONFIG GET " + CONFIG);
-        configSet(client, Integer.toString(millis));
-        return new LuaTimeLimit(client, original);
+        Map<String, String> originals = new LinkedHashMap<>();
+        if (client instanceof GlideClusterClient) {
+            ((GlideClusterClient) client)
+                    .configGet(new String[] {CONFIG}, ALL_NODES)
+                    .get()
+                    .getMultiValue()
+                    .forEach((address, config) -> originals.put(address, requireValue(config)));
+        } else {
+            originals.put(
+                    null, requireValue(((GlideClient) client).configGet(new String[] {CONFIG}).get()));
+        }
+        String value = Integer.toString(millis);
+        for (String address : originals.keySet()) {
+            configSet(client, address, value);
+        }
+        return new LuaTimeLimit(client, originals);
     }
 
     @Override
     public void close() {
-        configSet(client, original);
+        originals.forEach((address, value) -> configSet(client, address, value));
+    }
+
+    private static String requireValue(Map<String, String> config) {
+        return Objects.requireNonNull(config.get(CONFIG), "CONFIG GET " + CONFIG);
     }
 
     @SneakyThrows
-    private static Map<String, String> configGet(BaseClient client) {
-        String[] parameters = {CONFIG};
-        return client instanceof GlideClusterClient
-                ? ((GlideClusterClient) client).configGet(parameters).get()
-                : ((GlideClient) client).configGet(parameters).get();
-    }
-
-    @SneakyThrows
-    private static void configSet(BaseClient client, String value) {
+    private static void configSet(BaseClient client, String address, String value) {
         Map<String, String> parameters = Collections.singletonMap(CONFIG, value);
         assertEquals(
                 OK,
-                client instanceof GlideClusterClient
-                        ? ((GlideClusterClient) client).configSet(parameters).get()
-                        : ((GlideClient) client).configSet(parameters).get());
+                address == null
+                        ? ((GlideClient) client).configSet(parameters).get()
+                        : ((GlideClusterClient) client)
+                                .configSet(parameters, new ByAddressRoute(address))
+                                .get());
     }
 }
