@@ -5,6 +5,7 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -13,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.GlideString;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.CompressionBackend;
@@ -1048,6 +1050,98 @@ public class CompressionTests {
 
             // Cleanup
             client.del(new String[] {key1, key2, key3}).get();
+        }
+    }
+
+    // ============================================================================
+    // Batch Decompression Per Element Tests
+    // ============================================================================
+
+    private static Stream<Arguments> batchModes() {
+        return Stream.of(false, true)
+                .flatMap(
+                        clusterMode -> Stream.of(false, true).map(atomic -> Arguments.of(clusterMode, atomic)));
+    }
+
+    @SneakyThrows
+    private static BaseClient clientWithCompression(
+            boolean clusterMode, CompressionConfiguration compression) {
+        return clusterMode
+                ? GlideClusterClient.createClient(
+                                commonClusterClientConfig().compressionConfiguration(compression).build())
+                        .get()
+                : GlideClient.createClient(
+                                commonClientConfig().compressionConfiguration(compression).build())
+                        .get();
+    }
+
+    @SneakyThrows
+    private static BaseClient plainClient(boolean clusterMode) {
+        return clusterMode
+                ? GlideClusterClient.createClient(commonClusterClientConfig().build()).get()
+                : GlideClient.createClient(commonClientConfig().build()).get();
+    }
+
+    @SneakyThrows
+    private static Object[] execGets(BaseClient client, boolean atomic, GlideString... keys) {
+        if (client instanceof GlideClusterClient) {
+            glide.api.models.ClusterBatch batch =
+                    new glide.api.models.ClusterBatch(atomic).withBinaryOutput();
+            for (GlideString key : keys) batch.get(key);
+            return ((GlideClusterClient) client).exec(batch, true).get();
+        }
+        glide.api.models.Batch batch = new glide.api.models.Batch(atomic).withBinaryOutput();
+        for (GlideString key : keys) batch.get(key);
+        return ((GlideClient) client).exec(batch, true).get();
+    }
+
+    /** Names a real backend so the decoder runs, on a payload it rejects. */
+    private static final byte[] HEADER_SHAPED_PLAIN = {
+        0x00, 0x01, 0x02, 0x00, 0x01, 'z', 'z', 'z', 'z'
+    };
+
+    @SneakyThrows
+    @ParameterizedTest(name = "clusterMode={0} atomic={1}")
+    @MethodSource("batchModes")
+    public void compression_batch_surfaces_size_limit(boolean clusterMode, boolean atomic) {
+        CompressionConfiguration unlimited = CompressionConfiguration.builder().enabled(true).build();
+        CompressionConfiguration limited =
+                CompressionConfiguration.builder().enabled(true).maxDecompressedSize(100L).build();
+        try (BaseClient writer = clientWithCompression(clusterMode, unlimited);
+                BaseClient reader = clientWithCompression(clusterMode, limited)) {
+            String key = randomKey("{batch_limit}");
+            assertEquals(OK, writer.set(key, generateCompressibleText(10_000)).get());
+
+            Throwable cause =
+                    assertThrows(ExecutionException.class, () -> execGets(reader, atomic, gs(key)))
+                            .getCause();
+            assertTrue(cause instanceof RequestException, "Should throw RequestException, got " + cause);
+            assertTrue(
+                    cause.getMessage().toLowerCase().contains("size limit exceeded"),
+                    "Error should name the size limit: " + cause.getMessage());
+
+            writer.del(new String[] {key}).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "clusterMode={0} atomic={1}")
+    @MethodSource("batchModes")
+    public void compression_batch_keeps_header_shaped_neighbour(boolean clusterMode, boolean atomic) {
+        CompressionConfiguration enabled = CompressionConfiguration.builder().enabled(true).build();
+        try (BaseClient compressed = clientWithCompression(clusterMode, enabled);
+                BaseClient plain = plainClient(clusterMode)) {
+            String compressedKey = randomKey("{batch_collision}_compressed");
+            String plainKey = randomKey("{batch_collision}_plain");
+            String value = generateCompressibleText(1024);
+            assertEquals(OK, compressed.set(compressedKey, value).get());
+            assertEquals(OK, plain.set(gs(plainKey), gs(HEADER_SHAPED_PLAIN)).get());
+
+            Object[] results = execGets(compressed, atomic, gs(compressedKey), gs(plainKey));
+            assertEquals(gs(value), results[0]);
+            assertEquals(gs(HEADER_SHAPED_PLAIN), results[1]);
+
+            plain.del(new String[] {compressedKey, plainKey}).get();
         }
     }
 
