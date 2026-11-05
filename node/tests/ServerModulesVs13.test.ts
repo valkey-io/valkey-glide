@@ -291,13 +291,7 @@ describe("GlideFt", () => {
                 });
 
                 it("INKEYS: absent, [], and a list", async () => {
-                    if (!capability) {
-                        console.warn(
-                            "skipping: search module present but pre-1.3 " +
-                                "(INKEYS probe rejected it)",
-                        );
-                        return;
-                    }
+                    if (!recordGate(capability)) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -705,7 +699,7 @@ describe("GlideFt", () => {
                             client,
                             indexName,
                             "*",
-                            { noContent: true } as FtSearchOptions,
+                            { nocontent: true } as FtSearchOptions,
                         );
                         expect(result[0]).toBe(1);
                         const keys = (

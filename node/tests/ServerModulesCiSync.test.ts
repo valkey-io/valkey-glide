@@ -39,7 +39,24 @@ const WORKFLOW_FILE = join(
 );
 const LOCAL_RUNNER_FILE = join(REPO_ROOT, "utils", "run-modules-ci-locally.sh");
 
-const ENDPOINT_FLAGS = ["--standalone-endpoints", "--cluster-endpoints"];
+/**
+ * Each endpoint flag paired with the exact variable reference it must be
+ * bound to on both sides, so the check catches a swapped or mismatched
+ * value (e.g. `--standalone-endpoints` bound to the cluster variable)
+ * instead of only confirming the flag name appears somewhere in the text.
+ */
+const ENDPOINT_FLAG_BINDINGS = [
+    {
+        flag: "--standalone-endpoints",
+        workflowValue: "${{ env.MODULES_STANDALONE_ENDPOINT }}",
+        runnerValue: '"${MODULES_STANDALONE_ENDPOINT}"',
+    },
+    {
+        flag: "--cluster-endpoints",
+        workflowValue: "${{ env.MODULES_CLUSTER_ENDPOINTS }}",
+        runnerValue: '"${MODULES_CLUSTER_ENDPOINTS}"',
+    },
+];
 
 /**
  * Slices the `node)` case arm out of the runner script's `case
@@ -113,19 +130,27 @@ describe("GlideFt CI sync: node-modules.yml / run-modules-ci-locally.sh", () => 
         const nodeArm = extractNodeCaseArm(runnerText);
         expect(nodeArm).toContain("npm run test:modules");
 
-        for (const flag of ENDPOINT_FLAGS) {
+        for (const {
+            flag,
+            workflowValue,
+            runnerValue,
+        } of ENDPOINT_FLAG_BINDINGS) {
             // Checked against the Linux job's "Run modules tests" step
             // specifically, not the whole workflow file -- the
             // self-hosted job's own "test" step only has
             // --cluster-endpoints, so a whole-file check would still
             // pass even if the Linux step specifically lost
-            // --standalone-endpoints.
-            expect(linuxStep).toContain(flag);
+            // --standalone-endpoints. Checked as "flag=value" (not the
+            // flag name alone) so a swapped or mismatched value --
+            // e.g. --standalone-endpoints bound to the cluster
+            // variable -- fails here instead of passing vacuously.
+            expect(linuxStep).toContain(`${flag}=${workflowValue}`);
             // Checked against the Node arm specifically, not the whole
             // runner script -- the Python arm already contains both
             // flags for its own invocation, so a whole-file check would
-            // pass even if the Node arm lost them.
-            expect(nodeArm).toContain(flag);
+            // pass even if the Node arm lost them. Same flag=value
+            // binding check as above.
+            expect(nodeArm).toContain(`${flag}=${runnerValue}`);
         }
     });
 
@@ -133,11 +158,30 @@ describe("GlideFt CI sync: node-modules.yml / run-modules-ci-locally.sh", () => 
         const workflowText = readFileSync(WORKFLOW_FILE, "utf-8");
         const runnerText = readFileSync(LOCAL_RUNNER_FILE, "utf-8");
 
-        // The CI job's "Run modules tests" step runs with
-        // `working-directory: ./node`; the local runner must `cd` there
-        // too before invoking the same npm script, or it would silently
-        // run a different package.json's scripts.
-        expect(workflowText).toMatch(/working-directory:\s*\.\/node/);
-        expect(runnerText).toMatch(/cd\s+"\$\{REPO_ROOT\}\/node"/);
+        // Checked against the Linux job's "Run modules tests" step and
+        // the Node case arm specifically, not the whole file -- the
+        // earlier "Install and build" step also runs with
+        // working-directory: ./node, and the runner script's REPO_ROOT
+        // assignment also matches `cd ... "${REPO_ROOT}"`-shaped text
+        // outside the Node arm. A whole-file check would still pass if
+        // the Linux test step's own working-directory were lost (another
+        // step still has one) or if the Node arm's own `cd` were removed
+        // (an unrelated `cd` elsewhere in the script still matches). The
+        // local runner must `cd` there before invoking the same npm
+        // script, or it would silently run a different package.json's
+        // scripts.
+        const linuxStep = extractLinuxModulesTestStep(workflowText);
+        const nodeArm = extractNodeCaseArm(runnerText);
+        expect(linuxStep).toMatch(/working-directory:\s*\.\/node/);
+        expect(nodeArm).toMatch(/cd\s+"\$\{REPO_ROOT\}\/node"/);
+
+        // The `cd` must come before the test invocation within the Node
+        // arm, not after -- a `cd` placed below `npm run test:modules`
+        // would still match the regex above but would not actually have
+        // run before the test command.
+        const cdIndex = nodeArm.search(/cd\s+"\$\{REPO_ROOT\}\/node"/);
+        const testInvocationIndex = nodeArm.indexOf("npm run test:modules");
+        expect(cdIndex).toBeGreaterThanOrEqual(0);
+        expect(testInvocationIndex).toBeGreaterThan(cdIndex);
     });
 });
