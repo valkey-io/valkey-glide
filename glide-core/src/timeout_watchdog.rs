@@ -612,9 +612,6 @@ pub struct TimeoutWatchdog {
 static GLOBAL_WATCHDOG: std::sync::atomic::AtomicPtr<TimeoutWatchdog> =
     std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
 
-/// Process id that created the current global watchdog, or 0 if none.
-static GLOBAL_PID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-
 /// Unset the global watchdog so the next `global()` call starts a fresh one.
 ///
 /// The old instance is leaked, never dropped. In a forked child the parent's
@@ -623,9 +620,9 @@ static GLOBAL_PID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::
 /// one inherited instance per fork is the safe choice.
 ///
 /// Only atomic stores, so it is safe to run in a `pthread_atfork` child handler.
+#[cfg(unix)]
 fn reset_global() {
     GLOBAL_WATCHDOG.store(std::ptr::null_mut(), Ordering::Release);
-    GLOBAL_PID.store(0, Ordering::Relaxed);
     PUBLISHED_PENDING.store(0, Ordering::Relaxed);
 }
 
@@ -671,9 +668,6 @@ impl TimeoutWatchdog {
     fn init_global() -> &'static Self {
         #[cfg(unix)]
         ensure_reset_in_forked_child();
-        // Every racing caller is in this process, so storing the pid before the
-        // compare_exchange is correct whichever caller wins.
-        GLOBAL_PID.store(std::process::id(), Ordering::Relaxed);
         let ptr = Box::into_raw(Box::new(Self::start_global()));
         match GLOBAL_WATCHDOG.compare_exchange(
             std::ptr::null_mut(),
@@ -693,17 +687,13 @@ impl TimeoutWatchdog {
         }
     }
 
-    /// Reset the global watchdog after fork() if it was inherited.
+    /// Does nothing; kept for API compatibility.
     ///
-    /// A forked child already gets this reset automatically inside fork(), so
-    /// calling it is not required. If the current global was started by this
-    /// process, this does nothing, so a child never ends up with two watchdogs.
-    /// Otherwise the next `global()` call starts a fresh watchdog.
-    pub fn reinit_global() {
-        if GLOBAL_PID.load(Ordering::Relaxed) != std::process::id() {
-            reset_global();
-        }
-    }
+    /// A forked child resets the inherited global watchdog inside fork(),
+    /// before any child code runs (see `ensure_reset_in_forked_child`), and
+    /// platforms without fork() never inherit one. Resetting again here could
+    /// discard a watchdog the child already started.
+    pub fn reinit_global() {}
 
     /// Start the global watchdog instance (publishes pending count).
     fn start_global() -> Self {
@@ -1068,35 +1058,6 @@ mod tests {
     }
 
     // ── Fork Safety (reinit) ─────────────────────────────────────────────
-
-    #[tokio::test]
-    #[serial]
-    async fn reinit_global_spawns_new_working_watchdog() {
-        let pre = TimeoutWatchdog::global() as *const TimeoutWatchdog;
-
-        // Simulate a global inherited from a parent process.
-        GLOBAL_PID.store(u32::MAX, Ordering::Relaxed);
-        TimeoutWatchdog::reinit_global();
-
-        // A fresh watchdog replaces it and must be functional.
-        let watchdog = TimeoutWatchdog::global();
-        assert_ne!(watchdog as *const TimeoutWatchdog, pre);
-        let rx = watchdog.register(Duration::from_millis(50), Instant::now());
-        let result = tokio::time::timeout(Duration::from_millis(500), rx).await;
-        assert!(
-            result.is_ok(),
-            "watchdog must fire after reinit_global (simulating post-fork)"
-        );
-        assert!(result.unwrap().is_ok());
-    }
-
-    #[test]
-    #[serial]
-    fn reinit_global_keeps_this_process_watchdog() {
-        let pre = TimeoutWatchdog::global() as *const TimeoutWatchdog;
-        TimeoutWatchdog::reinit_global();
-        assert_eq!(TimeoutWatchdog::global() as *const TimeoutWatchdog, pre);
-    }
 
     /// Run `child` in a forked child and assert it returned true. The child
     /// never returns into the test harness, and a child that does not exit
