@@ -215,6 +215,73 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithScoresAndWithSortKeysCombined
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
+// TestModuleFtSearchPureVectorKnnWithScoresOrdersByDistanceNotScore is the regression test for
+// the WITHSCORES ordering bug jamesx-improving found in review: a pure-vector KNN query (no
+// text/tag/numeric pre-filter) always reports 0 for every document's WITHSCORES value
+// (ft_search.cc: `has_relevance ? neighbor.score : 0.0f`, server test
+// pure_vector_with_scores_reports_zero), so sorting on Score alone can't distinguish documents
+// and silently falls back to the key tiebreak instead of the server's own nearest-first KNN
+// order. Three points at increasing distance from the query vector (0, 0) confirm the real
+// order comes from the __<field>_score Fields entry, not Score.
+func (suite *GlideTestSuite) TestModuleFtSearchPureVectorKnnWithScoresOrdersByDistanceNotScore() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
+	}
+
+	prefix := "{ft-knn-withscores-order-" + uuid.New().String() + "}:"
+	index := prefix + "index"
+	vecField := "vec"
+
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
+		[]options.Field{options.NewVectorFieldFlat(vecField, constants.DistanceMetricL2, 2)},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
+	require.NoError(suite.T(), err)
+
+	// Keys deliberately inserted out of distance order, so a fallback to the key tiebreak (or to
+	// insertion order) would not coincidentally match the correct nearest-first order.
+	points := map[string][2]float32{"far": {5.0, 0.0}, "near": {1.0, 0.0}, "mid": {3.0, 0.0}}
+	for name, coords := range points {
+		_, err = client.HSet(ctx, prefix+name, map[string]string{vecField: packFloat32Vector(coords[0], coords[1])})
+		require.NoError(suite.T(), err)
+	}
+	time.Sleep(time.Second)
+
+	queryBlob := packFloat32Vector(0.0, 0.0)
+	scoreField := "__" + vecField + "_score"
+	knnQuery := fmt.Sprintf("*=>[KNN 3 @%s $blob]", vecField)
+	result, err := glideft.ClusterFtSearch(ctx, client, index, knnQuery, &options.FtSearchOptions{
+		WithScores:   true,
+		Params:       []options.FtSearchParam{{Key: "blob", Value: queryBlob}},
+		ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: scoreField}},
+	})
+	require.NoError(suite.T(), err)
+	require.Len(suite.T(), result.Documents, 3)
+
+	for _, doc := range result.Documents {
+		require.NotNil(suite.T(), doc.Score)
+		assert.Equal(suite.T(), 0.0, *doc.Score,
+			"pure-vector KNN WITHSCORES always reports 0 -- confirms this test is exercising the bug's exact condition")
+	}
+	assert.Equal(suite.T(), []string{prefix + "near", prefix + "mid", prefix + "far"}, []string{
+		result.Documents[0].Key, result.Documents[1].Key, result.Documents[2].Key,
+	}, "documents must come back nearest-first by KNN distance, not key order")
+
+	distances := make([]float64, len(result.Documents))
+	for i, doc := range result.Documents {
+		d, err := strconv.ParseFloat(fmt.Sprintf("%v", doc.Fields[scoreField]), 64)
+		require.NoError(suite.T(), err)
+		distances[i] = d
+	}
+	for i := 1; i < len(distances); i++ {
+		assert.Greater(suite.T(), distances[i], distances[i-1],
+			"each successive document's real KNN distance must be strictly larger")
+	}
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+}
+
 func (suite *GlideTestSuite) TestModuleFtSearchScorerTfidfRejected() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()

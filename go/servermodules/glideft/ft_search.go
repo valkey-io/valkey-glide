@@ -4,6 +4,7 @@ package glideft
 
 import (
 	"context"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -129,6 +130,35 @@ func isPureVectorKnnQuery(query string) bool {
 	return preFilter == "" || preFilter == "*"
 }
 
+// knnDistanceFieldRegexp matches a KNN clause's own vector field reference, `@<field>`, right
+// after the `KNN <k>` keyword pair -- e.g. `*=>[KNN 5 @vec $blob]` captures "vec". Whitespace
+// between KNN and the count, and between the count and the field reference, mirrors the
+// flexibility the server's own query parser allows (search.cc's token scanner skips runs of
+// space/tab/newline/CR between tokens the same way isPureVectorKnnQuery's delimiter scan does).
+var knnDistanceFieldRegexp = regexp.MustCompile(`(?i)KNN\s+\d+\s+@(\w+)`)
+
+// knnDistanceFieldName returns the Fields key holding a pure-vector KNN query's own distance
+// value -- `__<field>_score` by default, or the caller's own RETURN ... AS alias for that same
+// `__<field>_score` identifier when opts sets one (see options.FtSearchReturnField). Returns ""
+// if query has no KNN clause to extract a field from (callers only reach this when
+// isPureVectorKnnQuery(query) is already true, so this should not normally happen).
+func knnDistanceFieldName(query string, opts *options.FtSearchOptions) string {
+	m := knnDistanceFieldRegexp.FindStringSubmatch(query)
+	if m == nil {
+		return ""
+	}
+	defaultName := "__" + m[1] + "_score"
+	if opts == nil {
+		return defaultName
+	}
+	for _, rf := range opts.ReturnFields {
+		if rf.FieldIdentifier == defaultName && rf.Alias != "" {
+			return rf.Alias
+		}
+	}
+	return defaultName
+}
+
 // TODO (#5853): We should find a way to NOT have to do it client-side. The current
 // limitations are that we only have access to CustomCommand and we are forced to not
 // "leak" out of the glideft folder which limits our ability to parse from CustomCommand.
@@ -142,28 +172,45 @@ func isPureVectorKnnQuery(query string) bool {
 // callers see (dict insertion order is preserved there). Go's map-based Documents loses that
 // order, so it's restored here by sorting on Score, with the document key as a deterministic
 // tiebreak (the server's own tie-break for an equivalent case, search.cc, is also the key,
-// ascending). For a pure-vector KNN query (see isPureVectorKnnQuery), Score is a distance, where
-// lower is closer, and the server keeps its reply in ascending order -- so this sorts ascending
-// to match. Every other case (BM25 text relevance, or a hybrid text+KNN query, which the server
-// itself re-ranks to relevance descending) sorts descending, best match first. This only applies
-// when SortBy is empty: once SortBy and WithScores combine, the existing port rule below keeps
-// sorting by SortBy/SortKey and never falls back to Score.
+// ascending). For a pure-vector KNN query (see isPureVectorKnnQuery), WITHSCORES itself always
+// reports 0 (ft_search.cc: `has_relevance ? neighbor.score : 0.0f`, confirmed by the server's
+// own pure_vector_with_scores_reports_zero test) rather than the KNN distance, so sorting on
+// Score would compare equal across every document and fall through to the key tiebreak --
+// silently replacing the server's nearest-first order with key order. The real distance is
+// reported separately via the `score_as` field (knnDistanceFieldName: `__<field>_score`, or its
+// RETURN ... AS alias), so this branch sorts on that field instead, ascending (lower distance is
+// closer). Every other case (BM25 text relevance, or a hybrid text+KNN query, which the server
+// itself re-ranks to relevance descending) sorts descending on the real Score, best match
+// first. This only applies when SortBy is empty: once SortBy and WithScores combine, the
+// existing port rule below keeps sorting by SortBy/SortKey and never falls back to Score.
 func sortDocuments(docs []models.FtSearchDocument, opts *options.FtSearchOptions, withSortKeys bool, query string) {
 	if len(docs) <= 1 {
 		return
 	}
 	if opts == nil || opts.SortBy == "" {
 		if opts != nil && opts.WithScores {
-			ascending := isPureVectorKnnQuery(query)
+			if isPureVectorKnnQuery(query) {
+				distanceField := knnDistanceFieldName(query, opts)
+				sort.SliceStable(docs, func(i, j int) bool {
+					di, dj := fieldAsString(docs[i].Fields, distanceField), fieldAsString(docs[j].Fields, distanceField)
+					if di != dj {
+						diNum, diErr := strconv.ParseFloat(di, 64)
+						djNum, djErr := strconv.ParseFloat(dj, 64)
+						if diErr == nil && djErr == nil {
+							return diNum < djNum
+						}
+						return di < dj
+					}
+					return docs[i].Key < docs[j].Key
+				})
+				return
+			}
 			sort.SliceStable(docs, func(i, j int) bool {
 				si, sj := docs[i].Score, docs[j].Score
 				if si == nil || sj == nil {
 					return false
 				}
 				if *si != *sj {
-					if ascending {
-						return *si < *sj
-					}
 					return *si > *sj
 				}
 				return docs[i].Key < docs[j].Key
