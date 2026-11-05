@@ -436,7 +436,7 @@ def build_sync_client(
     if ffi_features:
         # setup.py reads these for the sdist/wheel path.
         env["GLIDE_SYNC_RDMA"] = "1"
-        if "tcp-dev" in ffi_features:
+        if ffi_features == "rdma-tcp-dev":
             env["GLIDE_SYNC_RDMA_TCP"] = "1"
 
     if wheel:
@@ -595,7 +595,8 @@ Examples:
     python dev.py build                                   # Build the async client in debug mode
     python dev.py build --client async --mode release     # Build the async client in release mode
     python dev.py build --client sync                     # Build the sync client
-    python dev.py build --client sync --rdma              # Build the sync client with RDMA
+    python dev.py build --client sync --rdma              # Build the sync client with RDMA and the tcp provider
+    python dev.py build --client sync --mode release --rdma  # Build the sync client with RDMA as released
     python dev.py protobuf                                # Generate Python protobuf files (.py and .pyi)
     python dev.py lint                                    # Run Python linters
     python dev.py test                                    # Run all tests
@@ -649,9 +650,9 @@ Examples:
     build_parser.add_argument(
         "--rdma",
         action="store_true",
-        help="Build the FFI library with RDMA support (sync client only), including "
-        "the tcp provider the RDMA tests use. Release wheels are built without it; "
-        "a wheel built with --rdma carries it.",
+        help="Build the FFI library with RDMA support (sync client only). In debug "
+        "mode this includes the tcp provider the RDMA tests use; in release mode "
+        "it does not, as in the published wheels.",
     )
 
     subparsers.add_parser(
@@ -697,7 +698,12 @@ Examples:
         no_cache = args.no_cache
         wheel = args.wheel
         features = args.features
-        ffi_features = "rdma-tcp-dev" if args.rdma else ""
+        if not args.rdma:
+            ffi_features = ""
+        elif release:
+            ffi_features = "rdma"
+        else:
+            ffi_features = "rdma-tcp-dev"
         if args.client in (ClientTarget.ASYNC, ClientTarget.ALL):
             print(f"🛠 Building async client ({args.mode} mode)...")
             build_async_client(

@@ -277,7 +277,8 @@ def _create_tcp_client(client_type, config):
     except Exception as caught:
         if _TCP_PROVIDER_NOT_BUILT in str(caught):
             pytest.skip(
-                "this build has no tcp RDMA provider; build with dev.py build --rdma"
+                "this build has no tcp RDMA provider; build with dev.py build --rdma "
+                "in debug mode"
             )
         raise
 

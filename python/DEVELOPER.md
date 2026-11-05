@@ -198,7 +198,7 @@ After installing prerequisites and cloning the repository, you can build the asy
 # Build the async client in release mode
 python3 dev.py build --client async --mode release
 
-# Build the sync client with RDMA support
+# Build the sync client with RDMA support (debug mode also has the tcp provider)
 python3 dev.py build --client sync --rdma
 ```
 
@@ -309,9 +309,8 @@ If the environment variable is not set, DNS tests will be skipped.
 
 ### RDMA Tests
 
-RDMA is only in the sync client, and only when it is built with `--rdma`. That is a
-development build (the FFI `rdma-tcp-dev` feature): it carries the `tcp` provider the tests
-use, which release wheels leave out (see `glide_rdma::Provider::Tcp`).
+RDMA is only in the sync client, and only when it is built with `--rdma`. The tcp tests
+need a debug-mode build; a `--mode release` build has no tcp provider and they skip.
 `libfabric` 2.4 or newer is loaded when a client first opens a fabric, so it only has to be
 installed where the tests run. Set `GLIDE_LIBFABRIC_PATH` to the library file to use a copy
 the default search does not find.
