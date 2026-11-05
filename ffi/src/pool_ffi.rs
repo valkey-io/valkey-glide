@@ -583,7 +583,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
     let mut pool = pool_arc.lock();
     // A client whose release is mid-reset is in neither idle, in_use nor
     // discarded_ids, so the id loop below cannot reach its scopes; the adapter
-    // map, keyed by pool, can.
+    // map, whose entries record the owning pool, can.
     let owned: Vec<usize> = get_pool_adapter_map()
         .iter()
         .filter(|e| e.value().0 == pool_id)
