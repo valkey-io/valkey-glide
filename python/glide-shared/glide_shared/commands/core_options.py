@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import List, Optional, Type, Union, get_args
+from typing import List, Mapping, Optional, Type, Union, get_args
 
 from glide_shared.commands.command_args import Limit, OrderBy
 from glide_shared.constants import TEncodable
@@ -47,7 +47,7 @@ class MonitorMsg:
 
 class ConditionalChange(Enum):
     """
-    A condition to the `SET`, `ZADD` and `GEOADD` commands.
+    A condition to the `SET`, `ZADD`, `GEOADD` and `HSETEX` commands.
     """
 
     ONLY_IF_EXISTS = "XX"
@@ -452,6 +452,32 @@ class ClientPauseMode(Enum):
 
     WRITE = "WRITE"
     """ Pause client write commands. """
+
+
+def _build_hsetex_args(
+    key: TEncodable,
+    field_value_map: Mapping[TEncodable, TEncodable],
+    key_conditional_change: Optional[ConditionalChange] = None,
+    field_conditional_change: Optional[HashFieldConditionalChange] = None,
+    expiry: Optional[ExpirySet] = None,
+) -> List[TEncodable]:
+    args: List[TEncodable] = [key]
+
+    if key_conditional_change is not None:
+        args.append(key_conditional_change.value)
+
+    if field_conditional_change is not None:
+        args.append(field_conditional_change.value)
+
+    if expiry is not None:
+        args.extend(expiry.get_cmd_args())
+
+    args.extend(["FIELDS", str(len(field_value_map))])
+
+    for field, value in field_value_map.items():
+        args.extend([field, value])
+
+    return args
 
 
 def _build_sort_args(

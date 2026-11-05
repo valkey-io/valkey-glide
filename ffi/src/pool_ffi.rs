@@ -115,6 +115,18 @@ pub(crate) fn get_pool_adapter_map() -> &'static dashmap::DashMap<usize, (u64, u
     POOL_ADAPTER_MAP.get_or_init(dashmap::DashMap::new)
 }
 
+/// [`glide_core::pool::track_scope_command`] for a scope whose parent adapter is
+/// pool-borrowed; `None` otherwise.
+fn track_scope_command(
+    scope_id: u64,
+    cmd_name: &str,
+    args: &[Vec<u8>],
+) -> Option<glide_core::pool::BlockingGuard> {
+    let parent = scope::scope_parent_id(scope_id)? as usize;
+    let (pool_id, client_id) = *get_pool_adapter_map().get(&parent)?.value();
+    glide_core::pool::track_scope_command(pool_id, client_id, cmd_name, args)
+}
+
 /// Maps pool_id → ClientType for background client creation.
 static POOL_CLIENT_TYPES: std::sync::OnceLock<dashmap::DashMap<u64, ClientType>> =
     std::sync::OnceLock::new();
@@ -629,9 +641,8 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
     }
 
     {
-        // try_lock rather than blocking_lock: the abandon monitor may hold the
-        // lock briefly during a scan. Using blocking_lock here can deadlock if
-        // the monitor's async sleep is pending on the same runtime.
+        // Cleanup runs inline when the lock is free and is handed to a task when
+        // it is not, so destroy never waits on the caller's thread.
         if let Ok(mut pool) = pool_arc.try_lock() {
             // Clean up POOL_CLIENTS entries for all clients owned by this pool
             // (includes discarded clients that the abandon monitor removed from in_use)
@@ -653,7 +664,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
                     }
                 }
             }
-            pool.destroy();
+            ClientPool::destroy(pool);
         } else {
             // Lock contended — schedule async cleanup so resources are eventually freed.
             let pool_arc_async = pool_arc.clone();
@@ -677,7 +688,7 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
                         }
                     }
                 }
-                pool.destroy();
+                ClientPool::destroy(pool);
             });
         }
     }
@@ -730,7 +741,8 @@ pub enum PoolMetricsStatus {
     Read = 0,
     /// No pool has this id.
     UnknownPool = 1,
-    /// The pool lock was held, so no read was made.
+    /// The pool lock was held and the caller is on a Tokio runtime thread,
+    /// where waiting for it would panic.
     LockHeld = 2,
 }
 
@@ -740,6 +752,7 @@ pub enum PoolMetricsStatus {
 ///
 /// Mirrored in the CFFI declarations beside [`PoolMetricsStatus`].
 #[repr(C)]
+#[must_use]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PoolMetrics {
     pub status: PoolMetricsStatus,
@@ -764,8 +777,16 @@ pub extern "C" fn glide_pool_metrics(pool_id: u64) -> PoolMetrics {
     let Some(pool_arc) = pool::get_pool(pool_id) else {
         return PoolMetrics::not_read(PoolMetricsStatus::UnknownPool);
     };
-    let Ok(pool) = pool_arc.try_lock() else {
-        return PoolMetrics::not_read(PoolMetricsStatus::LockHeld);
+    // Holders release the lock without awaiting, so waiting is short.
+    // blocking_lock panics on a Tokio runtime thread, and a panic through
+    // extern "C" aborts the process, so a runtime thread keeps the non-waiting read.
+    let pool = if tokio::runtime::Handle::try_current().is_ok() {
+        let Ok(pool) = pool_arc.try_lock() else {
+            return PoolMetrics::not_read(PoolMetricsStatus::LockHeld);
+        };
+        pool
+    } else {
+        pool_arc.blocking_lock()
     };
     PoolMetrics {
         status: PoolMetricsStatus::Read,
@@ -816,8 +837,11 @@ pub unsafe extern "C" fn glide_scope_execute_async(
     };
 
     let runtime = get_pool_runtime();
+    // Marked before spawning so the abandon monitor never sees the gap.
+    let blocking_guard = track_scope_command(scope_id, &cmd_name, &args);
 
     runtime.spawn(async move {
+        let _blocking_guard = blocking_guard;
         // OTel: create span for scope command
         let span_ptr = if GlideOpenTelemetry::is_initialized() {
             create_otel_span(RequestType::CustomCommand)
@@ -1250,6 +1274,7 @@ pub unsafe extern "C" fn glide_scope_execute(
     };
 
     let runtime = get_pool_runtime();
+    let _blocking_guard = track_scope_command(scope_id, &cmd_name, &args);
 
     // OTel: create span for scope command
     let span_ptr = if GlideOpenTelemetry::is_initialized() {
@@ -1490,14 +1515,48 @@ mod pool_metrics_tests {
         );
     }
 
-    /// Pins the current behaviour: a contended read is declined rather than
-    /// waited for. #7130 changes this.
     #[test]
-    fn contended_read_reports_lock_held_with_no_counts() {
+    fn contended_read_waits_for_the_lock_and_reports_read() {
         let pool = registered_pool_with_two_reserved_slots();
         let held = hold_lock(pool::get_pool(pool.0).unwrap());
+        let (reading_tx, reading_rx) = std::sync::mpsc::channel();
+        let reader = {
+            let pool_id = pool.0;
+            std::thread::spawn(move || {
+                reading_tx.send(()).unwrap();
+                glide_pool_metrics(pool_id)
+            })
+        };
+        reading_rx.recv().unwrap();
+        std::thread::sleep(Duration::from_millis(50));
+        assert!(
+            !reader.is_finished(),
+            "the read returned while the lock was held"
+        );
 
-        let metrics = glide_pool_metrics(pool.0);
+        held.release();
+        let metrics = reader.join().unwrap();
+
+        assert_eq!(
+            metrics,
+            PoolMetrics {
+                status: PoolMetricsStatus::Read,
+                idle: 0,
+                active: 0,
+                total: 2,
+            }
+        );
+    }
+
+    #[test]
+    fn contended_read_on_a_runtime_thread_reports_lock_held_with_no_counts() {
+        let pool = registered_pool_with_two_reserved_slots();
+        let held = hold_lock(pool::get_pool(pool.0).unwrap());
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+
+        let metrics = rt.block_on(async { glide_pool_metrics(pool.0) });
         held.release();
 
         assert_eq!(metrics, PoolMetrics::not_read(PoolMetricsStatus::LockHeld));

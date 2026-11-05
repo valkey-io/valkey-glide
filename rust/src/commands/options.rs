@@ -467,6 +467,79 @@ impl ToValkeyArgs for FunctionRestorePolicy {
 
 impl ToSingleValkeyArg for FunctionRestorePolicy {}
 
+/// Section of information for the `INFO` command.
+///
+/// Mirrors Python `InfoSection`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum InfoSection {
+    /// Return all sections, excluding module generated ones (`all`).
+    All,
+    /// Client connections section (`clients`).
+    Clients,
+    /// Valkey Cluster section (`cluster`).
+    Cluster,
+    /// Valkey Cluster information (`cluster_info`).
+    ///
+    /// Since Valkey 9.1.0.
+    ClusterInfo,
+    /// Valkey command statistics (`commandstats`).
+    CommandStats,
+    /// CPU consumption statistics (`cpu`).
+    Cpu,
+    /// Return only the default set of sections (`default`).
+    Default,
+    /// Valkey error statistics (`errorstats`).
+    ErrorStats,
+    /// Includes all and modules (`everything`).
+    Everything,
+    /// Database related statistics (`keyspace`).
+    Keyspace,
+    /// Valkey command latency percentile distribution statistics (`latencystats`).
+    LatencyStats,
+    /// Memory consumption related information (`memory`).
+    Memory,
+    /// Modules section (`modules`).
+    Modules,
+    /// RDB and AOF related information (`persistence`).
+    Persistence,
+    /// Primary/replica replication information (`replication`).
+    Replication,
+    /// Valkey Sentinel section, only applicable to Sentinel instances (`sentinel`).
+    Sentinel,
+    /// General information about the server (`server`).
+    Server,
+    /// General statistics (`stats`).
+    Stats,
+}
+
+impl ToValkeyArgs for InfoSection {
+    fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        out.write_arg(match self {
+            InfoSection::All => b"all".as_slice(),
+            InfoSection::Clients => b"clients".as_slice(),
+            InfoSection::Cluster => b"cluster".as_slice(),
+            InfoSection::ClusterInfo => b"cluster_info".as_slice(),
+            InfoSection::CommandStats => b"commandstats".as_slice(),
+            InfoSection::Cpu => b"cpu".as_slice(),
+            InfoSection::Default => b"default".as_slice(),
+            InfoSection::ErrorStats => b"errorstats".as_slice(),
+            InfoSection::Everything => b"everything".as_slice(),
+            InfoSection::Keyspace => b"keyspace".as_slice(),
+            InfoSection::LatencyStats => b"latencystats".as_slice(),
+            InfoSection::Memory => b"memory".as_slice(),
+            InfoSection::Modules => b"modules".as_slice(),
+            InfoSection::Persistence => b"persistence".as_slice(),
+            InfoSection::Replication => b"replication".as_slice(),
+            InfoSection::Sentinel => b"sentinel".as_slice(),
+            InfoSection::Server => b"server".as_slice(),
+            InfoSection::Stats => b"stats".as_slice(),
+        });
+    }
+}
+
+impl ToSingleValkeyArg for InfoSection {}
+
 /// Mode for the `CLIENT PAUSE` command.
 ///
 /// Mirrors Python `ClientPauseMode`.
@@ -893,5 +966,27 @@ mod tests {
         assert_args(FunctionRestorePolicy::Append, &["APPEND"]);
         assert_args(FunctionRestorePolicy::Flush, &["FLUSH"]);
         assert_args(FunctionRestorePolicy::Replace, &["REPLACE"]);
+    }
+
+    #[test]
+    fn info_section_args() {
+        assert_args(InfoSection::All, &["all"]);
+        assert_args(InfoSection::Clients, &["clients"]);
+        assert_args(InfoSection::Cluster, &["cluster"]);
+        assert_args(InfoSection::ClusterInfo, &["cluster_info"]);
+        assert_args(InfoSection::CommandStats, &["commandstats"]);
+        assert_args(InfoSection::Cpu, &["cpu"]);
+        assert_args(InfoSection::Default, &["default"]);
+        assert_args(InfoSection::ErrorStats, &["errorstats"]);
+        assert_args(InfoSection::Everything, &["everything"]);
+        assert_args(InfoSection::Keyspace, &["keyspace"]);
+        assert_args(InfoSection::LatencyStats, &["latencystats"]);
+        assert_args(InfoSection::Memory, &["memory"]);
+        assert_args(InfoSection::Modules, &["modules"]);
+        assert_args(InfoSection::Persistence, &["persistence"]);
+        assert_args(InfoSection::Replication, &["replication"]);
+        assert_args(InfoSection::Sentinel, &["sentinel"]);
+        assert_args(InfoSection::Server, &["server"]);
+        assert_args(InfoSection::Stats, &["stats"]);
     }
 }

@@ -4,15 +4,16 @@
 
 ### Features
 
+* Go: Add valkey-search 1.3 support, including scoring, cursors, and `FT.HYBRID` ([#7380](https://github.com/valkey-io/valkey-glide/pull/7380))
 * All: Add support for Valkey 9.0 commands:
   * `DELIFEQ` ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Java, Node, Python, Go: Add support for Valkey 9.1 commands:
   * `HGETDEL` ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145))
-* Java: Add support for Valkey 9.1 commands:
   * `NX`/`XX` support for `HSETEX` ([#6154](https://github.com/valkey-io/valkey-glide/issues/6154))
 * All: Add support for Valkey 9.2 commands:
   * `SISMEMBER` with `XX` option ([#7202](https://github.com/valkey-io/valkey-glide/issues/7202))
   * `SET` with `IFNE` option ([#7237](https://github.com/valkey-io/valkey-glide/issues/7237))
+* Python/CI: Add experimental Windows AMD64 (CPython 3.9–3.14) and ARM64 (CPython 3.11–3.14) wheel builds for the async and sync clients, including Windows FFI width fixes and a threaded async response-pipe reader. Wheels remain build-only CI artifacts; Windows integration coverage is required before PyPI publishing ([#6826](https://github.com/valkey-io/valkey-glide/pull/6826)).
 * Rust: Implement `ToSingleValkeyArg` and `ToValkeyArgs` for option types ([#7381](https://github.com/valkey-io/valkey-glide/issues/7381))
 * Core: Add `glide-rdma` crate, an RDMA transfer layer over libfabric (loaded at runtime), for later RDMA support ([#7177](https://github.com/valkey-io/valkey-glide/pull/7177))
 * Core: Add opt-in RDMA support to glide-core behind the `rdma` feature: `RdmaConfig` in the connection request, `Client::register_rdma_region` / `rdma_get` / `rdma_set` / `close_rdma`, and the `rdma_parked_bytes` / `rdma_leaked_bytes` counters. Transfers route to the key's primary and have no request timeout. `BLOB.RDMA_*` commands are refused when sent any other way, in every build ([#7412](https://github.com/valkey-io/valkey-glide/pull/7412))
@@ -84,6 +85,7 @@
 * Core: fix(core): enforce RESP3 recursion-depth guard for all aggregate types ([#6477](https://github.com/valkey-io/valkey-glide/pull/6477))
 * Core: Update `anyhow` to 1.0.103 to fix RUSTSEC-2026-0190, an unsoundness advisory in `anyhow::Error::downcast_mut()` that can trigger undefined behavior ([#6364](https://github.com/valkey-io/valkey-glide/pull/6364))
 * Go: Remove `.gitignore` from the released module so consumers who commit `vendor/` keep the generated artifacts (`internal/protobuf/*.pb.go`, `rustbin/**`, `lib.h`) ([#6441](https://github.com/valkey-io/valkey-glide/pull/6441))
+* Core: Releasing a scope, or closing its parent client, while a blocking command is in flight now closes the scope's socket, so the server drops the blocked waiter instead of letting it consume a later push — the socket used to stay open until the server replied, which for `BLPOP key 0` is never. A reused scope connection also gets a fresh scope id, and a blocking scope command keeps the abandon monitor from reclaiming its pool-borrowed parent mid-command ([#7000](https://github.com/valkey-io/valkey-glide/issues/7000))
 * Core: Validate client library names ([#6891](https://github.com/valkey-io/valkey-glide/pull/6891))
 
 ### Changes
@@ -123,6 +125,7 @@
 
 ### Breaking Changes
 
+* Rust: Require `InfoSection` enum for `info_sections` command ([#7366](https://github.com/valkey-io/valkey-glide/issues/7366))
 * Java: An AZ-affinity read strategy configured without `clientAZ` now fails at client creation. Previously the core logged a warning and downgraded the strategy to `PreferReplica`, so reads silently went to arbitrary nodes. Affects `AZ_AFFINITY` and `AZ_AFFINITY_REPLICAS_AND_PRIMARY` as well as the new `AZ_AFFINITY_ALL_NODES`, and reaches `ClientPool.create` as well as `GlideClient`/`GlideClusterClient` ([#7059](https://github.com/valkey-io/valkey-glide/pull/7059))
 * Node: `clientAz` is now trimmed and validated for the `AZAffinity`, `AZAffinityReplicasAndPrimary`, and `AZAffinityAllNodes` read strategies. A whitespace-only `clientAz` now raises a `ConfigurationError`, and a padded value (e.g. `" us-east-1a "`) is trimmed before reaching the core so reads pin to that zone instead of falling back to all nodes ([#7104](https://github.com/valkey-io/valkey-glide/pull/7104))
 

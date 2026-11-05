@@ -291,11 +291,11 @@ type XInfoGroupInfo struct {
 	// The ID of the last entry delivered to the group's consumers.
 	LastDeliveredId string
 	// The logical "read counter" of the last entry delivered to the group's consumers.
-	// Included in the response only on valkey 7.0.0 and above.
+	// Included in the response only on Valkey 7.0.0 and above.
 	EntriesRead Result[int64]
 	// The number of entries in the stream that are still waiting to be delivered to the group's consumers, or a `nil` when
 	// that number can't be determined.
-	// Included in the response only on valkey 7.0.0 and above.
+	// Included in the response only on Valkey 7.0.0 and above.
 	Lag Result[int64]
 }
 
@@ -394,11 +394,11 @@ type XInfoStreamGroupInfo struct {
 	// The ID of the last entry delivered to the group's consumers.
 	LastDeliveredId string
 	// The logical "read counter" of the last entry delivered to the group's consumers.
-	// Included in the response only on valkey 7.0.0 and above.
+	// Included in the response only on Valkey 7.0.0 and above.
 	EntriesRead Result[int64]
 	// The number of entries in the stream that are still waiting to be delivered to the group's consumers, or a `nil` when
 	// that number can't be determined.
-	// Included in the response only on valkey 7.0.0 and above.
+	// Included in the response only on Valkey 7.0.0 and above.
 	Lag Result[int64]
 	// The count of the group's Pending Entries List (PEL), which are messages that were delivered
 	// but are yet to be acknowledged.
