@@ -81,17 +81,17 @@ public final class LuaTimeLimit implements AutoCloseable {
         Map<String, CompletableFuture<String>> replies = new LinkedHashMap<>();
         values.forEach((address, value) -> replies.put(address, configSet(client, address, value)));
         return replies.entrySet().stream()
-                .map(e -> e.getValue().handle((reply, error) -> failure(e.getKey(), reply, error)).join())
+                .map(e -> refusal(e.getValue()).join().map(reason -> e.getKey() + ": " + reason))
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .collect(Collectors.toList());
     }
 
-    private static Optional<String> failure(String address, String reply, Throwable error) {
-        if (error != null) {
-            return Optional.of(address + ": " + error.getMessage());
-        }
-        return OK.equals(reply) ? Optional.empty() : Optional.of(address + ": " + reply);
+    /** Empty when the reply was OK; otherwise the non-OK reply or the request's error. */
+    private static CompletableFuture<Optional<String>> refusal(CompletableFuture<String> reply) {
+        return reply
+                .thenApply(value -> Optional.of(value).filter(v -> !OK.equals(v)))
+                .exceptionally(error -> Optional.of(error.toString()));
     }
 
     private static CompletableFuture<String> configSet(
