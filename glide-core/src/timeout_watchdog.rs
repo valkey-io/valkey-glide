@@ -612,13 +612,20 @@ pub struct TimeoutWatchdog {
 static GLOBAL_WATCHDOG: std::sync::atomic::AtomicPtr<TimeoutWatchdog> =
     std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
 
+/// Unset the global watchdog so the next `global()` call starts a fresh one.
+/// Only atomic stores, so it is safe to run in a `pthread_atfork` child handler.
+fn reset_global() {
+    GLOBAL_WATCHDOG.store(std::ptr::null_mut(), Ordering::Release);
+    PUBLISHED_PENDING.store(0, Ordering::Relaxed);
+}
+
 impl TimeoutWatchdog {
     /// Get or initialize the global shared watchdog instance.
     pub fn global() -> &'static Self {
         let ptr = GLOBAL_WATCHDOG.load(std::sync::atomic::Ordering::Acquire);
         if !ptr.is_null() {
             // Safety: once installed as non-null, the pointer is never freed
-            // until process exit (reinit_global intentionally leaks the prior
+            // until process exit (reset_global intentionally leaks the prior
             // instance rather than dropping it).
             return unsafe { &*ptr };
         }
@@ -647,26 +654,31 @@ impl TimeoutWatchdog {
         }
     }
 
-    /// Reinitialize the global watchdog after fork().
+    /// Reset the global watchdog after fork().
     ///
-    /// After fork(), the watchdog thread is dead but the AtomicPtr still points
-    /// to the old instance. This replaces it with a fresh one. The old instance
-    /// is intentionally leaked — its internal Mutex/Condvar are in undefined
-    /// state post-fork and cannot be safely dropped.
-    ///
-    /// Must only be called in a forked child process where the previous
-    /// watchdog thread is no longer running.
+    /// A forked child already gets this reset automatically (see
+    /// `start_global`), so calling it is not required. The next `global()`
+    /// call starts a fresh watchdog. The old instance is intentionally leaked:
+    /// its channel state was copied from the parent and cannot be safely dropped.
     pub fn reinit_global() {
-        let w = Box::new(Self::start_global());
-        let w_ref: &'static Self = Box::leak(w);
-        let ptr = w_ref as *const Self as *mut Self;
-        GLOBAL_WATCHDOG.store(ptr, std::sync::atomic::Ordering::Release);
-        // Reset the published pending count — the old watchdog's entries are gone.
-        PUBLISHED_PENDING.store(0, Ordering::Relaxed);
+        reset_global();
     }
 
     /// Start the global watchdog instance (publishes pending count).
     fn start_global() -> Self {
+        // fork() copies only the calling thread, so a child would inherit a
+        // global whose watchdog thread does not exist: its deadlines would never
+        // fire, and on macOS sending to it crashes the child with SIGTRAP.
+        #[cfg(unix)]
+        {
+            extern "C" fn reset_global_in_child() {
+                reset_global();
+            }
+            static AT_FORK: std::sync::Once = std::sync::Once::new();
+            AT_FORK.call_once(|| unsafe {
+                libc::pthread_atfork(None, None, Some(reset_global_in_child));
+            });
+        }
         let (tx, rx) = mpsc::channel();
         std::thread::Builder::new()
             .name("glide-timeout-watchdog".into())
@@ -1047,5 +1059,40 @@ mod tests {
             "watchdog must fire after reinit_global (simulating post-fork)"
         );
         assert!(result.unwrap().is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn forked_child_gets_working_watchdog() {
+        // Start the global watchdog in the parent and let it fire once.
+        let rx = TimeoutWatchdog::global().register(Duration::from_millis(10), Instant::now());
+        assert_eq!(rx.blocking_recv(), Ok(()));
+
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0, "fork failed");
+        if pid == 0 {
+            // Child: the parent's watchdog thread was not copied. A deadline
+            // registered here only fires if the child got a fresh watchdog.
+            let fired = std::panic::catch_unwind(|| {
+                let rx =
+                    TimeoutWatchdog::global().register(Duration::from_millis(10), Instant::now());
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_time()
+                    .build()
+                    .unwrap()
+                    .block_on(async { tokio::time::timeout(Duration::from_secs(5), rx).await })
+                    .is_ok_and(|r| r.is_ok())
+            });
+            // Never return into the test harness from the child.
+            unsafe { libc::_exit(if matches!(fired, Ok(true)) { 0 } else { 1 }) };
+        }
+
+        let mut status = 0;
+        assert_eq!(unsafe { libc::waitpid(pid, &mut status, 0) }, pid);
+        assert!(
+            libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+            "forked child's watchdog did not fire a deadline (raw wait status {status})"
+        );
     }
 }
