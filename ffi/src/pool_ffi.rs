@@ -1581,6 +1581,10 @@ mod pool_destroy_tests {
             assert!(Instant::now() < deadline, "release never took the client");
             std::thread::sleep(Duration::from_millis(5));
         }
+        assert!(
+            pool_arc.lock().idle.is_empty(),
+            "the release finished before destroy, so destroy's id loop would cover the client"
+        );
 
         assert_eq!(glide_pool_destroy(pool_id), 0);
 

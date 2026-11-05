@@ -4530,14 +4530,22 @@ mod client_pool_tests {
     fn refresh_by_client_waits_for_the_pool_lock_without_holding_the_map() {
         let pool_id =
             register_pool(ClientPool::new(test_pool_config(Duration::from_secs(5))).unwrap());
-        let client_id = allocate_client_id();
-        register_pool_client(pool_id, client_id);
         let pool_arc = get_pool(pool_id).unwrap();
+        let stale = Instant::now() - Duration::from_secs(60);
+        let client_id = {
+            let mut pool = pool_arc.lock();
+            let id = pool.add_client(crate::client::create_test_glide_client());
+            assert_eq!(pool.try_acquire(), id as i64);
+            pool.in_use.get_mut(&id).unwrap().borrowed_at = Some(stale);
+            id
+        };
+        register_pool_client(pool_id, client_id);
 
         let (held_tx, held_rx) = std::sync::mpsc::channel();
         let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let holder_pool = pool_arc.clone();
         let holder = std::thread::spawn(move || {
-            let _guard = pool_arc.lock();
+            let _guard = holder_pool.lock();
             held_tx.send(()).unwrap();
             release_rx.recv().unwrap();
         });
@@ -4557,11 +4565,17 @@ mod client_pool_tests {
         holder.join().unwrap();
         refresher.join().unwrap();
         remover.join().unwrap();
+        let refreshed = pool_arc.lock().in_use[&client_id].borrowed_at != Some(stale);
+        drop(pool_arc);
         unregister_pool(pool_id);
 
         assert!(
             removed.is_ok(),
             "the map write waited for a refresh that was waiting for the pool lock"
+        );
+        assert!(
+            refreshed,
+            "the refresher read the map after the removal, so the test exercised nothing"
         );
     }
 
