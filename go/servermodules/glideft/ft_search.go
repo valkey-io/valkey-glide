@@ -130,22 +130,35 @@ func isPureVectorKnnQuery(query string) bool {
 	return preFilter == "" || preFilter == "*"
 }
 
-// knnDistanceFieldRegexp matches a KNN clause's own vector field reference, `@<field>`, right
-// after the `KNN <k>` keyword pair -- e.g. `*=>[KNN 5 @vec $blob]` captures "vec". Whitespace
-// between KNN and the count, and between the count and the field reference, mirrors the
-// flexibility the server's own query parser allows (search.cc's token scanner skips runs of
-// space/tab/newline/CR between tokens the same way isPureVectorKnnQuery's delimiter scan does).
-var knnDistanceFieldRegexp = regexp.MustCompile(`(?i)KNN\s+\d+\s+@(\w+)`)
+// knnClauseRegexp matches a whole `[KNN <k> @<field> ...]` clause body (the bracket interior),
+// so the optional trailing parameters (EF_RUNTIME, HYBRID_POLICY, AS -- any order, per
+// docs/topics/search-query.md's `[ KNN <K> @<field> $<parameter> [EF_RUNTIME <ef-value>]
+// [HYBRID_POLICY <policy>] [AS <name>] ]` grammar) can be searched for an AS token separately,
+// rather than assuming AS is the very next token after the field reference.
+var knnClauseRegexp = regexp.MustCompile(`(?i)KNN\s+\d+\s+@(\w+)\s+\$\w+([^\]]*)\]`)
+
+// knnAsAliasRegexp matches a bare `AS <name>` token within a KNN clause's optional-parameter
+// tail (knnClauseRegexp's second capture group), case-insensitively, the way the server's own
+// MatchInsensitive("AS") token scan does.
+var knnAsAliasRegexp = regexp.MustCompile(`(?i)\bAS\s+(\w+)\b`)
 
 // knnDistanceFieldName returns the Fields key holding a pure-vector KNN query's own distance
-// value -- `__<field>_score` by default, or the caller's own RETURN ... AS alias for that same
-// `__<field>_score` identifier when opts sets one (see options.FtSearchReturnField). Returns ""
-// if query has no KNN clause to extract a field from (callers only reach this when
-// isPureVectorKnnQuery(query) is already true, so this should not normally happen).
+// value. Per docs/topics/search-query.md: the server reports it under the query's own `AS
+// <name>` if the KNN clause carries one, or under the default `__<field>_score` otherwise --
+// and in the default case, the caller's own RETURN ... AS alias for that identifier (see
+// options.FtSearchReturnField) renames it again, same as any other returned field. An AS
+// inside the KNN clause itself already is the name the server sends on the wire, so a RETURN
+// remap for the default `__<field>_score` identifier does not apply once the query supplies its
+// own AS -- the default identifier doesn't exist on the wire to remap. Returns "" if query has
+// no KNN clause to extract a field from (callers only reach this when isPureVectorKnnQuery(query)
+// is already true, so this should not normally happen).
 func knnDistanceFieldName(query string, opts *options.FtSearchOptions) string {
-	m := knnDistanceFieldRegexp.FindStringSubmatch(query)
+	m := knnClauseRegexp.FindStringSubmatch(query)
 	if m == nil {
 		return ""
+	}
+	if as := knnAsAliasRegexp.FindStringSubmatch(m[2]); as != nil {
+		return as[1]
 	}
 	defaultName := "__" + m[1] + "_score"
 	if opts == nil {

@@ -282,6 +282,58 @@ func (suite *GlideTestSuite) TestModuleFtSearchPureVectorKnnWithScoresOrdersByDi
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
+// TestModuleFtSearchPureVectorKnnWithScoresAndKnnAsAliasOrdersByDistance is
+// TestModuleFtSearchPureVectorKnnWithScoresOrdersByDistanceNotScore's companion for a KNN
+// clause that names its own distance field via `AS` (docs/topics/search-query.md: `[ KNN <K>
+// @<field> $<parameter> ... [AS <name>] ]`) rather than falling back to the default
+// `__<field>_score`. knnDistanceFieldName must read that in-clause alias and not assume the
+// default name -- otherwise the lookup for `__<field>_score` finds nothing (not present on the
+// wire once the query names its own alias), every document compares equal, and the result
+// silently falls back to key order.
+func (suite *GlideTestSuite) TestModuleFtSearchPureVectorKnnWithScoresAndKnnAsAliasOrdersByDistance() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
+	}
+
+	prefix := "{ft-knn-as-alias-order-" + uuid.New().String() + "}:"
+	index := prefix + "index"
+	vecField := "vec"
+
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
+		[]options.Field{options.NewVectorFieldFlat(vecField, constants.DistanceMetricL2, 2)},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
+	require.NoError(suite.T(), err)
+
+	points := map[string][2]float32{"far": {5.0, 0.0}, "near": {1.0, 0.0}, "mid": {3.0, 0.0}}
+	for name, coords := range points {
+		_, err = client.HSet(ctx, prefix+name, map[string]string{vecField: packFloat32Vector(coords[0], coords[1])})
+		require.NoError(suite.T(), err)
+	}
+	time.Sleep(time.Second)
+
+	queryBlob := packFloat32Vector(0.0, 0.0)
+	knnQuery := fmt.Sprintf("*=>[KNN 3 @%s $blob AS dist]", vecField)
+	result, err := glideft.ClusterFtSearch(ctx, client, index, knnQuery, &options.FtSearchOptions{
+		WithScores: true,
+		Params:     []options.FtSearchParam{{Key: "blob", Value: queryBlob}},
+	})
+	require.NoError(suite.T(), err)
+	require.Len(suite.T(), result.Documents, 3)
+
+	for _, doc := range result.Documents {
+		require.NotNil(suite.T(), doc.Score)
+		assert.Equal(suite.T(), 0.0, *doc.Score)
+		assert.Contains(suite.T(), doc.Fields, "dist")
+	}
+	assert.Equal(suite.T(), []string{prefix + "near", prefix + "mid", prefix + "far"}, []string{
+		result.Documents[0].Key, result.Documents[1].Key, result.Documents[2].Key,
+	}, "documents must come back nearest-first by KNN distance (via the AS dist alias), not key order")
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+}
+
 func (suite *GlideTestSuite) TestModuleFtSearchScorerTfidfRejected() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
