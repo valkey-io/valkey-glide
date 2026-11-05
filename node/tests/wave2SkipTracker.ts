@@ -56,8 +56,7 @@ export function recordGate(capability: boolean): boolean {
  * Appends this process's final tally as one JSON line to the shared scratch
  * report, labelled by the emulate-release level the capability probe saw
  * (or `"incapable"` if the module never reached 1.3 capability at all).
- * Best-effort: a write failure (e.g. the scratch dir not existing because
- * this test file is being run outside `run-modules-ci-locally.sh`) is
+ * Best-effort: a write failure, such as an unwritable repository root, is
  * logged, not thrown -- this is reporting, not a correctness gate.
  */
 export function writeWave2SkipReport(
