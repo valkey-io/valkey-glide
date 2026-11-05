@@ -892,11 +892,17 @@ export type FtHybridOptions = {
     /** Overrides the timeout parameter of the module, in milliseconds. */
     timeout?: number;
     /**
-     * Param key/value pairs referenced from within the SEARCH query, a VSIM arm's `$name` vector
-     * reference, or any clause's expression text. If {@link FtHybridVsimArm.vector} in the same
-     * call is given raw vector bytes rather than an explicit `$name` string, an internally
-     * generated entry is merged into this mapping automatically -- a name collision with a
-     * caller-supplied entry here raises an `Error` rather than silently overwriting either one.
+     * Param key/value pairs referenced from a VSIM arm's `$name` vector reference or any
+     * aggregate clause's expression text (FILTER, APPLY). The SEARCH arm's query text is NOT
+     * substituted -- it goes through the same query pipeline as `FT.SEARCH`, where `$name`
+     * substitutes only inside a KNN vector clause (`*=>[KNN k @v $vec]`), not in ordinary
+     * predicates: `@tag:{$t}` silently matches the literal text `$t` rather than substituting,
+     * and `@num:[$lo $hi]` or a bare `$term` raise a parse error. Confirmed live against
+     * valkey-search 1.3.0-rc2 and in `src/commands/ft_hybrid_parser.cc`. If
+     * {@link FtHybridVsimArm.vector} in the same call is given raw vector bytes rather than an
+     * explicit `$name` string, an internally generated entry is merged into this mapping
+     * automatically -- a name collision with a caller-supplied entry here raises an `Error`
+     * rather than silently overwriting either one.
      */
     params?: GlideRecord<GlideString>;
     /**
