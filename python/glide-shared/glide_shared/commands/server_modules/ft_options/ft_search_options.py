@@ -174,8 +174,9 @@ class FtSearchOptions:
                 matching result whose key is not in the list. The result count is adjusted to reflect the
                 filtered set. ``[]`` (an explicit empty list) is distinct from the default ``None``: ``None``
                 omits INKEYS entirely (no restriction), while ``[]`` sends ``INKEYS 0`` and excludes every result.
-            with_scores (Optional[bool]): If set, augments the output with each document's relevance score
-                (valkey-search 1.3.0). This changes the result shape: each document value in the result map
+                Available since Valkey 9.1.0 and Valkey Search 1.3.0.
+            with_scores (Optional[bool]): If set, augments the output with each document's relevance score.
+                This changes the result shape: each document value in the result map
                 becomes a two-element list ``[score, field_map]`` instead of just ``field_map`` (a `bytes`-encoded
                 decimal string, e.g. ``b"0.287682086229"`` -- confirmed live, not a float, on both RESP2 and RESP3).
                 With ``nocontent=True``, the shape becomes ``[score, {}]``, with an empty field map. Combining
@@ -184,14 +185,17 @@ class FtSearchOptions:
                 both ``with_scores=True`` and ``withsortkeys=True`` and content present, each row becomes a
                 three-element list ``[score, sort_key, field_map]`` (`glide-core`'s
                 ``FTSearchWithScoresAndSortKeysReturnType``), a genuinely different shape from either flag alone.
-            scorer (Optional[TEncodable]): The scoring function used to rank results (valkey-search 1.3.0,
-                ``src/indexes/scoring/scorer.h``). ``"BM25STD"`` is the only value currently registered and
+                Available since Valkey 9.1.0 and Valkey Search 1.3.0.
+            scorer (Optional[TEncodable]): The scoring function used to rank results
+                (``src/indexes/scoring/scorer.h``). ``"BM25STD"`` is the only value currently registered and
                 selectable; any other value is rejected by the server. Has no visible effect unless combined with
                 ``with_scores=True`` (or inspected indirectly via ``sortby``).
+                Available since Valkey 9.1.0 and Valkey Search 1.3.0.
 
         Note:
             Vector Range queries (``@field:[VECTOR_RANGE <radius> $blob]``) are written directly into the
             query string passed to `FT.SEARCH`, not as a field on this class; see the examples below.
+            Vector Range queries are available since Valkey 9.1.0 and Valkey Search 1.3.0.
             As of valkey-search 1.3.0-rc1, a VECTOR_RANGE predicate used as a pre-filter inside a KNN query
             is rejected by the server (a "single-VR model" limitation of that release) -- VECTOR_RANGE and
             KNN cannot currently be combined in the same query.
