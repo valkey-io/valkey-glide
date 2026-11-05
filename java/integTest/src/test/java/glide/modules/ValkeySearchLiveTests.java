@@ -1866,9 +1866,11 @@ public class ValkeySearchLiveTests {
                 capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
 
         // Confirms (rather than assumes) that FT.HYBRID's params map is NOT substituted into the
-        // SEARCH arm's query text the way it is into the VSIM arm's $name vector reference -- the
-        // server rejects a bare $name token in a text/tag query filter outright, as a parse
-        // error, not a silent no-match. See FTHybridOptions#params's javadoc.
+        // SEARCH arm's query text the way it is into the VSIM arm's $name vector reference. For a
+        // TEXT field (as exercised here), the server rejects a bare $name token in the query
+        // outright, as a parse error, not a silent no-match -- a TAG field instead silently
+        // matches the literal text "$name" (not exercised by this test; see
+        // FTHybridOptions#params's javadoc for both cases).
         String prefix = "{ft-hybrid-paramprobe-" + UUID.randomUUID() + "}:";
         String index = createHybridIndex(client, prefix);
         try {
