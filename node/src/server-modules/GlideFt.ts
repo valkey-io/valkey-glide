@@ -47,6 +47,14 @@ export type FtSearchReturnType = [
  */
 export type FtAggregateReturnType = GlideRecord<GlideReturnType>[];
 
+/**
+ * The reply shape of {@link GlideFt.cursorRead | FT.CURSOR READ}: a two-element
+ * `[rows, cursorId]` array, where `rows` is the same per-document array shape
+ * {@link GlideFt.aggregate}/{@link GlideFt.hybrid} return, and `cursorId` is `0` once the
+ * cursor is exhausted, or the id to pass to the next `cursorRead` call otherwise.
+ */
+export type FtCursorReturnType = [FtAggregateReturnType, number];
+
 /** Module for Vector Search commands. */
 export class GlideFt {
     /**
@@ -515,7 +523,7 @@ export class GlideFt {
         indexName: GlideString,
         cursorId: number,
         options?: DecoderOption & { count?: number },
-    ): Promise<FtAggregateReturnType> {
+    ): Promise<FtCursorReturnType> {
         const args: GlideString[] = [
             "FT.CURSOR",
             "READ",
@@ -531,7 +539,7 @@ export class GlideFt {
             client,
             args,
             options,
-        ) as Promise<FtAggregateReturnType>;
+        ) as Promise<FtCursorReturnType>;
     }
 
     /**

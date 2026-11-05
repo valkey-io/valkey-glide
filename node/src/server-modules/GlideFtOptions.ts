@@ -831,8 +831,8 @@ export interface FtHybridFunction {
 export type FtHybridCombine = FtHybridRrf | FtHybridLinear | FtHybridFunction;
 
 /**
- * Additional parameters for {@link GlideFt.hybrid | FT.HYBRID}, applied to the aggregate-suffix
- * tail that follows the mandatory SEARCH, VSIM and optional COMBINE clauses (which are passed
+ * Additional parameters for {@link GlideFt.hybrid | FT.HYBRID}: the optional COMBINE clause and
+ * the aggregate-suffix tail that follows the mandatory SEARCH and VSIM arms (which are passed
  * directly to {@link GlideFt.hybrid}, not through this type).
  */
 export type FtHybridOptions = {

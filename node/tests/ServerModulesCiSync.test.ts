@@ -72,6 +72,33 @@ function extractNodeCaseArm(runnerText: string): string {
     return runnerText.slice(nodeArmStart, armEnd);
 }
 
+/**
+ * Slices the "Run modules tests" step out of the workflow's "Modules Tests
+ * (Linux)" job specifically, from the step's `- name: Run modules tests`
+ * line up to the next `- name:` step. Narrower than searching the whole
+ * workflow file: the self-hosted "Running Module Tests" job has its own
+ * step (also named "test") that passes `--cluster-endpoints` but not
+ * `--standalone-endpoints` (it targets a MemDB endpoint over TLS, not the
+ * local Docker containers this script reproduces) -- a whole-file
+ * `toContain` check would still pass if the Linux step specifically lost
+ * `--standalone-endpoints`, since the other job's step still has
+ * `--cluster-endpoints` elsewhere in the file.
+ */
+function extractLinuxModulesTestStep(workflowText: string): string {
+    const stepStart = workflowText.indexOf("- name: Run modules tests");
+
+    if (stepStart === -1) {
+        throw new Error(
+            "node-modules.yml has no 'Run modules tests' step to check",
+        );
+    }
+
+    const nextStep = workflowText.indexOf("- name:", stepStart + 1);
+    const stepEnd = nextStep === -1 ? workflowText.length : nextStep;
+
+    return workflowText.slice(stepStart, stepEnd);
+}
+
 describe("GlideFt CI sync: node-modules.yml / run-modules-ci-locally.sh", () => {
     it("both invoke npm run test:modules with the same endpoint flags", () => {
         const workflowText = readFileSync(WORKFLOW_FILE, "utf-8");
@@ -80,11 +107,20 @@ describe("GlideFt CI sync: node-modules.yml / run-modules-ci-locally.sh", () => 
         expect(workflowText).toContain("npm run test:modules");
         expect(runnerText).toContain("npm run test:modules");
 
+        const linuxStep = extractLinuxModulesTestStep(workflowText);
+        expect(linuxStep).toContain("npm run test:modules");
+
         const nodeArm = extractNodeCaseArm(runnerText);
         expect(nodeArm).toContain("npm run test:modules");
 
         for (const flag of ENDPOINT_FLAGS) {
-            expect(workflowText).toContain(flag);
+            // Checked against the Linux job's "Run modules tests" step
+            // specifically, not the whole workflow file -- the
+            // self-hosted job's own "test" step only has
+            // --cluster-endpoints, so a whole-file check would still
+            // pass even if the Linux step specifically lost
+            // --standalone-endpoints.
+            expect(linuxStep).toContain(flag);
             // Checked against the Node arm specifically, not the whole
             // runner script -- the Python arm already contains both
             // flags for its own invocation, so a whole-file check would
