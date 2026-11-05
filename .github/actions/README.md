@@ -55,7 +55,6 @@ Installs platform-specific dependencies for valkey-glide builds. This is the pri
 #### Behavior
 
 - **Ubuntu/Debian:** Installs `git`, `gcc`, `pkg-config`, `openssl`, `libssl-dev` via `apt`
-- **macOS:** Installs `openssl@3`, `coreutils` via `brew`
 - **Amazon Linux:** Installs `gcc`, `pkgconfig`, `openssl`, `openssl-devel`, and other build tools via `yum`
 - **Alpine/MUSL:** Installs `protobuf-dev`, `musl-dev`, `make`, `gcc`, `openssl`, `openssl-dev`, and Rust via `apk`
 - **Windows:** Sets up WSL with Ubuntu 22.04 and Python
@@ -550,13 +549,6 @@ runs:
     using: "composite"
     steps:
         # Platform-specific OS dependencies (inline - these are simple shell commands)
-        - name: Install software dependencies for macOS
-          shell: bash
-          if: "${{ inputs.os == 'macos' }}"
-          run: |
-              brew update
-              brew install openssl@3 coreutils
-
         - name: Install software dependencies for Ubuntu GNU
           shell: bash
           if: "${{ inputs.os == 'ubuntu' }}"
