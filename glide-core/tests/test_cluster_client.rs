@@ -12,10 +12,12 @@ mod cluster_client_tests {
     use std::time::Duration;
 
     use crate::constants::{IP_ADDRESS_V4, IP_ADDRESS_V6};
+    #[cfg(unix)]
+    use crate::utilities::cluster::create_cluster_client;
     use crate::utilities::{
         cluster::{
             LONG_CLUSTER_TEST_TIMEOUT, RedisCluster, SHORT_CLUSTER_TEST_TIMEOUT,
-            create_cluster_client, setup_cluster_with_replicas, setup_test_basics_internal,
+            setup_cluster_with_replicas, setup_test_basics_internal,
         },
         *,
     };
@@ -947,6 +949,7 @@ mod cluster_client_tests {
     }
 
     /// Number of connections on `addr` whose `CLIENT LIST` name is one of `names`.
+    #[cfg(unix)]
     async fn count_named_connections(addr: &redis::ConnectionAddr, names: &[&str]) -> usize {
         let client = redis::Client::open(redis::ConnectionInfo {
             addr: addr.clone(),
@@ -973,6 +976,8 @@ mod cluster_client_tests {
             .count()
     }
 
+    // Unix only: it kills a node with `kill -9`.
+    #[cfg(unix)]
     #[rstest]
     #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
     fn test_close_releases_connections_while_reconnecting_a_dead_node() {
