@@ -632,7 +632,7 @@ public class FT {
      * FTAggregateOptions.builder().withCursor(...)}) or {@link #hybridWithCursor}.
      *
      * <p>Requires valkey-search 1.3 or later. See the <a
-     * href="https://valkey.io/commands/ft.cursor-read/">FT.CURSOR READ documentation</a>.
+     * href="https://valkey.io/commands/ft.cursor/">FT.CURSOR documentation</a> (the READ subcommand).
      *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
@@ -665,7 +665,7 @@ public class FT {
      * String, String, FTAggregateOptions)} or {@link #hybridWithCursor}.
      *
      * <p>Requires valkey-search 1.3 or later. See the <a
-     * href="https://valkey.io/commands/ft.cursor-read/">FT.CURSOR READ documentation</a>.
+     * href="https://valkey.io/commands/ft.cursor/">FT.CURSOR documentation</a> (the READ subcommand).
      *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
@@ -684,7 +684,7 @@ public class FT {
      * GlideString, GlideString, FTAggregateOptions)} or {@link #hybridWithCursor}.
      *
      * <p>Requires valkey-search 1.3 or later. See the <a
-     * href="https://valkey.io/commands/ft.cursor-read/">FT.CURSOR READ documentation</a>.
+     * href="https://valkey.io/commands/ft.cursor/">FT.CURSOR documentation</a> (the READ subcommand).
      *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
@@ -701,7 +701,7 @@ public class FT {
      * GlideString, GlideString, FTAggregateOptions)} or {@link #hybridWithCursor}.
      *
      * <p>Requires valkey-search 1.3 or later. See the <a
-     * href="https://valkey.io/commands/ft.cursor-read/">FT.CURSOR READ documentation</a>.
+     * href="https://valkey.io/commands/ft.cursor/">FT.CURSOR documentation</a> (the READ subcommand).
      *
      * <p>Always reads from the PRIMARY of the index's slot, regardless of the client's {@code
      * ReadFrom} configuration -- a cursor is a per-process, node-local resource. A cursor opened by
@@ -741,7 +741,7 @@ public class FT {
      * Deletes an open cursor, discarding it before it would otherwise be exhausted or time out.
      *
      * <p>Requires valkey-search 1.3 or later. See the <a
-     * href="https://valkey.io/commands/ft.cursor-del/">FT.CURSOR DEL documentation</a>.
+     * href="https://valkey.io/commands/ft.cursor/">FT.CURSOR documentation</a> (the DEL subcommand).
      *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
@@ -761,7 +761,7 @@ public class FT {
      * Deletes an open cursor, discarding it before it would otherwise be exhausted or time out.
      *
      * <p>Requires valkey-search 1.3 or later. See the <a
-     * href="https://valkey.io/commands/ft.cursor-del/">FT.CURSOR DEL documentation</a>.
+     * href="https://valkey.io/commands/ft.cursor/">FT.CURSOR documentation</a> (the DEL subcommand).
      *
      * <p>Always reads from the PRIMARY of the index's slot, regardless of the client's {@code
      * ReadFrom} configuration -- see {@link #cursorRead}'s note.
