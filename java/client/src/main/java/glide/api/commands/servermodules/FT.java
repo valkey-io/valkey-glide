@@ -703,10 +703,20 @@ public class FT {
      * <p>Requires valkey-search 1.3 or later. See the <a
      * href="https://valkey.io/commands/ft.cursor/">FT.CURSOR documentation</a> (the READ subcommand).
      *
-     * <p>Always reads from the PRIMARY of the index's slot, regardless of the client's {@code
-     * ReadFrom} configuration -- a cursor is a per-process, node-local resource. A cursor opened by
-     * FT.HYBRID is read the same way as one opened by FT.AGGREGATE; the server does not distinguish
-     * which command created it.
+     * <p>In cluster mode, always reads from the PRIMARY of the index's slot, regardless of the
+     * client's {@code ReadFrom} configuration -- a cursor is a per-process, node-local resource. A
+     * cursor opened by FT.HYBRID is read the same way as one opened by FT.AGGREGATE; the server does
+     * not distinguish which command created it.
+     *
+     * <p>On a standalone client with {@code ReadFrom.PREFER_REPLICA}, this pinning does not hold: the
+     * opening query can land on a replica, but this call always goes to the primary, so a cursor
+     * opened on a replica fails on its next page. Use {@code ReadFrom.PRIMARY} on a standalone client
+     * whenever {@code withCursor} is set, until this is fixed in glide-core (tracked separately).
+     *
+     * <p>On a client created with {@code readOnly(true)}, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats {@code FT.CURSOR} as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry for
+     * {@code FT.CURSOR}; this is a known gap tracked as a follow-up, not fixed in this PR.
      *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
@@ -763,8 +773,9 @@ public class FT {
      * <p>Requires valkey-search 1.3 or later. See the <a
      * href="https://valkey.io/commands/ft.cursor/">FT.CURSOR documentation</a> (the DEL subcommand).
      *
-     * <p>Always reads from the PRIMARY of the index's slot, regardless of the client's {@code
-     * ReadFrom} configuration -- see {@link #cursorRead}'s note.
+     * <p>In cluster mode, always reads from the PRIMARY of the index's slot, regardless of the
+     * client's {@code ReadFrom} configuration -- see {@link #cursorRead}'s note, including the
+     * standalone and read-only-client caveats.
      *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
@@ -783,6 +794,11 @@ public class FT {
      *
      * <p>Requires valkey-search 1.3 or later. See the <a
      * href="https://valkey.io/commands/ft.hybrid/">FT.HYBRID documentation</a>.
+     *
+     * <p>On a client created with {@code readOnly(true)}, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats {@code FT.HYBRID} as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry for
+     * {@code FT.HYBRID}; this is a known gap tracked as a follow-up, not fixed in this PR.
      *
      * @param client The client to execute the command.
      * @param indexName The index name to query.
@@ -819,6 +835,11 @@ public class FT {
      * #hybridWithCursor(BaseClient, String, FTHybridSearchArm, FTHybridVsimArm, FTHybridOptions)}
      * instead, which returns the honestly-typed {@code [rows, cursorId]} 2-tuple that WITHCURSOR
      * actually produces.
+     *
+     * <p>On a client created with {@code readOnly(true)}, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats {@code FT.HYBRID} as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry for
+     * {@code FT.HYBRID}; this is a known gap tracked as a follow-up, not fixed in this PR.
      *
      * @param client The client to execute the command.
      * @param indexName The index name to query.
@@ -870,6 +891,11 @@ public class FT {
      * cannot be revalidated against concurrent mutations before fusion under forced synchronous
      * execution.
      *
+     * <p>On a client created with {@code readOnly(true)}, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats {@code FT.HYBRID} as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry for
+     * {@code FT.HYBRID}; this is a known gap tracked as a follow-up, not fixed in this PR.
+     *
      * @param client The client to execute the command.
      * @param indexName The index name to query.
      * @param searchArm The text/tag/numeric query arm. See {@link FTHybridSearchArm}.
@@ -904,6 +930,15 @@ public class FT {
      *
      * <p>Requires valkey-search 1.3 or later. See the <a
      * href="https://valkey.io/commands/ft.hybrid/">FT.HYBRID documentation</a>.
+     *
+     * <p>In cluster mode, always reads from the PRIMARY of the index's slot, regardless of the
+     * client's {@code ReadFrom} configuration -- see {@link #cursorRead}'s note for why, and for the
+     * standalone caveat with {@code ReadFrom.PREFER_REPLICA}.
+     *
+     * <p>On a client created with {@code readOnly(true)}, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats {@code FT.HYBRID} as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry for
+     * {@code FT.HYBRID}; this is a known gap tracked as a follow-up, not fixed in this PR.
      *
      * @param client The client to execute the command.
      * @param indexName The index name to query.
@@ -947,6 +982,15 @@ public class FT {
      *
      * <p>Requires valkey-search 1.3 or later. See the <a
      * href="https://valkey.io/commands/ft.hybrid/">FT.HYBRID documentation</a>.
+     *
+     * <p>In cluster mode, always reads from the PRIMARY of the index's slot, regardless of the
+     * client's {@code ReadFrom} configuration -- see {@link #cursorRead}'s note for why, and for the
+     * standalone caveat with {@code ReadFrom.PREFER_REPLICA}.
+     *
+     * <p>On a client created with {@code readOnly(true)}, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats {@code FT.HYBRID} as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry for
+     * {@code FT.HYBRID}; this is a known gap tracked as a follow-up, not fixed in this PR.
      *
      * <p>Transactions: FT.HYBRID is an ordinary custom command as far as GLIDE's batch/transaction
      * machinery is concerned, but the server itself rejects FT.HYBRID inside MULTI/EXEC outright (and

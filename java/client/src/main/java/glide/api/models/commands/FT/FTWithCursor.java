@@ -9,11 +9,18 @@ import java.util.ArrayList;
 /**
  * The WITHCURSOR option, requesting a paged reply instead of the whole result set at once. Shared
  * verbatim between FT.AGGREGATE and FT.HYBRID -- the option's own grammar ({@code WITHCURSOR [COUNT
- * n] [MAXIDLE ms]}) and reply shape are identical regardless of which command opened the cursor. A
- * paged query, and every subsequent {@code FT.CURSOR READ}/{@code FT.CURSOR DEL} against the cursor
- * it opens, is pinned to the PRIMARY of the index's slot regardless of {@code ReadFrom} -- a cursor
- * is a per-process, node-local resource, and this is a deliberate, documented exception to GLIDE's
- * normal read routing.
+ * n] [MAXIDLE ms]}) and reply shape are identical regardless of which command opened the cursor.
+ *
+ * <p>In cluster mode, a paged query, and every subsequent {@code FT.CURSOR READ}/{@code FT.CURSOR
+ * DEL} against the cursor it opens, is pinned to the PRIMARY of the index's slot regardless of
+ * {@code ReadFrom} -- a cursor is a per-process, node-local resource, and this is a deliberate,
+ * documented exception to GLIDE's normal read routing.
+ *
+ * <p>On a standalone client with {@code ReadFrom.PREFER_REPLICA}, this pinning does not hold: the
+ * opening query can land on a replica, but the cursor read/delete always goes to the primary, so a
+ * cursor opened on a replica fails on its next page. Use {@code ReadFrom.PRIMARY} on a standalone
+ * client whenever {@code withCursor} is set, until this is fixed in glide-core (tracked
+ * separately).
  */
 public class FTWithCursor {
     private final Integer count;
