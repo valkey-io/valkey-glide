@@ -472,8 +472,21 @@ export class GlideFt {
         client: GlideClient | GlideClusterClient,
         indexName: GlideString,
         query: GlideString,
+        options: DecoderOption &
+            FtAggregateOptions & { withCursor: FtWithCursor },
+    ): Promise<FtCursorReturnType>;
+    static async aggregate(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
         options?: DecoderOption & FtAggregateOptions,
-    ): Promise<FtAggregateReturnType> {
+    ): Promise<FtAggregateReturnType>;
+    static async aggregate(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: DecoderOption & FtAggregateOptions,
+    ): Promise<FtAggregateReturnType | FtCursorReturnType> {
         const args: GlideString[] = [
             "FT.AGGREGATE",
             indexName,
@@ -481,11 +494,9 @@ export class GlideFt {
             ..._addFtAggregateOptions(options),
         ];
 
-        return _handleCustomCommand(
-            client,
-            args,
-            options,
-        ) as Promise<FtAggregateReturnType>;
+        return _handleCustomCommand(client, args, options) as Promise<
+            FtAggregateReturnType | FtCursorReturnType
+        >;
     }
 
     /**
@@ -508,6 +519,11 @@ export class GlideFt {
      * configuration -- see the cursor-affinity note on {@link GlideFt.aggregate}/{@link GlideFt.hybrid}.
      * A cursor opened by FT.HYBRID is read the same way as one opened by FT.AGGREGATE; the
      * server does not distinguish which command created it.
+     *
+     * On a client created with `readOnly: true`, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats FT.CURSOR as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry
+     * for FT.CURSOR; this is a known gap tracked as a follow-up, not fixed in this PR.
      *
      * @example
      * ```typescript
@@ -552,6 +568,11 @@ export class GlideFt {
      *
      * Always reads from the PRIMARY of the index's slot, regardless of the client's `ReadFrom`
      * configuration -- see the cursor-affinity note on {@link GlideFt.aggregate}/{@link GlideFt.hybrid}.
+     *
+     * On a client created with `readOnly: true`, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats FT.CURSOR as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry
+     * for FT.CURSOR; this is a known gap tracked as a follow-up, not fixed in this PR.
      *
      * @example
      * ```typescript
@@ -598,13 +619,24 @@ export class GlideFt {
      *     once exhausted).
      *
      * A paged (`withCursor`) FT.HYBRID query, and every subsequent FT.CURSOR READ/DEL against
-     * the cursor it opens, always reads from the PRIMARY of the index's slot, regardless of the
-     * client's `ReadFrom` configuration. This is because a cursor is a per-process, node-local
-     * resource on the server that opened it -- it is not shared or forwarded between nodes, so a
-     * read that lands on a different node (a replica a `PREFER_REPLICA`/AZ-affinity client would
-     * otherwise have used) fails with "Cursor not found". A failover of the primary that was
-     * holding an open cursor loses that cursor, the same as any other cursor-discarding event on
-     * that node.
+     * the cursor it opens, always reads from the PRIMARY of the index's slot in cluster mode,
+     * regardless of the client's `ReadFrom` configuration. This is because a cursor is a
+     * per-process, node-local resource on the server that opened it -- it is not shared or
+     * forwarded between nodes, so a read that lands on a different node (a replica a
+     * `PREFER_REPLICA`/AZ-affinity client would otherwise have used) fails with "Cursor not
+     * found". A failover of the primary that was holding an open cursor loses that cursor, the
+     * same as any other cursor-discarding event on that node.
+     *
+     * On a standalone `GlideClient` with `readFrom: "preferReplica"`, this pinning does not
+     * hold: the opening query can land on a replica, but `cursorRead`/`cursorDel` always go to
+     * the primary, so a cursor opened on a replica fails on its next page the same way. Use
+     * `readFrom: "primary"` on a standalone client whenever `withCursor` is set, until this is
+     * fixed in glide-core (tracked separately).
+     *
+     * On a client created with `readOnly: true`, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats FT.HYBRID as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry
+     * for FT.HYBRID; this is a known gap tracked as a follow-up, not fixed in this PR.
      *
      * @example
      * ```typescript
@@ -637,8 +669,22 @@ export class GlideFt {
         indexName: GlideString,
         searchArm: FtHybridSearchArm,
         vsimArm: FtHybridVsimArm,
+        options: DecoderOption & FtHybridOptions & { withCursor: FtWithCursor },
+    ): Promise<FtCursorReturnType>;
+    static async hybrid(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        searchArm: FtHybridSearchArm,
+        vsimArm: FtHybridVsimArm,
         options?: DecoderOption & FtHybridOptions,
-    ): Promise<FtAggregateReturnType> {
+    ): Promise<FtAggregateReturnType>;
+    static async hybrid(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        searchArm: FtHybridSearchArm,
+        vsimArm: FtHybridVsimArm,
+        options?: DecoderOption & FtHybridOptions,
+    ): Promise<FtAggregateReturnType | FtCursorReturnType> {
         const args: GlideString[] = ["FT.HYBRID", indexName];
         args.push(..._addFtHybridSearchArm(searchArm));
 
@@ -662,11 +708,9 @@ export class GlideFt {
 
         args.push(..._addFtHybridOptions(options, generatedVsimParam));
 
-        return _handleCustomCommand(
-            client,
-            args,
-            options,
-        ) as Promise<FtAggregateReturnType>;
+        return _handleCustomCommand(client, args, options) as Promise<
+            FtAggregateReturnType | FtCursorReturnType
+        >;
     }
 
     /**

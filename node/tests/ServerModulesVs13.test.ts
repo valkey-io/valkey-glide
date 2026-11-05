@@ -1292,7 +1292,7 @@ describe("GlideFt", () => {
                                 withCursor: { count: 5 },
                             },
                         );
-                        let cursorId = page[1] as unknown as number;
+                        let cursorId = page[1];
                         let rows = page[0] as unknown as {
                             key: GlideString;
                             value: GlideString;
@@ -1321,7 +1321,7 @@ describe("GlideFt", () => {
                                 seenNValues.add(Number(readRowField(row, "n")));
                             }
 
-                            cursorId = nextPage[1] as unknown as number;
+                            cursorId = nextPage[1];
                             pagesRead++;
                             expect(pagesRead).toBeLessThanOrEqual(10);
                         }
@@ -1355,8 +1355,7 @@ describe("GlideFt", () => {
                                 withCursor: { count: 5 },
                             },
                         );
-                        const anotherCursorId =
-                            anotherPage[1] as unknown as number;
+                        const anotherCursorId = anotherPage[1];
 
                         for (const { host, port } of replicaAddrs) {
                             await expect(
@@ -1421,7 +1420,7 @@ describe("GlideFt", () => {
                                 withCursor: { count: 1 },
                             },
                         );
-                        const openCursorId = page[1] as unknown as number;
+                        const openCursorId = page[1];
                         expect(openCursorId).not.toBe(0);
 
                         expect(
@@ -2599,7 +2598,7 @@ describe("GlideFt", () => {
                                     withCursor: { count: 1 },
                                 } as FtHybridOptions,
                             );
-                            let cursorId = page[1] as unknown as number;
+                            let cursorId = page[1];
                             let rows = page[0] as unknown as {
                                 key: GlideString;
                                 value: GlideString;
@@ -2625,7 +2624,7 @@ describe("GlideFt", () => {
                                 rows.forEach((r) =>
                                     seenKeys.add(readRowField(r, "__key")),
                                 );
-                                cursorId = nextPage[1] as unknown as number;
+                                cursorId = nextPage[1];
                                 pagesRead++;
                                 expect(pagesRead).toBeLessThanOrEqual(10);
                             }
@@ -2877,7 +2876,7 @@ describe("GlideFt", () => {
                                 withCursor: { count: 3 },
                             },
                         );
-                        let cursorId = page[1] as unknown as number;
+                        let cursorId = page[1];
                         let rows = page[0] as unknown as {
                             key: GlideString;
                             value: GlideString;
@@ -2906,7 +2905,7 @@ describe("GlideFt", () => {
                                 seenNValues.add(Number(readRowField(row, "n")));
                             }
 
-                            cursorId = nextPage[1] as unknown as number;
+                            cursorId = nextPage[1];
                             pagesRead++;
                             expect(pagesRead).toBeLessThanOrEqual(10);
                         }

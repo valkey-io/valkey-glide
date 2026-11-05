@@ -262,11 +262,17 @@ export type FtAggregateOptions = {
      * {@link GlideFt.cursorRead | GlideFt.cursorRead} call to fetch the next page (`0` once
      * exhausted).
      *
-     * A paged query, and every subsequent `cursorRead`/`cursorDel` against the cursor it opens,
-     * is pinned to the PRIMARY of the index's slot regardless of `ReadFrom` -- a cursor is a
-     * per-process, node-local resource, and this is a deliberate, documented exception to
-     * GLIDE's normal read routing. A plain aggregate without `withCursor` is unaffected and
-     * still prefers replicas as normal.
+     * In cluster mode, a paged query, and every subsequent `cursorRead`/`cursorDel` against the
+     * cursor it opens, is pinned to the PRIMARY of the index's slot regardless of `ReadFrom` --
+     * a cursor is a per-process, node-local resource, and this is a deliberate, documented
+     * exception to GLIDE's normal read routing. A plain aggregate without `withCursor` is
+     * unaffected and still prefers replicas as normal.
+     *
+     * On a standalone `GlideClient` with `readFrom: "preferReplica"`, this pinning does not
+     * hold: the opening query can land on a replica, but `cursorRead`/`cursorDel` always go to
+     * the primary, so a cursor opened on a replica fails on its next page with "Cursor: not
+     * found" (confirmed live). Use `readFrom: "primary"` on a standalone client whenever
+     * `withCursor` is set, until this is fixed in glide-core (tracked separately).
      */
     withCursor?: FtWithCursor;
 } & (
@@ -289,11 +295,18 @@ export type FtAggregateOptions = {
  * Shared verbatim between {@link GlideFt.aggregate | FT.AGGREGATE} and
  * {@link GlideFt.hybrid | FT.HYBRID} -- both commands drive the exact same aggregate-suffix
  * parser, so the option's own grammar (`WITHCURSOR [COUNT n] [MAXIDLE ms]`) and reply shape are
- * identical regardless of which command opened the cursor. Every subsequent
- * {@link GlideFt.cursorRead | cursorRead}/{@link GlideFt.cursorDel | cursorDel} against the
- * cursor it opens is pinned to the PRIMARY of the index's slot regardless of `ReadFrom` -- a
- * cursor is a per-process, node-local resource, and this is a deliberate, documented exception
- * to GLIDE's normal read routing.
+ * identical regardless of which command opened the cursor.
+ *
+ * In cluster mode, every subsequent {@link GlideFt.cursorRead | cursorRead}/
+ * {@link GlideFt.cursorDel | cursorDel} against the cursor it opens is pinned to the PRIMARY of
+ * the index's slot regardless of `ReadFrom` -- a cursor is a per-process, node-local resource,
+ * and this is a deliberate, documented exception to GLIDE's normal read routing.
+ *
+ * On a standalone `GlideClient` with `readFrom: "preferReplica"`, this pinning does not hold:
+ * the opening query can land on a replica, but `cursorRead`/`cursorDel` always go to the
+ * primary, so a cursor opened on a replica fails on its next page with "Cursor: not found"
+ * (confirmed live). Use `readFrom: "primary"` on a standalone client whenever `withCursor` is
+ * set, until this is fixed in glide-core (tracked separately).
  */
 export interface FtWithCursor {
     /** The number of rows to return per page. */
