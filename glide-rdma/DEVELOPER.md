@@ -13,16 +13,18 @@ cargo test
 To also run the tests that open a fabric and register memory:
 
 ```bash
-cargo test --features libfabric
+cargo test --features tcp-dev
 ```
 
 These tests need libfabric installed (see below). They use only the `tcp`
-provider, so they don't need RDMA hardware or a running server.
+provider, so they don't need RDMA hardware or a running server. `tcp-dev` adds
+`Provider::Tcp` on top of `libfabric`; a build with `libfabric` alone has only
+`efa-direct`, which is what every release ships.
 
 To run specific tests:
 
 ```bash
-cargo test --features libfabric <pattern>
+cargo test --features tcp-dev <pattern>
 ```
 
 ## Installing libfabric

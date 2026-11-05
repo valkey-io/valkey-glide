@@ -199,8 +199,10 @@ jobs:
             - name: Run glide-core RDMA tests
               working-directory: ./glide-core
               run: |
-                  cargo test --features rdma --lib
-                  cargo test --features rdma --test test_rdma
+                  cargo test --features rdma-tcp-dev --lib
+                  cargo test --features rdma-tcp-dev --test test_rdma
+                  # The release shape: `rdma` alone carries no tcp provider.
+                  cargo test --features rdma --lib -- rdma tcp_provider
 
             - name: Check features
               working-directory: ./glide-core

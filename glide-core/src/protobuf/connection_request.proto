@@ -88,7 +88,8 @@ message CompressionConfig {
 message EfaDirectProvider {
 }
 
-// Software-emulated transfers over TCP. For development and tests only.
+// Software-emulated transfers over TCP. For development and tests only: honored by a
+// core built with the `rdma-tcp-dev` feature and refused by every other build.
 message TcpProvider {
     // Source address to bind to. TCP binds an IP, unlike efa-direct.
     optional string bind = 1;

@@ -73,7 +73,7 @@ opens a fabric over the `tcp` provider and runs mostly against mock servers, plu
 the test suite starts:
 
 ```bash
-cargo test --features rdma --test test_rdma
+cargo test --features rdma-tcp-dev --test test_rdma
 ```
 
 [`tests/test_rdma_remote.rs`](tests/test_rdma_remote.rs) performs real transfers and is
@@ -83,10 +83,12 @@ and pick the provider:
 ```bash
 export GLIDE_RDMA_SERVER=<host>:<port>
 export GLIDE_RDMA_PROVIDER=efa-direct  # on a machine with an EFA device, or tcp
-cargo test --features rdma --test test_rdma_remote -- --ignored --nocapture
+cargo test --features rdma-tcp-dev --test test_rdma_remote -- --ignored --nocapture
 ```
 
-For `tcp`, load the module with `fabric-provider Emulated`; its default is `EfaDirect`. Set
+`rdma-tcp-dev` is `rdma` plus the `tcp` provider, which a release build does not carry (see
+`glide_rdma::Provider::Tcp`). For `tcp`, load the module with `fabric-provider Emulated`; its
+default is `EfaDirect`. Set
 `GLIDE_RDMA_INTERFACE` to choose a network interface when the machine has more than one.
 
 ## Timeout Watchdog Diagnostics

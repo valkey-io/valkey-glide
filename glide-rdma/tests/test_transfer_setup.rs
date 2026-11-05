@@ -2,9 +2,9 @@
 
 //! Tests the client flow for setting up a transfer: register, stage, lend, build a
 //! command, and get the buffer back. Does not require a server. Does require the
-//! `libfabric` feature and libfabric installed.
+//! `tcp-dev` feature and libfabric installed.
 
-#![cfg(feature = "libfabric")]
+#![cfg(feature = "tcp-dev")]
 
 use glide_rdma::{FabricConfig, Provider, RdmaFabric, SetChecksum, encode_hex};
 

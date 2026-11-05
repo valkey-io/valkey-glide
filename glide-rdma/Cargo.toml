@@ -18,6 +18,9 @@ edition = "2024"
 [features]
 default = []
 libfabric = ["dep:glide-libfabric-sys", "dep:libc", "dep:tokio", "dep:glide-logger"]
+# Adds `Provider::Tcp` (see its doc) for development and tests, never a release
+# build. This crate's own unit tests always have it.
+tcp-dev = ["libfabric"]
 
 [dependencies]
 
