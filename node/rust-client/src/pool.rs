@@ -116,8 +116,8 @@ fn release_warmup_slots(pool_id: u64, n: u32) {
     if n == 0 {
         return;
     }
-    if let Some(pool_entry) = pool::get_pool_registry().get(&pool_id) {
-        let mut pool_guard = pool_entry.value().lock();
+    if let Some(pool_arc) = pool::get_pool(pool_id) {
+        let mut pool_guard = pool_arc.lock();
         for _ in 0..n {
             pool_guard.release_reservation();
         }
@@ -175,10 +175,9 @@ async fn warmup_dial(pool_id: u64, conn_bytes: &[u8], seat_then_discard: bool) -
 
     // Register the client in the pool's idle list.
     {
-        let registry = pool::get_pool_registry();
-        match registry.get(&pool_id) {
-            Some(pool_entry) => {
-                let mut pool_guard = pool_entry.value().lock();
+        match pool::get_pool(pool_id) {
+            Some(pool_arc) => {
+                let mut pool_guard = pool_arc.lock();
                 if pool_guard.state != PoolState::Running {
                     // Pool was destroyed before this dial finished.
                     pool_guard.release_reservation();
@@ -198,16 +197,13 @@ async fn warmup_dial(pool_id: u64, conn_bytes: &[u8], seat_then_discard: bool) -
         }
     }
 
-    if seat_then_discard {
-        let registry = pool::get_pool_registry();
-        if let Some(pool_entry) = registry.get(&pool_id) {
-            let mut pool_guard = pool_entry.value().lock();
-            if let Some(entry) = pool_guard.idle.pop_back() {
-                // discard_client decrements the slot this dial consumed via
-                // add_client_reserved.
-                pool_guard.discard_client(entry.client_id);
-                scope::unregister_client(entry.client_id);
-            }
+    if seat_then_discard && let Some(pool_arc) = pool::get_pool(pool_id) {
+        let mut pool_guard = pool_arc.lock();
+        if let Some(entry) = pool_guard.idle.pop_back() {
+            // discard_client decrements the slot this dial consumed via
+            // add_client_reserved.
+            pool_guard.discard_client(entry.client_id);
+            scope::unregister_client(entry.client_id);
         }
         // Lock released here before the caller signals success.
     }
@@ -303,9 +299,8 @@ pub fn create_pool<'a>(
         // the min_idle=0 probe is seated then removed via discard_client, which
         // decrements the counted slot exactly once.
         let reserved = {
-            let registry = pool::get_pool_registry();
-            match registry.get(&(pool_id as u64)) {
-                Some(pool_entry) => pool_entry.value().lock().reserve_warmup_slots(probe_count),
+            match pool::get_pool(pool_id as u64) {
+                Some(pool_arc) => pool_arc.lock().reserve_warmup_slots(probe_count),
                 None => {
                     let _ = first_tx.send(Err("Pool unregistered before warmup".to_string()));
                     return;
@@ -535,12 +530,8 @@ fn maybe_spawn_on_demand_creation(pool_entry: Arc<pool::PoolMutex>, pool_guard: 
 #[napi]
 pub fn pool_try_acquire(pool_id: i64) -> Result<i64> {
     let pool_id_u64 = pool_id as u64;
-    let registry = pool::get_pool_registry();
-    let pool_entry = registry
-        .get(&pool_id_u64)
+    let pool_arc = pool::get_pool(pool_id_u64)
         .ok_or_else(|| Error::new(Status::InvalidArg, "Invalid pool_id"))?;
-
-    let pool_arc = pool_entry.value().clone();
     let result = {
         let mut pool_guard = pool_arc.lock();
         // Drain discarded IDs first (abandoned clients).
@@ -554,7 +545,7 @@ pub fn pool_try_acquire(pool_id: i64) -> Result<i64> {
         // the next pool_acquire_blocking poll (or a subsequent pool_try_acquire)
         // will hand it out.
         if result < 0 {
-            maybe_spawn_on_demand_creation(pool_entry.value().clone(), &mut pool_guard);
+            maybe_spawn_on_demand_creation(pool_arc.clone(), &mut pool_guard);
         }
         result
     };
@@ -585,9 +576,8 @@ pub fn pool_acquire_blocking<'a>(
         let result_value: i64;
 
         loop {
-            let registry = pool::get_pool_registry();
-            let pool_entry = match registry.get(&pool_id_u64) {
-                Some(e) => e.value().clone(),
+            let pool_entry = match pool::get_pool(pool_id_u64) {
+                Some(pool_arc) => pool_arc,
                 None => {
                     result_value = -2;
                     break;
