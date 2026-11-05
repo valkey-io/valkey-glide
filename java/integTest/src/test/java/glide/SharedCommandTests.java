@@ -6223,7 +6223,6 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void bzpopmin_timeout_check(BaseClient client) {
         String key = UUID.randomUUID().toString();
-        // create new client with default request timeout (250 millis)
         try (BaseClient testClient =
                 client instanceof GlideClient
                         ? GlideClient.createClient(
@@ -6252,7 +6251,6 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void bzpopmin_binary_timeout_check(BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
-        // create new client with default request timeout (250 millis)
         try (BaseClient testClient =
                 client instanceof GlideClient
                         ? GlideClient.createClient(
@@ -6398,7 +6396,6 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void bzpopmax_timeout_check(BaseClient client) {
         String key = UUID.randomUUID().toString();
-        // create new client with default request timeout (250 millis)
         try (BaseClient testClient =
                 client instanceof GlideClient
                         ? GlideClient.createClient(
@@ -6427,7 +6424,6 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void bzpopmax_binary_timeout_check(BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
-        // create new client with default request timeout (250 millis)
         try (BaseClient testClient =
                 client instanceof GlideClient
                         ? GlideClient.createClient(
@@ -8415,7 +8411,6 @@ public class SharedCommandTests {
     public void bzmpop_timeout_check(BaseClient client) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         String key = UUID.randomUUID().toString();
-        // create new client with default request timeout (250 millis)
         try (BaseClient testClient =
                 client instanceof GlideClient
                         ? GlideClient.createClient(
@@ -8446,7 +8441,6 @@ public class SharedCommandTests {
     public void bzmpop_binary_timeout_check(BaseClient client) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         GlideString key = gs(UUID.randomUUID().toString());
-        // create new client with default request timeout (250 millis)
         try (BaseClient testClient =
                 client instanceof GlideClient
                         ? GlideClient.createClient(
@@ -13485,7 +13479,6 @@ public class SharedCommandTests {
     public void blmpop_timeout_check(BaseClient client) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         String key = UUID.randomUUID().toString();
-        // create new client with default request timeout (250 millis)
         try (BaseClient testClient =
                 client instanceof GlideClient
                         ? GlideClient.createClient(
@@ -13518,7 +13511,6 @@ public class SharedCommandTests {
     public void blmpop_binary_timeout_check(BaseClient client) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         GlideString key = gs(UUID.randomUUID().toString());
-        // create new client with default request timeout (250 millis)
         try (BaseClient testClient =
                 client instanceof GlideClient
                         ? GlideClient.createClient(
@@ -18222,7 +18214,6 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void wait_timeout_check(BaseClient client) {
         String key = UUID.randomUUID().toString();
-        // create new client with default request timeout (250 millis)
         try (BaseClient testClient =
                 client instanceof GlideClient
                         ? GlideClient.createClient(
