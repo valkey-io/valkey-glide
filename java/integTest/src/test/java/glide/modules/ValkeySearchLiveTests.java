@@ -1546,7 +1546,7 @@ public class ValkeySearchLiveTests {
                                             .withCursor(new FTWithCursor(5))
                                             .build())
                             .get();
-            Map<GlideString, Object>[] rows = castArray((Object[]) page[0], Map.class);
+            Map<GlideString, Object>[] rows = (Map<GlideString, Object>[]) page[0];
             long cursorId = (long) page[1];
             totalRows += rows.length;
             for (Map<GlideString, Object> row : rows) {
@@ -1555,7 +1555,7 @@ public class ValkeySearchLiveTests {
             int pagesRead = 1;
             while (cursorId != 0) {
                 Object[] nextPage = FT.cursorRead(client, index, cursorId).get();
-                Map<GlideString, Object>[] nextRows = castArray((Object[]) nextPage[0], Map.class);
+                Map<GlideString, Object>[] nextRows = (Map<GlideString, Object>[]) nextPage[0];
                 totalRows += nextRows.length;
                 for (Map<GlideString, Object> row : nextRows) {
                     seenNValues.add(Integer.parseInt(row.get(gs("n")).toString()));
@@ -2292,7 +2292,7 @@ public class ValkeySearchLiveTests {
             int pagesRead = 1;
             while (cursorId != 0) {
                 Object[] nextPage = FT.cursorRead(preferReplicaClient, index, cursorId).get();
-                Map<GlideString, Object>[] nextRows = castArray((Object[]) nextPage[0], Map.class);
+                Map<GlideString, Object>[] nextRows = (Map<GlideString, Object>[]) nextPage[0];
                 totalRows += nextRows.length;
                 for (Map<GlideString, Object> row : nextRows) {
                     seenKeys.add((GlideString) row.get(gs("__key")));

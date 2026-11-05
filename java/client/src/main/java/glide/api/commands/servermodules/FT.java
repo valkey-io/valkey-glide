@@ -617,7 +617,7 @@ public class FT {
         GlideString[] args =
                 concatenateArrays(
                         new GlideString[] {gs("FT.AGGREGATE"), indexName, query}, options.toArgs());
-        return FT.executeCommand(client, args, false);
+        return FT.<Object[]>executeCommand(client, args, false).thenApply(FT::castCursorPage);
     }
 
     /**
@@ -630,9 +630,11 @@ public class FT {
      * @param cursorId The cursor id, from the opening command's reply or a previous {@link
      *     #cursorRead} call. {@code 0} means the cursor is already exhausted; calling this with
      *     {@code 0} is a caller error, not something this function special-cases.
-     * @return A two-element array of {@code [rows, cursorId]}, where {@code rows} is the same
-     *     per-document mapping shape {@link #aggregate}/{@link #hybrid} return, and {@code cursorId}
-     *     is {@code 0} once the cursor is exhausted, or the id to pass to the next {@link
+     * @return A two-element array of {@code [rows, cursorId]}, where {@code rows} is a {@code
+     *     Map<GlideString, Object>[]} (the same per-document mapping shape {@link #aggregate}
+     *     returns, regardless of whether the cursor was opened by {@link #aggregateWithCursor} or
+     *     {@link #hybridWithCursor} -- the server replies the same way either way), and {@code
+     *     cursorId} is {@code 0} once the cursor is exhausted, or the id to pass to the next {@link
      *     #cursorRead} call otherwise.
      * @example
      *     <pre>{@code
@@ -640,6 +642,8 @@ public class FT {
      *         FTAggregateOptions.builder().loadFields(new String[] {"__key"})
      *             .withCursor(new FTWithCursor(10)).build())
      *     .get();
+     * Map<GlideString, Object>[] rows = (Map<GlideString, Object>[]) page[0];
+     * long cursorId = (long) page[1];
      * }</pre>
      */
     public static CompletableFuture<Object[]> cursorRead(
@@ -693,9 +697,11 @@ public class FT {
      *     {@code 0} is a caller error, not something this function special-cases.
      * @param count Overrides how many rows this page returns, instead of the count the cursor was
      *     opened with.
-     * @return A two-element array of {@code [rows, cursorId]}, where {@code rows} is the same
-     *     per-document mapping shape {@link #aggregate}/{@link #hybrid} return, and {@code cursorId}
-     *     is {@code 0} once the cursor is exhausted, or the id to pass to the next {@link
+     * @return A two-element array of {@code [rows, cursorId]}, where {@code rows} is a {@code
+     *     Map<GlideString, Object>[]} (the same per-document mapping shape {@link #aggregate}
+     *     returns, regardless of whether the cursor was opened by {@link #aggregateWithCursor} or
+     *     {@link #hybridWithCursor} -- the server replies the same way either way), and {@code
+     *     cursorId} is {@code 0} once the cursor is exhausted, or the id to pass to the next {@link
      *     #cursorRead} call otherwise.
      */
     public static CompletableFuture<Object[]> cursorRead(
@@ -709,7 +715,8 @@ public class FT {
             argsList.add(gs("COUNT"));
             argsList.add(gs(count.toString()));
         }
-        return executeCommand(client, argsList.toArray(new GlideString[0]), false);
+        return FT.<Object[]>executeCommand(client, argsList.toArray(new GlideString[0]), false)
+                .thenApply(FT::castCursorPage);
     }
 
     /**
@@ -1480,5 +1487,20 @@ public class FT {
         }
         throw new IllegalArgumentException(
                 "Unknown type of client, should be either `GlideClient` or `GlideClusterClient`");
+    }
+
+    /**
+     * Converts the raw {@code [rows, cursorId]} reply from FT.AGGREGATE WITHCURSOR or FT.CURSOR READ
+     * into {@code [Map<GlideString, Object>[] rows, Long cursorId]}, matching the typed shape {@link
+     * #aggregate} returns for its own (non-paged) rows. The server's reply has {@code page[0]} as a
+     * raw {@code Object[]} of maps, not an array typed as {@code Map[]}; casting it directly throws
+     * {@code ClassCastException}.
+     *
+     * @param page The raw two-element {@code [rows, cursorId]} reply.
+     * @return The same two elements, with {@code rows} cast to {@code Map<GlideString, Object>[]}.
+     */
+    private static Object[] castCursorPage(Object[] page) {
+        page[0] = castArray((Object[]) page[0], Map.class);
+        return page;
     }
 }
