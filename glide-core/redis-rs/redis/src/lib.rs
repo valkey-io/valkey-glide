@@ -384,6 +384,7 @@ pub use crate::types::{
     ExistenceCheck,
 
     // error and result types
+    ErrorOrigin,
     RedisError,
     RedisResult,
     RedisWrite,

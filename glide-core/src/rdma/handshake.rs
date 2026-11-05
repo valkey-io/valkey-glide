@@ -25,7 +25,10 @@ use super::RdmaUnavailable;
 /// mean the server cannot be using the memory. Otherwise a transfer would hand
 /// back a buffer the server may still write into.
 pub(crate) fn server_is_done_with(error: &redis::RedisError) -> bool {
-    error.is_server_reply()
+    matches!(
+        error.origin(),
+        redis::ErrorOrigin::Server | redis::ErrorOrigin::NotSent
+    )
 }
 
 /// Whether `error` looks like an `ExtensionError` this client built, rather than
@@ -146,11 +149,7 @@ mod tests {
     use crate::rdma::protocol;
 
     fn server_error(detail: &str) -> redis::RedisError {
-        redis::RedisError::from((
-            redis::ErrorKind::ResponseError,
-            redis::SERVER_ERROR_DESCRIPTION,
-            detail.to_string(),
-        ))
+        redis::RedisError::server_reply(redis::ErrorKind::ResponseError, detail.to_string())
     }
 
     #[test]

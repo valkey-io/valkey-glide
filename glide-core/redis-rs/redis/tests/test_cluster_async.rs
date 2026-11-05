@@ -5748,11 +5748,10 @@ mod cluster_async {
                     match requests.fetch_add(1, atomic::Ordering::SeqCst) {
                         // What glide-core's RDMA connection returns for a
                         // handshake that leaves the connection unusable.
-                        0 => Err(Err(RedisError::from((
+                        0 => Err(Err(RedisError::server_reply(
                             ErrorKind::FatalSendError,
-                            redis::SERVER_ERROR_DESCRIPTION,
                             "the connection is being replaced".to_string(),
-                        )))),
+                        ))),
                         _ => Err(Ok(Value::Array(vec![Value::Int(16), Value::Int(0)]))),
                     }
                 }
