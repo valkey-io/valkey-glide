@@ -68,5 +68,5 @@ libc = "0.2"
 
 [build-dependencies]
 # Only used by `regenerate-bindings`; the generated file is kept in the tree.
-bindgen = { version = "0.72.0", optional = true }
+bindgen = { version = "0.73.2", optional = true }
 cc = "1.2.26"
