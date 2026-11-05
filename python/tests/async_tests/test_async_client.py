@@ -787,6 +787,40 @@ class TestCommands:
         assert await glide_client.get(key_mv_key) == b"value2"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize(
+        "view_fn",
+        [
+            lambda b: memoryview(b).cast("H"),
+            lambda b: memoryview(b).cast("I"),
+            lambda b: memoryview(b).cast("Q"),
+            lambda b: memoryview(b).cast("B", (2, len(b) // 2)),
+        ],
+        ids=["cast-H", "cast-I", "cast-Q", "2-D"],
+    )
+    async def test_memoryview_args_sent_by_byte_length(
+        self, glide_client: TGlideClient, view_fn
+    ):
+        """Test that set() and custom_command() accept memoryview values and keys
+        whose len() is smaller than nbytes (wider item formats and 2-D views)."""
+        data = os.urandom(64)
+        view = view_fn(data)
+        assert len(view) < view.nbytes == len(data)
+
+        key = get_random_string(10)
+        assert await glide_client.set(key, view) == OK
+        assert await glide_client.get(key) == data
+
+        custom_key = get_random_string(10)
+        await glide_client.custom_command(["SET", custom_key, view])
+        assert await glide_client.get(custom_key) == data
+
+        key_bytes = b"mv_key_" + os.urandom(8)
+        key_bytes += b"\x00" * (-len(key_bytes) % 8)  # whole uint64 elements
+        assert await glide_client.set(view_fn(key_bytes), b"value") == OK
+        assert await glide_client.get(key_bytes) == b"value"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
     async def test_use_resp3_protocol(self, glide_client: TGlideClient):
         result = cast(Dict[bytes, bytes], await glide_client.custom_command(["HELLO"]))
