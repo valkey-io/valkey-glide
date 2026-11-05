@@ -2282,7 +2282,7 @@ public class ValkeySearchLiveTests {
                                     FTHybridVsimArm.builder("vec", packVector(1.0f, 1.0f)).k(5).build(),
                                     FTHybridOptions.builder().withCursor(new FTWithCursor(1)).build())
                             .get();
-            Map<GlideString, Object>[] rows = castArray((Object[]) page[0], Map.class);
+            Map<GlideString, Object>[] rows = (Map<GlideString, Object>[]) page[0];
             long cursorId = (long) page[1];
             totalRows += rows.length;
             Set<GlideString> seenKeys = new HashSet<>();

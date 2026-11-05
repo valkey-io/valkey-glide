@@ -559,6 +559,9 @@ public class FT {
      * Runs a search query on an index with a paged ({@code WITHCURSOR}) reply, and perform aggregate
      * transformations on the results.
      *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.aggregate/">FT.AGGREGATE documentation</a>.
+     *
      * @param client The client to execute the command.
      * @param indexName The index name.
      * @param query The text query to search.
@@ -594,6 +597,9 @@ public class FT {
      * Runs a search query on an index with a paged ({@code WITHCURSOR}) reply, and perform aggregate
      * transformations on the results.
      *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.aggregate/">FT.AGGREGATE documentation</a>.
+     *
      * @param client The client to execute the command.
      * @param indexName The index name.
      * @param query The text query to search.
@@ -625,6 +631,9 @@ public class FT {
      * String, String, FTAggregateOptions)} (with {@code
      * FTAggregateOptions.builder().withCursor(...)}) or {@link #hybridWithCursor}.
      *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.cursor-read/">FT.CURSOR READ documentation</a>.
+     *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
      * @param cursorId The cursor id, from the opening command's reply or a previous {@link
@@ -655,6 +664,9 @@ public class FT {
      * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
      * String, String, FTAggregateOptions)} or {@link #hybridWithCursor}.
      *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.cursor-read/">FT.CURSOR READ documentation</a>.
+     *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
      * @param cursorId The cursor id.
@@ -671,6 +683,9 @@ public class FT {
      * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
      * GlideString, GlideString, FTAggregateOptions)} or {@link #hybridWithCursor}.
      *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.cursor-read/">FT.CURSOR READ documentation</a>.
+     *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
      * @param cursorId The cursor id.
@@ -684,6 +699,9 @@ public class FT {
     /**
      * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
      * GlideString, GlideString, FTAggregateOptions)} or {@link #hybridWithCursor}.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.cursor-read/">FT.CURSOR READ documentation</a>.
      *
      * <p>Always reads from the PRIMARY of the index's slot, regardless of the client's {@code
      * ReadFrom} configuration -- a cursor is a per-process, node-local resource. A cursor opened by
@@ -722,6 +740,9 @@ public class FT {
     /**
      * Deletes an open cursor, discarding it before it would otherwise be exhausted or time out.
      *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.cursor-del/">FT.CURSOR DEL documentation</a>.
+     *
      * @param client The client to execute the command.
      * @param indexName The index name the cursor was opened against.
      * @param cursorId The cursor id to delete.
@@ -738,6 +759,9 @@ public class FT {
 
     /**
      * Deletes an open cursor, discarding it before it would otherwise be exhausted or time out.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.cursor-del/">FT.CURSOR DEL documentation</a>.
      *
      * <p>Always reads from the PRIMARY of the index's slot, regardless of the client's {@code
      * ReadFrom} configuration -- see {@link #cursorRead}'s note.
@@ -756,6 +780,9 @@ public class FT {
     /**
      * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
      * arm) in a single query, fusing both arms' results into one ranked reply.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.hybrid/">FT.HYBRID documentation</a>.
      *
      * @param client The client to execute the command.
      * @param indexName The index name to query.
@@ -784,6 +811,9 @@ public class FT {
     /**
      * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
      * arm) in a single query, fusing both arms' results into one ranked reply.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.hybrid/">FT.HYBRID documentation</a>.
      *
      * <p>Rejects {@code options} with {@code withCursor} set -- use {@link
      * #hybridWithCursor(BaseClient, String, FTHybridSearchArm, FTHybridVsimArm, FTHybridOptions)}
@@ -825,6 +855,9 @@ public class FT {
     /**
      * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
      * arm) in a single query, fusing both arms' results into one ranked reply.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.hybrid/">FT.HYBRID documentation</a>.
      *
      * <p>Rejects {@code options} with {@code withCursor} set -- use {@link
      * #hybridWithCursor(BaseClient, GlideString, FTHybridSearchArm, FTHybridVsimArm,
@@ -878,12 +911,14 @@ public class FT {
      * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
      * @param options The optional arguments for the FT.HYBRID command. Must have {@code withCursor}
      *     set; see {@link FTHybridOptions.FTHybridOptionsBuilder}.
-     * @return A two-element {@code Object[]} of {@code [rows, cursorId]}, where {@code rows} is the
-     *     same per-document mapping shape {@link #hybrid} returns and {@code cursorId} is a {@code
-     *     Long}, {@code 0} once the cursor is exhausted, or the id to pass to a subsequent {@link
-     *     #cursorRead} call otherwise. With no explicit {@code LIMIT} clause, {@code rows} is capped
-     *     at 10 per the server's own default, even after reading the cursor to exhaustion; add an
-     *     {@code FTAggregateOptions.Limit} clause through {@code options} to request more.
+     * @return A two-element {@code Object[]} of {@code [rows, cursorId]}, where {@code rows} is a
+     *     {@code Map<GlideString, Object>[]} (the same per-document mapping shape {@link #aggregate}
+     *     returns, not the raw {@code Object[]} {@link #hybrid} returns for its own, non-paged rows)
+     *     and {@code cursorId} is a {@code Long}, {@code 0} once the cursor is exhausted, or the id
+     *     to pass to a subsequent {@link #cursorRead} call otherwise. With no explicit {@code LIMIT}
+     *     clause, {@code rows} is capped at 10 per the server's own default, even after reading the
+     *     cursor to exhaustion; add an {@code FTAggregateOptions.Limit} clause through {@code
+     *     options} to request more.
      * @throws IllegalArgumentException If {@code options} does not have {@code withCursor} set.
      * @example
      *     <pre>{@code
@@ -892,7 +927,7 @@ public class FT {
      *         FTHybridVsimArm.builder("vec", queryVectorBytes).k(10).yieldScoreAs("vs").build(),
      *         FTHybridOptions.builder().withCursor(new FTWithCursor(10)).build())
      *     .get();
-     * Object[] rows = (Object[]) page[0];
+     * Map<GlideString, Object>[] rows = (Map<GlideString, Object>[]) page[0];
      * long cursorId = (long) page[1];
      * }</pre>
      */
@@ -943,7 +978,7 @@ public class FT {
         }
         GlideString[] args =
                 hybridArgs(indexName, searchArm, vsimArm, options, FT::generatedVsimParamName);
-        return executeCommand(client, args, false);
+        return FT.<Object[]>executeCommand(client, args, false).thenApply(FT::castCursorPage);
     }
 
     /**
