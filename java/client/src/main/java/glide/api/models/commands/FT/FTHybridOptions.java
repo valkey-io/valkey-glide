@@ -75,10 +75,13 @@ public class FTHybridOptions {
     private final Integer timeout;
 
     /**
-     * Param key/value pairs referenced from within the SEARCH query, a VSIM arm's {@code $name}
-     * vector reference, or any clause's expression text. If a {@link FTHybridVsimArm} in the same
-     * call is given raw vector bytes rather than an explicit {@code $name} string, an internally
-     * generated entry is merged into this mapping automatically -- a name collision with a
+     * Param key/value pairs referenced from a VSIM arm's {@code $name} vector reference or any
+     * clause's expression text (e.g. {@code @ss > $thresh} in a {@link FTAggregateOptions.Filter}) --
+     * confirmed live against both uses. The SEARCH arm's own query text is a different grammar and
+     * does NOT substitute a {@code $name} token: the server rejects a bare {@code $name} there with a
+     * parse error ("Unexpected character"), not a silent non-match. If a {@link FTHybridVsimArm} in
+     * the same call is given raw vector bytes rather than an explicit {@code $name} string, an
+     * internally generated entry is merged into this mapping automatically -- a name collision with a
      * caller-supplied entry here raises {@link IllegalArgumentException} rather than silently
      * overwriting either one.
      */

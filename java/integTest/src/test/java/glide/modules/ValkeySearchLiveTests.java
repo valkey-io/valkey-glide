@@ -1860,6 +1860,89 @@ public class ValkeySearchLiveTests {
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_params_not_substituted_in_search_query_text(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        // Confirms (rather than assumes) that FT.HYBRID's params map is NOT substituted into the
+        // SEARCH arm's query text the way it is into the VSIM arm's $name vector reference -- the
+        // server rejects a bare $name token in a text/tag query filter outright, as a parse
+        // error, not a silent no-match. See FTHybridOptions#params's javadoc.
+        String prefix = "{ft-hybrid-paramprobe-" + UUID.randomUUID() + "}:";
+        String index = createHybridIndex(client, prefix);
+        try {
+            Map<String, GlideString> params = new HashMap<>();
+            params.put("titleparam", gs("hello"));
+            ExecutionException e =
+                    assertThrows(
+                            ExecutionException.class,
+                            () ->
+                                    FT.hybrid(
+                                                    client,
+                                                    index,
+                                                    new FTHybridSearchArm("@title:($titleparam)"),
+                                                    FTHybridVsimArm.builder("vec", packVector(1.0f, 1.0f)).k(5).build(),
+                                                    FTHybridOptions.builder().params(params).build())
+                                            .get());
+            assertTrue(e.getCause().getMessage().contains("Unexpected character"));
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_hybrid_params_substituted_in_filter_clause(BaseClient client) {
+        Assumptions.assumeTrue(
+                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+
+        // Confirms (rather than assumes) that FT.HYBRID's params map IS substituted into an
+        // aggregate-tail clause's expression text (unlike the SEARCH arm's own query text -- see
+        // ft_hybrid_params_not_substituted_in_search_query_text above). A threshold above every
+        // row's actual score excludes everything; the same threshold at zero admits the text
+        // winner's positive score, so the clause is genuinely evaluating the substituted value,
+        // not just failing open or closed regardless of it.
+        String prefix = "{ft-hybrid-paramprobe2-" + UUID.randomUUID() + "}:";
+        String index = createHybridIndex(client, prefix);
+        try {
+            Map<String, GlideString> excludingParams = new HashMap<>();
+            excludingParams.put("thresh", gs("999"));
+            Object[] excludingResult =
+                    FT.hybrid(
+                                    client,
+                                    index,
+                                    FTHybridSearchArm.withYieldScoreAs("hello", "ss"),
+                                    FTHybridVsimArm.builder("vec", packVector(1.0f, 1.0f)).k(5).build(),
+                                    FTHybridOptions.builder()
+                                            .addClause(new FTAggregateOptions.Filter("@ss > $thresh"))
+                                            .params(excludingParams)
+                                            .build())
+                            .get();
+            assertEquals(0, excludingResult.length);
+
+            Map<String, GlideString> admittingParams = new HashMap<>();
+            admittingParams.put("thresh", gs("0"));
+            Object[] admittingResult =
+                    FT.hybrid(
+                                    client,
+                                    index,
+                                    FTHybridSearchArm.withYieldScoreAs("hello", "ss"),
+                                    FTHybridVsimArm.builder("vec", packVector(1.0f, 1.0f)).k(5).build(),
+                                    FTHybridOptions.builder()
+                                            .addClause(new FTAggregateOptions.Filter("@ss > $thresh"))
+                                            .params(admittingParams)
+                                            .build())
+                            .get();
+            assertEquals(1, admittingResult.length);
+        } finally {
+            FT.dropindex(client, index).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getResp2Clients")
     public void ft_hybrid_basic_query_resp2(BaseClient client) {
         // RESP2 coverage for FT.HYBRID: the same basic-query shape as ft_hybrid_basic_query,

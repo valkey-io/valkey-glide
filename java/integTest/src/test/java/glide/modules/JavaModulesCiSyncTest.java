@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
@@ -108,12 +109,31 @@ public class JavaModulesCiSyncTest {
         String runnerText = readFile(LOCAL_RUNNER_FILE);
 
         assertTrue(
-                Pattern.compile("version:\\s*[\"']?29\\.1").matcher(workflowText).find(),
+                Pattern.compile("version:\\s*[\"']?29\\.1(?!\\d)").matcher(workflowText).find(),
                 "java-modules.yml no longer pins protoc 29.1 -- update "
                         + "run-modules-ci-locally.sh's pinned version to match.");
         assertTrue(
                 runnerText.contains("protoc-29.1"),
                 "utils/run-modules-ci-locally.sh no longer references the pinned protoc-29.1 "
                         + "toolchain -- update it to match java-modules.yml's pinned version.");
+        // Checks the pinned directory is actually wired into PATH, not just assigned to an
+        // unused variable -- a future edit could change the `export PATH=` line to prepend a
+        // different directory while leaving the protoc-29.1 string assignment dead above it,
+        // which the plain contains() check above would not catch.
+        Matcher dirAssignment =
+                Pattern.compile("(\\w+)\\s*=\\s*\"[^\"]*protoc-29\\.1[^\"]*\"").matcher(runnerText);
+        assertTrue(
+                dirAssignment.find(),
+                "utils/run-modules-ci-locally.sh's protoc-29.1 directory is not assigned to a "
+                        + "variable in the expected `VAR=\"...protoc-29.1...\"` form.");
+        String dirVariable = dirAssignment.group(1);
+        assertTrue(
+                Pattern.compile("export\\s+PATH=\"\\$\\{?" + Pattern.quote(dirVariable) + "\\}?")
+                        .matcher(runnerText)
+                        .find(),
+                "utils/run-modules-ci-locally.sh assigns the protoc-29.1 directory to "
+                        + dirVariable
+                        + " but never prepends it to PATH -- the pinned protoc would not actually be"
+                        + " used.");
     }
 }
