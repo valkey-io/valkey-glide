@@ -3221,6 +3221,45 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// The standalone client is cloned out of the client wrapper on every command.
+    /// The "client dropped" telemetry decrement must fire once per client, not once
+    /// per per-command clone (it used to drive `total_clients` to 0 after the first
+    /// command).
+    #[test]
+    #[serial_test::serial]
+    fn test_client_telemetry_standalone_survives_commands() {
+        Telemetry::reset();
+        block_on_all(async move {
+            let server_config = TestConfiguration {
+                use_tls: false,
+                ..Default::default()
+            };
+            let test_basics = utilities::setup_test_basics_internal(&server_config).await;
+            let server = BackingServer::Standalone(test_basics.server);
+            // The `Client` wrapper is what clones the standalone client per command.
+            let mut client = create_client(&server, server_config).await;
+            assert_eq!(Telemetry::total_clients(), 2);
+            for i in 0..50 {
+                client
+                    .send_command(redis::cmd("SET").arg(format!("k{i}")).arg("v"), None)
+                    .await
+                    .expect("SET");
+                client
+                    .send_command(redis::cmd("GET").arg(format!("k{i}")), None)
+                    .await
+                    .expect("GET");
+            }
+            assert_eq!(
+                Telemetry::total_clients(),
+                2,
+                "per-command clones must not decrement total_clients"
+            );
+            assert_eq!(Telemetry::total_connections(), 2);
+            drop(client);
+            assert_eq!(Telemetry::total_clients(), 1);
+        });
+    }
+
     #[test]
     #[serial_test::serial]
     fn test_client_telemetry_cluster() {

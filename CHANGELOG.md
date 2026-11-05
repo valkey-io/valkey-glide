@@ -93,6 +93,7 @@
 * Core: Validate client library names ([#6891](https://github.com/valkey-io/valkey-glide/pull/6891))
 * Python: A legal numeric `0` is no longer dropped from the command sent to the server. `zpopmin`/`zpopmax` with `count=0`, `OffsetOptions` with `end=0`, `StreamClaimOptions` with `idle`/`idle_unix_time`/`retry_count` of `0`, `ExpirySet`/`ExpiryGetEx` with a value of `0` (`set`, `getex`, `hsetex`, `hgetex`), `FtSearchOptions`/`FtAggregateOptions` with `timeout=0` and `FtAggregateSortBy` with `max=0` previously omitted the argument, so the server ran a different command (e.g. `zpopmin(k, 0)` popped and removed a member). Empty-string `JsonGetOptions` values are also forwarded ([#7525](https://github.com/valkey-io/valkey-glide/issues/7525))
 * Rust: Commands that take a key or argument list encode a byte slice passed as the list (e.g. `&b"key"[..]`) as one argument instead of one argument per byte ([#7313](https://github.com/valkey-io/valkey-glide/issues/7313))
+* Core: Standalone clients decrement the `total_clients` telemetry counter once, when the client is dropped, instead of on every command, which drove it to 0 after the first command ([#7540](https://github.com/valkey-io/valkey-glide/issues/7540))
 
 ### Changes
 
