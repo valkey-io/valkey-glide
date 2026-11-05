@@ -78,12 +78,14 @@ public class FTHybridOptions {
      * Param key/value pairs referenced from a VSIM arm's {@code $name} vector reference or any
      * clause's expression text (e.g. {@code @ss > $thresh} in a {@link FTAggregateOptions.Filter}) --
      * confirmed live against both uses. The SEARCH arm's own query text is a different grammar and
-     * does NOT substitute a {@code $name} token: the server rejects a bare {@code $name} there with a
-     * parse error ("Unexpected character"), not a silent non-match. If a {@link FTHybridVsimArm} in
-     * the same call is given raw vector bytes rather than an explicit {@code $name} string, an
-     * internally generated entry is merged into this mapping automatically -- a name collision with a
-     * caller-supplied entry here raises {@link IllegalArgumentException} rather than silently
-     * overwriting either one.
+     * does NOT substitute a {@code $name} token there: depending on the field type, the server either
+     * rejects a bare {@code $name} with a parse error ("Unexpected character") or, for a TAG field
+     * (e.g. {@code @tag:{$name}}), silently matches the literal text {@code $name} instead of the
+     * param's value -- the same behavior FT.SEARCH has for its own non-vector predicates. If a {@link
+     * FTHybridVsimArm} in the same call is given raw vector bytes rather than an explicit {@code
+     * $name} string, an internally generated entry is merged into this mapping automatically -- a
+     * name collision with a caller-supplied entry here raises {@link IllegalArgumentException} rather
+     * than silently overwriting either one.
      */
     @Builder.Default private final Map<String, GlideString> params = new HashMap<>();
 
