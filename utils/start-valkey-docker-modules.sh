@@ -69,7 +69,13 @@ SEARCH_MODULE_ARGS="${SEARCH_MODULE_ARGS:-}"
 SEARCH_MODULE_PATH="${SEARCH_MODULE_PATH:-/usr/lib/valkey/libsearch.so}"
 SEARCH_MODULE_HOST_PATH="${SEARCH_MODULE_HOST_PATH:-}"
 MODULE_MOUNT_ARGS=()
-if [ -n "$SEARCH_MODULE_HOST_PATH" ]; then MODULE_MOUNT_ARGS=(-v "${SEARCH_MODULE_HOST_PATH}:${SEARCH_MODULE_PATH}:ro"); fi
+if [ -n "$SEARCH_MODULE_HOST_PATH" ]; then
+    if [ ! -f "$SEARCH_MODULE_HOST_PATH" ]; then
+        echo "ERROR: SEARCH_MODULE_HOST_PATH '${SEARCH_MODULE_HOST_PATH}' is not a file. Docker's -v would silently create a directory there instead of mounting it, so the search module would fail to load with no clear error." >&2
+        exit 1
+    fi
+    MODULE_MOUNT_ARGS=(-v "${SEARCH_MODULE_HOST_PATH}:${SEARCH_MODULE_PATH}:ro")
+fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRATCH_DIR="${SCRATCH_DIR:-${REPO_ROOT}/.module-ci-local-scratch}"
 mkdir -p "$SCRATCH_DIR"
