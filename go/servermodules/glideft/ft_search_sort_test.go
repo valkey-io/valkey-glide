@@ -114,17 +114,19 @@ func TestSortDocuments_WithScoresTiesBrokenByKeyDeterministically(t *testing.T) 
 	}
 }
 
-// TestSortDocuments_PureVectorKnnQuerySortsScoreAscending covers a pure-vector KNN query (no
-// text/tag/numeric pre-filter): Score there is a KNN distance, where lower means closer, and the
-// server's own reply order is ascending by distance -- not descending like BM25 relevance. The
-// fixture's input slice order does not match ascending order, so this test fails if the sort
-// stays descending (the pre-existing, BM25-only behavior) or is removed.
-func TestSortDocuments_PureVectorKnnQuerySortsScoreAscending(t *testing.T) {
-	distFar, distNear, distMid := 0.9, 0.1, 0.5
+// TestSortDocuments_PureVectorKnnQuerySortsByDistanceFieldAscending covers a pure-vector KNN
+// query (no text/tag/numeric pre-filter). The server's own WITHSCORES value is always 0 for
+// this case (ft_search.cc: `has_relevance ? neighbor.score : 0.0f`), so Score cannot carry the
+// real distance -- sortDocuments reads it from the Fields entry knnDistanceFieldName resolves
+// (__<field>_score by default), ascending (lower distance is closer). The fixture's input slice
+// order does not match ascending order, so this test fails if the sort stays descending
+// (the pre-existing, BM25-only behavior), is removed, or still reads Score instead of Fields.
+func TestSortDocuments_PureVectorKnnQuerySortsByDistanceFieldAscending(t *testing.T) {
+	zeroScore := 0.0
 	docs := []models.FtSearchDocument{
-		{Key: "far", Fields: map[string]any{}, Score: &distFar},
-		{Key: "near", Fields: map[string]any{}, Score: &distNear},
-		{Key: "mid", Fields: map[string]any{}, Score: &distMid},
+		{Key: "far", Fields: map[string]any{"__vec_score": "0.9"}, Score: &zeroScore},
+		{Key: "near", Fields: map[string]any{"__vec_score": "0.1"}, Score: &zeroScore},
+		{Key: "mid", Fields: map[string]any{"__vec_score": "0.5"}, Score: &zeroScore},
 	}
 
 	opts := &options.FtSearchOptions{WithScores: true}
@@ -138,7 +140,35 @@ func TestSortDocuments_PureVectorKnnQuerySortsScoreAscending(t *testing.T) {
 		t,
 		[]string{"near", "mid", "far"},
 		keysInOrder,
-		"a pure-vector KNN query (no pre-filter) must sort by Score ascending (closest distance first)",
+		"a pure-vector KNN query (no pre-filter) must sort by the real distance field ascending (closest first)",
+	)
+}
+
+// TestSortDocuments_PureVectorKnnQueryWithKnnAsAliasSortsByAliasedDistanceField covers a
+// pure-vector KNN query whose clause names its own distance field via AS (docs/topics/search-
+// query.md: `[ KNN <K> @<field> $<parameter> ... [AS <name>] ]`). knnDistanceFieldName must
+// read that alias rather than falling back to the default __<field>_score, which would not be
+// present in Fields at all once the query supplies its own AS.
+func TestSortDocuments_PureVectorKnnQueryWithKnnAsAliasSortsByAliasedDistanceField(t *testing.T) {
+	zeroScore := 0.0
+	docs := []models.FtSearchDocument{
+		{Key: "far", Fields: map[string]any{"dist": "0.9"}, Score: &zeroScore},
+		{Key: "near", Fields: map[string]any{"dist": "0.1"}, Score: &zeroScore},
+		{Key: "mid", Fields: map[string]any{"dist": "0.5"}, Score: &zeroScore},
+	}
+
+	opts := &options.FtSearchOptions{WithScores: true}
+	sortDocuments(docs, opts, false, "*=>[KNN 10 @vec $q AS dist]")
+
+	keysInOrder := make([]string, len(docs))
+	for i, d := range docs {
+		keysInOrder[i] = d.Key
+	}
+	assert.Equal(
+		t,
+		[]string{"near", "mid", "far"},
+		keysInOrder,
+		"a pure-vector KNN query with its own AS alias must sort by that aliased distance field ascending",
 	)
 }
 
