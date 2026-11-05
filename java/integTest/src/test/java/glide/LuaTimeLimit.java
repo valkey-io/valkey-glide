@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import lombok.SneakyThrows;
@@ -81,15 +82,16 @@ public final class LuaTimeLimit implements AutoCloseable {
         values.forEach((address, value) -> replies.put(address, configSet(client, address, value)));
         return replies.entrySet().stream()
                 .map(e -> e.getValue().handle((reply, error) -> failure(e.getKey(), reply, error)).join())
-                .filter(Objects::nonNull)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
                 .collect(Collectors.toList());
     }
 
-    private static String failure(String address, String reply, Throwable error) {
+    private static Optional<String> failure(String address, String reply, Throwable error) {
         if (error != null) {
-            return address + ": " + error.getMessage();
+            return Optional.of(address + ": " + error.getMessage());
         }
-        return OK.equals(reply) ? null : address + ": " + reply;
+        return OK.equals(reply) ? Optional.empty() : Optional.of(address + ": " + reply);
     }
 
     private static CompletableFuture<String> configSet(
