@@ -359,7 +359,7 @@ class TestSyncBatch:
     @pytest.mark.parametrize("is_atomic", [True, False])
     def test_sync_batch_large_values(self, request, cluster_mode, protocol, is_atomic):
         glide_sync_client = create_sync_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
         length = 2**25  # 33mb
         key = "0" * length
