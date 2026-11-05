@@ -47,8 +47,11 @@ installed, and the ones in `tests/ffi_client_tests.rs` also need `valkey-server`
 `PATH`. To run all of them:
 
 ```bash
-cargo test --features rdma
+cargo test --features rdma-tcp-dev
 ```
+
+`rdma-tcp-dev` is `rdma` plus the `tcp` provider the tests open; a release build uses
+`rdma` alone (see `glide_rdma::Provider::Tcp`).
 
 ## Generating the C Header File
 

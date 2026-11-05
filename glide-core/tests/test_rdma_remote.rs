@@ -17,7 +17,7 @@
 //! valkey-server --port 6379 --loadmodule ./<rdma-module>.so fabric-provider Emulated &
 //! export GLIDE_RDMA_SERVER=127.0.0.1:6379
 //! export GLIDE_RDMA_PROVIDER=tcp
-//! cargo test --features rdma --test test_rdma_remote -- --ignored --nocapture
+//! cargo test --features rdma-tcp-dev --test test_rdma_remote -- --ignored --nocapture
 //! ```
 //!
 //! Against EFA hardware, where the transfer is a real NIC operation:
@@ -56,9 +56,12 @@ mod remote_dma_tests {
             .expect("set GLIDE_RDMA_PROVIDER=tcp or efa-direct")
             .as_str()
         {
+            #[cfg(feature = "rdma-tcp-dev")]
             "tcp" => Provider::Tcp,
             "efa-direct" => Provider::EfaDirect,
-            other => panic!("GLIDE_RDMA_PROVIDER must be tcp or efa-direct, got {other:?}"),
+            other => panic!(
+                "GLIDE_RDMA_PROVIDER must be efa-direct, or tcp in a `rdma-tcp-dev` build, got {other:?}"
+            ),
         }
     }
 

@@ -13,6 +13,9 @@ default = ["pool-support"]
 pool-support = []
 # RDMA over fabric. libfabric is loaded at runtime.
 rdma = ["dep:glide-rdma", "glide-core/rdma"]
+# `rdma` plus the `tcp` provider (see `glide_rdma::Provider::Tcp`), for the tests and
+# for development builds of a binding; never a release build.
+rdma-tcp-dev = ["rdma", "glide-core/rdma-tcp-dev"]
 
 [lib]
 crate-type = ["staticlib", "rlib", "cdylib"]

@@ -1004,7 +1004,7 @@ fn test_ffi_monitor_credential_boundary_fails_closed_before_address_conversion()
 /// Cancelling with `rdma_close_regions` while other threads are starting and
 /// running transfers. Unlike `close_client`, it never frees the client, so the
 /// transfers can keep using it, and the client still serves other commands.
-#[cfg(feature = "rdma")]
+#[cfg(feature = "rdma-tcp-dev")]
 #[test]
 fn rdma_close_regions_cancels_transfers_and_keeps_the_client() {
     use glide_core::connection_request::{RdmaConfig, TcpProvider};
@@ -1141,7 +1141,7 @@ fn rdma_close_regions_cancels_transfers_and_keeps_the_client() {
 
 /// The memory counters answer for a client with an RDMA configuration, and
 /// refuse one without, which has no fabric to count.
-#[cfg(feature = "rdma")]
+#[cfg(feature = "rdma-tcp-dev")]
 #[test]
 fn rdma_memory_counters_answer_only_for_an_rdma_client() {
     use glide_core::connection_request::{RdmaConfig, TcpProvider};

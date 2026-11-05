@@ -65,6 +65,9 @@ proto = ["protobuf"]
 # RDMA transfers through glide-rdma.
 # Needs libfabric at run time (see DEVELOPER.md).
 rdma = ["dep:glide-rdma", "glide-rdma/libfabric", "glide-core-engine/rdma"]
+# `rdma` plus glide-rdma's `tcp` provider (see `glide_rdma::Provider::Tcp`), for the
+# tests and for a development client; never a release build.
+rdma-tcp-dev = ["rdma", "glide-rdma/tcp-dev"]
 socket-layer = [
     "proto",
     "directories",

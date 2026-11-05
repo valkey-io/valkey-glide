@@ -29,8 +29,8 @@ fn a_missing_libfabric_is_a_readable_error_rather_than_a_dead_process() {
         "the error should name the path it tried, got: {detail}"
     );
 
-    let error =
-        RdmaFabric::open(&FabricConfig::new(Provider::Tcp)).expect_err("no libfabric, no fabric");
+    let error = RdmaFabric::open(&FabricConfig::new(Provider::EfaDirect))
+        .expect_err("no libfabric, no fabric");
     assert!(
         matches!(error, RdmaError::LibfabricUnavailable { .. }),
         "opening a fabric should say libfabric is unavailable, got {error:?}"
