@@ -721,12 +721,12 @@ public class TestUtilities {
 
     /**
      * Starts a write script or function and polls {@code kill} until the server reports it as
-     * unkillable, then waits for it to finish.
+     * unkillable.
      *
      * <p>A {@code NOTBUSY} reply does not say whether the script has not started yet or has already
-     * finished, so when the current invocation is done the script is started again and polling
-     * continues. The script is waited out even when the poll fails: the server rejects commands such
-     * as the {@code CONFIG SET} that restores {@code lua-time-limit} while it is busy.
+     * finished, so a finished invocation is started again. The script is waited out before returning,
+     * even when the poll fails: the server rejects commands such as the {@code CONFIG SET} that
+     * restores {@code lua-time-limit} while it is busy.
      *
      * @param kill Issues {@code SCRIPT KILL} or {@code FUNCTION KILL}.
      * @param invoke Starts the write script or function without awaiting it.

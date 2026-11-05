@@ -166,8 +166,8 @@ public class SharedCommandTests {
     private static final String INITIAL_VALUE = "VALUE";
     private static final String ANOTHER_VALUE = "VALUE2";
 
-    // The timeout-check tests build their own clients with this request timeout, shorter than both
-    // waits below: a blocking command still pending after them was not cut short by it.
+    // Shorter than both waits below: a blocking command still pending after them was not cut short
+    // by the request timeout.
     private static final int REQUEST_TIMEOUT_MS = 250;
     private static final double BLOCKING_TIMEOUT_SECONDS = 0.5;
     private static final long BLOCKING_TIMEOUT_MS = (long) (BLOCKING_TIMEOUT_SECONDS * 1000);

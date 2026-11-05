@@ -27,7 +27,7 @@ public final class LuaTimeLimit implements AutoCloseable {
 
     private final BaseClient client;
 
-    /** Original value per node address; a single entry keyed {@code null} for a standalone client. */
+    /** Keyed by node address; {@code null} for a standalone client. */
     private final Map<String, String> originals;
 
     private LuaTimeLimit(BaseClient client, Map<String, String> originals) {
