@@ -74,7 +74,7 @@ public final class LuaTimeLimit implements AutoCloseable {
 
     /**
      * Every node receives its CONFIG SET before any reply is awaited, so one refusal cannot skip the
-     * rest. Returns one line per node that refused.
+     * rest.
      */
     private static List<String> configSetAll(BaseClient client, Map<String, String> values) {
         Map<String, CompletableFuture<String>> replies = new LinkedHashMap<>();
