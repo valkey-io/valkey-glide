@@ -130,6 +130,8 @@ jobs:
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
                 node: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
+        env:
+            CARGO_INCREMENTAL: "0"
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -196,6 +198,13 @@ jobs:
                   language-version: ${{ matrix.node }}
                   base-language-version: ${{ env.BASE_NODE_VERSION }}
 
+            # A fresh checkout is newer than the restored dep-info, so cargo rebuilds these
+            # crates on every run; only the registry crates are worth saving.
+            - name: Remove the path crates from the cargo cache
+              if: always()
+              working-directory: ./node/rust-client
+              run: cargo clean -p valkey-glide -p glide-core -p glide-core-engine -p glide-logger -p glide-telemetry
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -210,6 +219,8 @@ jobs:
         name: Node Extra Tests (ES/CJS, Yarn, Types)
         runs-on: ubuntu-24.04
         timeout-minutes: 25
+        env:
+            CARGO_INCREMENTAL: "0"
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -306,6 +317,11 @@ jobs:
                   pnpm install
                   pnpm run test
               working-directory: ./node/hybrid-node-tests/pnpm-pubsub-test
+
+            - name: Remove the path crates from the cargo cache
+              if: always()
+              working-directory: ./node/rust-client
+              run: cargo clean -p valkey-glide -p glide-core -p glide-core-engine -p glide-logger -p glide-telemetry
 
             - name: Upload test reports
               if: always()
