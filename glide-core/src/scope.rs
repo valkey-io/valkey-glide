@@ -1887,7 +1887,7 @@ mod tests {
         ScopeAcquireOutcome, ScopeCreateError, ScopeFailCause, ScopeRetryCause,
         acquire_scope_outcome, acquisition_slot_for, build_scope_connection, classify_acquire,
         create_scope_connection, execute_scope_command, get_parent_client, inherited_tls_params,
-        resolve_scope_parent, try_resolve_scope_target,
+        release_scope, resolve_scope_parent, try_resolve_scope_target,
     };
     use redis::{RedisResult, Value};
 
@@ -3384,6 +3384,64 @@ mod tests {
         assert_released_promptly(command).await;
         assert!(pool.lock().idle.is_empty(), "not re-idled");
 
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
+    }
+
+    /// A scope released while another thread holds the pool lock is back in
+    /// idle when `release_scope` returns, not after a deferred task gets the
+    /// lock.
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn release_scope_has_landed_when_it_returns_under_contention() {
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let request_bytes = request_bytes("", port);
+        let pool = reserved_pool(request_bytes.clone());
+        let client_id = 6_898_514_u64;
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
+
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await
+        .expect("seat one connection");
+        let scope_id = reused_scope_id(pool.lock().try_acquire(
+            get_scope_registry(),
+            ScopeTarget::Standalone,
+            0,
+            None,
+        ));
+        assert!(pool.lock().in_use.contains(&scope_id), "borrowed");
+
+        let (locked_tx, locked_rx) = mpsc::channel();
+        let holder = {
+            let pool = pool.clone();
+            std::thread::spawn(move || {
+                let guard = pool.lock();
+                locked_tx.send(()).expect("test thread is waiting");
+                std::thread::sleep(Duration::from_millis(200));
+                drop(guard);
+            })
+        };
+        locked_rx.recv().expect("holder took the lock");
+
+        assert_eq!(
+            release_scope(scope_id, client_id, &tokio::runtime::Handle::current()),
+            0
+        );
+        {
+            let pool = pool.lock();
+            assert!(!pool.in_use.contains(&scope_id), "released on return");
+            assert_eq!(pool.idle.len(), 1, "re-idled on return");
+        }
+        holder.join().expect("holder exits cleanly");
+
+        get_client_scope_pools().remove(&client_id);
         shutdown_sender.send(()).expect("stop mock server");
         server.join().expect("mock server exits cleanly");
     }
