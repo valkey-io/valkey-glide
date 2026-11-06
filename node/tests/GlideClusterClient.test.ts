@@ -40,6 +40,7 @@ import {
     Script,
     SlotKeyTypes,
     SortOrder,
+    TimeoutError,
     convertGlideRecordToRecord,
     convertRecordToGlideRecord,
 } from "../build-ts";
@@ -70,6 +71,7 @@ import {
     PRIMARY_SLOT_ROUTE_OPTION,
     triggerLatencySpike,
     validateBatchResponse,
+    waitFor,
     waitForNotBusy,
     socketDrainDelay,
 } from "./TestUtilities";
@@ -473,6 +475,75 @@ describe("GlideClusterClient", () => {
             });
             expect(result).toEqual(expect.stringContaining("# Server"));
             expect(result).toEqual(expect.not.stringContaining("# Errorstats"));
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `info with allowPartialResults keeps replies when a primary is slow_%p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 1000,
+                }),
+            );
+            const primaries = Object.keys(await client.info()).sort();
+            const [host, port] = primaries[0].split(":");
+            const route = {
+                type: "routeByAddress" as const,
+                host,
+                port: Number(port),
+            };
+
+            // A second client pauses the primary, so the pause is not queued
+            // behind the client under test.
+            const pauser = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            try {
+                await pauser.customCommand(["CLIENT", "PAUSE", "2500", "ALL"], {
+                    route,
+                });
+
+                // Without the option, one slow primary fails the whole call.
+                await expect(client.info()).rejects.toThrow(TimeoutError);
+
+                const result = await client.info({
+                    allowPartialResults: true,
+                });
+                expect(typeof result).toEqual("object");
+                const replies = result as Record<string, string | RequestError>;
+                expect(Object.keys(replies).sort()).toEqual(primaries);
+
+                for (const address of primaries.slice(1)) {
+                    expect(replies[address]).toEqual(
+                        expect.stringContaining("# Server"),
+                    );
+                }
+
+                expect(replies[primaries[0]]).toBeInstanceOf(TimeoutError);
+                expect(replies[primaries[0]]).toBeInstanceOf(RequestError);
+            } finally {
+                // CLIENT UNPAUSE would wait for the pause too; wait for it to end.
+                await waitFor(async () => {
+                    try {
+                        await pauser.ping({ route });
+                        return true;
+                    } catch {
+                        return false;
+                    }
+                }, "paused primary did not recover");
+                pauser.close();
+            }
+
+            // With every node healthy, the option returns the same replies.
+            const healthy = await client.info({ allowPartialResults: true });
+            expect(Object.keys(healthy).sort()).toEqual(primaries);
+
+            for (const reply of Object.values(healthy)) {
+                expect(reply).toEqual(expect.stringContaining("# Server"));
+            }
         },
         TIMEOUT,
     );
