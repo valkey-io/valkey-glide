@@ -3,6 +3,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import argparse
+import ipaddress
 
 try:
     import fcntl  # POSIX only — not available on Windows
@@ -519,22 +520,24 @@ def start_server(
 
     cmd_args.extend(["--bind", *get_bind_addresses(host)])
 
-    # If host is a DNS hostname, set cluster-announce-hostname so
-    # the cluster topology reports DNS names instead of IP addresses.
     if cluster_mode:
         if cluster_node_timeout is not None:
             cmd_args.extend(["--cluster-node-timeout", str(cluster_node_timeout)])
-        try:
-            import ipaddress
-            ipaddress.ip_address(host)
-        except ValueError:
-            cmd_args.extend(["--cluster-announce-hostname", host])
+
+        # Enable cluster-announce-hostname if host is a DNS hostname (Redis 7.0+).
+        if server_version >= (7, 0, 0):
+            try:
+                ipaddress.ip_address(host)
+            except ValueError:
+                cmd_args.extend(["--cluster-announce-hostname", host])
+
+        # Enable multi-database support (Valkey 9.0+).
+        if cluster_mode and server_version >= (9, 0, 0):
+            cmd_args.extend(["--cluster-databases", "16"])
 
     if server_version >= (7, 0, 0):
         cmd_args.extend(["--enable-debug-command", "yes"])
-    # Enable multi-database support in cluster mode for Valkey 9.0+
-    if cluster_mode and server_version >= (9, 0, 0):
-        cmd_args.extend(["--cluster-databases", "16"])
+
     if load_module:
         if len(load_module) == 0:
             raise ValueError(
