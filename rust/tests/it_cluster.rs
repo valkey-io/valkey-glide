@@ -3,7 +3,8 @@
 
 mod common;
 
-use glide::{AsyncTypedCommands, CustomCommand, FromValkeyValue, Route};
+use glide::{AsyncTypedCommands, CustomCommand, FromValkeyValue, GlideError, Route};
+use std::time::Duration;
 
 #[tokio::test]
 async fn cluster_set_get_routed_by_key() {
@@ -55,6 +56,77 @@ async fn cluster_info_reports_ok() {
         info.contains("cluster_state:ok"),
         "cluster never reported ok: {info}"
     );
+}
+
+#[tokio::test]
+async fn cluster_info_with_partial_results_keeps_replies_when_a_primary_is_slow() {
+    let cluster = common::ClusterHarness::start().await;
+    let client = glide::GlideClusterClient::connect(
+        cluster.config().request_timeout(Duration::from_millis(500)),
+    )
+    .await
+    .unwrap();
+    // A second client pauses the primary, so the pause is not queued behind the
+    // client under test.
+    let pauser = cluster.client().await;
+
+    let healthy = client.info_with_partial_results(&[], None).await.unwrap();
+    let mut primaries: Vec<String> = healthy.keys().cloned().collect();
+    primaries.sort();
+    assert_eq!(primaries.len(), cluster.primary_ports.len());
+    for reply in healthy.values() {
+        assert!(reply.as_ref().unwrap().contains("# Server"), "{reply:?}");
+    }
+
+    let (host, port) = primaries[0].rsplit_once(':').unwrap();
+    let route = Route::ByAddress {
+        host: host.to_string(),
+        port: port.parse().unwrap(),
+    };
+    let err = client
+        .info_with_partial_results(&[], Some(route.clone()))
+        .await
+        .unwrap_err();
+    assert!(matches!(err, GlideError::Request(_)), "{err:?}");
+
+    pauser
+        .custom_command_with_route(&["CLIENT", "PAUSE", "1500", "ALL"], route.clone())
+        .await
+        .unwrap();
+
+    // Without partial results, one slow primary fails the whole call.
+    let err = client
+        .custom_command_with_route(&["INFO"], Route::AllPrimaries)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, GlideError::Timeout(_)), "{err:?}");
+
+    let replies = client.info_with_partial_results(&[], None).await.unwrap();
+    let mut addresses: Vec<String> = replies.keys().cloned().collect();
+    addresses.sort();
+    assert_eq!(addresses, primaries);
+    assert!(
+        matches!(replies[&primaries[0]], Err(GlideError::Timeout(_))),
+        "{:?}",
+        replies[&primaries[0]]
+    );
+    for address in &primaries[1..] {
+        assert!(replies[address].as_ref().unwrap().contains("# Server"));
+    }
+
+    // CLIENT UNPAUSE would wait for the pause too; wait for it to end.
+    let mut recovered = false;
+    for _ in 0..50 {
+        if pauser
+            .custom_command_with_route(&["PING"], route.clone())
+            .await
+            .is_ok()
+        {
+            recovered = true;
+            break;
+        }
+    }
+    assert!(recovered, "paused primary did not recover");
 }
 
 #[tokio::test]
