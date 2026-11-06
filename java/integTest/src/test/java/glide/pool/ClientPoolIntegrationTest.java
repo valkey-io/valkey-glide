@@ -935,7 +935,8 @@ public class ClientPoolIntegrationTest {
             // release_client_async, and the client stays in the in-use set until that task
             // first runs take_for_release. Poll for the count to reach 1 instead of reading once.
             int active = pool.getActiveCount();
-            long settleDeadline = System.currentTimeMillis() + 5000;
+            // Give up at half the abandon timeout, before the monitor could drop a leaked client.
+            long settleDeadline = System.currentTimeMillis() + cfg.getAbandonTimeout().toMillis() / 2;
             while (active != 1 && System.currentTimeMillis() < settleDeadline) {
                 Thread.sleep(50);
                 active = pool.getActiveCount();
