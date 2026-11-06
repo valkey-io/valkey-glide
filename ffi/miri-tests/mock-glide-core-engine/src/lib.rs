@@ -64,6 +64,10 @@ impl Cmd {
         None
     }
 
+    pub fn set_allow_partial_results(&mut self, _allow: bool) -> &mut Cmd {
+        self
+    }
+
     pub fn command(&self) -> Option<Vec<u8>> {
         Some(self.command_bytes.clone())
     }
