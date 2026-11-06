@@ -4785,7 +4785,11 @@ mod tests_response_arena {
             for (i, error_type) in expected.into_iter().enumerate() {
                 let node = &*root.array_value.add(i);
                 assert!(matches!(node.response_type, ResponseType::Error));
-                assert_eq!(node.int_value, error_type as i64, "node {i}");
+                // MIRI links a stub `glide_core::errors::error_type` that always
+                // returns `Unspecified`; the classification is only real here.
+                if !cfg!(miri) {
+                    assert_eq!(node.int_value, error_type as i64, "node {i}");
+                }
             }
             free_response_arena(arena_ptr);
         }

@@ -32,6 +32,7 @@ pub use cluster_topology::*;
 
 pub use redis::SHARED_ARG_INLINE_MAX;
 pub use redis::ToRedisArgs;
+pub use redis::parse_redis_value;
 
 pub struct Cmd {
     command_bytes: Vec<u8>,
