@@ -37,7 +37,7 @@ use crate::client::Client as GlideClient;
 use dashmap::DashMap;
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU8, AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::Notify;
@@ -1666,7 +1666,7 @@ impl ScopePool {
                         };
                         drop(guard);
 
-                        let mut pool = pool_arc.lock().await;
+                        let mut pool = pool_arc.lock();
                         if pool.state.load(Ordering::Acquire) == POOL_RUNNING {
                             pool.idle.push_back(idle_conn);
                         } else {
@@ -1686,7 +1686,7 @@ impl ScopePool {
                     guard.connection.kill();
                     drop(guard);
                     if let Some(pool_arc) = pool_arc {
-                        let pool = pool_arc.lock().await;
+                        let pool = pool_arc.lock();
                         saturating_dec(&pool.total_count);
                         pool.wakeup.notify_waiters();
                     }
@@ -1795,13 +1795,34 @@ pub fn get_client_scope_pools() -> &'static DashMap<u64, ScopePoolHandle> {
     CLIENT_SCOPE_POOLS.get_or_init(DashMap::new)
 }
 
+/// The lock every holder of a [`ScopePool`] goes through; the scope-pool
+/// counterpart of [`PoolMutex`], with the same poisoning policy.
+///
+/// Holders do in-memory work under the guard and release it before awaiting,
+/// so a `std::sync::Mutex` is enough: `lock()` waits only for in-memory
+/// critical sections, from any thread, runtime or not. The guard is `!Send`, so
+/// holding it across an `.await` in a spawned task does not compile.
+pub struct ScopeMutex(Mutex<ScopePool>);
+
+pub type ScopeGuard<'a> = MutexGuard<'a, ScopePool>;
+
+impl ScopeMutex {
+    pub fn new(pool: ScopePool) -> Self {
+        Self(Mutex::new(pool))
+    }
+
+    pub fn lock(&self) -> ScopeGuard<'_> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
 /// A scope pool and its wake signal, side by side. The signal sits outside the
 /// mutex so a path that cannot take the pool lock -- parent close, which runs
 /// synchronously and possibly off any runtime -- can still wake a waiting
 /// acquire, and so a waiter can arm it without locking.
 #[derive(Clone)]
 pub struct ScopePoolHandle {
-    pub pool: Arc<TokioMutex<ScopePool>>,
+    pub pool: Arc<ScopeMutex>,
     pub wakeup: Arc<Notify>,
 }
 
@@ -1809,19 +1830,14 @@ impl ScopePoolHandle {
     pub fn new(pool: ScopePool) -> Self {
         Self {
             wakeup: pool.wakeup.clone(),
-            pool: Arc::new(TokioMutex::new(pool)),
+            pool: Arc::new(ScopeMutex::new(pool)),
         }
     }
 
-    /// Test-only: wrap an already shared pool. The pool is fresh and unshared
-    /// at this point, so the `try_lock` cannot contend.
+    /// Test-only: wrap an already shared pool.
     #[cfg(test)]
-    pub(crate) fn for_test(pool: &Arc<TokioMutex<ScopePool>>) -> Self {
-        let wakeup = pool
-            .try_lock()
-            .expect("fresh test pool is unlocked")
-            .wakeup
-            .clone();
+    pub(crate) fn for_test(pool: &Arc<ScopeMutex>) -> Self {
+        let wakeup = pool.lock().wakeup.clone();
         Self {
             pool: pool.clone(),
             wakeup,
@@ -2195,14 +2211,13 @@ mod client_pool_marking_tests {
 
 #[cfg(test)]
 mod scope_pool_tests {
-    use super::ScopePoolHandle;
     use super::{
         Arc, AtomicU32, DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig,
         ScopeReservation, ScopeTarget, saturating_dec,
     };
+    use super::{ScopeMutex, ScopePoolHandle};
     use std::net::SocketAddr;
     use std::process::{Child, Command, Stdio};
-    use tokio::sync::Mutex as TokioMutex;
 
     /// `max_total = N` must grant exactly N reservations before reporting
     /// exhaustion. The slot is counted as the reservation is granted, so the Nth is
@@ -2448,7 +2463,7 @@ mod scope_pool_tests {
         };
 
         let client_id = 6_898_000_u64;
-        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool_arc = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             connection_request_bytes.clone(),
             client_id,
@@ -2461,7 +2476,6 @@ mod scope_pool_tests {
         // production `ScopeAcquire::Reserved` path.
         let reservation = pool_arc
             .lock()
-            .await
             .reserve_slot()
             .expect("fresh pool must grant a reservation");
         let _ = crate::scope::create_scope_connection(
@@ -2476,7 +2490,7 @@ mod scope_pool_tests {
         // Pull the freshly-created connection out of idle and into in_use, the
         // same way `try_acquire` would for a real borrower.
         let scope_id = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             match pool.try_acquire(registry, ScopeTarget::Standalone, 0, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the freshly created connection to be idle: {other:?}"),
@@ -2494,7 +2508,7 @@ mod scope_pool_tests {
         .expect("CLIENT SETNAME must succeed");
 
         {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             assert!(
                 pool.release(scope_id, registry),
                 "release must succeed for an in-use scope"
@@ -2505,7 +2519,7 @@ mod scope_pool_tests {
         // the connection back in idle.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
-            if pool_arc.lock().await.idle.len() == 1 {
+            if pool_arc.lock().idle.len() == 1 {
                 break;
             }
             if std::time::Instant::now() > deadline {
@@ -2517,7 +2531,7 @@ mod scope_pool_tests {
         // Re-acquire the same physical connection and confirm the name was
         // cleared by the release cleanup pipeline, not merely reclassified.
         let scope_id = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             match pool.try_acquire(registry, ScopeTarget::Standalone, 0, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
@@ -2572,7 +2586,7 @@ mod scope_pool_tests {
         };
 
         let client_id = 6_898_001_u64;
-        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool_arc = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             connection_request_bytes.clone(),
             client_id,
@@ -2585,7 +2599,6 @@ mod scope_pool_tests {
         // production `ScopeAcquire::Reserved` path.
         let reservation = pool_arc
             .lock()
-            .await
             .reserve_slot()
             .expect("fresh pool must grant a reservation");
         let _ = crate::scope::create_scope_connection(
@@ -2600,7 +2613,7 @@ mod scope_pool_tests {
         // Pull the freshly-created connection out of idle and into in_use, the
         // same way `try_acquire` would for a real borrower.
         let scope_id = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             match pool.try_acquire(registry, ScopeTarget::Standalone, 0, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the freshly created connection to be idle: {other:?}"),
@@ -2636,7 +2649,7 @@ mod scope_pool_tests {
         .expect("CLIENT SETNAME must succeed");
 
         {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             assert!(
                 pool.release(scope_id, registry),
                 "release must succeed for an in-use scope"
@@ -2647,7 +2660,7 @@ mod scope_pool_tests {
         // the connection back in idle.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
-            if pool_arc.lock().await.idle.len() == 1 {
+            if pool_arc.lock().idle.len() == 1 {
                 break;
             }
             if std::time::Instant::now() > deadline {
@@ -2660,7 +2673,7 @@ mod scope_pool_tests {
         // pipeline reset the name back to the CONFIGURED baseline — not the
         // borrower's override, and not empty.
         let scope_id = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             match pool.try_acquire(registry, ScopeTarget::Standalone, 0, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the cleaned-up connection to be reused: {other:?}"),
@@ -2724,7 +2737,7 @@ mod scope_pool_tests {
         };
 
         let client_id = 7_064_000_u64;
-        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool_arc = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             connection_request_bytes.clone(),
             client_id,
@@ -2736,7 +2749,6 @@ mod scope_pool_tests {
         // Create the connection with no parent: it opens on the configured db (2).
         let reservation = pool_arc
             .lock()
-            .await
             .reserve_slot()
             .expect("pool must grant a reservation");
         let _ = crate::scope::create_scope_connection(
@@ -2752,7 +2764,7 @@ mod scope_pool_tests {
         // signals NeedsResync. Fix it onto db 3 (mirrors acquire_scope_outcome's retry path),
         // then acquire — now it's a clean db match.
         let first_acquire = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db, None)
         };
         assert!(
@@ -2767,7 +2779,7 @@ mod scope_pool_tests {
         .await;
 
         let scope_id = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected the resynced connection to be reused: {other:?}"),
@@ -2786,7 +2798,7 @@ mod scope_pool_tests {
 
         // Release the scope WITHOUT changing its database (clean path).
         {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             assert!(
                 pool.release(scope_id, registry),
                 "release must succeed for an in-use scope"
@@ -2795,7 +2807,7 @@ mod scope_pool_tests {
 
         // Clean release is synchronous; the connection should be back in idle immediately.
         assert_eq!(
-            pool_arc.lock().await.idle.len(),
+            pool_arc.lock().idle.len(),
             1,
             "a clean release must return the connection to idle with no round-trip"
         );
@@ -2803,7 +2815,7 @@ mod scope_pool_tests {
         // Re-acquire the SAME connection at runtime_db 3 — must be a direct db match now,
         // no resync needed.
         let scope_id = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => {
@@ -2868,7 +2880,7 @@ mod scope_pool_tests {
         };
 
         let client_id = 7_064_001_u64;
-        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool_arc = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             connection_request_bytes.clone(),
             client_id,
@@ -2879,7 +2891,6 @@ mod scope_pool_tests {
 
         let reservation = pool_arc
             .lock()
-            .await
             .reserve_slot()
             .expect("pool must grant a reservation");
         let _ = crate::scope::create_scope_connection(
@@ -2894,12 +2905,9 @@ mod scope_pool_tests {
         // Bring the connection onto the runtime database (3), mirroring the acquire path.
         assert!(matches!(
             {
-                pool_arc.lock().await.try_acquire(
-                    registry,
-                    ScopeTarget::Standalone,
-                    runtime_db,
-                    None,
-                )
+                pool_arc
+                    .lock()
+                    .try_acquire(registry, ScopeTarget::Standalone, runtime_db, None)
             },
             ScopeAcquire::NeedsResync
         ));
@@ -2911,7 +2919,7 @@ mod scope_pool_tests {
         .await;
 
         let scope_id = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on the runtime db: {other:?}"),
@@ -2933,12 +2941,12 @@ mod scope_pool_tests {
 
         // Release dirty: the cleanup pipeline must SELECT back to the baseline (3).
         {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             assert!(pool.release(scope_id, registry));
         }
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
-            if pool_arc.lock().await.idle.len() == 1 {
+            if pool_arc.lock().idle.len() == 1 {
                 break;
             }
             if std::time::Instant::now() > deadline {
@@ -2950,7 +2958,7 @@ mod scope_pool_tests {
         // Re-acquire on the runtime db — must be a clean match (release restored db 3),
         // and the key written on db 3 must be visible.
         let scope_id = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             match pool.try_acquire(registry, ScopeTarget::Standalone, runtime_db, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!(
@@ -3008,7 +3016,7 @@ mod scope_pool_tests {
         };
 
         let client_id = 7_064_002_u64;
-        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool_arc = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             connection_request_bytes.clone(),
             client_id,
@@ -3019,7 +3027,6 @@ mod scope_pool_tests {
 
         let reservation = pool_arc
             .lock()
-            .await
             .reserve_slot()
             .expect("pool must grant a reservation");
         let _ = crate::scope::create_scope_connection(
@@ -3037,7 +3044,6 @@ mod scope_pool_tests {
             {
                 pool_arc
                     .lock()
-                    .await
                     .try_acquire(registry, ScopeTarget::Standalone, 3, None)
             },
             ScopeAcquire::NeedsResync
@@ -3045,18 +3051,18 @@ mod scope_pool_tests {
         crate::scope::resync_idle_connection_database(pool_arc.clone(), ScopeTarget::Standalone, 3)
             .await;
         let scope_id = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             match pool.try_acquire(registry, ScopeTarget::Standalone, 3, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on db 3: {other:?}"),
             }
         };
         {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             assert!(pool.release(scope_id, registry));
         }
         assert_eq!(
-            pool_arc.lock().await.idle.len(),
+            pool_arc.lock().idle.len(),
             1,
             "clean release must idle the connection with no round-trip"
         );
@@ -3068,7 +3074,6 @@ mod scope_pool_tests {
                 {
                     pool_arc
                         .lock()
-                        .await
                         .try_acquire(registry, ScopeTarget::Standalone, 5, None)
                 },
                 ScopeAcquire::NeedsResync
@@ -3078,7 +3083,7 @@ mod scope_pool_tests {
         crate::scope::resync_idle_connection_database(pool_arc.clone(), ScopeTarget::Standalone, 5)
             .await;
         let scope_id = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             match pool.try_acquire(registry, ScopeTarget::Standalone, 5, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on db 5 after resync: {other:?}"),
@@ -3140,7 +3145,7 @@ mod scope_pool_tests {
         };
 
         let client_id = 7_064_003_u64;
-        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool_arc = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             connection_request_bytes.clone(),
             client_id,
@@ -3155,7 +3160,6 @@ mod scope_pool_tests {
         // otherwise the second resync would just move the db-3 connection to db 5.
         let reservation = pool_arc
             .lock()
-            .await
             .reserve_slot()
             .expect("pool must grant a reservation");
         let _ = crate::scope::create_scope_connection(
@@ -3170,7 +3174,7 @@ mod scope_pool_tests {
             .await;
         // Hold the db-3 connection by acquiring it, so the next resync can't touch it.
         let held_db3 = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             match pool.try_acquire(registry, ScopeTarget::Standalone, 3, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected to hold the db-3 connection: {other:?}"),
@@ -3178,7 +3182,6 @@ mod scope_pool_tests {
         };
         let reservation = pool_arc
             .lock()
-            .await
             .reserve_slot()
             .expect("pool must grant a reservation");
         let _ = crate::scope::create_scope_connection(
@@ -3193,11 +3196,11 @@ mod scope_pool_tests {
             .await;
         // Return the db-3 connection to idle: now idle holds one db-3 and one db-5 conn.
         {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             assert!(pool.release(held_db3, registry));
         }
         {
-            let pool = pool_arc.lock().await;
+            let pool = pool_arc.lock();
             let mut dbs: Vec<u32> = pool.idle.iter().map(|c| c.state.selected_db).collect();
             dbs.sort_unstable();
             assert_eq!(
@@ -3209,7 +3212,7 @@ mod scope_pool_tests {
 
         // Acquire at runtime db 5: must be a clean reuse of the db-5 connection, no resync.
         let scope_id = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             match pool.try_acquire(registry, ScopeTarget::Standalone, 5, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => {
@@ -3220,7 +3223,7 @@ mod scope_pool_tests {
         // Exactly one connection left idle, and it is the db-3 one (the db-5 one was reused,
         // the db-3 one left untouched — the pool never resynced or exposed it).
         {
-            let pool = pool_arc.lock().await;
+            let pool = pool_arc.lock();
             assert_eq!(pool.idle.len(), 1, "one connection must remain idle");
             assert_eq!(
                 pool.idle.back().unwrap().state.selected_db,
@@ -3286,7 +3289,7 @@ mod scope_pool_tests {
         };
 
         let client_id = 7_064_004_u64;
-        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool_arc = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             connection_request_bytes.clone(),
             client_id,
@@ -3299,7 +3302,6 @@ mod scope_pool_tests {
         // record 4, not 0.
         let reservation = pool_arc
             .lock()
-            .await
             .reserve_slot()
             .expect("pool must grant a reservation");
         let _ = crate::scope::create_scope_connection(
@@ -3311,7 +3313,7 @@ mod scope_pool_tests {
         )
         .await;
         assert_eq!(
-            pool_arc.lock().await.idle.back().unwrap().state.selected_db,
+            pool_arc.lock().idle.back().unwrap().state.selected_db,
             4,
             "a freshly created connection's tracker must match its init database (4)"
         );
@@ -3321,7 +3323,6 @@ mod scope_pool_tests {
             {
                 pool_arc
                     .lock()
-                    .await
                     .try_acquire(registry, ScopeTarget::Standalone, 6, None)
             },
             ScopeAcquire::NeedsResync
@@ -3329,13 +3330,13 @@ mod scope_pool_tests {
         crate::scope::resync_idle_connection_database(pool_arc.clone(), ScopeTarget::Standalone, 6)
             .await;
         assert_eq!(
-            pool_arc.lock().await.idle.back().unwrap().state.selected_db,
+            pool_arc.lock().idle.back().unwrap().state.selected_db,
             6,
             "after resync the tracker must match the new database (6)"
         );
 
         let scope_id = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             match pool.try_acquire(registry, ScopeTarget::Standalone, 6, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected reuse on db 6: {other:?}"),
@@ -3345,11 +3346,11 @@ mod scope_pool_tests {
         // Release cleanly: the connection idles back, and its tracker must still read 6
         // (the borrow baseline), not be reset to 0 or to the configured db 4.
         {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             assert!(pool.release(scope_id, registry));
         }
         assert_eq!(
-            pool_arc.lock().await.idle.back().unwrap().state.selected_db,
+            pool_arc.lock().idle.back().unwrap().state.selected_db,
             6,
             "after a clean release the tracker must preserve the connection's real db (6)"
         );
@@ -3388,7 +3389,7 @@ mod scope_pool_tests {
         };
 
         let client_id = 7_064_005_u64;
-        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool_arc = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             connection_request_bytes.clone(),
             client_id,
@@ -3399,7 +3400,6 @@ mod scope_pool_tests {
         // Seat one connection on db 0.
         let reservation = pool_arc
             .lock()
-            .await
             .reserve_slot()
             .expect("pool must grant a reservation");
         let _ = crate::scope::create_scope_connection(
@@ -3410,8 +3410,8 @@ mod scope_pool_tests {
             reservation,
         )
         .await;
-        assert_eq!(pool_arc.lock().await.idle.len(), 1);
-        assert_eq!(pool_arc.lock().await.total_count.load(Ordering::Acquire), 1);
+        assert_eq!(pool_arc.lock().idle.len(), 1);
+        assert_eq!(pool_arc.lock().total_count.load(Ordering::Acquire), 1);
 
         // Resync to an out-of-range database → the SELECT fails.
         crate::scope::resync_idle_connection_database(
@@ -3423,7 +3423,7 @@ mod scope_pool_tests {
 
         // The connection must be gone and its slot reclaimed — not re-idled on a bad db.
         {
-            let pool = pool_arc.lock().await;
+            let pool = pool_arc.lock();
             assert_eq!(
                 pool.idle.len(),
                 0,
@@ -3469,7 +3469,7 @@ mod scope_pool_tests {
         };
 
         let client_id = 7_064_006_u64;
-        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool_arc = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             connection_request_bytes.clone(),
             client_id,
@@ -3479,7 +3479,6 @@ mod scope_pool_tests {
 
         let reservation = pool_arc
             .lock()
-            .await
             .reserve_slot()
             .expect("pool must grant a reservation");
         let _ = crate::scope::create_scope_connection(
@@ -3492,7 +3491,7 @@ mod scope_pool_tests {
         .await;
 
         {
-            let pool = pool_arc.lock().await;
+            let pool = pool_arc.lock();
             assert_eq!(
                 pool.idle.len(),
                 0,
@@ -3536,7 +3535,7 @@ mod scope_pool_tests {
         };
 
         let client_id = 7_064_007_u64;
-        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool_arc = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             connection_request_bytes.clone(),
             client_id,
@@ -3547,7 +3546,6 @@ mod scope_pool_tests {
 
         let reservation = pool_arc
             .lock()
-            .await
             .reserve_slot()
             .expect("pool must grant a reservation");
         let _ = crate::scope::create_scope_connection(
@@ -3560,7 +3558,7 @@ mod scope_pool_tests {
         .await;
 
         let scope_id = {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             match pool.try_acquire(registry, ScopeTarget::Standalone, 0, None) {
                 ScopeAcquire::Reused(id) => id,
                 other => panic!("expected a clean reuse on db 0: {other:?}"),
@@ -3579,23 +3577,24 @@ mod scope_pool_tests {
         }
 
         {
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             assert!(pool.release(scope_id, registry));
         }
 
         // Cleanup runs in a spawned task — wait for it, then assert discard + slot reclaim.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
-            let pool = pool_arc.lock().await;
-            if pool.total_count.load(Ordering::Acquire) == 0 {
+            let idle_after_reclaim = {
+                let pool = pool_arc.lock();
+                (pool.total_count.load(Ordering::Acquire) == 0).then(|| pool.idle.len())
+            };
+            if let Some(idle) = idle_after_reclaim {
                 assert_eq!(
-                    pool.idle.len(),
-                    0,
+                    idle, 0,
                     "a failed cleanup SELECT must not re-idle the connection"
                 );
                 break;
             }
-            drop(pool);
             if std::time::Instant::now() > deadline {
                 panic!("cleanup did not discard the connection and reclaim the slot in time");
             }
@@ -3977,7 +3976,7 @@ mod scope_pool_tests {
         let client_id = 7_064_008_u64;
         crate::scope::register_client(client_id, parent);
 
-        let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool_arc = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             connection_request_bytes.clone(),
             client_id,
@@ -3988,7 +3987,6 @@ mod scope_pool_tests {
         // Seat one idle connection on db 0 (mismatched with the parent's db 4).
         let reservation = pool_arc
             .lock()
-            .await
             .reserve_slot()
             .expect("pool must grant a reservation");
         let _ = crate::scope::create_scope_connection(
@@ -4208,7 +4206,7 @@ mod scope_pool_tests {
             };
 
             let client_id = 7_124_000_u64 + offset;
-            let pool_arc = Arc::new(TokioMutex::new(ScopePool::new(
+            let pool_arc = Arc::new(ScopeMutex::new(ScopePool::new(
                 ScopePoolConfig::default(),
                 connection_request_bytes.clone(),
                 client_id,
@@ -4220,7 +4218,6 @@ mod scope_pool_tests {
             // Reserve a slot the RAII way (#7120), then hand the guard to the creator.
             let reservation = pool_arc
                 .lock()
-                .await
                 .reserve_slot()
                 .expect("pool must grant a reservation");
             let _ = crate::scope::create_scope_connection(
@@ -4235,7 +4232,7 @@ mod scope_pool_tests {
             // The connection must have seated. Pre-fix, create fails, idle is empty,
             // and this acquire returns `Reserved` (the slot was counted before connecting).
             let scope_id = {
-                let mut pool = pool_arc.lock().await;
+                let mut pool = pool_arc.lock();
                 match pool.try_acquire(registry, ScopeTarget::Standalone, 0, None) {
                     ScopeAcquire::Reused(id) => id,
                     other => {

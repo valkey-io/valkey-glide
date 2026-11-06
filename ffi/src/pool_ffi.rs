@@ -897,7 +897,7 @@ pub unsafe extern "C" fn glide_scope_prewarm(
                     return;
                 }
             };
-            let reservation = match pool_clone.lock().await.reserve_slot() {
+            let reservation = match pool_clone.lock().reserve_slot() {
                 Some(reservation) => reservation,
                 None => return,
             };
