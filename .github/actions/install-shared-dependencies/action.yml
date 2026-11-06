@@ -70,7 +70,12 @@ runs:
               chmod +x "$RUSTUP_INIT"
               "$RUSTUP_INIT" -y --no-modify-path --default-toolchain "$RUST_TOOLCHAIN"
               source "$HOME/.cargo/env"
-              apk add protobuf-dev musl-dev make gcc envsubst openssl libressl-dev py3-pip
+              # Use OpenSSL (openssl-dev) rather than LibreSSL (libressl-dev) for the TLS headers.
+              # The Valkey engine's src/tls.c calls SSL_CTX_set_current_cert(ctx, SSL_CERT_SET_FIRST),
+              # which are OpenSSL-only symbols absent from LibreSSL headers, so building the engine
+              # with BUILD_TLS=yes fails to compile against libressl-dev. openssl-dev and libressl-dev
+              # conflict on Alpine, so libressl-dev is replaced (not added alongside).
+              apk add protobuf-dev musl-dev make gcc envsubst openssl openssl-dev py3-pip
 
         - name: Install software dependencies for Amazon-Linux
           shell: bash
