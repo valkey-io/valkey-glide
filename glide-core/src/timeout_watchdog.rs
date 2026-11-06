@@ -254,6 +254,8 @@ pub fn cmd_name_from_bytes(bytes: &[u8]) -> &'static str {
         9 => match_upper(
             bytes,
             &[
+                (b"FT.CURSOR", "FT.CURSOR"),
+                (b"FT.HYBRID", "FT.HYBRID"),
                 (b"GEOSEARCH", "GEOSEARCH"),
                 (b"HEXPIREAT", "HEXPIREAT"),
                 (b"PEXPIREAT", "PEXPIREAT"),
