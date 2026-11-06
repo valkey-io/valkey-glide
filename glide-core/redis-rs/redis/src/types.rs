@@ -249,19 +249,27 @@ pub enum ServerErrorKind {
     PermissionDenied,
 }
 
+/// An error held as a value, such as an error reply nested in a server's reply.
 #[derive(PartialEq, Debug, Clone, Display)]
 pub enum ServerError {
+    /// An error whose code has no [`ErrorKind`] of its own.
     ExtensionError {
+        /// The error code, such as the first word of the server's reply.
         code: String,
+        /// The rest of the message.
         detail: Option<String>,
     },
+    /// An error with a known kind.
     KnownError {
+        /// The kind of the error.
         kind: ServerErrorKind,
+        /// The rest of the message.
         detail: Option<String>,
     },
 }
 
 impl ServerError {
+    /// The error code, such as `ERR` or `NOPERM`.
     pub fn err_code(&self) -> &str {
         match self {
             ServerError::ExtensionError { code, .. } => code,
@@ -283,6 +291,7 @@ impl ServerError {
         }
     }
 
+    /// The rest of the message, after the code.
     pub fn details(&self) -> Option<&str> {
         match self {
             ServerError::ExtensionError { detail, .. } => detail.as_ref().map(|str| str.as_str()),
@@ -404,12 +413,23 @@ pub const TIMEOUT_ERROR_CODE: &str = "Client timeout";
 
 impl ServerError {
     /// Same as `ServerError::from`, except that a timeout gets
-    /// [`TIMEOUT_ERROR_CODE`] so it is still a timeout after the round trip.
+    /// [`TIMEOUT_ERROR_CODE`] so it is still a timeout after the round trip,
+    /// and a server's error reply keeps its message as the server sent it.
     pub(crate) fn from_error_keeping_timeout(error: RedisError) -> Self {
         if error.is_timeout() {
             ServerError::ExtensionError {
                 code: TIMEOUT_ERROR_CODE.into(),
                 detail: Some(error.to_string()),
+            }
+        } else if let (true, Some(kind)) = (
+            error.is_server_reply(),
+            Option::<ServerErrorKind>::from(error.kind()),
+        ) {
+            // `ServerError::from` would put the server-error description into
+            // the detail, and converting back adds it a second time.
+            ServerError::KnownError {
+                kind,
+                detail: error.detail().map(str::to_string),
             }
         } else {
             error.into()

@@ -389,6 +389,7 @@ pub use crate::types::{
     RedisWrite,
     ToRedisArgs,
     SERVER_ERROR_DESCRIPTION,
+    ServerError,
     TIMEOUT_ERROR_CODE,
 
     // low level values

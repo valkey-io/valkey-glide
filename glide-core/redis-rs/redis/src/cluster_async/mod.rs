@@ -3303,12 +3303,8 @@ where
                 })
                 .unzip()
         }
-        let partial_results = cmd.allow_partial_results()
-            && matches!(response_policy, Some(ResponsePolicy::Special) | None)
-            && matches!(
-                routing,
-                MultipleNodeRoutingInfo::AllNodes | MultipleNodeRoutingInfo::AllMasters
-            );
+        let partial_results =
+            cmd.allow_partial_results() && routing.allows_partial_results(response_policy);
         let (receivers, requests): (Vec<_>, Vec<_>);
         {
             let connections_container = core.conn_lock.read();
@@ -5268,6 +5264,22 @@ mod partial_results_tests {
         let err: RedisError = err.into();
         assert!(!err.is_timeout(), "{err:?}");
         assert!(err.to_string().contains("Timeout"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn server_error_entry_has_the_plain_error_message() {
+        let Value::ServerError(server) = crate::parse_redis_value(
+            b"-NOPERM User rv has no permissions to run the 'info' command\r\n",
+        )
+        .unwrap() else {
+            panic!("expected a server error");
+        };
+        let plain: RedisError = server.into();
+        let expected = plain.to_string();
+        let entries = entries(collect(vec![ready("a:1", Err(plain))], None).await.unwrap());
+        let entry = error_of(&entries[0].1);
+        assert_eq!(entry.to_string(), expected);
+        assert_eq!(entry.kind(), ErrorKind::PermissionDenied);
     }
 
     #[tokio::test]
