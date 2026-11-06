@@ -13,7 +13,7 @@
 use crate::create_handle_for_client;
 use glide_core::client::{Client, ConnectionRequest};
 use glide_core::connection_request::ConnectionRequest as ProtobufConnectionRequest;
-use glide_core::pool::{self, ClientPool, POOL_RUNNING, PoolConfig};
+use glide_core::pool::{self, ClientPool, PoolConfig, PoolState};
 use glide_core::scope;
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::ThreadsafeFunction;
@@ -51,8 +51,9 @@ pub fn mark_blocking(client_id: u64, blocking: bool) -> bool {
         if blocking {
             arc.fetch_add(1, Ordering::Release);
         } else {
-            // Best-effort activity refresh BEFORE decrementing.
-            let _ = glide_core::pool::try_refresh_activity_by_client(client_id);
+            // Refresh BEFORE decrementing so the monitor never sees the mark
+            // cleared with a stale timer.
+            glide_core::pool::refresh_activity_by_client(client_id);
             // Atomic CAS decrement: avoids the TOCTOU window between load and fetch_sub.
             // If count > 0, decrement atomically; if already 0, do nothing (no underflow).
             //TODO: (#7175) `fetch_update` is deprecated for `try_update` since Rust 1.99, but `try_update`
@@ -111,12 +112,12 @@ enum WarmupOutcome {
 
 /// Hand back `n` warmup reservations the calling task holds.  No-op if the pool
 /// is already unregistered — the reservations died with the registry entry.
-async fn release_warmup_slots(pool_id: u64, n: u32) {
+fn release_warmup_slots(pool_id: u64, n: u32) {
     if n == 0 {
         return;
     }
-    if let Some(pool_entry) = pool::get_pool_registry().get(&pool_id) {
-        let mut pool_guard = pool_entry.value().lock().await;
+    if let Some(pool_arc) = pool::get_pool(pool_id) {
+        let mut pool_guard = pool_arc.lock();
         for _ in 0..n {
             pool_guard.release_reservation();
         }
@@ -136,7 +137,7 @@ async fn warmup_dial(pool_id: u64, conn_bytes: &[u8], seat_then_discard: bool) -
     let connection_request = match ProtobufConnectionRequest::parse_from_bytes(conn_bytes) {
         Ok(req) => req,
         Err(e) => {
-            release_warmup_slots(pool_id, 1).await;
+            release_warmup_slots(pool_id, 1);
             return WarmupOutcome::Failed(format!(
                 "Failed to parse connection request during warmup: {e}"
             ));
@@ -167,21 +168,19 @@ async fn warmup_dial(pool_id: u64, conn_bytes: &[u8], seat_then_discard: bool) -
     let client: Client = match Client::new(internal_req, None).await {
         Ok(c) => c,
         Err(e) => {
-            release_warmup_slots(pool_id, 1).await;
+            release_warmup_slots(pool_id, 1);
             return WarmupOutcome::Failed(format!("Pool warmup: failed to create client: {e}"));
         }
     };
 
     // Register the client in the pool's idle list.
     {
-        let registry = pool::get_pool_registry();
-        match registry.get(&pool_id) {
-            Some(pool_entry) => {
-                let mut pool_guard = pool_entry.value().lock().await;
-                if pool_guard.state.load(Ordering::Acquire) != POOL_RUNNING {
+        match pool::get_pool(pool_id) {
+            Some(pool_arc) => {
+                let mut pool_guard = pool_arc.lock();
+                if pool_guard.state != PoolState::Running {
                     // Pool was destroyed before this dial finished.
-                    drop(pool_guard);
-                    release_warmup_slots(pool_id, 1).await;
+                    pool_guard.release_reservation();
                     return WarmupOutcome::Aborted;
                 }
                 // Slot already reserved — add_client_reserved does not
@@ -198,16 +197,13 @@ async fn warmup_dial(pool_id: u64, conn_bytes: &[u8], seat_then_discard: bool) -
         }
     }
 
-    if seat_then_discard {
-        let registry = pool::get_pool_registry();
-        if let Some(pool_entry) = registry.get(&pool_id) {
-            let mut pool_guard = pool_entry.value().lock().await;
-            if let Some(entry) = pool_guard.idle.pop_back() {
-                // discard_client decrements the slot this dial consumed via
-                // add_client_reserved.
-                pool_guard.discard_client(entry.client_id);
-                scope::unregister_client(entry.client_id);
-            }
+    if seat_then_discard && let Some(pool_arc) = pool::get_pool(pool_id) {
+        let mut pool_guard = pool_arc.lock();
+        if let Some(entry) = pool_guard.idle.pop_back() {
+            // discard_client decrements the slot this dial consumed via
+            // add_client_reserved.
+            pool_guard.discard_client(entry.client_id);
+            scope::unregister_client(entry.client_id);
         }
         // Lock released here before the caller signals success.
     }
@@ -303,12 +299,8 @@ pub fn create_pool<'a>(
         // the min_idle=0 probe is seated then removed via discard_client, which
         // decrements the counted slot exactly once.
         let reserved = {
-            let registry = pool::get_pool_registry();
-            match registry.get(&(pool_id as u64)) {
-                Some(pool_entry) => {
-                    let pool_guard = pool_entry.value().lock().await;
-                    pool_guard.reserve_warmup_slots(probe_count)
-                }
+            match pool::get_pool(pool_id as u64) {
+                Some(pool_arc) => pool_arc.lock().reserve_warmup_slots(probe_count),
                 None => {
                     let _ = first_tx.send(Err("Pool unregistered before warmup".to_string()));
                     return;
@@ -332,14 +324,14 @@ pub fn create_pool<'a>(
             WarmupOutcome::Failed(msg) => {
                 glide_logger::log_warn("pool", msg.clone());
                 // Nothing was spawned for the other slots, so hand them back here.
-                release_warmup_slots(pool_id as u64, reserved - 1).await;
+                release_warmup_slots(pool_id as u64, reserved - 1);
                 let _ = first_tx.send(Err(msg));
                 return;
             }
             WarmupOutcome::Aborted => {
                 // Pool destroyed mid-dial.  Leaving the oneshot unreported is
                 // deliberate: the dropped sender rejects the deferred.
-                release_warmup_slots(pool_id as u64, reserved - 1).await;
+                release_warmup_slots(pool_id as u64, reserved - 1);
                 return;
             }
         }
@@ -431,7 +423,7 @@ pub fn pool_build_handle<'a>(
             glide_core::pool::get_pool_id_for_client(client_id_u64)
         {
             if let Some(pool_arc) = glide_core::pool::get_pool(pool_id) {
-                let pool_guard = pool_arc.lock().await;
+                let pool_guard = pool_arc.lock();
                 let req = ProtobufConnectionRequest::parse_from_bytes(
                     &pool_guard.config.connection_request,
                 );
@@ -506,23 +498,18 @@ async fn create_raw_pool_client(conn_bytes: &[u8]) -> std::result::Result<Client
 /// Spawn a background task to create a new pool client if `pool_guard.should_create()`.
 /// Pre-increments `total_count` under the caller's lock, then decrements on failure.
 /// Notifies waiters via `release_notify` on success so `pool_acquire_blocking` wakes up.
-fn maybe_spawn_on_demand_creation(
-    pool_entry: Arc<tokio::sync::Mutex<ClientPool>>,
-    pool_guard: &mut ClientPool,
-) {
+fn maybe_spawn_on_demand_creation(pool_entry: Arc<pool::PoolMutex>, pool_guard: &mut ClientPool) {
     if !pool_guard.should_create() {
         return;
     }
     // Pre-reserve the slot so concurrent callers don't over-create.
-    pool_guard
-        .total_count
-        .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    pool_guard.total_count += 1;
     let bytes = pool_guard.config.connection_request.clone();
     get_pool_runtime().spawn(async move {
         match create_raw_pool_client(&bytes).await {
             Ok(client) => {
-                let mut pg = pool_entry.lock().await;
-                if pg.state.load(std::sync::atomic::Ordering::Acquire) != POOL_RUNNING {
+                let mut pg = pool_entry.lock();
+                if pg.state != PoolState::Running {
                     pg.release_reservation();
                     return;
                 }
@@ -534,8 +521,7 @@ fn maybe_spawn_on_demand_creation(
             }
             Err(e) => {
                 glide_logger::log_warn("pool", format!("On-demand pool creation failed: {e}"));
-                let mut pg = pool_entry.lock().await;
-                pg.release_reservation();
+                pool_entry.lock().release_reservation();
             }
         }
     });
@@ -544,14 +530,10 @@ fn maybe_spawn_on_demand_creation(
 #[napi]
 pub fn pool_try_acquire(pool_id: i64) -> Result<i64> {
     let pool_id_u64 = pool_id as u64;
-    let registry = pool::get_pool_registry();
-    let pool_entry = registry
-        .get(&pool_id_u64)
+    let pool_arc = pool::get_pool(pool_id_u64)
         .ok_or_else(|| Error::new(Status::InvalidArg, "Invalid pool_id"))?;
-
-    let pool_arc = pool_entry.value().clone();
-    let result = get_pool_runtime().block_on(async {
-        let mut pool_guard = pool_arc.lock().await;
+    let result = {
+        let mut pool_guard = pool_arc.lock();
         // Drain discarded IDs first (abandoned clients).
         let discarded = pool_guard.drain_discarded_ids();
         for cid in discarded {
@@ -563,10 +545,10 @@ pub fn pool_try_acquire(pool_id: i64) -> Result<i64> {
         // the next pool_acquire_blocking poll (or a subsequent pool_try_acquire)
         // will hand it out.
         if result < 0 {
-            maybe_spawn_on_demand_creation(pool_entry.value().clone(), &mut pool_guard);
+            maybe_spawn_on_demand_creation(pool_arc.clone(), &mut pool_guard);
         }
         result
-    });
+    };
 
     // Register the acquired client in glide-core's CLIENT_TO_POOL map so that
     // refresh_activity_by_client() works at command dispatch.
@@ -594,9 +576,8 @@ pub fn pool_acquire_blocking<'a>(
         let result_value: i64;
 
         loop {
-            let registry = pool::get_pool_registry();
-            let pool_entry = match registry.get(&pool_id_u64) {
-                Some(e) => e.value().clone(),
+            let pool_entry = match pool::get_pool(pool_id_u64) {
+                Some(pool_arc) => pool_arc,
                 None => {
                     result_value = -2;
                     break;
@@ -604,7 +585,7 @@ pub fn pool_acquire_blocking<'a>(
             };
 
             let result = {
-                let mut pool_guard = pool_entry.lock().await;
+                let mut pool_guard = pool_entry.lock();
                 // Drain discarded IDs (abandoned clients) on every poll.
                 let discarded = pool_guard.drain_discarded_ids();
                 for cid in discarded {
@@ -664,49 +645,36 @@ pub fn pool_release<'a>(env: &'a Env, pool_id: i64, client_id: i64) -> Result<Ob
 
 #[napi]
 pub fn pool_metrics(pool_id: i64) -> Result<PoolMetrics> {
-    let registry = pool::get_pool_registry();
-    let pool_entry = registry
-        .get(&(pool_id as u64))
+    let counts = pool::pool_counts(pool_id as u64)
         .ok_or_else(|| Error::new(Status::InvalidArg, "Invalid pool_id"))?;
-
-    let (idle, active, total) = get_pool_runtime().block_on(async {
-        let pool_guard = pool_entry.value().lock().await;
-        let idle = pool_guard.idle.len() as u32;
-        let active = pool_guard.in_use.len() as u32;
-        let total = pool_guard.total_count.load(Ordering::Acquire);
-        (idle, active, total)
-    });
-
     Ok(PoolMetrics {
-        idle,
-        active,
-        total,
+        idle: counts.idle,
+        active: counts.active,
+        total: counts.total,
     })
 }
 
 #[napi]
 pub fn pool_destroy(pool_id: i64) {
     if let Some(pool_arc) = pool::unregister_pool(pool_id as u64) {
-        get_pool_runtime().block_on(async {
-            let mut pool_guard = pool_arc.lock().await;
-            // Remove each client from the scope client registry. unregister_blocking_flag and
-            // unregister_pool_client are intentionally omitted here: ClientPool::destroy() already
-            // handles those as a defensive fallback for idle and in_use entries.
-            // scope::unregister_client is NOT called by destroy(), so we must do it ourselves.
-            for entry in pool_guard.idle.iter() {
-                scope::unregister_client(entry.client_id);
-            }
-            for entry in pool_guard.in_use.iter() {
-                scope::unregister_client(*entry.key());
-            }
-            // discard_client() already unregistered the core registries for these ids;
-            // only the scope entry is ours.
-            let discarded = pool_guard.drain_discarded_ids();
-            for cid in discarded {
-                scope::unregister_client(cid);
-            }
-            ClientPool::destroy(pool_guard);
-        });
+        let mut pool_guard = pool_arc.lock();
+        // Remove each client from the scope client registry. unregister_blocking_flag and
+        // unregister_pool_client are intentionally omitted here: ClientPool::destroy() already
+        // handles those as a defensive fallback for idle and in_use entries.
+        // scope::unregister_client is NOT called by destroy(), so we must do it ourselves.
+        for entry in pool_guard.idle.iter() {
+            scope::unregister_client(entry.client_id);
+        }
+        for &client_id in pool_guard.in_use.keys() {
+            scope::unregister_client(client_id);
+        }
+        // discard_client() already unregistered the core registries for these ids;
+        // only the scope entry is ours.
+        let discarded = pool_guard.drain_discarded_ids();
+        for cid in discarded {
+            scope::unregister_client(cid);
+        }
+        ClientPool::destroy(pool_guard);
     }
 }
 
