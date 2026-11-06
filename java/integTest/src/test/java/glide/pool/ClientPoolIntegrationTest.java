@@ -16,6 +16,7 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.pool.ClientPool;
 import glide.api.models.pool.ClientPoolConfig;
+import glide.internal.GlideNativeBridge;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
@@ -943,7 +944,7 @@ public class ClientPoolIntegrationTest {
             }
 
             // Only the BLPOP holder should still be borrowed. The count alone cannot tell the holder
-            // from a pending release, so the PING below proves the holder survived.
+            // from a pending release, so the membership check below proves the holder survived.
             assertEquals(
                     1, active, "Pool should have exactly 1 active client (the BLPOP holder); got " + active);
 
@@ -963,7 +964,14 @@ public class ClientPoolIntegrationTest {
             assertEquals(blpopKey, blpopResult[0].toString(), "BLPOP key mismatch");
             assertEquals(blpopValue, blpopResult[1].toString(), "BLPOP value mismatch");
 
-            // If the abandon monitor had reclaimed the holder, its handle is closed and PING fails.
+            // A discarded client keeps its native handle until the next acquire drains it, so a holder
+            // reclaimed after the helper's acquire would still answer. Acquire once more to drain,
+            // then check the holder's own handle is still registered.
+            pool.acquire().get(10, TimeUnit.SECONDS).close();
+            assertTrue(
+                    GlideNativeBridge.isConnected(blpopClientId),
+                    "BLPOP holder should still be in the pool after the abandon window");
+
             assertEquals(
                     "PONG",
                     blpopClient.ping().get(5, TimeUnit.SECONDS),
