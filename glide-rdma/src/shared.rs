@@ -46,6 +46,10 @@ struct SharedBufferInner {
     /// Whether a loan ended without a reply, which decides whether the memory
     /// is parked; see [`crate::LentBuffer`].
     unanswered: AtomicBool,
+    /// Set by a test to pause a lend just before it takes the `lent` lock: the
+    /// lend waits on it once on arriving and once more before going on.
+    #[cfg(test)]
+    lend_pause: std::sync::OnceLock<std::sync::Barrier>,
 }
 
 // SAFETY: the bytes are reached only through `LentWindow::bytes`, a slice of one
@@ -70,6 +74,8 @@ impl RdmaSharedBuffer {
                 fabric,
                 lent: Mutex::new(Vec::new()),
                 unanswered: AtomicBool::new(false),
+                #[cfg(test)]
+                lend_pause: std::sync::OnceLock::new(),
             }),
         }
     }
@@ -138,7 +144,6 @@ impl RdmaSharedBuffer {
         written: bool,
         build: impl FnOnce(&[u8], &RegionRef) -> RdmaCommand,
     ) -> Result<(RdmaCommand, LentWindow), RdmaError> {
-        self.inner.registration.check_open()?;
         let end = at
             .checked_add(length)
             .filter(|end| *end <= self.capacity())
@@ -157,8 +162,16 @@ impl RdmaSharedBuffer {
                 remote_address,
             })
             .ok_or_else(|| RdmaError::Configuration("window address overflows".into()))?;
+        #[cfg(test)]
+        if let Some(pause) = self.inner.lend_pause.get() {
+            pause.wait();
+            pause.wait();
+        }
         {
             let mut lent = self.lent();
+            // Under the lock: a window that ended without a reply is given back only
+            // after its region was revoked or failed to close, so then this fails.
+            self.inner.registration.check_open()?;
             // An empty window overlaps nothing.
             if length > 0
                 && lent.iter().any(|&(start, stop, other_written)| {
@@ -393,6 +406,7 @@ mod tests {
     use glide_libfabric_sys::bindgen::{fi_close, fi_cq_entry, fi_cq_read};
     use std::ptr::NonNull;
     use std::sync::Arc;
+    use std::sync::Barrier;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
 
@@ -766,6 +780,32 @@ mod tests {
             released.load(Ordering::Acquire),
             "freed once the fabric closed"
         );
+    }
+
+    /// A lend paused before the `lent` lock while a recall closes the region and
+    /// gives its window back must find the region revoked, not the window free:
+    /// on tcp the server may still write it.
+    #[test]
+    fn a_lend_racing_a_recall_does_not_take_the_recalled_window() {
+        let fabric = fabric();
+        let mut memory = vec![0u8; 4096];
+        let (region, released) = region(&fabric, &mut memory);
+        let (_, recalled) = region.lend_for_get(b"a", 0, 64).unwrap();
+        let pause = region.inner.lend_pause.get_or_init(|| Barrier::new(2));
+
+        std::thread::scope(|scope| {
+            let racing = scope.spawn(|| region.lend_for_set(b"b", 0, 64, SetChecksum::Skip));
+            pause.wait();
+            recalled.recall().expect("closes");
+            pause.wait();
+            let lent = racing.join().expect("does not panic");
+            assert!(matches!(lent, Err(RdmaError::Revoked)), "{lent:?}");
+        });
+
+        drop(region);
+        fabric.wait_for_closes();
+        drop(fabric);
+        assert!(released.load(Ordering::Acquire), "freed before `memory` is");
     }
 
     #[test]
