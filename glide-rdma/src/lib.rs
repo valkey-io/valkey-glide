@@ -29,6 +29,8 @@ mod libfabric_dl;
 mod progress;
 mod region_ref;
 mod session;
+#[cfg(feature = "libfabric")]
+mod shared;
 
 #[cfg(feature = "libfabric")]
 pub use buffer::{LentBuffer, RdmaBuffer, RdmaRevoker};
@@ -44,3 +46,5 @@ pub use libfabric_dl::{ensure_loaded, header_api_version};
 pub use progress::ProgressGuard;
 pub use region_ref::{InvalidHex, decode_hex, encode_hex};
 pub use session::Handshake;
+#[cfg(feature = "libfabric")]
+pub use shared::{LentWindow, RdmaSharedBuffer};

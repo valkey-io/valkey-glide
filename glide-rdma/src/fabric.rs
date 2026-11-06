@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::buffer::{HostMemory, RdmaBuffer};
@@ -13,6 +13,7 @@ use crate::error::RdmaError;
 use crate::progress::{ProgressDriver, ProgressGuard};
 use crate::region_ref::RegionRef;
 use crate::session::Handshake;
+use crate::shared::RdmaSharedBuffer;
 
 /// One address vector entry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -30,14 +31,20 @@ struct PeerHandle(u64);
 ///   fabric is still closing.
 /// - [`Self::open_session`] and dropping an [`RdmaSession`]: edit the address
 ///   vector, which waits for any region closing at that moment.
-/// - [`RdmaBuffer::revoke`], [`crate::RdmaRevoker::revoke`] and
-///   [`crate::LentBuffer::recall`]: close the region before returning.
+/// - [`RdmaBuffer::revoke`], [`RdmaSharedBuffer::revoke`], [`crate::RdmaRevoker::revoke`],
+///   [`crate::LentBuffer::recall`] and [`crate::LentWindow::recall`]: close the region
+///   before returning.
 /// - [`Self::wait_for_closes`]: waits for the regions of buffers dropped before it.
+/// - Lending a window of an [`RdmaSharedBuffer`], reclaiming one, and
+///   [`RdmaSharedBuffer::is_closed`]: can wait for a close of its region already
+///   under way. A reclaim that finds a read ran past its window closes the region
+///   before returning.
 /// - Dropping the last handle to the fabric, from any thread but its closing
 ///   thread: stops the progress thread and closes the endpoint.
 ///
-/// Dropping an [`RdmaBuffer`] or a [`crate::LentBuffer`] does not block: the
-/// fabric's closing thread closes the region and then frees or parks the memory.
+/// Dropping an [`RdmaBuffer`], an [`RdmaSharedBuffer`], a [`crate::LentBuffer`] or a
+/// [`crate::LentWindow`] does not block: the fabric's closing thread closes the
+/// region and then frees or parks the memory.
 #[derive(Clone, Debug)]
 pub struct RdmaFabric {
     inner: Arc<FabricInner>,
@@ -57,6 +64,10 @@ struct FabricInner {
     parked_bytes: AtomicUsize,
     /// Bytes kept for the life of the process because their region failed to close.
     leaked_bytes: AtomicUsize,
+    /// Whether a region on this fabric failed to close. `RegionState::Abandoned` then
+    /// holds the fabric, so it can never close. Set at the failed close, which can be
+    /// long before [`Self::leaked_bytes`] counts the memory when its owner drops.
+    has_abandoned_region: AtomicBool,
     /// [`crate::config::Provider::close_stops_writes`] for this fabric's provider.
     close_stops_writes: bool,
     address: Vec<u8>,
@@ -109,6 +120,7 @@ impl RdmaFabric {
                 parked: Mutex::new(Vec::new()),
                 parked_bytes: AtomicUsize::new(0),
                 leaked_bytes: AtomicUsize::new(0),
+                has_abandoned_region: AtomicBool::new(false),
                 close_stops_writes: config.provider().close_stops_writes(),
                 address,
                 uses_virtual_addressing,
@@ -117,6 +129,61 @@ impl RdmaFabric {
                 hooks: tests::CloseHooks::default(),
             }),
         })
+    }
+
+    /// The fabric of `group`, opened for `config` if nothing holds it, so that
+    /// clients naming one group share one endpoint and the memory registered on
+    /// it. Held weakly: the fabric closes once its last holder drops.
+    ///
+    /// A fabric that can never close, because one of its regions failed to close,
+    /// leaves its group: clients already on it keep it, and the group's next client
+    /// opens a new one. Memory registered on the old fabric does not serve the new.
+    ///
+    /// # Errors
+    ///
+    /// When `group` is empty, when it is open with a configuration other than
+    /// `config`, or as [`Self::open`].
+    pub fn open_in_group(group: &str, config: &FabricConfig) -> Result<Self, RdmaError> {
+        if group.is_empty() {
+            return Err(RdmaError::Configuration(
+                "a fabric group name must not be empty".into(),
+            ));
+        }
+        type Groups = Vec<(String, FabricConfig, std::sync::Weak<FabricInner>)>;
+        static GROUPS: Mutex<Groups> = Mutex::new(Vec::new());
+
+        // Dropped after `groups`, so a fabric whose other holders let go meanwhile
+        // closes outside the lock: closing drops the owners of its parked memory,
+        // which run the caller's code and may open a group themselves.
+        let mut upgraded = Vec::new();
+        // Held across the open, so two clients starting together open one fabric.
+        let mut groups = GROUPS.lock().unwrap_or_else(PoisonError::into_inner);
+        groups.retain(|(_, _, fabric)| {
+            let inner = fabric.upgrade();
+            let keep = inner
+                .as_ref()
+                .is_some_and(|inner| !inner.has_abandoned_region.load(Ordering::Relaxed));
+            upgraded.extend(inner);
+            keep
+        });
+        if let Some((_, open, fabric)) = groups.iter().find(|(name, _, _)| name == group) {
+            if open != config {
+                return Err(RdmaError::Configuration(format!(
+                    "fabric group {group:?} is open with {open}, but a client of it asked for \
+                     {config}"
+                )));
+            }
+            if let Some(inner) = fabric.upgrade() {
+                return Ok(Self { inner });
+            }
+        }
+        let fabric = Self::open(config)?;
+        groups.push((
+            group.to_string(),
+            config.clone(),
+            Arc::downgrade(&fabric.inner),
+        ));
+        Ok(fabric)
     }
 
     /// Register host memory for the server to RMA against.
@@ -191,6 +258,29 @@ impl RdmaFabric {
             host,
             self.clone(),
         ))
+    }
+
+    /// Register memory owned outside Rust as a [`RdmaSharedBuffer`].
+    ///
+    /// # Safety
+    ///
+    /// As [`Self::register_raw`], except that the caller may keep using the memory
+    /// that no transfer holds:
+    ///
+    /// * A window is held from the `lend_for_get` or `lend_for_set` call that lends
+    ///   it until [`crate::LentWindow::reclaim`] returns. Lending a set may read the
+    ///   window for its checksum, and reclaiming a get reads it to verify.
+    /// * Once a loan ends without a reply, by [`crate::LentWindow::recall`] or by
+    ///   being dropped, the server may still write any window that was lent, so the
+    ///   caller must leave all of the memory alone until `owner` is dropped. On tcp
+    ///   that is once the fabric closes, and if the region failed to close, never.
+    pub unsafe fn register_shared_raw(
+        &self,
+        memory: NonNull<[u8]>,
+        owner: impl Send + 'static,
+    ) -> Result<RdmaSharedBuffer, RdmaError> {
+        // SAFETY: the caller upholds `register_raw`'s contract.
+        unsafe { self.register_raw(memory, owner) }.map(RdmaBuffer::into_shared)
     }
 
     /// Open one RDMA session for one RESP connection.
@@ -329,6 +419,14 @@ impl RdmaFabric {
         );
     }
 
+    /// Record that a region on this fabric failed to close and now holds the fabric
+    /// for good, so [`Self::open_in_group`] stops handing it out.
+    pub(crate) fn note_abandoned_region(&self) {
+        self.inner
+            .has_abandoned_region
+            .store(true, Ordering::Relaxed);
+    }
+
     /// Keep `host` allocated until this fabric closes; see [`crate::LentBuffer`].
     /// Only the endpoint closing guarantees no accepted write can still land in it.
     fn park(&self, host: HostMemory) {
@@ -350,7 +448,8 @@ impl RdmaFabric {
     /// Bytes parked by loans that ended without a reply. Only grows; freed when the
     /// last handle drops, and every buffer, loan and session on the fabric holds one.
     /// To get them back sooner, drop this fabric's buffers and create a new client,
-    /// which opens a new fabric.
+    /// which opens a new fabric. In a fabric group, every client of the group holds
+    /// the fabric, so all of them must drop.
     ///
     /// Stays at zero on efa-direct, where a successful close stops the server's writes
     /// and the memory is freed at once.
@@ -363,7 +462,9 @@ impl RdmaFabric {
     ///
     /// After a failed close the device may still let the server write into the memory,
     /// so it is never freed, and this fabric can never close, which also keeps any
-    /// [`Self::parked_bytes`] for good. A failed close needs a device or driver error,
+    /// [`Self::parked_bytes`] for good. Such a fabric leaves its group, so a new client
+    /// opens a new fabric even when it names the same group; see
+    /// [`Self::open_in_group`]. A failed close needs a device or driver error,
     /// and each one is logged at error level.
     ///
     /// Restart the process when the leaked total passes your chosen threshold.
@@ -615,6 +716,62 @@ pub(crate) mod tests {
                 "the good address before it was given back"
             );
         }
+    }
+
+    #[test]
+    fn a_group_is_one_fabric_until_its_last_holder_drops() {
+        let loopback = || FabricConfig::new(Provider::Tcp).with_bind("127.0.0.1");
+        // Unique to this test, as groups are process-wide.
+        let (a, b) = ("fabric-test-group-a", "fabric-test-group-b");
+
+        let first = RdmaFabric::open_in_group(a, &loopback()).expect("opens");
+        let second = RdmaFabric::open_in_group(a, &loopback()).expect("opens");
+        assert!(first.is(&second), "one fabric for the group");
+        assert!(!first.is(&fabric()), "no group opens its own");
+        let other = RdmaFabric::open_in_group(b, &loopback()).expect("opens");
+        assert!(!first.is(&other), "another group is not shared");
+
+        let error = RdmaFabric::open_in_group(a, &FabricConfig::new(Provider::Tcp)).unwrap_err();
+        assert!(
+            matches!(&error, RdmaError::Configuration(message)
+                if message.contains("fabric group \"fabric-test-group-a\" is open with Tcp, bind: 127.0.0.1")),
+            "{error:?}"
+        );
+
+        let error = RdmaFabric::open_in_group("", &loopback()).unwrap_err();
+        assert!(matches!(error, RdmaError::Configuration(_)), "{error:?}");
+
+        drop((first, second));
+        // Held weakly, so the group opens afresh, even with another configuration.
+        RdmaFabric::open_in_group(a, &FabricConfig::new(Provider::Tcp)).expect("opens");
+    }
+
+    /// A failed close keeps the fabric open for good, so the group must not hand it
+    /// to new clients, even before the leak is counted when the buffer drops.
+    #[test]
+    fn a_group_opens_a_new_fabric_once_a_region_fails_to_close() {
+        let loopback = || FabricConfig::new(Provider::Tcp).with_bind("127.0.0.1");
+        // Unique to this test, as groups are process-wide.
+        let group = "fabric-test-group-abandoned";
+
+        let stuck = RdmaFabric::open_in_group(group, &loopback()).expect("opens");
+        let buffer = stuck.register(vec![0u8; 64]).expect("registers");
+        stuck.fail_next_closes(1);
+        buffer.revoke().expect_err("the close fails");
+        assert_eq!(
+            stuck.leaked_bytes(),
+            0,
+            "counted only once the buffer drops"
+        );
+
+        let next = RdmaFabric::open_in_group(group, &loopback()).expect("opens");
+        assert!(!next.is(&stuck), "the group left the stuck fabric");
+        let again = RdmaFabric::open_in_group(group, &loopback()).expect("opens");
+        assert!(again.is(&next), "and shares the new one");
+        assert!(
+            !buffer.is_registered_on(&next),
+            "memory on the stuck fabric does not serve the new one"
+        );
     }
 
     #[test]

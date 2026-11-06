@@ -57,7 +57,7 @@ impl Provider {
 }
 
 /// How to open the local fabric endpoint.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FabricConfig {
     provider: Provider,
     interface: Option<String>,
@@ -101,6 +101,20 @@ impl FabricConfig {
     /// The source address to bind to.
     pub fn bind(&self) -> Option<&str> {
         self.bind.as_deref()
+    }
+}
+
+/// As the connection log names it, e.g. `Tcp, interface: lo, bind: 127.0.0.1`.
+impl std::fmt::Display for FabricConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{:?}", self.provider)?;
+        if let Some(interface) = &self.interface {
+            write!(formatter, ", interface: {interface}")?;
+        }
+        if let Some(bind) = &self.bind {
+            write!(formatter, ", bind: {bind}")?;
+        }
+        Ok(())
     }
 }
 
