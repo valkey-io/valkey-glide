@@ -358,6 +358,7 @@ def listening_ports(port: int, cluster_mode: bool) -> List[int]:
 
 
 def is_port_free(port: int) -> bool:
+    """Whether a plain bind of `port` succeeds on both loopback addresses."""
     for family, host in (
         (socket.AF_INET, DEFAULT_HOST_IPV4),
         (socket.AF_INET6, DEFAULT_HOST_IPV6),
@@ -384,6 +385,8 @@ def next_free_port(
     *,
     cluster_mode: bool,
 ) -> int:
+    """A random client port in [min_port, max_port] whose `listening_ports`
+    are all free, or raise once `timeout` seconds pass without one."""
     tic = time.perf_counter()
 
     timeout_start = time.time()
