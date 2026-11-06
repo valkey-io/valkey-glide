@@ -514,7 +514,8 @@ jobs:
               run: |
                   mkdir maven-files
                   cd maven-files
-                  find ../. -name "*.jar" -exec jar xf {} \;
+                  mapfile -t jar_files < <(find ../. -name "*.jar")
+                  for file in "${jar_files[@]}"; do jar xf "$file"; done
 
             - name: Generate sha1 and md5 files for all Maven files
               shell: bash
