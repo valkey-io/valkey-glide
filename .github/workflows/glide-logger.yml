@@ -68,7 +68,7 @@ jobs:
 
               # `--test-threads=1`: Tests install a global logger and share a
               # single `glide-logs` directory, so they cannot run in parallel.
-              run: cargo test --all-features -- --test-threads=1
+              run: cargo test --locked --all-features -- --test-threads=1
 
     lint:
         runs-on: ubuntu-24.04
