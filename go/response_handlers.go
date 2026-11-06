@@ -172,7 +172,7 @@ func parseInterface(response *C.struct_CommandResponse) (any, error) {
 		if !ok {
 			return nil, errors.New("error message isn't a string")
 		}
-		return errors.New(errStrString), nil
+		return errors.New(restoreNoScriptMessage(errStrString)), nil
 	}
 
 	return nil, errors.New("unexpected return type from Valkey")

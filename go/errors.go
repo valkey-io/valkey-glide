@@ -105,8 +105,37 @@ func IsError(val any) error {
 	return nil
 }
 
+const (
+	// coreServerErrorPrefix starts glide-core's rendering of a server error it recognizes.
+	coreServerErrorPrefix = "An error was signalled by the server:"
+	// coreNoScriptKind is the name glide-core gives the server's NOSCRIPT error.
+	coreNoScriptKind = "NoScriptError"
+	// serverNoScriptCode is the code the server puts at the start of a NOSCRIPT error.
+	serverNoScriptCode = "NOSCRIPT"
+)
+
+// restoreNoScriptMessage returns the server's own text for a NOSCRIPT error that glide-core renamed,
+// e.g. "An error was signalled by the server: - NoScriptError: No matching script." becomes
+// "NOSCRIPT No matching script.", so callers can match it as they would the server reply.
+// Any other message is returned unchanged.
+func restoreNoScriptMessage(errorMessage string) string {
+	rest, ok := strings.CutPrefix(errorMessage, coreServerErrorPrefix)
+	if !ok {
+		return errorMessage
+	}
+	if detail, ok := strings.CutPrefix(rest, " - "+coreNoScriptKind+": "); ok {
+		return serverNoScriptCode + " " + detail
+	}
+	// glide-core omits the detail separator when the server sent the code alone.
+	if rest == "- "+coreNoScriptKind {
+		return serverNoScriptCode
+	}
+	return errorMessage
+}
+
 // GoError converts a C error type to a corresponding Go error.
 func GoError(cErrorType uint32, errorMessage string) error {
+	errorMessage = restoreNoScriptMessage(errorMessage)
 	switch cErrorType {
 	case C.ExecAbort:
 		return &ExecAbortError{errorMessage}
