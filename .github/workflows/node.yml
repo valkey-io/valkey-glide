@@ -203,7 +203,9 @@ jobs:
             - name: Remove the path crates from the cargo cache
               if: always()
               working-directory: ./node/rust-client
-              run: cargo clean -p valkey-glide -p glide-core -p glide-core-engine -p glide-logger -p glide-telemetry
+              run: |
+                  cargo clean -p valkey-glide -p glide-core -p glide-core-engine -p glide-logger -p glide-telemetry
+                  cargo clean --release -p valkey-glide -p glide-core -p glide-core-engine -p glide-logger -p glide-telemetry
 
             - name: Upload test reports
               if: always()
@@ -321,7 +323,9 @@ jobs:
             - name: Remove the path crates from the cargo cache
               if: always()
               working-directory: ./node/rust-client
-              run: cargo clean -p valkey-glide -p glide-core -p glide-core-engine -p glide-logger -p glide-telemetry
+              run: |
+                  cargo clean -p valkey-glide -p glide-core -p glide-core-engine -p glide-logger -p glide-telemetry
+                  cargo clean --release -p valkey-glide -p glide-core -p glide-core-engine -p glide-logger -p glide-telemetry
 
             - name: Upload test reports
               if: always()
