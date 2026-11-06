@@ -948,9 +948,12 @@ public class ClientPoolIntegrationTest {
             assertEquals(
                     1, active, "Pool should have exactly 1 active client (the BLPOP holder); got " + active);
 
-            // Unblock the BLPOP by pushing the sentinel value.
+            // Unblock the BLPOP by pushing the sentinel value. BLPOP cannot return, and refresh the
+            // holder's activity, before the LPUSH is sent, so this timestamp bounds its idle time.
+            long unblockNanos;
             try (glide.api.models.pool.PooledGlideClient helper =
                     pool.acquire().get(10, TimeUnit.SECONDS)) {
+                unblockNanos = System.nanoTime();
                 helper
                         .unwrap()
                         .customCommand(new String[] {"LPUSH", blpopKey, blpopValue})
@@ -968,14 +971,26 @@ public class ClientPoolIntegrationTest {
             // reclaimed after the helper's acquire would still answer. Acquire once more to drain,
             // then check the holder's own handle is still registered.
             pool.acquire().get(10, TimeUnit.SECONDS).close();
-            assertTrue(
-                    GlideNativeBridge.isConnected(blpopClientId),
-                    "BLPOP holder should still be in the pool after the abandon window");
+            boolean holderRegistered = GlideNativeBridge.isConnected(blpopClientId);
+            long idleBoundMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - unblockNanos);
+            // Once BLPOP returns the holder is idle, and the monitor may rightly reclaim it after the
+            // abandon timeout. Inside that bound, a missing handle means it was reclaimed mid-BLPOP.
+            if (idleBoundMs < cfg.getAbandonTimeout().toMillis()) {
+                assertTrue(
+                        holderRegistered, "BLPOP holder should still be in the pool after the abandon window");
+            } else {
+                System.out.println(
+                        "Membership check skipped: "
+                                + idleBoundMs
+                                + " ms since unblock exceeds the abandon timeout");
+            }
 
-            assertEquals(
-                    "PONG",
-                    blpopClient.ping().get(5, TimeUnit.SECONDS),
-                    "BLPOP holder should still be usable after the abandon window");
+            if (holderRegistered) {
+                assertEquals(
+                        "PONG",
+                        blpopClient.ping().get(5, TimeUnit.SECONDS),
+                        "BLPOP holder should still be usable after the abandon window");
+            }
 
             System.out.println("testAbandonMonitorDoesNotReclaimBlockingClient PASSED");
         } finally {
