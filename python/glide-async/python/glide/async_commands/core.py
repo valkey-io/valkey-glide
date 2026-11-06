@@ -83,6 +83,7 @@ class CoreCommands(Protocol):
         request_type: int,
         args: List[TEncodable],
         route: Optional[Route] = ...,
+        allow_partial_results: bool = ...,
     ) -> TResult: ...
 
     async def _execute_batch(

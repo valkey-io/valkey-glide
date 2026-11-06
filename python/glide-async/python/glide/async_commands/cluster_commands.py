@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Set, Union, cast
+from typing import Dict, List, Literal, Mapping, Optional, Set, Union, cast, overload
 
 from glide._ffi_wrappers import ClusterScanCursor, Script
 from glide.async_commands.core import RequestType
@@ -72,11 +72,29 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.CustomCommand, command_args, route),
         )
 
+    @overload
     async def info(
         self,
         sections: Optional[List[InfoSection]] = None,
         route: Optional[Route] = None,
-    ) -> TClusterResponse[bytes]:
+        allow_partial_results: Literal[False] = False,
+    ) -> TClusterResponse[bytes]: ...
+
+    @overload
+    async def info(
+        self,
+        sections: Optional[List[InfoSection]] = None,
+        route: Optional[Route] = None,
+        *,
+        allow_partial_results: bool,
+    ) -> Union[bytes, Dict[bytes, Union[bytes, RequestError]]]: ...
+
+    async def info(
+        self,
+        sections: Optional[List[InfoSection]] = None,
+        route: Optional[Route] = None,
+        allow_partial_results: bool = False,
+    ) -> Union[TClusterResponse[bytes], Dict[bytes, Union[bytes, RequestError]]]:
         """
         Get information and statistics about the server.
 
@@ -89,18 +107,28 @@ class ClusterCommands(CoreCommands):
                 information to retrieve. When no parameter is provided, the default option is assumed.
             route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided, in
                 which case the client will route the command to the nodes defined by `route`. Defaults to None.
+            allow_partial_results (bool): When True, a command sent to several nodes returns an entry for every
+                target node, holding that node's reply or the error for that node, instead of raising the first
+                node error. A node that did not answer in time gets a `TimeoutError`; other failures get a
+                `RequestError`. Has no effect when the command goes to a single node. Defaults to False.
 
         Returns:
             TClusterResponse[bytes]: If a single node route is requested, returns a bytes string containing the information for
             the required sections. Otherwise, returns a dict of bytes strings, with each key containing the address of
             the queried node and value containing the information regarding the requested sections.
+            With `allow_partial_results=True`, a node that failed has its error as the value.
         """
         args: List[TEncodable] = (
             [section.value for section in sections] if sections else []
         )
         return cast(
-            TClusterResponse[bytes],
-            await self._execute_command(RequestType.Info, args, route),
+            Union[TClusterResponse[bytes], Dict[bytes, Union[bytes, RequestError]]],
+            await self._execute_command(
+                RequestType.Info,
+                args,
+                route,
+                allow_partial_results=allow_partial_results,
+            ),
         )
 
     async def exec(

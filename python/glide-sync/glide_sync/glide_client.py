@@ -1059,6 +1059,7 @@ class BaseClient(CoreCommands):
         route: Optional[Route] = None,
         response_buffer: Optional[memoryview] = None,
         response_buffers: Optional[List[memoryview]] = None,
+        allow_partial_results: bool = False,
     ) -> TResult:
         if self._is_closed:
             raise ClosingError(
@@ -1096,7 +1097,19 @@ class BaseClient(CoreCommands):
             # Route bytes should be kept alive in the scope of the FFI call
             route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
 
-            if response_buffers is not None:
+            if allow_partial_results:
+                result = self._lib.command_with_partial_results(
+                    client_adapter_ptr,
+                    0,
+                    request_type,
+                    len(args),
+                    c_args,
+                    c_lengths,
+                    route_ptr,
+                    route_len,
+                    span,
+                )
+            elif response_buffers is not None:
                 # One writable buffer per top-level array element (e.g. mget):
                 # each value is copied straight into its caller-owned buffer.
                 # The from_buffer cdata must stay alive for the call, so keep

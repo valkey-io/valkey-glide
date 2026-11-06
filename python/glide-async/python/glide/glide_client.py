@@ -1172,6 +1172,7 @@ class BaseClient(CoreCommands):
         request_type: int,
         args: List[TEncodable],
         route: Optional[Route] = None,
+        allow_partial_results: bool = False,
     ) -> TResult:
         if self._is_closed:
             raise ClosingError(
@@ -1198,9 +1199,14 @@ class BaseClient(CoreCommands):
                 self._ffi, self._lib, span_name_cstr, parent_ctx
             )
 
+        command = (
+            self._lib.command_with_partial_results
+            if allow_partial_results
+            else self._lib.command
+        )
         try:
             if route is None:
-                self._lib.command(
+                command(
                     self._core_client,
                     callback_id,
                     request_type,
@@ -1213,7 +1219,7 @@ class BaseClient(CoreCommands):
                 )
             else:
                 route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
-                self._lib.command(
+                command(
                     self._core_client,
                     callback_id,
                     request_type,
