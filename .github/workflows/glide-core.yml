@@ -195,8 +195,8 @@ jobs:
             - name: Run glide-core RDMA tests
               working-directory: ./glide-core
               run: |
-                  cargo test --features rdma --lib
-                  cargo test --features rdma --test test_rdma
+                  cargo test --locked --features rdma --lib
+                  cargo test --locked --features rdma --test test_rdma
 
             - name: Check features
               working-directory: ./glide-core
