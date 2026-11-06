@@ -100,7 +100,12 @@ prettier-fix:
 ##
 action-lint:
 	@echo "$(GREEN)Linting GitHub Actions$(RESET)"
+
+	@# Check that dependencies are installed
 	@command -v actionlint >/dev/null || { echo "actionlint not found - see https://github.com/rhysd/actionlint/blob/main/docs/install.md"; exit 1; }
+	@command -v shellcheck >/dev/null || { echo "shellcheck not found - see https://github.com/koalaman/shellcheck#installing"; exit 1; }
+	@command -v pyflakes >/dev/null || { echo "pyflakes not found - see https://pypi.org/project/pyflakes"; exit 1; }
+
 	actionlint
 
 ##

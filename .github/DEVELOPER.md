@@ -123,7 +123,15 @@ Adjust cron schedules in workflow files for different timing of scheduled runs.
 
 ### Workflows Linting
 
-Workflows and actions are linted with [actionlint](https://github.com/rhysd/actionlint). The `lint-yaml` workflow runs it in CI. To run it locally, [install actionlint](https://github.com/rhysd/actionlint/blob/main/docs/install.md) and run `make action-lint`.
+Workflows and actions are linted with [actionlint](https://github.com/rhysd/actionlint).
+
+To run it locally, install:
+
+- [actionlint](https://github.com/rhysd/actionlint/blob/main/docs/install.md)
+- [shellcheck](https://github.com/koalaman/shellcheck#installing)
+- [pyflakes](https://pypi.org/project/pyflakes/)
+
+The `lint-yaml` workflow runs it in CI.
 
 ### Workflow Matrices
 
