@@ -158,6 +158,49 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// `send_command` borrows the caller's `Cmd` instead of cloning it, and the
+    /// clone was what reset the watchdog fields the timeout diagnostics read. A
+    /// reused `Cmd` must still start every send as Queued with zero retries.
+    /// The cluster client sends from its own copy of the command, so after the
+    /// reply the caller's `Cmd` shows exactly what `send_command` reset it to.
+    /// The standalone client marks the caller's `Cmd` as Sent while sending, so
+    /// only the retry count shows the reset there.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_reused_cmd_starts_each_send_with_reset_watchdog_fields(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        use std::sync::atomic::Ordering;
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut cmd = redis::cmd("SET");
+            cmd.arg(generate_random_string(6)).arg("value");
+            let phase_after_send = if use_cluster {
+                redis::PHASE_QUEUED
+            } else {
+                redis::PHASE_SENT
+            };
+            for _ in 0..3 {
+                // Leftovers from an earlier send of the same `Cmd`.
+                cmd.watchdog_phase
+                    .store(redis::PHASE_SENT, Ordering::Release);
+                cmd.watchdog_retry_count.store(7, Ordering::Relaxed);
+                let reply = test_basics.client.send_command(&mut cmd, None).await;
+                assert_eq!(reply, Ok(Value::Okay));
+                assert_eq!(cmd.watchdog_retry_count.load(Ordering::Relaxed), 0);
+                assert_eq!(cmd.watchdog_phase.load(Ordering::Acquire), phase_after_send);
+            }
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -3221,6 +3264,45 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// The standalone client is cloned out of the client wrapper on every command.
+    /// The "client dropped" telemetry decrement must fire once per client, not once
+    /// per per-command clone (it used to drive `total_clients` to 0 after the first
+    /// command).
+    #[test]
+    #[serial_test::serial]
+    fn test_client_telemetry_standalone_survives_commands() {
+        Telemetry::reset();
+        block_on_all(async move {
+            let server_config = TestConfiguration {
+                use_tls: false,
+                ..Default::default()
+            };
+            let test_basics = utilities::setup_test_basics_internal(&server_config).await;
+            let server = BackingServer::Standalone(test_basics.server);
+            // The `Client` wrapper is what clones the standalone client per command.
+            let mut client = create_client(&server, server_config).await;
+            assert_eq!(Telemetry::total_clients(), 2);
+            for i in 0..50 {
+                client
+                    .send_command(redis::cmd("SET").arg(format!("k{i}")).arg("v"), None)
+                    .await
+                    .expect("SET");
+                client
+                    .send_command(redis::cmd("GET").arg(format!("k{i}")), None)
+                    .await
+                    .expect("GET");
+            }
+            assert_eq!(
+                Telemetry::total_clients(),
+                2,
+                "per-command clones must not decrement total_clients"
+            );
+            assert_eq!(Telemetry::total_connections(), 2);
+            drop(client);
+            assert_eq!(Telemetry::total_clients(), 1);
+        });
+    }
+
     #[test]
     #[serial_test::serial]
     fn test_client_telemetry_cluster() {
@@ -5018,7 +5100,7 @@ pub(crate) mod shared_client_tests {
             redis: RedisConnectionInfo::default(),
         })
         .unwrap();
-        let mut setup_conn = retry(|| async {
+        let setup_conn = retry(|| async {
             setup_client
                 .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
                 .await
@@ -5232,7 +5314,7 @@ pub(crate) mod shared_client_tests {
         use glide_core::scope;
 
         block_on_all(async {
-            let (_server, mut admin_conn, proto_request) =
+            let (_server, admin_conn, proto_request) =
                 setup_password_local_server("old-password").await;
             let bytes = proto_request
                 .write_to_bytes()
@@ -5296,7 +5378,7 @@ pub(crate) mod shared_client_tests {
         use glide_core::scope;
 
         block_on_all(async {
-            let (_server, mut admin_conn, proto_request) =
+            let (_server, admin_conn, proto_request) =
                 setup_password_local_server("old-password").await;
             let bytes = proto_request
                 .write_to_bytes()
@@ -5369,7 +5451,7 @@ pub(crate) mod shared_client_tests {
         use glide_core::scope;
 
         block_on_all(async {
-            let (_server, mut admin_conn, proto_request) =
+            let (_server, admin_conn, proto_request) =
                 setup_password_local_server("old-password").await;
             let bytes = proto_request
                 .write_to_bytes()
@@ -5756,7 +5838,7 @@ pub(crate) mod shared_client_tests {
                 redis: RedisConnectionInfo::default(),
             })
             .unwrap();
-            let mut admin_conn = retry(|| async {
+            let admin_conn = retry(|| async {
                 admin_client
                     .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
                     .await
@@ -6133,7 +6215,7 @@ pub(crate) mod shared_client_tests {
                 redis: RedisConnectionInfo::default(),
             })
             .unwrap();
-            let mut admin_conn = retry(|| async {
+            let admin_conn = retry(|| async {
                 admin_client
                     .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
                     .await
@@ -6220,7 +6302,7 @@ pub(crate) mod shared_client_tests {
                     redis: RedisConnectionInfo::default(),
                 })
                 .unwrap();
-                let mut conn = retry(|| async {
+                let conn = retry(|| async {
                     admin
                         .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
                         .await
