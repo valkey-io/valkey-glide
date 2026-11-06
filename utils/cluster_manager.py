@@ -346,35 +346,59 @@ def print_servers_json(servers: List[Server]):
     print("SERVERS_JSON={}".format(json.dumps(arr)))
 
 
+# valkey's default cluster-port is the client port plus this offset.
+CLUSTER_BUS_PORT_OFFSET = 10000
+
+
+def listening_ports(port: int, cluster_mode: bool) -> List[int]:
+    """Every port a node started with `--port port` binds."""
+    if cluster_mode:
+        return [port, port + CLUSTER_BUS_PORT_OFFSET]
+    return [port]
+
+
+def is_port_free(port: int) -> bool:
+    for family, host in (
+        (socket.AF_INET, DEFAULT_HOST_IPV4),
+        (socket.AF_INET6, DEFAULT_HOST_IPV6),
+    ):
+        sock = None
+        try:
+            sock = socket.socket(family, socket.SOCK_STREAM)
+            if family == socket.AF_INET6:
+                sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            sock.bind((host, port))
+        except OSError as e:
+            logging.warning(f"next_free_port error for port {port}: {e}")
+            return False
+        finally:
+            if sock is not None:
+                sock.close()
+    return True
+
+
 def next_free_port(
-    min_port: int = 6379, max_port: int = 55535, timeout: int = 60
+    min_port: int = 6379,
+    max_port: int = 55535,
+    timeout: float = 60,
+    *,
+    cluster_mode: bool,
 ) -> int:
     tic = time.perf_counter()
 
     timeout_start = time.time()
     while time.time() < timeout_start + timeout:
-        try:
-            port = random.randint(min_port, max_port)
-
-            # Check IPv4 address.
-            sock4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock4.bind((DEFAULT_HOST_IPV4, port))
-            sock4.close()
-
-            # Check IPv6 address.
-            sock6 = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-            sock6.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-            sock6.bind((DEFAULT_HOST_IPV6, port))
-            sock6.close()
-
+        port = random.randint(min_port, max_port)
+        # A collision on a port the probe skipped surfaces only as the node
+        # exiting with "Address already in use". Without SO_REUSEADDR the probe
+        # also rejects server-side TIME_WAIT the server could bind over; that
+        # costs one retry.
+        if all(is_port_free(p) for p in listening_ports(port, cluster_mode)):
             toc = time.perf_counter()
             logging.debug(f"next_free_port() is {port} Elapsed time: {toc - tic:0.4f}")
             return port
-        except OSError as e:
-            logging.warning(f"next_free_port error for port {port}: {e}")
-            # Sleep so we won't spam the system with sockets
-            time.sleep(random.randint(0, 9) / 10000 + 0.01)
-            continue
+        # Sleep so we won't spam the system with sockets
+        time.sleep(random.randint(0, 9) / 10000 + 0.01)
 
     logging.error("Timeout Expired: No free port found")
     raise Exception("Timeout Expired: No free port found")
@@ -467,7 +491,7 @@ def start_server(
     load_module: Optional[List[str]] = None,
     cluster_node_timeout: Optional[int] = None,
 ) -> Tuple[Server, str]:
-    port = port if port else next_free_port()
+    port = port if port else next_free_port(cluster_mode=cluster_mode)
     logging.debug(f"Creating server {host}:{port}")
 
     # Create sub-folder for each node
@@ -664,6 +688,10 @@ def create_servers(
                 failure = "it never reported Ready"
             else:
                 failure = "address already in use"
+                # The node folder is removed below; this is the only record of
+                # which address (client or cluster bus port, v4 or v6) collided.
+                for line in bind_failures(f"{node_folder}/server.log"):
+                    logging.warning(f"Server {server}: {line}")
             # A failure a new port cannot fix (a bad --load-module path, a config
             # the engine rejects) would otherwise be replaced forever, with the
             # log that explains it deleted on every round.
@@ -1045,6 +1073,12 @@ def check_node_startup(
         f"Server {server} reported neither Ready nor a bind error within {timeout}s"
     )
     return NodeCheck.NO_VERDICT
+
+
+def bind_failures(log_file: str) -> List[str]:
+    """The server's own report of each address it could not bind."""
+    with open(log_file, "r") as f:
+        return [line.rstrip("\n") for line in f if "listening socket" in line]
 
 
 def dir_path(path: str):
