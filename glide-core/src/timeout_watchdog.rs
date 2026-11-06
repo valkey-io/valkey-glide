@@ -619,14 +619,14 @@ static GLOBAL_WATCHDOG: std::sync::atomic::AtomicPtr<TimeoutWatchdog> =
 /// were copied mid-use, so dropping it could deadlock or misbehave. Leaking
 /// one inherited instance per fork is the safe choice.
 ///
-/// Only atomic stores, so it is safe to run in a `pthread_atfork` child handler.
+/// Only atomic stores, so it is safe to run as a `pthread_atfork` child handler.
 #[cfg(unix)]
-fn reset_global() {
+extern "C" fn reinit_global_in_child() {
     GLOBAL_WATCHDOG.store(std::ptr::null_mut(), Ordering::Release);
     PUBLISHED_PENDING.store(0, Ordering::Relaxed);
 }
 
-/// Make sure forked children reset the global watchdog.
+/// Make sure forked children reinitialize the global watchdog.
 ///
 /// fork() copies only the calling thread, so a child would otherwise inherit a
 /// global whose watchdog thread does not exist: its deadlines would never fire,
@@ -635,16 +635,13 @@ fn reset_global() {
 /// Every caller runs this before it can publish a global, so a published global
 /// always has the handler registered. It never blocks: a child forked while
 /// another thread was registering just registers again. Registering more than
-/// once is harmless because the reset is idempotent. Panics if registration
+/// once is harmless because reinit is idempotent. Panics if registration
 /// fails, so no global is published without the handler.
 #[cfg(unix)]
-fn ensure_reset_in_forked_child() {
-    extern "C" fn reset_global_in_child() {
-        reset_global();
-    }
+fn ensure_reinit_in_forked_child() {
     static REGISTERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     if !REGISTERED.load(Ordering::Acquire) {
-        let rc = unsafe { libc::pthread_atfork(None, None, Some(reset_global_in_child)) };
+        let rc = unsafe { libc::pthread_atfork(None, None, Some(reinit_global_in_child)) };
         assert_eq!(
             rc, 0,
             "Failed to register the timeout watchdog fork handler"
@@ -659,8 +656,8 @@ impl TimeoutWatchdog {
         let ptr = GLOBAL_WATCHDOG.load(std::sync::atomic::Ordering::Acquire);
         if !ptr.is_null() {
             // Safety: once installed as non-null, the pointer is never freed
-            // until process exit (reset_global intentionally leaks the prior
-            // instance rather than dropping it).
+            // until process exit (reinit_global_in_child intentionally leaks
+            // the prior instance rather than dropping it).
             return unsafe { &*ptr };
         }
         Self::init_global()
@@ -670,7 +667,7 @@ impl TimeoutWatchdog {
     /// Uses compare_exchange so only one caller wins the race.
     fn init_global() -> &'static Self {
         #[cfg(unix)]
-        ensure_reset_in_forked_child();
+        ensure_reinit_in_forked_child();
         let ptr = Box::into_raw(Box::new(Self::start_global()));
         match GLOBAL_WATCHDOG.compare_exchange(
             std::ptr::null_mut(),
@@ -692,10 +689,10 @@ impl TimeoutWatchdog {
 
     /// Does nothing; kept for API compatibility.
     ///
-    /// A forked child resets the inherited global watchdog inside fork(),
-    /// before any child code runs (see `ensure_reset_in_forked_child`), and
-    /// platforms without fork() never inherit one. Resetting again here could
-    /// discard a watchdog the child already started.
+    /// A forked child reinitializes the inherited global watchdog inside
+    /// fork(), before any child code runs (see `ensure_reinit_in_forked_child`),
+    /// and platforms without fork() never inherit one. Reinitializing again
+    /// here could discard a watchdog the child already started.
     pub fn reinit_global() {}
 
     /// Start the global watchdog instance (publishes pending count).
