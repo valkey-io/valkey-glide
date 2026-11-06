@@ -1488,7 +1488,7 @@ impl Client {
         &'a mut self,
         permit: DispatchPermit,
         cmd: &'a mut Cmd,
-        routing: Option<RoutingInfo>,
+        mut routing: Option<RoutingInfo>,
     ) -> RedisResult<Value> {
         let (client, tracker) = permit.into_parts();
         let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
@@ -1539,12 +1539,14 @@ impl Client {
             RoutingInfo::MultiNode((nodes, policy)) => nodes.allows_partial_results(*policy),
             RoutingInfo::SingleNode(_) => false,
         };
-        let partial_results = cmd.allow_partial_results()
-            && matches!(client, ClientWrapper::Cluster { .. })
-            && match &routing {
-                Some(routing) => fans_out(routing),
-                None => RoutingInfo::for_routable(cmd).is_some_and(|routing| fans_out(&routing)),
-            };
+        let mut partial_results = false;
+        if cmd.allow_partial_results() && matches!(client, ClientWrapper::Cluster { .. }) {
+            // A fan-out resolved here is passed on, so it is not resolved twice.
+            if routing.is_none() {
+                routing = RoutingInfo::for_routable(cmd).filter(fans_out);
+            }
+            partial_results = routing.as_ref().is_some_and(fans_out);
+        }
 
         // Captured by the timeout path for watchdog-informed CB decisions.
         let mut timeout_cause: Option<crate::timeout_watchdog::TimeoutCause> = None;
