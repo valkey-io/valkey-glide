@@ -946,9 +946,8 @@ public class ClientPoolIntegrationTest {
                 active = pool.getActiveCount();
             }
 
-            // Core assertion: the BLPOP client must still be in the pool's active set. If the
-            // abandon monitor had wrongly reclaimed it, the count would settle to 0 (and this poll
-            // would never reach 1); if a contention release leaked, it would stay above 1.
+            // Only the BLPOP holder should still be borrowed. The count alone cannot tell the holder
+            // from a pending release, so the PING below proves the holder survived.
             assertEquals(
                     1, active, "Pool should have exactly 1 active client (the BLPOP holder); got " + active);
 
@@ -967,6 +966,12 @@ public class ClientPoolIntegrationTest {
             assertEquals(2, blpopResult.length, "BLPOP result should have [key, value]");
             assertEquals(blpopKey, blpopResult[0].toString(), "BLPOP key mismatch");
             assertEquals(blpopValue, blpopResult[1].toString(), "BLPOP value mismatch");
+
+            // If the abandon monitor had reclaimed the holder, its handle is closed and PING fails.
+            assertEquals(
+                    "PONG",
+                    blpopClient.ping().get(5, TimeUnit.SECONDS),
+                    "BLPOP holder should still be usable after the abandon window");
 
             System.out.println("testAbandonMonitorDoesNotReclaimBlockingClient PASSED");
         } finally {
