@@ -11028,6 +11028,62 @@ class TestClusterRoutes:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_info_allow_partial_results_keeps_the_error_reply_of_a_denied_primary(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        admin = cast(
+            GlideClusterClient,
+            create_sync_client(request, cluster_mode, protocol=protocol),
+        )
+        username = f"partial-{get_random_string(10)}"
+        password = "password"
+        admin.custom_command(
+            ["ACL", "SETUSER", username, "on", f">{password}", "~*", "&*", "+@all"],
+            AllNodes(),
+        )
+        denied = cast(
+            GlideClusterClient,
+            create_sync_client(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                credentials=ServerCredentials(password=password, username=username),
+            ),
+        )
+        try:
+            primaries = sorted(cast(Dict[bytes, bytes], denied.info()).keys())
+            host, port = primaries[0].decode().rsplit(":", 1)
+            admin.custom_command(
+                ["ACL", "SETUSER", username, "-info"], ByAddressRoute(host, int(port))
+            )
+
+            # Without the option, the denied primary fails the whole call.
+            with pytest.raises(RequestError) as plain:
+                denied.info()
+
+            result = denied.info(allow_partial_results=True)
+            assert isinstance(result, dict)
+            assert sorted(result.keys()) == primaries
+            error = result[primaries[0]]
+            assert isinstance(error, RequestError)
+            assert not isinstance(error, GlideTimeoutError)
+            assert str(error) == str(plain.value)
+            for address in primaries[1:]:
+                assert b"# Server" in cast(bytes, result[address])
+
+            # With every primary denied, the call returns an error for each.
+            admin.custom_command(["ACL", "SETUSER", username, "-info"], AllPrimaries())
+            failed = denied.info(allow_partial_results=True)
+            assert isinstance(failed, dict)
+            assert sorted(failed.keys()) == primaries
+            assert all(isinstance(reply, RequestError) for reply in failed.values())
+        finally:
+            denied.close()
+            admin.custom_command(["ACL", "DELUSER", username], AllNodes())
+            admin.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_cluster_route_by_address_reaches_correct_node(
         self, glide_sync_client: GlideClusterClient
     ):
