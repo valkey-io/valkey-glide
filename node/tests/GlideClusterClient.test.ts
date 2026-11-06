@@ -15,6 +15,7 @@ import { gte } from "semver";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     BitwiseOperation,
+    CircuitBreakerError,
     ClientPauseMode,
     ClientSideCache,
     ClientTrackingInfo,
@@ -556,6 +557,164 @@ describe("GlideClusterClient", () => {
             expect(
                 await client.info({ route, allowPartialResults: true }),
             ).toEqual(expect.stringContaining("# Server"));
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `info with allowPartialResults keeps the error reply of a denied primary_%p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const username = `partial-${getRandomKey()}`;
+            const password = "password";
+            await client.customCommand(
+                [
+                    "ACL",
+                    "SETUSER",
+                    username,
+                    "on",
+                    `>${password}`,
+                    "~*",
+                    "&*",
+                    "+@all",
+                ],
+                { route: "allNodes" },
+            );
+            const denied = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    credentials: { username, password },
+                }),
+            );
+
+            try {
+                const primaries = Object.keys(await denied.info()).sort();
+                const [host, port] = primaries[0].split(":");
+                await client.customCommand(
+                    ["ACL", "SETUSER", username, "-info"],
+                    {
+                        route: {
+                            type: "routeByAddress",
+                            host,
+                            port: Number(port),
+                        },
+                    },
+                );
+
+                // Without the option, the denied primary fails the whole call.
+                const plain = await denied
+                    .info()
+                    .catch((error: unknown) => error);
+                expect(plain).toBeInstanceOf(RequestError);
+
+                const replies = (await denied.info({
+                    allowPartialResults: true,
+                })) as Record<string, string | RequestError>;
+                expect(Object.keys(replies).sort()).toEqual(primaries);
+                expect(replies[primaries[0]]).toBeInstanceOf(RequestError);
+                expect(replies[primaries[0]]).not.toBeInstanceOf(TimeoutError);
+                expect((replies[primaries[0]] as RequestError).message).toEqual(
+                    (plain as RequestError).message,
+                );
+
+                for (const address of primaries.slice(1)) {
+                    expect(replies[address]).toEqual(
+                        expect.stringContaining("# Server"),
+                    );
+                }
+
+                // With every primary denied, the call resolves with an error for each.
+                await client.customCommand(
+                    ["ACL", "SETUSER", username, "-info"],
+                    {
+                        route: "allPrimaries",
+                    },
+                );
+                const failed = await denied.info({ allowPartialResults: true });
+                expect(Object.keys(failed).sort()).toEqual(primaries);
+
+                for (const reply of Object.values(failed)) {
+                    expect(reply).toBeInstanceOf(RequestError);
+                }
+            } finally {
+                denied.close();
+                await client.customCommand(["ACL", "DELUSER", username], {
+                    route: "allNodes",
+                });
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `info with allowPartialResults counts a call no node answered for the circuit breaker_%p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 300,
+                    clientCircuitBreaker: {
+                        countTimeouts: true,
+                        minErrors: 2,
+                        failureRateThreshold: 0.5,
+                        openTimeoutMs: 60000,
+                        windowSizeMs: 60000,
+                    },
+                }),
+            );
+            const primaries = Object.keys(await client.info()).sort();
+            const routes = primaries.map((address) => {
+                const [host, port] = address.split(":");
+                return {
+                    type: "routeByAddress" as const,
+                    host,
+                    port: Number(port),
+                };
+            });
+            const pauser = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            try {
+                for (const route of routes) {
+                    await pauser.customCommand(
+                        ["CLIENT", "PAUSE", "3000", "ALL"],
+                        { route },
+                    );
+                }
+
+                for (let call = 0; call < 2; call++) {
+                    const replies = await client.info({
+                        allowPartialResults: true,
+                    });
+                    expect(Object.keys(replies).sort()).toEqual(primaries);
+
+                    for (const reply of Object.values(replies)) {
+                        expect(reply).toBeInstanceOf(TimeoutError);
+                    }
+                }
+
+                // Two calls in which no node answered open the breaker, as two
+                // plain timeouts would.
+                await expect(client.get("key")).rejects.toThrow(
+                    CircuitBreakerError,
+                );
+            } finally {
+                try {
+                    for (const route of routes) {
+                        await waitFor(async () => {
+                            try {
+                                await pauser.ping({ route });
+                                return true;
+                            } catch {
+                                return false;
+                            }
+                        }, "paused primary did not recover");
+                    }
+                } finally {
+                    pauser.close();
+                }
+            }
         },
         TIMEOUT,
     );
