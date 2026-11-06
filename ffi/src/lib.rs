@@ -4771,6 +4771,11 @@ mod tests_response_arena {
             redis::parse_redis_value(b"-ERR boom\r\n").unwrap(),
             // A server reply coded `Timeout` is not a client timeout.
             redis::parse_redis_value(b"-Timeout limit was reached\r\n").unwrap(),
+            // A node that did not answer in a partial-results reply.
+            Value::ServerError(redis::ServerError::ExtensionError {
+                code: redis::TIMEOUT_ERROR_CODE.into(),
+                detail: Some("timed out".into()),
+            }),
         ]);
 
         let (root, arena_ptr) =
@@ -4781,6 +4786,7 @@ mod tests_response_arena {
                 RequestErrorType::ExecAbort,
                 RequestErrorType::Unspecified,
                 RequestErrorType::Unspecified,
+                RequestErrorType::Timeout,
             ];
             for (i, error_type) in expected.into_iter().enumerate() {
                 let node = &*root.array_value.add(i);
@@ -4991,8 +4997,10 @@ pub unsafe extern "C-unwind" fn command(
 /// reply is a map keyed by node address (such as `INFO`) returns an entry for
 /// every target node instead of failing on the first node error. A failed
 /// node's entry is an `Error` response whose `int_value` is `Timeout` if the
-/// node did not answer in time and `Unspecified` otherwise. Other routes behave
-/// as with [`command`].
+/// node did not answer in time and `Unspecified` otherwise. A node has not
+/// answered in time when it has not answered by the request timeout minus the
+/// smaller of a tenth of it and 100 ms, and the call itself can still fail with
+/// a timeout. Other routes behave as with [`command`].
 ///
 /// # Safety
 ///
