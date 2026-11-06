@@ -79,11 +79,11 @@ jobs:
 
             - name: Run tests
               working-directory: ./glide-rdma
-              run: cargo test
+              run: cargo test --locked
 
             - name: Run tests with libfabric
               working-directory: ./glide-rdma
-              run: cargo test --features libfabric
+              run: cargo test --locked --features libfabric
 
     lint:
         runs-on: ubuntu-24.04
