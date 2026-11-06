@@ -134,8 +134,6 @@ fn parse_node_address(address: &str) -> Option<(&str, i64)> {
     Some((host, port))
 }
 
-/// Sets the routed node's address on the command span for OTel reporting.
-/// Called after cluster routing resolves the actual target node.
 // No receivers means we reached no node for this fan-out. Either a
 // concurrent remove_node drained the connection map after the outer
 // is_empty check, or the slot map lists primaries or routes that the
@@ -150,6 +148,8 @@ fn no_fan_out_connections_error() -> RedisError {
     ))
 }
 
+/// Sets the routed node's address on the command span for OTel reporting.
+/// Called after cluster routing resolves the actual target node.
 fn set_routed_node_on_span(span: &GlideSpan, address: &str) {
     if let Some((host, port)) = parse_node_address(address) {
         span.set_attribute("server.address", host.to_string());
@@ -2519,9 +2519,10 @@ where
     ///
     /// Waits for every node, but no later than `deadline`. A node that has not
     /// answered by then is reported as timed out and its receiver is dropped,
-    /// which stops its sub-request. Errors are stored as `Value::ServerError`,
-    /// and timeouts keep [`crate::TIMEOUT_ERROR_CODE`]. The map has an entry
-    /// for every node even when all of them failed.
+    /// so its sub-request is not retried; a reply already in flight still ends
+    /// at the connection's response timeout. Errors are stored as
+    /// `Value::ServerError`, and timeouts keep [`crate::TIMEOUT_ERROR_CODE`].
+    /// The map has an entry for every node even when all of them failed.
     async fn collect_partial_results(
         receivers: Vec<(Option<String>, oneshot::Receiver<RedisResult<Response>>)>,
         deadline: Option<std::time::Instant>,
@@ -3303,7 +3304,11 @@ where
                 .unzip()
         }
         let partial_results = cmd.allow_partial_results()
-            && matches!(response_policy, Some(ResponsePolicy::Special) | None);
+            && matches!(response_policy, Some(ResponsePolicy::Special) | None)
+            && matches!(
+                routing,
+                MultipleNodeRoutingInfo::AllNodes | MultipleNodeRoutingInfo::AllMasters
+            );
         let (receivers, requests): (Vec<_>, Vec<_>);
         {
             let connections_container = core.conn_lock.read();
@@ -3318,27 +3323,41 @@ where
                 ));
             }
 
-            // The connection iterators skip slot-map nodes that have no
-            // connection. Partial results report those nodes instead.
-            let unconnected = |primaries_only| {
-                if partial_results {
-                    connections_container.nodes_without_connection(primaries_only)
-                } else {
-                    Vec::new()
-                }
-            };
             (receivers, requests) = match routing {
+                // Partial results also report the slot-map nodes that have no
+                // connection, which the default path skips.
+                MultipleNodeRoutingInfo::AllNodes | MultipleNodeRoutingInfo::AllMasters
+                    if partial_results =>
+                {
+                    let (connections, unconnected) = connections_container
+                        .connections_and_unconnected_nodes(matches!(
+                            routing,
+                            MultipleNodeRoutingInfo::AllMasters
+                        ));
+                    // With no node reachable, fail as the default path does, so
+                    // the request refreshes slots and retries.
+                    if connections.is_empty() {
+                        return OperationResult::Err((
+                            OperationTarget::FanOut,
+                            no_fan_out_connections_error(),
+                        ));
+                    }
+                    into_channels(
+                        connections
+                            .into_iter()
+                            .map(|tuple| Ok((cmd.clone(), tuple)))
+                            .chain(unconnected.into_iter().map(|address| Err(Some(address)))),
+                    )
+                }
                 MultipleNodeRoutingInfo::AllNodes => into_channels(
                     connections_container
                         .all_node_connections()
-                        .map(|tuple| Ok((cmd.clone(), tuple)))
-                        .chain(unconnected(false).into_iter().map(|addr| Err(Some(addr)))),
+                        .map(|tuple| Ok((cmd.clone(), tuple))),
                 ),
                 MultipleNodeRoutingInfo::AllMasters => into_channels(
                     connections_container
                         .all_primary_connections()
-                        .map(|tuple| Ok((cmd.clone(), tuple)))
-                        .chain(unconnected(true).into_iter().map(|addr| Err(Some(addr)))),
+                        .map(|tuple| Ok((cmd.clone(), tuple))),
                 ),
                 MultipleNodeRoutingInfo::MultiSlot((slots, _)) => {
                     // multi_shard never emits an empty slots vec, so an empty
@@ -5237,6 +5256,18 @@ mod partial_results_tests {
         assert!(error_of(&entries[0].1)
             .to_string()
             .contains("receiver was dropped"));
+    }
+
+    #[test]
+    fn server_reply_coded_timeout_is_not_a_client_timeout() {
+        let Value::ServerError(err) =
+            crate::parse_redis_value(b"-Timeout limit was reached\r\n").unwrap()
+        else {
+            panic!("expected a server error");
+        };
+        let err: RedisError = err.into();
+        assert!(!err.is_timeout(), "{err:?}");
+        assert!(err.to_string().contains("Timeout"), "{err}");
     }
 
     #[tokio::test]

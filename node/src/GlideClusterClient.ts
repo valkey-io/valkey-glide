@@ -125,7 +125,8 @@ export interface PartialResultsOption {
      * When `true`, a command sent to several nodes resolves with an entry for every target node,
      * holding that node's reply or the error for that node. A node that did not answer in time
      * gets a {@link TimeoutError}; other failures get a {@link RequestError}. The promise does not
-     * reject because some of the nodes failed, even if all of them did.
+     * reject because some or all of the target nodes failed; it still rejects when no node can be
+     * reached at all.
      *
      * Has no effect on a command routed to a single node. Defaults to `false`, which rejects with
      * the first node error.

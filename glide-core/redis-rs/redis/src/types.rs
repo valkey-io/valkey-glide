@@ -397,7 +397,10 @@ impl From<RedisError> for ServerError {
 /// Extension code of a [`ServerError`] that holds a client-side timeout as a
 /// value, such as a node that did not answer in a partial-results reply.
 /// Converting the error back into a [`RedisError`] restores the timeout kind.
-pub const TIMEOUT_ERROR_CODE: &str = "Timeout";
+///
+/// The code contains a space, and the code of a server error reply is its
+/// first word, so no reply from a server can carry it.
+pub const TIMEOUT_ERROR_CODE: &str = "Client timeout";
 
 impl ServerError {
     /// Same as `ServerError::from`, except that a timeout gets

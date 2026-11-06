@@ -744,16 +744,16 @@ pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
     }
 }
 
-/// The longest head start a partial-results fan-out takes over the timeout watchdog.
-const PARTIAL_RESULTS_MAX_MARGIN: Duration = Duration::from_millis(50);
+/// The largest `partial_results_margin`.
+const PARTIAL_RESULTS_MAX_MARGIN: Duration = Duration::from_millis(100);
 
-/// How long a partial-results fan-out waits for nodes. It stops a little before
-/// `request_timeout` (a tenth of it, at most `PARTIAL_RESULTS_MAX_MARGIN`), so the
-/// nodes that did not answer are reported before the watchdog fails the whole
-/// request. If the runtime is too busy to use that margin, the watchdog still
-/// wins and the request fails with a timeout, as it does without partial results.
-fn partial_results_wait(request_timeout: Duration) -> Duration {
-    request_timeout - (request_timeout / 10).min(PARTIAL_RESULTS_MAX_MARGIN)
+/// A partial-results fan-out stops waiting for nodes this long before
+/// `request_timeout`, and the timeout watchdog of such a request fires this long
+/// after it. The gap lets the reply reach the caller before the watchdog fails
+/// the whole request; if the runtime is too busy to use it, the request fails
+/// with a timeout, as it does without partial results.
+fn partial_results_margin(request_timeout: Duration) -> Duration {
+    (request_timeout / 10).min(PARTIAL_RESULTS_MAX_MARGIN)
 }
 
 fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Option<Duration>> {
@@ -1514,15 +1514,17 @@ impl Client {
                 let cmd_start = Instant::now();
 
                 let mut owned_cmd = owned_cmd;
+                let mut watchdog_duration = duration;
                 if owned_cmd.allow_partial_results() {
-                    owned_cmd
-                        .set_fan_out_deadline(Some(cmd_start + partial_results_wait(duration)));
+                    let margin = partial_results_margin(duration);
+                    owned_cmd.set_fan_out_deadline(Some(cmd_start + duration - margin));
+                    watchdog_duration += margin;
                 }
                 // Wrap Cmd in Arc so the timeout arm can still read watchdog fields after execute takes ownership
                 let owned_cmd = Arc::new(owned_cmd);
 
                 let timeout_rx = crate::timeout_watchdog::TimeoutWatchdog::global()
-                    .register(duration, cmd_start);
+                    .register(watchdog_duration, cmd_start);
                 // Defer the expensive Debug-format of the route to the (rare)
                 // timeout path. Cloning the routing is cheap for the common
                 // single-node case (no heap allocation); previously a String was
@@ -4064,7 +4066,7 @@ mod tests {
     };
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, RequestTimeoutOption, TimeUnit,
-        get_request_timeout, is_blocking_command, is_blocking_command_name, partial_results_wait,
+        get_request_timeout, is_blocking_command, is_blocking_command_name, partial_results_margin,
     };
 
     use super::{
@@ -4762,16 +4764,16 @@ mod tests {
     }
 
     #[test]
-    fn test_partial_results_wait_stops_before_the_request_timeout() {
+    fn test_partial_results_margin_is_a_tenth_of_the_timeout_up_to_100ms() {
         assert_eq!(
-            partial_results_wait(Duration::from_millis(250)),
-            Duration::from_millis(225)
+            partial_results_margin(Duration::from_millis(250)),
+            Duration::from_millis(25)
         );
         assert_eq!(
-            partial_results_wait(Duration::from_secs(5)),
-            Duration::from_millis(4950)
+            partial_results_margin(Duration::from_secs(5)),
+            Duration::from_millis(100)
         );
-        assert_eq!(partial_results_wait(Duration::ZERO), Duration::ZERO);
+        assert_eq!(partial_results_margin(Duration::ZERO), Duration::ZERO);
     }
 
     #[test]

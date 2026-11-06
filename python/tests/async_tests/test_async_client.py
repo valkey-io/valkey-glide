@@ -10999,7 +10999,8 @@ class TestClusterRoutes:
                 except RequestError:
                     return False
 
-            await pauser.custom_command(["CLIENT", "PAUSE", "2500", "ALL"], route)
+            # Long enough for both calls below to see the node as slow.
+            await pauser.custom_command(["CLIENT", "PAUSE", "4500", "ALL"], route)
             try:
                 # Without the option, one slow primary fails the whole call.
                 with pytest.raises(GlideTimeoutError):
@@ -11021,6 +11022,10 @@ class TestClusterRoutes:
             assert sorted(healthy.keys()) == primaries
             for reply in healthy.values():
                 assert b"# Server" in cast(bytes, reply)
+
+            # A single-node route still returns the node's reply as bytes.
+            single = await client.info(route=route, allow_partial_results=True)
+            assert b"# Server" in cast(bytes, single)
         finally:
             await client.close()
             await pauser.close()

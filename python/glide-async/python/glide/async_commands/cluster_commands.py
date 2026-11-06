@@ -77,6 +77,7 @@ class ClusterCommands(CoreCommands):
         self,
         sections: Optional[List[InfoSection]] = None,
         route: Optional[Route] = None,
+        *,
         allow_partial_results: Literal[False] = False,
     ) -> TClusterResponse[bytes]: ...
 
@@ -93,6 +94,7 @@ class ClusterCommands(CoreCommands):
         self,
         sections: Optional[List[InfoSection]] = None,
         route: Optional[Route] = None,
+        *,
         allow_partial_results: bool = False,
     ) -> Union[TClusterResponse[bytes], Dict[bytes, Union[bytes, RequestError]]]:
         """
@@ -109,8 +111,9 @@ class ClusterCommands(CoreCommands):
                 which case the client will route the command to the nodes defined by `route`. Defaults to None.
             allow_partial_results (bool): When True, a command sent to several nodes returns an entry for every
                 target node, holding that node's reply or the error for that node, instead of raising the first
-                node error. A node that did not answer in time gets a `TimeoutError`; other failures get a
-                `RequestError`. Has no effect when the command goes to a single node. Defaults to False.
+                node error. A node that did not answer in time gets a GLIDE `TimeoutError` (a `RequestError`
+                subclass); other failures get a `RequestError`. Has no effect when the command goes to a single
+                node. Keyword-only. Defaults to False.
 
         Returns:
             TClusterResponse[bytes]: If a single node route is requested, returns a bytes string containing the information for

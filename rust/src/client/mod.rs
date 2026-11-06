@@ -381,8 +381,9 @@ impl GlideClusterClient {
     /// every target node, keyed by node address: the node's reply, or the error
     /// for that node. A node that did not answer in time holds
     /// [`GlideError::Timeout`]. `route` must be [`Route::AllNodes`] or
-    /// [`Route::AllPrimaries`]; for a single node, use
-    /// [`crate::ServerManagementCommands::info_sections`] with a route instead.
+    /// [`Route::AllPrimaries`], since a single node's reply has no address to
+    /// key it by; for a single node, send `INFO` with
+    /// [`GlideClusterClient::route_command`] instead.
     pub async fn info_with_partial_results(
         &self,
         sections: &[crate::commands::options::InfoSection],

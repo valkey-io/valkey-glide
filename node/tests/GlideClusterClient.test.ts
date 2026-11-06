@@ -147,6 +147,9 @@ describe("GlideClusterClient", () => {
     afterAll(async () => {
         client?.close();
         azClient?.close();
+        // A test that replaces `client` leaves the pooled clients open otherwise.
+        pooledClient?.close();
+        pooledAzClient?.close();
 
         if (testsFailed === 0) {
             if (cluster) await cluster.close();
@@ -502,7 +505,8 @@ describe("GlideClusterClient", () => {
             );
 
             try {
-                await pauser.customCommand(["CLIENT", "PAUSE", "2500", "ALL"], {
+                // Long enough for both calls below to see the node as slow.
+                await pauser.customCommand(["CLIENT", "PAUSE", "4500", "ALL"], {
                     route,
                 });
 
@@ -525,16 +529,19 @@ describe("GlideClusterClient", () => {
                 expect(replies[primaries[0]]).toBeInstanceOf(TimeoutError);
                 expect(replies[primaries[0]]).toBeInstanceOf(RequestError);
             } finally {
-                // CLIENT UNPAUSE would wait for the pause too; wait for it to end.
-                await waitFor(async () => {
-                    try {
-                        await pauser.ping({ route });
-                        return true;
-                    } catch {
-                        return false;
-                    }
-                }, "paused primary did not recover");
-                pauser.close();
+                try {
+                    // CLIENT UNPAUSE would wait for the pause too; wait for it to end.
+                    await waitFor(async () => {
+                        try {
+                            await pauser.ping({ route });
+                            return true;
+                        } catch {
+                            return false;
+                        }
+                    }, "paused primary did not recover");
+                } finally {
+                    pauser.close();
+                }
             }
 
             // With every node healthy, the option returns the same replies.
@@ -544,6 +551,11 @@ describe("GlideClusterClient", () => {
             for (const reply of Object.values(healthy)) {
                 expect(reply).toEqual(expect.stringContaining("# Server"));
             }
+
+            // A single-node route still returns the node's reply as a string.
+            expect(
+                await client.info({ route, allowPartialResults: true }),
+            ).toEqual(expect.stringContaining("# Server"));
         },
         TIMEOUT,
     );

@@ -557,7 +557,8 @@ public class CommandTests {
                     new ByAddressRoute(
                             paused.substring(0, portIndex), Integer.parseInt(paused.substring(portIndex + 1)));
 
-            pauser.customCommand(new String[] {"CLIENT", "PAUSE", "2500", "ALL"}, route).get();
+            // Long enough for both calls below to see the node as slow.
+            pauser.customCommand(new String[] {"CLIENT", "PAUSE", "4500", "ALL"}, route).get();
             try {
                 // Without partial results, one slow primary fails the whole call.
                 ExecutionException error =
@@ -584,6 +585,10 @@ public class CommandTests {
                         },
                         "paused primary did not recover");
             }
+
+            // A single-node route still returns the node's reply as a string.
+            Object single = client.infoWithPartialResults(new Section[0], route).get().getSingleValue();
+            assertTrue(((String) single).contains("# Server"));
         }
     }
 

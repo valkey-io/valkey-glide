@@ -194,7 +194,8 @@ pub struct CommandResponse {
     pub response_type: ResponseType,
     /// The integer of an `Int` response. For an `Error` response (an error
     /// nested in a reply, such as a failed node in a partial-results map), the
-    /// error's [`RequestErrorType`].
+    /// error's [`RequestErrorType`] as glide-core classifies it, for example
+    /// `Timeout` for a node that did not answer in time.
     pub int_value: i64,
     pub float_value: c_double,
     pub bool_value: bool,
@@ -4765,22 +4766,27 @@ mod tests_response_arena {
 
     #[test]
     fn error_nodes_carry_their_request_error_type() {
-        let timeout = format!("-{} timed out\r\n", redis::TIMEOUT_ERROR_CODE);
         let value = Value::Array(vec![
-            redis::parse_redis_value(timeout.as_bytes()).unwrap(),
+            redis::parse_redis_value(b"-EXECABORT aborted\r\n").unwrap(),
             redis::parse_redis_value(b"-ERR boom\r\n").unwrap(),
+            // A server reply coded `Timeout` is not a client timeout.
+            redis::parse_redis_value(b"-Timeout limit was reached\r\n").unwrap(),
         ]);
 
         let (root, arena_ptr) =
             valkey_value_to_arena_response(value, &[]).expect("arena build failed");
         unsafe {
             let root = &*root;
-            let timeout = &*root.array_value;
-            let other = &*root.array_value.add(1);
-            assert!(matches!(timeout.response_type, ResponseType::Error));
-            assert_eq!(timeout.int_value, RequestErrorType::Timeout as i64);
-            assert!(matches!(other.response_type, ResponseType::Error));
-            assert_eq!(other.int_value, RequestErrorType::Unspecified as i64);
+            let expected = [
+                RequestErrorType::ExecAbort,
+                RequestErrorType::Unspecified,
+                RequestErrorType::Unspecified,
+            ];
+            for (i, error_type) in expected.into_iter().enumerate() {
+                let node = &*root.array_value.add(i);
+                assert!(matches!(node.response_type, ResponseType::Error));
+                assert_eq!(node.int_value, error_type as i64, "node {i}");
+            }
             free_response_arena(arena_ptr);
         }
     }
@@ -4977,12 +4983,12 @@ pub unsafe extern "C-unwind" fn command(
     }
 }
 
-/// Same as [`command`], but a command sent to several nodes whose reply is a
-/// map keyed by node address (such as `INFO` to all primaries) returns an entry
-/// for every target node instead of failing on the first node error. A failed
-/// node's entry is an `Error` response whose `int_value` holds its
-/// [`RequestErrorType`], so a node that did not answer in time reads as
-/// `Timeout`. A command routed to a single node behaves as with [`command`].
+/// Same as [`command`], but a command sent to all nodes or all primaries whose
+/// reply is a map keyed by node address (such as `INFO`) returns an entry for
+/// every target node instead of failing on the first node error. A failed
+/// node's entry is an `Error` response whose `int_value` is `Timeout` if the
+/// node did not answer in time and `Unspecified` otherwise. Other routes behave
+/// as with [`command`].
 ///
 /// # Safety
 ///

@@ -5242,6 +5242,79 @@ mod cluster_async {
         assert!(err.is_timeout(), "{err:?}");
     }
 
+    // INFO to both primaries (6379, 6380) where 6380 refuses every command, so
+    // the client never gets a connection to it.
+    fn run_info_with_one_unconnected_primary(
+        name: &'static str,
+        partial: bool,
+    ) -> RedisResult<Value> {
+        let mut info = cmd("INFO");
+        info.set_allow_partial_results(partial);
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(0),
+            name,
+            move |received_cmd: &[u8], port| {
+                if port == 6380 {
+                    return Err(Err(std::io::Error::from(
+                        std::io::ErrorKind::ConnectionRefused,
+                    )
+                    .into()));
+                }
+                respond_startup_two_nodes(name, received_cmd)?;
+                Err(Ok(Value::BulkString(
+                    format!("info: {port}").into_bytes().into(),
+                )))
+            },
+        );
+        runtime.block_on(connection.route_command(
+            &info,
+            RoutingInfo::MultiNode((
+                MultipleNodeRoutingInfo::AllMasters,
+                Some(redis::cluster_routing::ResponsePolicy::Special),
+            )),
+        ))
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_report_unconnected_primary() {
+        let name = "test_async_cluster_partial_results_report_unconnected_primary";
+        let pairs = sorted_map(run_info_with_one_unconnected_primary(name, true).unwrap());
+
+        assert_eq!(pairs.len(), 2, "{pairs:?}");
+        assert_eq!(pairs[0].0, format!("{name}:6379"));
+        assert_eq!(pairs[0].1, Value::BulkString(b"info: 6379".to_vec().into()));
+        assert_eq!(pairs[1].0, format!("{name}:6380"));
+        let Value::ServerError(err) = &pairs[1].1 else {
+            panic!("expected an error for 6380, got {:?}", pairs[1].1);
+        };
+        let err: RedisError = err.clone().into();
+        assert!(
+            err.to_string().contains("ConnectionNotFoundForRoute"),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_without_partial_results_skips_unconnected_primary() {
+        let name = "test_async_cluster_without_partial_results_skips_unconnected_primary";
+        let pairs = sorted_map(run_info_with_one_unconnected_primary(name, false).unwrap());
+
+        assert_eq!(
+            pairs,
+            vec![(
+                format!("{name}:6379"),
+                Value::BulkString(b"info: 6379".to_vec().into())
+            )]
+        );
+    }
+
     #[test]
     #[serial_test::parallel(otel)]
     fn test_async_cluster_partial_results_return_map_when_all_nodes_fail() {

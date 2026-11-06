@@ -993,9 +993,9 @@ impl Cmd {
     }
 
     /// Return one entry per target node instead of failing on the first node
-    /// error. Applies only to multi-node commands whose reply is a map keyed by
-    /// node address (`ResponsePolicy::Special` or no policy), such as `INFO`
-    /// sent to all primaries. Failed nodes hold a `Value::ServerError`.
+    /// error. Applies only to commands sent to all nodes or all primaries whose
+    /// reply is a map keyed by node address (`ResponsePolicy::Special` or no
+    /// policy), such as `INFO`. Failed nodes hold a `Value::ServerError`.
     #[inline]
     pub fn set_allow_partial_results(&mut self, allow: bool) -> &mut Cmd {
         self.allow_partial_results = allow;

@@ -61,11 +61,9 @@ async fn cluster_info_reports_ok() {
 #[tokio::test]
 async fn cluster_info_with_partial_results_keeps_replies_when_a_primary_is_slow() {
     let cluster = common::ClusterHarness::start().await;
-    let client = glide::GlideClusterClient::connect(
-        cluster.config().request_timeout(Duration::from_millis(500)),
-    )
-    .await
-    .unwrap();
+    let client = cluster
+        .client_with_config(cluster.config().request_timeout(Duration::from_millis(500)))
+        .await;
     // A second client pauses the primary, so the pause is not queued behind the
     // client under test.
     let pauser = cluster.client().await;
@@ -90,7 +88,8 @@ async fn cluster_info_with_partial_results_keeps_replies_when_a_primary_is_slow(
     assert!(matches!(err, GlideError::Request(_)), "{err:?}");
 
     pauser
-        .custom_command_with_route(&["CLIENT", "PAUSE", "1500", "ALL"], route.clone())
+        // Long enough for both calls below to see the node as slow.
+        .custom_command_with_route(&["CLIENT", "PAUSE", "3000", "ALL"], route.clone())
         .await
         .unwrap();
 

@@ -172,7 +172,8 @@ func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsRepliesWhenAPrimaryI
 	require.NoError(t, err)
 	route := config.NewByAddressRoute(host, int32(port))
 
-	_, err = pauser.CustomCommandWithRoute(ctx, []string{"CLIENT", "PAUSE", "2500", "ALL"}, route)
+	// Long enough for both calls below to see the node as slow.
+	_, err = pauser.CustomCommandWithRoute(ctx, []string{"CLIENT", "PAUSE", "4500", "ALL"}, route)
 	require.NoError(t, err)
 	defer func() {
 		// CLIENT UNPAUSE would wait for the pause too; wait for it to end.
@@ -180,6 +181,15 @@ func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsRepliesWhenAPrimaryI
 			_, err := pauser.CustomCommandWithRoute(ctx, []string{"PING"}, route)
 			return err == nil
 		}, 10*time.Second, 100*time.Millisecond, "paused primary did not recover")
+
+		// A single-node route still returns the node's reply as a string.
+		single, err := client.InfoWithPartialResults(
+			ctx,
+			options.ClusterInfoOptions{RouteOption: &options.RouteOption{Route: route}},
+		)
+		assert.NoError(t, err)
+		assert.True(t, single.IsSingleValue())
+		assert.Contains(t, single.SingleValue(), "# Server")
 	}()
 
 	// Without partial results, one slow primary fails the whole call.
