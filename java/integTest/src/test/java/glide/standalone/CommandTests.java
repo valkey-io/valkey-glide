@@ -23,6 +23,7 @@ import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getInfo;
 import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
+import static glide.TestUtilities.killUntilUnkillable;
 import static glide.TestUtilities.parseLong;
 import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
@@ -59,6 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import glide.LuaTimeLimit;
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
@@ -1087,8 +1089,9 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
-        try (GlideClient testClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+        try (LuaTimeLimit limit = LuaTimeLimit.set(regularClient, 100);
+                GlideClient testClient =
+                        GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 // call the function without await
                 testClient.fcall(funcName);
@@ -1139,8 +1142,9 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
-        try (GlideClient testClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+        try (LuaTimeLimit limit = LuaTimeLimit.set(regularClient, 100);
+                GlideClient testClient =
+                        GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 // call the function without await
                 testClient.fcall(funcName);
@@ -1178,10 +1182,7 @@ public class CommandTests {
         String libName = "functionKill_write_function";
         String funcName = "deadlock_write_function";
         String key = libName;
-        String code = createLuaLibWithLongRunningFunction(libName, funcName, 6, false);
-        CompletableFuture<Object> promise = new CompletableFuture<>();
-        promise.complete(null);
-
+        String code = createLuaLibWithLongRunningFunction(libName, funcName, 2, false);
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
         // nothing to kill
@@ -1193,44 +1194,12 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
-        try (GlideClient testClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
-            try {
-                // call the function without await
-                promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
-
-                Thread.sleep(1000);
-
-                boolean foundUnkillable = false;
-                int timeout = 4000; // ms
-                while (timeout >= 0) {
-                    try {
-                        // valkey kills a function with 5 sec delay
-                        // but this will always throw an error in the test
-                        regularClient.functionKill().get();
-                    } catch (ExecutionException executionException) {
-                        // looking for an error with "unkillable" in the message
-                        // at that point we can break the loop
-                        if (executionException.getCause() instanceof RequestException
-                                && executionException.getMessage().toLowerCase().contains("unkillable")) {
-                            foundUnkillable = true;
-                            break;
-                        }
-                    }
-                    Thread.sleep(500);
-                    timeout -= 500;
-                }
-                assertTrue(foundUnkillable);
-
-            } finally {
-                // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-                // test to fail.
-                // wait for the function to complete (we cannot kill it)
-                try {
-                    promise.get();
-                } catch (Exception ignored) {
-                }
-            }
+        try (LuaTimeLimit limit = LuaTimeLimit.set(regularClient, 100);
+                GlideClient testClient =
+                        GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+            killUntilUnkillable(
+                    () -> regularClient.functionKill(),
+                    () -> testClient.fcall(funcName, new String[] {key}, new String[0]));
         }
     }
 
@@ -1245,10 +1214,7 @@ public class CommandTests {
         GlideString funcName = gs("deadlock_write_function");
         GlideString key = libName;
         GlideString code =
-                gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 6, false));
-        CompletableFuture<Object> promise = new CompletableFuture<>();
-        promise.complete(null);
-
+                gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 2, false));
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
         // nothing to kill
@@ -1260,44 +1226,12 @@ public class CommandTests {
         // load the lib
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
-        try (GlideClient testClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
-            try {
-                // call the function without await
-                promise = testClient.fcall(funcName, new GlideString[] {key}, new GlideString[0]);
-
-                Thread.sleep(1000);
-
-                boolean foundUnkillable = false;
-                int timeout = 4000; // ms
-                while (timeout >= 0) {
-                    try {
-                        // valkey kills a function with 5 sec delay
-                        // but this will always throw an error in the test
-                        regularClient.functionKill().get();
-                    } catch (ExecutionException executionException) {
-                        // looking for an error with "unkillable" in the message
-                        // at that point we can break the loop
-                        if (executionException.getCause() instanceof RequestException
-                                && executionException.getMessage().toLowerCase().contains("unkillable")) {
-                            foundUnkillable = true;
-                            break;
-                        }
-                    }
-                    Thread.sleep(500);
-                    timeout -= 500;
-                }
-                assertTrue(foundUnkillable);
-
-            } finally {
-                // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-                // test to fail.
-                // wait for the function to complete (we cannot kill it)
-                try {
-                    promise.get();
-                } catch (Exception ignored) {
-                }
-            }
+        try (LuaTimeLimit limit = LuaTimeLimit.set(regularClient, 100);
+                GlideClient testClient =
+                        GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+            killUntilUnkillable(
+                    () -> regularClient.functionKill(),
+                    () -> testClient.fcall(funcName, new GlideString[] {key}, new GlideString[0]));
         }
     }
 
@@ -2003,8 +1937,9 @@ public class CommandTests {
         // create and load a long-running script
         Script script = new Script(createLongRunningLuaScript(6, true), true);
 
-        try (GlideClient testClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+        try (LuaTimeLimit limit = LuaTimeLimit.set(regularClient, 100);
+                GlideClient testClient =
+                        GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 testClient.invokeScript(script);
                 Thread.sleep(1000);
@@ -2103,14 +2038,15 @@ public class CommandTests {
         waitForNotBusy(regularClient::scriptKill);
 
         String key = UUID.randomUUID().toString();
-        String code = createLongRunningLuaScript(6, false);
+        String code = createLongRunningLuaScript(2, false);
         Script script = new Script(code, false);
 
         CompletableFuture<Object> promise = new CompletableFuture<>();
         promise.complete(null);
 
-        try (GlideClient testClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+        try (LuaTimeLimit limit = LuaTimeLimit.set(regularClient, 100);
+                GlideClient testClient =
+                        GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 // run the script without await
                 promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
@@ -2146,8 +2082,6 @@ public class CommandTests {
                 timeout = 4000;
                 while (timeout >= 0) {
                     try {
-                        // valkey kills a script with 5 sec delay
-                        // but this will always throw an error in the test
                         regularClient.scriptKill().get();
                     } catch (ExecutionException execException) {
                         // looking for an error with "unkillable" in the message
