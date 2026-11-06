@@ -26,13 +26,6 @@ inputs:
 runs:
     using: "composite"
     steps:
-        - name: Install software dependencies for macOS
-          shell: bash
-          if: "${{ inputs.os == 'macos' }}"
-          run: |
-              brew update
-              brew install openssl@3 coreutils
-
         - name: Install software dependencies for Ubuntu GNU
           shell: bash
           if: "${{ inputs.os == 'ubuntu' && !contains(inputs.target, 'musl')}}"
