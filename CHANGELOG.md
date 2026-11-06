@@ -1,6 +1,12 @@
 # Changelog
 
-## Pending 2.6
+## Pending 2.7
+
+### Fixes
+
+* Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
+
+## 2.6
 
 ### Features
 
