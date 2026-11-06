@@ -1106,8 +1106,10 @@ mod tests {
     #[serial]
     fn forked_child_gets_working_watchdog() {
         // Start the global watchdog in the parent and let it fire once.
-        let rx = TimeoutWatchdog::global().register(Duration::from_millis(10), Instant::now());
-        assert_eq!(rx.blocking_recv(), Ok(()));
+        assert!(
+            global_deadline_fires(),
+            "parent watchdog must fire before the fork"
+        );
 
         // The parent's watchdog thread is not copied into the child, so a
         // deadline registered there only fires if the child got a fresh one.
