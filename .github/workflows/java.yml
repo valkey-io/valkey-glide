@@ -106,8 +106,8 @@ jobs:
               with:
                   language-name: java
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
-                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
-                  run-with-macos: ${{ (github.event.inputs.run-with-macos) }}
+                  run-full-matrix: ${{ inputs.full-matrix == true || github.event_name == 'schedule' }}
+                  run-with-macos: ${{ inputs.run-with-macos }}
                   use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
             # Filter hosts based on `windows-only` input
             - id: filter-hosts
@@ -459,7 +459,7 @@ jobs:
 
     get-containers:
         runs-on: ubuntu-24.04
-        if: ${{ inputs.windows-only != true && (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true) }}
+        if: ${{ inputs.windows-only != true && (inputs.full-matrix == true || github.event_name == 'schedule') }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
