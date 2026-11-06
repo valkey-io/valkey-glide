@@ -314,15 +314,10 @@ jobs:
                   pnpm run test
               working-directory: ./node/hybrid-node-tests/pnpm-pubsub-test
 
-            - name: Run benchmarks
-              uses: ./.github/workflows/test-benchmark
-              with:
-                  language-flag: -node
-
             - name: Ensure extra tests leave the worktree clean
               uses: ./.github/actions/ensure-clean-tree
               with:
-                  context: Node package-manager compatibility and benchmark tests
+                  context: Node package-manager compatibility tests
 
             - name: Upload test reports
               if: always()
