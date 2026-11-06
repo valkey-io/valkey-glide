@@ -53,7 +53,12 @@ public class GlideNativeBridge {
         return new CredentialsProviderInvoker(credentialsProvider);
     }
 
-    /** Execute a single command asynchronously, passing parameters directly via JNI. */
+    /**
+     * Execute a single command asynchronously, passing parameters directly via JNI.
+     *
+     * @param allowPartialResults when true, a command sent to several nodes returns each node's reply
+     *     or error instead of failing on the first node error
+     */
     public static native void executeCommandAsync(
             long clientPtr,
             long callbackId,
@@ -63,6 +68,7 @@ public class GlideNativeBridge {
             int routeType,
             String routeParam,
             boolean expectUtf8Response,
+            boolean allowPartialResults,
             long spanPtr);
 
     /**

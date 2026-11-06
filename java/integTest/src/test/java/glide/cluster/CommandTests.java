@@ -107,12 +107,14 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRout
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.GlideException;
 import glide.api.models.exceptions.RequestException;
+import glide.api.models.exceptions.TimeoutException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -134,6 +136,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 @Timeout(30) // seconds
@@ -528,6 +531,58 @@ public class CommandTests {
                 assertTrue(
                         info.toLowerCase().contains("# " + section.toString().toLowerCase()),
                         "Section " + section + " is missing");
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProtocolVersion.class)
+    @SneakyThrows
+    public void infoWithPartialResults_keeps_replies_when_a_primary_is_slow(
+            ProtocolVersion protocol) {
+        try (GlideClusterClient client =
+                        GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(1000).protocol(protocol).build())
+                                .get();
+                // A second client pauses the primary, so the pause is not queued behind the
+                // client under test.
+                GlideClusterClient pauser =
+                        GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                                .get()) {
+            List<String> primaries = new ArrayList<>(client.info().get().getMultiValue().keySet());
+            Collections.sort(primaries);
+            String paused = primaries.get(0);
+            int portIndex = paused.lastIndexOf(':');
+            ByAddressRoute route =
+                    new ByAddressRoute(
+                            paused.substring(0, portIndex), Integer.parseInt(paused.substring(portIndex + 1)));
+
+            pauser.customCommand(new String[] {"CLIENT", "PAUSE", "2500", "ALL"}, route).get();
+            try {
+                // Without partial results, one slow primary fails the whole call.
+                ExecutionException error =
+                        assertThrows(ExecutionException.class, () -> client.info().get());
+                assertInstanceOf(TimeoutException.class, error.getCause());
+
+                Map<String, Object> replies =
+                        client.infoWithPartialResults(new Section[0]).get().getMultiValue();
+                assertEquals(new HashSet<>(primaries), replies.keySet());
+                assertInstanceOf(TimeoutException.class, replies.get(paused));
+                for (String address : primaries.subList(1, primaries.size())) {
+                    assertTrue(((String) replies.get(address)).contains("# Server"));
+                }
+            } finally {
+                // CLIENT UNPAUSE would wait for the pause too; wait for it to end.
+                waitFor(
+                        () -> {
+                            try {
+                                pauser.customCommand(new String[] {"PING"}, route).get();
+                                return true;
+                            } catch (ExecutionException e) {
+                                return false;
+                            }
+                        },
+                        "paused primary did not recover");
             }
         }
     }
