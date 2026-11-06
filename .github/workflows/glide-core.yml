@@ -205,14 +205,6 @@ jobs:
                   cargo check --benches --all-features
                   cargo check --no-default-features
 
-            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              with:
-                  path: |
-                      glide-core/target
-                  key: ${{ matrix.host.TARGET }}-glide-core-${{ hashFiles('glide-core/Cargo.lock') }}
-                  restore-keys: |
-                      ${{ matrix.host.TARGET }}-glide-core-
-
             - uses: ./.github/actions/test-benchmark
               with:
                   language-flag: -rust
