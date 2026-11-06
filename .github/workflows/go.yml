@@ -187,7 +187,7 @@ jobs:
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
-            - name: Validate RC tracked changes
+            - name: Validate RC worktree changes
               if: ${{ github.event.inputs.rc-version }}
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
@@ -213,11 +213,11 @@ jobs:
                         unexpected_paths+=("$path")
                         ;;
                     esac
-                  done < <(git diff --name-only HEAD)
+                  done < <(git diff --name-only HEAD; git ls-files --others --exclude-standard)
                   if (( ${#unexpected_paths[@]} > 0 )); then
-                    echo "Unexpected tracked changes after Go RC script:"
-                    echo "Tracked status (first 200 entries):"
-                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected worktree changes after Go RC script:"
+                    echo "Worktree status (first 200 entries):"
+                    git status --short --untracked-files=all | sed -n '1,200p'
                     echo "Unexpected paths (first 200 entries):"
                     printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
                     exit 1
@@ -266,7 +266,7 @@ jobs:
                   language-version: ${{ matrix.go }}
                   base-language-version: ${{ env.BASE_GO_VERSION }}
 
-            - name: Validate final RC tracked changes
+            - name: Validate final RC worktree changes
               if: ${{ github.event.inputs.rc-version }}
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
@@ -292,11 +292,11 @@ jobs:
                         unexpected_paths+=("$path")
                         ;;
                     esac
-                  done < <(git diff --name-only HEAD)
+                  done < <(git diff --name-only HEAD; git ls-files --others --exclude-standard)
                   if (( ${#unexpected_paths[@]} > 0 )); then
-                    echo "Unexpected tracked changes after Go RC workload:"
-                    echo "Tracked status (first 200 entries):"
-                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected worktree changes after Go RC workload:"
+                    echo "Worktree status (first 200 entries):"
+                    git status --short --untracked-files=all | sed -n '1,200p'
                     echo "Unexpected paths (first 200 entries):"
                     printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
                     exit 1
@@ -468,7 +468,7 @@ jobs:
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
-            - name: Validate RC tracked changes
+            - name: Validate RC worktree changes
               if: ${{ github.event.inputs.rc-version }}
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
@@ -494,11 +494,11 @@ jobs:
                         unexpected_paths+=("$path")
                         ;;
                     esac
-                  done < <(git diff --name-only HEAD)
+                  done < <(git diff --name-only HEAD; git ls-files --others --exclude-standard)
                   if (( ${#unexpected_paths[@]} > 0 )); then
-                    echo "Unexpected tracked changes after Go RC script:"
-                    echo "Tracked status (first 200 entries):"
-                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected worktree changes after Go RC script:"
+                    echo "Worktree status (first 200 entries):"
+                    git status --short --untracked-files=all | sed -n '1,200p'
                     echo "Unexpected paths (first 200 entries):"
                     printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
                     exit 1
@@ -526,7 +526,7 @@ jobs:
                     make -k unit-test integ-test
                   fi
 
-            - name: Validate final RC tracked changes
+            - name: Validate final RC worktree changes
               if: ${{ github.event.inputs.rc-version }}
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
@@ -552,11 +552,11 @@ jobs:
                         unexpected_paths+=("$path")
                         ;;
                     esac
-                  done < <(git diff --name-only HEAD)
+                  done < <(git diff --name-only HEAD; git ls-files --others --exclude-standard)
                   if (( ${#unexpected_paths[@]} > 0 )); then
-                    echo "Unexpected tracked changes after Go RC workload:"
-                    echo "Tracked status (first 200 entries):"
-                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected worktree changes after Go RC workload:"
+                    echo "Worktree status (first 200 entries):"
+                    git status --short --untracked-files=all | sed -n '1,200p'
                     echo "Unexpected paths (first 200 entries):"
                     printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
                     exit 1
@@ -644,7 +644,7 @@ jobs:
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
-            - name: Validate RC tracked changes
+            - name: Validate RC worktree changes
               if: ${{ github.event.inputs.rc-version }}
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
@@ -670,11 +670,11 @@ jobs:
                         unexpected_paths+=("$path")
                         ;;
                     esac
-                  done < <(git diff --name-only HEAD)
+                  done < <(git diff --name-only HEAD; git ls-files --others --exclude-standard)
                   if (( ${#unexpected_paths[@]} > 0 )); then
-                    echo "Unexpected tracked changes after Go RC script:"
-                    echo "Tracked status (first 200 entries):"
-                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected worktree changes after Go RC script:"
+                    echo "Worktree status (first 200 entries):"
+                    git status --short --untracked-files=all | sed -n '1,200p'
                     echo "Unexpected paths (first 200 entries):"
                     printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
                     exit 1
@@ -694,7 +694,7 @@ jobs:
                   fi
                   make -k pubsub-test
 
-            - name: Validate final RC tracked changes
+            - name: Validate final RC worktree changes
               if: ${{ github.event.inputs.rc-version }}
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
@@ -720,11 +720,11 @@ jobs:
                         unexpected_paths+=("$path")
                         ;;
                     esac
-                  done < <(git diff --name-only HEAD)
+                  done < <(git diff --name-only HEAD; git ls-files --others --exclude-standard)
                   if (( ${#unexpected_paths[@]} > 0 )); then
-                    echo "Unexpected tracked changes after Go RC workload:"
-                    echo "Tracked status (first 200 entries):"
-                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "Unexpected worktree changes after Go RC workload:"
+                    echo "Worktree status (first 200 entries):"
+                    git status --short --untracked-files=all | sed -n '1,200p'
                     echo "Unexpected paths (first 200 entries):"
                     printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
                     exit 1
