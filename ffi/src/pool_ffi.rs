@@ -1136,6 +1136,7 @@ pub unsafe extern "C" fn glide_scope_acquire_blocking(
             response: scope_id_response(scope_id),
             command_error: std::ptr::null_mut(),
             arena: std::ptr::null_mut(),
+            value: std::ptr::null_mut(),
         })),
         Err(err) => create_error_result_with_redis_error(RedisError::from(err)),
     }
@@ -1248,6 +1249,7 @@ pub unsafe extern "C" fn glide_scope_execute(
                 response: resp,
                 command_error: std::ptr::null_mut(),
                 arena: std::ptr::null_mut(),
+                value: std::ptr::null_mut(),
             }))
         }
         Ok(Value::Nil) => {
@@ -1270,6 +1272,7 @@ pub unsafe extern "C" fn glide_scope_execute(
                 response: resp,
                 command_error: std::ptr::null_mut(),
                 arena: std::ptr::null_mut(),
+                value: std::ptr::null_mut(),
             }))
         }
         Ok(value) => match valkey_value_to_arena_response(value, &[]) {
@@ -1277,6 +1280,7 @@ pub unsafe extern "C" fn glide_scope_execute(
                 response: response_ptr,
                 command_error: std::ptr::null_mut(),
                 arena: arena_ptr,
+                value: std::ptr::null_mut(),
             })),
             Err(err) => {
                 let msg = format!("{}", err);
@@ -1289,6 +1293,7 @@ pub unsafe extern "C" fn glide_scope_execute(
                     response: std::ptr::null_mut(),
                     command_error: error,
                     arena: std::ptr::null_mut(),
+                    value: std::ptr::null_mut(),
                 }))
             }
         },
@@ -1304,6 +1309,7 @@ pub unsafe extern "C" fn glide_scope_execute(
                 response: std::ptr::null_mut(),
                 command_error: error,
                 arena: std::ptr::null_mut(),
+                value: std::ptr::null_mut(),
             }))
         }
     }
