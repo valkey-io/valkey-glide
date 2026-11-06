@@ -6,7 +6,10 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"net"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -144,6 +147,54 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 		fallbacks_name := "cluster_io_main_thread_fallbacks"
 		fallbacks_value := AssertInt(t, cluster_info[fallbacks_name], fallbacks_name)
 		assert.GreaterOrEqual(t, fallbacks_value, int64(0))
+	}
+}
+
+func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsRepliesWhenAPrimaryIsSlow() {
+	t := suite.T()
+	ctx := context.Background()
+	client, err := suite.clusterClient(suite.defaultClusterClientConfig().WithRequestTimeout(time.Second))
+	require.NoError(t, err)
+	// A second client pauses the primary, so the pause is not queued behind the client under test.
+	pauser, err := suite.clusterClient(suite.defaultClusterClientConfig())
+	require.NoError(t, err)
+
+	infos, err := client.Info(ctx)
+	require.NoError(t, err)
+	primaries := make([]string, 0, len(infos))
+	for address := range infos {
+		primaries = append(primaries, address)
+	}
+	sort.Strings(primaries)
+	host, portText, err := net.SplitHostPort(primaries[0])
+	require.NoError(t, err)
+	port, err := strconv.Atoi(portText)
+	require.NoError(t, err)
+	route := config.NewByAddressRoute(host, int32(port))
+
+	_, err = pauser.CustomCommandWithRoute(ctx, []string{"CLIENT", "PAUSE", "2500", "ALL"}, route)
+	require.NoError(t, err)
+	defer func() {
+		// CLIENT UNPAUSE would wait for the pause too; wait for it to end.
+		assert.Eventually(t, func() bool {
+			_, err := pauser.CustomCommandWithRoute(ctx, []string{"PING"}, route)
+			return err == nil
+		}, 10*time.Second, 100*time.Millisecond, "paused primary did not recover")
+	}()
+
+	// Without partial results, one slow primary fails the whole call.
+	_, err = client.Info(ctx)
+	var timeoutErr *glide.TimeoutError
+	assert.ErrorAs(t, err, &timeoutErr)
+
+	result, err := client.InfoWithPartialResults(ctx, options.ClusterInfoOptions{})
+	require.NoError(t, err)
+	require.True(t, result.IsMultiValue())
+	replies := result.MultiValue()
+	assert.Len(t, replies, len(primaries))
+	assert.IsType(t, &glide.TimeoutError{}, replies[primaries[0]])
+	for _, address := range primaries[1:] {
+		assert.Contains(t, replies[address], "# Server")
 	}
 }
 
