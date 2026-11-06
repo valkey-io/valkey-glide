@@ -35,6 +35,13 @@ jobs:
               run: |
                   npx prettier --check .github/
 
+            - name: Install actionlint
+              run: |
+                  curl -fsSL https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz | sudo tar xz -C /usr/local/bin actionlint
+
+            - name: Run actionlint
+              run: make action-lint
+
             - name: Install PyYAML
               run: pip install --quiet PyYAML==6.0.3
 

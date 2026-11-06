@@ -25,7 +25,8 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/lint-rust/action.yml
+
             - utils/cluster_manager.py
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
@@ -49,7 +50,8 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/lint-rust/action.yml
+
             - utils/cluster_manager.py
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
@@ -76,7 +78,7 @@ jobs:
               with:
                   persist-credentials: false
 
-            - uses: ./.github/workflows/lint-rust
+            - uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: rust
                   github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,18 +1,14 @@
 name: Update GLIDE version in the config.toml file
+description: Set the GLIDE version in a package config.toml file
 
 inputs:
     folder_path:
         description: "The folder path of the config.toml file"
         required: true
-        type: string
     named_os:
-        description: "The name of the current operating system"
+        description: "The name of the current operating system (one of: linux, darwin)"
         required: false
         default: "linux"
-        type: string
-        options:
-            - linux
-            - darwin
 runs:
     using: "composite"
     steps:
