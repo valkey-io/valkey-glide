@@ -18,7 +18,15 @@ runs:
           env:
               NAMED_OS: ${{ inputs.named_os }}
           run: |
-              SED_FOR_MACOS=`if [[ "$NAMED_OS" == "darwin" ]]; then echo "''"; fi`
-              sed -i $SED_FOR_MACOS "s|unknown|${{ env.RELEASE_VERSION }}|g" ./config.toml
+              SED_SCRIPT="s|unknown|${{ env.RELEASE_VERSION }}|g"
+
+              # macOS: BSD sed requires a backup suffix argument.
+              # Empty string means no backup.
+              if [[ "$NAMED_OS" == "darwin" ]]; then
+                sed -i '' "$SED_SCRIPT" ./config.toml
+              else
+                sed -i "$SED_SCRIPT" ./config.toml
+              fi
+
               # log the config.toml file
               cat ./config.toml
