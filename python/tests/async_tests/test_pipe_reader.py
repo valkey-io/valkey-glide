@@ -66,10 +66,20 @@ def test_response_failure_preserves_later_frames(
         if split_frame
         else [first_frame + second_frame]
     )
+    # The reader loop may run os.read more times than the frames we queue when a
+    # response worker interleaves with the test thread. A bare list side_effect
+    # would exhaust and raise StopIteration under that scheduling. Serve the
+    # queued chunks in order, then return EOF (b"") so any extra read is a
+    # harmless no-op that terminates the loop instead of stealing a later frame.
+    pending_reads = list(reads)
+
+    def read_next(*_args, **_kwargs):
+        return pending_reads.pop(0) if pending_reads else b""
+
     monkeypatch.setattr(
         pipe.os,
         "read",
-        Mock(side_effect=reads),
+        Mock(side_effect=read_next),
     )
     monkeypatch.setattr(pipe, "_PENDING_FUTURES_REQUIRE_LOCK", require_lock)
     with ThreadPoolExecutor(max_workers=1) as pool:
