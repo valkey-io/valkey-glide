@@ -1,6 +1,12 @@
 # Changelog
 
-## Pending 2.6
+## Pending 2.7
+
+### Fixes
+
+* Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
+
+## 2.6
 
 ### Features
 
@@ -87,7 +93,6 @@
 * Go: Remove `.gitignore` from the released module so consumers who commit `vendor/` keep the generated artifacts (`internal/protobuf/*.pb.go`, `rustbin/**`, `lib.h`) ([#6441](https://github.com/valkey-io/valkey-glide/pull/6441))
 * Core: Releasing a scope, or closing its parent client, while a blocking command is in flight now closes the scope's socket, so the server drops the blocked waiter instead of letting it consume a later push — the socket used to stay open until the server replied, which for `BLPOP key 0` is never. A reused scope connection also gets a fresh scope id, and a blocking scope command keeps the abandon monitor from reclaiming its pool-borrowed parent mid-command ([#7000](https://github.com/valkey-io/valkey-glide/issues/7000))
 * Core: Validate client library names ([#6891](https://github.com/valkey-io/valkey-glide/pull/6891))
-* Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
 
 ### Changes
 
