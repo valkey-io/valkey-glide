@@ -161,7 +161,7 @@ fn execute_command(
     client_ptr: *const c_void,
     index: usize,
     command_bytes: &[u8],
-    arg_count: u64,
+    arg_count: c_ulong,
     command_type: RequestType,
 ) -> Option<Box<CommandResult>> {
     let command_len = command_bytes.len();
@@ -241,13 +241,7 @@ fn test_command(client_ptr: *const c_void, async_client: bool) {
     // Good command: PING IS_WORKING
     let good_cmd_idx = 0;
     let ping_value = b"IS_WORKING";
-    let good_res = execute_command(
-        client_ptr,
-        good_cmd_idx,
-        ping_value,
-        1_u64,
-        RequestType::Ping,
-    );
+    let good_res = execute_command(client_ptr, good_cmd_idx, ping_value, 1, RequestType::Ping);
     let ping_res = if async_client {
         assert!(good_res.is_none()); // result should be returned through callback
         let metrics = ASYNC_METRICS.read().expect(ASYNC_READ_LOCK_ERR);
@@ -264,7 +258,7 @@ fn test_command(client_ptr: *const c_void, async_client: bool) {
         client_ptr,
         bad_cmd_idx,
         b"NOTAREALCMD",
-        1_u64,
+        1,
         RequestType::SAdd,
     );
     let (err_msg, err_type) = if async_client {
@@ -284,7 +278,7 @@ fn execute_command_with_route_info(
     client_ptr: *const c_void,
     index: usize,
     command_bytes: &[u8],
-    arg_count: u64,
+    arg_count: c_ulong,
     command_type: RequestType,
     route_info: *const RouteInfo,
 ) -> Option<Box<CommandResult>> {
@@ -346,7 +340,7 @@ fn test_command_with_route_info(client_ptr: *const c_void, async_client: bool) {
         client_ptr,
         good_cmd_idx,
         ping_value,
-        1_u64,
+        1,
         RequestType::Ping,
         route_info_ptr,
     );
@@ -367,7 +361,7 @@ fn test_command_with_route_info(client_ptr: *const c_void, async_client: bool) {
         client_ptr,
         bad_cmd_idx,
         b"NOTAREALCMD",
-        1_u64,
+        1,
         RequestType::SAdd,
         route_info_ptr,
     );
@@ -390,7 +384,7 @@ fn test_command_with_route_info(client_ptr: *const c_void, async_client: bool) {
         client_ptr,
         null_route_cmd_idx,
         ping_value,
-        1_u64,
+        1,
         RequestType::Ping,
         std::ptr::null(),
     );

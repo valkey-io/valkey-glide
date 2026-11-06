@@ -37,6 +37,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.api.models.configuration.ServiceType;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
+import glide.api.models.exceptions.RequestException;
 import glide.cluster.ValkeyCluster;
 import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
@@ -642,19 +643,25 @@ public class TestUtilities {
     }
 
     /**
-     * Create a lua lib with a function which runs an endless loop up to timeout sec.<br>
-     * Execution takes at least 5 sec regardless of the timeout configured.
+     * Lua expression for the server clock in seconds with microsecond precision. {@code TIME} returns
+     * whole seconds and microseconds separately; using only the seconds makes a loop of {@code N}
+     * seconds off by up to a second in either direction.
      */
+    private static final String LUA_NOW_SECONDS =
+            "(function() local t = redis.pcall('time') return tonumber(t[1]) + tonumber(t[2]) / 1e6"
+                    + " end)()";
+
+    /** Create a lua lib with a function which runs a busy loop for {@code timeout} seconds. */
     public static String createLuaLibWithLongRunningFunction(
             String libName, String funcName, int timeout, boolean readOnly) {
         String code =
                 "#!lua name=$libName\n"
                         + "local function $libName_$funcName(keys, args)\n"
-                        + "  local started = tonumber(redis.pcall('time')[1])\n"
+                        + "  local started = $now\n"
                         // fun fact - redis does no writes if 'no-writes' flag is set
                         + "  redis.pcall('set', keys[1], 42)\n"
                         + "  while (true) do\n"
-                        + "    local now = tonumber(redis.pcall('time')[1])\n"
+                        + "    local now = $now\n"
                         + "    if now > started + $timeout then\n"
                         + "      return 'Timed out $timeout sec'\n"
                         + "    end\n"
@@ -667,30 +674,28 @@ public class TestUtilities {
                         + (readOnly ? "flags={ 'no-writes' }\n" : "")
                         + "}";
         return code.replace("$timeout", Integer.toString(timeout))
+                .replace("$now", LUA_NOW_SECONDS)
                 .replace("$funcName", funcName)
                 .replace("$libName", libName);
     }
 
-    /**
-     * Create a lua script which runs an endless loop up to timeout sec.<br>
-     * Execution takes at least 5 sec regardless of the timeout configured.
-     */
+    /** Create a lua script which runs a busy loop for {@code timeout} seconds. */
     public static String createLongRunningLuaScript(int timeout, boolean readOnly) {
         String script =
                 readOnly
-                        ? "  local started = tonumber(redis.pcall('time')[1])\n"
+                        ? "  local started = $now\n"
                                 + "  while (true) do\n"
-                                + "    local now = tonumber(redis.pcall('time')[1])\n"
+                                + "    local now = $now\n"
                                 + "    if now > started + $timeout then\n"
                                 + "      return 'Timed out $timeout sec'\n"
                                 + "    end\n"
                                 + "  end\n"
                         : "redis.call('SET', KEYS[1], 'value')\n"
-                                + "  local start = redis.call('time')[1]\n"
-                                + "  while redis.call('time')[1] - start < $timeout do\n"
+                                + "  local start = $now\n"
+                                + "  while $now - start < $timeout do\n"
                                 + "      redis.call('SET', KEYS[1], 'value')\n"
                                 + "   end\n";
-        return script.replace("$timeout", Integer.toString(timeout));
+        return script.replace("$timeout", Integer.toString(timeout)).replace("$now", LUA_NOW_SECONDS);
     }
 
     /**
@@ -712,6 +717,45 @@ public class TestUtilities {
                 }
             }
         } while (isBusy);
+    }
+
+    /**
+     * Starts a write script or function and polls {@code kill} until the server reports it as
+     * unkillable.
+     *
+     * <p>A {@code NOTBUSY} reply does not say whether the script has not started yet or has already
+     * finished, so a finished invocation is started again. The script is waited out before returning,
+     * even when the poll fails: the server rejects commands such as the {@code CONFIG SET} that
+     * restores {@code lua-time-limit} while it is busy.
+     *
+     * @param kill Issues {@code SCRIPT KILL} or {@code FUNCTION KILL}.
+     * @param invoke Starts the write script or function without awaiting it.
+     */
+    @SneakyThrows
+    public static void killUntilUnkillable(
+            Supplier<CompletableFuture<?>> kill, Supplier<CompletableFuture<Object>> invoke) {
+        CompletableFuture<Object>[] running = new CompletableFuture[] {invoke.get()};
+        try {
+            waitFor(
+                    () -> {
+                        if (running[0].isDone()) {
+                            running[0] = invoke.get();
+                        }
+                        try {
+                            kill.get().get();
+                            return false;
+                        } catch (ExecutionException e) {
+                            return e.getCause() instanceof RequestException
+                                    && e.getMessage().toLowerCase().contains("unkillable");
+                        }
+                    },
+                    "Expected an 'unkillable' error for the write script");
+        } finally {
+            try {
+                running[0].get();
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     /**
