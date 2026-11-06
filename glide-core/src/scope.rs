@@ -1044,15 +1044,14 @@ pub async fn create_scope_connection(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SCOPE ACQUIRE / RELEASE (NON-BLOCKING WRAPPERS)
+// SCOPE ACQUIRE / RELEASE
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Why one acquire poll did not hand out a scope but a later poll may.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScopeRetryCause {
     /// Work this acquire is waiting on is in progress: its connection is being
-    /// created, an idle connection is being re-`SELECT`ed, or another acquire
-    /// briefly holds the pool lock.
+    /// created, or an idle connection is being re-`SELECT`ed.
     Pending,
     Exhausted,
     /// The routing slot has no mapped primary yet, or the topology is being
@@ -1281,7 +1280,7 @@ const SCOPE_REDIAL_BACKOFF_CAP: Duration = Duration::from_millis(200);
 ///
 /// One call, one result: the wait lives here, not in the caller, so the
 /// retry/terminal decision and the backoff exist once. Each attempt runs
-/// `classify_acquire` under the awaited pool lock, so lock contention is a
+/// `classify_acquire` under the pool lock, so lock contention is a
 /// wait rather than a retry. Between attempts the call sleeps on
 /// [`ScopePoolHandle::wakeup`], armed before the attempt so a release that lands
 /// between classifying and sleeping is not missed, capped by
@@ -1674,7 +1673,9 @@ pub(crate) async fn resync_idle_connection_database(
     // via `saturating_dec`.
 }
 
-/// Release a scope back to the pool. Fire-and-forget, non-blocking.
+/// Release a scope back to the pool. Waits for the pool lock; the release has
+/// landed when this returns. A dirty connection's cleanup round-trip is still
+/// spawned, not awaited.
 ///
 /// Returns 0 on success, -1 if client not found.
 pub fn release_scope(scope_id: u64, client_id: u64, runtime: &tokio::runtime::Handle) -> i32 {
