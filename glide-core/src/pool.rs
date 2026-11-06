@@ -37,7 +37,7 @@ use crate::client::Client as GlideClient;
 use dashmap::DashMap;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
+use std::sync::{Arc, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::Notify;
@@ -1797,13 +1797,13 @@ pub fn get_client_scope_pools() -> &'static DashMap<u64, ScopePoolHandle> {
 /// so a `std::sync::Mutex` is enough: `lock()` waits only for in-memory
 /// critical sections, from any thread, runtime or not. The guard is `!Send`, so
 /// holding it across an `.await` in a spawned task does not compile.
-pub struct ScopeMutex(Mutex<ScopePool>);
+pub struct ScopeMutex(std::sync::Mutex<ScopePool>);
 
-pub type ScopeGuard<'a> = MutexGuard<'a, ScopePool>;
+pub type ScopeGuard<'a> = std::sync::MutexGuard<'a, ScopePool>;
 
 impl ScopeMutex {
     pub fn new(pool: ScopePool) -> Self {
-        Self(Mutex::new(pool))
+        Self(std::sync::Mutex::new(pool))
     }
 
     pub fn lock(&self) -> ScopeGuard<'_> {
