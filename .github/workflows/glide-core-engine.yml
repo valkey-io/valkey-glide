@@ -175,7 +175,7 @@ jobs:
                   if grep -A1 "cargo-machete found the following unused dependencies in this directory:" machete-results.txt | sed -n '2p' | grep -v "^if" > /dev/null; then
                     echo "Machete results summary: Unused dependencies found" >> "$GITHUB_STEP_SUMMARY"
                     echo "Machete results summary: Unused dependencies found"
-                    cat machete-results.txt | grep -A1 "cargo-machete found the following unused dependencies in this directory:" | sed -n '2p' | grep -v "^if" >> "$GITHUB_STEP_SUMMARY"
+                    grep -A1 "cargo-machete found the following unused dependencies in this directory:" machete-results.txt | sed -n '2p' | grep -v "^if" >> "$GITHUB_STEP_SUMMARY"
                     exit 1
                   else
                     echo "### Machete results summary: All good, no unused dependencies found :rocket:" >> "$GITHUB_STEP_SUMMARY"

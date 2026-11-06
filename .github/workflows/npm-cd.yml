@@ -461,8 +461,8 @@ jobs:
                   NPM_TAG: ${{ needs.get-build-parameters.outputs.npm_tag }}
                   NPM_CONFIG_PROVENANCE: true
               run: |
-                  package_name=$(cat package.json | jq -r .name)
-                  version=$(cat package.json | jq -r .version)
+                  package_name=$(jq -r .name package.json)
+                  version=$(jq -r .version package.json)
                   echo "Publishing base package ${package_name}@${version} with tag ${NPM_TAG}"
                   if ! npm publish --tag "${NPM_TAG}" --access public --provenance --scope=@valkey; then
                       echo "::error::Base package publish failed"; exit 1
