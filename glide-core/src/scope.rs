@@ -42,15 +42,13 @@ use redis::{Cmd, RedisError, RedisResult, Value};
 use crate::client::SlotAddressError;
 #[cfg(feature = "proto")]
 use crate::pool::{
-    ConnectionState, POOL_RUNNING, ScopeAcquire, ScopePool, ScopePoolHandle, ScopeTarget,
+    ConnectionState, PoolState, ScopeAcquire, ScopePool, ScopePoolHandle, ScopeTarget,
     ScopeTargetUnresolved,
 };
 #[cfg(feature = "proto")]
 use std::str::FromStr;
 #[cfg(feature = "proto")]
 use std::sync::Arc;
-#[cfg(feature = "proto")]
-use std::sync::atomic::Ordering;
 #[cfg(feature = "proto")]
 use std::time::{Duration, Instant};
 
@@ -987,7 +985,7 @@ pub async fn create_scope_connection(
 
     let mut pool_guard = pool.lock();
     let connection = connection.and_then(|prepared| {
-        if pool_guard.state.load(Ordering::Acquire) == POOL_RUNNING {
+        if pool_guard.state == PoolState::Running {
             Ok(prepared)
         } else {
             Err(ScopeCreateError::PoolClosed)
@@ -1521,7 +1519,7 @@ fn classify_acquire(
 
     let registry = get_scope_registry();
 
-    if pool.state.load(Ordering::Acquire) != crate::pool::POOL_RUNNING {
+    if pool.state != PoolState::Running {
         return Outcome(Fail(ScopeFailCause::PoolClosed));
     }
 
@@ -2623,9 +2621,7 @@ mod tests {
             request_bytes.clone(),
             client_id,
         )));
-        pool.lock()
-            .state
-            .store(crate::pool::POOL_CLOSED, Ordering::Release);
+        pool.lock().state = crate::pool::PoolState::Closed;
         get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
         register_client(client_id, lazy_parent(false).await);
 

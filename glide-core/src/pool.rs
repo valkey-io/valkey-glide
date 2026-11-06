@@ -35,8 +35,8 @@
 use crate::client::AuthGeneration;
 use crate::client::Client as GlideClient;
 use dashmap::DashMap;
-use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicU8, AtomicU32, AtomicU64, Ordering};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex as TokioMutex;
@@ -46,11 +46,8 @@ use tokio::sync::Notify;
 // POOL STATES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// [`ScopePool`] states, stored in its `AtomicU8`. [`ClientPool`] uses [`PoolState`].
-pub const POOL_RUNNING: u8 = 0;
-pub const POOL_CLOSING: u8 = 1;
-pub const POOL_CLOSED: u8 = 2;
-
+/// Lifecycle of a [`ClientPool`] or [`ScopePool`]; only read and written under
+/// the pool's lock.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PoolState {
     Running,
@@ -1140,11 +1137,11 @@ pub struct ScopedConnection {
 pub struct ScopePool {
     pub config: ScopePoolConfig,
     pub idle: VecDeque<ScopedConnection>,
-    pub in_use: DashMap<u64, ()>,
+    pub in_use: HashSet<u64>,
     /// Reservation count. `Arc` so a [`ScopeReservation`] can decrement it
-    /// lock-free from its `Drop` (which cannot `.await` the pool mutex).
+    /// without the pool lock from its `Drop`, which may run with the lock held.
     pub total_count: Arc<AtomicU32>,
-    pub state: AtomicU8,
+    pub state: PoolState,
     pub connection_request_bytes: Vec<u8>,
     /// The parent client_id that owns this scope pool (for accessing client config).
     pub parent_client_id: u64,
@@ -1295,9 +1292,9 @@ impl ScopePool {
         Self {
             config,
             idle: VecDeque::new(),
-            in_use: DashMap::new(),
+            in_use: HashSet::new(),
             total_count: Arc::new(AtomicU32::new(0)),
-            state: AtomicU8::new(POOL_RUNNING),
+            state: PoolState::Running,
             connection_request_bytes,
             parent_client_id,
             configured_database_id,
@@ -1332,7 +1329,7 @@ impl ScopePool {
         runtime_db: u32,
         acquisition_slot: Option<u16>,
     ) -> ScopeAcquire {
-        if self.state.load(Ordering::Acquire) != POOL_RUNNING {
+        if self.state != PoolState::Running {
             return ScopeAcquire::Exhausted;
         }
 
@@ -1379,7 +1376,7 @@ impl ScopePool {
             // Preserve the connection's actual db; reset only borrow-scoped flags.
             conn.state.begin_borrow(runtime_db);
             registry.insert(scope_id, ScopeEntry::new(conn, self.parent_client_id));
-            self.in_use.insert(scope_id, ());
+            self.in_use.insert(scope_id);
             return ScopeAcquire::Reused(scope_id);
         }
 
@@ -1423,7 +1420,7 @@ impl ScopePool {
     }
 
     fn reserve_slot_inner(&self) -> Option<ScopeReservation> {
-        if self.state.load(Ordering::Acquire) != POOL_RUNNING {
+        if self.state != PoolState::Running {
             return None;
         }
         if self.total_count.load(Ordering::Acquire) < self.config.max_total {
@@ -1446,7 +1443,7 @@ impl ScopePool {
         target: ScopeTarget,
         runtime_db: u32,
     ) -> Option<ScopedConnection> {
-        if self.state.load(Ordering::Acquire) != POOL_RUNNING {
+        if self.state != PoolState::Running {
             return None;
         }
         let mut mismatched: Vec<ScopedConnection> = Vec::new();
@@ -1468,7 +1465,7 @@ impl ScopePool {
     /// after its database was corrected, or drop it (decrementing the slot) if the pool is
     /// no longer running.
     pub fn reidle_after_resync(&mut self, conn: ScopedConnection) {
-        if self.state.load(Ordering::Acquire) == POOL_RUNNING {
+        if self.state == PoolState::Running {
             self.idle.push_back(conn);
         } else {
             saturating_dec(&self.total_count);
@@ -1494,7 +1491,7 @@ impl ScopePool {
 
     #[allow(clippy::needless_borrow)]
     fn release_inner(&mut self, scope_id: u64, registry: &DashMap<u64, ScopeEntry>) -> bool {
-        if self.in_use.remove(&scope_id).is_none() {
+        if !self.in_use.remove(&scope_id) {
             return false;
         }
         let entry = registry.remove(&scope_id);
@@ -1502,7 +1499,7 @@ impl ScopePool {
             return false;
         };
 
-        if self.state.load(Ordering::Acquire) != POOL_RUNNING {
+        if self.state != PoolState::Running {
             entry.discard();
             saturating_dec(&self.total_count);
             return true;
@@ -1667,7 +1664,7 @@ impl ScopePool {
                         drop(guard);
 
                         let mut pool = pool_arc.lock();
-                        if pool.state.load(Ordering::Acquire) == POOL_RUNNING {
+                        if pool.state == PoolState::Running {
                             pool.idle.push_back(idle_conn);
                         } else {
                             saturating_dec(&pool.total_count);
@@ -1702,11 +1699,9 @@ impl ScopePool {
     /// works without the lock. Currently unused; kept for a graceful shutdown
     /// that needs to drain in-use scopes rather than abandon them.
     pub fn destroy(&mut self, registry: &DashMap<u64, ScopeEntry>) {
-        self.state.store(POOL_CLOSED, Ordering::Release);
+        self.state = PoolState::Closed;
         self.idle.clear();
-        let keys: Vec<u64> = self.in_use.iter().map(|e| *e.key()).collect();
-        for key in keys {
-            self.in_use.remove(&key);
+        for key in self.in_use.drain() {
             if let Some((_, entry)) = registry.remove(&key) {
                 entry.discard();
             }
