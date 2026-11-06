@@ -635,7 +635,8 @@ fn reset_global() {
 /// Every caller runs this before it can publish a global, so a published global
 /// always has the handler registered. It never blocks: a child forked while
 /// another thread was registering just registers again. Registering more than
-/// once is harmless because the reset is idempotent.
+/// once is harmless because the reset is idempotent. Panics if registration
+/// fails, so no global is published without the handler.
 #[cfg(unix)]
 fn ensure_reset_in_forked_child() {
     extern "C" fn reset_global_in_child() {
@@ -643,9 +644,11 @@ fn ensure_reset_in_forked_child() {
     }
     static REGISTERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     if !REGISTERED.load(Ordering::Acquire) {
-        unsafe {
-            libc::pthread_atfork(None, None, Some(reset_global_in_child));
-        }
+        let rc = unsafe { libc::pthread_atfork(None, None, Some(reset_global_in_child)) };
+        assert_eq!(
+            rc, 0,
+            "Failed to register the timeout watchdog fork handler"
+        );
         REGISTERED.store(true, Ordering::Release);
     }
 }
