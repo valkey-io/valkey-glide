@@ -114,10 +114,10 @@ run-name:
 
 env:
     # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
-    RUN_FULL_MATRIX: ${{ (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true) }}
-    RUN_WITH_MACOS: ${{ (github.event.inputs.run-with-macos) }}
-    RUN_SYNC_ONLY: ${{ (github.event.inputs.run_sync_tests == 'true' && github.event.inputs.run_async_tests == 'false') }}
-    RUN_ASYNC_ONLY: ${{ (github.event.inputs.run_async_tests == 'true' && github.event.inputs.run_sync_tests == 'false') }}
+    RUN_FULL_MATRIX: ${{ (inputs.full-matrix == true || github.event_name == 'schedule') }}
+    RUN_WITH_MACOS: ${{ inputs.run-with-macos }}
+    RUN_SYNC_ONLY: ${{ (inputs.run_sync_tests == true && inputs.run_async_tests != true) }}
+    RUN_ASYNC_ONLY: ${{ (inputs.run_async_tests == true && inputs.run_sync_tests != true) }}
     BASE_PYTHON_VERSION: "3.13"
 
 jobs:
@@ -150,7 +150,7 @@ jobs:
         name: Python Tests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-matrices, approve-self-hosted]
-        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped') && github.event.inputs.containers-only != 'true'
+        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped') && inputs.containers-only != true
         timeout-minutes: 120
         strategy:
             fail-fast: false
@@ -306,7 +306,7 @@ jobs:
         name: Python PubSubTests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-matrices, approve-self-hosted]
-        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped') && github.event.inputs.containers-only != 'true'
+        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped') && inputs.containers-only != true
         timeout-minutes: 120
         strategy:
             fail-fast: false
@@ -384,7 +384,7 @@ jobs:
 
             - name: Rebuild Python wrapper with pubsub mock
               if: ${{ env.RUN_FULL_MATRIX != 'true'
-                  && (github.event.inputs.run-dynamic-pubsub-with-mock == 'true'
+                  && (inputs.run-dynamic-pubsub-with-mock == true
                   || steps.pubsub_mock_changes.outputs.mock_pubsub == 'true') }}
               uses: ./.github/actions/build-python-wrapper
               with:
@@ -396,7 +396,7 @@ jobs:
 
             - name: Test dynamic pubsub with mock
               if: ${{ env.RUN_FULL_MATRIX != 'true'
-                  && (github.event.inputs.run-dynamic-pubsub-with-mock == 'true'
+                  && (inputs.run-dynamic-pubsub-with-mock == true
                   || steps.pubsub_mock_changes.outputs.mock_pubsub == 'true') }}
               working-directory: ./python
               run: |
@@ -413,7 +413,7 @@ jobs:
 
     lint:
         runs-on: ubuntu-24.04
-        if: ${{ github.event.inputs.containers-only != 'true' }}
+        if: ${{ inputs.containers-only != true }}
         timeout-minutes: 15
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -438,7 +438,7 @@ jobs:
 
     docs-test:
         runs-on: ubuntu-24.04
-        if: ${{ github.event.inputs.containers-only != 'true' }}
+        if: ${{ inputs.containers-only != true }}
         timeout-minutes: 15
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -460,7 +460,7 @@ jobs:
 
     get-containers:
         runs-on: ubuntu-24.04
-        if: ${{ github.event.inputs.full-matrix == 'true' || github.event.inputs.containers-only == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
+        if: ${{ inputs.full-matrix == true || inputs.containers-only == true || github.event_name == 'schedule' }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}

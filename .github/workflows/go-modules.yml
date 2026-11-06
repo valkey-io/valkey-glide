@@ -144,16 +144,16 @@ jobs:
 
             - name: Run patch to test with RC
               working-directory: go
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
             - name: Build and test
               working-directory: ./go
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
                       make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
