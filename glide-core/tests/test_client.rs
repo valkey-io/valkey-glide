@@ -6368,12 +6368,16 @@ pub(crate) mod shared_client_tests {
     /// 1. (all versions) A MULTI opened on `AllNodes` must be cleared on every node
     ///    on release: re-acquire and assert `PING` to each primary returns `PONG`
     ///    (an open MULTI replies `QUEUED`). Fails deterministically on the pre-fix
-    ///    single-node DISCARD, which leaves ≥2 of 3 primaries dirty.
+    ///    single-node DISCARD, which leaves ≥2 of 3 primaries dirty. Releasing that
+    ///    no-MULTI borrow must also re-idle despite every node's "DISCARD without
+    ///    MULTI".
     /// 2. (all versions) A MULTI opened on a SINGLE primary must still re-idle: the
     ///    release DISCARD fans out to `AllNodes`, so the owner answers `+OK` while
     ///    the siblings answer "DISCARD without MULTI" and the aggregate is `Err` —
     ///    which must be tolerated, not read as a reset failure that discards the
     ///    connection. Exercises the classify-by-message branch on a live cluster.
+    ///    A primary left with `CLIENT REPLY OFF` must instead be discarded, even
+    ///    though a sibling's "DISCARD without MULTI" can return before it times out.
     /// 3. (Valkey 9.0+ multi-db clusters) A borrow that `SELECT`ed another db must
     ///    be restored to the configured db on release — guards against the wrong
     ///    fix of skipping `SELECT` by topology, which would leak db 7.
@@ -6496,6 +6500,18 @@ pub(crate) mod shared_client_tests {
                     );
                 }
             }
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock();
+                assert_eq!(
+                    pool.idle_count(),
+                    1,
+                    "a no-MULTI cluster release must re-idle"
+                );
+                assert!(pool.drain_discarded_ids().is_empty());
+                // Keep it borrowed so section 2 starts from the same pool state.
+                assert_eq!(pool.try_acquire(), client_id as i64);
+            }
 
             // ── 2. MULTI open on a SINGLE primary: release must still re-idle ──
             // The production shape the AllNodes DISCARD aggregation must tolerate:
@@ -6560,6 +6576,39 @@ pub(crate) mod shared_client_tests {
                          (got {v:?} instead of PONG)"
                     );
                 }
+            }
+
+            // ── 2b. a node left unable to reply must be discarded, not re-idled ──
+            // Short timeout: CLIENT REPLY OFF and the release liveness PING time out.
+            let short_timeout = create_connection_request(
+                &addresses,
+                &TestConfiguration {
+                    cluster_mode: ClusterMode::Enabled,
+                    request_timeout: Some(500),
+                    ..Default::default()
+                },
+            );
+            let client = Client::new(short_timeout.into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(&pool_arc, client);
+            {
+                let mut client = borrowed(&pool_arc, client_id);
+                let _ = client
+                    .send_command(
+                        redis::cmd("CLIENT").arg("REPLY").arg("OFF"),
+                        Some(one_primary.clone()),
+                    )
+                    .await;
+            }
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock();
+                assert_eq!(
+                    pool.drain_discarded_ids(),
+                    vec![client_id],
+                    "a CLIENT REPLY OFF node must fail the reset and be discarded"
+                );
             }
 
             // ── 3. db drift must be restored (Valkey 9.0+ multi-db cluster) ──

@@ -62,6 +62,13 @@ runs:
                   IMAGE_ID="$(uname -s)$(uname -r)"
               fi
               IMAGE_ID="${IMAGE_ID}-$(uname -m)"
+              # The TLS library the engine links is part of the key too, so switching it never
+              # restores a binary built against the old one.
+              if [[ "$(uname -s)" == "Darwin" ]]; then
+                  IMAGE_ID="${IMAGE_ID}-openssl3"
+              elif [[ "${ID:-}" == "alpine" ]]; then
+                  IMAGE_ID="${IMAGE_ID}-openssl"
+              fi
               # Cache keys cannot contain commas, so keep the id to safe characters.
               IMAGE_ID="${IMAGE_ID//[^a-zA-Z0-9._-]/-}"
               echo "Runner image: $IMAGE_ID"
@@ -125,14 +132,24 @@ runs:
           shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
           run: |
               cd valkey
-              make BUILD_TLS=yes -j4
+              MAKE_ARGS=(BUILD_TLS=yes)
+              if [[ "$(uname -s)" == "Darwin" ]]; then
+                  # Homebrew's `openssl` is OpenSSL 4, and valkey 9.x fails to build against it
+                  # (-Werror=deprecated-declarations), so build against openssl@3. Pass the prefix to
+                  # `make install` too: the 6.2, 7.0 and 9.2.0-rc1 Makefiles do not save it in
+                  # .make-settings, so a bare `make install` falls back to Homebrew's `openssl` and rebuilds.
+                  # pypi-cd's test-release job calls this action without install-shared-dependencies.
+                  brew list openssl@3 &> /dev/null || brew install openssl@3
+                  MAKE_ARGS+=("OPENSSL_PREFIX=$(brew --prefix openssl@3)")
+              fi
+              make "${MAKE_ARGS[@]}" -j4
               if command -v sudo &> /dev/null
               then
                   echo "sudo command exists"
-                  sudo make install
+                  sudo make install "${MAKE_ARGS[@]}"
               else
                   echo "sudo command does not exist"
-                  make install
+                  make install "${MAKE_ARGS[@]}"
               fi
               echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
