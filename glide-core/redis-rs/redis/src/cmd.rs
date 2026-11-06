@@ -62,6 +62,13 @@ pub struct Cmd {
     /// response_timeout for this specific command. Used to propagate the
     /// caller's request_timeout into the multiplexed connection layer.
     response_timeout: Option<std::time::Duration>,
+    /// When true, a multi-node command whose reply is a map keyed by node
+    /// address returns an entry for every target node, holding either that
+    /// node's reply or its error, instead of failing on the first error.
+    allow_partial_results: bool,
+    /// The time at which a partial-results fan-out stops waiting for nodes and
+    /// reports the unanswered ones as timed out.
+    fan_out_deadline: Option<std::time::Instant>,
     /// Inflight slot tracker. When set, the slot is released when the last
     /// clone of this Cmd (or its Arc) is dropped. Used to decouple user-facing
     /// timeout from internal pipeline cleanup.
@@ -88,6 +95,8 @@ impl Clone for Cmd {
             is_fenced: self.is_fenced,
             is_blocking: self.is_blocking,
             response_timeout: self.response_timeout,
+            allow_partial_results: self.allow_partial_results,
+            fan_out_deadline: self.fan_out_deadline,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: self.inflight_tracker.clone(),
             // Reset watchdog fields — each clone is a fresh command attempt
@@ -536,6 +545,8 @@ impl Cmd {
             is_fenced: false,
             is_blocking: false,
             response_timeout: None,
+            allow_partial_results: false,
+            fan_out_deadline: None,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: None,
             watchdog_phase: AtomicU8::new(PHASE_QUEUED),
@@ -554,6 +565,8 @@ impl Cmd {
             is_fenced: false,
             is_blocking: false,
             response_timeout: None,
+            allow_partial_results: false,
+            fan_out_deadline: None,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: None,
             watchdog_phase: AtomicU8::new(PHASE_QUEUED),
@@ -979,6 +992,36 @@ impl Cmd {
         self.response_timeout
     }
 
+    /// Return one entry per target node instead of failing on the first node
+    /// error. Applies only to multi-node commands whose reply is a map keyed by
+    /// node address (`ResponsePolicy::Special` or no policy), such as `INFO`
+    /// sent to all primaries. Failed nodes hold a `Value::ServerError`.
+    #[inline]
+    pub fn set_allow_partial_results(&mut self, allow: bool) -> &mut Cmd {
+        self.allow_partial_results = allow;
+        self
+    }
+
+    /// Check whether this command returns partial results. See
+    /// [`Cmd::set_allow_partial_results`].
+    #[inline]
+    pub fn allow_partial_results(&self) -> bool {
+        self.allow_partial_results
+    }
+
+    /// Set the time at which a partial-results fan-out stops waiting. Nodes
+    /// that have not answered by then are reported as timed out.
+    #[inline]
+    pub fn set_fan_out_deadline(&mut self, deadline: Option<std::time::Instant>) {
+        self.fan_out_deadline = deadline;
+    }
+
+    /// Get the partial-results fan-out deadline, if set.
+    #[inline]
+    pub fn fan_out_deadline(&self) -> Option<std::time::Instant> {
+        self.fan_out_deadline
+    }
+
     /// Attach an inflight slot tracker. The slot is released when the last
     /// clone of this Cmd (or its `Arc<Cmd>`) is dropped.
     #[cfg(feature = "cluster-async")]
@@ -1132,6 +1175,20 @@ mod tests {
 
         cmd.set_is_blocking(false);
         assert!(!cmd.is_blocking());
+    }
+
+    #[test]
+    fn test_allow_partial_results_defaults_and_clone() {
+        let mut cmd = Cmd::new();
+        assert!(!cmd.allow_partial_results());
+        assert_eq!(cmd.fan_out_deadline(), None);
+
+        let deadline = std::time::Instant::now();
+        cmd.set_allow_partial_results(true);
+        cmd.set_fan_out_deadline(Some(deadline));
+        let cloned = cmd.clone();
+        assert!(cloned.allow_partial_results());
+        assert_eq!(cloned.fan_out_deadline(), Some(deadline));
     }
 
     #[test]

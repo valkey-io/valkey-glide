@@ -719,6 +719,22 @@ where
             .flat_map(|addr| self.connection_for_address(&addr))
     }
 
+    /// Addresses of slot-map nodes (only primaries if `primaries_only`) that
+    /// have no connection, which `all_node_connections` and
+    /// `all_primary_connections` skip.
+    pub(crate) fn nodes_without_connection(&self, primaries_only: bool) -> Vec<String> {
+        let addresses = if primaries_only {
+            self.slot_map.addresses_for_all_primaries()
+        } else {
+            self.slot_map.all_node_addresses()
+        };
+        addresses
+            .into_iter()
+            .filter(|address| !self.connection_map.contains_key(address.as_str()))
+            .map(|address| address.to_string())
+            .collect()
+    }
+
     pub(crate) fn node_for_address(&self, address: &str) -> Option<ClusterNode<Connection>> {
         self.connection_map
             .get(address)
@@ -1740,6 +1756,19 @@ mod tests {
         connections.sort();
 
         assert_eq!(vec![2, 3], connections);
+    }
+
+    #[test]
+    fn nodes_without_connection_lists_only_unconnected_slot_map_nodes() {
+        let container = create_container();
+        assert!(container.nodes_without_connection(true).is_empty());
+
+        remove_nodes(&container, &["primary1", "replica3-1"]);
+
+        assert_eq!(container.nodes_without_connection(true), vec!["primary1"]);
+        let mut all = container.nodes_without_connection(false);
+        all.sort();
+        assert_eq!(all, vec!["primary1", "replica3-1"]);
     }
 
     #[test]

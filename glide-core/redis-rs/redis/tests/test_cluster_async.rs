@@ -5168,6 +5168,127 @@ mod cluster_async {
         );
     }
 
+    // INFO to all primaries where 6379 replies and 6381 times out.
+    fn run_info_with_one_timed_out_primary(
+        name: &'static str,
+        partial: bool,
+    ) -> RedisResult<Value> {
+        let mut info = cmd("INFO");
+        info.set_allow_partial_results(partial);
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(0),
+            name,
+            move |received_cmd: &[u8], port| {
+                respond_startup_with_replica_using_config(name, received_cmd, None)?;
+                if port == 6381 {
+                    return Err(Err(
+                        std::io::Error::from(std::io::ErrorKind::TimedOut).into()
+                    ));
+                }
+                Err(Ok(Value::BulkString(
+                    format!("info: {port}").into_bytes().into(),
+                )))
+            },
+        );
+        runtime.block_on(connection.route_command(
+            &info,
+            RoutingInfo::MultiNode((
+                MultipleNodeRoutingInfo::AllMasters,
+                Some(redis::cluster_routing::ResponsePolicy::Special),
+            )),
+        ))
+    }
+
+    fn sorted_map(value: Value) -> Vec<(String, Value)> {
+        let Value::Map(pairs) = value else {
+            panic!("expected a map, got {value:?}");
+        };
+        let mut pairs: Vec<_> = pairs
+            .into_iter()
+            .map(|(k, v)| (String::from_owned_redis_value(k).unwrap(), v))
+            .collect();
+        pairs.sort_by(|a, b| a.0.cmp(&b.0));
+        pairs
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_keep_replies_and_report_timeout() {
+        let name = "test_async_cluster_partial_results_keep_replies_and_report_timeout";
+        let pairs = sorted_map(run_info_with_one_timed_out_primary(name, true).unwrap());
+
+        assert_eq!(pairs.len(), 2, "{pairs:?}");
+        assert_eq!(pairs[0].0, format!("{name}:6379"));
+        assert_eq!(pairs[0].1, Value::BulkString(b"info: 6379".to_vec().into()));
+        assert_eq!(pairs[1].0, format!("{name}:6381"));
+        let Value::ServerError(err) = &pairs[1].1 else {
+            panic!("expected an error for 6381, got {:?}", pairs[1].1);
+        };
+        assert_eq!(err.err_code(), redis::TIMEOUT_ERROR_CODE);
+        let err: RedisError = err.clone().into();
+        assert!(err.is_timeout(), "{err:?}");
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_without_partial_results_fails_on_node_timeout() {
+        let name = "test_async_cluster_without_partial_results_fails_on_node_timeout";
+        let err = run_info_with_one_timed_out_primary(name, false).unwrap_err();
+        assert!(err.is_timeout(), "{err:?}");
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_return_map_when_all_nodes_fail() {
+        let name = "test_async_cluster_partial_results_return_map_when_all_nodes_fail";
+        let mut info = cmd("INFO");
+        info.set_allow_partial_results(true);
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(0),
+            name,
+            move |received_cmd: &[u8], port| {
+                respond_startup_with_replica_using_config(name, received_cmd, None)?;
+                Err(Err(RedisError::from((
+                    ErrorKind::ResponseError,
+                    "An error was signalled by the server:",
+                    format!("boom {port}"),
+                ))))
+            },
+        );
+        let value = runtime
+            .block_on(connection.route_command(
+                &info,
+                RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllMasters,
+                    Some(redis::cluster_routing::ResponsePolicy::Special),
+                )),
+            ))
+            .unwrap();
+
+        let pairs = sorted_map(value);
+        assert_eq!(pairs.len(), 2, "{pairs:?}");
+        for (address, value) in pairs {
+            let Value::ServerError(err) = value else {
+                panic!("expected an error for {address}, got {value:?}");
+            };
+            let port = address.rsplit(':').next().unwrap();
+            assert!(
+                err.details().unwrap().contains(&format!("boom {port}")),
+                "{err:?}"
+            );
+        }
+    }
+
     #[test]
     #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_combine_arrays_of_values() {

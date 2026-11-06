@@ -744,6 +744,18 @@ pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
     }
 }
 
+/// The longest head start a partial-results fan-out takes over the timeout watchdog.
+const PARTIAL_RESULTS_MAX_MARGIN: Duration = Duration::from_millis(50);
+
+/// How long a partial-results fan-out waits for nodes. It stops a little before
+/// `request_timeout` (a tenth of it, at most `PARTIAL_RESULTS_MAX_MARGIN`), so the
+/// nodes that did not answer are reported before the watchdog fails the whole
+/// request. If the runtime is too busy to use that margin, the watchdog still
+/// wins and the request fails with a timeout, as it does without partial results.
+fn partial_results_wait(request_timeout: Duration) -> Duration {
+    request_timeout - (request_timeout / 10).min(PARTIAL_RESULTS_MAX_MARGIN)
+}
+
 fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Option<Duration>> {
     let command = cmd.command().unwrap_or_default();
     let timeout = match command.as_slice() {
@@ -1497,11 +1509,17 @@ impl Client {
                         as usize,
                 );
 
+                // Single Instant::now() shared between watchdog, latency tracking
+                // and the partial-results deadline
+                let cmd_start = Instant::now();
+
+                let mut owned_cmd = owned_cmd;
+                if owned_cmd.allow_partial_results() {
+                    owned_cmd
+                        .set_fan_out_deadline(Some(cmd_start + partial_results_wait(duration)));
+                }
                 // Wrap Cmd in Arc so the timeout arm can still read watchdog fields after execute takes ownership
                 let owned_cmd = Arc::new(owned_cmd);
-
-                // Single Instant::now() shared between watchdog and latency tracking
-                let cmd_start = Instant::now();
 
                 let timeout_rx = crate::timeout_watchdog::TimeoutWatchdog::global()
                     .register(duration, cmd_start);
@@ -4046,7 +4064,7 @@ mod tests {
     };
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, RequestTimeoutOption, TimeUnit,
-        get_request_timeout, is_blocking_command, is_blocking_command_name,
+        get_request_timeout, is_blocking_command, is_blocking_command_name, partial_results_wait,
     };
 
     use super::{
@@ -4741,6 +4759,19 @@ mod tests {
         let result = get_timeout_from_cmd_arg(&cmd, cmd.args_iter().len() - 1, TimeUnit::Seconds);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), RequestTimeoutOption::NoTimeout,);
+    }
+
+    #[test]
+    fn test_partial_results_wait_stops_before_the_request_timeout() {
+        assert_eq!(
+            partial_results_wait(Duration::from_millis(250)),
+            Duration::from_millis(225)
+        );
+        assert_eq!(
+            partial_results_wait(Duration::from_secs(5)),
+            Duration::from_millis(4950)
+        );
+        assert_eq!(partial_results_wait(Duration::ZERO), Duration::ZERO);
     }
 
     #[test]
