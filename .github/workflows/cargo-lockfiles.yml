@@ -57,6 +57,11 @@ jobs:
               shell: bash
               run: |
                   set -uo pipefail
+                  lockfiles="$(git ls-files '*Cargo.lock')" || exit 1
+                  if [[ -z "$lockfiles" ]]; then
+                    echo "::error::No committed Cargo.lock found."
+                    exit 1
+                  fi
                   stale=()
                   while IFS= read -r lockfile; do
                     manifest="$(dirname "$lockfile")/Cargo.toml"
@@ -68,7 +73,7 @@ jobs:
                       echo "::error file=$lockfile::$lockfile is out of date with $manifest or a path dependency's manifest. Run 'cargo tree' (any cargo command without --locked) in $(dirname "$lockfile") and commit the updated Cargo.lock."
                     fi
                     echo "::endgroup::"
-                  done < <(git ls-files '*Cargo.lock')
+                  done <<< "$lockfiles"
 
                   if (( ${#stale[@]} > 0 )); then
                     echo "Stale lockfiles:"
