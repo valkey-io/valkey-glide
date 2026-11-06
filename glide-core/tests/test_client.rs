@@ -6579,7 +6579,7 @@ pub(crate) mod shared_client_tests {
             }
 
             // ── 2b. a node left unable to reply must be discarded, not re-idled ──
-            // Short timeout: CLIENT REPLY OFF and the release liveness PING time out.
+            // Short timeout: CLIENT REPLY OFF itself times out.
             let short_timeout = create_connection_request(
                 &addresses,
                 &TestConfiguration {
