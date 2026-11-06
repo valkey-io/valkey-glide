@@ -148,6 +148,8 @@ class FtAggregateReducer:
         Examples:
             >>> FtAggregateReducer.to_list("@color", name="colors")
             # Collects the unique set of "color" values seen in each group into "colors".
+
+        Since: Valkey 9.1.0 and Valkey Search 1.3.0.
         """
         return cls(FtAggregateReducerKeywords.TOLIST, [field], name)
 
@@ -186,6 +188,8 @@ class FtAggregateReducer:
 
             >>> FtAggregateReducer.first_value("@title", by="@price", order=OrderBy.DESC, name="most_expensive_title")
             # Returns the "title" of the record with the highest "price" in each group.
+
+        Since: Valkey 9.1.0 and Valkey Search 1.3.0.
         """
         if order is not None and by is None:
             raise ValueError("first_value: order requires by to be set.")
@@ -217,6 +221,8 @@ class FtAggregateReducer:
         Examples:
             >>> FtAggregateReducer.random_sample("@score", 5, name="score_sample")
             # Returns up to 5 randomly sampled "score" values from each group.
+
+        Since: Valkey 9.1.0 and Valkey Search 1.3.0.
         """
         return cls(FtAggregateReducerKeywords.RANDOM_SAMPLE, [field, str(size)], name)
 
@@ -333,7 +339,7 @@ class LoadField:
     A single entry in the LOAD clause of FT.AGGREGATE, optionally renaming the loaded field via
     AS. Modelled on `ReturnField` (the equivalent concept for FT.SEARCH's RETURN option).
 
-    ``AS <alias>`` in the LOAD clause is a compatibility fix introduced in valkey-search 1.3.0
+    ``AS <alias>`` in the LOAD clause is a compatibility fix
     (``src/commands/ft_aggregate_parser.cc``, gated by the ``ft_aggregate_load_as`` compatibility
     flag -- see ``COMPATIBILITY.md``). Below ``search.emulate-release 1.3.0``, the legacy branch
     does not recognise ``AS`` as a rename keyword at all: it is consumed as just another LOAD
@@ -344,6 +350,8 @@ class LoadField:
     `requires_search_1_3` marker (or equivalent capability check) around any code path that relies
     on the alias actually renaming the column. Requires `search.emulate-release` >= 1.3.0 -- see
     upstream COMPATIBILITY.md's "Sunsetting of Incompatible Behavior" section.
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
 
     def __init__(
@@ -462,6 +470,8 @@ class FtWithCursor:
     the cursor it opens, is pinned to the PRIMARY of the index's slot regardless of ``ReadFrom``
     -- a cursor is a per-process, node-local resource, and this is a deliberate, documented
     exception to GLIDE's normal read routing.
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
 
     def __init__(self, count: Optional[int] = None, maxidle: Optional[int] = None):
@@ -518,7 +528,7 @@ class FtAggregateOptions:
             loadAll (Optional[bool]): An option to load all fields declared in the index.
             loadFields (Optional[List[Union[TEncodable, LoadField]]]): An option to load only the fields passed in
                 this list. Each entry is either a plain field identifier (loaded under its own name, as before) or a
-                `LoadField` to additionally rename it via ``AS`` (valkey-search 1.3.0; see `LoadField`'s docstring
+                `LoadField` to additionally rename it via ``AS`` (see `LoadField`'s docstring
                 for the compatibility gate). The two forms can be freely mixed in the same list.
             timeout (Optional[int]): Overrides the timeout parameter of the module.
             params (Optional[Mapping[TEncodable, TEncodable]]): The key/value pairs can be referenced from within the
@@ -531,20 +541,21 @@ class FtAggregateOptions:
             slop (Optional[int]): Specifies a slop value for proximity matching of terms.
             dialect (Optional[int]): The query dialect version to use. The only supported dialect is ``2``.
             add_scores (Optional[bool]): If set, exposes the relevance score as a pipeline field named
-                ``__score`` (valkey-search 1.3.0, ``src/commands/ft_aggregate_parser.cc`` ``kAddScoresParam``,
+                ``__score`` (``src/commands/ft_aggregate_parser.cc`` ``kAddScoresParam``,
                 ``src/commands/ft_aggregate_exec.cc``). Confirmed live: ``__score`` can then be referenced like any
                 other pipeline field in a `LoadField`, `FtAggregateApply` expression, or an
                 `FtAggregateSortProperty` (e.g. ``FtAggregateSortProperty("@__score", OrderBy.DESC)``) placed in
-                `clauses`.
+                `clauses`. Available since Valkey 9.1.0 and Valkey Search 1.3.0.
             scorer (Optional[TEncodable]): The scoring function used to compute ``__score`` and rank results
-                (valkey-search 1.3.0, ``src/indexes/scoring/scorer.h``). ``"BM25STD"`` is the only value currently
+                (``src/indexes/scoring/scorer.h``). ``"BM25STD"`` is the only value currently
                 registered and selectable; any other value is rejected by the server. Has no visible effect unless
                 combined with ``add_scores=True`` (or inspected indirectly via a SORTBY on ``__score``).
+                Available since Valkey 9.1.0 and Valkey Search 1.3.0.
             with_cursor (Optional[FtWithCursor]): Requests a paged reply instead of the whole result set at once.
                 See `FtWithCursor`. The reply shape becomes a two-element array of ``[rows, cursor_id]``, where
                 ``rows`` is this same aggregate response shape and ``cursor_id`` is passed to a subsequent
                 `glide.async_commands.ft.cursor_read`/`glide_sync.sync_commands.ft.cursor_read` call to fetch the
-                next page (``0`` once exhausted).
+                next page (``0`` once exhausted). Available since Valkey 9.1.0 and Valkey Search 1.3.0.
 
         Note:
             A paged (``with_cursor``) query, and every subsequent FT.CURSOR READ/DEL against the cursor it opens,
