@@ -3815,7 +3815,7 @@ mod scope_pool_tests {
                     .await
                     .expect("client connects to the test server")
             };
-            let pool_arc = Arc::new(TokioMutex::new(
+            let pool_arc = Arc::new(super::PoolMutex::new(
                 super::ClientPool::new(super::PoolConfig {
                     max_size: 1,
                     min_idle: 0,
@@ -3830,7 +3830,7 @@ mod scope_pool_tests {
                 .expect("valid pool config"),
             ));
             let client_id = {
-                let mut pool = pool_arc.lock().await;
+                let mut pool = pool_arc.lock();
                 let id = pool.add_client(client.clone());
                 assert_eq!(pool.try_acquire(), id as i64);
                 id
@@ -3843,7 +3843,7 @@ mod scope_pool_tests {
             let _ = client.send_command(&mut cmd, None).await;
 
             super::release_client_async(pool_arc.clone(), client_id).await;
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             assert_eq!(
                 pool.idle_count(),
                 u32::from(reused),
@@ -3884,7 +3884,7 @@ mod scope_pool_tests {
                     .await
                     .expect("client connects to primary and replica")
             };
-            let pool_arc = Arc::new(TokioMutex::new(
+            let pool_arc = Arc::new(super::PoolMutex::new(
                 super::ClientPool::new(super::PoolConfig {
                     max_size: 1,
                     min_idle: 0,
@@ -3899,7 +3899,7 @@ mod scope_pool_tests {
                 .expect("valid pool config"),
             ));
             let client_id = {
-                let mut pool = pool_arc.lock().await;
+                let mut pool = pool_arc.lock();
                 let id = pool.add_client(client.clone());
                 assert_eq!(pool.try_acquire(), id as i64);
                 id
@@ -3912,7 +3912,7 @@ mod scope_pool_tests {
             let _ = client.send_command(&mut cmd, None).await;
 
             super::release_client_async(pool_arc.clone(), client_id).await;
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             assert_eq!(
                 pool.idle_count(),
                 u32::from(reused),

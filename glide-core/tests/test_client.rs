@@ -6502,7 +6502,7 @@ pub(crate) mod shared_client_tests {
             }
             release_client_async(pool_arc.clone(), client_id).await;
             {
-                let mut pool = pool_arc.lock().await;
+                let mut pool = pool_arc.lock();
                 assert_eq!(
                     pool.idle_count(),
                     1,
@@ -6591,12 +6591,10 @@ pub(crate) mod shared_client_tests {
             let client = Client::new(short_timeout.into(), None)
                 .await
                 .expect("cluster client creation");
-            let client_id = add_and_acquire(pool_arc.clone(), client).await;
+            let client_id = add_and_acquire(&pool_arc, client);
             {
-                let pool = pool_arc.lock().await;
-                let mut entry = pool.in_use.get_mut(&client_id).expect("borrowed entry");
-                let _ = entry
-                    .client
+                let mut client = borrowed(&pool_arc, client_id);
+                let _ = client
                     .send_command(
                         redis::cmd("CLIENT").arg("REPLY").arg("OFF"),
                         Some(one_primary.clone()),
@@ -6605,7 +6603,7 @@ pub(crate) mod shared_client_tests {
             }
             release_client_async(pool_arc.clone(), client_id).await;
             {
-                let mut pool = pool_arc.lock().await;
+                let mut pool = pool_arc.lock();
                 assert_eq!(
                     pool.drain_discarded_ids(),
                     vec![client_id],
