@@ -1,10 +1,10 @@
 name: Lint TypeScript
+description: Run ESLint on a TypeScript package
 
 inputs:
     package-folder:
         description: "folder that contains the target Cargo.toml file"
         required: true
-        type: string
 
 runs:
     using: "composite"

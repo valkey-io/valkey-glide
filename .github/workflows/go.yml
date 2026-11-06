@@ -17,10 +17,10 @@ on:
             - go/**
             - .github/workflows/go.yml
             - .github/actions/install-shared-dependencies/action.yml
-            - .github/workflows/test-benchmark/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/test-benchmark/action.yml
+            - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
-            - .github/workflows/create-test-matrices/action.yml
+            - .github/actions/create-test-matrices/action.yml
             - .github/json_matrices/**
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
@@ -33,10 +33,10 @@ on:
             - go/**
             - .github/workflows/go.yml
             - .github/actions/install-shared-dependencies/action.yml
-            - .github/workflows/test-benchmark/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/test-benchmark/action.yml
+            - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
-            - .github/workflows/create-test-matrices/action.yml
+            - .github/actions/create-test-matrices/action.yml
             - .github/json_matrices/**
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
@@ -103,7 +103,7 @@ jobs:
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
-              uses: ./.github/workflows/create-test-matrices
+              uses: ./.github/actions/create-test-matrices
               with:
                   language-name: go
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
@@ -207,7 +207,7 @@ jobs:
               run: |
                   make -k example-test
 
-            - uses: ./.github/workflows/test-benchmark
+            - uses: ./.github/actions/test-benchmark
               with:
                   language-flag: -go
                   engine-run: ${{ matrix.engine.run }}
@@ -254,7 +254,7 @@ jobs:
                       x86_64-unknown-linux-gnu
 
             - name: lint rust
-              uses: ./.github/workflows/lint-rust
+              uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: ffi
                   github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -275,7 +275,7 @@ jobs:
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
-              uses: ./.github/workflows/create-test-matrices
+              uses: ./.github/actions/create-test-matrices
               with:
                   language-name: go
                   run-full-matrix: true
@@ -295,16 +295,17 @@ jobs:
                 host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
         container:
             image: ${{ matrix.host.IMAGE }}
-            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
             - name: Install git
+              env:
+                  TARGET: ${{ matrix.host.TARGET }}
               run: |
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
                     yum update
                     yum install -y git tar
                     git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                    echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
-                  elif [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
+                    echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> "$GITHUB_ENV"
+                  elif [[ "$TARGET" == *"musl"* ]]; then
                     apk update
                     apk add git bash tar
                     git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -334,7 +335,7 @@ jobs:
               run: |
                   apk add clang lld compiler-rt
                   # Ensure Rust is in PATH for container environments
-                  echo "$HOME/.cargo/bin:$PATH" >> $GITHUB_PATH
+                  echo "$HOME/.cargo/bin:$PATH" >> "$GITHUB_PATH"
 
             - name: Install zig
               if: ${{ contains(matrix.host.TARGET, 'musl') }}

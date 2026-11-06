@@ -1,4 +1,5 @@
 name: Start self hosted EC2 runner
+description: Start a self-hosted EC2 runner instance and wait for it to be running
 
 inputs:
     aws-region:
