@@ -244,8 +244,7 @@ mod tests {
     #[test]
     fn incr_clamps_at_usize_max() {
         let t = Telemetry::new();
-        t.total_connections
-            .store(usize::MAX - 1, Ordering::Relaxed);
+        t.total_connections.store(usize::MAX - 1, Ordering::Relaxed);
         assert_eq!(saturating_add(&t.total_connections, 5), usize::MAX);
     }
 
@@ -275,7 +274,10 @@ mod tests {
         assert_eq!(t.total_bytes_decompressed.load(Ordering::Relaxed), 0);
         assert_eq!(t.compression_skipped_count.load(Ordering::Relaxed), 0);
         assert_eq!(t.subscription_out_of_sync_count.load(Ordering::Relaxed), 0);
-        assert_eq!(t.subscription_last_sync_timestamp.load(Ordering::Relaxed), 0);
+        assert_eq!(
+            t.subscription_last_sync_timestamp.load(Ordering::Relaxed),
+            0
+        );
     }
 
     #[test]
