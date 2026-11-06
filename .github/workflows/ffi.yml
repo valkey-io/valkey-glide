@@ -91,18 +91,18 @@ jobs:
 
             - name: Run glide-ffi tests
               working-directory: ./ffi
-              run: cargo test
+              run: cargo test --locked
 
             - name: Install libfabric
               uses: ./.github/actions/install-libfabric
 
             - name: Run glide-ffi RDMA tests
               working-directory: ./ffi
-              run: cargo test --features rdma
+              run: cargo test --locked --features rdma
 
             - name: Run glide-ffi MIRI tests
               working-directory: ./ffi/miri-tests
-              run: cargo miri test
+              run: cargo miri test --locked
 
     lint:
         runs-on: ubuntu-24.04
