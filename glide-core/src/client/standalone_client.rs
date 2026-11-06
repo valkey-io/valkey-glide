@@ -10,11 +10,12 @@ use glide_logger::log_info;
 use glide_logger::log_warn;
 use glide_telemetry::Telemetry;
 use redis::aio::ConnectionLike;
-use redis::cluster_routing::{self, ResponsePolicy, Routable, RoutingInfo, is_readonly_cmd};
+use redis::cluster_routing::{
+    self, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo, SlotAddr, is_readonly_cmd,
+};
 use redis::{AddressResolver, PushInfo, RedisError, RedisResult, RetryStrategy, Value};
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task;
@@ -89,6 +90,7 @@ struct DropWrapper {
     primary_index: usize,
     nodes: Vec<ReconnectingConnection>,
     read_from: ReadFrom,
+    replicas_database_consistent: AtomicBool,
     /// When true, write commands are blocked and INFO REPLICATION is skipped during connection.
     read_only: bool,
     /// Owns the background mTLS certificate reload task, when path-based reload is
@@ -705,6 +707,7 @@ impl StandaloneClient {
                 primary_index,
                 nodes,
                 read_from,
+                replicas_database_consistent: AtomicBool::new(true),
                 read_only,
                 _cert_material_manager: cert_material_manager,
                 cert_material,
@@ -889,7 +892,13 @@ impl StandaloneClient {
     }
 
     async fn get_connection(&self, readonly: bool) -> &ReconnectingConnection {
-        if self.inner.nodes.len() == 1 || !readonly {
+        if self.inner.nodes.len() == 1
+            || !readonly
+            || !self
+                .inner
+                .replicas_database_consistent
+                .load(Ordering::Acquire)
+        {
             return self.get_primary_connection();
         }
 
@@ -1057,7 +1066,11 @@ impl StandaloneClient {
         offset: usize,
         count: usize,
     ) -> RedisResult<Vec<Value>> {
-        let reconnecting_connection = self.get_primary_connection();
+        // Transactions and pipelines containing any write must remain on the
+        // primary. A fully read-only, non-atomic pipeline can use the configured
+        // read-from strategy just like a single read-only command.
+        let readonly = is_readonly_nonatomic_pipeline(pipeline);
+        let reconnecting_connection = self.get_connection(readonly).await;
         let mut connection = reconnecting_connection.get_connection().await?;
         let result = connection
             .send_packed_commands(pipeline, offset, count)
@@ -1166,10 +1179,51 @@ impl StandaloneClient {
 
     /// Update the database id used to establish connection with the servers.
     pub async fn update_connection_database(&self, database_id: i64) -> RedisResult<Value> {
+        self.store_connection_database(database_id);
+        self.inner
+            .replicas_database_consistent
+            .store(true, Ordering::Release);
+
+        Ok(Value::Okay)
+    }
+
+    fn store_connection_database(&self, database_id: i64) {
         for node in self.inner.nodes.iter() {
             node.update_connection_database(database_id);
         }
+    }
 
+    pub(super) async fn synchronize_connection_database(
+        &self,
+        database_id: i64,
+    ) -> RedisResult<Value> {
+        self.store_connection_database(database_id);
+        self.inner
+            .replicas_database_consistent
+            .store(false, Ordering::Release);
+
+        let mut select = redis::cmd("SELECT");
+        select.arg(database_id);
+        for (index, node) in self.inner.nodes.iter().enumerate() {
+            if index == self.inner.primary_index {
+                continue;
+            }
+
+            let Some(mut connection) = node.try_get_connection().await else {
+                return Err(RedisError::from((
+                    redis::ErrorKind::AllConnectionsUnavailable,
+                    "replica unavailable while synchronizing database",
+                )));
+            };
+            if let Err(error) = connection.send_packed_command(&select).await {
+                node.reconnect(ReconnectReason::ConnectionDropped);
+                return Err(error);
+            }
+        }
+
+        self.inner
+            .replicas_database_consistent
+            .store(true, Ordering::Release);
         Ok(Value::Okay)
     }
 
@@ -1321,6 +1375,67 @@ fn get_read_from(read_from: Option<super::ReadFrom>) -> ReadFrom {
     }
 }
 
+fn is_readonly_nonatomic_pipeline(pipeline: &redis::Pipeline) -> bool {
+    !pipeline.is_atomic()
+        && pipeline.cmd_iter().all(|command| {
+            let Some(command_name) = Routable::command(command.as_ref()) else {
+                return false;
+            };
+            is_readonly_cmd(command_name.as_slice())
+                && !requires_primary_pipeline_routing(command.as_ref(), command_name.as_slice())
+        })
+}
+
+// The cluster routing predicate also includes keyless administrative commands
+// and commands with node-local state; those must retain primary pipeline routing.
+fn requires_primary_pipeline_routing(command: &redis::Cmd, command_name: &[u8]) -> bool {
+    matches!(
+        command_name,
+        b"ACL DELUSER"
+            | b"ACL LOAD"
+            | b"ACL SAVE"
+            | b"ACL SETUSER"
+            | b"BGREWRITEAOF"
+            | b"BGSAVE"
+            | b"CLIENT KILL"
+            | b"CLIENT PAUSE"
+            | b"CLIENT UNBLOCK"
+            | b"CLIENT UNPAUSE"
+            | b"CLUSTER FAILOVER"
+            | b"CLUSTER REPLICATE"
+            | b"CLUSTER SAVECONFIG"
+            | b"CONFIG RESETSTAT"
+            | b"CONFIG REWRITE"
+            | b"CONFIG SET"
+            | b"FUNCTION KILL"
+            | b"HSCAN"
+            | b"LATENCY RESET"
+            | b"MEMORY PURGE"
+            | b"MODULE LOAD"
+            | b"MODULE LOADEX"
+            | b"MODULE UNLOAD"
+            | b"PUBLISH"
+            | b"REPLICAOF"
+            | b"SAVE"
+            | b"SCAN"
+            | b"SCRIPT FLUSH"
+            | b"SCRIPT KILL"
+            | b"SCRIPT LOAD"
+            | b"SELECT"
+            | b"SHUTDOWN"
+            | b"SLOWLOG RESET"
+            | b"SPUBLISH"
+            | b"SSCAN"
+            | b"ZSCAN"
+    ) || (command_name == b"FT.AGGREGATE"
+        && matches!(
+            RoutingInfo::for_routable(command),
+            Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::SpecificNode(route)
+            )) if route.slot_addr() == SlotAddr::Master
+        ))
+}
+
 /// Parse replica addresses from a primary's INFO REPLICATION response.
 /// Format: slave0:ip=10.1.35.66,port=6379,state=online,offset=144849,lag=0
 fn parse_replica_addresses(replication_info: &str) -> Vec<NodeAddress> {
@@ -1390,6 +1505,44 @@ fn address_is_known(addr: &NodeAddress, existing: &[String], discovered: &[NodeA
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn readonly_pipeline_requires_all_commands_to_be_readonly_and_non_atomic() {
+        let mut readonly = redis::Pipeline::new();
+        readonly.get("key-1").get("key-2");
+        assert!(is_readonly_nonatomic_pipeline(&readonly));
+
+        let mut mixed = redis::Pipeline::new();
+        mixed.get("key").set("key", "value");
+        assert!(!is_readonly_nonatomic_pipeline(&mixed));
+
+        let mut config_set = redis::Pipeline::new();
+        config_set.cmd("CONFIG").arg("SET");
+        assert!(!is_readonly_nonatomic_pipeline(&config_set));
+
+        let mut acl_setuser = redis::Pipeline::new();
+        acl_setuser.cmd("ACL").arg("SETUSER");
+        assert!(!is_readonly_nonatomic_pipeline(&acl_setuser));
+
+        let mut shutdown = redis::Pipeline::new();
+        shutdown.cmd("SHUTDOWN");
+        assert!(!is_readonly_nonatomic_pipeline(&shutdown));
+
+        for command in ["SCAN", "HSCAN", "SSCAN", "ZSCAN", "SELECT"] {
+            let mut primary_only = redis::Pipeline::new();
+            primary_only.cmd(command);
+            assert!(!is_readonly_nonatomic_pipeline(&primary_only));
+        }
+
+        let mut aggregate = redis::Pipeline::new();
+        aggregate.cmd("FT.AGGREGATE").arg("index").arg("*");
+        assert!(is_readonly_nonatomic_pipeline(&aggregate));
+        aggregate.arg("WITHCURSOR");
+        assert!(!is_readonly_nonatomic_pipeline(&aggregate));
+
+        readonly.atomic();
+        assert!(!is_readonly_nonatomic_pipeline(&readonly));
+    }
 
     #[test]
     fn test_parse_replica_addresses_basic() {
