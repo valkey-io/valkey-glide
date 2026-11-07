@@ -684,6 +684,25 @@ public class GlideClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void infoWithPartialResults_without_sections_sends_no_sections() {
+        // setup
+        Map<String, Object> testPayload = createMap("addr1", "addr1 result");
+        CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(ClusterValue.of(testPayload));
+        when(commandManager.<ClusterValue<Object>>submitNewCommandWithPartialResults(
+                        eq(Info), eq(new String[0]), eq(null), any()))
+                .thenReturn(testResponse);
+        when(commandManager.<ClusterValue<Object>>submitNewCommandWithPartialResults(
+                        eq(Info), eq(new String[0]), eq(ALL_NODES), any()))
+                .thenReturn(testResponse);
+
+        // exercise and verify
+        assertEquals(testPayload, service.infoWithPartialResults().get().getMultiValue());
+        assertEquals(testPayload, service.infoWithPartialResults(ALL_NODES).get().getMultiValue());
+    }
+
+    @SneakyThrows
+    @Test
     public void infoWithPartialResults_with_route_passes_route() {
         // setup
         Map<String, Object> testPayload = createMap("addr1", "addr1 result");

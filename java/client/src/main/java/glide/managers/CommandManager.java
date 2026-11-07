@@ -739,9 +739,7 @@ public class CommandManager {
                             routeArgs.routeParam,
                             expectUtf8Response,
                             allowPartialResults,
-                            // With partial results, the core bounds the request and must answer
-                            // after its own fan-out deadline, so skip the Java-side timer.
-                            allowPartialResults ? 0 : coreClient.getRequestTimeoutMillis(),
+                            coreClient.getRequestTimeoutMillis(),
                             spanPtr);
 
             return jniFuture

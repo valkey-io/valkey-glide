@@ -528,6 +528,16 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<ClusterValue<Object>> infoWithPartialResults() {
+        return infoWithPartialResults(new Section[0]);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object>> infoWithPartialResults(@NonNull Route route) {
+        return infoWithPartialResults(new Section[0], route);
+    }
+
+    @Override
     public CompletableFuture<ClusterValue<Object>> infoWithPartialResults(
             @NonNull Section[] sections) {
         return commandManager.submitNewCommandWithPartialResults(

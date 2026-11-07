@@ -105,6 +105,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
+import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.GlideException;
 import glide.api.models.exceptions.RequestException;
 import glide.api.models.exceptions.TimeoutException;
@@ -589,6 +590,70 @@ public class CommandTests {
             // A single-node route still returns the node's reply as a string.
             Object single = client.infoWithPartialResults(new Section[0], route).get().getSingleValue();
             assertTrue(((String) single).contains("# Server"));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProtocolVersion.class)
+    @SneakyThrows
+    public void infoWithPartialResults_keeps_the_error_reply_of_a_denied_primary(
+            ProtocolVersion protocol) {
+        String username = "partial-" + UUID.randomUUID();
+        String password = "password";
+        try (GlideClusterClient admin =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get()) {
+            admin
+                    .customCommand(
+                            new String[] {"ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all"},
+                            ALL_NODES)
+                    .get();
+            try (GlideClusterClient denied =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig()
+                                            .protocol(protocol)
+                                            .credentials(
+                                                    ServerCredentials.builder().username(username).password(password).build())
+                                            .build())
+                            .get()) {
+                List<String> primaries = new ArrayList<>(denied.info().get().getMultiValue().keySet());
+                Collections.sort(primaries);
+                String deniedPrimary = primaries.get(0);
+                int portIndex = deniedPrimary.lastIndexOf(':');
+                admin
+                        .customCommand(
+                                new String[] {"ACL", "SETUSER", username, "-info"},
+                                new ByAddressRoute(
+                                        deniedPrimary.substring(0, portIndex),
+                                        Integer.parseInt(deniedPrimary.substring(portIndex + 1))))
+                        .get();
+
+                // Without partial results, the denied primary fails the whole call.
+                ExecutionException plain =
+                        assertThrows(ExecutionException.class, () -> denied.info().get());
+                assertInstanceOf(RequestException.class, plain.getCause());
+
+                Map<String, Object> replies = denied.infoWithPartialResults().get().getMultiValue();
+                assertEquals(new HashSet<>(primaries), replies.keySet());
+                Object error = replies.get(deniedPrimary);
+                assertInstanceOf(RequestException.class, error);
+                assertEquals(plain.getCause().getMessage(), ((RequestException) error).getMessage());
+                for (String address : primaries.subList(1, primaries.size())) {
+                    assertTrue(((String) replies.get(address)).contains("# Server"));
+                }
+
+                // With every primary denied, the call returns an error for each.
+                admin
+                        .customCommand(new String[] {"ACL", "SETUSER", username, "-info"}, ALL_PRIMARIES)
+                        .get();
+                Map<String, Object> failed = denied.infoWithPartialResults().get().getMultiValue();
+                assertEquals(new HashSet<>(primaries), failed.keySet());
+                for (Object reply : failed.values()) {
+                    assertInstanceOf(RequestException.class, reply);
+                }
+            } finally {
+                admin.customCommand(new String[] {"ACL", "DELUSER", username}, ALL_NODES).get();
+            }
         }
     }
 
