@@ -621,8 +621,9 @@ static GLOBAL_SLOT: AtomicPtr<AtomicPtr<TimeoutWatchdog>> = AtomicPtr::new(ptr::
 /// handlers run, and a child skips any handler registered after its fork
 /// began. A first `global()` that runs during that window registers the
 /// handler too late for that child, yet still publishes the watchdog.
-/// Elsewhere, and on Linux kernels older than 4.14, the slot is plain memory
-/// and only the handler clears it.
+/// Elsewhere, and wherever `mmap` or `madvise` fails (kernels older than
+/// 4.14, a sandbox that denies it), the slot is plain memory and only the
+/// handler clears it.
 #[inline]
 fn global_slot() -> &'static AtomicPtr<TimeoutWatchdog> {
     let slot = GLOBAL_SLOT.load(Ordering::Acquire);
@@ -657,8 +658,8 @@ fn new_global_slot() -> *mut AtomicPtr<TimeoutWatchdog> {
             0,
         );
         if page != libc::MAP_FAILED {
-            // If the kernel lacks MADV_WIPEONFORK the page is plain memory,
-            // and the atfork handler still clears it. A new anonymous page is
+            // If madvise fails the page is plain memory, and the atfork
+            // handler still clears it. A new anonymous page is
             // all zeros, so the slot starts null.
             libc::madvise(page, len, libc::MADV_WIPEONFORK);
             return page.cast();
@@ -1193,6 +1194,7 @@ mod tests {
         // The window only exists while the global has never been created,
         // so run the scenario alone in a fresh copy of this test binary.
         const IN_FRESH_PROCESS: &str = "GLIDE_TEST_FRESH_PROCESS";
+        const FRESH_PROCESS_PASSED: i32 = 73;
         if std::env::var_os(IN_FRESH_PROCESS).is_none() {
             let name = concat!(
                 module_path!(),
@@ -1215,7 +1217,13 @@ mod tests {
                 }
                 std::thread::sleep(Duration::from_millis(10));
             };
-            assert!(status.success(), "fresh test process failed: {status}");
+            // A distinct code proves the scenario ran; a stale test name
+            // would make libtest run nothing and exit 0.
+            assert_eq!(
+                status.code(),
+                Some(FRESH_PROCESS_PASSED),
+                "fresh test process failed: {status}"
+            );
             return;
         }
 
@@ -1234,7 +1242,9 @@ mod tests {
         }
 
         assert!(GLOBAL_SLOT.load(Ordering::Acquire).is_null());
-        // Registered before the watchdog's handler, so it runs first.
+        // Registered before the fork starts, so it runs. The watchdog's
+        // handler is registered inside the window, after the fork took its
+        // snapshot, so glibc skips it in the child.
         let rc = unsafe { libc::pthread_atfork(Some(hold_fork_in_prepare), None, None) };
         assert_eq!(rc, 0);
         ARMED.store(true, Ordering::Release);
@@ -1248,5 +1258,33 @@ mod tests {
         });
         assert_in_forked_child(global_deadline_fires);
         first_global.join().unwrap();
+        std::process::exit(FRESH_PROCESS_PASSED);
+    }
+
+    /// A raw clone() runs no atfork handlers, so only the wipe-on-fork page
+    /// can clear the slot in this child. This also catches a madvise call
+    /// that fails without anyone noticing.
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[serial]
+    fn slot_is_zeroed_in_child_without_atfork_handlers() {
+        TimeoutWatchdog::global();
+        assert!(!global_slot().load(Ordering::Acquire).is_null());
+
+        let pid = unsafe { libc::syscall(libc::SYS_clone, libc::SIGCHLD, 0, 0, 0, 0) };
+        assert!(pid >= 0, "clone failed");
+        if pid == 0 {
+            // Only atomic loads and _exit: the child has one thread and must
+            // not touch locks the parent's other threads may hold.
+            let wiped = global_slot().load(Ordering::Acquire).is_null();
+            unsafe { libc::_exit(if wiped { 0 } else { 1 }) };
+        }
+        let mut status = 0;
+        let reaped = unsafe { libc::waitpid(pid as libc::pid_t, &mut status, 0) };
+        assert_eq!(reaped, pid as libc::pid_t);
+        assert!(
+            libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+            "slot was not zeroed in the child (raw wait status {status})"
+        );
     }
 }
