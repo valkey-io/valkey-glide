@@ -103,6 +103,9 @@ message RdmaConfig {
     // Fabric domain to pin to when a host has more than one card.
     // Unset takes the first the provider returns.
     optional string interface = 3;
+    // Open the fabric able to register device memory, such as CUDA memory, as well
+    // as host memory. The provider must offer FI_HMEM.
+    optional bool device_memory = 4;
 }
 
 message PubSubChannelsOrPatterns

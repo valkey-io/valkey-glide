@@ -154,7 +154,15 @@ impl RdmaSetting {
                     .bind()
                     .map(|bind| format!(", bind: {bind}"))
                     .unwrap_or_default();
-                format!("\nRDMA: {:?}{interface}{bind}", config.provider())
+                let device_memory = if config.device_memory() {
+                    ", device memory"
+                } else {
+                    ""
+                };
+                format!(
+                    "\nRDMA: {:?}{interface}{bind}{device_memory}",
+                    config.provider()
+                )
             }
         }
     }
@@ -167,6 +175,20 @@ mod tests {
     #[test]
     fn an_absent_setting_logs_nothing() {
         assert_eq!(RdmaSetting::Absent.log_summary(), "");
+    }
+
+    #[cfg(feature = "rdma")]
+    #[test]
+    fn a_setting_with_device_memory_says_so_in_the_log() {
+        let config = glide_rdma::FabricConfig::new(glide_rdma::Provider::EfaDirect);
+        assert_eq!(
+            RdmaSetting::Configured(config.clone()).log_summary(),
+            "\nRDMA: EfaDirect"
+        );
+        assert_eq!(
+            RdmaSetting::Configured(config.with_device_memory()).log_summary(),
+            "\nRDMA: EfaDirect, device memory"
+        );
     }
 
     #[test]

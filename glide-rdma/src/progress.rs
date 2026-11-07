@@ -417,6 +417,58 @@ mod tests {
         drop(target);
     }
 
+    /// Memory registered through `fi_mr_regattr`, the device path, is reachable by
+    /// a peer's RMA just as `fi_mr_reg`'s is. `FI_HMEM_SYSTEM` stands in for a
+    /// device so this runs without a GPU.
+    #[test]
+    fn an_inbound_read_reaches_memory_registered_as_a_device() {
+        let (mut target, driver) = driver();
+        let mut initiator = LibfabricEndpoint::open(&FabricConfig::new(Provider::Tcp))
+            .expect("the tcp provider should open");
+        let mut pattern: Vec<u8> = (0..1u32 << 16).map(|i| (i * 7) as u8).collect();
+        // SAFETY: `pattern` outlives the region, which is closed below.
+        let source = unsafe {
+            target.register_remote_device(
+                NonNull::from(pattern.as_mut_slice()),
+                crate::memory::DeviceRuntime::SystemForTests,
+            )
+        }
+        .expect("fi_mr_regattr registers the source")
+        .region;
+        // SAFETY: `source` is an open region.
+        let remote_key = unsafe { fi_mr_key(source) };
+        let remote_address = if target.uses_virtual_addressing() {
+            pattern.as_ptr() as u64
+        } else {
+            0
+        };
+        let target_address = target.local_address().expect("has an address");
+
+        let guard = driver.drive();
+        let mut landed = vec![0u8; pattern.len()];
+        // SAFETY: `landed` outlives its region, which is closed below.
+        let region = unsafe {
+            post_read(
+                &mut initiator,
+                &mut landed,
+                &target_address,
+                remote_address,
+                remote_key,
+            )
+        };
+        let deadline = Instant::now() + Duration::from_secs(5);
+        assert!(wait_for_completion(&initiator, deadline) > 0);
+        assert_eq!(landed, pattern);
+        drop(guard);
+        // SAFETY: the read has completed, and nothing uses either region after this.
+        unsafe {
+            fi_close(&raw mut (*region).fid);
+            fi_close(&raw mut (*source).fid);
+        }
+        drop(driver);
+        drop(target);
+    }
+
     /// Guards are counted, not boolean: overlapping transfers must not let the first
     /// one to finish park the poller while others are still outstanding.
     #[test]

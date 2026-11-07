@@ -9,13 +9,14 @@ use std::sync::{Arc, Mutex, PoisonError, Weak};
 use tokio::sync::watch;
 
 use glide_libfabric_sys::bindgen::{
-    FI_CONTEXT2, FI_MR_ALLOCATED, FI_MR_LOCAL, FI_MR_PROV_KEY, FI_MR_VIRT_ADDR, FI_MSG, FI_READ,
-    FI_RECV, FI_REMOTE_READ, FI_REMOTE_WRITE, FI_RMA, FI_SOURCE, FI_TRANSMIT, FI_WRITE, fi_addr_t,
-    fi_allocinfo, fi_av_attr, fi_av_insert, fi_av_open, fi_av_remove, fi_av_type_FI_AV_MAP,
-    fi_close, fi_cq_attr, fi_cq_format_FI_CQ_FORMAT_CONTEXT, fi_cq_open, fi_domain, fi_domain_attr,
-    fi_dupinfo, fi_enable, fi_endpoint, fi_ep_bind, fi_ep_type_FI_EP_RDM, fi_fabric, fi_freeinfo,
-    fi_getinfo, fi_getname, fi_info, fi_mr_key, fi_mr_reg, fi_strerror, fi_threading,
-    fi_threading_FI_THREAD_COMPLETION, fi_threading_FI_THREAD_DOMAIN,
+    FI_CONTEXT2, FI_HMEM, FI_MR_ALLOCATED, FI_MR_HMEM, FI_MR_LOCAL, FI_MR_PROV_KEY,
+    FI_MR_VIRT_ADDR, FI_MSG, FI_READ, FI_RECV, FI_REMOTE_READ, FI_REMOTE_WRITE, FI_RMA, FI_SOURCE,
+    FI_TRANSMIT, FI_WRITE, fi_addr_t, fi_allocinfo, fi_av_attr, fi_av_insert, fi_av_open,
+    fi_av_remove, fi_av_type_FI_AV_MAP, fi_close, fi_cq_attr, fi_cq_format_FI_CQ_FORMAT_CONTEXT,
+    fi_cq_open, fi_domain, fi_domain_attr, fi_dupinfo, fi_enable, fi_endpoint, fi_ep_bind,
+    fi_ep_type_FI_EP_RDM, fi_fabric, fi_freeinfo, fi_getinfo, fi_getname,
+    fi_hmem_iface_FI_HMEM_CUDA, fi_info, fi_mr_attr, fi_mr_key, fi_mr_reg, fi_mr_regattr,
+    fi_strerror, fi_threading, fi_threading_FI_THREAD_COMPLETION, fi_threading_FI_THREAD_DOMAIN,
     fi_threading_FI_THREAD_ENDPOINT, fi_threading_FI_THREAD_FID, fi_threading_FI_THREAD_SAFE,
     fi_threading_FI_THREAD_UNSPEC, fi_wait_obj_FI_WAIT_UNSPEC, fid_av, fid_cq, fid_domain, fid_ep,
     fid_fabric, fid_mr,
@@ -25,6 +26,9 @@ use crate::config::{FabricConfig, Provider};
 use crate::error::RdmaError;
 use crate::fabric::RdmaFabric;
 use crate::libfabric_dl::header_api_version;
+use crate::memory::DeviceRuntime;
+#[cfg(test)]
+use glide_libfabric_sys::bindgen::fi_hmem_iface_FI_HMEM_SYSTEM;
 
 /// Turn a libfabric return code into a `Result`: 0 for success, negative `-errno` otherwise.
 pub(crate) fn check(code: i32, operation: &'static str) -> Result<(), RdmaError> {
@@ -65,7 +69,27 @@ pub(crate) fn query_info(config: &FabricConfig) -> Result<*mut fi_info, RdmaErro
         .provider()
         .needs_manual_progress()
         .then_some(fi_threading_FI_THREAD_SAFE);
-    query_info_requiring(config, required)
+    let error = match query_info_requiring(config, required) {
+        Ok(info) => return Ok(info),
+        Err(error) => error,
+    };
+
+    // As with threading, libfabric leaves out a provider that cannot offer FI_HMEM,
+    // so ask again without device memory and, if that finds it, say that is why.
+    if !config.device_memory() {
+        return Err(error);
+    }
+    let Ok(offered) = query_info_requiring(&config.without_device_memory(), required) else {
+        return Err(error);
+    };
+    // SAFETY: an owned list from fi_getinfo, freed here unread.
+    unsafe { fi_freeinfo(offered) };
+    Err(RdmaError::Configuration(format!(
+        "the {} provider does not offer FI_HMEM on this host, so it cannot register \
+         device memory. It needs a libfabric built with the device's runtime, such as \
+         CUDA, and the device present",
+        config.provider().as_str(),
+    )))
 }
 
 /// `query_info` with the threading model named rather than inferred. Tests use this
@@ -187,12 +211,18 @@ fn query_info_with(
                 errno: None,
             });
         }
-        let caps =
+        let mut caps =
             u64::from(FI_MSG | FI_RMA | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE);
         // Leaving mr_mode 0 makes efa hand back a variant whose RMA still needs
         // virtual addresses while reporting mr_mode=0, which then fails with
         // REMOTE_BAD_ADDRESS.
-        let mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
+        let mut mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
+        if config.device_memory() {
+            // A provider offering FI_HMEM asks for FI_MR_HMEM: device memory is
+            // reachable only once registered, which is all this crate does with it.
+            caps |= FI_HMEM;
+            mr_mode |= FI_MR_HMEM;
+        }
         (*hints).caps = caps;
         (*(*hints).ep_attr).type_ = fi_ep_type_FI_EP_RDM;
         (*(*hints).domain_attr).mr_mode = mr_mode as i32;
@@ -705,6 +735,13 @@ impl LibfabricEndpoint {
         self.uses_virtual_addressing
     }
 
+    /// Whether the provider opened this endpoint with `FI_HMEM`.
+    #[cfg(test)]
+    pub(crate) fn offers_device_memory(&self) -> bool {
+        // SAFETY: `info` is the entry this endpoint was opened from, freed only on drop.
+        unsafe { (*self.info).caps & FI_HMEM != 0 }
+    }
+
     /// The endpoint's local fabric address, to advertise to the server.
     pub(crate) fn local_address(&self) -> Result<Vec<u8>, RdmaError> {
         let endpoint = NonNull::new(self.endpoint).ok_or_else(|| RdmaError::Fabric {
@@ -749,6 +786,50 @@ impl LibfabricEndpoint {
         memory: NonNull<[u8]>,
     ) -> Result<RegisteredMemory, RdmaError> {
         unsafe { self.register(memory, remote_access()) }
+    }
+
+    /// Register device memory, such as CUDA memory, for remote RMA access.
+    ///
+    /// # Safety
+    /// As for [`Self::register_remote`], for memory of `runtime`.
+    pub(crate) unsafe fn register_remote_device(
+        &mut self,
+        memory: NonNull<[u8]>,
+        runtime: DeviceRuntime,
+    ) -> Result<RegisteredMemory, RdmaError> {
+        let start: *mut u8 = memory.as_ptr().cast();
+        let span = libc::iovec {
+            iov_base: start.cast(),
+            iov_len: memory.len(),
+        };
+        // SAFETY: zero is a valid value for every field of `fi_mr_attr`: null
+        // pointers, zero counts and `FI_HMEM_SYSTEM`.
+        let mut attributes: fi_mr_attr = unsafe { std::mem::zeroed() };
+        attributes.__bindgen_anon_1.mr_iov = &span;
+        attributes.iov_count = 1;
+        attributes.access = remote_access();
+        attributes.requested_key = self.remote_keys.take();
+        match runtime {
+            // `device.cuda` stays zero: efa finds the memory from its address.
+            DeviceRuntime::Cuda => {
+                attributes.iface = fi_hmem_iface_FI_HMEM_CUDA;
+            }
+            #[cfg(test)]
+            DeviceRuntime::SystemForTests => {
+                attributes.iface = fi_hmem_iface_FI_HMEM_SYSTEM;
+            }
+        }
+        let mut memory_region: *mut fid_mr = ptr::null_mut();
+        check(
+            // SAFETY: `attributes` and `span` outlive the call, and the caller
+            // guarantees `memory` outlives the registration.
+            unsafe { fi_mr_regattr(self.domain, &attributes, 0, &mut memory_region) },
+            "fi_mr_regattr",
+        )?;
+        Ok(RegisteredMemory {
+            region: memory_region,
+            address: start as u64,
+        })
     }
 
     /// # Safety

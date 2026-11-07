@@ -374,6 +374,11 @@ fn convert_rdma(config: Option<&protobuf::RdmaConfig>) -> RdmaSetting {
         Some(interface) => fabric.with_interface(interface.to_string()),
         None => fabric,
     };
+    let fabric = if config.device_memory == Some(true) {
+        fabric.with_device_memory()
+    } else {
+        fabric
+    };
     RdmaSetting::Configured(fabric)
 }
 
@@ -707,6 +712,30 @@ mod tests {
         use crate::compression::CompressionBackendType;
         use crate::connection_request as protobuf;
         use ::protobuf::EnumOrUnknown;
+
+        #[cfg(feature = "rdma")]
+        #[test]
+        fn device_memory_reaches_the_fabric_config_only_when_asked_for() {
+            use crate::rdma::RdmaSetting;
+            let request_with = |device_memory: Option<bool>| {
+                let mut rdma = protobuf::RdmaConfig::new();
+                rdma.set_efa_direct(protobuf::EfaDirectProvider::new());
+                rdma.device_memory = device_memory;
+                let mut proto_request = protobuf::ConnectionRequest::new();
+                proto_request.rdma_config = ::protobuf::MessageField::some(rdma);
+                ConnectionRequest::from(proto_request).rdma
+            };
+            for (asked, expected) in [(None, false), (Some(false), false), (Some(true), true)] {
+                let RdmaSetting::Configured(config) = request_with(asked) else {
+                    panic!("an efa-direct configuration is usable");
+                };
+                assert_eq!(
+                    config.device_memory(),
+                    expected,
+                    "device_memory = {asked:?}"
+                );
+            }
+        }
 
         #[test]
         fn test_lib_name_and_ver() {
