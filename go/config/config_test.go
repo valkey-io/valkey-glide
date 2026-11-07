@@ -1990,6 +1990,34 @@ func TestConfig_AzAffinityAllNodes_RequiresClientAZ(t *testing.T) {
 	assert.Contains(t, err.Error(), "client AZ must be set")
 }
 
+func TestConfig_AzAffinity_RejectsWhitespaceOnlyClientAZ(t *testing.T) {
+	strategies := []ReadFrom{AzAffinity, AzAffinityReplicaAndPrimary, AzAffinityAllNodes}
+	whitespaces := []string{" ", "   ", "\t", "\n", " \t\n "}
+
+	for _, strategy := range strategies {
+		for _, ws := range whitespaces {
+			config := NewClientConfiguration().
+				WithReadFrom(strategy).
+				WithClientAZ(ws)
+
+			_, err := config.ToProtobuf()
+			assert.Error(t, err, "expected error for strategy %v with whitespace clientAZ %q", strategy, ws)
+			assert.Contains(t, err.Error(), "client AZ must be set")
+		}
+	}
+}
+
+func TestConfig_AzAffinity_NormalizesSurroundingWhitespaceInValidClientAZ(t *testing.T) {
+	// Surrounding whitespace on a valid AZ is trimmed before forwarding to match Java and Node parity
+	config := NewClientConfiguration().
+		WithReadFrom(AzAffinity).
+		WithClientAZ("  us-east-1a  ")
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, "us-east-1a", result.ClientAz)
+}
+
 func TestConfig_AzAffinityAllNodes_MapsToProtobuf(t *testing.T) {
 	// AzAffinityAllNodes with ClientAZ must map to ReadFrom_AZAffinityAllNodes
 	az := "us-east-1a"

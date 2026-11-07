@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
@@ -360,8 +361,9 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 		request.ClientName = config.clientName
 	}
 
-	if config.clientAZ != "" {
-		request.ClientAz = config.clientAZ
+	trimmedClientAZ := strings.TrimSpace(config.clientAZ)
+	if trimmedClientAZ != "" {
+		request.ClientAz = trimmedClientAZ
 	}
 
 	libName, err := resolveLibName(config.libName, config.clientInfoTag)
@@ -373,7 +375,7 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 	if request.ReadFrom == protobuf.ReadFrom_AZAffinity ||
 		request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary ||
 		request.ReadFrom == protobuf.ReadFrom_AZAffinityAllNodes {
-		if config.clientAZ == "" {
+		if trimmedClientAZ == "" {
 			return nil, errors.New(
 				"client AZ must be set when using AZ affinity, AZ affinity with replicas and primary, or AZ affinity across all nodes",
 			)
