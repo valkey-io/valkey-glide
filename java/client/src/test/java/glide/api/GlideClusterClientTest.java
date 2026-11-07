@@ -686,19 +686,18 @@ public class GlideClusterClientTest {
     @Test
     public void infoWithPartialResults_without_sections_sends_no_sections() {
         // setup
-        Map<String, Object> testPayload = createMap("addr1", "addr1 result");
-        CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
-        testResponse.complete(ClusterValue.of(testPayload));
+        Map<String, Object> primariesPayload = createMap("addr1", "addr1 result");
+        Map<String, Object> allNodesPayload = createMap("addr2", "addr2 result");
         when(commandManager.<ClusterValue<Object>>submitNewCommandWithPartialResults(
                         eq(Info), eq(new String[0]), eq(null), any()))
-                .thenReturn(testResponse);
+                .thenReturn(CompletableFuture.completedFuture(ClusterValue.of(primariesPayload)));
         when(commandManager.<ClusterValue<Object>>submitNewCommandWithPartialResults(
                         eq(Info), eq(new String[0]), eq(ALL_NODES), any()))
-                .thenReturn(testResponse);
+                .thenReturn(CompletableFuture.completedFuture(ClusterValue.of(allNodesPayload)));
 
         // exercise and verify
-        assertEquals(testPayload, service.infoWithPartialResults().get().getMultiValue());
-        assertEquals(testPayload, service.infoWithPartialResults(ALL_NODES).get().getMultiValue());
+        assertEquals(primariesPayload, service.infoWithPartialResults().get().getMultiValue());
+        assertEquals(allNodesPayload, service.infoWithPartialResults(ALL_NODES).get().getMultiValue());
     }
 
     @SneakyThrows

@@ -11037,20 +11037,21 @@ class TestClusterRoutes:
         )
         username = f"partial-{get_random_string(10)}"
         password = "password"
-        admin.custom_command(
-            ["ACL", "SETUSER", username, "on", f">{password}", "~*", "&*", "+@all"],
-            AllNodes(),
-        )
-        denied = cast(
-            GlideClusterClient,
-            create_sync_client(
-                request,
-                cluster_mode,
-                protocol=protocol,
-                credentials=ServerCredentials(password=password, username=username),
-            ),
-        )
+        denied: Optional[GlideClusterClient] = None
         try:
+            admin.custom_command(
+                ["ACL", "SETUSER", username, "on", f">{password}", "~*", "&*", "+@all"],
+                AllNodes(),
+            )
+            denied = cast(
+                GlideClusterClient,
+                create_sync_client(
+                    request,
+                    cluster_mode,
+                    protocol=protocol,
+                    credentials=ServerCredentials(password=password, username=username),
+                ),
+            )
             primaries = sorted(cast(Dict[bytes, bytes], denied.info()).keys())
             host, port = primaries[0].decode().rsplit(":", 1)
             admin.custom_command(
@@ -11076,11 +11077,16 @@ class TestClusterRoutes:
             failed = denied.info(allow_partial_results=True)
             assert isinstance(failed, dict)
             assert sorted(failed.keys()) == primaries
-            assert all(isinstance(reply, RequestError) for reply in failed.values())
+            for reply in failed.values():
+                assert isinstance(reply, RequestError)
+                assert not isinstance(reply, GlideTimeoutError)
         finally:
-            denied.close()
-            admin.custom_command(["ACL", "DELUSER", username], AllNodes())
-            admin.close()
+            if denied is not None:
+                denied.close()
+            try:
+                admin.custom_command(["ACL", "DELUSER", username], AllNodes())
+            finally:
+                admin.close()
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

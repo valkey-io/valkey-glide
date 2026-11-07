@@ -189,7 +189,12 @@ async fn cluster_info_with_partial_results_keeps_the_error_reply_of_a_denied_pri
         .unwrap();
     let failed = denied.info_with_partial_results(&[], None).await.unwrap();
     assert_eq!(failed.len(), primaries.len());
-    assert!(failed.values().all(Result::is_err), "{failed:?}");
+    assert!(
+        failed
+            .values()
+            .all(|reply| matches!(reply, Err(error) if !matches!(error, GlideError::Timeout(_)))),
+        "{failed:?}"
+    );
 }
 
 #[tokio::test]

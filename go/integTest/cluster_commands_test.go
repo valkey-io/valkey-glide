@@ -228,6 +228,8 @@ func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsTheErrorReplyOfADeni
 		suite.defaultClusterClientConfig().WithCredentials(config.NewServerCredentials(username, password)),
 	)
 	require.NoError(t, err)
+	// Runs before the deferred ACL DELUSER, so the client never reconnects as a deleted user.
+	defer denied.Close()
 
 	infos, err := denied.Info(ctx)
 	require.NoError(t, err)
@@ -271,7 +273,9 @@ func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsTheErrorReplyOfADeni
 	require.NoError(t, err)
 	assert.Len(t, failed.MultiValue(), len(primaries))
 	for _, reply := range failed.MultiValue() {
-		assert.Implements(t, (*error)(nil), reply)
+		require.Implements(t, (*error)(nil), reply)
+		_, isTimeout := reply.(*glide.TimeoutError)
+		assert.False(t, isTimeout)
 	}
 }
 

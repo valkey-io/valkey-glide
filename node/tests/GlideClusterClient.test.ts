@@ -582,13 +582,16 @@ describe("GlideClusterClient", () => {
                 ],
                 { route: "allNodes" },
             );
-            const denied = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol, {
-                    credentials: { username, password },
-                }),
-            );
+            let denied: GlideClusterClient | undefined;
 
             try {
+                denied = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                        { credentials: { username, password } },
+                    ),
+                );
                 const primaries = Object.keys(await denied.info()).sort();
                 const [host, port] = primaries[0].split(":");
                 await client.customCommand(
@@ -636,9 +639,10 @@ describe("GlideClusterClient", () => {
 
                 for (const reply of Object.values(failed)) {
                     expect(reply).toBeInstanceOf(RequestError);
+                    expect(reply).not.toBeInstanceOf(TimeoutError);
                 }
             } finally {
-                denied.close();
+                denied?.close();
                 await client.customCommand(["ACL", "DELUSER", username], {
                     route: "allNodes",
                 });
@@ -652,7 +656,7 @@ describe("GlideClusterClient", () => {
         async (protocol) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol, {
-                    requestTimeout: 300,
+                    requestTimeout: 1000,
                     clientCircuitBreaker: {
                         countTimeouts: true,
                         minErrors: 2,
@@ -678,7 +682,7 @@ describe("GlideClusterClient", () => {
             try {
                 for (const route of routes) {
                     await pauser.customCommand(
-                        ["CLIENT", "PAUSE", "3000", "ALL"],
+                        ["CLIENT", "PAUSE", "4500", "ALL"],
                         { route },
                     );
                 }
