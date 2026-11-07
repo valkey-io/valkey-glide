@@ -9,7 +9,8 @@
 //! All diagnostic event construction moves to the consumer side (`client/mod.rs`).
 
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::ptr;
+use std::sync::atomic::{AtomicPtr, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use tokio::sync::oneshot;
@@ -607,10 +608,64 @@ pub struct TimeoutWatchdog {
     tx: mpsc::Sender<DeadlineEntry>,
 }
 
-/// Global singleton watchdog instance. Uses an atomic pointer so the read path
-/// is lock-free and the state can be replaced after fork().
-static GLOBAL_WATCHDOG: std::sync::atomic::AtomicPtr<TimeoutWatchdog> =
-    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+/// Points to the slot that holds the global watchdog pointer. Read it
+/// through [`global_slot`]. Both are atomic pointers, so reads take no lock
+/// and a forked child can replace the watchdog.
+static GLOBAL_SLOT: AtomicPtr<AtomicPtr<TimeoutWatchdog>> = AtomicPtr::new(ptr::null_mut());
+
+/// The slot that holds the global watchdog pointer.
+///
+/// On Linux the slot has a page of its own, marked `MADV_WIPEONFORK`, so the
+/// kernel zeroes it in every forked child. The `pthread_atfork` handler is not
+/// enough there. glibc 2.36 and later drop their atfork lock while prepare
+/// handlers run, and a child skips any handler registered after its fork
+/// began. A first `global()` that runs during that window registers the
+/// handler too late for that child, yet still publishes the watchdog.
+/// Elsewhere, and on Linux kernels older than 4.14, the slot is plain memory
+/// and only the handler clears it.
+#[inline]
+fn global_slot() -> &'static AtomicPtr<TimeoutWatchdog> {
+    let slot = GLOBAL_SLOT.load(Ordering::Acquire);
+    if !slot.is_null() {
+        // Safety: a published slot is never freed.
+        return unsafe { &*slot };
+    }
+    init_global_slot()
+}
+
+#[cold]
+fn init_global_slot() -> &'static AtomicPtr<TimeoutWatchdog> {
+    let slot = new_global_slot();
+    match GLOBAL_SLOT.compare_exchange(ptr::null_mut(), slot, Ordering::AcqRel, Ordering::Acquire) {
+        Ok(_) => unsafe { &*slot },
+        // Another thread published first. Ours is leaked, at most once per
+        // thread that races the first call.
+        Err(existing) => unsafe { &*existing },
+    }
+}
+
+fn new_global_slot() -> *mut AtomicPtr<TimeoutWatchdog> {
+    #[cfg(target_os = "linux")]
+    unsafe {
+        let len = libc::sysconf(libc::_SC_PAGESIZE) as usize;
+        let page = libc::mmap(
+            ptr::null_mut(),
+            len,
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+            -1,
+            0,
+        );
+        if page != libc::MAP_FAILED {
+            // If the kernel lacks MADV_WIPEONFORK the page is plain memory,
+            // and the atfork handler still clears it. A new anonymous page is
+            // all zeros, so the slot starts null.
+            libc::madvise(page, len, libc::MADV_WIPEONFORK);
+            return page.cast();
+        }
+    }
+    Box::into_raw(Box::new(AtomicPtr::new(ptr::null_mut())))
+}
 
 /// Unset the global watchdog so the next `global()` call starts a fresh one.
 ///
@@ -619,10 +674,14 @@ static GLOBAL_WATCHDOG: std::sync::atomic::AtomicPtr<TimeoutWatchdog> =
 /// were copied mid-use, so dropping it could deadlock or misbehave. Leaking
 /// one inherited instance per fork is the safe choice.
 ///
-/// Only atomic stores, so it is safe to run in a `pthread_atfork` child handler.
+/// Only atomic loads and stores, so it is safe to run in a `pthread_atfork`
+/// child handler.
 #[cfg(unix)]
 fn reinit_global() {
-    GLOBAL_WATCHDOG.store(std::ptr::null_mut(), Ordering::Release);
+    let slot = GLOBAL_SLOT.load(Ordering::Acquire);
+    if !slot.is_null() {
+        unsafe { &*slot }.store(ptr::null_mut(), Ordering::Release);
+    }
     PUBLISHED_PENDING.store(0, Ordering::Relaxed);
 }
 
@@ -633,8 +692,9 @@ fn reinit_global() {
 /// and on macOS sending to it crashes the child with SIGTRAP.
 ///
 /// Every caller runs this before it can publish a global, so a published global
-/// always has the handler registered. It never blocks: a child forked while
-/// another thread was registering just registers again. Registering more than
+/// always has the handler registered. A fork that had already begun can still
+/// skip it, which [`global_slot`] covers on Linux. It never blocks: a child
+/// forked while another thread was registering just registers again. Registering more than
 /// once is harmless because reinit is idempotent. Panics if registration
 /// fails, so no global is published without the handler.
 #[cfg(unix)]
@@ -656,7 +716,7 @@ fn ensure_reinit_in_forked_child() {
 impl TimeoutWatchdog {
     /// Get or initialize the global shared watchdog instance.
     pub fn global() -> &'static Self {
-        let ptr = GLOBAL_WATCHDOG.load(std::sync::atomic::Ordering::Acquire);
+        let ptr = global_slot().load(Ordering::Acquire);
         if !ptr.is_null() {
             // Safety: once installed as non-null, the pointer is never freed
             // until process exit (reinit_global intentionally leaks the prior
@@ -672,11 +732,11 @@ impl TimeoutWatchdog {
         #[cfg(unix)]
         ensure_reinit_in_forked_child();
         let ptr = Box::into_raw(Box::new(Self::start_global()));
-        match GLOBAL_WATCHDOG.compare_exchange(
-            std::ptr::null_mut(),
+        match global_slot().compare_exchange(
+            ptr::null_mut(),
             ptr,
-            std::sync::atomic::Ordering::AcqRel,
-            std::sync::atomic::Ordering::Acquire,
+            Ordering::AcqRel,
+            Ordering::Acquire,
         ) {
             Ok(_) => unsafe { &*ptr },
             Err(existing) => {
@@ -1114,5 +1174,79 @@ mod tests {
         // The parent's watchdog thread is not copied into the child, so a
         // deadline registered there only fires if the child got a fresh one.
         assert_in_forked_child(global_deadline_fires);
+    }
+
+    /// glibc 2.36 and later drop their atfork lock while prepare handlers run,
+    /// and the child skips any handler registered after its fork began. If
+    /// one thread forks while another runs the first `global()`, the child
+    /// misses the reinit handler and inherits a watchdog without its thread.
+    ///
+    /// A prepare handler holds the fork in that window until the first
+    /// `global()` returns. Where the lock stays held (macOS, musl, older
+    /// glibc), that `global()` waits for the fork instead, the handler gives
+    /// up after 5 s, and the child starts its own watchdog.
+    #[cfg(unix)]
+    #[test]
+    fn child_forked_during_first_global_gets_working_watchdog() {
+        use std::sync::atomic::AtomicBool;
+
+        // The window only exists while the global has never been created,
+        // so run the scenario alone in a fresh copy of this test binary.
+        const IN_FRESH_PROCESS: &str = "GLIDE_TEST_FRESH_PROCESS";
+        if std::env::var_os(IN_FRESH_PROCESS).is_none() {
+            let name = concat!(
+                module_path!(),
+                "::child_forked_during_first_global_gets_working_watchdog"
+            );
+            let name = name.split_once("::").unwrap().1;
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", name, "--test-threads=1", "--nocapture"])
+                .env(IN_FRESH_PROCESS, "1")
+                .spawn()
+                .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(60);
+            let status = loop {
+                if let Some(status) = child.try_wait().unwrap() {
+                    break status;
+                }
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    panic!("fresh test process did not exit within 60 s and was killed");
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            };
+            assert!(status.success(), "fresh test process failed: {status}");
+            return;
+        }
+
+        static ARMED: AtomicBool = AtomicBool::new(false);
+        static FORK_IN_PREPARE: AtomicBool = AtomicBool::new(false);
+        static FIRST_GLOBAL_DONE: AtomicBool = AtomicBool::new(false);
+        extern "C" fn hold_fork_in_prepare() {
+            if !ARMED.swap(false, Ordering::AcqRel) {
+                return;
+            }
+            FORK_IN_PREPARE.store(true, Ordering::Release);
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !FIRST_GLOBAL_DONE.load(Ordering::Acquire) && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+
+        assert!(GLOBAL_SLOT.load(Ordering::Acquire).is_null());
+        // Registered before the watchdog's handler, so it runs first.
+        let rc = unsafe { libc::pthread_atfork(Some(hold_fork_in_prepare), None, None) };
+        assert_eq!(rc, 0);
+        ARMED.store(true, Ordering::Release);
+
+        let first_global = std::thread::spawn(|| {
+            while !FORK_IN_PREPARE.load(Ordering::Acquire) {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            TimeoutWatchdog::global();
+            FIRST_GLOBAL_DONE.store(true, Ordering::Release);
+        });
+        assert_in_forked_child(global_deadline_fires);
+        first_global.join().unwrap();
     }
 }
