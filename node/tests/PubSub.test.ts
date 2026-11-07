@@ -375,7 +375,6 @@ describe("PubSub", () => {
             void 0;
         } finally {
             client.close();
-            await new Promise((resolve) => setTimeout(resolve, 1000));
         }
     }
 
