@@ -963,6 +963,13 @@ export class GlideClusterClient extends BaseClient {
         cursor: ClusterScanCursor,
         options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
+        if (!(cursor instanceof ClusterScanCursor)) {
+            throw new RequestError(
+                `Invalid cursor parameter: expected instance of ClusterScanCursor, received ${typeof cursor}. ` +
+                    `Use 'new ClusterScanCursor()' to start a cluster scan.`,
+            );
+        }
+
         return this.createClusterScanPromise(cursor, options);
     }
 
