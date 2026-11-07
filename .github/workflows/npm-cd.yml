@@ -496,7 +496,7 @@ jobs:
               shell: sh
               run: |
                   apk update
-                  apk add bash git python3
+                  apk add bash git python3 jq
 
             - name: Checkout (via action)
               if: ${{ !(matrix.TARGET == 'aarch64-unknown-linux-musl') }}

@@ -26,7 +26,7 @@
 //! │  ┌─────────────────────────────┐    │
 //! │  │ ClientPool                  │    │
 //! │  │  idle: VecDeque (LIFO)      │    │
-//! │  │  in_use: DashMap            │    │
+//! │  │  in_use: HashMap            │    │
 //! │  │  config: PoolConfig         │    │
 //! │  └─────────────────────────────┘    │
 //! └─────────────────────────────────────┘
@@ -35,9 +35,9 @@
 use crate::client::AuthGeneration;
 use crate::client::Client as GlideClient;
 use dashmap::DashMap;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU8, AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::Notify;
@@ -46,9 +46,16 @@ use tokio::sync::Notify;
 // POOL STATES
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// [`ScopePool`] states, stored in its `AtomicU8`. [`ClientPool`] uses [`PoolState`].
 pub const POOL_RUNNING: u8 = 0;
 pub const POOL_CLOSING: u8 = 1;
 pub const POOL_CLOSED: u8 = 2;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PoolState {
+    Running,
+    Closed,
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -118,18 +125,41 @@ pub struct PooledClient {
 // CLIENT POOL
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// The client-instance pool. Thread-safe via TokioMutex at the registry level.
+/// The lock every holder of a registered [`ClientPool`] goes through.
+///
+/// Holders do in-memory work under the guard and release it without awaiting,
+/// so a `std::sync::Mutex` is enough: `lock()` waits only for in-memory
+/// critical sections, from any thread, runtime or not. The guard is `!Send`, so holding
+/// it across an `.await` in a spawned task does not compile.
+///
+/// A holder that panics mid-section poisons the mutex. `lock()` recovers the
+/// guard rather than propagating, so one panic does not turn every later pool
+/// call into another, which through `extern "C"` would abort the process.
+pub struct PoolMutex(std::sync::Mutex<ClientPool>);
+
+pub type PoolGuard<'a> = std::sync::MutexGuard<'a, ClientPool>;
+
+impl PoolMutex {
+    pub fn new(pool: ClientPool) -> Self {
+        Self(std::sync::Mutex::new(pool))
+    }
+
+    pub fn lock(&self) -> PoolGuard<'_> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+/// The client-instance pool. The registry shares it behind a [`PoolMutex`].
 pub struct ClientPool {
     pub config: PoolConfig,
     /// LIFO idle stack — most recently returned client is at the back, so the
     /// warmest connection is reused first and long-idle ones age out.
     pub idle: VecDeque<PooledClient>,
     /// Currently borrowed clients (client_id → PooledClient).
-    pub in_use: DashMap<u64, PooledClient>,
+    pub in_use: HashMap<u64, PooledClient>,
     /// Current total count (idle + in_use + creating).
-    pub total_count: AtomicU32,
-    /// Pool lifecycle state.
-    pub state: AtomicU8,
+    pub total_count: u32,
+    pub state: PoolState,
     /// Condvar notified when a client is returned to idle (for blocking acquire).
     pub release_notify: Arc<(std::sync::Mutex<()>, std::sync::Condvar)>,
     /// Only `discard_client` pushes here; bindings read it via `drain_discarded_ids`.
@@ -173,9 +203,9 @@ impl ClientPool {
         Ok(Self {
             config,
             idle: VecDeque::new(),
-            in_use: DashMap::new(),
-            total_count: AtomicU32::new(0),
-            state: AtomicU8::new(POOL_RUNNING),
+            in_use: HashMap::new(),
+            total_count: 0,
+            state: PoolState::Running,
             release_notify: Arc::new((std::sync::Mutex::new(()), std::sync::Condvar::new())),
             discarded_ids: Vec::new(),
         })
@@ -187,14 +217,14 @@ impl ClientPool {
     }
 
     /// Non-blocking acquire. Returns `client_id` on success (>= 0).
-    /// Returns `-1` if pool is closed/closing, `-3` if no idle client available.
+    /// Returns `-1` if the pool is closed, `-3` if no idle client is available.
     /// Evicts idle connections past idle_timeout internally.
     ///
     /// The `is_blocking` flag for the acquired client is accessible lock-free via
     /// `glide_core::pool::get_blocking_flag(client_id)`, populated at client-creation
     /// time in the global `BLOCKING_FLAG_REGISTRY`.
     pub fn try_acquire(&mut self) -> i64 {
-        if self.state.load(Ordering::Acquire) != POOL_RUNNING {
+        if self.state != PoolState::Running {
             return -1;
         }
 
@@ -223,8 +253,7 @@ impl ClientPool {
 
     /// Whether background creation should be triggered (room below max_size).
     pub fn should_create(&self) -> bool {
-        self.state.load(Ordering::Acquire) == POOL_RUNNING
-            && self.total_count.load(Ordering::Acquire) < self.config.max_size
+        self.state == PoolState::Running && self.total_count < self.config.max_size
     }
 
     /// Add a newly created client to the idle pool. Returns the assigned client_id.
@@ -246,7 +275,7 @@ impl ClientPool {
             is_blocking: flag.clone(),
         };
         self.idle.push_back(entry);
-        self.total_count.fetch_add(1, Ordering::AcqRel);
+        self.total_count += 1;
         get_blocking_flag_registry().insert(client_id, flag);
         client_id
     }
@@ -282,19 +311,9 @@ impl ClientPool {
     /// it spawns an on-demand client redundant with the warmup client already in
     /// flight. Each warmup task consumes its reservation via `add_client_reserved` on
     /// success or returns it via `release_reservation` on failure.
-    pub fn reserve_warmup_slots(&self, n: u32) -> u32 {
-        let max = self.config.max_size;
-        let mut reserved = 0;
-        //TODO: (#7175) `fetch_update` is deprecated for `try_update` since Rust 1.99, but `try_update`
-        // needs 1.95 and the MSRV is 1.94.1.
-        #[allow(deprecated)]
-        let _ = self
-            .total_count
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |cur| {
-                let room = max.saturating_sub(cur);
-                reserved = room.min(n);
-                (reserved > 0).then_some(cur + reserved)
-            });
+    pub fn reserve_warmup_slots(&mut self, n: u32) -> u32 {
+        let reserved = self.config.max_size.saturating_sub(self.total_count).min(n);
+        self.total_count += reserved;
         reserved
     }
 
@@ -309,13 +328,12 @@ impl ClientPool {
     /// 2. Calling `return_to_idle(entry)` to put it back in the idle pool
     ///    Or on failure, calling `discard_client(client_id)` to remove it for good.
     pub fn take_for_release(&mut self, client_id: u64) -> Option<PooledClient> {
-        let entry = self.in_use.remove(&client_id);
-        entry.map(|(_, e)| e)
+        self.in_use.remove(&client_id)
     }
 
     /// Return a client to the idle pool after successful state reset.
     pub fn return_to_idle(&mut self, mut entry: PooledClient) {
-        if self.state.load(Ordering::Acquire) != POOL_RUNNING {
+        if self.state != PoolState::Running {
             self.discard_client(entry.client_id);
             return;
         }
@@ -334,7 +352,7 @@ impl ClientPool {
     /// `drain_discarded_ids` so every binding reclaims the adapter / handle it
     /// holds for that id. Also clears both core registries, so callers need not.
     pub fn discard_client(&mut self, client_id: u64) {
-        saturating_dec(&self.total_count);
+        self.total_count = self.total_count.saturating_sub(1);
         self.discarded_ids.push(client_id);
         unregister_pool_client(client_id);
         unregister_blocking_flag(client_id);
@@ -345,7 +363,7 @@ impl ClientPool {
     /// Give back a slot reserved by a binding that never became a client.
     /// No id exists, so there is nothing for a binding to reclaim.
     pub fn release_reservation(&mut self) {
-        saturating_dec(&self.total_count);
+        self.total_count = self.total_count.saturating_sub(1);
         let (_, condvar) = &*self.release_notify;
         condvar.notify_one();
     }
@@ -354,7 +372,7 @@ impl ClientPool {
     ///
     /// Takes the lock guard so the lock is released before the destruction logs
     /// are written; a metrics read waiting for the lock must not wait on the log sink.
-    pub fn destroy(mut pool: tokio::sync::MutexGuard<'_, ClientPool>) {
+    pub fn destroy(mut pool: PoolGuard<'_>) {
         let borrowed = pool.in_use.len();
 
         // Defensive fallback: every permanent drop should go through
@@ -364,12 +382,12 @@ impl ClientPool {
             unregister_blocking_flag(entry.client_id);
             unregister_pool_client(entry.client_id);
         }
-        for entry in pool.in_use.iter() {
-            unregister_blocking_flag(*entry.key());
-            unregister_pool_client(*entry.key());
+        for &client_id in pool.in_use.keys() {
+            unregister_blocking_flag(client_id);
+            unregister_pool_client(client_id);
         }
 
-        pool.state.store(POOL_CLOSED, Ordering::Release);
+        pool.state = PoolState::Closed;
 
         // Invalidate scopes owned by this pool's clients before dropping them, so a
         // scope cannot outlive the client it borrowed from.
@@ -377,7 +395,7 @@ impl ClientPool {
             .idle
             .iter()
             .map(|c| c.client_id)
-            .chain(pool.in_use.iter().map(|e| *e.key()))
+            .chain(pool.in_use.keys().copied())
             .collect::<Vec<_>>()
         {
             destroy_client_scope_pool(client_id);
@@ -385,7 +403,7 @@ impl ClientPool {
 
         pool.idle.clear();
         pool.in_use.clear();
-        pool.total_count.store(0, Ordering::Release);
+        pool.total_count = 0;
         drop(pool);
 
         if borrowed > 0 {
@@ -416,6 +434,28 @@ impl ClientPool {
     pub fn active_count(&self) -> u32 {
         self.in_use.len() as u32
     }
+
+    pub fn counts(&self) -> PoolCounts {
+        PoolCounts {
+            idle: self.idle_count(),
+            active: self.active_count(),
+            total: self.total_count,
+        }
+    }
+}
+
+/// The three counts every binding reports, read together under one lock so
+/// they describe the same instant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PoolCounts {
+    pub idle: u32,
+    pub active: u32,
+    pub total: u32,
+}
+
+/// `None` when no pool has this id.
+pub fn pool_counts(pool_id: u64) -> Option<PoolCounts> {
+    Some(get_pool(pool_id)?.lock().counts())
 }
 
 /// Async release of a pooled client with state reset and leak protection.
@@ -429,9 +469,9 @@ impl ClientPool {
 /// 4. A `LeakGuard` ensures `discard_client(client_id)` is called if the future is cancelled
 ///
 /// Call this from a spawned task. The pool_arc should already be cloned for the task.
-pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_id: u64) {
+pub async fn release_client_async(pool_arc: Arc<PoolMutex>, client_id: u64) {
     let (mut entry, configured_db, timeout_duration) = {
-        let mut pool = pool_arc.lock().await;
+        let mut pool = pool_arc.lock();
         let configured_db = pool.config.configured_database_id;
         let timeout = pool.config.request_timeout * 2;
         match pool.take_for_release(client_id) {
@@ -445,29 +485,17 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
 
     // If this task is cancelled after take_for_release but before the outcome is
     // recorded, the guard discards the client so neither the slot nor the id is
-    // lost. Cancellation can land while another task holds the pool lock, and
-    // blocking_lock() panics inside a runtime, so a contended lock is handed to
-    // a spawned task instead.
+    // lost.
     let pool_for_guard = pool_arc.clone();
     let guard_client_id = entry.client_id;
     struct LeakGuard {
-        pool: Option<Arc<TokioMutex<ClientPool>>>,
+        pool: Option<Arc<PoolMutex>>,
         client_id: u64,
     }
     impl Drop for LeakGuard {
         fn drop(&mut self) {
-            let Some(pool_arc) = self.pool.take() else {
-                return;
-            };
-            let client_id = self.client_id;
-            if let Ok(mut pool) = pool_arc.try_lock() {
-                pool.discard_client(client_id);
-            } else if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                handle.spawn(async move {
-                    pool_arc.lock().await.discard_client(client_id);
-                });
-            } else {
-                pool_arc.blocking_lock().discard_client(client_id);
+            if let Some(pool_arc) = self.pool.take() {
+                pool_arc.lock().discard_client(self.client_id);
             }
         }
     }
@@ -476,9 +504,7 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
         client_id: guard_client_id,
     };
 
-    // Reset only the state the borrow dirtied: DISCARD a still-open MULTI, and
-    // SELECT back to the configured db if the borrow drifted off it. See
-    // `reset_connection_state`.
+    // Undo the borrow's state (see `reset_connection_state`); failure discards.
     let reset_result = tokio::time::timeout(
         timeout_duration,
         entry.client.reset_connection_state(configured_db),
@@ -493,9 +519,7 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
         );
     }
 
-    // Disarm only once the lock is held: the lock wait is itself a
-    // cancellation point, and the outcome is handled explicitly below.
-    let mut pool = pool_arc.lock().await;
+    let mut pool = pool_arc.lock();
     guard.pool = None;
     match reset_result {
         Ok(Ok(_)) => pool.return_to_idle(entry),
@@ -508,7 +532,7 @@ pub async fn release_client_async(pool_arc: Arc<TokioMutex<ClientPool>>, client_
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Global pool registry: pool_id → Pool instance.
-static POOL_REGISTRY: OnceLock<DashMap<u64, Arc<TokioMutex<ClientPool>>>> = OnceLock::new();
+static POOL_REGISTRY: OnceLock<DashMap<u64, Arc<PoolMutex>>> = OnceLock::new();
 static NEXT_POOL_ID: AtomicU64 = AtomicU64::new(1);
 /// Abandon monitor task handles, keyed by pool_id. Stored outside the pool
 /// mutex to allow abort on destroy without locking.
@@ -611,27 +635,6 @@ pub fn refresh_activity_by_client(client_id: u64) {
     }
 }
 
-/// Attempt to refresh the inactivity timer for a pool-borrowed client.
-/// Returns `true` if the refresh succeeded, `false` if the pool mutex was
-/// contended and the update was skipped.
-pub fn try_refresh_activity_by_client(client_id: u64) -> bool {
-    let Some(pool_id) = get_client_to_pool().get(&client_id).map(|e| *e.value()) else {
-        return false;
-    };
-    let Some(pool_arc) = get_pool(pool_id) else {
-        return false;
-    };
-    // try_lock: if contended, caller must decide whether to clear is_blocking
-    if let Ok(pool) = pool_arc.try_lock() {
-        if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
-            entry.value_mut().borrowed_at = Some(Instant::now());
-        }
-        true
-    } else {
-        false
-    }
-}
-
 /// Register a blocking flag for a client that was manually added to the pool
 /// (i.e. without going through `add_client`/`add_client_reserved`).
 /// The provided Arc must be the same one stored in the `PooledClient.is_blocking` field
@@ -681,8 +684,8 @@ pub fn track_scope_command_by_client(
 }
 
 /// Clears a [`track_scope_command`] blocking mark on every exit path, including
-/// task abort. Refreshes activity first (best-effort: skipped if the pool lock is
-/// contended), so the monitor rarely sees the mark cleared with a stale timer.
+/// task abort. Refreshes activity first, so the monitor does not see the mark
+/// cleared with a stale timer.
 #[must_use = "dropping the guard clears the mark immediately"]
 pub struct BlockingGuard {
     pool_id: u64,
@@ -708,7 +711,7 @@ pub fn allocate_client_id() -> u64 {
     NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed)
 }
 
-pub fn get_pool_registry() -> &'static DashMap<u64, Arc<TokioMutex<ClientPool>>> {
+pub fn get_pool_registry() -> &'static DashMap<u64, Arc<PoolMutex>> {
     POOL_REGISTRY.get_or_init(DashMap::new)
 }
 
@@ -722,7 +725,7 @@ pub fn register_pool(pool: ClientPool) -> u64 {
             pool_id, pool.config.max_size, pool.config.min_idle, pool.config.abandon_timeout
         ),
     );
-    get_pool_registry().insert(pool_id, Arc::new(TokioMutex::new(pool)));
+    get_pool_registry().insert(pool_id, Arc::new(PoolMutex::new(pool)));
     pool_id
 }
 
@@ -744,10 +747,7 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
         }
     };
 
-    let abandon_timeout = {
-        let pool = pool_arc.blocking_lock();
-        pool.config.abandon_timeout
-    };
+    let abandon_timeout = pool_arc.lock().config.abandon_timeout;
 
     if abandon_timeout.is_zero() {
         glide_logger::log_debug("pool", "Abandon monitor disabled (timeout=0)");
@@ -770,21 +770,21 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
             tokio::time::sleep(scan_interval).await;
 
             let abandoned_ids: Vec<u64> = {
-                let pool = pool_arc_monitor.lock().await;
-                if pool.state.load(Ordering::Acquire) != POOL_RUNNING {
+                let pool = pool_arc_monitor.lock();
+                if pool.state != PoolState::Running {
                     break;
                 }
                 let now = Instant::now();
                 pool.in_use
                     .iter()
-                    .filter_map(|entry| {
+                    .filter_map(|(&client_id, entry)| {
                         // Skip clients currently executing blocking commands
-                        if entry.value().is_blocking.load(Ordering::Acquire) > 0 {
+                        if entry.is_blocking.load(Ordering::Acquire) > 0 {
                             return None;
                         }
-                        let borrowed_at = entry.value().borrowed_at?;
+                        let borrowed_at = entry.borrowed_at?;
                         if now.duration_since(borrowed_at) > abandon_timeout {
-                            Some(*entry.key())
+                            Some(client_id)
                         } else {
                             None
                         }
@@ -804,14 +804,14 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
                 // Discard rather than return-to-idle: a force-released client may still
                 // have a stale release pending from the original borrower. Discarding
                 // guarantees two borrowers never share a connection.
-                let mut pool = pool_arc_monitor.lock().await;
+                let mut pool = pool_arc_monitor.lock();
                 // Revalidate under lock: activity may have been refreshed or blocking
                 // flag set between the scan and this removal.
                 if let Some(entry) = pool.in_use.get(&client_id) {
-                    if entry.value().is_blocking.load(Ordering::Acquire) > 0 {
+                    if entry.is_blocking.load(Ordering::Acquire) > 0 {
                         continue;
                     }
-                    if entry.value().borrowed_at.is_some_and(|borrowed_at| {
+                    if entry.borrowed_at.is_some_and(|borrowed_at| {
                         Instant::now().duration_since(borrowed_at) <= abandon_timeout
                     }) {
                         continue;
@@ -833,25 +833,20 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
 /// monitor measures inactivity (time since last command) rather than total
 /// borrow duration. No-op if the pool or client is not found.
 pub fn refresh_client_activity(pool_id: u64, client_id: u64) {
-    let pool_arc = match get_pool(pool_id) {
-        Some(arc) => arc,
-        None => return,
-    };
-    #[allow(clippy::collapsible_if)]
-    if let Ok(pool) = pool_arc.try_lock() {
-        if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
-            entry.value_mut().borrowed_at = Some(Instant::now());
-        }
+    if let Some(pool_arc) = get_pool(pool_id)
+        && let Some(entry) = pool_arc.lock().in_use.get_mut(&client_id)
+    {
+        entry.borrowed_at = Some(Instant::now());
     }
 }
 
 /// Get a pool by ID (cheap Arc clone).
-pub fn get_pool(pool_id: u64) -> Option<Arc<TokioMutex<ClientPool>>> {
+pub fn get_pool(pool_id: u64) -> Option<Arc<PoolMutex>> {
     get_pool_registry().get(&pool_id).map(|e| e.value().clone())
 }
 
 /// Remove a pool from the registry.
-pub fn unregister_pool(pool_id: u64) -> Option<Arc<TokioMutex<ClientPool>>> {
+pub fn unregister_pool(pool_id: u64) -> Option<Arc<PoolMutex>> {
     // Abort the abandon monitor before removing the pool
     if let Some((_, handle)) = get_monitor_handles().remove(&pool_id) {
         handle.abort();
@@ -2029,31 +2024,18 @@ mod client_pool_marking_tests {
         .expect("valid pool config")
     }
 
-    /// `reset_connection_state` must fail (so release discards the connection) when
-    /// DISCARD could not run while a MULTI was open — otherwise the connection is
-    /// reused with a still-open transaction and the next borrower's commands queue
-    /// into it. With no MULTI open, the DISCARD outcome is not load-bearing and is
-    /// ignored. Uses a lazy client to a dead port so DISCARD fails with a connection
-    /// error (not the expected "DISCARD without MULTI"), which must propagate.
+    /// A DISCARD failure other than "DISCARD without MULTI" must fail the reset, MULTI
+    /// open or not. A lazy client to a dead port makes DISCARD fail to connect.
     #[tokio::test]
-    async fn reset_fails_when_discard_fails_with_multi_open() {
-        // No MULTI open: the DISCARD outcome is not load-bearing, so reset succeeds
-        // regardless of the connection error.
-        let mut no_multi = lazy_client().await;
-        assert!(
-            no_multi.reset_connection_state(0).await.is_ok(),
-            "a DISCARD error with no MULTI open must be ignored"
-        );
-
-        // MULTI open + a connection error (not "DISCARD without MULTI") means the
-        // transaction may still be open, so reset must fail and the caller discards
-        // the connection.
-        let mut multi_open = lazy_client().await;
-        multi_open.set_multi_active_for_test(true);
-        assert!(
-            multi_open.reset_connection_state(0).await.is_err(),
-            "a DISCARD failure with MULTI open must propagate so the connection is not reused"
-        );
+    async fn reset_fails_when_discard_fails() {
+        for multi_open in [false, true] {
+            let mut client = lazy_client().await;
+            client.set_multi_active_for_test(multi_open);
+            assert!(
+                client.reset_connection_state(0).await.is_err(),
+                "multi_open={multi_open}: a DISCARD failure must propagate so the connection is not reused"
+            );
+        }
     }
 
     /// A client is not pool-managed until it enters the pool, and `add_client` must
@@ -2085,8 +2067,7 @@ mod client_pool_marking_tests {
     async fn add_client_reserved_marks_pool_managed() {
         let client = lazy_client().await;
         let mut pool = test_pool();
-        pool.total_count
-            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        pool.total_count += 1;
         let id = pool.add_client_reserved(client);
         let entry = pool
             .idle
@@ -2140,19 +2121,15 @@ mod client_pool_marking_tests {
     /// instant warmup is decided, never over-reserving past the bound.
     #[test]
     fn warmup_reservation_counts_against_max_size() {
-        let pool = warmup_pool(4, 4);
+        let mut pool = warmup_pool(4, 4);
         assert_eq!(pool.reserve_warmup_slots(4), 4, "all 4 warmup slots fit");
         assert_eq!(
-            pool.total_count.load(std::sync::atomic::Ordering::Acquire),
-            4,
+            pool.total_count, 4,
             "total_count reflects the reservation immediately"
         );
         // A second request has no room — the bound is never exceeded.
         assert_eq!(pool.reserve_warmup_slots(4), 0, "pool already at max_size");
-        assert_eq!(
-            pool.total_count.load(std::sync::atomic::Ordering::Acquire),
-            4
-        );
+        assert_eq!(pool.total_count, 4);
     }
 
     /// An acquirer racing the warmup window must not spawn an on-demand client
@@ -2180,8 +2157,7 @@ mod client_pool_marking_tests {
             let mut surplus = 0;
             for _ in 0..16 {
                 if pool.try_acquire() < 0 && pool.should_create() {
-                    pool.total_count
-                        .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                    pool.total_count += 1;
                     surplus += 1;
                 }
             }
@@ -2210,8 +2186,7 @@ mod client_pool_marking_tests {
             pool.add_client_reserved(client);
         }
         assert_eq!(
-            pool.total_count.load(std::sync::atomic::Ordering::Acquire),
-            max_size,
+            pool.total_count, max_size,
             "after quiescing, total_count must settle at exactly max_size"
         );
         assert_eq!(pool.idle.len() as u32, max_size);
@@ -2316,6 +2291,32 @@ mod scope_pool_tests {
                 .stderr(Stdio::null())
                 .spawn()
                 .expect("spawn redis-server for regression test");
+            Self { child, port }
+        }
+
+        /// Like [`start`], but as a replica of the server on `primary_port`.
+        fn start_replica_of(primary_port: u16) -> Self {
+            let port = get_available_port();
+            let child = Command::new("redis-server")
+                .args([
+                    "--port",
+                    &port.to_string(),
+                    "--daemonize",
+                    "no",
+                    "--save",
+                    "",
+                    "--appendonly",
+                    "no",
+                    "--bind",
+                    "127.0.0.1",
+                    "--replicaof",
+                    "127.0.0.1",
+                    &primary_port.to_string(),
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .expect("spawn redis-server replica for regression test");
             Self { child, port }
         }
 
@@ -3782,6 +3783,145 @@ mod scope_pool_tests {
             .expect("a DISCARD-without-MULTI reply must be ignored, not propagated");
     }
 
+    /// Release must discard a connection the borrow left unusable and still reuse a
+    /// clean one. `CLIENT REPLY OFF|SKIP` times out the reset; a RESP3 `SUBSCRIBE`
+    /// answers it normally, so only `subscribe_sent` catches it. The read-only cases
+    /// pin that read-only mode, which rejects DISCARD locally, still reuses a clean
+    /// connection. A-B: the dirty ones were re-idled when DISCARD errors counted
+    /// only with a MULTI open.
+    #[tokio::test]
+    async fn release_discards_a_connection_left_unusable() {
+        let cases: [(bool, &[&str], bool); 6] = [
+            (false, &["PING"], true),
+            (false, &["CLIENT", "REPLY", "SKIP"], false),
+            (false, &["CLIENT", "REPLY", "OFF"], false),
+            (false, &["SUBSCRIBE", "release-discard-test"], false),
+            (true, &["PING"], true),
+            (true, &["CLIENT", "REPLY", "OFF"], false),
+        ];
+        for (read_only, command, reused) in cases {
+            let server = TestServer::start();
+            wait_for_server_ready(server.port).await;
+
+            let mut client = {
+                let mut request = crate::client::ConnectionRequest::default();
+                request.addresses.push(crate::client::NodeAddress {
+                    host: "127.0.0.1".into(),
+                    port: server.port,
+                    unix_socket_path: None,
+                });
+                request.read_only = read_only;
+                crate::client::Client::new(request, None)
+                    .await
+                    .expect("client connects to the test server")
+            };
+            let pool_arc = Arc::new(super::PoolMutex::new(
+                super::ClientPool::new(super::PoolConfig {
+                    max_size: 1,
+                    min_idle: 0,
+                    idle_timeout: std::time::Duration::from_secs(60),
+                    request_timeout: std::time::Duration::from_secs(1),
+                    test_on_borrow: false,
+                    connection_request: Vec::new(),
+                    is_async: true,
+                    configured_database_id: 0,
+                    abandon_timeout: std::time::Duration::from_secs(300),
+                })
+                .expect("valid pool config"),
+            ));
+            let client_id = {
+                let mut pool = pool_arc.lock();
+                let id = pool.add_client(client.clone());
+                assert_eq!(pool.try_acquire(), id as i64);
+                id
+            };
+
+            let mut cmd = redis::cmd(command[0]);
+            for arg in &command[1..] {
+                cmd.arg(*arg);
+            }
+            let _ = client.send_command(&mut cmd, None).await;
+
+            super::release_client_async(pool_arc.clone(), client_id).await;
+            let mut pool = pool_arc.lock();
+            assert_eq!(
+                pool.idle_count(),
+                u32::from(reused),
+                "read_only={read_only} {command:?}: reused={reused} expected"
+            );
+            let _ = pool.drain_discarded_ids();
+        }
+    }
+
+    /// With replicas, a read-routed `CLIENT REPLY OFF` lands on a replica, but
+    /// standalone DISCARD reaches only the primary; release must still discard it.
+    /// A-B: re-idled when standalone skipped the all-nodes SELECT without db drift.
+    #[tokio::test]
+    async fn release_discards_a_replica_left_unusable() {
+        let primary = TestServer::start();
+        let replica = TestServer::start_replica_of(primary.port);
+        wait_for_server_ready(primary.port).await;
+        wait_for_server_ready(replica.port).await;
+
+        for (read_only, command, reused) in [
+            (false, &["PING"][..], true),
+            (false, &["CLIENT", "REPLY", "OFF"][..], false),
+            (true, &["PING"][..], true),
+            (true, &["CLIENT", "REPLY", "OFF"][..], false),
+        ] {
+            let mut client = {
+                let mut request = crate::client::ConnectionRequest::default();
+                for port in [primary.port, replica.port] {
+                    request.addresses.push(crate::client::NodeAddress {
+                        host: "127.0.0.1".into(),
+                        port,
+                        unix_socket_path: None,
+                    });
+                }
+                request.read_from = Some(crate::client::ReadFrom::PreferReplica);
+                request.read_only = read_only;
+                crate::client::Client::new(request, None)
+                    .await
+                    .expect("client connects to primary and replica")
+            };
+            let pool_arc = Arc::new(super::PoolMutex::new(
+                super::ClientPool::new(super::PoolConfig {
+                    max_size: 1,
+                    min_idle: 0,
+                    idle_timeout: std::time::Duration::from_secs(60),
+                    request_timeout: std::time::Duration::from_secs(1),
+                    test_on_borrow: false,
+                    connection_request: Vec::new(),
+                    is_async: true,
+                    configured_database_id: 0,
+                    abandon_timeout: std::time::Duration::from_secs(300),
+                })
+                .expect("valid pool config"),
+            ));
+            let client_id = {
+                let mut pool = pool_arc.lock();
+                let id = pool.add_client(client.clone());
+                assert_eq!(pool.try_acquire(), id as i64);
+                id
+            };
+
+            let mut cmd = redis::cmd(command[0]);
+            for arg in &command[1..] {
+                cmd.arg(*arg);
+            }
+            let _ = client.send_command(&mut cmd, None).await;
+
+            super::release_client_async(pool_arc.clone(), client_id).await;
+            let mut pool = pool_arc.lock();
+            assert_eq!(
+                pool.idle_count(),
+                u32::from(reused),
+                "read_only={read_only} {command:?}: reused={reused} expected"
+            );
+            let _ = pool.drain_discarded_ids();
+        }
+    }
+
     /// End-to-end through the FFI entry `acquire_scope_outcome`, exercising the glue the
     /// direct-call tests skip: that a non-zero parent `current_database()` is actually
     /// read from the client registry, that a wrong-db idle connection drives the
@@ -4192,7 +4332,7 @@ mod abandon_monitor_tests {
         //   e. Set is_blocking = true so the monitor must skip the entry
         let client_id: u64;
         {
-            let mut pool = pool_arc.blocking_lock();
+            let mut pool = pool_arc.lock();
 
             // (a) add a lazy test client (no TCP connection)
             let glide_client = crate::client::create_test_glide_client();
@@ -4210,7 +4350,7 @@ mod abandon_monitor_tests {
             register_pool_client(pool_id, client_id);
 
             // (d) back-date borrowed_at so the monitor's age check fires
-            if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
+            if let Some(entry) = pool.in_use.get_mut(&client_id) {
                 entry.borrowed_at = Some(Instant::now() - abandon_timeout * 3);
             }
         } // pool mutex released
@@ -4229,7 +4369,7 @@ mod abandon_monitor_tests {
 
         // ── 6. Assertions ──────────────────────────────────────────────────────
         {
-            let pool = pool_arc.blocking_lock();
+            let pool = pool_arc.lock();
             assert!(
                 pool.in_use.contains_key(&client_id),
                 "Issue #6971 regression: abandon monitor evicted client {} even though \
@@ -4247,9 +4387,9 @@ mod abandon_monitor_tests {
         // ── 7. Cleanup ─────────────────────────────────────────────────────────
         flag.store(0, Ordering::Release);
         {
-            let pool = pool_arc.blocking_lock();
+            let mut pool = pool_arc.lock();
             pool.in_use.remove(&client_id);
-            pool.total_count.fetch_sub(1, Ordering::AcqRel);
+            pool.total_count -= 1;
         }
         unregister_blocking_flag(client_id);
         unregister_pool_client(client_id);
@@ -4283,7 +4423,7 @@ mod abandon_monitor_tests {
         // ── 3. Insert a test client (is_blocking stays false) ──────────────────
         let client_id: u64;
         {
-            let mut pool = pool_arc.blocking_lock();
+            let mut pool = pool_arc.lock();
             let glide_client = crate::client::create_test_glide_client();
             let cid = pool.add_client(glide_client);
             client_id = cid;
@@ -4294,7 +4434,7 @@ mod abandon_monitor_tests {
             register_pool_client(pool_id, client_id);
 
             // Back-date borrowed_at past the abandon timeout
-            if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
+            if let Some(entry) = pool.in_use.get_mut(&client_id) {
                 entry.borrowed_at = Some(Instant::now() - abandon_timeout * 3);
             }
         }
@@ -4308,7 +4448,7 @@ mod abandon_monitor_tests {
 
         // ── 6. The client must have been evicted ───────────────────────────────
         {
-            let pool = pool_arc.blocking_lock();
+            let pool = pool_arc.lock();
             assert!(
                 !pool.in_use.contains_key(&client_id),
                 "Abandon monitor should have evicted client {} (is_blocking=false, \
@@ -4345,14 +4485,14 @@ mod abandon_monitor_tests {
         );
         let pool_arc = get_pool(pool_id).expect("pool registered");
         let client_id = {
-            let mut pool = pool_arc.blocking_lock();
+            let mut pool = pool_arc.lock();
             let cid = pool.add_client(crate::client::create_test_glide_client());
             assert_eq!(pool.try_acquire(), cid as i64);
             register_pool_client(pool_id, cid);
             cid
         };
-        let backdate = |pool_arc: &Arc<TokioMutex<ClientPool>>| {
-            let pool = pool_arc.blocking_lock();
+        let backdate = |pool_arc: &Arc<PoolMutex>| {
+            let mut pool = pool_arc.lock();
             pool.in_use
                 .get_mut(&client_id)
                 .expect("borrowed")
@@ -4362,12 +4502,7 @@ mod abandon_monitor_tests {
         // A non-blocking scope command refreshes activity but leaves no mark.
         backdate(&pool_arc);
         assert!(track_scope_command_by_client(client_id, "GET", &[b"k".to_vec()]).is_none());
-        let borrowed_at = pool_arc
-            .blocking_lock()
-            .in_use
-            .get(&client_id)
-            .unwrap()
-            .borrowed_at;
+        let borrowed_at = pool_arc.lock().in_use.get(&client_id).unwrap().borrowed_at;
         assert!(borrowed_at.unwrap().elapsed() < abandon_timeout);
 
         backdate(&pool_arc);
@@ -4378,7 +4513,7 @@ mod abandon_monitor_tests {
         start_abandon_monitor(pool_id, rt.handle());
         std::thread::sleep(abandon_timeout * 4);
         assert!(
-            pool_arc.blocking_lock().in_use.contains_key(&client_id),
+            pool_arc.lock().in_use.contains_key(&client_id),
             "the monitor reclaimed a client whose scope is still blocking"
         );
 
@@ -4414,7 +4549,7 @@ mod abandon_monitor_tests {
         // ── 3. Insert a test client (backdated) ────────────────────────────────
         let client_id: u64;
         {
-            let mut pool = pool_arc.blocking_lock();
+            let mut pool = pool_arc.lock();
             let glide_client = crate::client::create_test_glide_client();
             let cid = pool.add_client(glide_client);
             client_id = cid;
@@ -4425,7 +4560,7 @@ mod abandon_monitor_tests {
             register_pool_client(pool_id, client_id);
 
             // Back-date borrowed_at well past the abandon timeout
-            if let Some(mut entry) = pool.in_use.get_mut(&client_id) {
+            if let Some(entry) = pool.in_use.get_mut(&client_id) {
                 entry.borrowed_at = Some(Instant::now() - abandon_timeout * 3);
             }
         }
@@ -4440,7 +4575,7 @@ mod abandon_monitor_tests {
         std::thread::sleep(abandon_timeout * 3);
 
         {
-            let pool = pool_arc.blocking_lock();
+            let pool = pool_arc.lock();
             assert!(
                 pool.in_use.contains_key(&client_id),
                 "Abandon monitor must not evict client {} while blocking counter = 2",
@@ -4453,7 +4588,7 @@ mod abandon_monitor_tests {
         std::thread::sleep(abandon_timeout * 2);
 
         {
-            let pool = pool_arc.blocking_lock();
+            let pool = pool_arc.lock();
             assert!(
                 pool.in_use.contains_key(&client_id),
                 "Abandon monitor must not evict client {} while blocking counter = 1",
@@ -4466,7 +4601,7 @@ mod abandon_monitor_tests {
         std::thread::sleep(abandon_timeout * 4);
 
         {
-            let pool = pool_arc.blocking_lock();
+            let pool = pool_arc.lock();
             assert!(
                 !pool.in_use.contains_key(&client_id),
                 "Abandon monitor should have evicted client {} once blocking counter = 0 \
@@ -4538,6 +4673,62 @@ mod client_pool_tests {
         client_id
     }
 
+    /// Pool code writes the client-to-pool map while holding the pool lock, so a
+    /// refresh that waited for that lock with its map guard still held would
+    /// deadlock against it.
+    #[test]
+    fn refresh_by_client_waits_for_the_pool_lock_without_holding_the_map() {
+        let pool_id =
+            register_pool(ClientPool::new(test_pool_config(Duration::from_secs(5))).unwrap());
+        let pool_arc = get_pool(pool_id).unwrap();
+        let stale = Instant::now() - Duration::from_secs(60);
+        let client_id = {
+            let mut pool = pool_arc.lock();
+            let id = pool.add_client(crate::client::create_test_glide_client());
+            assert_eq!(pool.try_acquire(), id as i64);
+            pool.in_use.get_mut(&id).unwrap().borrowed_at = Some(stale);
+            id
+        };
+        register_pool_client(pool_id, client_id);
+
+        let (held_tx, held_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let holder_pool = pool_arc.clone();
+        let holder = std::thread::spawn(move || {
+            let _guard = holder_pool.lock();
+            held_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+        });
+        held_rx.recv().unwrap();
+
+        let refresher = std::thread::spawn(move || refresh_activity_by_client(client_id));
+        std::thread::sleep(Duration::from_millis(100));
+
+        let (removed_tx, removed_rx) = std::sync::mpsc::channel();
+        let remover = std::thread::spawn(move || {
+            unregister_pool_client(client_id);
+            removed_tx.send(()).unwrap();
+        });
+        let removed = removed_rx.recv_timeout(Duration::from_secs(2));
+
+        release_tx.send(()).unwrap();
+        holder.join().unwrap();
+        refresher.join().unwrap();
+        remover.join().unwrap();
+        let refreshed = pool_arc.lock().in_use[&client_id].borrowed_at != Some(stale);
+        drop(pool_arc);
+        unregister_pool(pool_id);
+
+        assert!(
+            removed.is_ok(),
+            "the map write waited for a refresh that was waiting for the pool lock"
+        );
+        assert!(
+            refreshed,
+            "the refresher read the map after the removal, so the test exercised nothing"
+        );
+    }
+
     /// A pool is not supported with RDMA, so a pool whose clients would request it
     /// must be refused before any client is created.
     #[cfg(feature = "proto")]
@@ -4580,7 +4771,7 @@ mod client_pool_tests {
 
         pool.discard_client(entry.client_id);
 
-        assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+        assert_eq!(pool.total_count, 0);
         assert_eq!(pool.drain_discarded_ids(), vec![client_id]);
         assert!(get_blocking_flag(client_id).is_none());
         assert!(!is_pool_client(client_id));
@@ -4592,11 +4783,11 @@ mod client_pool_tests {
     fn release_reservation_reports_nothing() {
         let mut pool = ClientPool::new(test_pool_config(Duration::from_secs(5))).unwrap();
         // Bindings reserve a slot with a bare increment before creating the client.
-        pool.total_count.fetch_add(1, Ordering::AcqRel);
+        pool.total_count += 1;
 
         pool.release_reservation();
 
-        assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+        assert_eq!(pool.total_count, 0);
         assert!(pool.drain_discarded_ids().is_empty());
     }
 
@@ -4616,7 +4807,7 @@ mod client_pool_tests {
             -3,
             "the only idle client must be evicted"
         );
-        assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+        assert_eq!(pool.total_count, 0);
         assert_eq!(
             pool.drain_discarded_ids(),
             vec![client_id],
@@ -4644,12 +4835,12 @@ mod client_pool_tests {
             .port();
 
         rt.block_on(async {
-            let pool_arc = Arc::new(TokioMutex::new(
+            let pool_arc = Arc::new(PoolMutex::new(
                 ClientPool::new(test_pool_config(Duration::from_millis(500))).unwrap(),
             ));
             let client = lazy_client_to(dead_port).await;
             let client_id = {
-                let mut pool = pool_arc.lock().await;
+                let mut pool = pool_arc.lock();
                 let id = pool.add_client(client);
                 assert_eq!(pool.try_acquire(), id as i64);
                 id
@@ -4657,13 +4848,13 @@ mod client_pool_tests {
 
             release_client_async(pool_arc.clone(), client_id).await;
 
-            let mut pool = pool_arc.lock().await;
+            let mut pool = pool_arc.lock();
             assert_eq!(
                 pool.idle_count(),
                 0,
                 "a client that failed reset must not be reused"
             );
-            assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+            assert_eq!(pool.total_count, 0);
             assert_eq!(
                 pool.drain_discarded_ids(),
                 vec![client_id],
@@ -4690,12 +4881,12 @@ mod client_pool_tests {
         let port = blackhole.local_addr().unwrap().port();
 
         rt.block_on(async {
-            let pool_arc = Arc::new(TokioMutex::new(
+            let pool_arc = Arc::new(PoolMutex::new(
                 ClientPool::new(test_pool_config(Duration::from_secs(30))).unwrap(),
             ));
             let client = lazy_client_to(port).await;
             let client_id = {
-                let mut pool = pool_arc.lock().await;
+                let mut pool = pool_arc.lock();
                 let id = pool.add_client(client);
                 assert_eq!(pool.try_acquire(), id as i64);
                 id
@@ -4704,7 +4895,7 @@ mod client_pool_tests {
             let release = tokio::spawn(release_client_async(pool_arc.clone(), client_id));
             let deadline = Instant::now() + Duration::from_secs(5);
             loop {
-                if pool_arc.lock().await.in_use.is_empty() {
+                if pool_arc.lock().in_use.is_empty() {
                     break;
                 }
                 assert!(Instant::now() < deadline, "release never took the client");
@@ -4716,84 +4907,12 @@ mod client_pool_tests {
             release.abort();
             let _ = release.await;
 
-            let mut pool = pool_arc.lock().await;
-            assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
+            let mut pool = pool_arc.lock();
+            assert_eq!(pool.total_count, 0);
             assert_eq!(
                 pool.drain_discarded_ids(),
                 vec![client_id],
                 "LeakGuard discard must be reported so bindings reclaim their side"
-            );
-            assert!(get_blocking_flag(client_id).is_none());
-        });
-        drop(blackhole);
-    }
-
-    /// `LeakGuard` must stay armed while `release_client_async` waits for the
-    /// pool lock after the reset has finished; that wait is a cancellation
-    /// point too, and a release aborted there must still report the id.
-    #[test]
-    fn release_cancelled_while_waiting_for_lock_reports_discarded_id() {
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .worker_threads(2)
-            .build()
-            .unwrap();
-
-        // Accepts but never speaks, so the reset pends until its 2x request
-        // timeout and the test has time to take the lock while it is in flight.
-        let blackhole = TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = blackhole.local_addr().unwrap().port();
-
-        rt.block_on(async {
-            let pool_arc = Arc::new(TokioMutex::new(
-                ClientPool::new(test_pool_config(Duration::from_millis(100))).unwrap(),
-            ));
-            let client = lazy_client_to(port).await;
-            let client_id = {
-                let mut pool = pool_arc.lock().await;
-                let id = pool.add_client(client);
-                assert_eq!(pool.try_acquire(), id as i64);
-                id
-            };
-
-            let release = tokio::spawn(release_client_async(pool_arc.clone(), client_id));
-            let deadline = Instant::now() + Duration::from_secs(5);
-            loop {
-                if pool_arc.lock().await.in_use.is_empty() {
-                    break;
-                }
-                assert!(Instant::now() < deadline, "release never took the client");
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
-
-            // Hold the lock across the reset's timeout so the release parks on
-            // `pool_arc.lock().await` instead of completing.
-            let held = pool_arc.lock().await;
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            assert!(!release.is_finished(), "release must be parked on the lock");
-
-            release.abort();
-            drop(held);
-            let _ = release.await;
-
-            // The guard hands a contended lock to a spawned task, so the discard
-            // may land shortly after the aborted release has been joined.
-            let deadline = Instant::now() + Duration::from_secs(5);
-            loop {
-                if pool_arc.lock().await.total_count.load(Ordering::Acquire) == 0 {
-                    break;
-                }
-                assert!(
-                    Instant::now() < deadline,
-                    "cancelled release never freed its slot"
-                );
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
-            let mut pool = pool_arc.lock().await;
-            assert_eq!(
-                pool.drain_discarded_ids(),
-                vec![client_id],
-                "a release cancelled at the lock wait must still be reported"
             );
             assert!(get_blocking_flag(client_id).is_none());
         });
