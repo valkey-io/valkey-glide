@@ -3,7 +3,9 @@
 
 mod common;
 
-use glide::{AsyncTypedCommands, CustomCommand, FromValkeyValue, GlideError, Route};
+use glide::{
+    AsyncTypedCommands, CustomCommand, FromValkeyValue, GlideError, Route, ServerCredentials,
+};
 use std::time::Duration;
 
 #[tokio::test]
@@ -126,6 +128,68 @@ async fn cluster_info_with_partial_results_keeps_replies_when_a_primary_is_slow(
         }
     }
     assert!(recovered, "paused primary did not recover");
+}
+
+#[tokio::test]
+async fn cluster_info_with_partial_results_keeps_the_error_reply_of_a_denied_primary() {
+    let cluster = common::ClusterHarness::start().await;
+    let admin = cluster.client().await;
+    admin
+        .custom_command_with_route(
+            &[
+                "ACL",
+                "SETUSER",
+                "partial",
+                "on",
+                ">password",
+                "~*",
+                "&*",
+                "+@all",
+            ],
+            Route::AllNodes,
+        )
+        .await
+        .unwrap();
+    let credentials = ServerCredentials::username_password("partial", "password");
+    let denied = cluster
+        .client_with_config(cluster.config().credentials(credentials))
+        .await;
+
+    let healthy = denied.info_with_partial_results(&[], None).await.unwrap();
+    let mut primaries: Vec<String> = healthy.keys().cloned().collect();
+    primaries.sort();
+    let (host, port) = primaries[0].rsplit_once(':').unwrap();
+    let route = Route::ByAddress {
+        host: host.to_string(),
+        port: port.parse().unwrap(),
+    };
+    admin
+        .custom_command_with_route(&["ACL", "SETUSER", "partial", "-info"], route)
+        .await
+        .unwrap();
+
+    // Without partial results, the denied primary fails the whole call.
+    let plain = denied
+        .custom_command_with_route(&["INFO"], Route::AllPrimaries)
+        .await
+        .unwrap_err();
+
+    let replies = denied.info_with_partial_results(&[], None).await.unwrap();
+    let error = replies[&primaries[0]].as_ref().unwrap_err();
+    assert!(!matches!(error, GlideError::Timeout(_)), "{error:?}");
+    assert_eq!(error.to_string(), plain.to_string());
+    for address in &primaries[1..] {
+        assert!(replies[address].as_ref().unwrap().contains("# Server"));
+    }
+
+    // With every primary denied, the call returns an error for each.
+    admin
+        .custom_command_with_route(&["ACL", "SETUSER", "partial", "-info"], Route::AllPrimaries)
+        .await
+        .unwrap();
+    let failed = denied.info_with_partial_results(&[], None).await.unwrap();
+    assert_eq!(failed.len(), primaries.len());
+    assert!(failed.values().all(Result::is_err), "{failed:?}");
 }
 
 #[tokio::test]
