@@ -1021,3 +1021,48 @@ fn rdma_memory_counters_answer_only_for_an_rdma_client() {
         close_client(plain_client);
     }
 }
+
+/// Device memory needs a client whose RDMA configuration asked for it. Without it,
+/// a device registration fails naming the setting, before anything is registered.
+#[cfg(feature = "rdma")]
+#[test]
+fn a_device_region_needs_a_client_with_device_memory() {
+    use glide_core::connection_request::{RdmaConfig, TcpProvider};
+
+    let server = Server::new();
+    let mut request = ConnectionRequest::new();
+    request.tls_mode = TlsMode::NoTls.into();
+    let mut address = NodeAddress::new();
+    address.host = "localhost".into();
+    address.port = server.port as u32;
+    request.addresses.push(address);
+    let mut config = RdmaConfig::new();
+    config.set_tcp(TcpProvider::new());
+    request.rdma_config = protobuf::MessageField::some(config);
+    let request = request.write_to_bytes().expect("Failed to serialize");
+
+    unsafe {
+        let response = create_client(
+            request.as_ptr(),
+            request.len(),
+            Box::into_raw(Box::new(ClientType::SyncClient)),
+            None,
+            None,
+            0,
+        );
+        assert!((*response).connection_error_message.is_null());
+        let client = (*response).conn_ptr;
+        free_connection_response(response.cast_mut());
+
+        // Host memory stands in: the registration is refused before it is used.
+        let mut memory = vec![0u8; 4096];
+        let registration = register_rdma_device_region(client, memory.as_mut_ptr(), memory.len());
+        assert!((*registration).region.is_null());
+        let error = CStr::from_ptr((*registration).error_message)
+            .to_string_lossy()
+            .into_owned();
+        assert!(error.contains("device memory"), "{error}");
+        free_rdma_registration(registration);
+        close_client(client);
+    }
+}
