@@ -381,8 +381,9 @@ impl GlideClusterClient {
     /// every target node, keyed by node address: the node's reply, or the error
     /// for that node. A node that has not answered by the request timeout
     /// minus the smaller of a tenth of it and 100 ms holds
-    /// [`GlideError::Timeout`], and the call itself can still fail with
-    /// [`GlideError::Timeout`]. `route` must be [`Route::AllNodes`] or
+    /// [`GlideError::Timeout`], and the call itself fails with
+    /// [`GlideError::Timeout`] if it has not finished by the request timeout
+    /// plus the same amount. `route` must be [`Route::AllNodes`] or
     /// [`Route::AllPrimaries`], since a single node's reply has no address to
     /// key it by; for a single node, send `INFO` with
     /// [`GlideClusterClient::route_command`] instead.

@@ -126,8 +126,9 @@ export interface PartialResultsOption {
      * holding that node's reply or the error for that node. A node that has not answered by
      * `requestTimeout` minus the smaller of a tenth of it and 100 ms gets a {@link TimeoutError};
      * other failures get a {@link RequestError}. The promise does not reject because some or all
-     * of the target nodes failed; it still rejects when no node can be reached at all, and it can
-     * still reject with a {@link TimeoutError}.
+     * of the target nodes failed; it still rejects when no node can be reached at all, and it
+     * rejects with a {@link TimeoutError} if it has not settled by `requestTimeout` plus the same
+     * amount.
      *
      * Has no effect on a command routed to a single node. Defaults to `false`, which rejects with
      * the first node error.

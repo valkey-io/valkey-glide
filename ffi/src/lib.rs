@@ -4999,8 +4999,9 @@ pub unsafe extern "C-unwind" fn command(
 /// node's entry is an `Error` response whose `int_value` is `Timeout` if the
 /// node did not answer in time and `Unspecified` otherwise. A node has not
 /// answered in time when it has not answered by the request timeout minus the
-/// smaller of a tenth of it and 100 ms, and the call itself can still fail with
-/// a timeout. Other routes behave as with [`command`].
+/// smaller of a tenth of it and 100 ms, and the call itself fails with a timeout
+/// if it has not finished by the request timeout plus the same amount. Other
+/// routes behave as with [`command`].
 ///
 /// # Safety
 ///

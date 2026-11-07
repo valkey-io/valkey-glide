@@ -112,8 +112,9 @@ class ClusterCommands(CoreCommands):
                 target node, holding that node's reply or the error for that node, instead of raising the first
                 node error. A node that has not answered by `request_timeout` minus the smaller of a tenth of it
                 and 100 ms gets a GLIDE `TimeoutError` (a `RequestError` subclass); other failures get a
-                `RequestError`. The call itself can still raise a `TimeoutError`. Has no effect when the command
-                goes to a single node. Keyword-only. Defaults to False.
+                `RequestError`. The call itself raises a `TimeoutError` if it has not finished by `request_timeout`
+                plus the same amount. Has no effect when the command goes to a single node. Keyword-only. Defaults
+                to False.
 
         Returns:
             TClusterResponse[bytes]: If a single node route is requested, returns a bytes string containing the information for

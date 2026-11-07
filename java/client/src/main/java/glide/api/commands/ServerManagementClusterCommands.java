@@ -138,8 +138,9 @@ public interface ServerManagementClusterCommands {
      * Unlike {@link #info(Section[])}, a node that fails does not fail the call: its entry holds the
      * error for that node instead of its reply.<br>
      * A node that has not answered by the request timeout minus the smaller of a tenth of it and 100
-     * ms holds a {@link glide.api.models.exceptions.TimeoutException}, and the call itself can still
-     * fail with a {@link glide.api.models.exceptions.TimeoutException}.
+     * ms holds a {@link glide.api.models.exceptions.TimeoutException}, and the call itself fails with
+     * a {@link glide.api.models.exceptions.TimeoutException} if it has not finished by the request
+     * timeout.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
      * @param sections A list of {@link InfoOptions.Section} values specifying which sections of
@@ -167,8 +168,9 @@ public interface ServerManagementClusterCommands {
      * Unlike {@link #info(Section[], Route)}, a node that fails does not fail the call: its entry
      * holds the error for that node instead of its reply.<br>
      * A node that has not answered by the request timeout minus the smaller of a tenth of it and 100
-     * ms holds a {@link glide.api.models.exceptions.TimeoutException}, and the call itself can still
-     * fail with a {@link glide.api.models.exceptions.TimeoutException}.
+     * ms holds a {@link glide.api.models.exceptions.TimeoutException}, and the call itself fails with
+     * a {@link glide.api.models.exceptions.TimeoutException} if it has not finished by the request
+     * timeout.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
      * @param sections A list of {@link InfoOptions.Section} values specifying which sections of
