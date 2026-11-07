@@ -4,6 +4,7 @@
 
 ### Features
 
+* Core, Node, Java, Python, Go, Rust: opt-in per-node results for cluster INFO ([#7597](https://github.com/valkey-io/valkey-glide/pull/7597))
 * Go: Add valkey-search 1.3 support, including scoring, cursors, and `FT.HYBRID` ([#7380](https://github.com/valkey-io/valkey-glide/pull/7380))
 * All: Add support for Valkey 9.0 commands:
   * `DELIFEQ` ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))

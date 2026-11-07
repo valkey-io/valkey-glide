@@ -6,7 +6,7 @@ use dashmap::DashMap;
 use futures::FutureExt;
 use glide_telemetry::Telemetry;
 use rand::seq::IteratorRandom;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -717,6 +717,41 @@ where
             .addresses_for_all_primaries()
             .into_iter()
             .flat_map(|addr| self.connection_for_address(&addr))
+    }
+
+    /// The connections of all nodes (only primaries if `primaries_only`), and
+    /// the addresses of the slot-map nodes among them that have no connection,
+    /// which `all_node_connections` and `all_primary_connections` skip. Each
+    /// address is in exactly one of the two, even while nodes connect or leave.
+    pub(crate) fn connections_and_unconnected_nodes(
+        &self,
+        primaries_only: bool,
+    ) -> (Vec<ConnectionAndAddress<Connection>>, Vec<String>) {
+        if primaries_only {
+            let (mut connections, mut unconnected) = (Vec::new(), Vec::new());
+            for address in self.slot_map.addresses_for_all_primaries() {
+                match self.connection_for_address(&address) {
+                    Some(connection) => connections.push(connection),
+                    None => unconnected.push(address.to_string()),
+                }
+            }
+            return (connections, unconnected);
+        }
+        // All nodes also covers connected nodes the slot map does not list, as
+        // `all_node_connections` does.
+        let connections: Vec<_> = self.all_node_connections().collect();
+        let connected: HashSet<&str> = connections
+            .iter()
+            .map(|(address, _)| address.as_str())
+            .collect();
+        let unconnected = self
+            .slot_map
+            .all_node_addresses()
+            .into_iter()
+            .filter(|address| !connected.contains(address.as_str()))
+            .map(|address| address.to_string())
+            .collect();
+        (connections, unconnected)
     }
 
     pub(crate) fn node_for_address(&self, address: &str) -> Option<ClusterNode<Connection>> {
@@ -1740,6 +1775,30 @@ mod tests {
         connections.sort();
 
         assert_eq!(vec![2, 3], connections);
+    }
+
+    #[test]
+    fn connections_and_unconnected_nodes_split_slot_map_nodes() {
+        let container = create_container();
+        let (connections, unconnected) = container.connections_and_unconnected_nodes(true);
+        assert_eq!(connections.len(), 3);
+        assert!(unconnected.is_empty());
+
+        remove_nodes(&container, &["primary1", "replica3-1"]);
+
+        let (connections, unconnected) = container.connections_and_unconnected_nodes(true);
+        let mut connected: Vec<_> = connections
+            .into_iter()
+            .map(|(address, _)| address)
+            .collect();
+        connected.sort();
+        assert_eq!(connected, vec!["primary2", "primary3"]);
+        assert_eq!(unconnected, vec!["primary1"]);
+
+        let (connections, mut unconnected) = container.connections_and_unconnected_nodes(false);
+        unconnected.sort();
+        assert_eq!(connections.len(), 4);
+        assert_eq!(unconnected, vec!["primary1", "replica3-1"]);
     }
 
     #[test]

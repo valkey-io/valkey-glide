@@ -413,6 +413,34 @@ public class GlideCoreClient implements AutoCloseable {
             boolean expectUtf8Response,
             long timeoutMs,
             long spanPtr) {
+        return executeCommandAsync(
+                requestType,
+                args,
+                hasRoute,
+                routeType,
+                routeParam,
+                expectUtf8Response,
+                false,
+                timeoutMs,
+                spanPtr);
+    }
+
+    /**
+     * Execute a single command asynchronously via JNI.
+     *
+     * @param allowPartialResults when true, a command sent to several nodes returns each node's reply
+     *     or error instead of failing on the first node error
+     */
+    public CompletableFuture<Object> executeCommandAsync(
+            int requestType,
+            byte[][] args,
+            boolean hasRoute,
+            int routeType,
+            String routeParam,
+            boolean expectUtf8Response,
+            boolean allowPartialResults,
+            long timeoutMs,
+            long spanPtr) {
         try {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
@@ -442,6 +470,7 @@ public class GlideCoreClient implements AutoCloseable {
                     routeType,
                     routeParam,
                     expectUtf8Response,
+                    allowPartialResults,
                     spanPtr);
 
             return future;

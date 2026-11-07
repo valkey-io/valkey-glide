@@ -134,6 +134,20 @@ fn parse_node_address(address: &str) -> Option<(&str, i64)> {
     Some((host, port))
 }
 
+// No receivers means we reached no node for this fan-out. Either a
+// concurrent remove_node drained the connection map after the outer
+// is_empty check, or the slot map lists primaries or routes that the
+// connection map does not have, which can persist outside any race.
+// Both are connectivity failures, so classify as retryable to trigger
+// RefreshSlots and a retry (#6759).
+fn no_fan_out_connections_error() -> RedisError {
+    RedisError::from((
+        ErrorKind::ConnectionNotFoundForRoute,
+        "Connection not found for route",
+        "No connections available for multi-node fan-out".to_string(),
+    ))
+}
+
 /// Sets the routed node's address on the command span for OTel reporting.
 /// Called after cluster routing resolves the actual target node.
 fn set_routed_node_on_span(span: &GlideSpan, address: &str) {
@@ -2394,18 +2408,8 @@ where
             convert_result(receiver.await)
         };
 
-        // No receivers means we reached no node for this fan-out. Either a
-        // concurrent remove_node drained the connection map after the outer
-        // is_empty check, or the slot map lists primaries or routes that the
-        // connection map does not have, which can persist outside any race.
-        // Both are connectivity failures, so classify as retryable to trigger
-        // RefreshSlots and a retry (#6759).
         if receivers.is_empty() {
-            return Err(RedisError::from((
-                ErrorKind::ConnectionNotFoundForRoute,
-                "Connection not found for route",
-                "No connections available for multi-node fan-out".to_string(),
-            )));
+            return Err(no_fan_out_connections_error());
         }
 
         match response_policy {
@@ -2508,6 +2512,61 @@ where
                 Self::aggregate_resolved_results(collected, routing, response_policy)
             }
         }
+    }
+
+    /// Collects a fan-out with partial results (see [`Cmd::set_allow_partial_results`])
+    /// into a map of node address to that node's reply or error.
+    ///
+    /// Waits for every node, but no later than `deadline`. A node that has not
+    /// answered by then is reported as timed out and its receiver is dropped,
+    /// so its sub-request is not retried; a reply already in flight still ends
+    /// at the connection's response timeout. Errors are stored as
+    /// `Value::ServerError`, and timeouts keep [`crate::TIMEOUT_ERROR_CODE`].
+    /// The map has an entry for every node even when all of them failed.
+    async fn collect_partial_results(
+        receivers: Vec<(Option<String>, oneshot::Receiver<RedisResult<Response>>)>,
+        deadline: Option<std::time::Instant>,
+    ) -> RedisResult<Value> {
+        if receivers.is_empty() {
+            return Err(no_fan_out_connections_error());
+        }
+        let pairs = future::try_join_all(receivers.into_iter().map(
+            |(address, receiver)| async move {
+                let address = address.ok_or_else(|| {
+                    RedisError::from((
+                        ErrorKind::ResponseError,
+                        "No address provided for response in partial results",
+                    ))
+                })?;
+                let result = match deadline {
+                    Some(deadline) => {
+                        tokio::time::timeout_at(deadline.into(), receiver)
+                            .await
+                            .unwrap_or_else(|_| {
+                                Ok(Err(io::Error::from(io::ErrorKind::TimedOut).into()))
+                            })
+                    }
+                    None => receiver.await,
+                };
+                let value = match result {
+                    Ok(Ok(Response::Single(value))) => value,
+                    Ok(Ok(_)) => unreachable!(
+                        "collect_partial_results only handles `Response::Single` for multi-node commands"
+                    ),
+                    Ok(Err(err)) => Value::ServerError(ServerError::from_error_keeping_timeout(err)),
+                    Err(_) => Value::ServerError(
+                        RedisError::from((
+                            ErrorKind::ResponseError,
+                            "Internal failure: receiver was dropped before delivering a response",
+                        ))
+                        .into(),
+                    ),
+                };
+                Ok::<_, RedisError>((Value::BulkString(address.into_bytes().into()), value))
+            },
+        ))
+        .await?;
+        Ok(Value::Map(pairs))
     }
 
     /// Synchronously folds a fully‐collected `Vec<(Option<String>, Value)>` according to `response_policy`.
@@ -3193,22 +3252,24 @@ where
     ) -> OperationResult {
         log_trace_lazy!("cluster", "execute_on_multiple_nodes");
 
+        // An `Err` item is a target with no connection, keyed by its address when known.
         #[allow(clippy::type_complexity)]
         fn into_channels<C>(
             iterator: impl Iterator<
-                Item = Option<(Arc<Cmd>, ConnectionAndAddress<ConnectionFuture<C>>)>,
+                Item = Result<
+                    (Arc<Cmd>, ConnectionAndAddress<ConnectionFuture<C>>),
+                    Option<String>,
+                >,
             >,
         ) -> (
             Vec<(Option<String>, Receiver<Result<Response, RedisError>>)>,
             Vec<Option<PendingRequest<C>>>,
         ) {
             iterator
-                .map(|tuple_opt| {
+                .map(|item| {
                     let (sender, receiver) = oneshot::channel();
-                    if let Some((cmd, conn, address)) =
-                        tuple_opt.map(|(cmd, (address, conn))| (cmd, conn, address))
-                    {
-                        (
+                    match item {
+                        Ok((cmd, (address, conn))) => (
                             (Some(address.clone()), receiver),
                             Some(PendingRequest {
                                 retry: 0,
@@ -3224,18 +3285,21 @@ where
                                     },
                                 },
                             }),
-                        )
-                    } else {
-                        let _ = sender.send(Err((
-                            ErrorKind::ConnectionNotFoundForRoute,
-                            "Connection not found",
-                        )
-                            .into()));
-                        ((None, receiver), None)
+                        ),
+                        Err(address) => {
+                            let _ = sender.send(Err((
+                                ErrorKind::ConnectionNotFoundForRoute,
+                                "Connection not found",
+                            )
+                                .into()));
+                            ((address, receiver), None)
+                        }
                     }
                 })
                 .unzip()
         }
+        let partial_results =
+            cmd.allow_partial_results() && routing.allows_partial_results(response_policy);
         let (receivers, requests): (Vec<_>, Vec<_>);
         {
             let connections_container = core.conn_lock.read();
@@ -3251,15 +3315,40 @@ where
             }
 
             (receivers, requests) = match routing {
+                // Partial results also report the slot-map nodes that have no
+                // connection, which the default path skips.
+                MultipleNodeRoutingInfo::AllNodes | MultipleNodeRoutingInfo::AllMasters
+                    if partial_results =>
+                {
+                    let (connections, unconnected) = connections_container
+                        .connections_and_unconnected_nodes(matches!(
+                            routing,
+                            MultipleNodeRoutingInfo::AllMasters
+                        ));
+                    // With no node reachable, fail as the default path does, so
+                    // the request refreshes slots and retries.
+                    if connections.is_empty() {
+                        return OperationResult::Err((
+                            OperationTarget::FanOut,
+                            no_fan_out_connections_error(),
+                        ));
+                    }
+                    into_channels(
+                        connections
+                            .into_iter()
+                            .map(|tuple| Ok((cmd.clone(), tuple)))
+                            .chain(unconnected.into_iter().map(|address| Err(Some(address)))),
+                    )
+                }
                 MultipleNodeRoutingInfo::AllNodes => into_channels(
                     connections_container
                         .all_node_connections()
-                        .map(|tuple| Some((cmd.clone(), tuple))),
+                        .map(|tuple| Ok((cmd.clone(), tuple))),
                 ),
                 MultipleNodeRoutingInfo::AllMasters => into_channels(
                     connections_container
                         .all_primary_connections()
-                        .map(|tuple| Some((cmd.clone(), tuple))),
+                        .map(|tuple| Ok((cmd.clone(), tuple))),
                 ),
                 MultipleNodeRoutingInfo::MultiSlot((slots, _)) => {
                     // multi_shard never emits an empty slots vec, so an empty
@@ -3287,6 +3376,7 @@ where
                                     );
                                 (Arc::new(new_cmd), tuple)
                             })
+                            .ok_or(None)
                     }))
                 }
             };
@@ -3295,8 +3385,12 @@ where
             let _ = core.pending_requests_tx.send(request);
         }
 
-        Self::aggregate_results(receivers, routing, response_policy)
-            .await
+        let result = if partial_results {
+            Self::collect_partial_results(receivers, cmd.fan_out_deadline()).await
+        } else {
+            Self::aggregate_results(receivers, routing, response_policy).await
+        };
+        result
             .map(Response::Single)
             .map_err(|err| (OperationTarget::FanOut, err))
     }
@@ -5030,6 +5124,163 @@ impl Connect for MultiplexedConnection {
             }
         }
         .boxed()
+    }
+}
+
+#[cfg(test)]
+mod partial_results_tests {
+    use super::{ClusterConnInner, Response};
+    use crate::{aio::MultiplexedConnection, ErrorKind, RedisError, RedisResult, Value};
+    use std::time::{Duration, Instant};
+    use tokio::sync::oneshot;
+
+    type Receivers = Vec<(Option<String>, oneshot::Receiver<RedisResult<Response>>)>;
+
+    fn ready(
+        address: &str,
+        result: RedisResult<Value>,
+    ) -> (Option<String>, oneshot::Receiver<RedisResult<Response>>) {
+        let (sender, receiver) = oneshot::channel();
+        let _ = sender.send(result.map(Response::Single));
+        (Some(address.to_string()), receiver)
+    }
+
+    async fn collect(receivers: Receivers, deadline: Option<Instant>) -> RedisResult<Value> {
+        ClusterConnInner::<MultiplexedConnection>::collect_partial_results(receivers, deadline)
+            .await
+    }
+
+    fn entries(value: Value) -> Vec<(String, Value)> {
+        let Value::Map(pairs) = value else {
+            panic!("expected a map, got {value:?}");
+        };
+        pairs
+            .into_iter()
+            .map(|(k, v)| match k {
+                Value::BulkString(k) => (String::from_utf8(k.to_vec()).unwrap(), v),
+                other => panic!("unexpected key {other:?}"),
+            })
+            .collect()
+    }
+
+    fn error_of(value: &Value) -> RedisError {
+        match value {
+            Value::ServerError(err) => err.clone().into(),
+            other => panic!("expected an error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn keeps_replies_and_errors_per_node() {
+        let receivers = vec![
+            ready("a:1", Ok(Value::BulkString(b"info a".to_vec().into()))),
+            ready(
+                "b:1",
+                Err(RedisError::from((
+                    ErrorKind::ResponseError,
+                    "An error was signalled by the server:",
+                    "boom".to_string(),
+                ))),
+            ),
+            ready(
+                "c:1",
+                Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into()),
+            ),
+            // A target with no connection, as `into_channels` reports it.
+            ready(
+                "d:1",
+                Err((
+                    ErrorKind::ConnectionNotFoundForRoute,
+                    "Connection not found",
+                )
+                    .into()),
+            ),
+        ];
+        let entries = entries(collect(receivers, None).await.unwrap());
+
+        assert_eq!(
+            entries[0],
+            ("a:1".into(), Value::BulkString(b"info a".to_vec().into()))
+        );
+        let b = error_of(&entries[1].1);
+        assert_eq!(b.kind(), ErrorKind::ResponseError);
+        assert!(b.to_string().contains("boom"), "{b}");
+        let c = error_of(&entries[2].1);
+        assert!(c.is_timeout(), "timeout kind must survive: {c:?}");
+        assert_eq!(entries[3].0, "d:1");
+        assert!(error_of(&entries[3].1)
+            .to_string()
+            .contains("ConnectionNotFoundForRoute"));
+    }
+
+    #[tokio::test]
+    async fn reports_unanswered_nodes_as_timed_out_at_the_deadline() {
+        let (silent_sender, silent_receiver) = oneshot::channel();
+        let receivers = vec![
+            ready("a:1", Ok(Value::Okay)),
+            (Some("b:1".to_string()), silent_receiver),
+        ];
+        let start = Instant::now();
+        let entries = entries(
+            collect(receivers, Some(start + Duration::from_millis(50)))
+                .await
+                .unwrap(),
+        );
+
+        assert!(start.elapsed() >= Duration::from_millis(50));
+        assert!(start.elapsed() < Duration::from_secs(5));
+        assert_eq!(entries[0], ("a:1".into(), Value::Okay));
+        assert!(error_of(&entries[1].1).is_timeout());
+        // Dropping the receiver is what stops the node's sub-request.
+        assert!(silent_sender.is_closed());
+    }
+
+    #[tokio::test]
+    async fn dropped_sender_becomes_an_error_entry() {
+        let (sender, receiver) = oneshot::channel::<RedisResult<Response>>();
+        drop(sender);
+        let entries = entries(
+            collect(vec![(Some("a:1".into()), receiver)], None)
+                .await
+                .unwrap(),
+        );
+        assert!(error_of(&entries[0].1)
+            .to_string()
+            .contains("receiver was dropped"));
+    }
+
+    #[test]
+    fn server_reply_coded_timeout_is_not_a_client_timeout() {
+        let Value::ServerError(err) =
+            crate::parse_redis_value(b"-Timeout limit was reached\r\n").unwrap()
+        else {
+            panic!("expected a server error");
+        };
+        let err: RedisError = err.into();
+        assert!(!err.is_timeout(), "{err:?}");
+        assert!(err.to_string().contains("Timeout"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn server_error_entry_has_the_plain_error_message() {
+        let Value::ServerError(server) = crate::parse_redis_value(
+            b"-NOPERM User rv has no permissions to run the 'info' command\r\n",
+        )
+        .unwrap() else {
+            panic!("expected a server error");
+        };
+        let plain: RedisError = server.into();
+        let expected = plain.to_string();
+        let entries = entries(collect(vec![ready("a:1", Err(plain))], None).await.unwrap());
+        let entry = error_of(&entries[0].1);
+        assert_eq!(entry.to_string(), expected);
+        assert_eq!(entry.kind(), ErrorKind::PermissionDenied);
+    }
+
+    #[tokio::test]
+    async fn no_targets_is_still_a_retryable_error() {
+        let err = collect(Vec::new(), None).await.unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::ConnectionNotFoundForRoute);
     }
 }
 

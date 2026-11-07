@@ -330,6 +330,61 @@ func (client *ClusterClient) InfoWithOptions(
 	return models.CreateClusterSingleValue[string](data), nil
 }
 
+// Gets information and statistics about the server, keeping the replies of the nodes that answered when other nodes fail.
+// The command will be routed to all primary nodes, unless `route` in [options.ClusterInfoOptions] is provided.
+//
+// Unlike [ClusterClient.InfoWithOptions], a node that fails does not fail the call: its entry holds the error for that
+// node instead of its reply. A node that has not answered by the request timeout minus the smaller of a tenth of it and
+// 100 ms gets a [TimeoutError], and the call itself can still fail with a [TimeoutError].
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	options - Additional command parameters, see [ClusterInfoOptions] for more details.
+//
+// Return value:
+//
+//	When specifying a route other than a single node or when route is not given,
+//	it returns a map where each address is the key and the value is the node's reply as a string, or an error.
+//	When a single node route is given, command returns a string containing the information for the sections requested.
+//
+// [valkey.io]: https://valkey.io/commands/info/
+func (client *ClusterClient) InfoWithPartialResults(
+	ctx context.Context,
+	options options.ClusterInfoOptions,
+) (models.ClusterValue[any], error) {
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return models.CreateEmptyClusterValue[any](), err
+	}
+	var route config.Route
+	if options.RouteOption != nil {
+		route = options.Route
+	}
+	response, err := client.executeCommandWithOptions(ctx, C.Info, optionArgs, route, true)
+	if err != nil {
+		return models.CreateEmptyClusterValue[any](), err
+	}
+	if route != nil && !route.IsMultiNode() {
+		data, err := handleStringResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[any](), err
+		}
+		return models.CreateClusterSingleValue[any](data), nil
+	}
+	data, err := handleInterfaceResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[any](), err
+	}
+	replies, ok := data.(map[string]any)
+	if !ok {
+		return models.CreateEmptyClusterValue[any](), fmt.Errorf("unexpected INFO response type %T", data)
+	}
+	return models.CreateClusterMultiValue[any](replies), nil
+}
+
 // CustomCommandWithRoute executes a single command, specified by args, without checking inputs. Every part of the command,
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
 // the executed command.

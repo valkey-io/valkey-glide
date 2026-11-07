@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use glide_core::client::FINISHED_SCAN_CURSOR;
-use glide_core::errors::error_message;
+use glide_core::errors::{RequestErrorType, error_message, error_type};
 // Protocol constants for Java (defined directly since we don't use socket layer)
 const TYPE_HASH: &str = "hash";
 const TYPE_LIST: &str = "list";
@@ -468,18 +468,19 @@ fn resp_value_to_java<'local>(
             Ok(hash_map)
         }
         Value::ServerError(server_error) => {
-            let err_msg = error_message(&server_error.into());
-            let jmsg = env.new_string(err_msg)?;
+            let error = server_error.into();
+            let jmsg = env.new_string(error_message(&error))?;
             let cache = get_java_value_conversion_cache_safe(env)?;
-            let cls = to_local_jclass(env, &cache.request_exception_class)?;
-            let raw = jmsg.into_raw();
-            let obj = unsafe {
-                env.new_object_unchecked(
-                    cls,
-                    cache.request_exception_ctor,
-                    &[jni::sys::jvalue { l: raw }],
-                )?
+            let (class, ctor) = match error_type(&error) {
+                RequestErrorType::Timeout => {
+                    (&cache.timeout_exception_class, cache.timeout_exception_ctor)
+                }
+                _ => (&cache.request_exception_class, cache.request_exception_ctor),
             };
+            let cls = to_local_jclass(env, class)?;
+            let raw = jmsg.into_raw();
+            let obj =
+                unsafe { env.new_object_unchecked(cls, ctor, &[jni::sys::jvalue { l: raw }])? };
             // Recreate to allow drop and avoid leaking the local ref
             let _ = unsafe { JString::from_raw(raw) };
             Ok(obj)
@@ -1839,6 +1840,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
     route_type: jint,
     route_param: JString,
     expect_utf8: jni::sys::jboolean,
+    allow_partial_results: jni::sys::jboolean,
     span_ptr: jlong,
 ) {
     run_ffi(|| {
@@ -1917,6 +1919,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
         };
 
         let expect_utf8_bool = expect_utf8 != 0;
+        let allow_partial_results = allow_partial_results != 0;
 
         // Synchronously detect if this is a blocking command and raise the flag
         // BEFORE spawning the async task, so the abandon monitor cannot observe
@@ -1998,6 +2001,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                 for arg in &args_data {
                     cmd.arg(arg.as_slice());
                 }
+                cmd.set_allow_partial_results(allow_partial_results);
 
                 // Apply compression
                 #[allow(clippy::collapsible_if)]
@@ -2634,6 +2638,8 @@ pub struct JavaValueConversionCache {
     big_integer_ctor: JMethodID,
     request_exception_class: GlobalRef,
     request_exception_ctor: JMethodID,
+    timeout_exception_class: GlobalRef,
+    timeout_exception_ctor: JMethodID,
 }
 
 static JAVA_VALUE_CONVERSION_CACHE: OnceLock<Mutex<Option<JavaValueConversionCache>>> =
@@ -2697,6 +2703,11 @@ fn get_java_value_conversion_cache(
     let req_exc_ctor = env.get_method_id(&req_exc_cls, "<init>", "(Ljava/lang/String;)V")?;
     let request_exception_class = env.new_global_ref(&req_exc_cls)?;
 
+    let timeout_exc_cls = env.find_class("glide/api/models/exceptions/TimeoutException")?;
+    let timeout_exc_ctor =
+        env.get_method_id(&timeout_exc_cls, "<init>", "(Ljava/lang/String;)V")?;
+    let timeout_exception_class = env.new_global_ref(&timeout_exc_cls)?;
+
     let cache = JavaValueConversionCache {
         long_class,
         long_ctor,
@@ -2717,6 +2728,8 @@ fn get_java_value_conversion_cache(
         big_integer_ctor: bi_ctor,
         request_exception_class,
         request_exception_ctor: req_exc_ctor,
+        timeout_exception_class,
+        timeout_exception_ctor: timeout_exc_ctor,
     };
 
     // Prefer existing value if concurrently initialized

@@ -172,6 +172,10 @@ func parseInterface(response *C.struct_CommandResponse) (any, error) {
 		if !ok {
 			return nil, errors.New("error message isn't a string")
 		}
+		// An error node carries its error type in int_value.
+		if uint32(response.int_value) == C.Timeout {
+			return NewTimeoutError(errStrString), nil
+		}
 		return errors.New(errStrString), nil
 	}
 

@@ -57,6 +57,7 @@ import {
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     MigrateOptions,
     OpenTelemetry,
+    PartialResultsOption,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -1547,9 +1548,27 @@ export interface PubSubMsg {
  * @see {@link ClusterBatchOptions}
  * @see {@link BatchOptions}
  */
-type BaseOptions = RouteOption & DecoderOption;
+type BaseOptions = RouteOption & DecoderOption & PartialResultsOption;
 type WritePromiseOptions =
     BaseOptions | (BaseOptions & (ClusterBatchOptions | BatchOptions));
+
+/**
+ * @internal
+ * Errors inside a reply come from the native layer as plain `Error` objects
+ * whose `name` is the GLIDE error class. Gives such an error that class's
+ * prototype, so `instanceof` checks work. Other values are left as they are.
+ */
+export function restoreErrorPrototype(value: unknown): void {
+    // Compare by name: the native `Error` can come from another realm (e.g. jest's VM).
+    const error = value as Error | undefined;
+    if (error?.constructor?.name !== "Error") return;
+
+    if (error.name === "TimeoutError") {
+        Object.setPrototypeOf(error, TimeoutError.prototype);
+    } else if (error.name === "RequestError") {
+        Object.setPrototypeOf(error, RequestError.prototype);
+    }
+}
 
 /**
  * Base client interface for GLIDE
@@ -1904,19 +1923,8 @@ export class BaseClient {
         return this.sendBatch<T>(command, options, isAtomic, raiseOnError).then(
             (result: T) => {
                 // Patch error prototypes in batch results.
-                // The Rust NAPI layer returns errors as plain JS Error objects with
-                // name="RequestError". We need to re-class them as RequestError instances
-                // so that `instanceof RequestError` checks work correctly.
                 if (Array.isArray(result)) {
-                    for (const item of result) {
-                        if (
-                            item?.constructor?.name === "Error" &&
-                            /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-                            (item as any).name === "RequestError"
-                        ) {
-                            Object.setPrototypeOf(item, RequestError.prototype);
-                        }
-                    }
+                    result.forEach(restoreErrorPrototype);
                 }
 
                 return result;
@@ -2121,6 +2129,7 @@ export class BaseClient {
                 argsPointerLow,
                 spanPtr,
                 routeBytes,
+                options.allowPartialResults,
             );
 
             if (command.argsVecPointer) {

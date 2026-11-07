@@ -84,6 +84,7 @@ class CoreCommands(Protocol):
         route: Optional[Route] = ...,
         response_buffer: Optional[memoryview] = ...,
         response_buffers: Optional[List[memoryview]] = ...,
+        allow_partial_results: bool = ...,
     ) -> TResult: ...
 
     def _execute_batch(

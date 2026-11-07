@@ -19,6 +19,7 @@ import {
     PubSubMsg,
     convertGlideRecordToRecord,
     isGlideRecord,
+    restoreErrorPrototype,
 } from "./BaseClient";
 import { RequestError } from "./Errors";
 import { ClusterBatch } from "./Batch";
@@ -114,6 +115,24 @@ export interface RouteOption {
      * The client will route the command to the nodes defined by `route`.
      */
     route?: Routes;
+}
+
+/**
+ * An optional argument for cluster commands that are sent to several nodes.
+ */
+export interface PartialResultsOption {
+    /**
+     * When `true`, a command sent to several nodes resolves with an entry for every target node,
+     * holding that node's reply or the error for that node. A node that has not answered by
+     * `requestTimeout` minus the smaller of a tenth of it and 100 ms gets a {@link TimeoutError};
+     * other failures get a {@link RequestError}. The promise does not reject because some or all
+     * of the target nodes failed; it still rejects when no node can be reached at all, and it can
+     * still reject with a {@link TimeoutError}.
+     *
+     * Has no effect on a command routed to a single node. Defaults to `false`, which rejects with
+     * the first node error.
+     */
+    allowPartialResults?: boolean;
 }
 
 /**
@@ -1121,9 +1140,11 @@ export class GlideClusterClient extends BaseClient {
      * - (Optional) `sections`: a list of {@link InfoOptions} values specifying which sections of information to retrieve.
      *     When no parameter is provided, {@link InfoOptions.Default|Default} is assumed.
      * - (Optional) `route`: see {@link RouteOption}.
+     * - (Optional) `allowPartialResults`: see {@link PartialResultsOption}.
      * @returns A string containing the information for the sections requested.
      *     When specifying a route other than a single node,
      *     it returns a dictionary where each address is the key and its corresponding node response is the value.
+     *     With `allowPartialResults: true`, a node that failed has its error as the value.
      *
      * @example
      * ```typescript
@@ -1131,14 +1152,55 @@ export class GlideClusterClient extends BaseClient {
      * const result = await client.info(new Section[] { Section.STATS });
      * console.log(someClusterParsingFunction(result, "total_net_input_bytes")); // Output: 1
      * ```
+     *
+     * @example
+     * ```typescript
+     * // Keep the replies of the healthy primaries when one of them times out
+     * const result = await client.info({ allowPartialResults: true });
+     * for (const [address, reply] of Object.entries(result)) {
+     *     if (reply instanceof TimeoutError) console.log(`${address} timed out`);
+     * }
+     * ```
      */
     public async info(
-        options?: { sections?: InfoOptions[] } & RouteOption,
-    ): Promise<ClusterResponse<string>> {
+        options?: {
+            sections?: InfoOptions[];
+            allowPartialResults?: false;
+        } & RouteOption,
+    ): Promise<ClusterResponse<string>>;
+    /**
+     * Gets information and statistics about the server, keeping the replies of the nodes that
+     * answered when other nodes fail. See {@link PartialResultsOption}.
+     *
+     * @param options - Same as above, with `allowPartialResults`.
+     * @returns A string when the command goes to a single node. Otherwise a dictionary from each
+     *     node address to its reply, or to its error: a {@link TimeoutError} if the node did not
+     *     answer in time, or a {@link RequestError} for any other failure.
+     */
+    public async info(
+        options: { sections?: InfoOptions[] } & RouteOption &
+            PartialResultsOption,
+    ): Promise<string | Record<string, string | RequestError>>;
+    public async info(
+        options?: { sections?: InfoOptions[] } & RouteOption &
+            PartialResultsOption,
+    ): Promise<string | Record<string, string | RequestError>> {
         return this.createWritePromise<ClusterGlideRecord<string>>(
             createInfo(options?.sections),
             { decoder: Decoder.String, ...options },
-        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
+        ).then((res) => {
+            const result = convertClusterGlideRecord(
+                res,
+                false,
+                options?.route,
+            );
+
+            if (options?.allowPartialResults && typeof result === "object") {
+                Object.values(result).forEach(restoreErrorPrototype);
+            }
+
+            return result;
+        });
     }
 
     /**
