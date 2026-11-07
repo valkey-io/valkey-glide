@@ -142,7 +142,7 @@ where
     /// The caller owns the bytes from here on, so a stream built with them and then
     /// dropped without being read discards them rather than returning them here.
     fn take_decoder_buffer(&mut self) -> bytes::BytesMut {
-        let leftover = bytes::BytesMut::from(self.decoder.buffer());
+        let leftover = read_buf_with_leftover(self.decoder.buffer());
         self.decoder = combine::stream::Decoder::new();
         leftover
     }
@@ -459,6 +459,27 @@ where
             Box::pin(async move { T::from_owned_redis_value(value.ok()?.ok()?).ok() })
         })
     }
+}
+
+/// Original capacity of a stream codec's read buffer; the same as tokio's
+/// `FramedRead` default.
+const STREAM_READ_BUF_CAPACITY: usize = 8 * 1024;
+
+/// Builds a stream's read buffer holding `leftover`.
+///
+/// Created with [`STREAM_READ_BUF_CAPACITY`] and then filled, rather than with
+/// `BytesMut::from(leftover)`: `BytesMut` remembers the capacity it was
+/// created with (growing it later does not change that), and `ValueCodec`
+/// splits small frames off the read buffer, so each refill made while the
+/// caller still holds such values allocates a new buffer of at least that
+/// original capacity. A buffer created from a short leftover remembers no
+/// capacity, and those refills would offer reads of a single byte and grow
+/// from there; one created from a leftover of 16 KiB or more would make every
+/// such refill that large (rounded down to a power of two, up to 64 KiB).
+fn read_buf_with_leftover(leftover: &[u8]) -> bytes::BytesMut {
+    let mut buf = bytes::BytesMut::with_capacity(STREAM_READ_BUF_CAPACITY);
+    buf.extend_from_slice(leftover);
+    buf
 }
 
 /// Builds a [`ValueCodec`] [`Framed`] over `con`, seeding its read buffer with
@@ -1070,6 +1091,82 @@ mod pubsub_tests {
                     panic!("stream ended before delivering the {nth} buffered message")
                 });
             assert_expected_message(msg);
+        }
+    }
+}
+
+#[cfg(all(test, feature = "tokio-comp"))]
+mod tests {
+    use super::*;
+    use crate::parser::test_io::{bulk_frame, ChunkedIo};
+    use futures_util::StreamExt;
+
+    /// The seeded read buffer remembers an 8 KiB original capacity whatever
+    /// the leftover's size: a refill made while split values share the
+    /// buffer allocates `max(unconsumed + 1, original capacity)`, so with
+    /// nothing unconsumed it is exactly that original capacity.
+    #[test]
+    fn seeded_read_buffer_refills_at_8_kib_for_any_leftover() {
+        for len in [0, 100, 5000, 20_000, 70_000] {
+            let mut buf = read_buf_with_leftover(&vec![b'x'; len]);
+            assert_eq!(&buf[..], &vec![b'x'; len][..]);
+            // Reads fill the buffer, then everything is decoded, split off
+            // and still held.
+            buf.resize(buf.capacity(), b'y');
+            let _held = buf.split_to(buf.len()).freeze();
+            buf.reserve(1);
+            assert_eq!(
+                buf.capacity(),
+                STREAM_READ_BUF_CAPACITY,
+                "{len}-byte leftover"
+            );
+        }
+    }
+
+    /// A `PubSub`/`Monitor` stream's read buffer, seeded from the handshake
+    /// leftover, must read in full chunks while the caller holds decoded
+    /// values. Small frames are split off the read buffer, so a refill while
+    /// they are alive allocates a new buffer of at least the seed's original
+    /// capacity; a seed with no original capacity would make that refill
+    /// offer a single byte, then grow by doubling, one read per step.
+    #[test]
+    fn stream_seeded_from_leftover_reads_in_full_chunks_while_values_are_held() {
+        // More than the read buffer's 8 KiB of complete frames left over.
+        let long: Vec<u8> = (0..100u8).flat_map(|i| bulk_frame(&[i; 97])).collect();
+        assert!(long.len() > STREAM_READ_BUF_CAPACITY);
+        // (decoder leftover, rest of its last frame, frames in the leftover)
+        let cases: [(&[u8], &[u8], usize); 3] = [
+            (b"", b"", 0),
+            // The decoder holds "$3\r\nab"; the stream gets "c\r\n" first.
+            (b"$3\r\nab", b"c\r\n", 1),
+            (&long, b"", 100),
+        ];
+        for (leftover, rest, leftover_frames) in cases {
+            let mut wire = rest.to_vec();
+            for i in 0..200u8 {
+                wire.extend_from_slice(&bulk_frame(&[i; 97]));
+            }
+            let (io, offered) = ChunkedIo::new(wire, 4096);
+            let mut framed = framed_with_leftover(io, read_buf_with_leftover(leftover));
+            let values: Vec<Value> = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    let mut values = Vec::new();
+                    while let Some(v) = framed.next().await {
+                        values.push(v.unwrap().unwrap());
+                    }
+                    values
+                });
+            assert_eq!(values.len(), 200 + leftover_frames);
+            let offered: Vec<usize> = offered.lock().unwrap().iter().map(|&(n, _)| n).collect();
+            let smallest = offered.iter().min().copied().unwrap();
+            assert!(
+                smallest >= 1024,
+                "{}-byte leftover: a read was offered {smallest} bytes ({} reads: {offered:?})",
+                leftover.len(),
+                offered.len()
+            );
         }
     }
 }

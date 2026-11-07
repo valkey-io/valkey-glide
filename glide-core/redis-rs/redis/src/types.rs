@@ -644,8 +644,17 @@ impl Value {
     /// decoder is a slice of its response's single frame buffer, so
     /// retaining even one small slice pins the *entire* frame (e.g. keeping
     /// one 16-byte element of a 6 MB MGET response holds all 6 MB — plus its
-    /// recycled `buf_pool` allocation — alive). If you extract and keep a
-    /// subset of a response, detach it first.
+    /// recycled `buf_pool` allocation — alive). Responses of up to 4 KiB
+    /// (other than RESP3 pushes) are split off the connection's read buffer
+    /// instead, so retaining one of their slices pins that read buffer
+    /// allocation (typically 8 KiB, at most about 85 KiB) for as long as it
+    /// is held, including while a language binding holds the response until
+    /// its caller frees it. If you extract and keep a subset of a response,
+    /// detach it first.
+    ///
+    /// To turn such a slice into a `Vec<u8>`, use [`bytes_into_vec`] rather
+    /// than `Vec::from`: on the last slice of a read buffer, `Vec::from`
+    /// would keep the whole read buffer as the `Vec`'s capacity.
     pub fn detach_buffers(self) -> Value {
         match self {
             Value::BulkString(b) => Value::BulkString(bytes::Bytes::copy_from_slice(&b)),
@@ -2146,7 +2155,9 @@ macro_rules! from_vec_from_redis_value {
                     // Binary data is parsed into a single-element vector, except
                     // for the element type `u8`, which directly consumes the entire
                     // array of bytes.
-                    Value::BulkString(bytes) => FromRedisValue::from_owned_byte_vec(bytes.into()).map($convert),
+                    // `bytes_into_vec`, not `bytes.into()`: a small value split
+                    // off the read buffer would otherwise keep the whole buffer.
+                    Value::BulkString(bytes) => FromRedisValue::from_owned_byte_vec(bytes_into_vec(bytes)).map($convert),
                     Value::Array(items) => FromRedisValue::from_owned_redis_values(items).map($convert),
                     Value::Set(items) => FromRedisValue::from_owned_redis_values(items).map($convert),
                     Value::Map(items) => {
@@ -2525,6 +2536,25 @@ impl FromRedisValue for bytes::Bytes {
             _ => invalid_type_error!(v, "Not a bulk string"),
         }
     }
+}
+
+/// Converts the bytes of a reply value into an owned `Vec<u8>` whose
+/// capacity is at most `2 * len + 64`.
+///
+/// Use this instead of `Vec::from(bytes)` (or `bytes.into()`) when handing
+/// reply bytes to code that keeps the `Vec`. When a `Bytes` holds the only
+/// reference to its allocation, `Vec::from` reuses that allocation with its
+/// full capacity. A small value the decoder split off the connection's read
+/// buffer shares that buffer, so `Vec::from` on the last such value keeps
+/// the whole read buffer (typically 8 KiB) behind a few bytes. This
+/// function shrinks the result in that case. A `Vec` that is not much
+/// larger than its contents is returned without a reallocation.
+pub fn bytes_into_vec(bytes: bytes::Bytes) -> Vec<u8> {
+    let mut vec = Vec::from(bytes);
+    if vec.capacity() > 2 * vec.len() + 64 {
+        vec.shrink_to_fit();
+    }
+    vec
 }
 
 /// A shortcut function to invoke `FromRedisValue::from_redis_value`
