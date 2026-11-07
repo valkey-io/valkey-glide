@@ -208,6 +208,73 @@ func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsRepliesWhenAPrimaryI
 	}
 }
 
+func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsTheErrorReplyOfADeniedPrimary() {
+	t := suite.T()
+	ctx := context.Background()
+	admin := suite.defaultClusterClient()
+	username := "partial-" + uuid.NewString()
+	password := "password"
+	_, err := admin.CustomCommandWithRoute(
+		ctx,
+		[]string{"ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all"},
+		config.AllNodes,
+	)
+	require.NoError(t, err)
+	defer func() {
+		_, err := admin.CustomCommandWithRoute(ctx, []string{"ACL", "DELUSER", username}, config.AllNodes)
+		assert.NoError(t, err)
+	}()
+	denied, err := suite.clusterClient(
+		suite.defaultClusterClientConfig().WithCredentials(config.NewServerCredentials(username, password)),
+	)
+	require.NoError(t, err)
+
+	infos, err := denied.Info(ctx)
+	require.NoError(t, err)
+	primaries := make([]string, 0, len(infos))
+	for address := range infos {
+		primaries = append(primaries, address)
+	}
+	sort.Strings(primaries)
+	host, portText, err := net.SplitHostPort(primaries[0])
+	require.NoError(t, err)
+	port, err := strconv.Atoi(portText)
+	require.NoError(t, err)
+	_, err = admin.CustomCommandWithRoute(
+		ctx,
+		[]string{"ACL", "SETUSER", username, "-info"},
+		config.NewByAddressRoute(host, int32(port)),
+	)
+	require.NoError(t, err)
+
+	// Without partial results, the denied primary fails the whole call.
+	_, plainErr := denied.Info(ctx)
+	require.Error(t, plainErr)
+
+	result, err := denied.InfoWithPartialResults(ctx, options.ClusterInfoOptions{})
+	require.NoError(t, err)
+	replies := result.MultiValue()
+	assert.Len(t, replies, len(primaries))
+	nodeErr, ok := replies[primaries[0]].(error)
+	require.True(t, ok, "%v", replies[primaries[0]])
+	_, isTimeout := nodeErr.(*glide.TimeoutError)
+	assert.False(t, isTimeout)
+	assert.Equal(t, plainErr.Error(), nodeErr.Error())
+	for _, address := range primaries[1:] {
+		assert.Contains(t, replies[address], "# Server")
+	}
+
+	// With every primary denied, the call returns an error for each.
+	_, err = admin.CustomCommandWithRoute(ctx, []string{"ACL", "SETUSER", username, "-info"}, config.AllPrimaries)
+	require.NoError(t, err)
+	failed, err := denied.InfoWithPartialResults(ctx, options.ClusterInfoOptions{})
+	require.NoError(t, err)
+	assert.Len(t, failed.MultiValue(), len(primaries))
+	for _, reply := range failed.MultiValue() {
+		assert.Implements(t, (*error)(nil), reply)
+	}
+}
+
 func (suite *GlideTestSuite) TestClusterRegisterCustomClientInfoTag() {
 	suite.SkipIfServerVersionLowerThan("7.2.0", suite.T())
 
