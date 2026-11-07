@@ -81,6 +81,10 @@ keyUsage = digitalSignature, keyEncipherment
 subjectAltName = IP:{DEFAULT_HOST_IPV4}, IP:{DEFAULT_HOST_IPV6}, DNS:localhost, DNS:{HOSTNAME_TLS}
 """
 
+# Matches a cluster node ID in a CLUSTER SLOTS response.
+# A Valkey/Redis node ID is composed of 40 lowercase hex characters.
+CLUSTER_SLOTS_NODE_ID_REGEX = re.compile(r"^[0-9a-f]{40}$", re.MULTILINE)
+
 
 def get_command(commands: List[str]) -> str:
     for command in commands:
@@ -719,16 +723,18 @@ def create_cluster(
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
 ):
+    endpoints = [f"{get_bind_addresses(server.host)[0]}:{server.port}" for server in servers]
+
     tic = time.perf_counter()
-    servers_tuple = (str(server) for server in servers)
     logging.debug("## Starting cluster creation...")
+
     p = subprocess.Popen(
         [
             get_cli_command(),
             *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
             "--cluster",
             "create",
-            *servers_tuple,
+            *endpoints,
             "--cluster-replicas",
             str(replica_count),
             "--cluster-yes",
@@ -819,40 +825,6 @@ def wait_for_a_message_in_logs(
             )
 
 
-def parse_cluster_nodes(command_output: Optional[str]) -> Optional[dict]:
-    """
-    Parameters
-    ----------
-    command_output: str :
-        The output returned from valkey for the command 'CLUSTER NODES'
-
-    Returns
-    -------
-        A dictionary for the current node's details
-    """
-    if command_output is None:
-        return None
-
-    lines = command_output.splitlines(keepends=False)
-    for line in lines:
-        tokens = line.split(" ")
-        if len(tokens) < 3:
-            continue
-
-        node_id = tokens[0].strip()
-        network = tokens[1].strip()
-        flags = tokens[2].strip()
-
-        if "myself" in flags:
-            # This is us
-            return {
-                "node_id": node_id,
-                "network": network,
-                "is_primary": "master" in flags,
-            }
-    return None
-
-
 def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
     try:
         p = subprocess.Popen(
@@ -884,7 +856,13 @@ def wait_for_all_topology_views(
     Only when a replica finished syncing and loading, it will be included in the CLUSTER SLOTS output.
     """
     for server in servers:
-        cmd_args = [
+
+        # [1] Wait for server to be ready
+        # -------------------------------
+
+        # Server is ready when CLUSTER SLOTS returns
+        # node IDs for the expected number of nodes.
+        cluster_slots_cmd_args = [
             get_cli_command(),
             "-h",
             server.host,
@@ -894,38 +872,54 @@ def wait_for_all_topology_views(
             "cluster",
             "slots",
         ]
-        logging.debug(f"Executing: {cmd_args}")
-        retries = 80
-        while retries >= 0:
-            output = redis_cli_run_command(cmd_args)
-            if output is not None and output.count(f"{server.host}") == len(servers):
-                # Server is ready, get the node's role
-                cmd_args = [
-                    get_cli_command(),
-                    "-h",
-                    server.host,
-                    "-p",
-                    str(server.port),
-                    *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
-                    "cluster",
-                    "nodes",
-                ]
-                cluster_slots_output = redis_cli_run_command(cmd_args)
-                node_info = parse_cluster_nodes(cluster_slots_output)
-                if node_info:
-                    server.set_primary(node_info["is_primary"])
-                logging.debug(f"Server {server} is ready!")
-                break
-            else:
-                retries -= 1
-                time.sleep(1)
-                continue
 
-        if retries < 0:
+        logging.debug(f"Executing: {cluster_slots_cmd_args}")
+
+        for _ in range(81):
+            cluster_slots_output = redis_cli_run_command(cluster_slots_cmd_args)
+            if cluster_slots_output is not None and (
+                len(CLUSTER_SLOTS_NODE_ID_REGEX.findall(cluster_slots_output)) == len(servers)
+            ):
+                break
+            time.sleep(1)
+        else:
             raise Exception(
                 f"Timeout exceeded trying to wait for server {server} to know all hosts.\n"
-                f"Current CLUSTER SLOTS output:\n{output}"
+                f"Current CLUSTER SLOTS output:\n{cluster_slots_output}"
             )
+
+        # [2] Determine if server is primary
+        # ----------------------------------
+
+        # Server is a primary when CLUSTER NODES returns
+        # a line with both "myself" and "master" flags.
+        cluster_nodes_cmd_args = [
+            get_cli_command(),
+            "-h",
+            server.host,
+            "-p",
+            str(server.port),
+            *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+            "cluster",
+            "nodes",
+        ]
+
+        cluster_nodes_output = redis_cli_run_command(cluster_nodes_cmd_args)
+        if cluster_nodes_output is None:
+            raise Exception(f"Timed out getting CLUSTER NODES from server {server}")
+
+        # Each line is `<id> <ip:port@cport> <flags> ...`.
+        # Flags is a comma-separated list (e.g. `myself,master` or `slave`).
+        is_primary = False
+        for line in cluster_nodes_output.splitlines():
+            fields = line.split(" ")
+            flags = set(fields[2].split(","))
+            if {"myself", "master"} <= flags:
+                is_primary = True
+                break
+        server.set_primary(is_primary)
+
+        logging.debug(f"Server {server} is ready!")
 
 
 def wait_for_server(
