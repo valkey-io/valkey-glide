@@ -559,7 +559,7 @@ def start_server(
                 cmd_args.extend(["--cluster-announce-hostname", host])
 
         # Enable multi-database support (Valkey 9.0+).
-        if cluster_mode and server_version >= (9, 0, 0):
+        if server_version >= (9, 0, 0):
             cmd_args.extend(["--cluster-databases", "16"])
 
     if server_version >= (7, 0, 0):
