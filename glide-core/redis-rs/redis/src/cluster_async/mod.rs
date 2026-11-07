@@ -2530,8 +2530,14 @@ where
         if receivers.is_empty() {
             return Err(no_fan_out_connections_error());
         }
-        let entries = future::join_all(receivers.into_iter().map(
+        let pairs = future::try_join_all(receivers.into_iter().map(
             |(address, receiver)| async move {
+                let address = address.ok_or_else(|| {
+                    RedisError::from((
+                        ErrorKind::ResponseError,
+                        "No address provided for response in partial results",
+                    ))
+                })?;
                 let result = match deadline {
                     Some(deadline) => {
                         tokio::time::timeout_at(deadline.into(), receiver)
@@ -2556,21 +2562,10 @@ where
                         .into(),
                     ),
                 };
-                (address, value)
+                Ok::<_, RedisError>((Value::BulkString(address.into_bytes().into()), value))
             },
         ))
-        .await;
-
-        let mut pairs = Vec::with_capacity(entries.len());
-        for (address, value) in entries {
-            let Some(address) = address else {
-                return Err(RedisError::from((
-                    ErrorKind::ResponseError,
-                    "No address provided for response in partial results",
-                )));
-            };
-            pairs.push((Value::BulkString(address.into_bytes().into()), value));
-        }
+        .await?;
         Ok(Value::Map(pairs))
     }
 

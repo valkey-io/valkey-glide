@@ -727,27 +727,30 @@ where
         &self,
         primaries_only: bool,
     ) -> (Vec<ConnectionAndAddress<Connection>>, Vec<String>) {
-        let connections: Vec<_> = if primaries_only {
-            self.all_primary_connections().collect()
-        } else {
-            self.all_node_connections().collect()
-        };
-        let addresses = if primaries_only {
-            self.slot_map.addresses_for_all_primaries()
-        } else {
-            self.slot_map.all_node_addresses()
-        };
-        let unconnected = {
-            let connected: HashSet<&str> = connections
-                .iter()
-                .map(|(address, _)| address.as_str())
-                .collect();
-            addresses
-                .into_iter()
-                .filter(|address| !connected.contains(address.as_str()))
-                .map(|address| address.to_string())
-                .collect()
-        };
+        if primaries_only {
+            let (mut connections, mut unconnected) = (Vec::new(), Vec::new());
+            for address in self.slot_map.addresses_for_all_primaries() {
+                match self.connection_for_address(&address) {
+                    Some(connection) => connections.push(connection),
+                    None => unconnected.push(address.to_string()),
+                }
+            }
+            return (connections, unconnected);
+        }
+        // All nodes also covers connected nodes the slot map does not list, as
+        // `all_node_connections` does.
+        let connections: Vec<_> = self.all_node_connections().collect();
+        let connected: HashSet<&str> = connections
+            .iter()
+            .map(|(address, _)| address.as_str())
+            .collect();
+        let unconnected = self
+            .slot_map
+            .all_node_addresses()
+            .into_iter()
+            .filter(|address| !connected.contains(address.as_str()))
+            .map(|address| address.to_string())
+            .collect();
         (connections, unconnected)
     }
 
