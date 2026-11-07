@@ -216,33 +216,20 @@ describe("PubSub", () => {
         }
     }
 
+    /**
+     * Every read method checks the queue instantly. Callers establish the
+     * ordering first: this client has read its last expected message, or a
+     * later publish has been read on another client (so the server has
+     * dispatched it), or the caller slept after an unsubscribe.
+     */
     async function checkNoMessagesLeft(
         method: number,
         client: TGlideClient,
         callback: PubSubMsg[] | null = [],
         expectedCallbackMessagesCount = 0,
     ) {
-        if (method === MethodTesting.Async) {
-            try {
-                // Assert there are no messages to read
-                await Promise.race([
-                    client.getPubSubMessage(),
-                    new Promise((_, reject) =>
-                        setTimeout(
-                            () => reject(new TimeoutError("TimeoutError")),
-                            3000,
-                        ),
-                    ),
-                ]);
-                throw new Error("Expected TimeoutError but got a message.");
-            } catch (error) {
-                if (!(error instanceof TimeoutError)) {
-                    throw error;
-                }
-            }
-        } else if (method === MethodTesting.Sync) {
-            const message = client.tryGetPubSubMessage();
-            expect(message).toBe(null);
+        if (method === MethodTesting.Async || method === MethodTesting.Sync) {
+            expect(client.tryGetPubSubMessage()).toBe(null);
         } else {
             if (callback === null) {
                 throw new Error("Callback must be provided.");
