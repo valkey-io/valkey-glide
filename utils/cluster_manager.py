@@ -551,7 +551,8 @@ def start_server(
         if cluster_node_timeout is not None:
             cmd_args.extend(["--cluster-node-timeout", str(cluster_node_timeout)])
 
-        # Enable cluster-announce-hostname if host is a DNS hostname (Redis 7.0+).
+        # Enable cluster-announce-hostname if host is a DNS hostname so that
+        # cluster topology reports hostnames instead of IP addresses (Redis 7.0+).
         if server_version >= (7, 0, 0):
             try:
                 ipaddress.ip_address(host)
