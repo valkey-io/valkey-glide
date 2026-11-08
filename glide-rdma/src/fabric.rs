@@ -197,11 +197,12 @@ impl RdmaFabric {
     ///   `cudaMemset`, or `cudaMemcpy` from pageable host memory, can return before
     ///   their writes land, unless the allocation has
     ///   `CU_POINTER_ATTRIBUTE_SYNC_MEMOPS` set.
-    /// * Device work must not touch a window while a get of it is in flight. Once the
-    ///   get returns, device work that reads the landed bytes may still see stale
-    ///   ones on a device whose `CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WRITES_ORDERING`
-    ///   does not order them, unless the caller first calls
-    ///   `cuFlushGPUDirectRDMAWrites`, which is a no-op where the device does.
+    /// * Device work must not touch a window while a get of it is in flight. Device
+    ///   work that reads the landed bytes must be submitted after the get returns,
+    ///   since work already running may see stale ones. On a device whose
+    ///   `CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WRITES_ORDERING` does not order them,
+    ///   the caller first calls `cuFlushGPUDirectRDMAWrites`, which is a no-op where
+    ///   the device does.
     ///
     /// The fabric must have been opened with [`FabricConfig::with_device_memory`].
     /// `owner` is dropped as for [`Self::register_raw`], at once if registration fails.

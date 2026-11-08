@@ -93,6 +93,7 @@ enum RegionBuffer {
 
 #[cfg(feature = "rdma")]
 impl RegionBuffer {
+    /// The fabric the buffer is registered with.
     fn fabric(&self) -> &glide_rdma::RdmaFabric {
         match self {
             Self::Host(buffer) => buffer.fabric(),
@@ -100,6 +101,7 @@ impl RegionBuffer {
         }
     }
 
+    /// A handle that revokes the buffer's region from another thread.
     fn revoker(&self) -> glide_rdma::RdmaRevoker {
         match self {
             Self::Host(buffer) => buffer.revoker(),
@@ -107,6 +109,7 @@ impl RegionBuffer {
         }
     }
 
+    /// Whether the buffer's region has been revoked.
     fn is_revoked(&self) -> bool {
         match self {
             Self::Host(buffer) => buffer.is_revoked(),
@@ -309,8 +312,9 @@ impl RdmaResult {
     ///
     /// # Safety
     ///
-    /// `region` must be null or a region from [`register_rdma_region`] that
-    /// [`free_rdma_region`] has not been called on.
+    /// `region` must be null or a region from [`register_rdma_region`] or
+    /// [`register_rdma_device_region`] that [`free_rdma_region`] has not been called
+    /// on.
     unsafe fn panicked(region: *mut RdmaRegion) -> Self {
         #[cfg(feature = "rdma")]
         let region_closed = !region.is_null() && unsafe { &*region }.is_closed();
@@ -510,11 +514,12 @@ pub unsafe extern "C-unwind" fn register_rdma_region(
 ///   it, for example by synchronizing its stream. `cudaMemset`, or `cudaMemcpy`
 ///   from pageable host memory, can return before their writes land, unless the
 ///   allocation has `CU_POINTER_ATTRIBUTE_SYNC_MEMOPS` set.
-/// * Device work must not touch a window while [`rdma_get`] of it runs. Once it
-///   returns, device work that reads the landed bytes may still see stale ones on
-///   a device whose `CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WRITES_ORDERING` does not
-///   order them, unless the caller first calls `cuFlushGPUDirectRDMAWrites`, which
-///   is a no-op where the device does.
+/// * Device work must not touch a window while [`rdma_get`] of it runs. Device
+///   work that reads the landed bytes must be submitted after it returns, since
+///   work already running may see stale ones. On a device whose
+///   `CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WRITES_ORDERING` does not order them, the
+///   caller first calls `cuFlushGPUDirectRDMAWrites`, which is a no-op where the
+///   device does.
 ///
 /// Every other function takes the region as it takes one from
 /// [`register_rdma_region`], and [`free_rdma_region`] frees it.
@@ -661,9 +666,9 @@ fn register_region(
 ///   called on it until this call returns.
 /// * `key` must point to `key_len` initialized bytes, which must stay valid for
 ///   the duration of the call.
-/// * `region` must be a region from [`register_rdma_region`] that
-///   [`free_rdma_region`] has not been called on, and no other thread may use
-///   it for the duration of the call.
+/// * `region` must be a region from [`register_rdma_region`] or
+///   [`register_rdma_device_region`] that [`free_rdma_region`] has not been
+///   called on, and no other thread may use it for the duration of the call.
 /// * The caller must not read or write the region's memory until this call
 ///   returns. If it returns with [`RdmaResult::region_closed`] set, the server
 ///   may still write into the memory until [`free_rdma_region`] says it may be
@@ -977,7 +982,8 @@ pub unsafe extern "C" fn rdma_close_regions(client_adapter_ptr: *const c_void) -
 ///
 /// # Safety
 ///
-/// * `region` must be null or a region from [`register_rdma_region`].
+/// * `region` must be null or a region from [`register_rdma_region`] or
+///   [`register_rdma_device_region`].
 /// * `free_rdma_region` may be called only once per region.
 /// * No transfer against the region may be in flight, including one that
 ///   [`rdma_close_regions`] cancelled but that has not returned yet.
@@ -1169,7 +1175,8 @@ pub unsafe extern "C" fn free_rdma_memory_hold(hold: *mut RdmaMemoryHold) {
 ///
 /// # Safety
 ///
-/// * `registration` must be null or a pointer from [`register_rdma_region`].
+/// * `registration` must be null or a pointer from [`register_rdma_region`] or
+///   [`register_rdma_device_region`].
 /// * `free_rdma_registration` may be called only once per registration.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_rdma_registration(registration: *mut RdmaRegistration) {
