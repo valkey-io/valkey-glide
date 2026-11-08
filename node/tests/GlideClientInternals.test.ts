@@ -189,7 +189,7 @@ describe("GlideClusterClientConfiguration", () => {
 
 class RequestClient extends BaseClient {
     public constructor() {
-        super();
+        super({ addresses: [] });
     }
 
     public buildRequest(
@@ -406,7 +406,7 @@ describe("Reconnect strategy validation", () => {
 describe("BaseClient response handling", () => {
     class TestBaseClient extends BaseClient {
         public constructor() {
-            super();
+            super({ addresses: [] });
         }
     }
 

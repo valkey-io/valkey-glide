@@ -775,7 +775,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<GlideClusterClient> {
         return await super.createClientInternal(
             options,
-            (options?: GlideClusterClientConfiguration) =>
+            (options: GlideClusterClientConfiguration) =>
                 new GlideClusterClient(options),
         );
     }
@@ -825,7 +825,7 @@ export class GlideClusterClient extends BaseClient {
     } {
         return super.serializeConnectionRequest(
             options,
-            (opts?: BaseClientConfiguration) =>
+            (opts: BaseClientConfiguration) =>
                 new GlideClusterClient(opts as GlideClusterClientConfiguration),
         );
     }
