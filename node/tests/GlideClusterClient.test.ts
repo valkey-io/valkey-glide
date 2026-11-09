@@ -18,6 +18,7 @@ import {
     ClientPauseMode,
     ClientSideCache,
     ClientTrackingInfo,
+    ClosingError,
     ClusterBatch,
     ConfigurationError,
     Decoder,
@@ -3653,12 +3654,14 @@ describe("GlideClusterClient", () => {
             };
 
             // Test 1: Eager connection to non-existent host should fail immediately
-            await expect(
-                GlideClusterClient.createClient({
-                    ...baseConfig,
-                    lazyConnect: false,
-                }),
-            ).rejects.toThrow(/connect|connection|resolve|network|host/i);
+            const creation = GlideClusterClient.createClient({
+                ...baseConfig,
+                lazyConnect: false,
+            });
+            await expect(creation).rejects.toThrow(ClosingError);
+            await expect(creation).rejects.toThrow(
+                /connect|connection|resolve|network|host/i,
+            );
 
             // Test 2: Lazy connection to non-existent host should succeed in client creation
             const lazyClient = await GlideClusterClient.createClient({
