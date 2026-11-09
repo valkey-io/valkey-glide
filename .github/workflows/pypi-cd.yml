@@ -8,10 +8,10 @@ on:
             - .github/actions/install-engine/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/json_matrices/**
-            - .github/workflows/build-python-wrapper/action.yml
-            - .github/workflows/create-test-matrices/action.yml
+            - .github/actions/build-python-wrapper/action.yml
+            - .github/actions/create-test-matrices/action.yml
             - .github/workflows/pypi-cd.yml
-            - .github/workflows/start-self-hosted-runner/action.yml
+            - .github/actions/start-self-hosted-runner/action.yml
     push:
         tags:
             - "v*.*"
@@ -56,13 +56,13 @@ jobs:
               run: |
 
                   # For testing, Filter entries with pypi in PACKAGE_MANAGERS
-                  export TESTS_PLATFORM_MATRIX=$(jq 'map(
+                  TESTS_PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"])))
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
-                  echo "TESTS_PLATFORM_MATRIX=${TESTS_PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+                  echo "TESTS_PLATFORM_MATRIX=${TESTS_PLATFORM_MATRIX}" >> "$GITHUB_OUTPUT"
 
                   # For building and publishing, replace "ephemeral" with "persistent" in RUNNER
-                  export PLATFORM_MATRIX=$(echo "${TESTS_PLATFORM_MATRIX}" | jq 'map(
+                  PLATFORM_MATRIX=$(echo "${TESTS_PLATFORM_MATRIX}" | jq 'map(
                       .RUNNER = (
                           if (.RUNNER | type == "array")
                           then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end))
@@ -70,7 +70,7 @@ jobs:
                           end
                       )
                   )' | jq -c .)
-                  echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+                  echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> "$GITHUB_OUTPUT"
 
     start-self-hosted-runner:
         if: github.repository_owner == 'valkey-io'
@@ -83,7 +83,7 @@ jobs:
                   fetch-depth: 0
 
             - name: Start self hosted EC2 runner
-              uses: ./.github/workflows/start-self-hosted-runner
+              uses: ./.github/actions/start-self-hosted-runner
               with:
                   role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
                   aws-region: ${{ secrets.AWS_REGION }}
@@ -104,7 +104,7 @@ jobs:
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+              run: sudo chown -R "$USER:$USER" /home/ubuntu/actions-runner/_work/valkey-glide
 
             - name: Checkout
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -122,8 +122,8 @@ jobs:
                   else
                     R_VERSION=${GITHUB_REF:11}
                   fi
-                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
-                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_OUTPUT
+                  echo "RELEASE_VERSION=${R_VERSION}" >> "$GITHUB_ENV"
+                  echo "RELEASE_VERSION=${R_VERSION}" >> "$GITHUB_OUTPUT"
               env:
                   EVENT_NAME: ${{ github.event_name }}
                   INPUT_VERSION: ${{ github.event.inputs.version }}
@@ -131,19 +131,28 @@ jobs:
             - name: Check that the release version dont have typo init
               if: ${{ github.event_name != 'pull_request' && contains(env.RELEASE_VERSION, '-') && !contains(env.RELEASE_VERSION, 'rc') }}
               run: |
-                  echo "The release version "${{ env.RELEASE_VERSION }}" contains a typo, please fix it"
+                  echo "The release version \"$RELEASE_VERSION\" contains a typo, please fix it"
                   echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
                   exit 1
 
             - name: Set the package version for Python
               working-directory: ./python
+              env:
+                  OS: ${{ matrix.build.OS }}
               run: |
-                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
                   # Set the version for the Async, Sync and Shared packages
                   # List of packages to update
+                  SED_SCRIPT="s/^dynamic = \[\s*\"version\"\s*\]/version = \"${{ env.RELEASE_VERSION }}\"/"
                   for package in glide-async glide-sync glide-shared; do
                     echo "Patching version in $package/pyproject.toml"
-                    sed -i $SED_FOR_MACOS "s/^dynamic = \[\s*\"version\"\s*\]/version = \"${{ env.RELEASE_VERSION }}\"/" "./$package/pyproject.toml"
+
+                    # macOS: BSD sed requires a backup suffix argument.
+                    # Empty string means no backup.
+                    if [[ "$OS" == *"macos"* ]]; then
+                      sed -i '' "$SED_SCRIPT" "./$package/pyproject.toml"
+                    else
+                      sed -i "$SED_SCRIPT" "./$package/pyproject.toml"
+                    fi
 
                     # Log the updated file
                     cat "./$package/pyproject.toml"
@@ -170,13 +179,13 @@ jobs:
                   python-version: "3.14"
 
             - name: Update package version in config.toml for the async client
-              uses: ./.github/workflows/update-glide-version
+              uses: ./.github/actions/update-glide-version
               with:
                   folder_path: "${{ github.workspace }}/python/glide-async/.cargo"
                   named_os: ${{ matrix.build.NAMED_OS }}
 
             - name: Update package version in config.toml for the sync client
-              uses: ./.github/workflows/update-glide-version
+              uses: ./.github/actions/update-glide-version
               with:
                   folder_path: "${{ github.workspace }}/ffi/.cargo"
                   named_os: ${{ matrix.build.NAMED_OS }}
@@ -184,7 +193,7 @@ jobs:
             ### BUILD ###
 
             - name: Build Python Sync and Async wrappers
-              uses: ./.github/workflows/build-python-wrapper
+              uses: ./.github/actions/build-python-wrapper
               with:
                   os: ${{ matrix.build.OS }}
                   target: ${{ matrix.build.TARGET }}
@@ -229,7 +238,7 @@ jobs:
                   sudo unzip -o "$PROTOC_ZIP" -d /opt/protoc
 
                   # Add only the protoc bin directory to PATH
-                  echo "/opt/protoc/bin" >> $GITHUB_PATH
+                  echo "/opt/protoc/bin" >> "$GITHUB_PATH"
 
                   /opt/protoc/bin/protoc --version
 
@@ -244,11 +253,20 @@ jobs:
 
             - name: Include protobuf files in the package
               working-directory: ./python
+              env:
+                  OS: ${{ matrix.build.OS }}
               run: |
                   # Protobuf files are ignored by .gitignore, which affects packaging tools.
                   # To include them in the build, we temporarily remove them from .gitignore.
-                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS '/pb2.py/d' .gitignore
+
+                  # macOS: BSD sed requires a backup suffix argument.
+                  # Empty string means no backup.
+                  if [[ "$OS" == *"macos"* ]]; then
+                    sed -i '' '/pb2.py/d' .gitignore
+                  else
+                    sed -i '/pb2.py/d' .gitignore
+                  fi
+
                   # Log the edited .gitignore file
                   cat .gitignore
 
@@ -288,7 +306,7 @@ jobs:
                     sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                   fi
 
-                  echo "/opt/${PYPY_VERSION_3_11}/bin" >> ${GITHUB_PATH}
+                  echo "/opt/${PYPY_VERSION_3_11}/bin" >> "$GITHUB_PATH"
 
                   sudo chmod -R a+rx /opt/pypy*/bin
                   sudo chmod -R a+rx /opt/pypy*/lib/*.dylib
@@ -541,17 +559,16 @@ jobs:
             - name: Set the release version
               shell: bash
               run: |
-                  echo "RELEASE_VERSION=${{needs.publish-binaries.outputs.release_version}}" >> $GITHUB_ENV
+                  echo "RELEASE_VERSION=${{needs.publish-binaries.outputs.release_version}}" >> "$GITHUB_ENV"
 
             - name: Set the package version for Python
               working-directory: ./python
               run: |
-                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
                   # Set the version for the Async, Sync and Shared packages
                   # List of packages to update
                   for package in glide-async glide-sync glide-shared; do
                     echo "Patching version in $package/pyproject.toml"
-                    sed -i $SED_FOR_MACOS "s/^dynamic = \[\s*\"version\"\s*\]/version = \"${{ env.RELEASE_VERSION }}\"/" "./$package/pyproject.toml"
+                    sed -i "s/^dynamic = \[\s*\"version\"\s*\]/version = \"${{ env.RELEASE_VERSION }}\"/" "./$package/pyproject.toml"
 
                     # Log the updated file
                     cat "./$package/pyproject.toml"
@@ -615,17 +632,16 @@ jobs:
             - name: Set the release version
               shell: bash
               run: |
-                  echo "RELEASE_VERSION=${{needs.publish-binaries.outputs.release_version}}" >> $GITHUB_ENV
+                  echo "RELEASE_VERSION=${{needs.publish-binaries.outputs.release_version}}" >> "$GITHUB_ENV"
 
             - name: Set the package version for Python
               working-directory: ./python
               run: |
-                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
                   # Set the version for the Async, Sync and Shared packages
                   # List of packages to update
                   for package in glide-async glide-sync glide-shared; do
                     echo "Patching version in $package/pyproject.toml"
-                    sed -i $SED_FOR_MACOS "s/^dynamic = \[\s*\"version\"\s*\]/version = \"${{ env.RELEASE_VERSION }}\"/" "./$package/pyproject.toml"
+                    sed -i "s/^dynamic = \[\s*\"version\"\s*\]/version = \"${{ env.RELEASE_VERSION }}\"/" "./$package/pyproject.toml"
 
                     # Log the updated file
                     cat "./$package/pyproject.toml"
@@ -698,7 +714,7 @@ jobs:
         steps:
             - name: Setup self-hosted runner access
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+              run: sudo chown -R "$USER:$USER" /home/ubuntu/actions-runner/_work/valkey-glide
 
             - name: checkout
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -726,7 +742,7 @@ jobs:
                       sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                     fi
 
-                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_11}/bin
+                    sudo chmod -R a+rx "/opt/${PYPY_VERSION_3_11}/bin"
 
                   elif [[ "${{ matrix.build.NAMED_OS }}" == "darwin" ]]; then
                     if [[ "$ARCH" == "arm64" ]]; then
@@ -742,11 +758,11 @@ jobs:
                       sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                     fi
 
-                    sudo chmod -R a+rx /opt/${PYPY_VERSION_3_11}/bin
+                    sudo chmod -R a+rx "/opt/${PYPY_VERSION_3_11}/bin"
                     sudo chmod -R a+rx /opt/${PYPY_VERSION_3_11}/lib/*.dylib
                   fi
 
-                  echo "/opt/${PYPY_VERSION_3_11}/bin" >> ${GITHUB_PATH}
+                  echo "/opt/${PYPY_VERSION_3_11}/bin" >> "$GITHUB_PATH"
 
             - name: Install engine build dependencies (ephemeral runners)
               if: ${{ contains(matrix.build.RUNNER, 'ephemeral') }}
@@ -768,16 +784,16 @@ jobs:
                   if [[ "$RELEASE_VERSION" == *"rc"* ]]
                   then
                     echo "This is a release candidate"
-                    echo "PIP_PRE=true" >> $GITHUB_ENV
+                    echo "PIP_PRE=true" >> "$GITHUB_ENV"
                   else
                     echo "This is a stable release"
-                    echo "PIP_PRE=false" >> $GITHUB_ENV
+                    echo "PIP_PRE=false" >> "$GITHUB_ENV"
                   fi
 
                   # Format the version for PyPI (remove leading 'v' and convert '-rc' to 'rc')
                   PYPI_VERSION="${RELEASE_VERSION#v}"
                   PYPI_VERSION="${PYPI_VERSION//-rc/rc}"
-                  echo "PYPI_VERSION=${PYPI_VERSION}" >> $GITHUB_ENV
+                  echo "PYPI_VERSION=${PYPI_VERSION}" >> "$GITHUB_ENV"
 
             - name: Run the Async Client tests
               if: ${{ github.event_name == 'push' || inputs.publish_async == true }}

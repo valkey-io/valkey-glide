@@ -54,7 +54,7 @@ jobs:
                     # Check if commits after the tag are only ORT attribution updates
                     # If all post-tag commits are automated ORT updates, the branch is effectively dormant
                     # KEEP IN SYNC WITH ort.yml commit-message (currently "Updated attribution files")
-                    non_ort_commits=$(git log --format="%s" "$latest_final_tag".."origin/$branch" \
+                    non_ort_commits=$(git log --format="%s" "$latest_final_tag..origin/$branch" \
                       | grep -Ev '^Updated attribution files for commit [0-9a-f]' || true)
 
                     if [ -z "$non_ort_commits" ]; then
@@ -68,7 +68,7 @@ jobs:
                   if [ -n "$skipped" ]; then
                     echo "Skipped branches:$skipped"
                   fi
-                  echo "branches=$branches" >> $GITHUB_OUTPUT
+                  echo "branches=$branches" >> "$GITHUB_OUTPUT"
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

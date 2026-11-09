@@ -42,7 +42,7 @@ runs:
               # a reviewed PR when adopting a newer module. See GHSA-q7rf-74qm-hr9g.
               DEFAULT_IMAGE="valkey/valkey-bundle:9.1.3"
               IMAGE="${IMAGE_OVERRIDE:-$DEFAULT_IMAGE}"
-              echo "image=$IMAGE" >> $GITHUB_OUTPUT
+              echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
               echo "Using Docker image: $IMAGE"
 
         - name: Start module servers via Docker
