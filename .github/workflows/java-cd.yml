@@ -411,6 +411,23 @@ jobs:
                   -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
                   -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
 
+            # The jedis-compatibility and jedis-4-compatibility POMs depend on the classifier-less
+            # compat-shared JAR, so it must be published next to the platform-specific ones.
+            - name: Bundle jedis-compat-shared no-classifier JAR
+              working-directory: java
+              shell: bash
+              run: |
+                  jedis_shared_folder=~/.m2/repository/io/valkey/valkey-glide-jedis-compat-shared/${{ env.RELEASE_VERSION }}
+                  if [ ! -d "$jedis_shared_folder" ]; then
+                    echo "Expected Maven local output missing: $jedis_shared_folder" >&2
+                    exit 1
+                  fi
+                  cd $jedis_shared_folder
+                  jar -cvf jedis-shared-bundle.jar *
+                  ls -ltr
+                  cd -
+                  cp $jedis_shared_folder/jedis-shared-bundle.jar jedis-shared-bundle-no-classifier.jar
+
             - name: Build jedis-compatibility (no classifier, no natives)
               working-directory: java
               shell: bash
@@ -482,6 +499,12 @@ jobs:
               with:
                   name: java-uber-jar
                   path: java/bundle-uber-jar.jar
+
+            - name: Upload jedis-compat-shared no-classifier artifact
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: jedis-compat-shared-no-classifier
+                  path: java/jedis-shared-bundle-no-classifier.jar
 
             - name: Upload jedis no-classifier artifact
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
