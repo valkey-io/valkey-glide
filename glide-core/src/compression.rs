@@ -144,13 +144,15 @@ impl From<SizeLimitExceeded> for redis::RedisError {
     }
 }
 
-/// The in-place form for a batch run with `raise_on_error` false. Built directly rather than
-/// through `RedisError`, whose `IoError` kind has no `ServerError` mapping and would surface
-/// as the code `IoError` in a message about a size limit.
+/// The in-place form for a batch run with `raise_on_error` false. `Value` has no variant for a
+/// slot that failed on the client, so the error rides in `ServerError` as the cluster pipeline's
+/// client-side errors do. Built directly rather than through `RedisError`, whose `IoError` kind
+/// has no `ServerError` mapping and would surface as the code `IoError` in a message about a
+/// size limit. The code is one token, as `err_code()` callers expect.
 impl From<SizeLimitExceeded> for redis::ServerError {
     fn from(limit: SizeLimitExceeded) -> Self {
         redis::ServerError::ExtensionError {
-            code: "Decompression error".to_string(),
+            code: "DecompressionError".to_string(),
             detail: Some(limit.to_string()),
         }
     }
