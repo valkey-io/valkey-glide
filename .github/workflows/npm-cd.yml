@@ -475,16 +475,6 @@ jobs:
 
                   echo "Packages published successfully"
 
-              # Delete artifacts if not published
-            - name: Delete artifacts
-              if: always() && ${{ needs.get-build-parameters.outputs.should_publish == 'false' }}
-              uses: geekyeggo/delete-artifact@54ab544f12cdb7b71613a16a2b5a37a9ade990af # v2
-              with:
-                  name: |
-                      artifacts-*
-                      js-files-${{ github.run_id }}
-                  failOnError: false
-
     test-published-release:
         needs: [get-build-parameters, prepare-and-publish]
         # Only run tests if the publish was successful
