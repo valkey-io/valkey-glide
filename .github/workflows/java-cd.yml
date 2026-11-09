@@ -732,7 +732,7 @@ jobs:
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                   ./gradlew --build-cache :benchmarks:run --args="--minimal --clients glide --port ${{ env.PORT }} --concurrentTasks \"1 10 100\""
 
-    # The benchmark test only consumes core valkey-glide; this checks the Jedis compat POMs resolve (#7603).
+    # Benchmark test covers only core valkey-glide (#7603).
     test-jedis-compatibility-maven-resolution:
         needs: [set-release-version, publish-to-maven-central-deployment]
         runs-on: ubuntu-24.04
@@ -755,7 +755,7 @@ jobs:
                   AUTHORIZATION_HEADER="Bearer $(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 -w 0)"
                   ARTIFACT_URL="https://central.sonatype.com/api/v1/publisher/deployments/download/io/valkey/valkey-glide-jedis-compatibility/${RELEASE_VERSION}/valkey-glide-jedis-compatibility-${RELEASE_VERSION}.pom"
                   for ((retries = 0; retries < 6; retries++)); do
-                      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: $AUTHORIZATION_HEADER" "$ARTIFACT_URL")
+                      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: $AUTHORIZATION_HEADER" "$ARTIFACT_URL" || true)
                       if [ "$HTTP_STATUS" = "200" ]; then
                           echo "Artifact available"
                           exit 0
