@@ -335,7 +335,7 @@ describe("GlideClient", () => {
         ).rejects.toThrow(ConfigurationError);
     });
 
-    it("core configuration refusal rejects with ConfigurationError", async () => {
+    it("core configuration error rejects with ConfigurationError", async () => {
         // The TypeScript layer validates libName itself, so change the encoded
         // request to reach the core's own validation.
         const seams = BaseClient as unknown as {
