@@ -880,7 +880,7 @@ def wait_for_all_topology_views(
         for _ in range(81):
             cluster_slots_output = redis_cli_run_command(cluster_slots_cmd_args)
             if cluster_slots_output is not None and (
-                len(CLUSTER_SLOTS_NODE_ID_REGEX.findall(cluster_slots_output)) == len(servers)
+                len(set(CLUSTER_SLOTS_NODE_ID_REGEX.findall(cluster_slots_output))) == len(servers)
             ):
                 break
             time.sleep(1)
@@ -915,6 +915,8 @@ def wait_for_all_topology_views(
         is_primary = False
         for line in cluster_nodes_output.splitlines():
             fields = line.split(" ")
+            if len(fields) < 3:
+                continue
             flags = set(fields[2].split(","))
             if {"myself", "master"} <= flags:
                 is_primary = True
