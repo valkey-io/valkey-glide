@@ -125,12 +125,13 @@ public abstract class AbstractGlideJedisFactory<J extends AbstractGlideJedis>
     @Override
     public void activateObject(PooledObject<J> pooledObject) throws Exception {
         J jedis = pooledObject.getObject();
-        if (jedis != null) {
-            jedis.resetForReuse();
-            int database = clientConfig.getDatabase();
-            if (jedis.getDB() != database) {
-                jedis.select(database);
-            }
+        if (jedis == null) {
+            return;
+        }
+        jedis.resetForReuse();
+        int database = clientConfig.getDatabase();
+        if (jedis.getDB() != database) {
+            jedis.select(database);
         }
     }
 

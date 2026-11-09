@@ -270,41 +270,40 @@ public class JedisPoolTest {
 
     @Test
     void pool_next_borrower_starts_on_configured_database() throws Exception {
-        int configuredDb = 9;
-        int otherDb = 15;
+        int configuredDatabase = 9;
+        int otherDatabase = 15;
         String key = UUID.randomUUID().toString();
         GenericObjectPoolConfig<Jedis> poolConfig = new GenericObjectPoolConfig<>();
         poolConfig.setMaxTotal(1); // both borrowers get the same pooled connection
-        try (GlideClient configuredDbClient = glideClientOnDatabase(configuredDb);
-                GlideClient otherDbClient = glideClientOnDatabase(otherDb);
+        try (GlideClient configuredDatabaseClient = glideClientOnDatabase(configuredDatabase);
+                GlideClient otherDatabaseClient = glideClientOnDatabase(otherDatabase);
                 JedisPool pool =
-                        new JedisPool(poolConfig, valkeyHost, valkeyPort, 5000, null, configuredDb)) {
-            try {
-                Jedis first;
-                try (Jedis jedis = pool.getResource()) {
-                    first = jedis;
-                    jedis.select(otherDb);
-                }
-                try (Jedis jedis = pool.getResource()) {
-                    assertSame(first, jedis, "verify: maxTotal=1 reuses the pooled connection");
-                    assertEquals(
-                            configuredDb,
-                            jedis.getDB(),
-                            "verify: next borrower starts on the pool's configured database");
-                    jedis.set(key, "value");
-                }
-                assertEquals(
-                        "value",
-                        configuredDbClient.get(key).get(),
-                        "verify: write from next borrower lands in the configured database");
-                assertEquals(
-                        0L,
-                        otherDbClient.exists(new String[] {key}).get(),
-                        "verify: write from next borrower does not land in the previous borrower's database");
-            } finally {
-                configuredDbClient.del(new String[] {key}).get();
-                otherDbClient.del(new String[] {key}).get();
+                        new JedisPool(poolConfig, valkeyHost, valkeyPort, 5000, null, configuredDatabase)) {
+            Jedis first;
+            try (Jedis jedis = pool.getResource()) {
+                first = jedis;
+                jedis.select(otherDatabase);
             }
+            try (Jedis jedis = pool.getResource()) {
+                assertSame(first, jedis, "verify: maxTotal=1 reuses the pooled connection");
+                assertEquals(
+                        configuredDatabase,
+                        jedis.getDB(),
+                        "verify: next borrower starts on the pool's configured database");
+                jedis.set(key, "value");
+            }
+            assertEquals(
+                    "value",
+                    configuredDatabaseClient.get(key).get(),
+                    "verify: write from next borrower lands in the configured database");
+            assertEquals(
+                    0L,
+                    otherDatabaseClient.exists(new String[] {key}).get(),
+                    "verify: write from next borrower does not land in the previous borrower's database");
+
+            // Cleanup
+            configuredDatabaseClient.del(new String[] {key}).get();
+            otherDatabaseClient.del(new String[] {key}).get();
         }
     }
 

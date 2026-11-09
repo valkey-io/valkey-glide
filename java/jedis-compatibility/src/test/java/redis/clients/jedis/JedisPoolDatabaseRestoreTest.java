@@ -30,26 +30,24 @@ import redis.clients.jedis.exceptions.JedisException;
  */
 class JedisPoolDatabaseRestoreTest {
 
-    private static final int CONFIGURED_DB = 9;
-    private static final int OTHER_DB = 15;
+    private static final int CONFIGURED_DATABASE = 9;
+    private static final int OTHER_DATABASE = 15;
 
     private static final JedisClientConfig CONFIG =
-            DefaultJedisClientConfig.builder().database(CONFIGURED_DB).build();
+            DefaultJedisClientConfig.builder().database(CONFIGURED_DATABASE).build();
 
-    /** A borrower that switched databases must not leak that database to the next borrower. */
     @Test
     void activateObject_selects_configured_database_when_database_differs() throws Exception {
         GlideClient client = clientAcceptingSelect();
         Jedis jedis = new Jedis(client, CONFIG);
-        jedis.select(OTHER_DB);
+        jedis.select(OTHER_DATABASE);
 
         newFactory().activateObject(new DefaultPooledObject<>(jedis));
 
-        verify(client).select((long) CONFIGURED_DB);
-        assertEquals(CONFIGURED_DB, jedis.getDB());
+        verify(client).select((long) CONFIGURED_DATABASE);
+        assertEquals(CONFIGURED_DATABASE, jedis.getDB());
     }
 
-    /** A connection already on the configured database must not pay for a redundant SELECT. */
     @Test
     void activateObject_skips_select_when_database_matches() throws Exception {
         GlideClient client = clientAcceptingSelect();
@@ -58,23 +56,22 @@ class JedisPoolDatabaseRestoreTest {
         newFactory().activateObject(new DefaultPooledObject<>(jedis));
 
         verify(client, never()).select(anyLong());
-        assertEquals(CONFIGURED_DB, jedis.getDB());
+        assertEquals(CONFIGURED_DATABASE, jedis.getDB());
     }
 
-    /** A failed restore SELECT must fail activation, so Commons Pool does not lend the connection. */
     @Test
     void activateObject_throws_when_restore_select_fails() {
         GlideClient client = clientAcceptingSelect();
-        when(client.select((long) CONFIGURED_DB)).thenReturn(failedSelect());
+        when(client.select((long) CONFIGURED_DATABASE)).thenReturn(failedSelect());
         Jedis jedis = new Jedis(client, CONFIG);
-        jedis.select(OTHER_DB);
+        jedis.select(OTHER_DATABASE);
 
         assertThrows(
-                JedisException.class, () -> newFactory().activateObject(new DefaultPooledObject<>(jedis)));
-        assertEquals(OTHER_DB, jedis.getDB(), "a failed SELECT must not update the tracked database");
+                JedisException.class,
+                () -> newFactory().activateObject(new DefaultPooledObject<>(jedis)),
+                "a failed restore SELECT must stop Commons Pool from lending the connection");
     }
 
-    /** Pool lifecycle: the next borrower of the same connection starts on the configured database. */
     @Test
     void pool_next_borrower_starts_on_configured_database() {
         GlideClient client = clientAcceptingSelect();
@@ -82,37 +79,33 @@ class JedisPoolDatabaseRestoreTest {
             Jedis first;
             try (Jedis jedis = pool.getResource()) {
                 first = jedis;
-                jedis.select(OTHER_DB);
+                jedis.select(OTHER_DATABASE);
             }
             try (Jedis jedis = pool.getResource()) {
                 assertSame(first, jedis, "maxTotal=1 must reuse the pooled connection");
-                assertEquals(CONFIGURED_DB, jedis.getDB());
+                assertEquals(CONFIGURED_DATABASE, jedis.getDB());
             }
-            verify(client).select((long) CONFIGURED_DB);
+            verify(client).select((long) CONFIGURED_DATABASE);
             assertEquals(1, pool.getCreatedCount());
             assertEquals(0, pool.getDestroyedCount());
         }
     }
 
-    /**
-     * Pool lifecycle, as upstream: when the restore SELECT fails, Commons Pool destroys that
-     * connection and lends a new one that is on the configured database.
-     */
     @Test
     void pool_replaces_connection_when_restore_select_fails() throws Exception {
         GlideClient failingClient = clientAcceptingSelect();
-        when(failingClient.select((long) CONFIGURED_DB)).thenReturn(failedSelect());
+        when(failingClient.select((long) CONFIGURED_DATABASE)).thenReturn(failedSelect());
         GlideClient freshClient = clientAcceptingSelect();
         try (JedisPool pool =
                 new JedisPool(singleConnection(), new MockClientFactory(failingClient, freshClient))) {
             Jedis first;
             try (Jedis jedis = pool.getResource()) {
                 first = jedis;
-                jedis.select(OTHER_DB);
+                jedis.select(OTHER_DATABASE);
             }
             try (Jedis jedis = pool.getResource()) {
                 assertNotSame(first, jedis, "the connection whose restore failed must not be lent");
-                assertEquals(CONFIGURED_DB, jedis.getDB());
+                assertEquals(CONFIGURED_DATABASE, jedis.getDB());
             }
             assertEquals(2, pool.getCreatedCount());
             assertEquals(1, pool.getDestroyedCount());
