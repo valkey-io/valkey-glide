@@ -254,11 +254,24 @@ describe("PubSub", () => {
         }
     }
 
+    // How long a cluster client is watched for an extra message after the
+    // caller has read its last expected one.
+    const NO_MESSAGE_WINDOW_MS = 100;
+
     /**
-     * Every read method checks the queue instantly. Callers establish the
-     * ordering first: this client has read its last expected message, or a
-     * later publish has been read on another client (so the server has
-     * dispatched it), or the caller slept after an unsubscribe.
+     * Callers establish the ordering first: this client has read its last
+     * expected message, or a later publish has been read on another client
+     * (so the server has dispatched it), or the caller slept after an
+     * unsubscribe.
+     *
+     * A standalone client has one connection, and the server writes every
+     * delivery of one PUBLISH to it in one pass, so an extra delivery is
+     * already queued behind the message the caller read: one look at the
+     * queue is enough. A cluster client subscribes on the node that owns
+     * each channel or pattern, one connection per node, so an extra
+     * delivery from another node can still be in transit when the expected
+     * one has been read; the queue is watched for NO_MESSAGE_WINDOW_MS and
+     * the first message to arrive fails the check.
      */
     async function checkNoMessagesLeft(
         method: number,
@@ -266,14 +279,28 @@ describe("PubSub", () => {
         callback: PubSubMsg[] | null = [],
         expectedCallbackMessagesCount = 0,
     ) {
-        if (method === MethodTesting.Async || method === MethodTesting.Sync) {
-            expect(client.tryGetPubSubMessage()).toBe(null);
-        } else {
-            if (callback === null) {
-                throw new Error("Callback must be provided.");
+        const deadline =
+            Date.now() +
+            (client instanceof GlideClusterClient ? NO_MESSAGE_WINDOW_MS : 0);
+
+        for (;;) {
+            if (method === MethodTesting.Callback) {
+                if (callback === null) {
+                    throw new Error("Callback must be provided.");
+                }
+
+                expect(callback.length).toBe(expectedCallbackMessagesCount);
+            } else {
+                expect(client.tryGetPubSubMessage()).toBe(null);
             }
 
-            expect(callback.length).toBe(expectedCallbackMessagesCount);
+            if (Date.now() >= deadline) {
+                return;
+            }
+
+            await new Promise((resolve) =>
+                setTimeout(resolve, DELIVERY_POLL_INTERVAL_MS),
+            );
         }
     }
 
@@ -752,7 +779,6 @@ describe("PubSub", () => {
 
                 // Assert there are no messages to read
                 await checkNoMessagesLeft(MethodTesting.Async, listeningClient);
-                expect(listeningClient.tryGetPubSubMessage()).toBeNull();
             } finally {
                 await Promise.all([
                     clientCleanup(publishingClient!),
@@ -1026,7 +1052,6 @@ describe("PubSub", () => {
 
                 // Assert there are no messages to read
                 await checkNoMessagesLeft(MethodTesting.Async, listeningClient);
-                expect(listeningClient.tryGetPubSubMessage()).toBeNull();
             } finally {
                 // Cleanup clients
                 await Promise.all([
@@ -1329,7 +1354,6 @@ describe("PubSub", () => {
 
                 // Assert there are no messages to read
                 await checkNoMessagesLeft(MethodTesting.Async, listeningClient);
-                expect(listeningClient!.tryGetPubSubMessage()).toBeNull();
             } finally {
                 // Cleanup clients
                 await Promise.all([
@@ -1772,7 +1796,6 @@ describe("PubSub", () => {
 
                 // Assert there are no more messages to read
                 await checkNoMessagesLeft(MethodTesting.Async, listeningClient);
-                expect(listeningClient.tryGetPubSubMessage()).toBeNull();
             } finally {
                 // Cleanup clients
                 await Promise.all([
@@ -5660,10 +5683,15 @@ describe("PubSub", () => {
 
                 // Verify callback received the message
                 await pollForCallbackMessage(callbackMessages, 0);
-                expect(callbackMessages.length).toBe(1);
                 expect(callbackMessages[0].message).toEqual(message);
                 expect(callbackMessages[0].channel).toEqual(channel);
                 expect(callbackMessages[0].pattern).toBeNull();
+                await checkNoMessagesLeft(
+                    MethodTesting.Callback,
+                    listener,
+                    callbackMessages,
+                    1,
+                );
             } finally {
                 if (listener) {
                     listener.close();
@@ -7430,9 +7458,7 @@ describe("PubSub", () => {
                     );
                 }
 
-                // Verify no extra messages
-                const extraMessage = listeningClient.tryGetPubSubMessage();
-                expect(extraMessage).toBeNull();
+                await checkNoMessagesLeft(MethodTesting.Async, listeningClient);
             } finally {
                 if (listeningClient) {
                     listeningClient.close();
