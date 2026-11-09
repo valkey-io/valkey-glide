@@ -13,8 +13,16 @@ async function checkClientInfo(client) {
     );
     const version = JSON.parse(readFileSync(packageJson, "utf8")).version;
     const info = String(await client.customCommand(["CLIENT", "INFO"]));
+    const fields = info.split(/\s+/);
+    // Servers older than 7.2 have no CLIENT SETINFO, so CLIENT INFO has no lib-name/lib-ver.
+    if (!fields.some((field) => field.startsWith("lib-name="))) {
+        console.log(
+            `Skipping lib-ver check: server is older than 7.2 (${info})`,
+        );
+        return;
+    }
     for (const expected of ["lib-name=GlideJS", `lib-ver=${version}`]) {
-        if (!info.split(/\s+/).includes(expected)) {
+        if (!fields.includes(expected)) {
             throw new Error(
                 `Expected CLIENT INFO to contain ${expected}, got ${info}`,
             );
