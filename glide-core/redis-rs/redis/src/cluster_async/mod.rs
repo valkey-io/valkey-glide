@@ -2527,9 +2527,6 @@ where
         receivers: Vec<(Option<String>, oneshot::Receiver<RedisResult<Response>>)>,
         deadline: Option<std::time::Instant>,
     ) -> RedisResult<Value> {
-        if receivers.is_empty() {
-            return Err(no_fan_out_connections_error());
-        }
         let pairs = future::try_join_all(receivers.into_iter().map(
             |(address, receiver)| async move {
                 let address = address.ok_or_else(|| {
@@ -5275,12 +5272,6 @@ mod partial_results_tests {
         let entry = error_of(&entries[0].1);
         assert_eq!(entry.to_string(), expected);
         assert_eq!(entry.kind(), ErrorKind::PermissionDenied);
-    }
-
-    #[tokio::test]
-    async fn no_targets_is_still_a_retryable_error() {
-        let err = collect(Vec::new(), None).await.unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::ConnectionNotFoundForRoute);
     }
 }
 
