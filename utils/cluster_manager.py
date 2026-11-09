@@ -341,6 +341,15 @@ class Server:
         self.is_primary = is_primary
 
     @cached_property
+    def is_dns_name(self) -> bool:
+        """Whether the server's host is a DNS name rather than an IP address."""
+        try:
+            ipaddress.ip_address(self.host)
+            return False
+        except ValueError:
+            return True
+
+    @cached_property
     def bind_addresses(self) -> List[str]:
         """The IP addresses to pass for the server to `--bind`."""
         # Loopback hosts bind to both the IPv4 and IPv6 loopback addresses.
@@ -355,21 +364,19 @@ class Server:
     @cached_property
     def cluster_create_address(self) -> str:
         """The IP address to pass for the server to `--cluster create`."""
-        # `redis-cli --cluster create` before Redis 7.0 sends CLUSTER MEET with the
-        # address it is given, and servers only accept an IP address there.
+        # Send the resolved IP address instead of the host name:
+        # `CLUSTER MEET` only accepts IP addresses, and `redis-cli`
+        # before Redis 7.0 did not resolve host names.
         return self._ip_addresses[0]
 
     @cached_property
     def _ip_addresses(self) -> List[str]:
         """The server's IP addresses."""
-        try:
-            ipaddress.ip_address(self.host)
+        if not self.is_dns_name:
             return [self.host]
 
-        # If host is not an IP address, return the resolved ones.
-        except ValueError:
-            addr_infos = socket.getaddrinfo(self.host, None, proto=socket.IPPROTO_TCP)
-            return list(dict.fromkeys(str(addr_info[4][0]) for addr_info in addr_infos))
+        addr_infos = socket.getaddrinfo(self.host, None, proto=socket.IPPROTO_TCP)
+        return list(dict.fromkeys(str(addr_info[4][0]) for addr_info in addr_infos))
 
 
 def print_servers_json(servers: List[Server]):
@@ -534,11 +541,8 @@ def start_server(
 
         # Enable cluster-announce-hostname if host is a DNS hostname so that
         # cluster topology reports hostnames instead of IP addresses (Redis 7.0+).
-        if server_version >= (7, 0, 0):
-            try:
-                ipaddress.ip_address(host)
-            except ValueError:
-                cmd_args.extend(["--cluster-announce-hostname", host])
+        if server_version >= (7, 0, 0) and server.is_dns_name:
+            cmd_args.extend(["--cluster-announce-hostname", host])
 
         # Enable multi-database support (Valkey 9.0+).
         if server_version >= (9, 0, 0):
