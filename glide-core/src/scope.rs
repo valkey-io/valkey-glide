@@ -992,14 +992,13 @@ pub async fn create_scope_connection(
         }
     });
 
-    match connection {
+    let (created, log) = match connection {
         Ok(prepared) => {
-            if pool_guard.last_create_warn.take().is_some() {
-                glide_logger::log_debug(
-                    "create_scope_connection",
-                    format!("scoped connection to {target:?} created again"),
-                );
-            }
+            let log = pool_guard.last_create_warn.take().map(|_| DeferredLog {
+                identifier: "create_scope_connection",
+                level: glide_logger::Level::Debug,
+                message: format!("scoped connection to {target:?} created again"),
+            });
             let scope_id = pool_guard.next_id();
             pool_guard.idle.push_back(ScopedConnection {
                 scope_id,
@@ -1016,7 +1015,7 @@ pub async fn create_scope_connection(
                 last_auth_generation: prepared.initial_auth_generation,
             });
             reservation.commit();
-            Ok(())
+            (Ok(()), log)
         }
         Err(err) => {
             // The uncommitted `reservation` gives the slot back on drop. A pool
@@ -1024,23 +1023,32 @@ pub async fn create_scope_connection(
             // per kind and logs the repeats at debug, since an acquire that keeps
             // retrying a persistent cause (a lazy mTLS parent, an unreachable
             // shard) would otherwise warn on every attempt. Same shape as
-            // `log_unresolved_target`.
-            let message = format!("scoped connection to {target:?} not created: {err}");
+            // `unresolved_target_log`.
             let kind = err.kind();
-            if matches!(err, ScopeCreateError::PoolClosed) {
-                glide_logger::log_debug("create_scope_connection", message);
+            let warn = if matches!(err, ScopeCreateError::PoolClosed) {
+                false
             } else {
-                let repeated = pool_guard.last_create_warn == Some(kind);
+                let first = pool_guard.last_create_warn != Some(kind);
                 pool_guard.last_create_warn = Some(kind);
-                if repeated {
-                    glide_logger::log_debug("create_scope_connection", message);
+                first
+            };
+            let log = DeferredLog {
+                identifier: "create_scope_connection",
+                level: if warn {
+                    glide_logger::Level::Warn
                 } else {
-                    glide_logger::log_warn("create_scope_connection", message);
-                }
-            }
-            Err(kind)
+                    glide_logger::Level::Debug
+                },
+                message: format!("scoped connection to {target:?} not created: {err}"),
+            };
+            (Err(kind), Some(log))
         }
+    };
+    drop(pool_guard);
+    if let Some(log) = log {
+        log.write();
     }
+    created
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1143,8 +1151,7 @@ pub(crate) fn acquire_scope_outcome(
     routing_slot: Option<u16>,
 ) -> ScopeAcquireOutcome {
     let handle = scope_pool_for(client_id, connection_request_bytes);
-    let pool = handle.pool.lock();
-    match classify_acquire(&handle.pool, pool, client_id, runtime, routing_slot) {
+    match attempt_acquire(&handle.pool, client_id, runtime, routing_slot) {
         Classified::Outcome(outcome) => outcome,
         Classified::Creating(_) => ScopeAcquireOutcome::Retry(ScopeRetryCause::Pending),
     }
@@ -1433,9 +1440,9 @@ async fn acquire_scope_with_wait_cap(
         tokio::pin!(notified);
         notified.as_mut().enable();
 
-        let pool = scope_pool.lock();
+        let classified = attempt_acquire(&scope_pool, client_id, runtime, routing_slot);
         let remaining = deadline.saturating_sub(started.elapsed());
-        match classify_acquire(&scope_pool, pool, client_id, runtime, routing_slot) {
+        match classified {
             Classified::Outcome(ScopeAcquireOutcome::Acquired(scope_id)) => return Ok(scope_id),
             Classified::Outcome(ScopeAcquireOutcome::Fail(cause)) => {
                 return Err(ScopeAcquireError::Terminal(cause));
@@ -1502,9 +1509,55 @@ fn scope_pool_for(client_id: u64, connection_request_bytes: Vec<u8>) -> ScopePoo
     }
 }
 
-/// The classification step behind [`acquire_scope`] (and the test-only single
-/// attempt `acquire_scope_outcome`). Takes the guard by value because the
-/// `NeedsResync` arm releases it before spawning.
+/// A log line decided under the scope pool's lock and written after the guard
+/// is released: `glide_logger` writes the rolling log file synchronously, and
+/// every other acquire and release would wait behind that write.
+#[cfg(feature = "proto")]
+#[must_use = "a deferred log line is lost unless written"]
+struct DeferredLog {
+    identifier: &'static str,
+    level: glide_logger::Level,
+    message: String,
+}
+
+#[cfg(feature = "proto")]
+impl DeferredLog {
+    fn write(self) {
+        glide_logger::log(self.level, self.identifier, self.message);
+    }
+}
+
+/// What [`classify_acquire`] decided, plus the log line it owes once the guard
+/// it consumed is gone.
+#[cfg(feature = "proto")]
+struct Classification {
+    next: Classified,
+    log: Option<DeferredLog>,
+}
+
+#[cfg(feature = "proto")]
+fn attempt_acquire(
+    scope_pool: &Arc<ScopeMutex>,
+    client_id: u64,
+    runtime: &tokio::runtime::Handle,
+    routing_slot: Option<u16>,
+) -> Classified {
+    let Classification { next, log } = classify_acquire(
+        scope_pool,
+        scope_pool.lock(),
+        client_id,
+        runtime,
+        routing_slot,
+    );
+    if let Some(log) = log {
+        log.write();
+    }
+    next
+}
+
+/// The classification step behind [`attempt_acquire`]. Takes the guard by
+/// value so it is released when this returns, before the caller writes the
+/// log line, and so the `NeedsResync` arm can release it before spawning.
 #[cfg(feature = "proto")]
 fn classify_acquire(
     scope_pool: &Arc<ScopeMutex>,
@@ -1512,14 +1565,17 @@ fn classify_acquire(
     client_id: u64,
     runtime: &tokio::runtime::Handle,
     routing_slot: Option<u16>,
-) -> Classified {
+) -> Classification {
     use Classified::{Creating, Outcome};
     use ScopeAcquireOutcome::{Acquired, Fail, Retry};
 
     let registry = get_scope_registry();
 
     if pool.state != PoolState::Running {
-        return Outcome(Fail(ScopeFailCause::PoolClosed));
+        return Classification {
+            next: Outcome(Fail(ScopeFailCause::PoolClosed)),
+            log: None,
+        };
     }
 
     // A no-routing-key acquire arrives as None; it still needs a concrete
@@ -1531,22 +1587,23 @@ fn classify_acquire(
     // wrong node. Unresolved never means "use the seed"; whether it means
     // "retry" depends on the cause (see `ScopeTargetUnresolved`).
     let client = get_parent_client(pool.parent_client_id);
-    let target = match try_resolve_scope_target(client.as_ref(), connection_slot) {
+    let (target, log) = match try_resolve_scope_target(client.as_ref(), connection_slot) {
         Ok(target) => {
-            if let Some(cleared) = pool.last_unresolved_target.take() {
-                glide_logger::log_debug(
-                    "acquire_scope_outcome",
-                    format!(
-                        "client {client_id}: scope target resolves again \
-                         (was: {cleared})"
+            let log = pool
+                .last_unresolved_target
+                .take()
+                .map(|cleared| DeferredLog {
+                    identifier: "acquire_scope_outcome",
+                    level: glide_logger::Level::Debug,
+                    message: format!(
+                        "client {client_id}: scope target resolves again (was: {cleared})"
                     ),
-                );
-            }
-            target
+                });
+            (target, log)
         }
         Err(cause) => {
-            log_unresolved_target(&mut pool, client_id, connection_slot, cause);
-            return Outcome(match cause {
+            let log = unresolved_target_log(&mut pool, client_id, connection_slot, cause);
+            let next = Outcome(match cause {
                 ScopeTargetUnresolved::ParentUnregistered => {
                     Fail(ScopeFailCause::ParentUnregistered)
                 }
@@ -1554,6 +1611,10 @@ fn classify_acquire(
                     Retry(ScopeRetryCause::TargetUnresolved)
                 }
             });
+            return Classification {
+                next,
+                log: Some(log),
+            };
         }
     };
 
@@ -1564,10 +1625,13 @@ fn classify_acquire(
     // already guarantees the parent is registered; `client` is the same local,
     // so this arm is a fail-closed guard, not a reachable path.
     let Some(runtime_db) = client.as_ref().map(|c| c.current_database()) else {
-        return Outcome(Fail(ScopeFailCause::ParentUnregistered));
+        return Classification {
+            next: Outcome(Fail(ScopeFailCause::ParentUnregistered)),
+            log,
+        };
     };
     let acquisition_slot = acquisition_slot_for(&target, routing_slot);
-    match pool.try_acquire(registry, target.clone(), runtime_db, acquisition_slot) {
+    let next = match pool.try_acquire(registry, target.clone(), runtime_db, acquisition_slot) {
         ScopeAcquire::Reused(scope_id) => {
             // Parent teardown unregisters the pool before sweeping the registry,
             // so if the pool is gone here the sweep may have missed this entry.
@@ -1579,7 +1643,10 @@ fn classify_acquire(
                 if let Some((_, entry)) = registry.remove(&scope_id) {
                     entry.discard();
                 }
-                return Outcome(Fail(ScopeFailCause::PoolClosed));
+                return Classification {
+                    next: Outcome(Fail(ScopeFailCause::PoolClosed)),
+                    log,
+                };
             }
             let _ = glide_telemetry::GlideOpenTelemetry::record_scope_acquire();
             Outcome(Acquired(scope_id))
@@ -1612,7 +1679,8 @@ fn classify_acquire(
             Outcome(Retry(ScopeRetryCause::Pending))
         }
         ScopeAcquire::Exhausted => Outcome(Retry(ScopeRetryCause::Exhausted)),
-    }
+    };
+    Classification { next, log }
 }
 
 /// Re-`SELECT` one slot-matching idle connection that is on the wrong database onto
@@ -1712,7 +1780,7 @@ pub fn get_parent_client(client_id: u64) -> Option<Client> {
     registry.get(&client_id).map(|e| e.value().clone())
 }
 
-/// Report an unresolved scope target without flooding the log.
+/// The log line for an unresolved scope target, chosen so the log is not flooded.
 ///
 /// A waiting acquire re-attempts every few milliseconds until its deadline, so an
 /// outage of a few seconds would otherwise produce hundreds of identical warnings
@@ -1725,24 +1793,24 @@ pub fn get_parent_client(client_id: u64) -> Option<Client> {
 /// Without any of this the borrower only ever sees "pool exhausted" while the
 /// slot stays uncovered.
 #[cfg(feature = "proto")]
-fn log_unresolved_target(
+fn unresolved_target_log(
     pool: &mut ScopePool,
     client_id: u64,
     routing_slot: u16,
     cause: ScopeTargetUnresolved,
-) {
+) -> DeferredLog {
     let repeated = pool
         .last_unresolved_target
         .is_some_and(|last| last.same_kind(cause));
     pool.last_unresolved_target = Some(cause);
     if repeated {
-        glide_logger::log_debug(
-            "acquire_scope_outcome",
-            format!(
+        return DeferredLog {
+            identifier: "acquire_scope_outcome",
+            level: glide_logger::Level::Debug,
+            message: format!(
                 "client {client_id}: scope target for slot {routing_slot} still unresolved: {cause}"
             ),
-        );
-        return;
+        };
     }
     let outlook = match cause {
         ScopeTargetUnresolved::ParentUnregistered => {
@@ -1752,13 +1820,14 @@ fn log_unresolved_target(
             "scope acquire will be retried"
         }
     };
-    glide_logger::log_warn(
-        "acquire_scope_outcome",
-        format!(
+    DeferredLog {
+        identifier: "acquire_scope_outcome",
+        level: glide_logger::Level::Warn,
+        message: format!(
             "client {client_id}: cannot resolve scope target for slot {routing_slot}: \
              {cause}; {outlook}"
         ),
-    );
+    }
 }
 
 /// Turn a routing slot into the target its scoped connection must reach.
@@ -1886,7 +1955,7 @@ mod tests {
     };
     use super::{
         ScopeAcquireOutcome, ScopeCreateError, ScopeFailCause, ScopeRetryCause,
-        acquire_scope_outcome, acquisition_slot_for, build_scope_connection, classify_acquire,
+        acquire_scope_outcome, acquisition_slot_for, attempt_acquire, build_scope_connection,
         create_scope_connection, execute_scope_command, get_parent_client, inherited_tls_params,
         release_scope, resolve_scope_parent, try_resolve_scope_target,
     };
@@ -2532,7 +2601,7 @@ mod tests {
     /// Creation failures repeat as fast as the binding retries, because each retry
     /// poll spawns another creation. `create_scope_connection` must therefore warn
     /// once per episode and log the repeats at debug, clearing the record once a
-    /// creation succeeds — the same shape `log_unresolved_target` applies to an
+    /// creation succeeds — the same shape `unresolved_target_log` applies to an
     /// unresolved target. As there, the log lines are not observable here; the
     /// field they key on is.
     #[tokio::test]
@@ -2668,13 +2737,8 @@ mod tests {
         register_client(client_id, lazy_parent(false).await);
 
         crate::pool::destroy_client_scope_pool(client_id);
-        let classified = classify_acquire(
-            &pool,
-            pool.lock(),
-            client_id,
-            &tokio::runtime::Handle::current(),
-            None,
-        );
+        let classified =
+            attempt_acquire(&pool, client_id, &tokio::runtime::Handle::current(), None);
 
         unregister_client(client_id);
         assert!(

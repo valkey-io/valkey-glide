@@ -1073,8 +1073,9 @@ pub enum ScopeTargetUnresolved {
     /// Cluster parent whose slot map has no primary for this slot (initial
     /// topology not yet fetched, or mid-resharding). Transient.
     SlotUnmapped(u16),
-    /// Cluster parent whose wrapper lock was held (e.g. mid-reconnect) when the
-    /// non-blocking lookup ran. Transient on the order of the lock hold.
+    /// Cluster parent whose wrapper lock (e.g. mid-reconnect) or slot-map lock
+    /// (mid topology refresh) was held when the non-blocking lookup ran.
+    /// Transient on the order of the lock hold.
     TopologyLocked,
 }
 
