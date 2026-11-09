@@ -14,10 +14,12 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { gte } from "semver";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
+    BaseClient,
     BitwiseOperation,
     ClientPauseMode,
     ClientSideCache,
     ClientTrackingInfo,
+    ClosingError,
     ClusterBatch,
     ConfigurationError,
     Decoder,
@@ -43,6 +45,8 @@ import {
     convertGlideRecordToRecord,
     convertRecordToGlideRecord,
 } from "../build-ts";
+import { CreateDirectClient } from "../build-ts/native";
+import { connection_request } from "../build-ts/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
     assertClientTrackingInfo,
@@ -347,6 +351,39 @@ describe("GlideClusterClient", () => {
                 ),
             ),
         ).rejects.toThrow(ConfigurationError);
+    });
+
+    it("core configuration refusal rejects with ConfigurationError", async () => {
+        // The TypeScript layer validates libName itself, so change the encoded
+        // request to reach the core's own validation.
+        const seams = BaseClient as unknown as {
+            nativeCreateDirectClient: typeof CreateDirectClient;
+        };
+        const originalCreate = seams.nativeCreateDirectClient;
+
+        seams.nativeCreateDirectClient = (bytes, wakeCallback) => {
+            const request = connection_request.ConnectionRequest.decode(bytes);
+            request.libName = "lib name with spaces";
+            return originalCreate(
+                connection_request.ConnectionRequest.encode(request).finish(),
+                wakeCallback,
+            );
+        };
+
+        try {
+            const creation = GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            await expect(creation).rejects.toThrow(ConfigurationError);
+            await expect(creation).rejects.toThrow(
+                /^Failed to create client: configuration error: library name/,
+            );
+        } finally {
+            seams.nativeCreateDirectClient = originalCreate;
+        }
     });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -3653,12 +3690,14 @@ describe("GlideClusterClient", () => {
             };
 
             // Test 1: Eager connection to non-existent host should fail immediately
-            await expect(
-                GlideClusterClient.createClient({
-                    ...baseConfig,
-                    lazyConnect: false,
-                }),
-            ).rejects.toThrow(/connect|connection|resolve|network|host/i);
+            const creation = GlideClusterClient.createClient({
+                ...baseConfig,
+                lazyConnect: false,
+            });
+            await expect(creation).rejects.toThrow(ClosingError);
+            await expect(creation).rejects.toThrow(
+                /connect|connection|resolve|network|host/i,
+            );
 
             // Test 2: Lazy connection to non-existent host should succeed in client creation
             const lazyClient = await GlideClusterClient.createClient({

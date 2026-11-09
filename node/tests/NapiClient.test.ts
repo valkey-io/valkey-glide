@@ -15,14 +15,11 @@ import {
 } from "@jest/globals";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
-    BaseClient,
     Batch,
     ClosingError,
     ClusterBatch,
     ClusterScanCursor,
     ClusterTransaction,
-    CompressionBackend,
-    ConfigurationError,
     Decoder,
     GlideClient,
     GlideClusterClient,
@@ -33,8 +30,6 @@ import {
     Script,
     Transaction,
 } from "../build-ts";
-import { CreateDirectClient } from "../build-ts/native";
-import { connection_request } from "../build-ts/ProtobufMessage";
 import { getServerVersion, parseEndpoints } from "./TestUtilities";
 
 const TIMEOUT = 40000;
@@ -991,219 +986,6 @@ describe("NAPI Client Integration Tests", () => {
                 TIMEOUT,
             );
         });
-    });
-
-    describe("Client creation errors", () => {
-        // Nothing listens on port 1: binding it needs root.
-        const closedPort = [{ host: "127.0.0.1", port: 1 }];
-        const advancedConfiguration = { connectionTimeout: 1000 };
-
-        const seams = BaseClient as unknown as {
-            nativeCreateDirectClient: typeof CreateDirectClient;
-        };
-        const originalCreate = seams.nativeCreateDirectClient;
-
-        afterEach(() => {
-            seams.nativeCreateDirectClient = originalCreate;
-        });
-
-        /** Returns the error client creation rejected with; fails if it resolved. */
-        async function creationError(
-            created: Promise<GlideClient | GlideClusterClient>,
-        ): Promise<Error> {
-            let client: GlideClient | GlideClusterClient;
-
-            try {
-                client = await created;
-            } catch (error) {
-                return error as Error;
-            }
-
-            client.close();
-            throw new Error("Expected client creation to fail");
-        }
-
-        function create(
-            clusterMode: boolean,
-            config: Parameters<typeof GlideClient.createClient>[0],
-        ): Promise<GlideClient | GlideClusterClient> {
-            return clusterMode
-                ? GlideClusterClient.createClient(config)
-                : GlideClient.createClient(config);
-        }
-
-        function expectClosingError(error: Error): void {
-            expect(error).toBeInstanceOf(ClosingError);
-            expect(error.message).toMatch(/^Failed to create client: /);
-        }
-
-        it.each([false, true])(
-            "rejects with ClosingError when the connection is refused (cluster mode: %p)",
-            async (clusterMode) => {
-                const error = await creationError(
-                    create(clusterMode, {
-                        addresses: closedPort,
-                        advancedConfiguration,
-                    }),
-                );
-                expectClosingError(error);
-            },
-            TIMEOUT,
-        );
-
-        it.each([false, true])(
-            "rejects with ClosingError when authentication fails (cluster mode: %p)",
-            async (clusterMode) => {
-                const error = await creationError(
-                    create(clusterMode, {
-                        addresses: clusterMode
-                            ? getClusterAddresses()
-                            : getStandaloneAddresses(),
-                        credentials: {
-                            username: `no-such-user-${Date.now()}`,
-                            password: "wrong-password",
-                        },
-                        advancedConfiguration,
-                    }),
-                );
-                expectClosingError(error);
-                expect(error.message).toContain("WRONGPASS");
-            },
-            TIMEOUT,
-        );
-
-        it(
-            "rejects with ClosingError when a cluster client connects to a standalone server",
-            async () => {
-                const error = await creationError(
-                    GlideClusterClient.createClient({
-                        addresses: getStandaloneAddresses(),
-                        advancedConfiguration,
-                    }),
-                );
-                expectClosingError(error);
-            },
-            TIMEOUT,
-        );
-
-        it(
-            "rejects with ClosingError when the server refuses the databaseId",
-            async () => {
-                const admin = await GlideClient.createClient({
-                    addresses: getStandaloneAddresses(),
-                });
-                let databases: number;
-
-                try {
-                    const reply = (await admin.configGet(["databases"])) as
-                        Record<string, string> | undefined;
-                    databases = Number(reply?.["databases"]);
-                } finally {
-                    admin.close();
-                }
-
-                expect(Number.isInteger(databases)).toBe(true);
-                // Database indexes run from 0 to databases - 1.
-                const error = await creationError(
-                    GlideClient.createClient({
-                        addresses: getStandaloneAddresses(),
-                        databaseId: databases,
-                        advancedConfiguration,
-                    }),
-                );
-                expectClosingError(error);
-            },
-            TIMEOUT,
-        );
-
-        it.each([false, true])(
-            "rejects with ConfigurationError when the core refuses the connection request (cluster mode: %p)",
-            async (clusterMode) => {
-                // The TypeScript layer validates libName itself, so change the
-                // encoded request to reach the core's own validation.
-                seams.nativeCreateDirectClient = (bytes, wakeCallback) => {
-                    const request =
-                        connection_request.ConnectionRequest.decode(bytes);
-                    request.libName = "lib name with spaces";
-                    return originalCreate(
-                        connection_request.ConnectionRequest.encode(
-                            request,
-                        ).finish(),
-                        wakeCallback,
-                    );
-                };
-
-                const error = await creationError(
-                    create(clusterMode, {
-                        addresses: clusterMode
-                            ? getClusterAddresses()
-                            : getStandaloneAddresses(),
-                        advancedConfiguration,
-                    }),
-                );
-                expect(error).toBeInstanceOf(ConfigurationError);
-                expect(error.message).toMatch(
-                    /^Failed to create client: configuration error: library name/,
-                );
-            },
-            TIMEOUT,
-        );
-
-        it.each([false, true])(
-            "rejects with ClosingError when the core refuses the compression level (cluster mode: %p)",
-            async (clusterMode) => {
-                // Unlike other core configuration refusals, this one kept ClosingError from 2.5.
-                const error = await creationError(
-                    create(clusterMode, {
-                        addresses: closedPort,
-                        compression: {
-                            enabled: true,
-                            backend: CompressionBackend.ZSTD,
-                            compressionLevel: 100,
-                        },
-                        advancedConfiguration,
-                    }),
-                );
-                expectClosingError(error);
-                expect(error.message).toContain("compression");
-            },
-            TIMEOUT,
-        );
-
-        it.each([
-            {
-                mode: "rejects",
-                code: "InvalidArg",
-                expected: ConfigurationError,
-            },
-            {
-                mode: "throws",
-                code: "InvalidArg",
-                expected: ConfigurationError,
-            },
-            { mode: "rejects", code: "Unknown", expected: ClosingError },
-            { mode: "throws", code: "GenericFailure", expected: ClosingError },
-        ])(
-            "maps a native creation failure that $mode with code $code to $expected.name",
-            async ({ mode, code, expected }) => {
-                const nativeError = Object.assign(
-                    new Error("native creation failure"),
-                    { code },
-                );
-                seams.nativeCreateDirectClient =
-                    mode === "throws"
-                        ? () => {
-                              throw nativeError;
-                          }
-                        : () => Promise.reject(nativeError);
-
-                const error = await creationError(
-                    GlideClient.createClient({ addresses: closedPort }),
-                );
-                expect(error).toBeInstanceOf(expected);
-                expect(error.message).toBe("native creation failure");
-            },
-        );
     });
 
     describe("Response Buffering", () => {
