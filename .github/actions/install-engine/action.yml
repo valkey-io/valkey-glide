@@ -21,7 +21,7 @@ runs:
           env:
               ENGINE_VERSION: ${{ inputs.engine-version }}
           run: |
-              echo "ENGINE_VERSION=$ENGINE_VERSION" >> $GITHUB_ENV
+              echo "ENGINE_VERSION=$ENGINE_VERSION" >> "$GITHUB_ENV"
 
         # TODO: workflow improvements https://github.com/valkey-io/valkey-glide/issues/5211
         - name: Prepare Valkey sources
@@ -42,7 +42,7 @@ runs:
               if [[ -z $SOURCES_VERSION ]]; then
                   SOURCES_VERSION=`grep ' REDIS_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]'`
               fi
-              echo "SOURCES_VERSION=$SOURCES_VERSION" >> $GITHUB_OUTPUT
+              echo "SOURCES_VERSION=$SOURCES_VERSION" >> "$GITHUB_OUTPUT"
 
         - name: Identify the runner image
           id: runner-image
@@ -72,7 +72,7 @@ runs:
               # Cache keys cannot contain commas, so keep the id to safe characters.
               IMAGE_ID="${IMAGE_ID//[^a-zA-Z0-9._-]/-}"
               echo "Runner image: $IMAGE_ID"
-              echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_OUTPUT
+              echo "IMAGE_ID=$IMAGE_ID" >> "$GITHUB_OUTPUT"
 
         - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
           id: cache-valkey
@@ -119,12 +119,12 @@ runs:
                   fi
               done
               if [[ $USABLE == true ]]; then
-                  echo "usable=true" >> $GITHUB_OUTPUT
+                  echo "usable=true" >> "$GITHUB_OUTPUT"
               else
                   echo "::warning::Cached engine cannot run on this image, rebuilding it from source"
                   $SUDO rm -f /usr/local/bin/valkey-server /usr/local/bin/valkey-cli /usr/local/bin/redis-server /usr/local/bin/redis-cli
                   rm -f valkey-server valkey-cli redis-server redis-cli
-                  echo "usable=false" >> $GITHUB_OUTPUT
+                  echo "usable=false" >> "$GITHUB_OUTPUT"
               fi
 
         - name: Build and install engine

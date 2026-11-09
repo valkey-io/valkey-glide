@@ -15,13 +15,13 @@ on:
             - glide-core/redis-rs/redis/src/**/**
             - utils/cluster_manager.py
             - .github/workflows/python.yml
-            - .github/workflows/build-python-wrapper/action.yml
+            - .github/actions/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
-            - .github/workflows/test-benchmark/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/test-benchmark/action.yml
+            - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
-            - .github/workflows/start-self-hosted-runner/action.yml
-            - .github/workflows/create-test-matrices/action.yml
+            - .github/actions/start-self-hosted-runner/action.yml
+            - .github/actions/create-test-matrices/action.yml
             - .github/json_matrices/**
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
@@ -33,13 +33,13 @@ on:
             - glide-core/redis-rs/redis/src/**
             - utils/cluster_manager.py
             - .github/workflows/python.yml
-            - .github/workflows/build-python-wrapper/action.yml
+            - .github/actions/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
-            - .github/workflows/test-benchmark/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/test-benchmark/action.yml
+            - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
-            - .github/workflows/start-self-hosted-runner/action.yml
-            - .github/workflows/create-test-matrices/action.yml
+            - .github/actions/start-self-hosted-runner/action.yml
+            - .github/actions/create-test-matrices/action.yml
             - .github/json_matrices/**
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
@@ -130,7 +130,7 @@ jobs:
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
-              uses: ./.github/workflows/create-test-matrices
+              uses: ./.github/actions/create-test-matrices
               with:
                   language-name: python
                   run-full-matrix: ${{ env.RUN_FULL_MATRIX == 'true' }}
@@ -189,7 +189,7 @@ jobs:
                       ${{ matrix.host.TARGET }}-python-v2-
 
             - name: Build Python wrapper
-              uses: ./.github/workflows/build-python-wrapper
+              uses: ./.github/actions/build-python-wrapper
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
@@ -281,7 +281,7 @@ jobs:
                           || { rc=$?; [ "$rc" -eq 5 ] && [ -n "$TEST_FILTER" ] && [ "$MAIN_RUN_EMPTY" != "true" ] || exit "$rc"; }
                   fi
 
-            - uses: ./.github/workflows/test-benchmark
+            - uses: ./.github/actions/test-benchmark
               with:
                   language-flag: -python
                   engine-run: ${{ matrix.engine.run }}
@@ -339,7 +339,7 @@ jobs:
                       ${{ matrix.host.TARGET }}-python-v2-
 
             - name: Build Python wrapper
-              uses: ./.github/workflows/build-python-wrapper
+              uses: ./.github/actions/build-python-wrapper
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
@@ -386,7 +386,7 @@ jobs:
               if: ${{ env.RUN_FULL_MATRIX != 'true'
                   && (inputs.run-dynamic-pubsub-with-mock == true
                   || steps.pubsub_mock_changes.outputs.mock_pubsub == 'true') }}
-              uses: ./.github/workflows/build-python-wrapper
+              uses: ./.github/actions/build-python-wrapper
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
@@ -419,7 +419,7 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: lint rust
-              uses: ./.github/workflows/lint-rust
+              uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: python/glide-async
                   github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -469,7 +469,7 @@ jobs:
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
-              uses: ./.github/workflows/create-test-matrices
+              uses: ./.github/actions/create-test-matrices
               with:
                   language-name: python
                   run-full-matrix: true
@@ -493,7 +493,6 @@ jobs:
             CARGO_INCREMENTAL: "0"
         container:
             image: ${{ matrix.host.IMAGE }}
-            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
             - name: Install git and python
               run: |
@@ -502,7 +501,7 @@ jobs:
                   python3 -m ensurepip --upgrade
                   python3 -m pip install --upgrade pip
                   python3 -m pip install mypy-protobuf virtualenv
-                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
+                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> "$GITHUB_ENV"
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -521,7 +520,7 @@ jobs:
                       ${{ matrix.host.IMAGE }}-python-v2-
 
             - name: Build Python wrapper
-              uses: ./.github/workflows/build-python-wrapper
+              uses: ./.github/actions/build-python-wrapper
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
@@ -558,7 +557,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
-                  name: test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ env.IMAGE }}-${{ matrix.host.ARCH }}
+                  name: test-report-python-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ env.IMAGE }}-${{ matrix.host.ARCH }}
                   path: |
                       python/pytest_report.html
                       utils/clusters/**
