@@ -5184,12 +5184,17 @@ mod tests {
         use std::sync::atomic::AtomicU64;
         use tokio::sync::RwLock;
 
+        // A port nothing listens on, so connecting always fails (6379 may be taken).
+        let dead_port = std::net::TcpListener::bind("127.0.0.1:0")
+            .and_then(|listener| listener.local_addr())
+            .map(|addr| addr.port())
+            .expect("bind a free port");
         let config = ConnectionRequest {
             database_id: 0,
             cluster_mode_enabled: false,
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
-                port: 6379,
+                port: dead_port,
                 unix_socket_path: None,
             }],
             lazy_connect: true,
@@ -5702,21 +5707,18 @@ mod tests {
         );
     }
 
-    /// `send_command` must route through `track_transaction_state` — pins the wiring
-    /// so removing that call is caught. A non-IAM lazy client reconciles to Ok, then
-    /// tracks the MULTI, then fails to connect; the flag must be set regardless of the
-    /// dispatch error.
+    /// A MULTI that fails to connect never reached the server, so `send_command` must
+    /// not track it. Tracking of a sent MULTI is pinned against a live server by the
+    /// pool release tests (`release_discards_a_client_whose_discard_was_denied`).
     #[test]
-    fn send_command_tracks_open_multi() {
+    fn send_command_does_not_track_a_multi_that_never_dispatched() {
         use std::sync::atomic::Ordering;
         let mut client = create_test_client(); // non-IAM, lazy (no network)
         let rt = borrow_test_runtime();
-        let _ = rt.block_on(client.send_command(&mut redis::cmd("MULTI"), None));
-        assert!(
-            client.shared.multi_active.load(Ordering::Acquire),
-            "send_command must track a raw MULTI via track_transaction_state, \
-             even when the dispatch itself fails"
-        );
+        let res = rt.block_on(client.send_command(&mut redis::cmd("MULTI"), None));
+        assert!(res.is_err(), "the lazy client can't connect");
+        assert!(!client.shared.multi_active.load(Ordering::Acquire));
+        assert!(!client.shared.multi_seen.load(Ordering::Acquire));
     }
 
     #[test]
