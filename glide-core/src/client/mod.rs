@@ -524,10 +524,11 @@ pub struct ClientShared {
     // rejected DISCARD or a concurrent task can't hide an open transaction.
     multi_seen: Arc<AtomicBool>,
     watch_seen: Arc<AtomicBool>,
-    // Pooled cluster clients only: the primaries WATCHes were sent to, so the
-    // release UNWATCH skips nodes the borrow never used. `None` when a WATCH could
-    // be on any primary (a batch, `RandomPrimary`), which falls back to all of them.
-    watch_routes: Arc<std::sync::Mutex<Option<Vec<Route>>>>,
+    // Pooled cluster clients only: the primaries WATCHes were sent to (route and
+    // owner address at WATCH time), so the release UNWATCH skips nodes the borrow
+    // never used. `None` when a WATCH could be on any primary (a batch,
+    // `RandomPrimary`, an owner lookup that failed), which falls back to all of them.
+    watch_routes: Arc<std::sync::Mutex<WatchRoutes>>,
     // IAM token generation the live connection last authenticated at. Compared by
     // `prepare_for_borrow` on the first command after a borrow to detect a rotation
     // that landed while the client sat idle in a pool, triggering a re-AUTH before
@@ -577,6 +578,21 @@ pub struct ClientShared {
     // outside those layers. Unused by IAM clients, whose scopes read the token
     // manager.
     credentials: credentials::CredentialsHandle,
+}
+
+/// Recorded WATCH targets: route and owner address at WATCH time, or `None` for
+/// every primary.
+type WatchRoutes = Option<Vec<(Route, String)>>;
+
+/// Where a WATCH lands, for the pool release reset.
+#[derive(Debug, PartialEq)]
+enum WatchTarget {
+    /// These slot primaries.
+    Primaries(Vec<Route>),
+    /// Some primary, which one unknown.
+    AnyPrimary,
+    /// Possibly a replica, which UNWATCH can't reliably reach.
+    MaybeReplica,
 }
 
 /// Why [`Client::address_for_slot`] / [`Client::try_address_for_slot`] could not
@@ -3727,21 +3743,15 @@ impl Client {
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .replace(Vec::new());
-            // One route per primary (a multi-key WATCH records one per slot), or
-            // `None` to fall back to every primary if a slot's owner is unknown.
             let per_node = match routes {
-                Some(routes) if is_cluster && !routes.is_empty() => {
-                    let mut by_address = std::collections::HashMap::new();
-                    let mut resolved = true;
-                    for route in routes {
-                        match self.address_for_slot(route.slot()).await {
-                            Ok(address) => {
-                                by_address.entry(address).or_insert(route);
-                            }
-                            Err(_) => resolved = false,
+                Some(recorded) if is_cluster && !recorded.is_empty() => {
+                    let mut owners = std::collections::HashMap::new();
+                    for (route, _) in &recorded {
+                        if let Ok(address) = self.address_for_slot(route.slot()).await {
+                            owners.insert(route.slot(), address);
                         }
                     }
-                    resolved.then_some(by_address.into_values().collect::<Vec<_>>())
+                    Self::unwatch_targets(recorded, |slot| owners.get(&slot).cloned())
                 }
                 _ => None,
             };
@@ -3863,11 +3873,8 @@ impl Client {
             .is_some_and(|name| name.eq_ignore_ascii_case(b"WATCH"))
     }
 
-    /// Add a WATCH's target primaries to `watch_routes`, using the routing the
-    /// cluster client would use for it. A WATCH that may have reached a replica
-    /// can't be undone (UNWATCH is primary-routed and replica picks rotate), so it
-    /// marks the client `unresettable`.
-    fn record_watch_routes(&self, cmd: &Cmd, routing: Option<&RoutingInfo>) {
+    /// Where a WATCH will land, from the routing the cluster client would use for it.
+    fn classify_watch(cmd: &Cmd, routing: Option<&RoutingInfo>) -> WatchTarget {
         use redis::cluster_routing::SlotAddr;
         let routes = match routing.cloned().or_else(|| RoutingInfo::for_routable(cmd)) {
             Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
@@ -3876,28 +3883,62 @@ impl Client {
             Some(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::MultiSlot((routes, _)), _))) => {
                 routes.into_iter().map(|(route, _)| route).collect()
             }
-            // Primaries only, but which one is unknown: UNWATCH every primary.
             Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary))
             | Some(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, _)))
-            | None => {
-                *self.watch_routes.lock().unwrap_or_else(|e| e.into_inner()) = None;
-                return;
-            }
+            | None => return WatchTarget::AnyPrimary,
             // Random, by address or all nodes: may include a replica.
             Some(_) => Vec::new(),
         };
         if routes.is_empty() || routes.iter().any(|r| r.slot_addr() != SlotAddr::Master) {
-            self.unresettable.store(true, Ordering::Release);
-            return;
+            WatchTarget::MaybeReplica
+        } else {
+            WatchTarget::Primaries(routes)
         }
-        if let Some(known) = self
-            .watch_routes
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .as_mut()
-        {
-            known.extend(routes);
+    }
+
+    /// Add a WATCH's target primaries to `watch_routes`, each with its owner's
+    /// address now, so release can tell if the slot has moved since. A WATCH that
+    /// may have reached a replica can't be undone (UNWATCH is primary-routed and
+    /// replica picks rotate), so it marks the client `unresettable`.
+    fn record_watch_routes(&self, cmd: &Cmd, routing: Option<&RoutingInfo>) {
+        let routes = match Self::classify_watch(cmd, routing) {
+            WatchTarget::MaybeReplica => {
+                self.unresettable.store(true, Ordering::Release);
+                return;
+            }
+            WatchTarget::Primaries(routes) => routes
+                .into_iter()
+                .map(|route| {
+                    self.try_address_for_slot(route.slot())
+                        .ok()
+                        .map(|address| (route, address))
+                })
+                .collect::<Option<Vec<_>>>(),
+            WatchTarget::AnyPrimary => None,
+        };
+        let mut known = self.watch_routes.lock().unwrap_or_else(|e| e.into_inner());
+        match (known.as_mut(), routes) {
+            (Some(known), Some(routes)) => known.extend(routes),
+            _ => *known = None,
         }
+    }
+
+    /// The UNWATCH targets, one route per primary, if every recorded slot is still
+    /// owned by the primary it had at WATCH time. `None` (UNWATCH every primary)
+    /// when a slot moved or an owner is unknown: the WATCH may be on the old owner.
+    /// An ASK-redirected WATCH isn't seen here (ASK doesn't update the slot map).
+    fn unwatch_targets(
+        recorded: Vec<(Route, String)>,
+        owner_now: impl Fn(u16) -> Option<String>,
+    ) -> Option<Vec<Route>> {
+        let mut by_address = std::collections::HashMap::new();
+        for (route, address) in recorded {
+            if owner_now(route.slot()).as_ref() != Some(&address) {
+                return None;
+            }
+            by_address.entry(address).or_insert(route);
+        }
+        (!by_address.is_empty()).then(|| by_address.into_values().collect())
     }
 
     /// Flag a (S|P)SUBSCRIBE, MONITOR, RESET or `CLIENT REPLY OFF|SKIP` before
@@ -5537,55 +5578,78 @@ mod tests {
     /// A WATCH routed to known primaries is recorded; one that could be on any
     /// primary falls back to all; one that may be on a replica can't be undone.
     #[test]
-    fn record_watch_routes_classifies_watch_targets() {
+    fn classify_watch_classifies_watch_targets() {
+        use super::WatchTarget;
         use redis::cluster_routing::{Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr};
-        use std::sync::atomic::Ordering;
         let node = |addr| {
             Some(RoutingInfo::SingleNode(
                 SingleNodeRoutingInfo::SpecificNode(Route::new(5, addr)),
             ))
         };
         let watch = redis::cmd("WATCH").arg("k").clone();
-        let cases: [(Option<RoutingInfo>, Option<bool>, bool); 6] = [
-            (None, Some(true), false),
-            (node(SlotAddr::Master), Some(true), false),
+        let key_slot = redis::cluster_topology::get_slot(b"k");
+        let cases = [
+            (
+                None,
+                WatchTarget::Primaries(vec![Route::new(key_slot, SlotAddr::Master)]),
+            ),
+            (
+                node(SlotAddr::Master),
+                WatchTarget::Primaries(vec![Route::new(5, SlotAddr::Master)]),
+            ),
             (
                 Some(RoutingInfo::SingleNode(
                     SingleNodeRoutingInfo::RandomPrimary,
                 )),
-                None,
-                false,
+                WatchTarget::AnyPrimary,
             ),
-            (node(SlotAddr::ReplicaRequired), Some(false), true),
+            (node(SlotAddr::ReplicaRequired), WatchTarget::MaybeReplica),
             (
                 Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
-                Some(false),
-                true,
+                WatchTarget::MaybeReplica,
             ),
             (
                 Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
                     host: "h".into(),
                     port: 1,
                 })),
-                Some(false),
-                true,
+                WatchTarget::MaybeReplica,
             ),
         ];
-        for (routing, recorded, unresettable) in cases {
-            let client = create_test_client();
-            client.record_watch_routes(&watch, routing.as_ref());
-            let routes = client.watch_routes.lock().unwrap().clone();
+        for (routing, expected) in cases {
             assert_eq!(
-                routes.map(|r| !r.is_empty()),
-                recorded,
-                "{routing:?}: recorded routes"
-            );
-            assert_eq!(
-                client.unresettable.load(Ordering::Acquire),
-                unresettable,
-                "{routing:?}: unresettable"
+                Client::classify_watch(&watch, routing.as_ref()),
+                expected,
+                "{routing:?}"
             );
         }
+    }
+
+    /// Release targets one UNWATCH per primary only while every watched slot still
+    /// has its WATCH-time owner; a moved slot or an unknown owner falls back to
+    /// every primary, since the WATCH may be on the old owner.
+    #[test]
+    fn unwatch_targets_falls_back_when_a_slot_moved() {
+        use redis::cluster_routing::{Route, SlotAddr};
+        let recorded = || {
+            vec![
+                (Route::new(1, SlotAddr::Master), "n1:1".to_string()),
+                (Route::new(2, SlotAddr::Master), "n1:1".to_string()),
+                (Route::new(3, SlotAddr::Master), "n2:1".to_string()),
+            ]
+        };
+        let owner = |moved: Option<u16>| {
+            move |slot: u16| match slot {
+                s if Some(s) == moved => Some("n3:1".to_string()),
+                3 => Some("n2:1".to_string()),
+                _ => Some("n1:1".to_string()),
+            }
+        };
+
+        let targets = Client::unwatch_targets(recorded(), owner(None)).expect("unchanged");
+        assert_eq!(targets.len(), 2, "one UNWATCH per primary: {targets:?}");
+        assert!(Client::unwatch_targets(recorded(), owner(Some(2))).is_none());
+        assert!(Client::unwatch_targets(recorded(), |_| None).is_none());
     }
 
     #[test]
