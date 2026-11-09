@@ -1169,8 +1169,9 @@ public class TestUtilities {
 
         assertTrue((Long) stats.get("allocator.active") > 0);
         assertTrue((Long) stats.get("allocator.allocated") > 0);
-        // Before 8.0 the engine reports this as allocator.active - allocator.allocated. Without
-        // jemalloc (macOS) that goes negative while a node holds memory not yet resident.
+        // Before 8.0 this is allocator.active - allocator.allocated. Without jemalloc (macOS),
+        // active is the RAM in use, which can be less than what was allocated, so it can go
+        // negative.
         Long allocatorFragBytes = (Long) stats.get("allocator-fragmentation.bytes");
         assertNotNull(allocatorFragBytes);
         if (SERVER_VERSION.isLowerThan("8.0.0")) {
