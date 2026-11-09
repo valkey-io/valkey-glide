@@ -21,7 +21,7 @@
 
 ### Fixes
 
-* Node: Populate actual `lib-ver` instead of `unknown` in `CLIENT INFO` responses ([#7602](https://github.com/valkey-io/valkey-glide/issues/7602))
+* Node: Populate actual `lib-ver` instead of `unknown` in `CLIENT INFO` responses ([#7616](https://github.com/valkey-io/valkey-glide/pull/7616))
 * Node: The published package loads with `NAPI_RS_ENFORCE_VERSION_CHECK=1` instead of failing with "Cannot find native binding"; the generated loader expected platform package version `0.1.0` instead of the release version ([#7602](https://github.com/valkey-io/valkey-glide/issues/7602))
 * Python: The sync client sends a `memoryview` argument with its byte length (`nbytes`) instead of `len()`. A `memoryview` cast to a wider format (e.g. `.cast("I")`) or with more than one dimension was sent truncated, silently storing a partial value or key; this affected direct commands, batches, `custom_command`, scripts and cluster scan ([#7560](https://github.com/valkey-io/valkey-glide/issues/7560))
 * Python: `TrimByMinId` (`xadd`/`xtrim`), `ExclusiveIdBound` (`xrange`/`xrevrange`/`xpending_range`) and the `FtHybridVsimArm` field (`ft.hybrid`) send `bytes`, `bytearray` and `memoryview` values verbatim instead of their Python repr, which the server rejected. A `bytes` stream ID returned by `xadd` can now be used as a `TrimByMinId` threshold ([#7558](https://github.com/valkey-io/valkey-glide/issues/7558))
