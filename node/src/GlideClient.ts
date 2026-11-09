@@ -289,8 +289,6 @@ export class GlideClient extends BaseClient {
      *
      * @param options - The configuration options for the client, including server addresses, authentication credentials, TLS settings, database selection, reconnection strategy, and Pub/Sub subscriptions.
      * @returns A promise that resolves to a connected `GlideClient` instance.
-     * @throws {ConfigurationError} if the configuration is invalid.
-     * @throws {ClosingError} if the client fails to connect, authenticate, or otherwise set up the connection.
      *
      * @remarks
      * Use this static method to create and connect a `GlideClient` to a standalone Valkey server.

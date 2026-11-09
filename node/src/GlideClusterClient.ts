@@ -718,8 +718,6 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param options - The configuration options for the client, including cluster addresses, database selection, authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
      * @returns A promise that resolves to a connected `GlideClusterClient` instance.
-     * @throws {ConfigurationError} if the configuration is invalid.
-     * @throws {ClosingError} if the client fails to connect, authenticate, or otherwise set up the connection.
      *
      * @remarks
      * Use this static method to create and connect a `GlideClusterClient` to a Valkey Cluster.
