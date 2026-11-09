@@ -605,13 +605,8 @@ jobs:
                       echo "Attempt ${attempt}/${MAX_ATTEMPTS}: version '${INSTALLED_VERSION:-none}' / native module not resolvable yet (likely npm registry propagation). Retrying in ${DELAY}s..."
                       sleep "${DELAY}"
                   done
-                  # A version mismatch surfaces as "Cannot find native binding"; the real reason is in error.cause.
-                  NAPI_RS_ENFORCE_VERSION_CHECK=1 node -e "
-                    try { require('@valkey/valkey-glide'); }
-                    catch (error) {
-                      for (let cause = error; cause; cause = cause.cause) console.error(String(cause.message ?? cause).split('\n')[0]);
-                      process.exit(1);
-                    }" || { echo "::error::@valkey/valkey-glide@${RELEASE_VERSION} fails to load with NAPI_RS_ENFORCE_VERSION_CHECK=1"; exit 1; }
+                  # Smoke test NAPI version check
+                  NAPI_RS_ENFORCE_VERSION_CHECK=1 node -e "require('@valkey/valkey-glide')"
                   npm run build:utils
                   npm test
 
