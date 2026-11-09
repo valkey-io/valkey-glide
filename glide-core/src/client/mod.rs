@@ -519,10 +519,9 @@ pub struct ClientShared {
     // (S|P)SUBSCRIBE, MONITOR, RESET, or `CLIENT REPLY OFF|SKIP`. Never cleared. Fails
     // `reset_connection_state`, which then discards the client.
     unresettable: Arc<AtomicBool>,
-    // Set on dispatch of MULTI / WATCH; taken by the release reset, which sends
-    // DISCARD / UNWATCH only when they are set. Unlike `multi_active` they never
-    // clear on EXEC/DISCARD, so a rejected DISCARD or concurrent use can't hide an
-    // open transaction or watch from the reset.
+    // Set on dispatch of MULTI / WATCH; taken by the release reset to decide on
+    // DISCARD / UNWATCH. Unlike `multi_active`, EXEC/DISCARD never clear them, so a
+    // rejected DISCARD or a concurrent task can't hide an open transaction.
     multi_seen: Arc<AtomicBool>,
     watch_seen: Arc<AtomicBool>,
     // IAM token generation the live connection last authenticated at. Compared by
@@ -1411,8 +1410,12 @@ impl Client {
             crate::rdma::refuse_direct_command(cmd)?;
             // Refresh IAM auth before the command (see `reconcile_iam_before_dispatch`).
             self.reconcile_iam_before_dispatch().await?;
-            // Track MULTI/EXEC/DISCARD for the borrow-time re-AUTH defer.
-            self.track_transaction_state(cmd);
+            // Track MULTI/WATCH/EXEC/DISCARD for the re-AUTH defer and release reset.
+            // Read-only standalone rejects all four locally, so they never reach the
+            // server (a pipeline can send them; `send_pipeline` still tracks).
+            if self.is_cluster || !self.read_only {
+                self.track_transaction_state(cmd);
+            }
             self.track_unresettable(cmd);
             // Flag a possible db change before dispatch (see `db_maybe_dirty`).
             if self.is_select_command(cmd) {
@@ -3729,12 +3732,11 @@ impl Client {
         self.is_pool_managed.load(Ordering::Acquire)
     }
 
-    /// Track raw MULTI/WATCH: `multi_active` lets
-    /// [`prepare_for_borrow`](Self::prepare_for_borrow) defer the re-AUTH while a
-    /// transaction is in flight; `multi_seen`/`watch_seen` tell the release reset what
-    /// to undo. `send_transaction` is not tracked: redis-rs adds its MULTI/EXEC
-    /// bracket at pack time, outside `cmd_iter()`, so it always closes, and a WATCH
-    /// inside it is rejected by the server.
+    /// Track raw MULTI/WATCH: `multi_active` for
+    /// [`prepare_for_borrow`](Self::prepare_for_borrow)'s re-AUTH defer,
+    /// `multi_seen`/`watch_seen` for the release reset. `send_transaction` is not
+    /// tracked: redis-rs adds its MULTI/EXEC bracket at pack time, outside
+    /// `cmd_iter()`, so it always closes, and the server rejects a WATCH inside it.
     fn track_transaction_state(&self, cmd: &Cmd) {
         match cmd.command().as_deref() {
             Some(b"MULTI") => {
@@ -3788,9 +3790,8 @@ impl Client {
     /// Only `SELECT` is tracked, not `RESET` (which also returns the connection to
     /// db 0). A batch like `[SELECT 3, RESET]` therefore records db 3 while the live
     /// connection is on db 0, leaving non-pooled scope/reconnect metadata stale.
-    /// Pooled release is unaffected — `RESET` flags `unresettable`, so the client is
-    /// discarded — so the narrow non-pooled gap is left as a known limitation rather
-    /// than tracked.
+    /// Pooled release is unaffected (`RESET` flags `unresettable`, so the client is
+    /// discarded), and the narrow non-pooled gap is left as a known limitation.
     fn last_select_db(&self, pipeline: &redis::Pipeline) -> Option<(usize, u32)> {
         pipeline
             .cmd_iter()

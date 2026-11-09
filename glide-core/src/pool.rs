@@ -3953,14 +3953,6 @@ mod scope_pool_tests {
             .send_command(&mut setuser, None)
             .await
             .expect("create ACL user");
-        let dryrun = admin
-            .send_command(
-                redis::cmd("ACL").arg("DRYRUN").arg(name).arg("DISCARD"),
-                None,
-            )
-            .await
-            .expect("ACL DRYRUN");
-        assert_ne!(dryrun, redis::Value::Okay, "{name} must be denied DISCARD");
 
         let mut request = request_for(&[port]);
         request.authentication_info = Some(crate::client::AuthenticationInfo {
@@ -3968,6 +3960,16 @@ mod scope_pool_tests {
             password: Some("unused".into()),
             ..Default::default()
         });
+        // Pin the precondition on a throwaway client (`ACL DRYRUN` needs 7.0+).
+        let mut probe = crate::client::Client::new(request.clone(), None)
+            .await
+            .expect("probe client connects as the restricted user");
+        let denied = probe.send_command(&mut redis::cmd("DISCARD"), None).await;
+        assert_eq!(
+            denied.map_err(|e| e.kind()),
+            Err(redis::ErrorKind::PermissionDenied),
+            "{name} must be denied DISCARD"
+        );
         request
     }
 
@@ -4065,6 +4067,39 @@ mod scope_pool_tests {
             redis::Value::Nil,
             "the next borrower's EXEC must not abort"
         );
+    }
+
+    /// A MULTI or WATCH that read-only mode rejects locally never reached the server,
+    /// so release must still reuse the client. A-B: discarded when the rejected
+    /// command was tracked as sent.
+    #[tokio::test]
+    async fn release_reuses_a_read_only_client_after_a_rejected_multi() {
+        for command in ["MULTI", "WATCH"] {
+            let server = TestServer::start();
+            wait_for_server_ready(server.port).await;
+            let mut request = request_for(&[server.port]);
+            request.read_only = true;
+            let mut client = crate::client::Client::new(request, None)
+                .await
+                .expect("read-only client connects");
+            let (pool_arc, client_id) = pool_with_borrowed(&client);
+
+            let mut cmd = redis::cmd(command);
+            if command == "WATCH" {
+                cmd.arg("watched");
+            }
+            let rejected = client.send_command(&mut cmd, None).await;
+            assert_eq!(
+                rejected.map_err(|e| e.kind()),
+                Err(redis::ErrorKind::ReadOnly),
+                "{command}"
+            );
+
+            super::release_client_async(pool_arc.clone(), client_id).await;
+            let mut pool = pool_arc.lock();
+            assert_eq!(pool.idle_count(), 1, "{command}: must be re-idled");
+            assert!(pool.drain_discarded_ids().is_empty(), "{command}");
+        }
     }
 
     /// Read-only mode rejects DISCARD/UNWATCH locally, but a pipeline still reaches
