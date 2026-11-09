@@ -6685,6 +6685,42 @@ pub(crate) mod shared_client_tests {
                 );
             }
 
+            // ── 2d. a clean borrow must be reused while a primary it never used is
+            // paused. A-B: discarded when release sent DISCARD/PING to every node ──
+            let short_timeout = create_connection_request(
+                &addresses,
+                &TestConfiguration {
+                    cluster_mode: ClusterMode::Enabled,
+                    request_timeout: Some(500),
+                    ..Default::default()
+                },
+            );
+            let client = Client::new(short_timeout.into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(&pool_arc, client);
+            let paused = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                0,
+                SlotAddr::Master,
+            )));
+            admin
+                .send_command(redis::cmd("CLIENT").arg("PAUSE").arg(2000), Some(paused))
+                .await
+                .expect("pause one primary");
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock();
+                assert!(pool.drain_discarded_ids().is_empty(), "nothing to reset");
+                // Re-borrow it so later sections start from the same pool state.
+                assert_eq!(
+                    pool.try_acquire(),
+                    client_id as i64,
+                    "the clean client must be re-idled"
+                );
+            }
+            // Let the pause lapse before later sections use that primary.
+            tokio::time::sleep(Duration::from_millis(2100)).await;
+
             // ── 3. db drift must be restored (Valkey 9.0+ multi-db cluster) ──
             let mut version_probe = Client::new(connection_request.clone().into(), None)
                 .await
