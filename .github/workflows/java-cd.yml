@@ -416,16 +416,16 @@ jobs:
               working-directory: java
               shell: bash
               run: |
-                  jedis_shared_folder="$HOME/.m2/repository/io/valkey/valkey-glide-jedis-compat-shared/$RELEASE_VERSION"
+                  jedis_shared_folder=~/.m2/repository/io/valkey/valkey-glide-jedis-compat-shared/$RELEASE_VERSION
                   if [ ! -d "$jedis_shared_folder" ]; then
                     echo "Expected Maven local output missing: $jedis_shared_folder" >&2
                     exit 1
                   fi
-                  cd "$jedis_shared_folder"
-                  jar -cvf jedis-shared-bundle.jar ./*
+                  cd $jedis_shared_folder
+                  jar -cvf jedis-shared-bundle.jar *
                   ls -ltr
                   cd -
-                  cp "$jedis_shared_folder/jedis-shared-bundle.jar" jedis-shared-bundle-no-classifier.jar
+                  cp $jedis_shared_folder/jedis-shared-bundle.jar jedis-shared-bundle-no-classifier.jar
 
             - name: Build jedis-compatibility (no classifier, no natives)
               working-directory: java
@@ -732,12 +732,163 @@ jobs:
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                   ./gradlew --build-cache :benchmarks:run --args="--minimal --clients glide --port ${{ env.PORT }} --concurrentTasks \"1 10 100\""
 
+    # Jedis compat artifacts: not covered by the benchmark test above (#7603).
+    test-jedis-compatibility-maven-resolution:
+        needs: [set-release-version, publish-to-maven-central-deployment]
+        runs-on: ubuntu-24.04
+        permissions: {}
+        env:
+            JAVA_VERSION: "11"
+            RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
+            DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
+            # Serves only this run's deployment; .../deployments/download/ serves any validated one.
+            CENTRAL_DEPLOYMENT_URL: https://central.sonatype.com/api/v1/publisher/deployment
+        steps:
+            - name: Validate release version and deployment ID
+              shell: bash
+              run: |
+                  if [[ ! "$RELEASE_VERSION" =~ ^[0-9A-Za-z.+-]+$ ]]; then
+                      echo "::error::RELEASE_VERSION is not a valid version string"
+                      exit 1
+                  fi
+                  if [[ ! "$DEPLOYMENT_ID" =~ ^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$ ]]; then
+                      echo "::error::DEPLOYMENT_ID is not a UUID"
+                      exit 1
+                  fi
+
+            - name: Set up JDK
+              uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+              with:
+                  distribution: "temurin"
+                  java-version: ${{ env.JAVA_VERSION }}
+
+            - name: Wait for deployment artifacts to be available
+              shell: bash
+              timeout-minutes: 7
+              env:
+                  CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+                  CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+              run: |
+                  AUTHORIZATION_HEADER="Bearer $(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 -w 0)"
+                  ARTIFACT_URL="${CENTRAL_DEPLOYMENT_URL}/${DEPLOYMENT_ID}/download/io/valkey/valkey-glide-jedis-compatibility/${RELEASE_VERSION}/valkey-glide-jedis-compatibility-${RELEASE_VERSION}.pom"
+                  for ((retries = 0; retries < 6; retries++)); do
+                      HTTP_STATUS=$(curl -s --connect-timeout 10 --max-time 60 -o /dev/null -w "%{http_code}" -H "Authorization: $AUTHORIZATION_HEADER" "$ARTIFACT_URL" || true)
+                      if [ "$HTTP_STATUS" = "200" ]; then
+                          echo "Artifact available"
+                          exit 0
+                      fi
+                      echo "Attempt $((retries + 1))/6: HTTP $HTTP_STATUS, waiting 5s..."
+                      sleep 5
+                  done
+                  echo "::warning::Artifact not available after 30s, proceeding anyway (deployment already validated)"
+
+            - name: Resolve Jedis compatibility artifacts from an empty Maven local repository
+              shell: bash
+              # 2 artifacts x 3 attempts x 180s Maven limit, plus backoff.
+              timeout-minutes: 20
+              env:
+                  CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+                  CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+                  # All classifiers share one POM, so one classifier covers the tree.
+                  CLASSIFIER: linux-x86_64
+              run: |
+                  mvn -v
+                  CENTRAL_AUTHORIZATION_HEADER="Bearer $(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 -w 0)"
+                  export CENTRAL_AUTHORIZATION_HEADER
+                  work_directory=$(mktemp -d)
+                  trap 'rm -rf "$work_directory"' EXIT
+
+                  # Quoted heredoc: Maven reads the token from env, keeping it off disk.
+                  cat > "$work_directory/settings.xml" <<'EOF'
+                  <settings>
+                    <servers>
+                      <server>
+                        <id>central-deployment</id>
+                        <configuration>
+                          <httpHeaders>
+                            <property>
+                              <name>Authorization</name>
+                              <value>${env.CENTRAL_AUTHORIZATION_HEADER}</value>
+                            </property>
+                          </httpHeaders>
+                        </configuration>
+                      </server>
+                    </servers>
+                  </settings>
+                  EOF
+
+                  # Central first: the deployment repo only serves io.valkey files.
+                  write_pom() {
+                      cat <<EOF
+                  <project xmlns="http://maven.apache.org/POM/4.0.0">
+                    <modelVersion>4.0.0</modelVersion>
+                    <groupId>io.valkey.release-test</groupId>
+                    <artifactId>$1-consumer</artifactId>
+                    <version>1</version>
+                    <repositories>
+                      <repository>
+                        <id>central</id>
+                        <url>https://repo.maven.apache.org/maven2</url>
+                      </repository>
+                      <repository>
+                        <id>central-deployment</id>
+                        <url>${CENTRAL_DEPLOYMENT_URL}/${DEPLOYMENT_ID}/download/</url>
+                      </repository>
+                    </repositories>
+                    <dependencies>
+                      <dependency>
+                        <groupId>io.valkey</groupId>
+                        <artifactId>$1</artifactId>
+                        <version>${RELEASE_VERSION}</version>
+                        <classifier>${CLASSIFIER}</classifier>
+                      </dependency>
+                    </dependencies>
+                  </project>
+                  EOF
+                  }
+
+                  # Fresh local repository per attempt: Maven caches not-found results.
+                  resolve_once() {
+                      local attempt_directory
+                      attempt_directory=$(mktemp -d -p "$work_directory")
+                      write_pom "$1" > "$attempt_directory/pom.xml"
+                      timeout 180 mvn -B -ntp -s "$work_directory/settings.xml" -Dmaven.repo.local="$attempt_directory/m2" -f "$attempt_directory/pom.xml" \
+                          org.apache.maven.plugins:maven-dependency-plugin:3.8.1:tree \
+                          org.apache.maven.plugins:maven-dependency-plugin:3.8.1:resolve | tee "$attempt_directory/maven.log" || return 1
+                      # A missing POM only warns and drops its dependencies, so check the tree.
+                      grep -qF "io.valkey:valkey-glide-jedis-compat-shared:jar:${RELEASE_VERSION}:" "$attempt_directory/maven.log" && return 0
+                      echo "::warning::$1 resolved without valkey-glide-jedis-compat-shared; is its POM missing?"
+                      return 1
+                  }
+
+                  resolve_with_retries() {
+                      local attempt
+                      for attempt in 1 2 3; do
+                          echo "::group::Resolve io.valkey:$1:${RELEASE_VERSION}:${CLASSIFIER} (attempt ${attempt}/3)"
+                          resolve_once "$1" && { echo "::endgroup::"; return 0; }
+                          echo "::endgroup::"
+                          [ "$attempt" -eq 3 ] || sleep $((attempt * 5))
+                      done
+                      return 1
+                  }
+
+                  failed=()
+                  for artifact in valkey-glide-jedis-compatibility valkey-glide-jedis-4-compatibility; do
+                      resolve_with_retries "$artifact" || failed+=("$artifact")
+                  done
+
+                  if [ ${#failed[@]} -ne 0 ]; then
+                      echo "::error::Maven could not resolve the dependencies of: ${failed[*]}"
+                      exit 1
+                  fi
+
     publish-release-to-maven:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
         needs:
             [
                 publish-to-maven-central-deployment,
                 test-deployment-on-all-architectures,
+                test-jedis-compatibility-maven-resolution,
             ]
         runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
@@ -750,188 +901,13 @@ jobs:
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
 
-    test-published-glide-client:
-        if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
-        needs: [set-release-version, publish-release-to-maven]
-        timeout-minutes: 40
-        runs-on: ubuntu-24.04
-        permissions:
-            contents: read
-        env:
-            CLASSIFIER: linux-x86_64
-            JAVA_VERSION: "11"
-            MAVEN_CENTRAL_URL: https://repo.maven.apache.org/maven2
-            RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
-            SERVER_PORT: "16379"
-        steps:
-            - name: Checkout
-              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-              with:
-                  persist-credentials: false
-
-            - name: Set up JDK
-              uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-              with:
-                  distribution: "temurin"
-                  java-version: ${{ env.JAVA_VERSION }}
-
-            - name: Install a standalone server
-              shell: bash
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install --yes redis-server
-                  sudo systemctl stop redis-server.service
-
-            - name: Wait for the published GLIDE artifact
-              shell: bash
-              run: |
-                  wait_timeout_seconds=1800
-                  delay_seconds=30
-                  wait_deadline=$((SECONDS + wait_timeout_seconds))
-                  attempt=0
-                  artifact_paths=(
-                    "valkey-glide/$RELEASE_VERSION/valkey-glide-$RELEASE_VERSION.pom"
-                    "valkey-glide/$RELEASE_VERSION/valkey-glide-$RELEASE_VERSION-$CLASSIFIER.jar"
-                  )
-
-                  while true; do
-                    attempt=$((attempt + 1))
-                    missing_paths=()
-                    for artifact_path in "${artifact_paths[@]}"; do
-                      if ! curl --fail --silent --head --connect-timeout 5 --max-time 15 --output /dev/null \
-                        "$MAVEN_CENTRAL_URL/io/valkey/$artifact_path"; then
-                        missing_paths+=("$artifact_path")
-                      fi
-                    done
-
-                    if [ "${#missing_paths[@]}" -eq 0 ]; then
-                      break
-                    fi
-
-                    if ((SECONDS >= wait_deadline)); then
-                      echo "::error::Published artifacts were not available from Maven Central: ${missing_paths[*]}"
-                      exit 1
-                    fi
-
-                    remaining_seconds=$((wait_deadline - SECONDS))
-                    sleep_seconds=$delay_seconds
-                    if ((remaining_seconds < delay_seconds)); then
-                      sleep_seconds=$remaining_seconds
-                    fi
-                    echo "Attempt $attempt: waiting ${sleep_seconds}s for ${missing_paths[*]}"
-                    sleep "$sleep_seconds"
-                  done
-
-            - name: Start a standalone server
-              shell: bash
-              run: |
-                  redis-server --bind 127.0.0.1 --protected-mode yes --port "$SERVER_PORT" --save "" --daemonize yes
-                  redis-cli -p "$SERVER_PORT" ping | grep -qx PONG
-
-            - name: Build and run a GLIDE consumer from Maven Central
-              working-directory: utils/release-candidate-testing/java/glide-client
-              shell: bash
-              run: |
-                  mvn -v
-                  mvn -B -ntp \
-                    -Dmaven.repo.local="${{ runner.temp }}/maven-repository" \
-                    -Dglide.version="$RELEASE_VERSION" \
-                    -Dglide.classifier="$CLASSIFIER" \
-                    -Dglide.port="$SERVER_PORT" \
-                    clean verify
-
-    test-published-jedis-compatibility:
-        if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
-        needs: [set-release-version, publish-release-to-maven]
-        timeout-minutes: 40
-        runs-on: ubuntu-24.04
-        permissions:
-            contents: read
-        env:
-            JAVA_VERSION: "11"
-            MAVEN_CENTRAL_URL: https://repo.maven.apache.org/maven2
-            RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
-        strategy:
-            fail-fast: false
-            matrix:
-                artifact:
-                    - valkey-glide-jedis-compatibility
-                    - valkey-glide-jedis-4-compatibility
-        steps:
-            - name: Checkout
-              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-              with:
-                  persist-credentials: false
-
-            - name: Set up JDK
-              uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-              with:
-                  distribution: "temurin"
-                  java-version: ${{ env.JAVA_VERSION }}
-
-            - name: Build a consumer project from Maven Central
-              working-directory: utils/release-candidate-testing/java/jedis-compatibility
-              shell: bash
-              env:
-                  COMPATIBILITY_ARTIFACT: ${{ matrix.artifact }}
-                  CLASSIFIER: linux-x86_64
-              run: |
-                  mvn -v
-                  local_repository="${{ runner.temp }}/maven-repository"
-                  wait_timeout_seconds=1800
-                  delay_seconds=30
-                  wait_deadline=$((SECONDS + wait_timeout_seconds))
-                  attempt=0
-                  artifact_paths=(
-                    "$COMPATIBILITY_ARTIFACT/$RELEASE_VERSION/$COMPATIBILITY_ARTIFACT-$RELEASE_VERSION.pom"
-                    "$COMPATIBILITY_ARTIFACT/$RELEASE_VERSION/$COMPATIBILITY_ARTIFACT-$RELEASE_VERSION-$CLASSIFIER.jar"
-                    "valkey-glide-jedis-compat-shared/$RELEASE_VERSION/valkey-glide-jedis-compat-shared-$RELEASE_VERSION.pom"
-                    "valkey-glide-jedis-compat-shared/$RELEASE_VERSION/valkey-glide-jedis-compat-shared-$RELEASE_VERSION.jar"
-                    "valkey-glide/$RELEASE_VERSION/valkey-glide-$RELEASE_VERSION.pom"
-                    "valkey-glide/$RELEASE_VERSION/valkey-glide-$RELEASE_VERSION.jar"
-                  )
-
-                  while true; do
-                    attempt=$((attempt + 1))
-                    missing_paths=()
-                    for artifact_path in "${artifact_paths[@]}"; do
-                      if ! curl --fail --silent --head --connect-timeout 5 --max-time 15 --output /dev/null \
-                        "$MAVEN_CENTRAL_URL/io/valkey/$artifact_path"; then
-                        missing_paths+=("$artifact_path")
-                      fi
-                    done
-
-                    if [ "${#missing_paths[@]}" -eq 0 ]; then
-                      break
-                    fi
-
-                    if ((SECONDS >= wait_deadline)); then
-                      echo "::error::Published artifacts were not available from Maven Central: ${missing_paths[*]}"
-                      exit 1
-                    fi
-
-                    remaining_seconds=$((wait_deadline - SECONDS))
-                    sleep_seconds=$delay_seconds
-                    if ((remaining_seconds < delay_seconds)); then
-                      sleep_seconds=$remaining_seconds
-                    fi
-                    echo "Attempt $attempt: waiting ${sleep_seconds}s for ${missing_paths[*]}"
-                    sleep "$sleep_seconds"
-                  done
-
-                  mvn -B -ntp \
-                    -Dmaven.repo.local="$local_repository" \
-                    -Dcompatibility.artifact="$COMPATIBILITY_ARTIFACT" \
-                    -Dcompatibility.version="$RELEASE_VERSION" \
-                    -Dcompatibility.classifier="$CLASSIFIER" \
-                    clean verify
-
     drop-deployment-if-validation-fails:
         if: ${{ failure() }}
         needs:
             [
                 publish-to-maven-central-deployment,
                 test-deployment-on-all-architectures,
+                test-jedis-compatibility-maven-resolution,
             ]
         runs-on: ubuntu-24.04
         env:
