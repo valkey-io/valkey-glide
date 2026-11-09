@@ -977,22 +977,17 @@ public class ClientPoolIntegrationTest {
             long idleBoundMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - unblockNanos);
             // Once BLPOP returns the holder is idle, and the monitor may rightly reclaim it after the
             // abandon timeout. Inside that bound, a missing handle means it was reclaimed mid-BLPOP.
-            if (idleBoundMs < cfg.getAbandonTimeout().toMillis()) {
-                assertTrue(
-                        holderRegistered, "BLPOP holder should still be in the pool after the abandon window");
-            } else {
-                System.out.println(
-                        "Membership check skipped: "
-                                + idleBoundMs
-                                + " ms since unblock exceeds the abandon timeout");
-            }
-
-            if (holderRegistered) {
-                assertEquals(
-                        "PONG",
-                        blpopClient.ping().get(5, TimeUnit.SECONDS),
-                        "BLPOP holder should still be usable after the abandon window");
-            }
+            assumeTrue(
+                    idleBoundMs < cfg.getAbandonTimeout().toMillis(),
+                    "Membership check skipped: "
+                            + idleBoundMs
+                            + " ms since unblock exceeds the abandon timeout");
+            assertTrue(
+                    holderRegistered, "BLPOP holder should still be in the pool after the abandon window");
+            assertEquals(
+                    "PONG",
+                    blpopClient.ping().get(5, TimeUnit.SECONDS),
+                    "BLPOP holder should still be usable after the abandon window");
 
             System.out.println("testAbandonMonitorDoesNotReclaimBlockingClient PASSED");
         } finally {
