@@ -1410,19 +1410,38 @@ impl Client {
             crate::rdma::refuse_direct_command(cmd)?;
             // Refresh IAM auth before the command (see `reconcile_iam_before_dispatch`).
             self.reconcile_iam_before_dispatch().await?;
-            // Track MULTI/WATCH/EXEC/DISCARD for the re-AUTH defer and release reset.
-            // Read-only standalone rejects all four locally, so they never reach the
-            // server (a pipeline can send them; `send_pipeline` still tracks).
-            if self.is_cluster || !self.read_only {
-                self.track_transaction_state(cmd);
-            }
-            self.track_unresettable(cmd);
-            // Flag a possible db change before dispatch (see `db_maybe_dirty`).
-            if self.is_select_command(cmd) {
-                self.shared.db_maybe_dirty.store(true, Ordering::Release);
-            }
             self.send_command_ungated(cmd, routing).await
         })
+    }
+
+    /// Record what an admitted command may change on the connection, for the
+    /// re-AUTH defer and the release reset.
+    fn track_command(&self, cmd: &Cmd) {
+        // Read-only standalone rejects MULTI/WATCH/EXEC/DISCARD locally, so they
+        // never reach the server (a pipeline can send them; `send_pipeline` tracks).
+        if self.is_cluster || !self.read_only {
+            self.track_transaction_state(cmd);
+        }
+        self.track_unresettable(cmd);
+        // Flag a possible db change before dispatch (see `db_maybe_dirty`).
+        if self.is_select_command(cmd) {
+            self.shared.db_maybe_dirty.store(true, Ordering::Release);
+        }
+    }
+
+    /// Dispatch for the pool release reset: takes an in-flight slot but skips the
+    /// circuit breaker, which would refuse the reset locally and discard a client
+    /// whose connection is fine, and the tracking and IAM reconcile that serve
+    /// borrower commands.
+    async fn send_reset_command(
+        &mut self,
+        cmd: &mut Cmd,
+        routing: Option<RoutingInfo>,
+    ) -> RedisResult<Value> {
+        let permit = Admission::check_ignoring_breaker(self)
+            .await?
+            .reserve(self)?;
+        self.dispatch(permit, cmd, routing).await
     }
 
     /// Ungated dispatch: everything `send_command` does after the borrow gate. The
@@ -1436,6 +1455,9 @@ impl Client {
         routing: Option<RoutingInfo>,
     ) -> RedisResult<Value> {
         let admission = Admission::check(self).await?;
+        // After the breaker (a refused command never reached the server), before
+        // the pubsub intercept (an intercepted SUBSCRIBE still subscribes).
+        self.track_command(cmd);
 
         // Answered locally, so it never takes an in-flight slot.
         if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
@@ -3557,6 +3579,15 @@ impl Client {
         }
     }
 
+    /// Whether the release reset would have anything to send or would fail.
+    #[cfg(test)]
+    pub(crate) fn borrow_is_dirty_for_test(&self) -> bool {
+        self.multi_seen.load(Ordering::Acquire)
+            || self.watch_seen.load(Ordering::Acquire)
+            || self.unresettable.load(Ordering::Acquire)
+            || self.shared.db_maybe_dirty.load(Ordering::Acquire)
+    }
+
     /// Mark the borrow as having sent MULTI, as `track_transaction_state` does.
     #[cfg(test)]
     pub(crate) fn set_multi_sent_for_test(&self, sent: bool) {
@@ -3631,7 +3662,7 @@ impl Client {
         }
         if multi_seen {
             let discard_result = self
-                .send_command(&mut redis::cmd("DISCARD"), is_cluster.then(all_nodes))
+                .send_reset_command(&mut redis::cmd("DISCARD"), is_cluster.then(all_nodes))
                 .await;
             // Classify by message, not `is_err()`. "DISCARD without MULTI" means the
             // borrow already closed its transaction. On cluster it is unavoidable
@@ -3643,13 +3674,15 @@ impl Client {
             {
                 return discard_result.map(|_| ());
             }
+            // The reset isn't tracked, so close the re-AUTH defer here.
+            self.multi_active.store(false, Ordering::Release);
             // The aggregate keeps only the first node's error, so a sibling's
             // "without MULTI" can mask a real one from the node holding the MULTI.
             // Every node must answer PONG: QUEUED means a MULTI is still open.
             if is_cluster {
                 let pong = Value::SimpleString("PONG".into());
                 let all_pong = match self
-                    .send_command(&mut redis::cmd("PING"), Some(all_nodes()))
+                    .send_reset_command(&mut redis::cmd("PING"), Some(all_nodes()))
                     .await?
                 {
                     Value::Map(replies) => replies.iter().all(|(_, v)| *v == pong),
@@ -3667,7 +3700,8 @@ impl Client {
         if watch_seen {
             // Default routing: all primaries on cluster, where WATCH lands; the
             // primary on standalone.
-            self.send_command(&mut redis::cmd("UNWATCH"), None).await?;
+            self.send_reset_command(&mut redis::cmd("UNWATCH"), None)
+                .await?;
         }
 
         // `None` routing is intentional: SELECT is an AllNodes command, so it fans
@@ -3677,7 +3711,7 @@ impl Client {
         {
             let mut select_cmd = redis::cmd("SELECT");
             select_cmd.arg(configured_db.to_string());
-            self.send_command(&mut select_cmd, None).await?;
+            self.send_reset_command(&mut select_cmd, None).await?;
         }
         // Cleared only after a successful reset: the connection is now on the
         // configured db.
@@ -3886,9 +3920,9 @@ impl Client {
         // `update_state_for_command`), so it assumes sequential use within a borrow:
         // it reflects intended transaction state, not the wire outcome. A borrower
         // that fires commands concurrently on one borrowed client, or one whose EXEC
-        // is rejected pre-wire (circuit breaker / inflight limit), can momentarily
-        // desync the flag — both are already out-of-contract usage for a borrowed
-        // client and self-heal on release.
+        // is rejected pre-wire by the inflight limit, can momentarily desync the
+        // flag — both are already out-of-contract usage for a borrowed client and
+        // self-heal on release.
         if self.multi_active.load(Ordering::Acquire) {
             return Ok(());
         }

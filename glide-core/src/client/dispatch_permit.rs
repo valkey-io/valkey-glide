@@ -35,6 +35,14 @@ impl Admission {
         Ok(Self { client: wrapper })
     }
 
+    /// [`check`](Self::check) without the circuit breaker, for the pool release
+    /// reset only (see `Client::send_reset_command`).
+    pub(super) async fn check_ignoring_breaker(client: &Client) -> RedisResult<Self> {
+        Ok(Self {
+            client: client.get_or_initialize_client().await?,
+        })
+    }
+
     /// Reserve an in-flight slot. The tracker holds the slot until the last clone
     /// of the Cmd is dropped (i.e. all sub-commands in the cluster event loop
     /// finish). This decouples user-facing timeout from internal pipeline cleanup.

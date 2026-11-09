@@ -4069,13 +4069,13 @@ mod scope_pool_tests {
         );
     }
 
-    /// A clean borrow released with its circuit breaker open must be reused with the
-    /// breaker still open, so it keeps protecting callers. A borrow that sent MULTI
-    /// is discarded instead: the breaker refuses the DISCARD and the transaction may
-    /// still be open. A-B: the clean one was discarded when release always sent
-    /// DISCARD.
+    /// A client released with its circuit breaker open must be reused with the
+    /// breaker still open, so it keeps protecting callers, whether the borrow was
+    /// clean or sent MULTI (the reset's DISCARD skips the breaker). A-B: discarded
+    /// when release always sent DISCARD (clean) or when the breaker refused it
+    /// (MULTI).
     #[tokio::test]
-    async fn release_keeps_a_clean_client_whose_breaker_is_open() {
+    async fn release_keeps_a_client_whose_breaker_is_open() {
         for multi_sent in [false, true] {
             let server = TestServer::start();
             wait_for_server_ready(server.port).await;
@@ -4102,22 +4102,53 @@ mod scope_pool_tests {
 
             super::release_client_async(pool_arc.clone(), client_id).await;
             let mut pool = pool_arc.lock();
-            let reused = !multi_sent;
-            assert_eq!(
-                pool.idle_count(),
-                u32::from(reused),
+            assert_eq!(pool.idle_count(), 1, "multi_sent={multi_sent}");
+            assert!(
+                pool.drain_discarded_ids().is_empty(),
                 "multi_sent={multi_sent}"
             );
-            if reused {
-                assert!(pool.drain_discarded_ids().is_empty());
-                assert!(
-                    !client.is_circuit_breaker_healthy(),
-                    "the re-idled client must keep its open breaker"
-                );
-            } else {
-                assert_eq!(pool.drain_discarded_ids(), vec![client_id]);
-            }
+            assert!(
+                !client.is_circuit_breaker_healthy(),
+                "multi_sent={multi_sent}: the re-idled client must keep its open breaker"
+            );
         }
+    }
+
+    /// A MULTI or WATCH the open circuit breaker refused never reached the server, so
+    /// it must not mark the borrow dirty. A-B: marked dirty when tracking ran before
+    /// the breaker check.
+    #[tokio::test]
+    async fn breaker_refused_multi_and_watch_are_not_tracked() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+        let mut request = request_for(&[server.port]);
+        request.client_circuit_breaker = Some(crate::client::ClientCircuitBreakerConfig {
+            window_size_ms: 60_000,
+            failure_rate_threshold: 0.5,
+            min_errors: 1,
+            open_timeout_ms: 60_000,
+            count_timeouts: true,
+            consecutive_successes: 1,
+        });
+        let mut client = crate::client::Client::new(request, None)
+            .await
+            .expect("client connects");
+        client.trip_circuit_breaker_for_test();
+
+        for (command, arg) in [("MULTI", None), ("WATCH", Some("watched"))] {
+            let mut cmd = redis::cmd(command);
+            if let Some(arg) = arg {
+                cmd.arg(arg);
+            }
+            assert!(
+                client.send_command(&mut cmd, None).await.is_err(),
+                "{command}: the open breaker must refuse it"
+            );
+        }
+        assert!(
+            !client.borrow_is_dirty_for_test(),
+            "a refused command must not mark the borrow dirty"
+        );
     }
 
     /// A MULTI or WATCH that read-only mode rejects locally never reached the server,
