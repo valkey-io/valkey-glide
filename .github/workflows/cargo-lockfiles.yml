@@ -50,9 +50,10 @@ jobs:
             # all lockfiles here keeps a manifest change from leaving one stale
             # for the next unrelated --locked build to trip over.
             #
-            # Run from the repository root with --manifest-path so each
-            # workspace resolves with the same stable cargo, not a toolchain
-            # pinned by a rust-toolchain.toml inside it.
+            # Run inside each lockfile's directory so cargo reads the same
+            # .cargo/config.toml the build there reads. RUSTUP_TOOLCHAIN keeps
+            # the resolution on stable even where a rust-toolchain.toml pins
+            # another toolchain.
             - name: Check lockfiles with cargo metadata --locked
               shell: bash
               run: |
@@ -66,7 +67,7 @@ jobs:
                   while IFS= read -r lockfile; do
                     manifest="$(dirname "$lockfile")/Cargo.toml"
                     echo "::group::$lockfile"
-                    if cargo metadata --locked --format-version 1 --manifest-path "$manifest" > /dev/null; then
+                    if (cd "$(dirname "$lockfile")" && RUSTUP_TOOLCHAIN=stable cargo metadata --locked --format-version 1 > /dev/null); then
                       echo "current"
                     else
                       stale+=("$lockfile")
