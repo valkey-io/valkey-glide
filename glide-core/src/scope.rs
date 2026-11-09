@@ -1769,9 +1769,9 @@ fn log_unresolved_target(
 /// caller can tell a transient gap from a parent that is gone, and never falls
 /// back to a seed node.
 ///
-/// Non-blocking: a held client wrapper lock is reported as
-/// [`ScopeTargetUnresolved::TopologyLocked`] rather than waited on, because the
-/// acquire path runs on the binding's thread outside a runtime context.
+/// Non-blocking: a held client wrapper lock or cluster slot-map lock is reported
+/// as [`ScopeTargetUnresolved::TopologyLocked`] rather than waited on, because
+/// `classify_acquire` runs this with the scope pool's lock held.
 #[cfg(feature = "proto")]
 pub fn try_resolve_scope_target(
     client: Option<&Client>,

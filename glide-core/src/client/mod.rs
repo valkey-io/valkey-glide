@@ -579,9 +579,9 @@ pub enum SlotAddressError {
     /// No primary is mapped for the slot in the current slot map (initial
     /// topology not yet fetched, or mid-resharding).
     Unmapped,
-    /// The client wrapper is write-locked (e.g. mid-reconnect) and the
-    /// non-blocking lookup declined to wait. Only `try_address_for_slot` returns
-    /// this.
+    /// The client wrapper is write-locked (mid-reconnect) or the cluster slot
+    /// map is write-locked (mid-topology-refresh), and the non-blocking lookup
+    /// declined to wait. Only `try_address_for_slot` returns this.
     TopologyLocked,
 }
 
@@ -1857,19 +1857,25 @@ impl Client {
         Self::address_for_slot_in(&client, slot)
     }
 
-    /// Variant of [`Client::address_for_slot`] for synchronous callers (the scope
-    /// acquire path runs without a runtime context).
+    /// Variant of [`Client::address_for_slot`] for a caller that must not wait:
+    /// the scope acquire path runs it with the scope pool's lock held, where a
+    /// wait would hold up every other scope acquire and release.
     ///
-    /// Does not wait for the client wrapper lock: if it is write-locked (e.g.
-    /// mid-reconnect) this returns [`SlotAddressError::TopologyLocked`] so the
-    /// caller can retry rather than fall back to a seed node. The slot-map read
-    /// inside the cluster connection is still a short blocking read.
+    /// Neither the client wrapper lock (held across a reconnect) nor the cluster
+    /// slot map's lock (held across a topology refresh) is waited for; a held
+    /// lock is [`SlotAddressError::TopologyLocked`], and the caller retries.
     pub fn try_address_for_slot(&self, slot: u16) -> Result<String, SlotAddressError> {
         let client = self
             .internal_client
             .try_read()
             .map_err(|_| SlotAddressError::TopologyLocked)?;
-        Self::address_for_slot_in(&client, slot)
+        match &*client {
+            ClientWrapper::Cluster { client, .. } => client
+                .try_address_for_slot(slot)
+                .map_err(|redis::cluster_async::SlotMapLocked| SlotAddressError::TopologyLocked)?
+                .ok_or(SlotAddressError::Unmapped),
+            other => Self::address_for_slot_in(other, slot),
+        }
     }
 
     fn address_for_slot_in(wrapper: &ClientWrapper, slot: u16) -> Result<String, SlotAddressError> {
