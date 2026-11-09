@@ -137,10 +137,11 @@ public interface ServerManagementClusterCommands {
      * the nodes that answered when other nodes fail.<br>
      * Unlike {@link #info(Section[])}, a node that fails does not fail the call: its entry holds the
      * error for that node instead of its reply.<br>
-     * A node that has not answered by the request timeout minus the smaller of a tenth of it and 100
-     * ms holds a {@link glide.api.models.exceptions.TimeoutException}, and the call itself fails with
-     * a {@link glide.api.models.exceptions.TimeoutException} if it has not finished by the request
-     * timeout.
+     * A node that has not answered by the request timeout minus a margin of a tenth of it, kept
+     * between 2 ms and 100 ms (a quarter of it under 8 ms), holds a {@link
+     * glide.api.models.exceptions.TimeoutException}, and the call itself fails with a {@link
+     * glide.api.models.exceptions.TimeoutException} if it has not finished by the request timeout.
+     * The call still fails when no target node can be reached.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
      * @param sections A list of {@link InfoOptions.Section} values specifying which sections of
@@ -167,10 +168,11 @@ public interface ServerManagementClusterCommands {
      * answered when other nodes fail.<br>
      * Unlike {@link #info(Section[], Route)}, a node that fails does not fail the call: its entry
      * holds the error for that node instead of its reply.<br>
-     * A node that has not answered by the request timeout minus the smaller of a tenth of it and 100
-     * ms holds a {@link glide.api.models.exceptions.TimeoutException}, and the call itself fails with
-     * a {@link glide.api.models.exceptions.TimeoutException} if it has not finished by the request
-     * timeout.
+     * A node that has not answered by the request timeout minus a margin of a tenth of it, kept
+     * between 2 ms and 100 ms (a quarter of it under 8 ms), holds a {@link
+     * glide.api.models.exceptions.TimeoutException}, and the call itself fails with a {@link
+     * glide.api.models.exceptions.TimeoutException} if it has not finished by the request timeout.
+     * The call still fails when no target node can be reached.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
      * @param sections A list of {@link InfoOptions.Section} values specifying which sections of

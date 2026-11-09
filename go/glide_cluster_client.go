@@ -334,9 +334,10 @@ func (client *ClusterClient) InfoWithOptions(
 // The command will be routed to all primary nodes, unless `route` in [options.ClusterInfoOptions] is provided.
 //
 // Unlike [ClusterClient.InfoWithOptions], a node that fails does not fail the call: its entry holds the error for that
-// node instead of its reply. A node that has not answered by the request timeout minus the smaller of a tenth of it and
-// 100 ms gets a [TimeoutError], and the call itself fails with a [TimeoutError] if it has not finished by the request
-// timeout plus the same amount.
+// node instead of its reply. A node that has not answered by the request timeout minus a margin of a tenth of it, kept
+// between 2 ms and 100 ms (a quarter of it under 8 ms), gets a [TimeoutError], and the call itself fails with a
+// [TimeoutError] if it has not finished by the request timeout plus the same margin. The call still fails when no target
+// node can be reached.
 //
 // See [valkey.io] for details.
 //
