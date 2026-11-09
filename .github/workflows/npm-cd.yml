@@ -233,9 +233,14 @@ jobs:
             - name: Build Native Module
               shell: bash
               working-directory: ./node/rust-client
+              env:
+                  RELEASE_VERSION: ${{ needs.get-build-parameters.outputs.release_version }}
               run: |
                   mkdir -p ../build-ts
                   npm ci
+
+                  # napi build bakes this version into native.js; it must match the published platform packages.
+                  npm pkg set version="${RELEASE_VERSION}"
 
                   if [[ "${{ matrix.OS }}" == "windows" ]]; then
                     # Windows: native build, no cross-compilation needed
@@ -263,6 +268,10 @@ jobs:
                       --target "${{ matrix.TARGET }}" \
                       --js ../build-ts/native.js --dts ../build-ts/native.d.ts \
                       --js-package-name @valkey/valkey-glide $npm_config_build_flags
+                  fi
+
+                  if ! grep -qF "expected ${RELEASE_VERSION} but got" ../build-ts/native.js; then
+                    echo "::error::build-ts/native.js does not expect platform package version ${RELEASE_VERSION}"; exit 1
                   fi
 
                   mkdir -p ../${{ matrix.TARGET }}
@@ -608,6 +617,13 @@ jobs:
                       echo "Attempt ${attempt}/${MAX_ATTEMPTS}: version '${INSTALLED_VERSION:-none}' / native module not resolvable yet (likely npm registry propagation). Retrying in ${DELAY}s..."
                       sleep "${DELAY}"
                   done
+                  # A version mismatch surfaces as "Cannot find native binding"; the real reason is in error.cause.
+                  NAPI_RS_ENFORCE_VERSION_CHECK=1 node -e "
+                    try { require('@valkey/valkey-glide'); }
+                    catch (error) {
+                      for (let cause = error; cause; cause = cause.cause) console.error(String(cause.message ?? cause).split('\n')[0]);
+                      process.exit(1);
+                    }" || { echo "::error::@valkey/valkey-glide@${RELEASE_VERSION} fails to load with NAPI_RS_ENFORCE_VERSION_CHECK=1"; exit 1; }
                   npm run build:utils
                   npm test
 
