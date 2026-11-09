@@ -355,8 +355,8 @@ class Server:
     @cached_property
     def cluster_create_address(self) -> str:
         """The IP address to pass for the server to `--cluster create`."""
-        # `--cluster create` sends CLUSTER MEET with the address it is given, and
-        # servers before Redis/Valkey 7.0 accept only an IP address there.
+        # `redis-cli --cluster create` before Redis 7.0 sends CLUSTER MEET with the
+        # address it is given, and servers only accept an IP address there.
         return self._ip_addresses[0]
 
     @cached_property
