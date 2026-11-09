@@ -651,9 +651,11 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `info with allowPartialResults counts a call no node answered for the circuit breaker_%p`,
-        async (protocol) => {
+    // The breaker reads the map the client builds, so one protocol covers it.
+    it(
+        "info with allowPartialResults counts a call no node answered for the circuit breaker",
+        async () => {
+            const protocol = ProtocolVersion.RESP3;
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol, {
                     requestTimeout: 1000,
