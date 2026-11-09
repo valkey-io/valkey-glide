@@ -784,6 +784,7 @@ public class CommandManager {
                             routeArgs.routeType,
                             routeArgs.routeParam,
                             expectUtf8Response,
+                            false,
                             0,
                             spanPtr);
 

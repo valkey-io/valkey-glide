@@ -403,28 +403,6 @@ public class GlideCoreClient implements AutoCloseable {
         return future;
     }
 
-    /** Execute a single command asynchronously via JNI. */
-    public CompletableFuture<Object> executeCommandAsync(
-            int requestType,
-            byte[][] args,
-            boolean hasRoute,
-            int routeType,
-            String routeParam,
-            boolean expectUtf8Response,
-            long timeoutMs,
-            long spanPtr) {
-        return executeCommandAsync(
-                requestType,
-                args,
-                hasRoute,
-                routeType,
-                routeParam,
-                expectUtf8Response,
-                false,
-                timeoutMs,
-                spanPtr);
-    }
-
     /**
      * Execute a single command asynchronously via JNI.
      *
