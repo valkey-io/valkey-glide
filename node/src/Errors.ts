@@ -43,6 +43,9 @@ export class CircuitBreakerError extends RequestError {}
  * Maps a native client or pool creation failure to a `ValkeyError` with the same message:
  * {@link ConfigurationError} for napi code `InvalidArg` (invalid connection request or pool
  * configuration), else {@link ClosingError}.
+ *
+ * TODO: This is stop gap implementation for 2.6 release. The core should instead return typed
+ * errors to clients.
  */
 export function toClientCreationError(error: unknown): ValkeyError {
     if (error instanceof ValkeyError) {
