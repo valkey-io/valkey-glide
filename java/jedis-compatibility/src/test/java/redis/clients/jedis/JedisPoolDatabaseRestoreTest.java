@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -12,7 +13,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import glide.api.GlideClient;
+import glide.api.models.exceptions.ConnectionException;
+import glide.api.models.exceptions.GlideException;
 import glide.api.models.exceptions.RequestException;
+import glide.api.models.exceptions.TimeoutException;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Deque;
@@ -24,9 +28,10 @@ import org.junit.jupiter.api.Test;
 import redis.clients.jedis.exceptions.JedisException;
 
 /**
- * Verifies that every connection borrowed from {@link JedisPool} starts on the pool's configured
- * database, following upstream Jedis {@code JedisFactory.activateObject}. The GLIDE client is
- * mocked, so no server is needed.
+ * Verifies that every connection borrowed from the Jedis 5.x {@link JedisPool} starts on the pool's
+ * configured database, following upstream Jedis {@code JedisFactory.activateObject}, and that a
+ * connection whose SELECT outcome is unknown is destroyed instead of lent again. The GLIDE client
+ * is mocked, so no server is needed.
  */
 class JedisPoolDatabaseRestoreTest {
 
@@ -62,7 +67,8 @@ class JedisPoolDatabaseRestoreTest {
     @Test
     void activateObject_throws_when_restore_select_fails() {
         GlideClient client = clientAcceptingSelect();
-        when(client.select((long) CONFIGURED_DATABASE)).thenReturn(failedSelect());
+        when(client.select((long) CONFIGURED_DATABASE))
+                .thenReturn(failedSelect(new RequestException("NOPERM SELECT")));
         Jedis jedis = new Jedis(client, CONFIG);
         jedis.select(OTHER_DATABASE);
 
@@ -94,7 +100,8 @@ class JedisPoolDatabaseRestoreTest {
     @Test
     void pool_replaces_connection_when_restore_select_fails() throws Exception {
         GlideClient failingClient = clientAcceptingSelect();
-        when(failingClient.select((long) CONFIGURED_DATABASE)).thenReturn(failedSelect());
+        when(failingClient.select((long) CONFIGURED_DATABASE))
+                .thenReturn(failedSelect(new RequestException("NOPERM SELECT")));
         GlideClient freshClient = clientAcceptingSelect();
         try (JedisPool pool =
                 new JedisPool(singleConnection(), new MockClientFactory(failingClient, freshClient))) {
@@ -114,6 +121,71 @@ class JedisPoolDatabaseRestoreTest {
         }
     }
 
+    @Test
+    void pool_destroys_connection_when_select_times_out() {
+        assertSelectFailureDestroysConnection(new TimeoutException("Request timed out"));
+    }
+
+    @Test
+    void pool_destroys_connection_when_select_loses_connection() {
+        assertSelectFailureDestroysConnection(new ConnectionException("Connection lost"));
+    }
+
+    @Test
+    void pool_reuses_connection_when_server_rejects_select() {
+        GlideClient client = clientAcceptingSelect();
+        when(client.select((long) OTHER_DATABASE))
+                .thenReturn(failedSelect(new RequestException("ERR DB index is out of range")));
+        try (JedisPool pool = new JedisPool(singleConnection(), new MockClientFactory(client))) {
+            Jedis first;
+            try (Jedis jedis = pool.getResource()) {
+                first = jedis;
+                assertThrows(JedisException.class, () -> jedis.select(OTHER_DATABASE));
+            }
+            try (Jedis jedis = pool.getResource()) {
+                assertSame(first, jedis, "a SELECT the server rejected was not applied");
+                assertEquals(CONFIGURED_DATABASE, jedis.getDB());
+            }
+            assertEquals(0, pool.getDestroyedCount());
+        }
+    }
+
+    @Test
+    void select_keeps_interrupt_flag_when_interrupted() {
+        GlideClient client = mock(GlideClient.class);
+        when(client.select(anyLong())).thenReturn(new CompletableFuture<>());
+        Jedis jedis = new Jedis(client, CONFIG);
+
+        Thread.currentThread().interrupt();
+        try {
+            assertThrows(JedisException.class, () -> jedis.select(OTHER_DATABASE));
+            assertTrue(Thread.currentThread().isInterrupted(), "select must restore the interrupt flag");
+            assertTrue(jedis.isBroken(), "an interrupted SELECT may still have been applied");
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    private static void assertSelectFailureDestroysConnection(GlideException failure) {
+        GlideClient failingClient = mock(GlideClient.class);
+        when(failingClient.select(anyLong())).thenReturn(failedSelect(failure));
+        GlideClient freshClient = clientAcceptingSelect();
+        try (JedisPool pool =
+                new JedisPool(singleConnection(), new MockClientFactory(failingClient, freshClient))) {
+            Jedis first;
+            try (Jedis jedis = pool.getResource()) {
+                first = jedis;
+                assertThrows(JedisException.class, () -> jedis.select(OTHER_DATABASE));
+            }
+            try (Jedis jedis = pool.getResource()) {
+                assertNotSame(first, jedis, "a SELECT with an unknown outcome must not be lent again");
+                assertEquals(CONFIGURED_DATABASE, jedis.getDB());
+            }
+            assertEquals(2, pool.getCreatedCount());
+            assertEquals(1, pool.getDestroyedCount());
+        }
+    }
+
     private static GlideJedisFactory newFactory() {
         return new GlideJedisFactory("localhost", 6379, CONFIG);
     }
@@ -124,9 +196,9 @@ class JedisPoolDatabaseRestoreTest {
         return client;
     }
 
-    private static CompletableFuture<String> failedSelect() {
+    private static CompletableFuture<String> failedSelect(GlideException failure) {
         CompletableFuture<String> future = new CompletableFuture<>();
-        future.completeExceptionally(new RequestException("NOPERM SELECT"));
+        future.completeExceptionally(failure);
         return future;
     }
 

@@ -72,6 +72,7 @@ import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
+import glide.api.models.exceptions.RequestException;
 import java.nio.charset.StandardCharsets;
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -856,6 +857,10 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Select a database.
      *
+     * <p>If the SELECT fails without a server error reply (for example a timeout, a lost connection
+     * or an interrupt), it may still have been applied, so a pooled connection is marked {@link
+     * #isBroken() broken} and is destroyed instead of being lent again.
+     *
      * @param index the database index
      * @return "OK" if successful
      */
@@ -866,8 +871,24 @@ public abstract class AbstractGlideJedis extends JedisCommon {
             glideClient.select((long) index).get();
             selectedDb = index;
             return "OK";
-        } catch (InterruptedException | ExecutionException e) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            markBrokenIfSelectOutcomeUnknown(e);
             throw new JedisException("SELECT failed", e);
+        } catch (ExecutionException e) {
+            markBrokenIfSelectOutcomeUnknown(e.getCause());
+            throw new JedisException("SELECT failed", e);
+        }
+    }
+
+    /**
+     * Marks a pooled connection broken unless the SELECT failed with a server error reply ({@link
+     * RequestException}), which means it was not applied. In every other case the connection may be
+     * on another database than {@link #getDB()} reports.
+     */
+    private void markBrokenIfSelectOutcomeUnknown(Throwable failure) {
+        if (isPooled && !(failure instanceof RequestException)) {
+            broken = true;
         }
     }
 
