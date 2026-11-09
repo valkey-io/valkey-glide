@@ -588,7 +588,9 @@ jobs:
                       # version is not visible on an npm edge yet, `npm install` exits non-zero
                       # (ETARGET/404). Guard it with `if` so that (under the default `set -e` shell)
                       # a transient miss is retried instead of aborting the step on the first attempt.
-                      if npm install "@valkey/valkey-glide@${RELEASE_VERSION}" --save; then
+                      # --prefer-online: otherwise npm answers retries from its local cache (packument
+                      # max-age=300) and keeps missing a version published after the first attempt (2.6.0-rc4).
+                      if npm install "@valkey/valkey-glide@${RELEASE_VERSION}" --save --prefer-online; then
                           # Read the version from the installed package.json on disk. The package's
                           # "exports" map only exposes ".", so require("@valkey/valkey-glide/package.json")
                           # would throw ERR_PACKAGE_PATH_NOT_EXPORTED; read the file directly instead.
