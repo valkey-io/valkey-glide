@@ -6376,8 +6376,9 @@ pub(crate) mod shared_client_tests {
     ///    the siblings answer "DISCARD without MULTI" and the aggregate is `Err` —
     ///    which must be tolerated, not read as a reset failure that discards the
     ///    connection. Exercises the classify-by-message branch on a live cluster.
-    ///    A primary left with `CLIENT REPLY OFF` must instead be discarded, even
-    ///    though a sibling's "DISCARD without MULTI" can return before it times out.
+    ///    Then (2b) `CLIENT REPLY OFF` and (2c) a MULTI whose DISCARD the holder
+    ///    denies must be discarded, while (2d) a clean borrow and (2e) a WATCH
+    ///    borrow must be reused with an unused primary paused, the WATCH cleared.
     /// 3. (Valkey 9.0+ multi-db clusters) A borrow that `SELECT`ed another db must
     ///    be restored to the configured db on release — guards against the wrong
     ///    fix of skipping `SELECT` by topology, which would leak db 7.
@@ -6727,17 +6728,32 @@ pub(crate) mod shared_client_tests {
             // ── 2e. a WATCH borrow must be reused while a primary it never used is
             // paused, and its WATCH must still be cleared. A-B: discarded when the
             // release UNWATCH went to every primary ──
-            let (watched, same_slot) = (0..)
-                .map(|i| (format!("{{w{i}}}:watched"), format!("{{w{i}}}:other")))
-                .find(|(key, _)| get_slot(key.as_bytes()) > 10_923)
-                .expect("a key outside the paused primary's slots");
-            let watched_primary = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
-                Route::new(get_slot(watched.as_bytes()), SlotAddr::Master),
-            ));
+            // Cross-slot: two slots on one healthy primary and one on another, so
+            // the release UNWATCH must reach both primaries, once each.
+            let tag_in = |lo: u16, hi: u16, skip: Option<u16>| {
+                (0..)
+                    .map(|i| format!("{{w{i}}}"))
+                    .find(|tag| {
+                        let slot = get_slot(tag.as_bytes());
+                        (lo..=hi).contains(&slot) && Some(slot) != skip
+                    })
+                    .expect("a hash tag in the slot range")
+            };
+            let shard3_a = tag_in(10_923, 16_383, None);
+            let shard3_b = tag_in(10_923, 16_383, Some(get_slot(shard3_a.as_bytes())));
+            let shard2 = tag_in(5_461, 10_922, None);
+            let watched: Vec<String> = [&shard3_a, &shard3_b, &shard2]
+                .iter()
+                .map(|tag| format!("{tag}:watched"))
+                .collect();
+            let mut watch = redis::cmd("WATCH");
+            for key in &watched {
+                watch.arg(key);
+            }
             borrowed(&pool_arc, client_id)
-                .send_command(redis::cmd("WATCH").arg(&watched), None)
+                .send_command(&mut watch, None)
                 .await
-                .expect("WATCH on a healthy shard");
+                .expect("WATCH keys on two healthy primaries");
             admin
                 .send_command(redis::cmd("CLIENT").arg("PAUSE").arg(2000), Some(paused))
                 .await
@@ -6756,28 +6772,36 @@ pub(crate) mod shared_client_tests {
                 );
             }
             tokio::time::sleep(Duration::from_millis(2100)).await;
-            admin
-                .send_command(redis::cmd("SET").arg(&watched).arg("changed"), None)
-                .await
-                .expect("touch the watched key from another connection");
             let mut client = borrowed(&pool_arc, client_id);
-            client
-                .send_command(&mut redis::cmd("MULTI"), Some(watched_primary.clone()))
-                .await
-                .expect("MULTI");
-            client
-                .send_command(redis::cmd("SET").arg(&same_slot).arg("v"), None)
-                .await
-                .expect("queue SET");
-            let exec = client
-                .send_command(&mut redis::cmd("EXEC"), Some(watched_primary))
-                .await
-                .expect("EXEC");
-            assert_ne!(
-                exec,
-                Value::Nil,
-                "the WATCH must have been cleared on release"
-            );
+            for tag in [&shard3_a, &shard2] {
+                admin
+                    .send_command(
+                        redis::cmd("SET").arg(format!("{tag}:watched")).arg("x"),
+                        None,
+                    )
+                    .await
+                    .expect("touch a watched key from another connection");
+                let primary = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                    Route::new(get_slot(tag.as_bytes()), SlotAddr::Master),
+                ));
+                client
+                    .send_command(&mut redis::cmd("MULTI"), Some(primary.clone()))
+                    .await
+                    .expect("MULTI");
+                client
+                    .send_command(redis::cmd("SET").arg(format!("{tag}:other")).arg("v"), None)
+                    .await
+                    .expect("queue SET");
+                let exec = client
+                    .send_command(&mut redis::cmd("EXEC"), Some(primary))
+                    .await
+                    .expect("EXEC");
+                assert_ne!(
+                    exec,
+                    Value::Nil,
+                    "{tag}: the WATCH must be cleared on release"
+                );
+            }
 
             // ── 3. db drift must be restored (Valkey 9.0+ multi-db cluster) ──
             let mut version_probe = Client::new(connection_request.clone().into(), None)
