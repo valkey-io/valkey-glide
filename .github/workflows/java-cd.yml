@@ -764,7 +764,7 @@ jobs:
 
             - name: Wait for deployment artifacts to be available
               shell: bash
-              timeout-minutes: 5
+              timeout-minutes: 7
               env:
                   CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
                   CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
