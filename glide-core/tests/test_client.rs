@@ -6611,6 +6611,80 @@ pub(crate) mod shared_client_tests {
                 );
             }
 
+            // ── 2c. a MULTI left open on one primary must be discarded ──
+            // Only the holder denies DISCARD, so the release DISCARD gets NOPERM there
+            // and "without MULTI" elsewhere, and the aggregate keeps whichever comes
+            // first. A holder on each primary puts a sibling first at least once, which
+            // only the post-DISCARD PING catches. A-B: re-idled without it.
+            let mut admin = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster admin client");
+            for slot in [0u16, 8000, 16000] {
+                let user = format!("nodisc{slot}");
+                let holder = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                    Route::new(slot, SlotAddr::Master),
+                ));
+                admin
+                    .send_command(
+                        redis::cmd("ACL")
+                            .arg("SETUSER")
+                            .arg(&user)
+                            .arg("on")
+                            .arg("nopass")
+                            .arg("+@all"),
+                        Some(all_nodes()),
+                    )
+                    .await
+                    .expect("create the user on every node");
+                admin
+                    .send_command(
+                        redis::cmd("ACL").arg("SETUSER").arg(&user).arg("-discard"),
+                        Some(holder.clone()),
+                    )
+                    .await
+                    .expect("deny DISCARD on the holder only");
+
+                let as_user = create_connection_request(
+                    &addresses,
+                    &TestConfiguration {
+                        cluster_mode: ClusterMode::Enabled,
+                        request_timeout: Some(10_000),
+                        connection_info: Some(redis::RedisConnectionInfo {
+                            username: Some(user.clone()),
+                            password: Some("unused".into()),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    },
+                );
+                let client = Client::new(as_user.into(), None)
+                    .await
+                    .expect("cluster client as the restricted user");
+                let client_id = add_and_acquire(&pool_arc, client);
+                {
+                    let mut client = borrowed(&pool_arc, client_id);
+                    client
+                        .send_command(&mut redis::cmd("MULTI"), Some(holder.clone()))
+                        .await
+                        .expect("MULTI on the holder");
+                    let denied = client
+                        .send_command(&mut redis::cmd("DISCARD"), Some(holder.clone()))
+                        .await;
+                    assert_eq!(
+                        denied.map_err(|e| e.kind()),
+                        Err(redis::ErrorKind::PermissionDenied),
+                        "slot {slot}: the holder must deny DISCARD"
+                    );
+                }
+                release_client_async(pool_arc.clone(), client_id).await;
+                let mut pool = pool_arc.lock();
+                assert_eq!(
+                    pool.drain_discarded_ids(),
+                    vec![client_id],
+                    "slot {slot}: a MULTI left open on the holder must be discarded"
+                );
+            }
+
             // ── 3. db drift must be restored (Valkey 9.0+ multi-db cluster) ──
             let mut version_probe = Client::new(connection_request.clone().into(), None)
                 .await
