@@ -1096,6 +1096,31 @@ impl InflightRequestTracker {
     /// Try to reserve one inflight slot atomically. Returns `None` if
     /// no slots are available (counter <= 0).
     pub fn try_new(counter: Arc<AtomicIsize>) -> Option<Self> {
+        InflightSlot::try_new(counter).map(Self::from_slot)
+    }
+
+    /// Make a reserved [`InflightSlot`] shareable across `Cmd` clones (one
+    /// allocation: the shared guard).
+    pub fn from_slot(slot: InflightSlot) -> Self {
+        Self {
+            _guard: Arc::new(slot.0),
+        }
+    }
+}
+
+/// A reserved inflight slot with a single owner, released when dropped.
+///
+/// The same reservation as [`InflightRequestTracker`] without the shared `Arc`
+/// guard, so reserving and releasing allocate nothing (only the counter `Arc` is
+/// bumped). For a request whose slot is owned by one future and never travels
+/// with a `Cmd` clone; convert with [`InflightRequestTracker::from_slot`] when it
+/// must be shared.
+pub struct InflightSlot(InflightSlotGuard);
+
+impl InflightSlot {
+    /// Try to reserve one inflight slot atomically. Returns `None` if
+    /// no slots are available (counter <= 0).
+    pub fn try_new(counter: Arc<AtomicIsize>) -> Option<Self> {
         loop {
             let current = counter.load(Ordering::SeqCst);
             if current <= 0 {
@@ -1105,9 +1130,7 @@ impl InflightRequestTracker {
                 .compare_exchange(current, current - 1, Ordering::SeqCst, Ordering::SeqCst)
                 .is_ok()
             {
-                return Some(Self {
-                    _guard: Arc::new(InflightSlotGuard(counter)),
-                });
+                return Some(Self(InflightSlotGuard(counter)));
             }
         }
     }
@@ -1132,6 +1155,29 @@ mod inflight_tracker_tests {
     fn try_new_returns_none_when_no_slots() {
         let counter = Arc::new(AtomicIsize::new(0));
         assert!(InflightRequestTracker::try_new(counter).is_none());
+    }
+
+    #[test]
+    fn unshared_slot_reserves_releases_and_converts() {
+        let counter = Arc::new(AtomicIsize::new(2));
+        let slot = InflightSlot::try_new(counter.clone()).unwrap();
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
+        drop(slot);
+        assert_eq!(counter.load(Ordering::Relaxed), 2);
+
+        // Converted to a shared tracker: released once, by the last clone.
+        let tracker =
+            InflightRequestTracker::from_slot(InflightSlot::try_new(counter.clone()).unwrap());
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
+        let clone = tracker.clone();
+        drop(tracker);
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
+        drop(clone);
+        assert_eq!(counter.load(Ordering::Relaxed), 2);
+
+        let _a = InflightSlot::try_new(counter.clone()).unwrap();
+        let _b = InflightSlot::try_new(counter.clone()).unwrap();
+        assert!(InflightSlot::try_new(counter.clone()).is_none());
     }
 
     #[test]

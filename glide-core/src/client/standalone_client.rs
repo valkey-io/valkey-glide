@@ -102,6 +102,13 @@ struct DropWrapper {
 
 impl Drop for DropWrapper {
     fn drop(&mut self) {
+        // The client was dropped: reduce the number of clients. This lives on the
+        // shared `DropWrapper`, which drops once, when the last `StandaloneClient`
+        // clone goes. `StandaloneClient` is cloned out of the client wrapper on
+        // every command, so a decrement on `StandaloneClient` itself fired once per
+        // command, took the global telemetry write lock each time, and drove
+        // `total_clients` to zero after the first command.
+        Telemetry::decr_total_clients(1);
         for node in self.nodes.iter() {
             node.mark_as_dropped();
         }
@@ -111,13 +118,6 @@ impl Drop for DropWrapper {
 #[derive(Clone, Debug)]
 pub struct StandaloneClient {
     inner: Arc<DropWrapper>,
-}
-
-impl Drop for StandaloneClient {
-    fn drop(&mut self) {
-        // Client was dropped, reduce the number of clients
-        Telemetry::decr_total_clients(1);
-    }
 }
 
 pub enum StandaloneClientConnectionError {
@@ -935,7 +935,9 @@ impl StandaloneClient {
         // Mark command as sent for watchdog diagnostics
         cmd.watchdog_phase
             .store(redis::PHASE_SENT, std::sync::atomic::Ordering::Release);
-        let mut connection = reconnecting_connection.get_connection().await?;
+        // Shared (`Arc`) handle: no per-command `GlideConnection` clone, `state`
+        // mutex or connection-available wait while connected.
+        let connection = reconnecting_connection.get_shared_connection().await?;
         let result = connection.send_packed_command(cmd).await;
         match result {
             Err(err) if err.is_unrecoverable_error() => {
@@ -1031,23 +1033,36 @@ impl StandaloneClient {
     }
 
     pub async fn send_command(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
-        let Some(cmd_bytes) = Routable::command(cmd) else {
+        let name = Routable::command(cmd);
+        self.send_command_with_name(cmd, name.as_deref()).await
+    }
+
+    /// [`Self::send_command`] with the uppercased command name
+    /// (`Routable::command()` bytes, `None` iff `cmd` has no arguments) already
+    /// computed by the caller, so the `Client::send_command` path does not
+    /// allocate it again.
+    pub(crate) async fn send_command_with_name(
+        &mut self,
+        cmd: &redis::Cmd,
+        cmd_name: Option<&[u8]>,
+    ) -> RedisResult<Value> {
+        let Some(cmd_bytes) = cmd_name else {
             return self.send_request_to_single_node(cmd, false).await;
         };
 
         // Block write commands in read-only mode
-        if self.inner.read_only && !is_readonly_cmd(cmd_bytes.as_slice()) {
+        if self.inner.read_only && !is_readonly_cmd(cmd_bytes) {
             return Err(RedisError::from((
                 redis::ErrorKind::ReadOnly,
                 "write commands are not allowed in read-only mode",
             )));
         }
 
-        if RoutingInfo::is_all_nodes(cmd_bytes.as_slice()) {
-            let response_policy = ResponsePolicy::for_command(cmd_bytes.as_slice());
+        if RoutingInfo::is_all_nodes(cmd_bytes) {
+            let response_policy = ResponsePolicy::for_command(cmd_bytes);
             return self.send_request_to_all_nodes(cmd, response_policy).await;
         }
-        self.send_request_to_single_node(cmd, is_readonly_cmd(cmd_bytes.as_slice()))
+        self.send_request_to_single_node(cmd, is_readonly_cmd(cmd_bytes))
             .await
     }
 
@@ -1089,8 +1104,7 @@ impl StandaloneClient {
                     return;
                 }
 
-                let Some(mut connection) = reconnecting_connection.try_get_connection().await
-                else {
+                let Some(connection) = reconnecting_connection.try_get_connection().await else {
                     log_debug(
                         "StandaloneClient",
                         "heartbeat stopped while connection is reconnecting",
@@ -1272,7 +1286,7 @@ async fn get_connection_and_replication_info(
     )
     .await?;
 
-    let mut multiplexed_connection = match reconnecting_connection.get_connection().await {
+    let multiplexed_connection = match reconnecting_connection.get_connection().await {
         Ok(multiplexed_connection) => multiplexed_connection,
         Err(err) => {
             reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);

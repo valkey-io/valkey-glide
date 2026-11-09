@@ -987,6 +987,14 @@ impl Cmd {
         self.inflight_tracker = Some(tracker);
     }
 
+    /// Drop the inflight tracker, if any, releasing its slot once no other clone
+    /// of this command holds it. For a sender that holds the slot itself rather
+    /// than on the command, so a reused command does not keep a stale slot.
+    #[cfg(feature = "cluster-async")]
+    pub fn clear_inflight_tracker(&mut self) {
+        self.inflight_tracker = None;
+    }
+
     /// Mark the command as sent and record the resolved node address.
     /// Called from the routing layer after connection resolution.
     /// Zero heap allocation for addresses ≤63 bytes (inline storage).

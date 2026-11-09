@@ -447,11 +447,17 @@ impl Client {
         parse: fn(redis::Value) -> redis::RedisResult<glide_rdma::TransferReply>,
     ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
         let mut command = crate::rdma::protocol::redis_command(&command);
+        let cmd_name = super::CmdName::of(&command);
+        // Keep the in-flight slot on `command` until this function returns, past
+        // a revoke that ends the dispatch while the transfer may still be in
+        // flight, and past the recall below.
+        let mut permit = permit;
+        permit.attach_slot_to(&mut command);
         let reply = tokio::select! {
             // A reply that is ready wins over a revoke that is also ready: the
             // transfer did finish, so the caller should hear that it did.
             biased;
-            reply = self.dispatch(permit, &mut command, None) => Some(reply),
+            reply = self.dispatch(permit, &mut command, cmd_name, None) => Some(reply),
             () = loan.revoked() => None,
         };
         match reply {

@@ -2,6 +2,7 @@
 
 use super::rdma_connection::GlideConnection;
 use super::{NodeAddress, TlsMode};
+use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use futures_intrusive::sync::ManualResetEvent;
 use glide_logger::{log_debug, log_error, log_trace, log_warn};
@@ -141,7 +142,36 @@ enum ConnectionState {
 
 struct InnerReconnectingConnection {
     state: Mutex<ConnectionState>,
+    /// Lock-free mirror of `state` for the command path: `Some(conn)` exactly while
+    /// `state` is `Connected(conn)`. Every write to `state` updates this in the same
+    /// critical section (`InnerReconnectingConnection::new` and the two
+    /// transitions in `reconnect`), so a load after a transition sees it. A reader
+    /// that loaded the connection just before `reconnect` keeps using that `Arc`
+    /// for its one send, the same window as the per-command clone this replaces
+    /// (the send fails on the dead connection and is reported as before). It lets
+    /// [`ReconnectingConnection::get_shared_connection`] skip the
+    /// `ManualResetEvent` wait, the `state` mutex and the `GlideConnection` clone
+    /// on every command.
+    live: ArcSwapOption<GlideConnection>,
     backend: ConnectionBackend,
+}
+
+impl InnerReconnectingConnection {
+    fn new(state: ConnectionState, backend: ConnectionBackend) -> Self {
+        let live = match &state {
+            ConnectionState::Connected(connection) => {
+                ArcSwapOption::from_pointee(connection.clone())
+            }
+            ConnectionState::Reconnecting | ConnectionState::InitializedDisconnected => {
+                ArcSwapOption::empty()
+            }
+        };
+        Self {
+            state: Mutex::new(state),
+            live,
+            backend,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -313,10 +343,10 @@ async fn create_connection(
             );
             Telemetry::incr_total_connections(1);
             Ok(ReconnectingConnection {
-                inner: Arc::new(InnerReconnectingConnection {
-                    state: Mutex::new(ConnectionState::Connected(connection)),
-                    backend: connection_backend,
-                }),
+                inner: Arc::new(InnerReconnectingConnection::new(
+                    ConnectionState::Connected(connection),
+                    connection_backend,
+                )),
                 connection_options,
             })
         }
@@ -336,10 +366,10 @@ async fn create_connection(
                 ),
             );
             let connection = ReconnectingConnection {
-                inner: Arc::new(InnerReconnectingConnection {
-                    state: Mutex::new(ConnectionState::InitializedDisconnected),
-                    backend: connection_backend,
-                }),
+                inner: Arc::new(InnerReconnectingConnection::new(
+                    ConnectionState::InitializedDisconnected,
+                    connection_backend,
+                )),
                 connection_options,
             };
             connection.reconnect(ReconnectReason::CreateError);
@@ -463,6 +493,17 @@ impl ReconnectingConnection {
         }
     }
 
+    /// Command-path accessor: the live connection behind an `Arc`, without
+    /// cloning the `GlideConnection` or taking the `state` mutex. While
+    /// (re)connecting it falls back to [`Self::get_connection`]'s wait for the
+    /// connection-available signal, so waiting during a reconnect is unchanged.
+    pub(super) async fn get_shared_connection(&self) -> Result<Arc<GlideConnection>, RedisError> {
+        if let Some(connection) = self.inner.live.load_full() {
+            return Ok(connection);
+        }
+        self.get_connection().await.map(Arc::new)
+    }
+
     pub(super) async fn get_connection(&self) -> Result<GlideConnection, RedisError> {
         loop {
             self.inner.backend.connection_available_signal.wait().await;
@@ -484,6 +525,8 @@ impl ReconnectingConnection {
                 return;
             }
             self.inner.backend.connection_available_signal.reset();
+            // Clear the lock-free mirror in the same critical section as the state.
+            self.inner.live.store(None);
             *guard = ConnectionState::Reconnecting;
         };
         log_debug("reconnect", "starting");
@@ -585,7 +628,7 @@ impl ReconnectingConnection {
                 match get_multiplexed_connection(&client, &connection_clone.connection_options)
                     .await
                 {
-                    Ok(mut connection) => {
+                    Ok(connection) => {
                         if connection
                             .send_packed_command(&redis::cmd("PING"))
                             .await
@@ -602,6 +645,12 @@ impl ReconnectingConnection {
                                 .backend
                                 .connection_available_signal
                                 .set();
+                            // Publish to the lock-free mirror in the same critical
+                            // section as the state.
+                            connection_clone
+                                .inner
+                                .live
+                                .store(Some(Arc::new(connection.clone())));
                             *guard = ConnectionState::Connected(connection);
                         }
 

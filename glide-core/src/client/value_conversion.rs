@@ -2385,9 +2385,17 @@ fn ft_hybrid_option_tail_contains_flag(cmd: &Cmd, flag: &[u8]) -> bool {
 
 pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>> {
     let command = cmd.command()?;
+    expected_type_for_cmd_name(cmd, &command)
+}
 
+/// [`expected_type_for_cmd`] with the uppercased command name (`Routable::command()`
+/// bytes) already computed, so the `send_command` path does not allocate it again.
+pub(crate) fn expected_type_for_cmd_name<'a>(
+    cmd: &'a Cmd,
+    command: &[u8],
+) -> Option<ExpectedReturnType<'a>> {
     // TODO use enum to avoid mistakes
-    match command.as_slice() {
+    match command {
         b"CLIENT TRACKINGINFO" => Some(ExpectedReturnType::SingleOrMultiNode(
             &Some(ExpectedReturnType::ClientTrackingInfoReturnType),
             Some(&is_array),
