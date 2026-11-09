@@ -6704,7 +6704,10 @@ pub(crate) mod shared_client_tests {
                 SlotAddr::Master,
             )));
             admin
-                .send_command(redis::cmd("CLIENT").arg("PAUSE").arg(2000), Some(paused))
+                .send_command(
+                    redis::cmd("CLIENT").arg("PAUSE").arg(2000),
+                    Some(paused.clone()),
+                )
                 .await
                 .expect("pause one primary");
             release_client_async(pool_arc.clone(), client_id).await;
@@ -6720,6 +6723,61 @@ pub(crate) mod shared_client_tests {
             }
             // Let the pause lapse before later sections use that primary.
             tokio::time::sleep(Duration::from_millis(2100)).await;
+
+            // ── 2e. a WATCH borrow must be reused while a primary it never used is
+            // paused, and its WATCH must still be cleared. A-B: discarded when the
+            // release UNWATCH went to every primary ──
+            let (watched, same_slot) = (0..)
+                .map(|i| (format!("{{w{i}}}:watched"), format!("{{w{i}}}:other")))
+                .find(|(key, _)| get_slot(key.as_bytes()) > 10_923)
+                .expect("a key outside the paused primary's slots");
+            let watched_primary = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                Route::new(get_slot(watched.as_bytes()), SlotAddr::Master),
+            ));
+            borrowed(&pool_arc, client_id)
+                .send_command(redis::cmd("WATCH").arg(&watched), None)
+                .await
+                .expect("WATCH on a healthy shard");
+            admin
+                .send_command(redis::cmd("CLIENT").arg("PAUSE").arg(2000), Some(paused))
+                .await
+                .expect("pause another primary");
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock();
+                assert!(
+                    pool.drain_discarded_ids().is_empty(),
+                    "a WATCH borrow is resettable"
+                );
+                assert_eq!(
+                    pool.try_acquire(),
+                    client_id as i64,
+                    "the client must be re-idled"
+                );
+            }
+            tokio::time::sleep(Duration::from_millis(2100)).await;
+            admin
+                .send_command(redis::cmd("SET").arg(&watched).arg("changed"), None)
+                .await
+                .expect("touch the watched key from another connection");
+            let mut client = borrowed(&pool_arc, client_id);
+            client
+                .send_command(&mut redis::cmd("MULTI"), Some(watched_primary.clone()))
+                .await
+                .expect("MULTI");
+            client
+                .send_command(redis::cmd("SET").arg(&same_slot).arg("v"), None)
+                .await
+                .expect("queue SET");
+            let exec = client
+                .send_command(&mut redis::cmd("EXEC"), Some(watched_primary))
+                .await
+                .expect("EXEC");
+            assert_ne!(
+                exec,
+                Value::Nil,
+                "the WATCH must have been cleared on release"
+            );
 
             // ── 3. db drift must be restored (Valkey 9.0+ multi-db cluster) ──
             let mut version_probe = Client::new(connection_request.clone().into(), None)
