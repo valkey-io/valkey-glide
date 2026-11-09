@@ -375,7 +375,11 @@ class Server:
         if not self.is_dns_name:
             return [self.host]
 
-        addr_infos = socket.getaddrinfo(self.host, None, proto=socket.IPPROTO_TCP)
+        try:
+            addr_infos = socket.getaddrinfo(self.host, None, proto=socket.IPPROTO_TCP)
+        except socket.gaierror as e:
+            raise ValueError(f"Could not resolve host {self.host}: {e}") from e
+
         return list(dict.fromkeys(str(addr_info[4][0]) for addr_info in addr_infos))
 
 
