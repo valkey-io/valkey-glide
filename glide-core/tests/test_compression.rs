@@ -1537,7 +1537,7 @@ mod compression_tests {
         let error = redis::RedisError::from(server_error.clone());
         let message = glide_core::errors::error_message(&error);
         assert!(
-            message.contains("Decompression size limit exceeded"),
+            message.starts_with("Decompression error: Decompression size limit exceeded"),
             "unexpected message: {message}"
         );
         assert!(message.contains("maxDecompressedSize"), "{message}");

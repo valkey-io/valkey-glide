@@ -249,19 +249,27 @@ pub enum ServerErrorKind {
     PermissionDenied,
 }
 
+/// An error carried in place of a reply, as a `Value::ServerError`.
 #[derive(PartialEq, Debug, Clone, Display)]
 pub enum ServerError {
+    /// An error whose code is not one of [`ServerErrorKind`].
     ExtensionError {
+        /// The error code, the first word of a RESP error line.
         code: String,
+        /// The text after the code.
         detail: Option<String>,
     },
+    /// An error with a recognised code.
     KnownError {
+        /// The recognised code.
         kind: ServerErrorKind,
+        /// The text after the code.
         detail: Option<String>,
     },
 }
 
 impl ServerError {
+    /// Returns the error code, the first word of a RESP error line.
     pub fn err_code(&self) -> &str {
         match self {
             ServerError::ExtensionError { code, .. } => code,
@@ -283,6 +291,7 @@ impl ServerError {
         }
     }
 
+    /// Returns the text after the error code, if any.
     pub fn details(&self) -> Option<&str> {
         match self {
             ServerError::ExtensionError { detail, .. } => detail.as_ref().map(|str| str.as_str()),

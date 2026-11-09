@@ -144,6 +144,18 @@ impl From<SizeLimitExceeded> for redis::RedisError {
     }
 }
 
+/// The in-place form for a batch run with `raise_on_error` false. Built directly rather than
+/// through `RedisError`, whose `IoError` kind has no `ServerError` mapping and would surface
+/// as the code `IoError` in a message about a size limit.
+impl From<SizeLimitExceeded> for redis::ServerError {
+    fn from(limit: SizeLimitExceeded) -> Self {
+        redis::ServerError::ExtensionError {
+            code: "Decompression error".to_string(),
+            detail: Some(limit.to_string()),
+        }
+    }
+}
+
 impl CompressionError {
     pub fn compression_failed(
         backend: &str,
@@ -1153,9 +1165,8 @@ fn decompress_batch_reply(
     }
 }
 
-/// In-place batch reply for a size-limit error, converted like other per-command errors.
 fn size_limit_error_reply(limit: SizeLimitExceeded) -> redis::Value {
-    redis::Value::ServerError(redis::RedisError::from(limit).into())
+    redis::Value::ServerError(limit.into())
 }
 
 /// Attempts to decompress a batch response if a compression manager is provided.
