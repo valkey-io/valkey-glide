@@ -23,6 +23,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from enum import Enum
+from functools import cached_property
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -339,6 +340,37 @@ class Server:
     def set_primary(self, is_primary: bool):
         self.is_primary = is_primary
 
+    @cached_property
+    def bind_addresses(self) -> List[str]:
+        """The IP addresses to pass for the server to `--bind`."""
+        # Loopback hosts bind to both the IPv4 and IPv6 loopback addresses.
+        if self.host in (DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6, "localhost"):
+            return [DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6]
+
+        # Any other host binds to its IP addresses plus the IPv4 loopback, so that
+        # local and remote clients can connect. Remove duplicates because binding
+        # the same address twice makes the server fail with "Address already in use".
+        return list(dict.fromkeys(self._ip_addresses + [DEFAULT_HOST_IPV4]))
+
+    @cached_property
+    def cluster_create_address(self) -> str:
+        """The IP address to pass for the server to `--cluster create`."""
+        # `--cluster create` sends CLUSTER MEET with the address it is given, and
+        # servers before Redis/Valkey 7.0 accept only an IP address there.
+        return self._ip_addresses[0]
+
+    @cached_property
+    def _ip_addresses(self) -> List[str]:
+        """The server's IP addresses."""
+        try:
+            ipaddress.ip_address(self.host)
+            return [self.host]
+
+        # If host is not an IP address, return the resolved ones.
+        except ValueError:
+            addr_infos = socket.getaddrinfo(self.host, None, proto=socket.IPPROTO_TCP)
+            return list(dict.fromkeys(str(addr_info[4][0]) for addr_info in addr_infos))
+
 
 def print_servers_json(servers: List[Server]):
     """
@@ -401,35 +433,6 @@ def create_cluster_folder(path: str, prefix: str) -> str:
     logging.debug(f"## Creating cluster folder in {cluster_folder}")
     Path(cluster_folder).mkdir(exist_ok=True)
     return cluster_folder
-
-
-def get_bind_addresses(host: str) -> List[str]:
-    """
-    Returns the addresses a server should bind to for the given host.
-
-    Loopback hosts bind to both the IPv4 and IPv6 loopback addresses. Any other
-    host binds to its resolved addresses plus the IPv4 loopback, so that local
-    and remote clients can connect.
-
-    Args:
-        host (str): The host the server is started with.
-
-    Returns:
-        List[str]: The unique addresses to pass to `--bind`.
-    """
-    if host in (DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6, "localhost"):
-        return [DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6]
-
-    try:
-        addr_infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
-        resolved = [str(addr_info[4][0]) for addr_info in addr_infos]
-    except socket.gaierror:
-        logging.warning(f"Could not resolve host {host}; binding it as given")
-        resolved = [host]
-
-    # Remove duplicates because binding the same address
-    # twice makes the server fail with "Address already in use".
-    return list(dict.fromkeys(resolved + [DEFAULT_HOST_IPV4]))
 
 
 def build_loadmodule_args(module_path: str) -> List[str]:
@@ -522,7 +525,8 @@ def start_server(
         "0",
     ]
 
-    cmd_args.extend(["--bind", *get_bind_addresses(host)])
+    server = Server(host, port)
+    cmd_args.extend(["--bind", *server.bind_addresses])
 
     if cluster_mode:
         if cluster_node_timeout is not None:
@@ -562,8 +566,6 @@ def start_server(
         raise Exception(
             f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
         )
-
-    server = Server(host, port)
 
     # Read the process ID from the log file
     # Note that `p.pid` is not good here since we daemonize the process
@@ -723,7 +725,7 @@ def create_cluster(
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
 ):
-    endpoints = [f"{get_bind_addresses(server.host)[0]}:{server.port}" for server in servers]
+    endpoints = [f"{server.cluster_create_address}:{server.port}" for server in servers]
 
     tic = time.perf_counter()
     logging.debug("## Starting cluster creation...")
