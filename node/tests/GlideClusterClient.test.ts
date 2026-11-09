@@ -723,6 +723,35 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
+    it(
+        "info with a non-boolean allowPartialResults resolves and frees its callback slot",
+        async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const primaries = Object.keys(await client.info()).sort();
+
+            // Plain JavaScript can pass any value here.
+            const replies = await client.info({
+                allowPartialResults: 1 as unknown as boolean,
+            });
+            expect(Object.keys(replies).sort()).toEqual(primaries);
+
+            const slots = client as unknown as {
+                promiseCallbackFunctions: unknown[];
+                availableCallbackSlots: number[];
+            };
+            expect(
+                slots.promiseCallbackFunctions.length -
+                    slots.availableCallbackSlots.length,
+            ).toEqual(0);
+        },
+        TIMEOUT,
+    );
+
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `route by address reaches correct node_%p`,
         async (protocol) => {

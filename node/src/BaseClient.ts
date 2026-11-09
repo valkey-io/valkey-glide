@@ -2129,7 +2129,9 @@ export class BaseClient {
                 argsPointerLow,
                 spanPtr,
                 routeBytes,
-                options.allowPartialResults,
+                // A non-boolean from plain JS would throw in NAPI and leak the
+                // callback slot and the args vector.
+                !!options.allowPartialResults,
             );
 
             if (command.argsVecPointer) {
