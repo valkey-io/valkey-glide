@@ -745,6 +745,7 @@ async fn execute_batch(
     let decompressed = glide_core::compression::try_decompress_batch_response(
         result?,
         client.compression_manager().as_deref(),
+        raise_on_error,
     )?;
     Ok(decompressed)
 }
