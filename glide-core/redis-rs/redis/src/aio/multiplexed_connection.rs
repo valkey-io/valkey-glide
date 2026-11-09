@@ -130,9 +130,19 @@ impl<W: AsyncWrite> Sink<crate::cmd::SendBuf> for VectoredSink<W> {
             crate::cmd::SendBuf::Contiguous(buf) => {
                 if !buf.is_empty() {
                     *this.queued_bytes += buf.len();
-                    // from_owner: avoids Bytes::from(Vec)'s shrink-realloc
-                    // on excess capacity.
-                    this.queue.push_back(bytes::Bytes::from_owner(buf));
+                    // `Cmd::get_packed_command` reserves the exact packed
+                    // length, so its Vec has no spare capacity and
+                    // `Bytes::from` takes it over as a boxed slice: no
+                    // allocation. `from_owner` would allocate an owner box per
+                    // command. A Vec with spare capacity costs one header box
+                    // either way (`Bytes::from` allocates a `Shared` header
+                    // for it), so it keeps the existing `from_owner` path.
+                    let queued = if buf.len() == buf.capacity() {
+                        bytes::Bytes::from(buf)
+                    } else {
+                        bytes::Bytes::from_owner(buf)
+                    };
+                    this.queue.push_back(queued);
                 }
             }
             crate::cmd::SendBuf::Segmented(segments) => {
@@ -2621,5 +2631,54 @@ mod tests {
             f.abort();
         }
         driver.abort();
+    }
+
+    /// `VectoredSink` queues an exact-capacity `Contiguous` buffer through
+    /// `Bytes::from` (no allocation) and one with spare capacity through
+    /// `Bytes::from_owner`. Both must reach the writer byte-identical and in
+    /// order, interleaved with segmented sends.
+    #[tokio::test]
+    async fn test_vectored_sink_contiguous_exact_and_spare_capacity() {
+        let exact = crate::cmd("GET").arg("key").get_packed_command();
+        assert_eq!(exact.len(), exact.capacity());
+        let mut spare = Vec::with_capacity(64);
+        spare.extend_from_slice(b"*1\r\n$4\r\nPING\r\n");
+        assert!(spare.len() < spare.capacity());
+        let mut segmented_cmd = crate::cmd("SET");
+        segmented_cmd
+            .arg("k")
+            .arg_shared(bytes::Bytes::from(vec![b'v'; 8 * 1024]));
+        let segmented = segmented_cmd.get_packed_segments();
+
+        let mut expected = exact.clone();
+        expected.extend_from_slice(&spare);
+        expected.extend_from_slice(&segmented_cmd.get_packed_command());
+        expected.extend_from_slice(&exact);
+
+        let mut sink = VectoredSink::new(Vec::<u8>::new());
+        Pin::new(&mut sink)
+            .start_send(crate::cmd::SendBuf::Contiguous(exact.clone()))
+            .unwrap();
+        // The exact-capacity branch hands the Vec to `Bytes::from` (a unique,
+        // promotable `Bytes`); `from_owner` buffers never report unique.
+        assert!(sink.queue.back().unwrap().is_unique());
+        Pin::new(&mut sink)
+            .start_send(crate::cmd::SendBuf::Contiguous(spare))
+            .unwrap();
+        assert!(!sink.queue.back().unwrap().is_unique());
+        Pin::new(&mut sink)
+            .start_send(crate::cmd::SendBuf::Segmented(segmented))
+            .unwrap();
+        Pin::new(&mut sink)
+            .start_send(crate::cmd::SendBuf::Contiguous(exact))
+            .unwrap();
+        assert_eq!(sink.queued_bytes, expected.len());
+
+        futures_util::future::poll_fn(|cx| Pin::new(&mut sink).poll_flush(cx))
+            .await
+            .unwrap();
+        assert!(sink.queue.is_empty());
+        assert_eq!(sink.queued_bytes, 0);
+        assert_eq!(sink.writer, expected);
     }
 }

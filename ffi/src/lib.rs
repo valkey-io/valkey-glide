@@ -4498,9 +4498,11 @@ impl ResponseArena {
     /// Accepts anything convertible to `Bytes`; `Vec<u8>` converts zero-copy.
     ///
     /// The returned pointer aliases the (possibly shared) `Bytes` buffer —
-    /// for zero-copy `BulkString`s that is the decoded network frame, shared
-    /// by every other slice of the same response and recycled through
-    /// `buf_pool` after release. It is therefore read-only and valid only
+    /// for zero-copy `BulkString`s that is the buffer the decoder took the
+    /// frame from: for most frames up to 4 KiB, the connection's read buffer
+    /// itself, shared with other responses decoded from it; otherwise a copy
+    /// of the frame (recycled through `buf_pool` after release above 4 KiB),
+    /// shared by every slice of that frame. It is therefore read-only and valid only
     /// until the arena releases its strings (`return_to_pool`); see the
     /// `CommandResponse::string_value` contract.
     fn store_string(&mut self, data: impl Into<bytes::Bytes>) -> (*mut c_char, i64) {
