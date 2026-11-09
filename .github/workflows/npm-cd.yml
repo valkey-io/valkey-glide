@@ -235,6 +235,8 @@ jobs:
               working-directory: ./node/rust-client
               env:
                   RELEASE_VERSION: ${{ needs.get-build-parameters.outputs.release_version }}
+                  # Reported as lib-ver in CLIENT SETINFO; overrides the non-forced "unknown" in .cargo/config.toml.
+                  GLIDE_VERSION: ${{ needs.get-build-parameters.outputs.release_version }}
               run: |
                   mkdir -p ../build-ts
                   npm ci

@@ -2,7 +2,26 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 import { GlideClient, GlideClusterClient } from "@valkey/valkey-glide";
+import { readFileSync } from "fs";
 import { ValkeyCluster } from "../../TestUtils.js";
+
+async function checkClientInfo(client) {
+    // The package's "exports" map blocks importing its package.json, so read it from disk.
+    const packageJson = new URL(
+        "../package.json",
+        import.meta.resolve("@valkey/valkey-glide"),
+    );
+    const version = JSON.parse(readFileSync(packageJson, "utf8")).version;
+    const info = String(await client.customCommand(["CLIENT", "INFO"]));
+    for (const expected of ["lib-name=GlideJS", `lib-ver=${version}`]) {
+        if (!info.split(/\s+/).includes(expected)) {
+            throw new Error(
+                `Expected CLIENT INFO to contain ${expected}, got ${info}`,
+            );
+        }
+    }
+    console.log(`Client info has lib-name=GlideJS lib-ver=${version}`);
+}
 
 async function runCommands(client) {
     console.log("Executing commands");
@@ -92,6 +111,7 @@ async function clusterTests() {
         });
         console.log("Connected to cluster");
 
+        await checkClientInfo(client);
         await runCommands(client);
 
         await closeClientAndCluster(client, valkeyCluster);
@@ -125,6 +145,8 @@ async function standaloneTests() {
         });
         const client = await GlideClient.createClient({ addresses: addresses });
         console.log("Connected to Cluster");
+
+        await checkClientInfo(client);
 
         await closeClientAndCluster(client, valkeyCluster);
         console.log("Done");
