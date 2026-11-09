@@ -1113,6 +1113,72 @@ mod tests {
         assert_eq!(cmd_name_from_bytes(b"unknowncmd"), "UNKNOWN");
     }
 
+    // ── Global Instance ──────────────────────────────────────────────────
+
+    #[tokio::test]
+    #[serial]
+    async fn repeated_calls_reuse_the_same_instance() {
+        let before = TimeoutWatchdog::global();
+        let after = TimeoutWatchdog::global();
+        assert!(
+            std::ptr::eq(before, after),
+            "global() must not replace a live instance"
+        );
+
+        let rx = after.register(Duration::from_millis(50), Instant::now());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), rx)
+                .await
+                .is_ok(),
+            "watchdog must still fire"
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn concurrent_global_calls_converge_on_one_instance() {
+        const THREADS: usize = 8;
+
+        // Clear the slot so every thread races to start the global. The old
+        // instance is leaked, as in a forked child.
+        TimeoutWatchdog::global();
+        let previous = global_slot().swap(ptr::null_mut(), Ordering::AcqRel);
+
+        let barrier = Arc::new(std::sync::Barrier::new(THREADS));
+        // Addresses, because `*const T` is not `Send`.
+        let handed_out: Vec<usize> = (0..THREADS)
+            .map(|_| {
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    TimeoutWatchdog::global() as *const TimeoutWatchdog as usize
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|worker| worker.join().expect("worker panicked"))
+            .collect();
+
+        let elected = handed_out[0];
+        assert!(
+            handed_out.iter().all(|got| *got == elected),
+            "concurrent global() calls handed out more than one instance"
+        );
+        assert_ne!(
+            elected, previous as usize,
+            "global() must start a new instance after the slot is cleared"
+        );
+
+        let elected = unsafe { &*(elected as *const TimeoutWatchdog) };
+        let rx = elected.register(Duration::from_millis(50), Instant::now());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), rx)
+                .await
+                .is_ok(),
+            "the elected watchdog must fire"
+        );
+    }
+
     // ── Fork Safety (reinit) ─────────────────────────────────────────────
 
     /// Run `child` in a forked child and assert it returned true. The child
