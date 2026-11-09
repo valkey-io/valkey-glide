@@ -4069,6 +4069,57 @@ mod scope_pool_tests {
         );
     }
 
+    /// A clean borrow released with its circuit breaker open must be reused with the
+    /// breaker still open, so it keeps protecting callers. A borrow that sent MULTI
+    /// is discarded instead: the breaker refuses the DISCARD and the transaction may
+    /// still be open. A-B: the clean one was discarded when release always sent
+    /// DISCARD.
+    #[tokio::test]
+    async fn release_keeps_a_clean_client_whose_breaker_is_open() {
+        for multi_sent in [false, true] {
+            let server = TestServer::start();
+            wait_for_server_ready(server.port).await;
+            let mut request = request_for(&[server.port]);
+            request.client_circuit_breaker = Some(crate::client::ClientCircuitBreakerConfig {
+                window_size_ms: 60_000,
+                failure_rate_threshold: 0.5,
+                min_errors: 1,
+                open_timeout_ms: 60_000,
+                count_timeouts: true,
+                consecutive_successes: 1,
+            });
+            let mut client = crate::client::Client::new(request, None)
+                .await
+                .expect("client connects");
+            let (pool_arc, client_id) = pool_with_borrowed(&client);
+            if multi_sent {
+                client
+                    .send_command(&mut redis::cmd("MULTI"), None)
+                    .await
+                    .expect("MULTI");
+            }
+            client.trip_circuit_breaker_for_test();
+
+            super::release_client_async(pool_arc.clone(), client_id).await;
+            let mut pool = pool_arc.lock();
+            let reused = !multi_sent;
+            assert_eq!(
+                pool.idle_count(),
+                u32::from(reused),
+                "multi_sent={multi_sent}"
+            );
+            if reused {
+                assert!(pool.drain_discarded_ids().is_empty());
+                assert!(
+                    !client.is_circuit_breaker_healthy(),
+                    "the re-idled client must keep its open breaker"
+                );
+            } else {
+                assert_eq!(pool.drain_discarded_ids(), vec![client_id]);
+            }
+        }
+    }
+
     /// A MULTI or WATCH that read-only mode rejects locally never reached the server,
     /// so release must still reuse the client. A-B: discarded when the rejected
     /// command was tracked as sent.

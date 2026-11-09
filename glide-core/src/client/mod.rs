@@ -3548,6 +3548,15 @@ impl Client {
         let _ = self.cert_material.set(material);
     }
 
+    /// Open the circuit breaker the way failing commands do.
+    #[cfg(test)]
+    pub(crate) fn trip_circuit_breaker_for_test(&self) {
+        let cb = self.circuit_breaker.as_ref().expect("breaker configured");
+        while cb.is_healthy() {
+            cb.on_result(true, Some("Timeout"), 0);
+        }
+    }
+
     /// Mark the borrow as having sent MULTI, as `track_transaction_state` does.
     #[cfg(test)]
     pub(crate) fn set_multi_sent_for_test(&self, sent: bool) {
