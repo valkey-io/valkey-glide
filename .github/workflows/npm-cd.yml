@@ -239,9 +239,15 @@ jobs:
               working-directory: ./node/rust-client
               env:
                   TARGET: ${{ matrix.TARGET }}
+                  RELEASE_VERSION: ${{ needs.get-build-parameters.outputs.release_version }}
+                  # Reported as lib-ver in CLIENT SETINFO; overrides the non-forced "unknown" in .cargo/config.toml.
+                  GLIDE_VERSION: ${{ needs.get-build-parameters.outputs.release_version }}
               run: |
                   mkdir -p ../build-ts
                   npm ci
+
+                  # napi build bakes this version into native.js; it must match the published platform packages.
+                  npm pkg set version="${RELEASE_VERSION}"
 
                   if [[ "${{ matrix.OS }}" == "windows" ]]; then
                     # Windows: native build, no cross-compilation needed
@@ -467,16 +473,6 @@ jobs:
 
                   echo "Packages published successfully"
 
-              # Delete artifacts if not published
-            - name: Delete artifacts
-              if: ${{ always() && needs.get-build-parameters.outputs.should_publish == 'false' }}
-              uses: geekyeggo/delete-artifact@54ab544f12cdb7b71613a16a2b5a37a9ade990af # v2
-              with:
-                  name: |
-                      artifacts-*
-                      js-files-${{ github.run_id }}
-                  failOnError: false
-
     test-published-release:
         needs: [get-build-parameters, prepare-and-publish]
         # Only run tests if the publish was successful
@@ -611,6 +607,8 @@ jobs:
                       echo "Attempt ${attempt}/${MAX_ATTEMPTS}: version '${INSTALLED_VERSION:-none}' / native module not resolvable yet (likely npm registry propagation). Retrying in ${DELAY}s..."
                       sleep "${DELAY}"
                   done
+                  # Smoke test NAPI version check
+                  NAPI_RS_ENFORCE_VERSION_CHECK=1 node -e "require('@valkey/valkey-glide')"
                   npm run build:utils
                   npm test
 
