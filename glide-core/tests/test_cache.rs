@@ -1826,22 +1826,65 @@ pub(crate) mod test_cache {
                 .await
                 .unwrap();
 
-            // Populate cache
-            let mut get_cmd = redis::Cmd::new();
-            get_cmd.arg("GET").arg(&key);
-            test_basics
-                .client
-                .send_command(&mut get_cmd, None)
-                .await
-                .unwrap();
+            // In cluster mode the key's replica also tracks this client (BCAST) and sends its own
+            // invalidation for the SET above once it has replicated it. If that invalidation
+            // arrives after the GET below was sent, it cancels the fill or evicts the entry. How
+            // long after the SET reply it arrives depends on replication lag, not on this client.
+            // So wait for it: WAIT returns once the replica has the SET, and a PING to every node
+            // then returns after each node's earlier invalidation on the same connection.
+            if use_cluster {
+                use redis::cluster_routing::{
+                    MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
+                };
+                let mut wait_cmd = redis::Cmd::new();
+                wait_cmd.arg("WAIT").arg(1).arg(1000);
+                let primary = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                    Route::new(get_slot(key.as_bytes()), SlotAddr::Master),
+                ));
+                assert_eq!(
+                    test_basics
+                        .client
+                        .send_command(&mut wait_cmd, Some(primary))
+                        .await
+                        .unwrap(),
+                    Value::Int(1),
+                    "the key's replica should acknowledge the SET"
+                );
+                let mut ping = redis::Cmd::new();
+                ping.arg("PING");
+                test_basics
+                    .client
+                    .send_command(
+                        &mut ping,
+                        Some(RoutingInfo::MultiNode((
+                            MultipleNodeRoutingInfo::AllNodes,
+                            None,
+                        ))),
+                    )
+                    .await
+                    .unwrap();
+            }
 
-            // Verify cache has the entry
-            let entry_count_before = test_basics.client.cache_entry_count().unwrap();
-            assert_eq!(
-                entry_count_before,
-                Value::Int(1),
-                "cache should have entries before flush"
-            );
+            // Populate cache. The node connections that are not used for commands (management
+            // connections) also receive the invalidations, unordered with the PINGs above, so
+            // repeat the GET until its entry is still there a little later.
+            tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                loop {
+                    let mut get_cmd = redis::Cmd::new();
+                    get_cmd.arg("GET").arg(&key);
+                    test_basics
+                        .client
+                        .send_command(&mut get_cmd, None)
+                        .await
+                        .unwrap();
+                    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                    if test_basics.client.cache_entry_count().unwrap() == Value::Int(1) {
+                        break;
+                    }
+                }
+            })
+            .await
+            .expect("cache should have entries before flush");
 
             // FLUSHDB triggers a nil invalidation push in BCAST mode, flushing the entire cache
             let mut flushdb = redis::Cmd::new();

@@ -41,6 +41,15 @@ const VECTORED_SINK_HIGH_WATERMARK: usize = 512 * 1024;
 /// Max iovec entries per `write_vectored` call (typical kernel UIO_MAXIOV is
 /// 1024; 64 keeps the stack array small while amortizing syscalls well).
 const MAX_WRITE_SLICES: usize = 64;
+/// Write coalescing (`PipelineSink::poll_flush`): a flush of fewer requests than this first yields
+/// once so concurrent producers can join it.
+const COALESCE_MAX_BATCH: usize = 16;
+
+/// Write coalescing is on unless `GLIDE_PIPELINE_COALESCE=0` (read once).
+fn coalesce_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("GLIDE_PIPELINE_COALESCE").map_or(true, |v| v != "0"))
+}
 
 pin_project! {
     /// Send-side zero-copy sink: queues the segments of packed commands and
@@ -298,6 +307,11 @@ pin_project! {
         response_sync_lost: bool,
         cache: Option<Arc<dyn GlideCache>>,
         progress: Arc<AtomicU64>,
+        // Write coalescing (see `PipelineSink::poll_flush`): requests accepted since the last
+        // completed flush, and the one-shot yield taken before flushing a small batch.
+        unflushed: usize,
+        coalesce_yield: Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
+        coalesce_yielded: bool,
     }
 
         impl<T> PinnedDrop for PipelineSink<T> {
@@ -341,6 +355,9 @@ where
             response_sync_lost: false,
             cache,
             progress,
+            unflushed: 0,
+            coalesce_yield: None,
+            coalesce_yielded: false,
         }
     }
 
@@ -662,6 +679,7 @@ where
                 };
 
                 self_.in_flight.push_back(entry);
+                *self_.unflushed += 1;
                 Ok(())
             }
             Err(err) => {
@@ -675,6 +693,48 @@ where
         mut self: Pin<&mut Self>,
         cx: &mut task::Context,
     ) -> Poll<Result<(), Self::Error>> {
+        // Write coalescing. When requests reach this writer from many tasks at once (the cluster
+        // caller-task fast path: up to one producer per in-flight request instead of the single
+        // cluster event loop), the channel is often momentarily empty after each push, so a
+        // flush would carry ~1 command: one TLS record and one write syscall per request, and a
+        // server that answers each read at once keeps it that way (measured: 0.83 write
+        // syscalls / GET and 1.5 GETs per server read, vs 0.08 and 17 through the event loop).
+        // So before flushing a SMALL batch, yield once and let other producers enqueue;
+        // `Forward` then drains the channel again before this flush. Large batches flush at
+        // once; at most one yield per flush; nothing is ever held back.
+        //
+        // Only when other requests are awaiting replies (`in_flight` holds more than the
+        // unflushed ones), which is when other producers are likely to be sending too. A single
+        // sequential caller (typical for standalone, management and pubsub connections at low
+        // load) does not yield while its previous replies have all arrived. Entries whose
+        // callers gave up stay in `in_flight` until their late replies arrive, and count too.
+        //
+        // Cost of a yield: `tokio::task::yield_now` defers the wake until the worker has run its
+        // other ready tasks. On the multi-thread runtime deferred wakes run when the worker next
+        // polls the I/O driver: with a zero timeout when it has nothing else to run, or at the
+        // latest after `event_interval` (61) task polls when busy. Then a self-wake goes round
+        // `Forward` once more. That is two extra writer polls, during which replies are not
+        // read, and one `Box`.
+        if *self.as_mut().project().unflushed > 0 && coalesce_enabled() {
+            let this = self.as_mut().project();
+            if !*this.coalesce_yielded
+                && *this.unflushed < COALESCE_MAX_BATCH
+                && this.in_flight.len() > *this.unflushed
+            {
+                let fut = this
+                    .coalesce_yield
+                    .get_or_insert_with(|| Box::pin(tokio::task::yield_now()));
+                if fut.as_mut().poll(cx).is_pending() {
+                    return Poll::Pending;
+                }
+                // The producers had their turn: go round `Forward` once more so it pulls what
+                // they enqueued, then flush (this flag lets the next call through).
+                *this.coalesce_yield = None;
+                *this.coalesce_yielded = true;
+                cx.waker().wake_by_ref();
+                return Poll::Pending;
+            }
+        }
         let flush_result = self
             .as_mut()
             .project()
@@ -684,6 +744,9 @@ where
                 self.as_mut().send_result(Err(err));
             })?;
         if flush_result.is_ready() {
+            let this = self.as_mut().project();
+            *this.unflushed = 0;
+            *this.coalesce_yielded = false;
             self.poll_read(cx)
         } else {
             // Flush is blocked (TCP send buffer full). Drain incoming responses
@@ -2621,5 +2684,233 @@ mod tests {
             f.abort();
         }
         driver.abort();
+    }
+
+    /// Replies a [`FlushRecordingSink`] holds back while `hold` is set.
+    #[derive(Default)]
+    struct HeldReplies {
+        hold: bool,
+        count: usize,
+    }
+
+    /// Answers every command with `+OK`, at once unless replies are held (then the test sends
+    /// them later), and records how many commands each non-empty flush carried. Notifies
+    /// `on_send` when it accepts a command.
+    struct FlushRecordingSink {
+        resp_tx: mpsc::UnboundedSender<RedisResult<Value>>,
+        resp_rx: mpsc::UnboundedReceiver<RedisResult<Value>>,
+        unflushed: usize,
+        flushes: Arc<std::sync::Mutex<Vec<usize>>>,
+        on_send: Arc<tokio::sync::Notify>,
+        held: Arc<std::sync::Mutex<HeldReplies>>,
+    }
+
+    impl FlushRecordingSink {
+        fn new() -> (Self, FlushRecordingHandles) {
+            let (resp_tx, resp_rx) = mpsc::unbounded_channel();
+            let handles = FlushRecordingHandles {
+                resp_tx: resp_tx.clone(),
+                flushes: Default::default(),
+                on_send: Default::default(),
+                held: Default::default(),
+            };
+            let sink = Self {
+                resp_tx,
+                resp_rx,
+                unflushed: 0,
+                flushes: handles.flushes.clone(),
+                on_send: handles.on_send.clone(),
+                held: handles.held.clone(),
+            };
+            (sink, handles)
+        }
+    }
+
+    /// The test's side of a [`FlushRecordingSink`].
+    struct FlushRecordingHandles {
+        resp_tx: mpsc::UnboundedSender<RedisResult<Value>>,
+        flushes: Arc<std::sync::Mutex<Vec<usize>>>,
+        on_send: Arc<tokio::sync::Notify>,
+        held: Arc<std::sync::Mutex<HeldReplies>>,
+    }
+
+    impl FlushRecordingHandles {
+        fn hold_replies(&self) {
+            self.held.lock().unwrap().hold = true;
+        }
+
+        fn held_replies(&self) -> usize {
+            self.held.lock().unwrap().count
+        }
+
+        /// Sends the replies held so far, in order, and answers later commands at once.
+        fn release_replies(&self) {
+            let mut held = self.held.lock().unwrap();
+            held.hold = false;
+            for _ in 0..std::mem::take(&mut held.count) {
+                let _ = self.resp_tx.send(Ok(Value::Okay));
+            }
+        }
+    }
+
+    /// Counts the polls of the future it wraps (here: the pipeline's writer task).
+    struct CountPolls<F> {
+        inner: Pin<Box<F>>,
+        polls: Arc<AtomicU64>,
+    }
+
+    impl<F: Future> Future for CountPolls<F> {
+        type Output = F::Output;
+        fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<F::Output> {
+            self.polls.fetch_add(1, Ordering::Relaxed);
+            self.inner.as_mut().poll(cx)
+        }
+    }
+
+    fn ping() -> Vec<u8> {
+        crate::cmd("PING").get_packed_command()
+    }
+
+    impl Stream for FlushRecordingSink {
+        type Item = RedisResult<Value>;
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            self.get_mut().resp_rx.poll_recv(cx)
+        }
+    }
+
+    impl Sink<Vec<u8>> for FlushRecordingSink {
+        type Error = RedisError;
+
+        fn poll_ready(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn start_send(self: Pin<&mut Self>, _item: Vec<u8>) -> Result<(), Self::Error> {
+            let this = self.get_mut();
+            this.unflushed += 1;
+            let mut held = this.held.lock().unwrap();
+            if held.hold {
+                held.count += 1;
+            } else {
+                let _ = this.resp_tx.send(Ok(Value::Okay));
+            }
+            drop(held);
+            this.on_send.notify_one();
+            Ok(())
+        }
+
+        fn poll_flush(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            let this = self.get_mut();
+            if this.unflushed > 0 {
+                this.flushes.lock().unwrap().push(this.unflushed);
+                this.unflushed = 0;
+            }
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_close(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    async fn send_ping(mut pipeline: Pipeline<Vec<u8>>) -> RedisResult<Value> {
+        pipeline
+            .send_single(ping(), Duration::from_secs(5), false, false)
+            .await
+    }
+
+    /// With a request already waiting for its reply (so more than one producer is active), a
+    /// small flush yields once and a sender that becomes runnable meanwhile joins it.
+    #[tokio::test]
+    async fn test_small_flush_with_requests_outstanding_yields_so_a_concurrent_sender_joins_it() {
+        if !coalesce_enabled() {
+            return; // GLIDE_PIPELINE_COALESCE=0 in this environment
+        }
+        let (sink, handles) = FlushRecordingSink::new();
+        let (pipeline, driver) = Pipeline::new_with_buffer_size(sink, None, None, 50);
+        let driver = tokio::spawn(driver);
+
+        // An outstanding request: flushed alone (nothing else in flight), reply held.
+        handles.hold_replies();
+        let outstanding = tokio::spawn(send_ping(pipeline.clone()));
+        handles.on_send.notified().await;
+
+        // The third sender becomes runnable only once the writer has accepted the second
+        // command, i.e. after the writer found its channel empty. With a request outstanding
+        // the writer yields before flushing, the third sender enqueues, and one flush carries
+        // both.
+        let third = tokio::spawn({
+            let pipeline = pipeline.clone();
+            let on_send = handles.on_send.clone();
+            async move {
+                on_send.notified().await;
+                send_ping(pipeline).await
+            }
+        });
+        let second = tokio::spawn(send_ping(pipeline.clone()));
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while handles.held_replies() < 3 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("all three commands should reach the sink");
+        handles.release_replies();
+
+        for request in [outstanding, second, third] {
+            assert_eq!(request.await.unwrap(), Ok(Value::Okay));
+        }
+        assert_eq!(*handles.flushes.lock().unwrap(), vec![1, 2]);
+
+        drop(pipeline);
+        let _ = driver.await;
+    }
+
+    /// One request at a time (a single sequential caller, as on a standalone, management or
+    /// pubsub connection at low load): no flush yields, so a request costs the writer the same
+    /// polls as without coalescing. Measures the writer polls per request.
+    #[tokio::test]
+    async fn test_sequential_requests_do_not_yield_before_flushing() {
+        const REQUESTS: u64 = 100;
+        let (sink, handles) = FlushRecordingSink::new();
+        let (pipeline, driver) = Pipeline::new_with_buffer_size(sink, None, None, 50);
+        let polls = Arc::new(AtomicU64::new(0));
+        let driver = tokio::spawn(CountPolls {
+            inner: Box::pin(driver),
+            polls: polls.clone(),
+        });
+        // Let the writer reach its idle state before counting.
+        send_ping(pipeline.clone()).await.unwrap();
+        let before = polls.load(Ordering::Relaxed);
+
+        for _ in 0..REQUESTS {
+            assert_eq!(send_ping(pipeline.clone()).await, Ok(Value::Okay));
+        }
+
+        let per_request = (polls.load(Ordering::Relaxed) - before) as f64 / REQUESTS as f64;
+        println!("writer polls per sequential request: {per_request:.2}");
+        assert_eq!(
+            *handles.flushes.lock().unwrap(),
+            vec![1; REQUESTS as usize + 1]
+        );
+        // Measured on this (current-thread) test runtime: 2.00 writer polls per request with
+        // `GLIDE_PIPELINE_COALESCE=0` and with coalescing gated on outstanding requests; 3.00
+        // when every small flush yields.
+        assert!(
+            per_request < 2.5,
+            "{per_request:.2} writer polls per sequential request (2.00 without a flush yield)"
+        );
+
+        drop(pipeline);
+        let _ = driver.await;
     }
 }
