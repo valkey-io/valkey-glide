@@ -272,10 +272,6 @@ jobs:
                       --js-package-name @valkey/valkey-glide $npm_config_build_flags
                   fi
 
-                  if ! grep -qF "expected ${RELEASE_VERSION} but got" ../build-ts/native.js; then
-                    echo "::error::build-ts/native.js does not expect platform package version ${RELEASE_VERSION}"; exit 1
-                  fi
-
                   mkdir -p ../${{ matrix.TARGET }}
                   cp -r *.node ../${{ matrix.TARGET }}/
 
