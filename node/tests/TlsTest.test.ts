@@ -5,6 +5,7 @@
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
+    ClosingError,
     GlideClient,
     GlideClusterClient,
     Logger,
@@ -188,6 +189,25 @@ describe("tls GlideClient", () => {
 
             const result = await client.ping();
             expect(result.toString()).toBe("PONG");
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "Standalone client creation rejects with ClosingError when the server certificate is untrusted",
+        async () => {
+            // The test servers use a self-signed CA that the default trust store lacks.
+            const created = GlideClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+                useTLS: true,
+                advancedConfiguration: { connectionTimeout: 1000 },
+            });
+
+            await expect(created).rejects.toThrow(ClosingError);
+            await expect(created).rejects.toThrow(/^Failed to create client: /);
         },
         TIMEOUT,
     );

@@ -1450,6 +1450,16 @@ pub fn get_provider_direct_open_handle_count() -> u32 {
     PROVIDER_DIRECT_OPEN_HANDLE_COUNT.load(Ordering::SeqCst) as u32
 }
 
+/// napi status for a failed `Client::new`: `InvalidArg` if `is_configuration()` (as for the parse
+/// and `credential_provider_key` errors), else `Unknown`. TS: `ConfigurationError` / `ClosingError`.
+pub(crate) fn client_creation_status(error: &ConnectionError) -> Status {
+    if error.is_configuration() {
+        Status::InvalidArg
+    } else {
+        Status::Unknown
+    }
+}
+
 /// Creates a new direct NAPI client connection with response buffering.
 ///
 /// This function creates a Client using the glide-core library and wraps it
@@ -1575,7 +1585,7 @@ pub fn create_direct_client<'a>(
                 // deferred settlement is queued.
                 drop(credential_provider_claim);
                 deferred.reject(napi::Error::new(
-                    Status::Unknown,
+                    client_creation_status(&err),
                     format!("Failed to create client: {err}"),
                 ));
                 // Release pool reference since client creation failed

@@ -37,3 +37,25 @@ export class ConnectionError extends RequestError {}
 export class ConfigurationError extends RequestError {}
 
 export class CircuitBreakerError extends RequestError {}
+
+/**
+ * @internal
+ * Maps a native client or pool creation failure to a `ValkeyError` with the same message:
+ * {@link ConfigurationError} for napi code `InvalidArg` (invalid connection request or pool
+ * configuration), else {@link ClosingError}.
+ */
+export function toClientCreationError(error: unknown): ValkeyError {
+    if (error instanceof ValkeyError) {
+        return error;
+    }
+
+    // Duck-typed: native errors may come from another realm (e.g. Jest VM).
+    const { message, code } =
+        typeof error === "object" && error !== null
+            ? (error as { message?: unknown; code?: unknown })
+            : { message: error, code: undefined };
+
+    return code === "InvalidArg"
+        ? new ConfigurationError(String(message))
+        : new ClosingError(String(message));
+}

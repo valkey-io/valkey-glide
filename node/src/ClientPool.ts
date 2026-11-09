@@ -31,6 +31,7 @@
 import type { BaseClient, BaseClientConfiguration } from "./BaseClient";
 import { GlideClient } from "./GlideClient";
 import type { GlideClientConfiguration } from "./GlideClient";
+import { toClientCreationError } from "./Errors";
 import { GlideClusterClient } from "./GlideClusterClient";
 import type { GlideClusterClientConfiguration } from "./GlideClusterClient";
 import { clearScopeConnectionRequest } from "./ScopeInternal";
@@ -121,6 +122,10 @@ export class ClientPool {
      * Warms up `minIdle` real connections in the background (via Rust).
      * The returned Promise resolves after the first connection succeeds
      * (connectivity validation) and rejects on first-connection failure.
+     *
+     * @throws {ConfigurationError} if the core rejects the pool configuration or connection request.
+     * @throws {ClosingError} if the first connection fails to connect, authenticate, or otherwise
+     *     set up the connection.
      */
     static async create(
         clientConfig: BaseClientConfiguration,
@@ -194,7 +199,7 @@ export class ClientPool {
                 removeAddressResolver(resolverKey);
             }
 
-            throw e;
+            throw toClientCreationError(e);
         }
 
         return new ClientPool(
