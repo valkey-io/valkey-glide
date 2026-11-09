@@ -1381,6 +1381,19 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
+     * Closes the GLIDE client of a connection the pool destroys after {@link #close()} already ran.
+     * {@link #close()} hands a pooled connection back to the pool (for example as broken) without
+     * closing its GLIDE client, so the pool must close it here.
+     *
+     * @throws ExecutionException if closing the GLIDE client fails
+     */
+    void closeGlideClientForDestroy() throws ExecutionException {
+        if (glideClient != null) {
+            glideClient.close();
+        }
+    }
+
+    /**
      * If this Jedis is pooled and the failure indicates the underlying client is unusable, mark
      * {@link #isBroken()} for correct pool invalidation on {@link #close()}.
      */

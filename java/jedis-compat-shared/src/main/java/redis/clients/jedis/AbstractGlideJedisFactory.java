@@ -87,16 +87,18 @@ public abstract class AbstractGlideJedisFactory<J extends AbstractGlideJedis>
             return;
         }
         jedis.detachFromPoolForDestroy();
-        if (!jedis.isClosed()) {
-            try {
+        try {
+            if (jedis.isClosed()) {
+                jedis.closeGlideClientForDestroy();
+            } else {
                 jedis.close();
-            } catch (Exception e) {
-                Logger.log(
-                        Logger.Level.WARN,
-                        "GlideJedisFactory",
-                        "Error closing Jedis connection during destroy",
-                        e);
             }
+        } catch (Exception e) {
+            Logger.log(
+                    Logger.Level.WARN,
+                    "GlideJedisFactory",
+                    "Error closing Jedis connection during destroy",
+                    e);
         }
     }
 

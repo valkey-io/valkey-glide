@@ -29,9 +29,10 @@ import redis.clients.jedis.exceptions.JedisException;
 
 /**
  * Verifies that every connection borrowed from the Jedis 4.x {@link JedisPool} starts on the pool's
- * configured database, following upstream Jedis {@code JedisFactory.activateObject}, and that a
- * connection whose SELECT outcome is unknown is destroyed instead of lent again. The GLIDE client
- * is mocked, so no server is needed.
+ * configured database, following upstream Jedis {@code JedisFactory.activateObject}, that a
+ * connection whose SELECT outcome is unknown is destroyed instead of lent again, and that a
+ * destroyed connection closes its GLIDE client exactly once. The GLIDE client is mocked, so no
+ * server is needed.
  */
 class JedisPoolDatabaseRestoreTest {
 
@@ -122,12 +123,12 @@ class JedisPoolDatabaseRestoreTest {
     }
 
     @Test
-    void pool_destroys_connection_when_select_times_out() {
+    void pool_destroys_connection_when_select_times_out() throws Exception {
         assertSelectFailureDestroysConnection(new TimeoutException("Request timed out"));
     }
 
     @Test
-    void pool_destroys_connection_when_select_loses_connection() {
+    void pool_destroys_connection_when_select_loses_connection() throws Exception {
         assertSelectFailureDestroysConnection(new ConnectionException("Connection lost"));
     }
 
@@ -151,6 +152,29 @@ class JedisPoolDatabaseRestoreTest {
     }
 
     @Test
+    void pool_closes_glide_client_once_when_broken_connection_is_destroyed() throws Exception {
+        GlideClient client = clientAcceptingSelect();
+        try (JedisPool pool = new JedisPool(singleConnection(), new MockClientFactory(client))) {
+            Jedis jedis = pool.getResource();
+            jedis.setBroken(true);
+            jedis.close();
+            assertEquals(1, pool.getDestroyedCount());
+        }
+        verify(client).close();
+    }
+
+    @Test
+    void pool_closes_glide_client_once_on_pool_close_after_normal_return() throws Exception {
+        GlideClient client = clientAcceptingSelect();
+        try (JedisPool pool = new JedisPool(singleConnection(), new MockClientFactory(client))) {
+            Jedis jedis = pool.getResource();
+            jedis.close();
+            verify(client, never()).close();
+        }
+        verify(client).close();
+    }
+
+    @Test
     void select_keeps_interrupt_flag_when_interrupted() {
         GlideClient client = mock(GlideClient.class);
         when(client.select(anyLong())).thenReturn(new CompletableFuture<>());
@@ -166,7 +190,8 @@ class JedisPoolDatabaseRestoreTest {
         }
     }
 
-    private static void assertSelectFailureDestroysConnection(GlideException failure) {
+    private static void assertSelectFailureDestroysConnection(GlideException failure)
+            throws Exception {
         GlideClient failingClient = mock(GlideClient.class);
         when(failingClient.select(anyLong())).thenReturn(failedSelect(failure));
         GlideClient freshClient = clientAcceptingSelect();
@@ -184,6 +209,7 @@ class JedisPoolDatabaseRestoreTest {
             assertEquals(2, pool.getCreatedCount());
             assertEquals(1, pool.getDestroyedCount());
         }
+        verify(failingClient).close();
     }
 
     private static GlideJedisFactory newFactory() {
