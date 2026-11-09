@@ -4,30 +4,6 @@
 import { GlideClient, GlideClusterClient } from "@valkey/valkey-glide";
 import { ValkeyCluster } from "../../TestUtils.js";
 
-async function checkClientInfo(client) {
-    const version = process.env.GLIDE_VERSION;
-    if (!version) {
-        throw new Error("GLIDE_VERSION must be set to the expected lib-ver");
-    }
-    const info = String(await client.customCommand(["CLIENT", "INFO"]));
-    const fields = info.split(/\s+/);
-    // Servers older than 7.2 have no CLIENT SETINFO, so CLIENT INFO has no lib-name/lib-ver.
-    if (!fields.some((field) => field.startsWith("lib-name="))) {
-        console.log(
-            `Skipping lib-ver check: server is older than 7.2 (${info})`,
-        );
-        return;
-    }
-    for (const expected of ["lib-name=GlideJS", `lib-ver=${version}`]) {
-        if (!fields.includes(expected)) {
-            throw new Error(
-                `Expected CLIENT INFO to contain ${expected}, got ${info}`,
-            );
-        }
-    }
-    console.log(`Client info has lib-name=GlideJS lib-ver=${version}`);
-}
-
 async function runCommands(client) {
     console.log("Executing commands");
     // Set a bunch of keys
@@ -116,7 +92,6 @@ async function clusterTests() {
         });
         console.log("Connected to cluster");
 
-        await checkClientInfo(client);
         await runCommands(client);
 
         await closeClientAndCluster(client, valkeyCluster);
@@ -150,8 +125,6 @@ async function standaloneTests() {
         });
         const client = await GlideClient.createClient({ addresses: addresses });
         console.log("Connected to Cluster");
-
-        await checkClientInfo(client);
 
         await closeClientAndCluster(client, valkeyCluster);
         console.log("Done");

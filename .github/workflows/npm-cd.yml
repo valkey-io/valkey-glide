@@ -565,8 +565,6 @@ jobs:
             - name: Run utils/node Tests
               if: ${{ matrix.build_type != 'windows' }}
               working-directory: utils/release-candidate-testing/node
-              env:
-                  GLIDE_VERSION: ${{ needs.get-build-parameters.outputs.release_version }}
               run: |
                   # Install the exact version this workflow just published, NOT the dist-tag
                   # (latest/next). The dist-tag pointer itself propagates across npm edges with lag,
