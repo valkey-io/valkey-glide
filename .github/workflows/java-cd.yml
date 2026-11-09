@@ -411,8 +411,7 @@ jobs:
                   -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
                   -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
 
-            # The jedis-compatibility and jedis-4-compatibility POMs depend on the classifier-less
-            # compat-shared JAR, so it must be published next to the platform-specific ones.
+            # Jedis compat POMs depend on the classifier-less compat-shared JAR.
             - name: Bundle jedis-compat-shared no-classifier JAR
               working-directory: java
               shell: bash
@@ -733,10 +732,7 @@ jobs:
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                   ./gradlew --build-cache :benchmarks:run --args="--minimal --clients glide --port ${{ env.PORT }} --concurrentTasks \"1 10 100\""
 
-    # Resolve each Jedis compatibility artifact the way a new Maven project does: a fresh, empty
-    # local repository and the documented dependency with a platform classifier. The benchmark
-    # test above only consumes the core valkey-glide artifact, so without this job a Jedis
-    # compatibility POM that points at an unpublished artifact (#7603) is only found after release.
+    # The benchmark test only consumes core valkey-glide; this checks the Jedis compat POMs resolve (#7603).
     test-jedis-compatibility-maven-resolution:
         needs: [set-release-version, publish-to-maven-central-deployment]
         runs-on: ubuntu-24.04
@@ -756,10 +752,10 @@ jobs:
                   CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
                   CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
               run: |
-                  AUTH_HEADER="Bearer $(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 -w 0)"
+                  AUTHORIZATION_HEADER="Bearer $(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 -w 0)"
                   ARTIFACT_URL="https://central.sonatype.com/api/v1/publisher/deployments/download/io/valkey/valkey-glide-jedis-compatibility/${RELEASE_VERSION}/valkey-glide-jedis-compatibility-${RELEASE_VERSION}.pom"
                   for ((retries = 0; retries < 6; retries++)); do
-                      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: $AUTH_HEADER" "$ARTIFACT_URL")
+                      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: $AUTHORIZATION_HEADER" "$ARTIFACT_URL")
                       if [ "$HTTP_STATUS" = "200" ]; then
                           echo "Artifact available"
                           exit 0
@@ -775,19 +771,17 @@ jobs:
                   CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
                   CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
                   DEPLOYMENT_REPOSITORY_URL: https://central.sonatype.com/api/v1/publisher/deployments/download/
-                  # Every classifier of an artifact shares one POM, so one classifier checks the
-                  # whole transitive tree. Use this runner's platform.
+                  # All classifiers share one POM, so one classifier covers the tree.
                   CLASSIFIER: linux-x86_64
               run: |
                   mvn -v
-                  CENTRAL_AUTH_HEADER="Bearer $(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 -w 0)"
-                  export CENTRAL_AUTH_HEADER
-                  work_dir=$(mktemp -d)
-                  trap 'rm -rf "$work_dir"' EXIT
+                  CENTRAL_AUTHORIZATION_HEADER="Bearer $(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 -w 0)"
+                  export CENTRAL_AUTHORIZATION_HEADER
+                  work_directory=$(mktemp -d)
+                  trap 'rm -rf "$work_directory"' EXIT
 
-                  # The deployment repository needs the Central Portal token as an HTTP header.
-                  # Maven reads it from the environment, so the token is not written to disk.
-                  cat > "$work_dir/settings.xml" <<'EOF'
+                  # Quoted heredoc: Maven reads the token from env, keeping it off disk.
+                  cat > "$work_directory/settings.xml" <<'EOF'
                   <settings>
                     <servers>
                       <server>
@@ -796,7 +790,7 @@ jobs:
                           <httpHeaders>
                             <property>
                               <name>Authorization</name>
-                              <value>${env.CENTRAL_AUTH_HEADER}</value>
+                              <value>${env.CENTRAL_AUTHORIZATION_HEADER}</value>
                             </property>
                           </httpHeaders>
                         </configuration>
@@ -807,11 +801,10 @@ jobs:
 
                   failed=()
                   for artifact in valkey-glide-jedis-compatibility valkey-glide-jedis-4-compatibility; do
-                      project_dir="$work_dir/$artifact"
-                      mkdir -p "$project_dir/m2"
-                      # Central is listed first so third-party dependencies are not requested
-                      # from the deployment repository, which only serves io.valkey files.
-                      cat > "$project_dir/pom.xml" <<EOF
+                      project_directory="$work_directory/$artifact"
+                      mkdir -p "$project_directory/m2"
+                      # Central first: the deployment repo only serves io.valkey files.
+                      cat > "$project_directory/pom.xml" <<EOF
                   <project xmlns="http://maven.apache.org/POM/4.0.0">
                     <modelVersion>4.0.0</modelVersion>
                     <groupId>io.valkey.release-test</groupId>
@@ -838,7 +831,7 @@ jobs:
                   </project>
                   EOF
                       echo "::group::Resolve io.valkey:${artifact}:${RELEASE_VERSION}:${CLASSIFIER}"
-                      if ! mvn -B -ntp -s "$work_dir/settings.xml" -Dmaven.repo.local="$project_dir/m2" -f "$project_dir/pom.xml" \
+                      if ! mvn -B -ntp -s "$work_directory/settings.xml" -Dmaven.repo.local="$project_directory/m2" -f "$project_directory/pom.xml" \
                           org.apache.maven.plugins:maven-dependency-plugin:3.8.1:tree \
                           org.apache.maven.plugins:maven-dependency-plugin:3.8.1:resolve; then
                           failed+=("$artifact")
