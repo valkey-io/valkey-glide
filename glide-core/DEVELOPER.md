@@ -95,13 +95,18 @@ The timeout watchdog provides structured diagnostic information when command tim
 
 ### Architecture
 
-The watchdog is a **pure timer** — it signals "timeout fired" with a bare `()` via a oneshot channel. All diagnostic enrichment (cause classification, latency percentiles, inflight counts, RSS) happens on the consumer side (`send_command`) at fire time. This keeps the hot path minimal:
+The watchdog is a **pure timer** — `register()` returns a `TimeoutReceiver` future that resolves to `Ok(())` when the deadline fires (or `Err(RecvError)` if the watchdog thread is gone). All diagnostic enrichment (cause classification, latency percentiles, inflight counts, RSS) happens on the consumer side (`send_command`) at fire time. This keeps the hot path minimal:
 
-- **Register** (~100ns): `Instant::now()` + oneshot channel + mpsc send
+- **Register**: `Instant::now()` + one small shared timer slot pushed into the calling thread's inbox shard (16 shards, an uncontended mutex). Slots are pooled per shard (up to 8192 each): the watchdog returns a slot to the shard that allocated it once it holds the last reference, so in steady state a registration does not allocate. A registration wakes the watchdog thread only if its deadline is earlier than the thread's published next look at the inboxes (or, for the first entry in an empty shard, if that look is more than 10 ms after the registration).
+- **Watchdog thread**: keeps outstanding deadlines in per-tick (`WATCHDOG_TICK`, 1 ms) buckets and sleeps until the next bucket is due. While registrations keep arriving it also looks at the inboxes every 10 ms, to drop entries whose request already completed (their slots go back to the pools). A single long deadline (e.g. `BLPOP q 30`) costs no wake-ups until it is due. Entries whose request completed after they were indexed are swept out every 10 ms while the thread is awake, about 4096 entries (whole buckets) per pass.
 - **Phase tracking** (zero-alloc): `AtomicU8` on `Cmd` set by routing layer after connection resolution
 - **Fire path** (rare): builds `TimeoutEvent` with classified cause, p99 latency, inflight trend, and process RSS
 
-No `Arc`, `Mutex`, or heap allocation on the per-command hot path beyond the oneshot channel.
+**Timeout accuracy**: a timeout fires at the first 1 ms tick boundary at or after its deadline. It never fires early; it fires less than one tick (1 ms) late, plus the wake-up latency of the watchdog thread (well under a tick on Linux; coarser on platforms whose sleeps have a coarser granularity).
+
+**Standalone clients** rely on the watchdog alone for the request deadline (`Cmd::deadline_enforced_by_caller`); the multiplexed connection does not arm a second tokio timer. Cluster sub-requests keep their per-node timer.
+
+**Fork safety**: an instance inherited across `fork()` has no thread. `TimeoutWatchdog::global()` detects it (a `pthread_atfork` child handler bumps a fork generation; if that handler is not known to be installed, it compares process ids instead) and replaces it; the FFI layer's post-fork hook also calls `TimeoutWatchdog::reinit_global()` explicitly. Either way a fresh instance (new thread and inbox shards) is installed and the inherited one is leaked without being touched. Forks that skip `pthread_atfork` handlers (a raw `clone`, `_Fork`) are not detected; such a child must call `reinit_global()`.
 
 ### Enabling
 

@@ -806,6 +806,7 @@ where
     }
 
     // `None` means that the stream was out of items causing that poll loop to shut down.
+    #[cfg_attr(not(test), allow(dead_code))]
     async fn send_single(
         &mut self,
         item: SinkItem,
@@ -813,10 +814,33 @@ where
         is_fenced: bool,
         is_blocking: bool,
     ) -> RedisResult<Value> {
-        self.send_recv(item, None, timeout, true, is_fenced, is_blocking)
+        self.send_recv(item, None, timeout, true, is_fenced, is_blocking, false)
             .await
     }
 
+    /// [`Self::send_single`] for a command whose response deadline is enforced by the caller
+    /// (`Cmd::deadline_enforced_by_caller`): no per-request receive timer is armed.
+    async fn send_single_caller_deadline(
+        &mut self,
+        item: SinkItem,
+        timeout: Duration,
+        is_fenced: bool,
+        is_blocking: bool,
+        caller_enforces_deadline: bool,
+    ) -> RedisResult<Value> {
+        self.send_recv(
+            item,
+            None,
+            timeout,
+            true,
+            is_fenced,
+            is_blocking,
+            caller_enforces_deadline,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
     async fn send_recv(
         &mut self,
         input: SinkItem,
@@ -826,6 +850,8 @@ where
         is_atomic: bool,
         is_fenced: bool,
         is_blocking: bool,
+        // When true the caller owns the response deadline: no tokio receive timer here.
+        caller_enforces_deadline: bool,
     ) -> Result<Value, RedisError> {
         let (sender, receiver) = oneshot::channel();
 
@@ -924,7 +950,13 @@ where
             );
         }
         let recv_start = std::time::Instant::now();
-        let recv_result = Runtime::locate().timeout(timeout, receiver).await;
+        let recv_result = if caller_enforces_deadline {
+            // The caller's deadline (glide-core watchdog) drops this future on expiry, so a
+            // second, per-request tokio timer would only ever lose the race.
+            Ok(receiver.await)
+        } else {
+            Runtime::locate().timeout(timeout, receiver).await
+        };
         let recv_elapsed = recv_start.elapsed();
         // For blocking commands (e.g. XREAD BLOCK, BLPOP) the client intentionally
         // waits for a server-side event, so a long receive time is expected and not
@@ -1128,6 +1160,9 @@ impl MultiplexedConnection {
                     .set_fenced(cmd.is_fenced())
                     .set_is_blocking(cmd.is_blocking());
                 misses_cmd.set_response_timeout(cmd.response_timeout());
+                // The MGET of the misses runs inside the caller's future, so the caller's
+                // deadline (if it owns one) bounds it too.
+                misses_cmd.set_deadline_enforced_by_caller(cmd.deadline_enforced_by_caller());
 
                 let response = self.send_packed_command_inner(&misses_cmd).await?;
                 return cache.complete_cached_mget(lookup, response);
@@ -1164,7 +1199,7 @@ impl MultiplexedConnection {
         let timeout = cmd.response_timeout().unwrap_or(self.response_timeout);
         let result = self
             .pipeline
-            .send_single(
+            .send_single_caller_deadline(
                 // Commands with no out-of-line payloads skip the segmented
                 // representation entirely (see SendBuf::Contiguous).
                 if cmd.has_out_of_line_args() {
@@ -1175,6 +1210,7 @@ impl MultiplexedConnection {
                 timeout,
                 cmd.is_fenced(),
                 cmd.is_blocking(),
+                cmd.deadline_enforced_by_caller(),
             )
             .await;
         if self.protocol != ProtocolVersion::RESP2 {
@@ -1207,6 +1243,7 @@ impl MultiplexedConnection {
                 Some(offset + count),
                 self.response_timeout,
                 cmd.is_atomic(),
+                false,
                 false,
                 false,
             )
@@ -2060,6 +2097,60 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// `caller_enforces_deadline = true` must not arm the per-request receive timer: the
+    /// request stays pending past `timeout` (the caller's own deadline drops it), while the
+    /// default path still fails with the timer's `Elapsed` error.
+    #[tokio::test]
+    async fn test_caller_enforced_deadline_skips_receive_timer() {
+        let (sink_tx, _sink_rx) = futures_mpsc::channel::<Vec<u8>>(100);
+        // Kept alive and never written: the server never answers.
+        let (_resp_tx, resp_rx) = futures_mpsc::channel::<RedisResult<Value>>(100);
+        let stream = DeadlockProneStream {
+            write_blocked: Arc::new(AtomicBool::new(false)),
+            inner_tx: sink_tx,
+            inner_rx: resp_rx,
+            waker: None,
+        };
+        let (pipeline, driver) = Pipeline::new(stream, None, None);
+        let driver_handle = tokio::spawn(driver);
+        let timeout = Duration::from_millis(50);
+
+        let mut p = pipeline.clone();
+        let own_timer = tokio::time::timeout(
+            Duration::from_secs(2),
+            p.send_single_caller_deadline(
+                crate::cmd("GET").arg("a").get_packed_command(),
+                timeout,
+                false,
+                false,
+                false,
+            ),
+        )
+        .await
+        .expect("the connection's own receive timer must fire");
+        let err = own_timer.expect_err("no response was sent");
+        assert!(err.is_timeout(), "got {err:?}");
+
+        let mut p = pipeline.clone();
+        let caller_deadline = tokio::time::timeout(
+            timeout * 4,
+            p.send_single_caller_deadline(
+                crate::cmd("GET").arg("b").get_packed_command(),
+                timeout,
+                false,
+                false,
+                true,
+            ),
+        )
+        .await;
+        assert!(
+            caller_deadline.is_err(),
+            "no receive timer may be armed when the caller owns the deadline, got {caller_deadline:?}"
+        );
+
+        driver_handle.abort();
     }
 
     #[tokio::test]
