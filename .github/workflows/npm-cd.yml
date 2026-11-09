@@ -250,7 +250,7 @@ jobs:
                     # Windows: native build, no cross-compilation needed
                     npx napi build --release --strip --platform --target "${{ matrix.TARGET }}" \
                       --js ../build-ts/native.js --dts ../build-ts/native.d.ts \
-                      --js-package-name @valkey/valkey-glide
+                      --js-package-name @valkey/valkey-glide -- --locked
 
                   elif [[ "$TARGET" == *"gnu"* ]]; then
                     # Linux GNU: use cargo-zigbuild for cross-compilation
@@ -260,7 +260,7 @@ jobs:
                     # macOS ARM: native build on arm64 runner, no --target needed
                     npx napi build --release --strip --platform \
                       --js ../build-ts/native.js --dts ../build-ts/native.d.ts \
-                      --js-package-name @valkey/valkey-glide
+                      --js-package-name @valkey/valkey-glide -- --locked
 
                   else
                     # macOS x86 or musl: may need zig for cross-compilation
@@ -271,7 +271,7 @@ jobs:
                     npx napi build --platform --release $additional_param --strip \
                       --target "${{ matrix.TARGET }}" \
                       --js ../build-ts/native.js --dts ../build-ts/native.d.ts \
-                      --js-package-name @valkey/valkey-glide
+                      --js-package-name @valkey/valkey-glide -- --locked
                   fi
 
                   mkdir -p "../$TARGET"
