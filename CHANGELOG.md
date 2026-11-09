@@ -21,6 +21,7 @@
 
 ### Fixes
 
+* Java: A connection borrowed from the Jedis compatibility layer's `JedisPool` (Jedis 4.x and 5.x) now starts on the pool's configured database. A borrower that called `select` returned the connection still on that database, so the next borrower read from and wrote to the wrong database without an error. Like Jedis, the pool now selects the configured database again before lending a connection that is on a different one, and destroys the connection instead of lending it if that `SELECT` fails ([#7604](https://github.com/valkey-io/valkey-glide/issues/7604))
 * Java: Publish the classifier-less `valkey-glide-jedis-compat-shared` JAR. The `valkey-glide-jedis-compatibility` and `valkey-glide-jedis-4-compatibility` POMs depend on it, and since 2.6.0-rc1 Maven failed to resolve them with `Could not find artifact io.valkey:valkey-glide-jedis-compat-shared` ([#7603](https://github.com/valkey-io/valkey-glide/issues/7603))
 * Node: Populate actual `lib-ver` instead of `unknown` in `CLIENT INFO` responses ([#7616](https://github.com/valkey-io/valkey-glide/pull/7616))
 * Node: The published package loads with `NAPI_RS_ENFORCE_VERSION_CHECK=1` instead of failing with "Cannot find native binding" ([#7602](https://github.com/valkey-io/valkey-glide/issues/7602))
