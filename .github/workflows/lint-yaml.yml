@@ -77,3 +77,15 @@ jobs:
                       sys.exit(1)
                   print(f"OK: all {len(paths)} .yarnrc.yml files have npmMinimalAgeGate == '7d'")
                   EOF
+
+            # Run actionlint
+            # --------------
+
+            - name: Install pyflakes
+              run: pip install --quiet pyflakes==4.1.0
+
+            - name: Install actionlint
+              run: curl -fsSL https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz | sudo tar xz -C /usr/local/bin actionlint
+
+            - name: Run actionlint
+              run: make action-lint
