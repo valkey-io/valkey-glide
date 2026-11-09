@@ -20,7 +20,7 @@ use redis::aio::ConnectionLike;
 use redis::cache::{get_or_create_cache, glide_cache::GlideCache};
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
-    MultipleNodeRoutingInfo, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo,
+    MultipleNodeRoutingInfo, ResponsePolicy, Routable, Route, RoutingInfo, SingleNodeRoutingInfo,
 };
 use redis::cluster_slotmap::ReadFromReplicaStrategy;
 use redis::{
@@ -524,6 +524,10 @@ pub struct ClientShared {
     // rejected DISCARD or a concurrent task can't hide an open transaction.
     multi_seen: Arc<AtomicBool>,
     watch_seen: Arc<AtomicBool>,
+    // Cluster only: the primaries WATCHes were sent to, so the release UNWATCH
+    // skips nodes the borrow never used. `None` when a WATCH's target is unknown
+    // (batch, random or address routing), which falls back to every primary.
+    watch_routes: Arc<std::sync::Mutex<Option<Vec<Route>>>>,
     // IAM token generation the live connection last authenticated at. Compared by
     // `prepare_for_borrow` on the first command after a borrow to detect a rotation
     // that landed while the client sat idle in a pool, triggering a re-AUTH before
@@ -1416,11 +1420,14 @@ impl Client {
 
     /// Record what an admitted command may change on the connection, for the
     /// re-AUTH defer and the release reset.
-    fn track_command(&self, cmd: &Cmd) {
+    fn track_command(&self, cmd: &Cmd, routing: Option<&RoutingInfo>) {
         // Read-only standalone rejects MULTI/WATCH/EXEC/DISCARD locally, so they
         // never reach the server (a pipeline can send them; `send_pipeline` tracks).
         if self.is_cluster || !self.read_only {
             self.track_transaction_state(cmd);
+        }
+        if self.is_cluster && Self::is_watch(cmd) {
+            self.record_watch_routes(cmd, routing);
         }
         self.track_unresettable(cmd);
         // Flag a possible db change before dispatch (see `db_maybe_dirty`).
@@ -1457,7 +1464,7 @@ impl Client {
         let admission = Admission::check(self).await?;
         // After the breaker (a refused command never reached the server), before
         // the pubsub intercept (an intercepted SUBSCRIBE still subscribes).
-        self.track_command(cmd);
+        self.track_command(cmd, routing.as_ref());
 
         // Answered locally, so it never takes an in-flight slot.
         if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
@@ -2240,6 +2247,10 @@ impl Client {
             for cmd in pipeline.cmd_iter() {
                 self.track_transaction_state(cmd);
                 self.track_unresettable(cmd);
+                // A batch may split across nodes, so its WATCH target is unknown.
+                if self.is_cluster && Self::is_watch(cmd) {
+                    *self.watch_routes.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                }
             }
             let drifted_db = self.last_select_db(pipeline);
             if drifted_db.is_some() {
@@ -3403,6 +3414,7 @@ impl Client {
                     unresettable: Arc::new(AtomicBool::new(false)),
                     multi_seen: Arc::new(AtomicBool::new(false)),
                     watch_seen: Arc::new(AtomicBool::new(false)),
+                    watch_routes: Arc::new(std::sync::Mutex::new(Some(Vec::new()))),
                     last_iam_generation: Arc::new(AtomicU64::new(0)),
                     is_pool_managed: Arc::new(AtomicBool::new(false)),
                     iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -3627,7 +3639,8 @@ impl Client {
     ///   "DISCARD without MULTI" reply is ignored (see the call site); any other
     ///   failure, `NOPERM` included, fails the reset.
     /// - UNWATCH — if the borrow sent WATCH (`watch_seen`): DISCARD only unwatches
-    ///   when a MULTI is still open.
+    ///   when a MULTI is still open. On cluster, only to the primaries the WATCHes
+    ///   reached (`watch_routes`) when those are known.
     /// - SELECT <configured_db> — when the database drifted
     ///   (`current_database() != configured_db`) or a SELECT may have applied
     ///   untracked (`db_maybe_dirty`). A clean db-0 cluster pool must not send a
@@ -3698,10 +3711,32 @@ impl Client {
             }
         }
         if watch_seen {
-            // Default routing: all primaries on cluster, where WATCH lands; the
-            // primary on standalone.
-            self.send_reset_command(&mut redis::cmd("UNWATCH"), None)
-                .await?;
+            // Taken after `watch_seen`: a WATCH racing the reset re-sets the flag, so
+            // its route is cleaned up on this release or the next.
+            let routes = self
+                .watch_routes
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .replace(Vec::new());
+            match routes {
+                // Only the primaries the WATCHes reached, so a down node elsewhere
+                // can't fail the reset.
+                Some(routes) if is_cluster && !routes.is_empty() => {
+                    let unique: std::collections::HashSet<Route> = routes.into_iter().collect();
+                    for route in unique {
+                        let to =
+                            RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route));
+                        self.send_reset_command(&mut redis::cmd("UNWATCH"), Some(to))
+                            .await?;
+                    }
+                }
+                // Default routing: all primaries on cluster; the primary on
+                // standalone.
+                _ => {
+                    self.send_reset_command(&mut redis::cmd("UNWATCH"), None)
+                        .await?;
+                }
+            }
         }
 
         // `None` routing is intentional: SELECT is an AllNodes command, so it fans
@@ -3789,6 +3824,30 @@ impl Client {
             Some(b"WATCH") => self.watch_seen.store(true, Ordering::Release),
             Some(b"EXEC") | Some(b"DISCARD") => self.multi_active.store(false, Ordering::Release),
             _ => {}
+        }
+    }
+
+    fn is_watch(cmd: &Cmd) -> bool {
+        cmd.arg_idx(0)
+            .is_some_and(|name| name.eq_ignore_ascii_case(b"WATCH"))
+    }
+
+    /// Add a WATCH's target primaries to `watch_routes`, using the routing the
+    /// cluster client would use for it, or mark them unknown.
+    fn record_watch_routes(&self, cmd: &Cmd, routing: Option<&RoutingInfo>) {
+        let routes = match routing.cloned().or_else(|| RoutingInfo::for_routable(cmd)) {
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                Some(vec![route])
+            }
+            Some(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::MultiSlot((routes, _)), _))) => {
+                Some(routes.into_iter().map(|(route, _)| route).collect())
+            }
+            _ => None,
+        };
+        let mut known = self.watch_routes.lock().unwrap_or_else(|e| e.into_inner());
+        match (known.as_mut(), routes) {
+            (Some(known), Some(routes)) => known.extend(routes),
+            _ => *known = None,
         }
     }
 
@@ -4074,6 +4133,7 @@ impl Client {
                 unresettable: Arc::new(AtomicBool::new(false)),
                 multi_seen: Arc::new(AtomicBool::new(false)),
                 watch_seen: Arc::new(AtomicBool::new(false)),
+                watch_routes: Arc::new(std::sync::Mutex::new(Some(Vec::new()))),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -4159,6 +4219,7 @@ pub fn create_test_glide_client() -> Client {
             unresettable: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             multi_seen: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             watch_seen: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            watch_routes: Arc::new(std::sync::Mutex::new(Some(Vec::new()))),
             last_iam_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             is_pool_managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -5120,6 +5181,7 @@ mod tests {
                 unresettable: Arc::new(AtomicBool::new(false)),
                 multi_seen: Arc::new(AtomicBool::new(false)),
                 watch_seen: Arc::new(AtomicBool::new(false)),
+                watch_routes: Arc::new(std::sync::Mutex::new(Some(Vec::new()))),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
