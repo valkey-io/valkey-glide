@@ -2,16 +2,13 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 import { GlideClient, GlideClusterClient } from "@valkey/valkey-glide";
-import { readFileSync } from "fs";
 import { ValkeyCluster } from "../../TestUtils.js";
 
 async function checkClientInfo(client) {
-    // The package's "exports" map blocks importing its package.json, so read it from disk.
-    const packageJson = new URL(
-        "../package.json",
-        import.meta.resolve("@valkey/valkey-glide"),
-    );
-    const version = JSON.parse(readFileSync(packageJson, "utf8")).version;
+    const version = process.env.GLIDE_VERSION;
+    if (!version) {
+        throw new Error("GLIDE_VERSION must be set to the expected lib-ver");
+    }
     const info = String(await client.customCommand(["CLIENT", "INFO"]));
     const fields = info.split(/\s+/);
     // Servers older than 7.2 have no CLIENT SETINFO, so CLIENT INFO has no lib-name/lib-ver.
