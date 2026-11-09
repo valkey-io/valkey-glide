@@ -233,6 +233,31 @@ describe("PubSub", () => {
         return pollUntil(() => messages[index], `callback message ${index}`);
     }
 
+    /**
+     * `getPubSubMessage()` resolves only when a message arrives, so a
+     * dropped message would hold the test until jest's own timeout and
+     * skip the `finally` that closes its clients; this fails it after
+     * `MESSAGE_DELIVERY_TIMEOUT_MS` like the polling reads do.
+     */
+    function getMessageWithDeadline(client: TGlideClient): Promise<PubSubMsg> {
+        let timer: NodeJS.Timeout | undefined;
+        const deadline = new Promise<never>((_, reject) => {
+            timer = setTimeout(
+                () =>
+                    reject(
+                        new Error(
+                            `pubsub message not delivered within ${MESSAGE_DELIVERY_TIMEOUT_MS} ms`,
+                        ),
+                    ),
+                MESSAGE_DELIVERY_TIMEOUT_MS,
+            );
+        });
+
+        return Promise.race([client.getPubSubMessage(), deadline]).finally(() =>
+            clearTimeout(timer),
+        );
+    }
+
     async function getMessageByMethod(
         method: number,
         client: TGlideClient,
@@ -240,7 +265,7 @@ describe("PubSub", () => {
         index?: number,
     ): Promise<PubSubMsg> {
         if (method === MethodTesting.Async) {
-            return client.getPubSubMessage();
+            return getMessageWithDeadline(client);
         } else if (method === MethodTesting.Sync) {
             return pollForMessage(client);
         } else {
