@@ -748,9 +748,13 @@ pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
 /// `request_timeout`, and the timeout watchdog of such a request fires this long
 /// after it. The gap lets the reply reach the caller before the watchdog fails
 /// the whole request; if the runtime is too busy to use it, the request fails
-/// with a timeout, as it does without partial results.
+/// with a timeout, as it does without partial results. The margin is at least
+/// 2 ms (at most a quarter of the timeout), since a smaller gap is within timer
+/// jitter.
 fn partial_results_margin(request_timeout: Duration) -> Duration {
-    (request_timeout / 10).min(Duration::from_millis(100))
+    (request_timeout / 10)
+        .max(Duration::from_millis(2).min(request_timeout / 4))
+        .min(Duration::from_millis(100))
 }
 
 /// Reads a partial result, which holds each failed node's error as a value, for
@@ -4833,10 +4837,19 @@ mod tests {
     }
 
     #[test]
-    fn test_partial_results_margin_is_a_tenth_of_the_timeout_up_to_100ms() {
+    fn test_partial_results_margin_is_a_tenth_of_the_timeout_from_2ms_to_100ms() {
         assert_eq!(
             partial_results_margin(Duration::from_millis(250)),
             Duration::from_millis(25)
+        );
+        // At least 2 ms, but at most a quarter of the timeout.
+        assert_eq!(
+            partial_results_margin(Duration::from_millis(10)),
+            Duration::from_millis(2)
+        );
+        assert_eq!(
+            partial_results_margin(Duration::from_millis(5)),
+            Duration::from_micros(1250)
         );
         assert_eq!(
             partial_results_margin(Duration::from_secs(5)),
