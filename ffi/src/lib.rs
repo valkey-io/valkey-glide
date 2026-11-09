@@ -193,9 +193,9 @@ pub unsafe extern "C" fn free_drop_script_error(error: *mut c_char) {
 pub struct CommandResponse {
     pub response_type: ResponseType,
     /// The integer of an `Int` response. For an `Error` response (an error
-    /// nested in a reply, such as a failed node in a partial-results map), the
-    /// error's [`RequestErrorType`] as glide-core classifies it, for example
-    /// `Timeout` for a node that did not answer in time.
+    /// nested in a reply, such as a failed node in a partial-results map),
+    /// [`RequestErrorType::Timeout`] for a node that did not answer in time,
+    /// else 0.
     pub int_value: i64,
     pub float_value: c_double,
     pub bool_value: bool,
@@ -4652,7 +4652,11 @@ impl ResponseArena {
                 let error = server_error.into();
                 let msg = error_message(&error).into_bytes();
                 let (ptr, len) = self.store_string(msg);
-                self.nodes[idx].int_value = errors::error_type(&error) as i64;
+                // Only a node that did not answer in time is marked, so a nested
+                // error without partial results keeps `int_value` 0.
+                if matches!(errors::error_type(&error), RequestErrorType::Timeout) {
+                    self.nodes[idx].int_value = RequestErrorType::Timeout as i64;
+                }
                 self.nodes[idx].response_type = ResponseType::Error;
                 self.nodes[idx].string_value = ptr;
                 self.nodes[idx].string_value_len = len;
@@ -4782,8 +4786,9 @@ mod tests_response_arena {
             valkey_value_to_arena_response(value, &[]).expect("arena build failed");
         unsafe {
             let root = &*root;
+            // Only a client timeout is marked; other nested errors keep 0.
             let expected = [
-                RequestErrorType::ExecAbort,
+                RequestErrorType::Unspecified,
                 RequestErrorType::Unspecified,
                 RequestErrorType::Unspecified,
                 RequestErrorType::Timeout,
