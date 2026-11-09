@@ -416,7 +416,7 @@ jobs:
               working-directory: java
               shell: bash
               run: |
-                  jedis_shared_folder=~/.m2/repository/io/valkey/valkey-glide-jedis-compat-shared/${{ env.RELEASE_VERSION }}
+                  jedis_shared_folder=~/.m2/repository/io/valkey/valkey-glide-jedis-compat-shared/$RELEASE_VERSION
                   if [ ! -d "$jedis_shared_folder" ]; then
                     echo "Expected Maven local output missing: $jedis_shared_folder" >&2
                     exit 1
@@ -732,14 +732,30 @@ jobs:
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                   ./gradlew --build-cache :benchmarks:run --args="--minimal --clients glide --port ${{ env.PORT }} --concurrentTasks \"1 10 100\""
 
-    # Benchmark test covers only core valkey-glide (#7603).
+    # Jedis compat artifacts: not covered by the benchmark test above (#7603).
     test-jedis-compatibility-maven-resolution:
         needs: [set-release-version, publish-to-maven-central-deployment]
         runs-on: ubuntu-24.04
+        permissions: {}
         env:
             JAVA_VERSION: "11"
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
+            DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
+            # Serves only this run's deployment; .../deployments/download/ serves any validated one.
+            CENTRAL_DEPLOYMENT_URL: https://central.sonatype.com/api/v1/publisher/deployment
         steps:
+            - name: Validate release version and deployment ID
+              shell: bash
+              run: |
+                  if [[ ! "$RELEASE_VERSION" =~ ^[0-9A-Za-z.+-]+$ ]]; then
+                      echo "::error::RELEASE_VERSION is not a valid version string"
+                      exit 1
+                  fi
+                  if [[ ! "$DEPLOYMENT_ID" =~ ^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$ ]]; then
+                      echo "::error::DEPLOYMENT_ID is not a UUID"
+                      exit 1
+                  fi
+
             - name: Set up JDK
               uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
               with:
@@ -748,14 +764,15 @@ jobs:
 
             - name: Wait for deployment artifacts to be available
               shell: bash
+              timeout-minutes: 5
               env:
                   CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
                   CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
               run: |
                   AUTHORIZATION_HEADER="Bearer $(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 -w 0)"
-                  ARTIFACT_URL="https://central.sonatype.com/api/v1/publisher/deployments/download/io/valkey/valkey-glide-jedis-compatibility/${RELEASE_VERSION}/valkey-glide-jedis-compatibility-${RELEASE_VERSION}.pom"
+                  ARTIFACT_URL="${CENTRAL_DEPLOYMENT_URL}/${DEPLOYMENT_ID}/download/io/valkey/valkey-glide-jedis-compatibility/${RELEASE_VERSION}/valkey-glide-jedis-compatibility-${RELEASE_VERSION}.pom"
                   for ((retries = 0; retries < 6; retries++)); do
-                      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: $AUTHORIZATION_HEADER" "$ARTIFACT_URL" || true)
+                      HTTP_STATUS=$(curl -s --connect-timeout 10 --max-time 60 -o /dev/null -w "%{http_code}" -H "Authorization: $AUTHORIZATION_HEADER" "$ARTIFACT_URL" || true)
                       if [ "$HTTP_STATUS" = "200" ]; then
                           echo "Artifact available"
                           exit 0
@@ -767,10 +784,11 @@ jobs:
 
             - name: Resolve Jedis compatibility artifacts from an empty Maven local repository
               shell: bash
+              # 2 artifacts x 3 attempts x 180s Maven limit, plus backoff.
+              timeout-minutes: 20
               env:
                   CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
                   CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
-                  DEPLOYMENT_REPOSITORY_URL: https://central.sonatype.com/api/v1/publisher/deployments/download/
                   # All classifiers share one POM, so one classifier covers the tree.
                   CLASSIFIER: linux-x86_64
               run: |
@@ -799,16 +817,13 @@ jobs:
                   </settings>
                   EOF
 
-                  failed=()
-                  for artifact in valkey-glide-jedis-compatibility valkey-glide-jedis-4-compatibility; do
-                      project_directory="$work_directory/$artifact"
-                      mkdir -p "$project_directory/m2"
-                      # Central first: the deployment repo only serves io.valkey files.
-                      cat > "$project_directory/pom.xml" <<EOF
+                  # Central first: the deployment repo only serves io.valkey files.
+                  write_pom() {
+                      cat <<EOF
                   <project xmlns="http://maven.apache.org/POM/4.0.0">
                     <modelVersion>4.0.0</modelVersion>
                     <groupId>io.valkey.release-test</groupId>
-                    <artifactId>${artifact}-consumer</artifactId>
+                    <artifactId>$1-consumer</artifactId>
                     <version>1</version>
                     <repositories>
                       <repository>
@@ -817,26 +832,49 @@ jobs:
                       </repository>
                       <repository>
                         <id>central-deployment</id>
-                        <url>${DEPLOYMENT_REPOSITORY_URL}</url>
+                        <url>${CENTRAL_DEPLOYMENT_URL}/${DEPLOYMENT_ID}/download/</url>
                       </repository>
                     </repositories>
                     <dependencies>
                       <dependency>
                         <groupId>io.valkey</groupId>
-                        <artifactId>${artifact}</artifactId>
+                        <artifactId>$1</artifactId>
                         <version>${RELEASE_VERSION}</version>
                         <classifier>${CLASSIFIER}</classifier>
                       </dependency>
                     </dependencies>
                   </project>
                   EOF
-                      echo "::group::Resolve io.valkey:${artifact}:${RELEASE_VERSION}:${CLASSIFIER}"
-                      if ! mvn -B -ntp -s "$work_directory/settings.xml" -Dmaven.repo.local="$project_directory/m2" -f "$project_directory/pom.xml" \
+                  }
+
+                  # Fresh local repository per attempt: Maven caches not-found results.
+                  resolve_once() {
+                      local attempt_directory
+                      attempt_directory=$(mktemp -d -p "$work_directory")
+                      write_pom "$1" > "$attempt_directory/pom.xml"
+                      timeout 180 mvn -B -ntp -s "$work_directory/settings.xml" -Dmaven.repo.local="$attempt_directory/m2" -f "$attempt_directory/pom.xml" \
                           org.apache.maven.plugins:maven-dependency-plugin:3.8.1:tree \
-                          org.apache.maven.plugins:maven-dependency-plugin:3.8.1:resolve; then
-                          failed+=("$artifact")
-                      fi
-                      echo "::endgroup::"
+                          org.apache.maven.plugins:maven-dependency-plugin:3.8.1:resolve | tee "$attempt_directory/maven.log" || return 1
+                      # A missing POM only warns and drops its dependencies, so check the tree.
+                      grep -qF "io.valkey:valkey-glide-jedis-compat-shared:jar:${RELEASE_VERSION}:" "$attempt_directory/maven.log" && return 0
+                      echo "::warning::$1 resolved without valkey-glide-jedis-compat-shared; is its POM missing?"
+                      return 1
+                  }
+
+                  resolve_with_retries() {
+                      local attempt
+                      for attempt in 1 2 3; do
+                          echo "::group::Resolve io.valkey:$1:${RELEASE_VERSION}:${CLASSIFIER} (attempt ${attempt}/3)"
+                          resolve_once "$1" && { echo "::endgroup::"; return 0; }
+                          echo "::endgroup::"
+                          [ "$attempt" -eq 3 ] || sleep $((attempt * 5))
+                      done
+                      return 1
+                  }
+
+                  failed=()
+                  for artifact in valkey-glide-jedis-compatibility valkey-glide-jedis-4-compatibility; do
+                      resolve_with_retries "$artifact" || failed+=("$artifact")
                   done
 
                   if [ ${#failed[@]} -ne 0 ]; then
