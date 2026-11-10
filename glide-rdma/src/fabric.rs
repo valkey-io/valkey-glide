@@ -35,7 +35,8 @@ struct PeerHandle(u64);
 ///   [`crate::LentBuffer::recall`] and [`crate::LentWindow::recall`]: close the region
 ///   before returning.
 /// - [`Self::wait_for_closes`]: waits for the regions of buffers dropped before it.
-/// - Lending a window of an [`RdmaSharedBuffer`], reclaiming one, and
+/// - Lending a window of an [`RdmaSharedBuffer`], ending one with
+///   [`crate::LentWindow::reclaim`] or [`crate::LentWindow::cancel_unsent`], and
 ///   [`RdmaSharedBuffer::is_closed`]: can wait for a close of its region already
 ///   under way. A reclaim that finds a read ran past its window closes the region
 ///   before returning.
@@ -268,8 +269,9 @@ impl RdmaFabric {
     /// that no transfer holds:
     ///
     /// * A window is held from the `lend_for_get` or `lend_for_set` call that lends
-    ///   it until [`crate::LentWindow::reclaim`] returns. Lending a set may read the
-    ///   window for its checksum, and reclaiming a get reads it to verify.
+    ///   it until [`crate::LentWindow::reclaim`] or [`crate::LentWindow::cancel_unsent`]
+    ///   returns. Lending a set may read the window for its checksum, and reclaiming a
+    ///   get reads it to verify.
     /// * Once a loan ends without a reply, by [`crate::LentWindow::recall`] or by
     ///   being dropped, the server may still write any window that was lent, so the
     ///   caller must leave all of the memory alone until `owner` is dropped. On tcp

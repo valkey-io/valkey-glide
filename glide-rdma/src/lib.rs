@@ -10,6 +10,8 @@
 //!
 //! `RdmaBuffer` and `LentBuffer` loans bytes to the server for the duration of
 //! a transfer. The memory can be accessed again only after the loan ends.
+//! `RdmaSharedBuffer` and `LentWindow` do the same a window at a time, so many
+//! transfers can share one registration.
 
 #[cfg(feature = "libfabric")]
 mod buffer;

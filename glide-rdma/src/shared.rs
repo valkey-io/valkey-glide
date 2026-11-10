@@ -169,8 +169,9 @@ impl RdmaSharedBuffer {
         }
         {
             let mut lent = self.lent();
-            // Under the lock: a window that ended without a reply is given back only
-            // after its region was revoked or failed to close, so then this fails.
+            // Checked under the lock: a window the server may still use is given back
+            // only once its region is revoked or has failed to close, and this check
+            // fails in both cases.
             self.inner.registration.check_open()?;
             // An empty window overlaps nothing.
             if length > 0
@@ -286,8 +287,17 @@ impl fmt::Debug for RdmaSharedBuffer {
 
 /// A window of a [`RdmaSharedBuffer`] lent to one transfer.
 ///
-/// Ends as a [`crate::LentBuffer`] does, but hands nothing back: the window just
-/// becomes lendable again. Ending without a reply revokes the whole buffer.
+/// The server may be using the window at any moment while this exists. There are
+/// four ways for the loan to end, as for a [`crate::LentBuffer`], except that
+/// nothing is handed back: the window just becomes lendable again.
+///
+/// - [`Self::reclaim`] once the server has replied.
+/// - [`Self::cancel_unsent`] when the command was never sent.
+/// - [`Self::recall`] when no reply is coming. This revokes the whole buffer,
+///   ending every other transfer through it, and its memory is then freed, parked
+///   or leaked as a [`crate::LentBuffer`]'s memory is.
+/// - Dropping the loan. As a recall, but on the fabric's closing thread, so the
+///   drop does not wait for it.
 pub struct LentWindow {
     buffer: RdmaSharedBuffer,
     at: usize,
@@ -333,8 +343,24 @@ impl LentWindow {
         result
     }
 
+    /// End a loan whose command was never sent, making the window lendable again
+    /// without revoking the buffer. If the buffer was revoked meanwhile, it stays
+    /// revoked.
+    ///
+    /// # Safety
+    ///
+    /// The command this loan was lent for must not have been sent. Once it has, only
+    /// the server's reply says it is done with the window.
+    pub unsafe fn cancel_unsent(self) {
+        self.finish();
+    }
+
     /// End the loan with no reply coming, revoking the buffer, as
     /// [`crate::LentBuffer::recall`] does.
+    ///
+    /// Unlike that recall, a failed close still ends this loan and gives its window
+    /// back. Nothing can be lent from the buffer after that:
+    /// [`RdmaSharedBuffer::is_closed`] returns true.
     ///
     /// # Errors
     ///
@@ -806,6 +832,55 @@ mod tests {
         fabric.wait_for_closes();
         drop(fabric);
         assert!(released.load(Ordering::Acquire), "freed before `memory` is");
+    }
+
+    /// Nothing was sent, so nothing can be in flight, and the other windows carry on.
+    #[test]
+    fn cancelling_an_unsent_window_lends_it_again_without_a_revoke() {
+        let fabric = fabric();
+        let mut memory = vec![0u8; 4096];
+        let (region, released) = region(&fabric, &mut memory);
+        let (_, other) = region.lend_for_get(b"a", 64, 64).unwrap();
+        let (_, loan) = region.lend_for_get(b"b", 0, 64).unwrap();
+        assert_eq!(fabric.transfers_in_flight(), 2);
+
+        // SAFETY: no command was sent.
+        unsafe { loan.cancel_unsent() };
+
+        assert!(!region.is_revoked() && !other.is_revoked());
+        assert_eq!(fabric.transfers_in_flight(), 1);
+        let (_, again) = region
+            .lend_for_get(b"b", 0, 64)
+            .expect("the window is free again");
+        // SAFETY: as above.
+        unsafe {
+            again.cancel_unsent();
+            other.reclaim(TransferReply::Missing).unwrap();
+        }
+        drop(region);
+        fabric.wait_for_closes();
+        assert_eq!(fabric.parked_bytes(), 0);
+        assert!(released.load(Ordering::Acquire), "freed, not parked");
+    }
+
+    #[test]
+    fn cancelling_an_unsent_window_after_a_revoke_leaves_the_buffer_revoked() {
+        let fabric = fabric();
+        let mut memory = vec![0u8; 4096];
+        let (region, released) = region(&fabric, &mut memory);
+        let (_, loan) = region.lend_for_get(b"a", 0, 64).unwrap();
+        region.revoker().revoke().unwrap();
+
+        // SAFETY: no command was sent.
+        unsafe { loan.cancel_unsent() };
+
+        assert!(matches!(
+            region.lend_for_get(b"a", 0, 64),
+            Err(RdmaError::Revoked)
+        ));
+        drop(region);
+        fabric.wait_for_closes();
+        assert!(released.load(Ordering::Acquire));
     }
 
     #[test]
