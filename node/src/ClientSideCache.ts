@@ -49,16 +49,18 @@ export interface ClientSideCacheConfig {
     serverAssisted?: boolean;
 
     /**
-     * Optional key prefix that limits server-assisted tracking to a namespace.
+     * Optional key prefix that limits server-assisted tracking and caching to
+     * keys starting with it.
      *
      * When set, GLIDE sends `CLIENT TRACKING ON BCAST PREFIX <prefix>` on every
-     * connection (and every cluster node), so the server only broadcasts
+     * connection (standalone, each cluster node, and each reconnection), so the
+     * server only broadcasts
      * invalidations for keys starting with this prefix, and the client only
      * caches those keys. Without a prefix the server broadcasts an invalidation
      * for every key written by any client, which does not scale when the cached
      * working set is a small part of the keyspace. Keys outside the prefix are
-     * always fetched from the server, are never cached and therefore can never
-     * be stale; an `MGET` mixing tracked and untracked keys still returns the
+     * always fetched from the server, are never cached, do not count as cache
+     * hits or misses and therefore can never be stale; an `MGET` mixing tracked and untracked keys still returns the
      * full ordered result and only the tracked keys are stored. Matching is a
      * byte-wise, case-sensitive starts-with check; a key equal to the prefix is
      * tracked.
@@ -104,8 +106,9 @@ export interface ClientSideCacheOptions {
  *
  * Client-side caching reduces network round-trips and server load by storing
  * frequently accessed data locally on the client. This class provides
- * configurable TTL-based expiration, multiple eviction policies, and
- * comprehensive metrics tracking.
+ * TTL-based expiration, optional server-assisted invalidation (`serverAssisted`,
+ * RESP3) that can be scoped to a key prefix (`trackingPrefix`), multiple
+ * eviction policies, and metrics tracking.
  *
  * @example
  * ```typescript

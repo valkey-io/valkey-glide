@@ -26,10 +26,10 @@ import lombok.Getter;
  * @example
  *     <pre>{@code
  * // Create cache with default settings
- * ClientSideCache cache = ClientSideCache.create(1024, 60000);
+ * ClientSideCache defaultCache = ClientSideCache.create(1024, 60000);
  *
  * // Create cache with custom configuration
- * ClientSideCache cache = ClientSideCache.builder()
+ * ClientSideCache customCache = ClientSideCache.builder()
  *     .maxCacheKb(2048)
  *     .entryTtlMs(300)
  *     .evictionPolicy(EvictionPolicy.LRU)
@@ -37,7 +37,7 @@ import lombok.Getter;
  *     .build();
  *
  * // Server-assisted cache that only tracks and caches keys under "user:"
- * ClientSideCache cache = ClientSideCache.builder()
+ * ClientSideCache scopedCache = ClientSideCache.builder()
  *     .maxCacheKb(2048)
  *     .entryTtlMs(0)
  *     .serverAssisted(true)
@@ -91,15 +91,17 @@ public class ClientSideCache {
      * default) means every key is tracked and cacheable.
      *
      * <p>When set, GLIDE sends {@code CLIENT TRACKING ON BCAST PREFIX <trackingPrefix>} on every
-     * connection (and on every reconnection, for every cluster node), so the server only broadcasts
-     * invalidations for keys that start with the prefix. Without a prefix the server broadcasts an
-     * invalidation for <em>every</em> key written by any client, which does not scale when the cached
-     * working set is a small part of the keyspace.
+     * connection (standalone, each cluster node, and each reconnection), so the server only
+     * broadcasts invalidations for keys that start with the prefix. Without a prefix the server
+     * broadcasts an invalidation for <em>every</em> key written by any client, which does not scale
+     * when the cached working set is a small part of the keyspace.
      *
      * <p>The local cache only stores keys that start with the prefix. A key outside the prefix is
      * always fetched from the server, is never cached and does not count as a cache lookup, hit or
      * miss, so it can never be served stale. A multi-key read such as {@code MGET} that mixes tracked
      * and untracked keys still returns the full ordered result; only the tracked keys are stored.
+     * Matching is a byte-wise, case-sensitive starts-with check; a key equal to the prefix is
+     * tracked.
      *
      * <p>Constraints:
      *
@@ -109,6 +111,8 @@ public class ClientSideCache {
      *   <li>Must not be empty. Omit it to track all keys.
      *   <li>Fixed for the lifetime of the client; it cannot be changed after connecting.
      *   <li>All clients sharing the same {@code ClientSideCache} instance use the same prefix.
+     *   <li>An empty prefix, or a prefix without {@code serverAssisted}, makes {@code build()} throw
+     *       {@code IllegalArgumentException}.
      * </ul>
      */
     private final GlideString trackingPrefix;

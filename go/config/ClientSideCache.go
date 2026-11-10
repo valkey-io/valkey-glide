@@ -92,6 +92,7 @@ type ClientSideCache struct {
 
 	// TrackingPrefix restricts server-assisted tracking to keys that start with this prefix.
 	// An empty string (the default) means no prefix is set and every key is tracked.
+	// Setting it without ServerAssisted makes client creation fail.
 	//
 	// When set, GLIDE sends CLIENT TRACKING ON BCAST PREFIX <prefix> on every connection
 	// (including reconnections and every cluster node), so the server only broadcasts

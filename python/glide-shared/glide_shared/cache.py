@@ -36,9 +36,8 @@ class ClientSideCache:
     expire after a configurable Time-To-Live (TTL) and, with ``server_assisted=True``,
     are also invalidated as soon as the server reports that the key changed.
 
-    Cached entries expire based on TTL. Without ``server_assisted``, server-side key
-    changes are not propagated to the cache, so values may become stale before TTL
-    expires. With ``server_assisted=True`` the server sends an invalidation message
+    Without ``server_assisted``, server-side key changes are not propagated to the
+    cache, so values may become stale before TTL expires. With ``server_assisted=True`` the server sends an invalidation message
     whenever a tracked key is modified and the stale entry is dropped.
     Expiration is lazy — entries are removed when accessed after their TTL, not
     proactively in the background.
@@ -48,14 +47,16 @@ class ClientSideCache:
 
     In server-assisted mode an optional ``tracking_prefix`` narrows the tracking to
     the keys starting with that prefix. GLIDE registers it with
-    ``CLIENT TRACKING ON BCAST PREFIX <prefix>`` on every connection (and every
-    cluster node), so the server only broadcasts invalidations for keys under that
-    prefix and the client only caches those keys. Keys outside the prefix are always
-    fetched from the server, are never cached and never go stale. Matching is a
+    ``CLIENT TRACKING ON BCAST PREFIX <prefix>`` on every connection (standalone,
+    each cluster node, and each reconnection), so the server only broadcasts
+    invalidations for keys under that prefix and the client only caches those keys.
+    Keys outside the prefix are always fetched from the server, are never cached, do
+    not count as cache hits or misses and never go stale. Matching is a
     byte-wise, case-sensitive starts-with check; a key equal to the prefix is tracked.
     The prefix is fixed for the lifetime of the client and cannot be changed after
     connecting; clients sharing the same ``ClientSideCache`` instance must use the
-    same prefix.
+    same prefix, and creating a client with a different prefix on a cache that is
+    already in use fails.
 
     Attributes:
         cache_id (str): Identifier of the cache. Clients created with the same
@@ -170,8 +171,10 @@ class ClientSideCache:
                 when the cached working set is a small part of the keyspace. Keys outside
                 the prefix are always read from the server and never cached, so they can
                 never be stale; an ``MGET`` mixing tracked and untracked keys still returns
-                the full ordered result and only the tracked keys are stored. Matching is a
-                byte-wise, case-sensitive starts-with check. A ``str`` is encoded as UTF-8.
+                the full ordered result and only the tracked keys are stored. Keys outside
+                the prefix do not count as cache hits or misses. Matching is a byte-wise,
+                case-sensitive starts-with check; a key equal to the prefix is tracked. A
+                ``str`` is encoded as UTF-8.
                 The prefix is fixed for the lifetime of the client. Requires
                 ``server_assisted=True`` and must not be empty; leave it as None to track
                 all keys.

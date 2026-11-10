@@ -802,7 +802,7 @@ pub(crate) trait MGetCacheExt: GlideCache {
     ///
     /// Returns `None` when `cmd` is not a valid MGET command, or when none of its
     /// keys is inside the tracking prefix, leaving the caller to execute it
-    /// unchanged. Metrics are recorded once per key.
+    /// unchanged. Metrics are recorded once per tracked key.
     /// Keys outside the tracking prefix are always fetched from the server and
     /// never stored; they do not count as hits or misses.
     fn get_cached_mget(&self, cmd: &Cmd) -> Option<MGetCacheLookup> {
