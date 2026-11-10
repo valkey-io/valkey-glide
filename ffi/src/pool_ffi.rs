@@ -94,6 +94,7 @@ fn get_pool_runtime() -> &'static tokio::runtime::Runtime {
             .enable_all()
             .worker_threads(2)
             .thread_name("glide-pool")
+            .thread_stack_size(RUNTIME_THREAD_STACK_SIZE)
             .build()
             .expect("Failed to create pool runtime")
     })

@@ -2601,11 +2601,15 @@ fn dispatch_async_push_notification(
     true
 }
 
+/// Explicit so `RUST_MIN_STACK` in the host process cannot shrink the threads that run a connect.
+const RUNTIME_THREAD_STACK_SIZE: usize = 2 * 1024 * 1024;
+
 /// Runs `future` on a worker thread of `rt` and blocks the caller until it finishes.
 ///
 /// Foreign callers choose the calling thread, and its stack can be too small for a connect:
-/// musl gives non-main threads 128 KiB, while a TLS cluster connect needs more. Tokio workers
-/// have 2 MiB stacks. A panic in `future` resumes on the caller, as if the caller had polled it.
+/// musl gives non-main threads 128 KiB, while a TLS cluster connect needs more. Runtimes built
+/// here give their workers [`RUNTIME_THREAD_STACK_SIZE`]. A panic in `future` resumes on the
+/// caller, as if the caller had polled it.
 fn block_on_worker<F>(rt: &Runtime, future: F) -> Result<F::Output, String>
 where
     F: Future + Send + 'static,
@@ -2693,6 +2697,7 @@ fn create_client_internal(
                 .enable_all()
                 .worker_threads(worker_threads)
                 .thread_name("Valkey-GLIDE thread")
+                .thread_stack_size(RUNTIME_THREAD_STACK_SIZE)
                 .build()
                 .map_err(|err| {
                     let redis_error: redis::RedisError = err.into();
@@ -2711,6 +2716,7 @@ fn create_client_internal(
                 .enable_all()
                 .worker_threads(1)
                 .thread_name("Valkey-GLIDE background")
+                .thread_stack_size(RUNTIME_THREAD_STACK_SIZE)
                 .build()
                 .map_err(|err| {
                     let redis_error: redis::RedisError = err.into();
@@ -7802,7 +7808,11 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         cache: None,
     };
 
-    let runtime = match Builder::new_multi_thread().enable_all().build() {
+    let runtime = match Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(RUNTIME_THREAD_STACK_SIZE)
+        .build()
+    {
         Ok(r) => r,
         Err(e) => {
             let err_msg =

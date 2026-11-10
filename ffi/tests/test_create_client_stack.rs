@@ -168,3 +168,21 @@ fn tls_clients_are_created_from_a_musl_sized_thread_stack() {
     let result = on_musl_sized_stack("monitor", move || create_monitor_and_close(&insecure));
     assert_eq!(result, Ok(()), "TLS monitor client");
 }
+
+// RUST_MIN_STACK sets the default stack of every thread the process spawns, tokio's included.
+#[test]
+fn tls_clients_are_created_when_rust_min_stack_is_small() {
+    let test = "tls_clients_are_created_from_a_musl_sized_thread_stack";
+    let output = Command::new(std::env::current_exe().expect("test binary path"))
+        .args([test, "--exact"])
+        .env("RUST_MIN_STACK", MUSL_THREAD_STACK.to_string())
+        .output()
+        .expect("run the test binary");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("1 passed"),
+        "{test} with RUST_MIN_STACK={MUSL_THREAD_STACK}: {}\n{stdout}\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
