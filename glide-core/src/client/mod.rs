@@ -515,6 +515,10 @@ pub struct ClientShared {
     // rejected. The flag makes `reset_connection_state` fail safe: restore whenever
     // a SELECT may have been issued, not only on observed drift.
     db_maybe_dirty: Arc<AtomicBool>,
+    // Set on dispatch of any (S|P)SUBSCRIBE; never cleared. Fails
+    // `reset_connection_state`: a RESP3 subscribed connection answers the reset
+    // normally, so nothing else catches it.
+    subscribe_sent: Arc<AtomicBool>,
     // IAM token generation the live connection last authenticated at. Compared by
     // `prepare_for_borrow` on the first command after a borrow to detect a rotation
     // that landed while the client sat idle in a pool, triggering a re-AUTH before
@@ -537,6 +541,8 @@ pub struct ClientShared {
     multi_active: Arc<AtomicBool>,
     // Whether this client is in cluster mode (immutable).
     is_cluster: bool,
+    // Whether this client is in read-only mode (immutable).
+    read_only: bool,
     // TLS certificate material the live connection was built with. Scope
     // connections read it to inherit the parent's mTLS identity and trust roots.
     // A shared write-once cell because the connection is built after
@@ -1453,6 +1459,7 @@ impl Client {
             self.reconcile_iam_before_dispatch().await?;
             // Track MULTI/EXEC/DISCARD for the borrow-time re-AUTH defer.
             self.track_transaction_state(cmd);
+            self.track_subscription(cmd);
             // Flag a possible db change before dispatch (see `db_maybe_dirty`).
             if self.is_select_command(cmd) {
                 self.shared.db_maybe_dirty.store(true, Ordering::Release);
@@ -2195,6 +2202,9 @@ impl Client {
             // reply shows the server took it, and flag a possible db change (see
             // `db_maybe_dirty`). No MULTI tracking here: redis-rs brackets MULTI/EXEC
             // at pack time and it always closes.
+            for cmd in pipeline.cmd_iter() {
+                self.track_subscription(cmd);
+            }
             let drifted_db = self.last_select_db(pipeline);
             if drifted_db.is_some() {
                 self.shared.db_maybe_dirty.store(true, Ordering::Release);
@@ -2290,6 +2300,7 @@ impl Client {
             // applied post-dispatch instead (see the store below).
             for cmd in pipeline.cmd_iter() {
                 self.track_transaction_state(cmd);
+                self.track_subscription(cmd);
             }
             let drifted_db = self.last_select_db(pipeline);
             if drifted_db.is_some() {
@@ -3450,11 +3461,13 @@ impl Client {
                     }),
                     current_database: Arc::new(AtomicU32::new(request.database_id as u32)),
                     db_maybe_dirty: Arc::new(AtomicBool::new(false)),
+                    subscribe_sent: Arc::new(AtomicBool::new(false)),
                     last_iam_generation: Arc::new(AtomicU64::new(0)),
                     is_pool_managed: Arc::new(AtomicBool::new(false)),
                     iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                     multi_active: Arc::new(AtomicBool::new(false)),
                     is_cluster: request.cluster_mode_enabled,
+                    read_only: request.read_only,
                     cert_material: cert_material_cell.clone(),
                     address_resolver: request.address_resolver.clone(),
                     configures_cert_material: request_configures_cert_material(&request),
@@ -3645,54 +3658,69 @@ impl Client {
     /// Reset connection state to a clean baseline after a pool borrow is returned.
     ///
     /// - DISCARD — always sent (not gated on the intent-tracked `multi_active`,
-    ///   which can desync under concurrent use), to `AllNodes` on cluster. A
-    ///   "DISCARD without MULTI" reply is expected and ignored; any other failure,
-    ///   when a MULTI *was* open, is propagated so release discards the connection
-    ///   rather than reuse it with queued commands. See the error-classification
-    ///   note at the call site for why cluster forces matching by message.
-    /// - SELECT <configured_db> — sent only when the database drifted
+    ///   which can desync under concurrent use), to `AllNodes` on cluster; skipped
+    ///   on read-only standalone, which can't open a MULTI. A "DISCARD without
+    ///   MULTI" reply is expected and ignored; any other failure is propagated so
+    ///   release discards the connection rather than reuse one it can't reset. See
+    ///   the error-classification note at the call site for why cluster forces
+    ///   matching by message.
+    /// - PING — cluster only, to `AllNodes`: the liveness check, since the DISCARD
+    ///   aggregate can mask a node that stopped replying.
+    /// - SELECT <configured_db> — always sent on standalone, where it is the
+    ///   all-nodes liveness check. On cluster, sent only when the database drifted
     ///   (`current_database() != configured_db`) or a SELECT may have applied
-    ///   untracked during the borrow (`db_maybe_dirty`); a borrow that never sent
-    ///   SELECT skips the round-trip. This is the fix for the cluster discard bug: a
-    ///   clean db-0 pool no longer sends a `SELECT` the cluster server rejects.
-    ///   Topology-independent — cluster supports multiple databases since Valkey 9.0.0
-    ///   (`cluster-databases`), so a drift must be undone there too.
+    ///   untracked during the borrow (`db_maybe_dirty`): a clean db-0 cluster pool
+    ///   must not send a `SELECT` the cluster server rejects. Cluster supports
+    ///   multiple databases since Valkey 9.0.0 (`cluster-databases`), so a drift
+    ///   must be undone there too.
     ///
     /// Does not UNSUBSCRIBE: callers must not subscribe on a pooled client (use the
-    /// parent client's pub/sub API, which keeps dedicated connections).
+    /// parent client's pub/sub API, which keeps dedicated connections). A client that
+    /// did (`subscribe_sent`) fails the reset so release discards it.
     pub async fn reset_connection_state(&mut self, configured_db: u32) -> RedisResult<()> {
-        // Capture multi_active before dispatch: send_command's track_transaction_state
-        // clears it on seeing DISCARD.
-        let multi_was_open = self.multi_active.load(Ordering::Acquire);
-        let discard_routing = self.is_cluster_mode().then_some(RoutingInfo::MultiNode((
-            MultipleNodeRoutingInfo::AllNodes,
-            None,
-        )));
-        let discard_result = self
-            .send_command(&mut redis::cmd("DISCARD"), discard_routing)
-            .await;
-        // Classify the DISCARD outcome by message, not `is_err()`. "DISCARD without
-        // MULTI" (no transaction open) is expected and ignored. On cluster it is
-        // unavoidable even on success: DISCARD fans out to AllNodes but a borrow's
-        // MULTI lives on one node, so the others answer "DISCARD without MULTI" and
-        // the `None`-policy aggregate surfaces that as an Err. Any other failure
-        // (circuit breaker, dead connection, timeout), when a MULTI *was* open, is
-        // propagated so release discards the connection instead of reusing it with
-        // queued commands. A real owner-node failure cannot be masked by a sibling's
-        // no-MULTI error: transport failures short-circuit aggregation before the
-        // per-node reply loop, and an owner node with an open MULTI has no DISCARD
-        // error path (it returns +OK).
-        if multi_was_open
-            && let Err(e) = &discard_result
-            && !Self::is_discard_without_multi(e)
-        {
-            return discard_result.map(|_| ());
+        if self.subscribe_sent.load(Ordering::Acquire) {
+            return Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Pooled client subscribed during the borrow; its connection cannot be reset",
+            )));
+        }
+        let is_cluster = self.is_cluster_mode();
+        let all_nodes = || RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
+        // Read-only standalone rejects DISCARD locally and can't open a MULTI.
+        if is_cluster || !self.read_only {
+            let discard_result = self
+                .send_command(&mut redis::cmd("DISCARD"), is_cluster.then(all_nodes))
+                .await;
+            // Classify the DISCARD outcome by message, not `is_err()`. "DISCARD
+            // without MULTI" (no transaction open) is expected and ignored. On
+            // cluster it is unavoidable even on success: DISCARD fans out to
+            // AllNodes but a borrow's MULTI lives on one node, so the others answer
+            // "DISCARD without MULTI" and the `None`-policy aggregate surfaces that
+            // as an Err. Any other failure (dead connection, timeout, circuit
+            // breaker) is propagated so release discards the connection.
+            if let Err(e) = &discard_result
+                && !Self::is_discard_without_multi(e)
+            {
+                return discard_result.map(|_| ());
+            }
+        }
+
+        // Cluster liveness check. The DISCARD aggregate can return a sibling's
+        // "without MULTI" before a node that stopped replying (`CLIENT REPLY OFF`)
+        // times out, so PING every node: PING has no benign error.
+        if is_cluster {
+            self.send_command(&mut redis::cmd("PING"), Some(all_nodes()))
+                .await?;
         }
 
         // `None` routing is intentional: SELECT is an AllNodes command, so it fans
-        // out to every node without spelling it out like DISCARD above. Restore on
-        // tracked drift OR a possible untracked SELECT (see `db_maybe_dirty`).
-        if self.current_database() != configured_db
+        // out to every node without spelling it out like DISCARD above. Standalone
+        // always sends it: standalone ignores routing, so DISCARD reaches only the
+        // primary, and SELECT is the liveness check for replicas a read-routed
+        // borrow used. Cluster restores only on tracked drift OR a possible
+        // untracked SELECT (see `db_maybe_dirty`).
+        if !is_cluster
+            || self.current_database() != configured_db
             || self.shared.db_maybe_dirty.load(Ordering::Acquire)
         {
             let mut select_cmd = redis::cmd("SELECT");
@@ -3770,6 +3798,25 @@ impl Client {
             Some(b"MULTI") => self.multi_active.store(true, Ordering::Release),
             Some(b"EXEC") | Some(b"DISCARD") => self.multi_active.store(false, Ordering::Release),
             _ => {}
+        }
+    }
+
+    /// Flag a (S|P)SUBSCRIBE before dispatch (see `subscribe_sent`).
+    fn track_subscription(&self, cmd: &Cmd) {
+        // arg_idx(0) avoids cmd.command()'s allocation on the hot path.
+        if cmd.arg_idx(0).is_some_and(|name| {
+            [
+                &b"SUBSCRIBE"[..],
+                b"PSUBSCRIBE",
+                b"SSUBSCRIBE",
+                b"SUBSCRIBE_BLOCKING",
+                b"PSUBSCRIBE_BLOCKING",
+                b"SSUBSCRIBE_BLOCKING",
+            ]
+            .iter()
+            .any(|sub| name.eq_ignore_ascii_case(sub))
+        }) {
+            self.subscribe_sent.store(true, Ordering::Release);
         }
     }
 
@@ -4021,11 +4068,13 @@ impl Client {
                 circuit_breaker: None,
                 current_database: Arc::new(AtomicU32::new(0)),
                 db_maybe_dirty: Arc::new(AtomicBool::new(false)),
+                subscribe_sent: Arc::new(AtomicBool::new(false)),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
+                read_only: false,
                 cert_material: Arc::default(),
                 address_resolver: None,
                 configures_cert_material: false,
@@ -4102,11 +4151,13 @@ pub fn create_test_glide_client() -> Client {
             circuit_breaker: None,
             current_database: Arc::new(AtomicU32::new(0)),
             db_maybe_dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            subscribe_sent: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             last_iam_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             is_pool_managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
             multi_active: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             is_cluster: false,
+            read_only: false,
             cert_material: Arc::default(),
             address_resolver: None,
             configures_cert_material: false,
@@ -5121,11 +5172,13 @@ mod tests {
                 circuit_breaker: None,
                 current_database: Arc::new(AtomicU32::new(0)),
                 db_maybe_dirty: Arc::new(AtomicBool::new(false)),
+                subscribe_sent: Arc::new(AtomicBool::new(false)),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
+                read_only: false,
                 cert_material: Arc::default(),
                 address_resolver: None,
                 configures_cert_material: false,
@@ -5409,6 +5462,34 @@ mod tests {
             !client.shared.multi_active.load(Ordering::Acquire),
             "DISCARD must clear the open-transaction flag"
         );
+    }
+
+    #[test]
+    fn track_subscription_flags_only_subscribe_commands() {
+        use std::sync::atomic::Ordering;
+        for name in ["UNSUBSCRIBE", "UNSUBSCRIBE_BLOCKING", "PUBLISH", "GET"] {
+            let client = create_test_client();
+            client.track_subscription(&redis::cmd(name));
+            assert!(
+                !client.shared.subscribe_sent.load(Ordering::Acquire),
+                "{name}"
+            );
+        }
+        for name in [
+            "subscribe",
+            "PSUBSCRIBE",
+            "SSUBSCRIBE",
+            "SUBSCRIBE_BLOCKING",
+            "PSUBSCRIBE_BLOCKING",
+            "SSUBSCRIBE_BLOCKING",
+        ] {
+            let client = create_test_client();
+            client.track_subscription(&redis::cmd(name));
+            assert!(
+                client.shared.subscribe_sent.load(Ordering::Acquire),
+                "{name}"
+            );
+        }
     }
 
     /// `last_select_db` returns the command index and db of the last `SELECT` in a
