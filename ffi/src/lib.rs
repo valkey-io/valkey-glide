@@ -2622,7 +2622,7 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod tests_block_on_worker {
     use super::*;
 

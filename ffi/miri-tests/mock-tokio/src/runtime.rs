@@ -48,15 +48,13 @@ impl Runtime {
         }
     }
 
-    pub fn spawn<F>(&self, _future: F) -> JoinHandle<F::Output> 
+    pub fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        // Don't poll the future - just return a handle
-        // This allows long-running tasks like pubsub listeners to be spawned
         JoinHandle {
-            _p: std::marker::PhantomData::<F::Output>
+            future: Box::pin(future),
         }
     }
 }
@@ -81,6 +79,10 @@ impl Builder {
     }
 
     pub fn thread_name(&mut self, _val: impl Into<String>) -> &mut Self {
+        self
+    }
+
+    pub fn thread_stack_size(&mut self, _val: usize) -> &mut Self {
         self
     }
 
