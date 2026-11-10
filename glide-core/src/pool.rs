@@ -522,12 +522,18 @@ pub async fn release_client_async(pool_arc: Arc<PoolMutex>, client_id: u64) {
         .await
     };
 
-    if !matches!(reset_result, Ok(Ok(_))) {
-        glide_logger::log_warn_rate_limited!(
+    match &reset_result {
+        Ok(Ok(_)) => {}
+        Ok(Err(e)) => glide_logger::log_warn_rate_limited!(
             "pool",
             10,
-            "Client reset failed on release — discarding connection"
-        );
+            format!("Client reset failed on release — discarding connection: {e}")
+        ),
+        Err(_) => glide_logger::log_warn_rate_limited!(
+            "pool",
+            10,
+            "Client reset timed out on release — discarding connection"
+        ),
     }
 
     let mut pool = pool_arc.lock();
@@ -4195,6 +4201,41 @@ mod scope_pool_tests {
             !client.borrow_is_dirty_for_test(),
             "a refused command must not mark the borrow dirty"
         );
+    }
+
+    /// A command refused for want of an in-flight slot never reached the server, so
+    /// it must not mark the client unresettable and release must reuse it. A-B:
+    /// discarded when tracking ran before the in-flight reserve.
+    #[tokio::test]
+    async fn release_reuses_a_client_after_an_inflight_refused_command() {
+        for args in [&["MONITOR"][..], &["RESET"], &["CLIENT", "REPLY", "OFF"]] {
+            let server = TestServer::start();
+            wait_for_server_ready(server.port).await;
+            let mut client = crate::client::Client::new(request_for(&[server.port]), None)
+                .await
+                .expect("client connects");
+            let (pool_arc, client_id) = pool_with_borrowed(&client);
+
+            let held: Vec<_> = std::iter::from_fn(|| client.reserve_inflight_request()).collect();
+            let mut cmd = redis::cmd(args[0]);
+            for arg in &args[1..] {
+                cmd.arg(*arg);
+            }
+            let err = client
+                .send_command(&mut cmd, None)
+                .await
+                .expect_err("no in-flight slot");
+            assert!(
+                err.to_string().contains("maximum inflight"),
+                "{args:?}: refused by the limit: {err}"
+            );
+            drop(held);
+
+            super::release_client_async(pool_arc.clone(), client_id).await;
+            let mut pool = pool_arc.lock();
+            assert_eq!(pool.idle_count(), 1, "{args:?}");
+            assert!(pool.drain_discarded_ids().is_empty(), "{args:?}");
+        }
     }
 
     /// A MULTI or WATCH that read-only mode rejects locally never reached the server,

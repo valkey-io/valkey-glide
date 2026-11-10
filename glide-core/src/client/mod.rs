@@ -1478,17 +1478,21 @@ impl Client {
         cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> RedisResult<Value> {
+        // Track only once admitted: a command refused here never reached the
+        // server, so it must not mark the client for reset or discard.
         let admission = Admission::check(self).await?;
-        // After the breaker (a refused command never reached the server), before
-        // the pubsub intercept (an intercepted SUBSCRIBE still subscribes).
-        self.track_command(cmd, routing.as_ref());
 
-        // Answered locally, so it never takes an in-flight slot.
+        // Answered locally, so it never takes an in-flight slot; an intercepted
+        // SUBSCRIBE still subscribes, so track it here.
         if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
+            self.track_command(cmd, routing.as_ref());
             return result;
         }
 
         let permit = admission.reserve(self)?;
+        // The request-timeout lookup in `dispatch` refuses only blocking and WAIT
+        // commands, none of which are tracked.
+        self.track_command(cmd, routing.as_ref());
         self.dispatch(permit, cmd, routing).await
     }
 
