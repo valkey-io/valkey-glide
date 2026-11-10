@@ -6755,7 +6755,10 @@ pub(crate) mod shared_client_tests {
                 .await
                 .expect("WATCH keys on two healthy primaries");
             admin
-                .send_command(redis::cmd("CLIENT").arg("PAUSE").arg(2000), Some(paused))
+                .send_command(
+                    redis::cmd("CLIENT").arg("PAUSE").arg(2000),
+                    Some(paused.clone()),
+                )
                 .await
                 .expect("pause another primary");
             release_client_async(pool_arc.clone(), client_id).await;
@@ -6802,6 +6805,99 @@ pub(crate) mod shared_client_tests {
                     "{tag}: the WATCH must be cleared on release"
                 );
             }
+
+            // ── 2f. a WATCH borrow released with its circuit breaker open must be
+            // reused with the breaker still open: the targeted UNWATCH skips the
+            // breaker. A-B: discarded when it went through the breaker ──
+            let mut breaker_request = create_connection_request(
+                &addresses,
+                &TestConfiguration {
+                    cluster_mode: ClusterMode::Enabled,
+                    request_timeout: Some(500),
+                    ..Default::default()
+                },
+            );
+            breaker_request.client_circuit_breaker = protobuf::MessageField::some(
+                glide_core::connection_request::ClientCircuitBreakerConfig {
+                    window_size_ms: 60_000,
+                    failure_rate_threshold: 0.5,
+                    min_errors: 1,
+                    open_timeout_ms: 60_000,
+                    count_timeouts: true,
+                    consecutive_successes: 1,
+                    ..Default::default()
+                },
+            );
+            let client = Client::new(breaker_request.into(), None)
+                .await
+                .expect("cluster client with a breaker");
+            let breaker_id = add_and_acquire(&pool_arc, client);
+            let mut client = borrowed(&pool_arc, breaker_id);
+            client
+                .send_command(redis::cmd("WATCH").arg(format!("{shard3_a}:watched")), None)
+                .await
+                .expect("WATCH on a healthy shard");
+            // Trip the breaker with a timeout on another primary.
+            admin
+                .send_command(
+                    redis::cmd("CLIENT").arg("PAUSE").arg(1000),
+                    Some(paused.clone()),
+                )
+                .await
+                .expect("pause another primary");
+            let on_paused = format!("{}:k", tag_in(0, 5_460, None));
+            let _ = client
+                .send_command(redis::cmd("GET").arg(on_paused), None)
+                .await;
+            assert!(
+                !client.is_circuit_breaker_healthy(),
+                "the timeout trips the breaker"
+            );
+            release_client_async(pool_arc.clone(), breaker_id).await;
+            {
+                let mut pool = pool_arc.lock();
+                assert!(
+                    pool.drain_discarded_ids().is_empty(),
+                    "the WATCH borrow is resettable"
+                );
+                assert_eq!(
+                    pool.try_acquire(),
+                    breaker_id as i64,
+                    "the client must be re-idled"
+                );
+            }
+            assert!(
+                !client.is_circuit_breaker_healthy(),
+                "its open breaker is kept"
+            );
+            tokio::time::sleep(Duration::from_millis(1100)).await;
+
+            // ── 2g. a WATCH routed by address may be on a replica, which the release
+            // UNWATCH can't reliably reach, so the client must be discarded. A-B:
+            // re-idled when the replica-routed WATCH wasn't flagged ──
+            let (host, port) = match &addresses[0] {
+                redis::ConnectionAddr::Tcp(host, port) => (host.clone(), *port),
+                other => panic!("tcp address expected: {other:?}"),
+            };
+            let client = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(&pool_arc, client);
+            let _ = borrowed(&pool_arc, client_id)
+                .send_command(
+                    redis::cmd("WATCH").arg("by-address"),
+                    Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                        host,
+                        port,
+                    })),
+                )
+                .await;
+            release_client_async(pool_arc.clone(), client_id).await;
+            assert_eq!(
+                pool_arc.lock().drain_discarded_ids(),
+                vec![client_id],
+                "a WATCH that may be on a replica must be discarded"
+            );
 
             // ── 3. db drift must be restored (Valkey 9.0+ multi-db cluster) ──
             let mut version_probe = Client::new(connection_request.clone().into(), None)

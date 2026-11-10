@@ -504,12 +504,23 @@ pub async fn release_client_async(pool_arc: Arc<PoolMutex>, client_id: u64) {
         client_id: guard_client_id,
     };
 
-    // Undo the borrow's state (see `reset_connection_state`); failure discards.
-    let reset_result = tokio::time::timeout(
-        timeout_duration,
-        entry.client.reset_connection_state(configured_db),
-    )
-    .await;
+    // A blocking command still in flight (the caller gave up waiting) holds the
+    // node's connection, so the next borrower's commands there would queue behind
+    // it; nothing a reset sends can cancel it. Like the scope pool's
+    // `blocking_in_flight`, discard instead of resetting.
+    let reset_result = if entry.is_blocking.load(Ordering::Acquire) > 0 {
+        Ok(Err(redis::RedisError::from((
+            redis::ErrorKind::ClientError,
+            "Pooled client released with a blocking command in flight",
+        ))))
+    } else {
+        // Undo the borrow's state (see `reset_connection_state`); failure discards.
+        tokio::time::timeout(
+            timeout_duration,
+            entry.client.reset_connection_state(configured_db),
+        )
+        .await
+    };
 
     if !matches!(reset_result, Ok(Ok(_))) {
         glide_logger::log_warn_rate_limited!(
@@ -4071,12 +4082,12 @@ mod scope_pool_tests {
 
     /// A client released with its circuit breaker open must be reused with the
     /// breaker still open, so it keeps protecting callers, whether the borrow was
-    /// clean or sent MULTI (the reset's DISCARD skips the breaker). A-B: discarded
-    /// when release always sent DISCARD (clean) or when the breaker refused it
-    /// (MULTI).
+    /// clean or sent MULTI or WATCH (the reset's DISCARD/UNWATCH skip the breaker).
+    /// A-B: discarded when release always sent DISCARD (clean) or when the breaker
+    /// refused the reset command (MULTI, WATCH).
     #[tokio::test]
     async fn release_keeps_a_client_whose_breaker_is_open() {
-        for multi_sent in [false, true] {
+        for sent in [None, Some("MULTI"), Some("WATCH")] {
             let server = TestServer::start();
             wait_for_server_ready(server.port).await;
             let mut request = request_for(&[server.port]);
@@ -4092,26 +4103,61 @@ mod scope_pool_tests {
                 .await
                 .expect("client connects");
             let (pool_arc, client_id) = pool_with_borrowed(&client);
-            if multi_sent {
-                client
-                    .send_command(&mut redis::cmd("MULTI"), None)
-                    .await
-                    .expect("MULTI");
+            if let Some(command) = sent {
+                let mut cmd = redis::cmd(command);
+                if command == "WATCH" {
+                    cmd.arg("watched");
+                }
+                client.send_command(&mut cmd, None).await.expect(command);
             }
             client.trip_circuit_breaker_for_test();
 
             super::release_client_async(pool_arc.clone(), client_id).await;
             let mut pool = pool_arc.lock();
-            assert_eq!(pool.idle_count(), 1, "multi_sent={multi_sent}");
-            assert!(
-                pool.drain_discarded_ids().is_empty(),
-                "multi_sent={multi_sent}"
-            );
+            assert_eq!(pool.idle_count(), 1, "{sent:?}");
+            assert!(pool.drain_discarded_ids().is_empty(), "{sent:?}");
             assert!(
                 !client.is_circuit_breaker_healthy(),
-                "multi_sent={multi_sent}: the re-idled client must keep its open breaker"
+                "{sent:?}: the re-idled client must keep its open breaker"
             );
         }
+    }
+
+    /// A blocking command still in flight when the client is released (the caller
+    /// gave up waiting) holds the connection, so release must discard the client
+    /// even though the borrow sent nothing else to reset. A-B: re-idled with the
+    /// BLPOP still blocking it.
+    #[tokio::test]
+    async fn release_discards_a_client_with_a_blocking_command_in_flight() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+        let client = crate::client::Client::new(request_for(&[server.port]), None)
+            .await
+            .expect("client connects");
+        let (pool_arc, client_id) = pool_with_borrowed(&client);
+
+        // What a binding does around a blocking dispatch.
+        let flag = super::get_blocking_flag(client_id).expect("pooled client has a flag");
+        flag.fetch_add(1, std::sync::atomic::Ordering::Release);
+        let mut blocked = client.clone();
+        let blpop = tokio::spawn(async move {
+            let _ = blocked
+                .send_command(redis::cmd("BLPOP").arg("empty").arg(0), None)
+                .await;
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        super::release_client_async(pool_arc.clone(), client_id).await;
+        {
+            let mut pool = pool_arc.lock();
+            assert_eq!(
+                pool.idle_count(),
+                0,
+                "a blocked client must not be re-idled"
+            );
+            assert_eq!(pool.drain_discarded_ids(), vec![client_id]);
+        }
+        blpop.abort();
     }
 
     /// A MULTI or WATCH the open circuit breaker refused never reached the server, so

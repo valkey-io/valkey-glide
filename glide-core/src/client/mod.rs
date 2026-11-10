@@ -580,9 +580,9 @@ pub struct ClientShared {
     credentials: credentials::CredentialsHandle,
 }
 
-/// Recorded WATCH targets: route and owner address at WATCH time, or `None` for
-/// every primary.
-type WatchRoutes = Option<Vec<(Route, String)>>;
+/// Recorded WATCH targets: watched slot → its primary's address at WATCH time
+/// (one entry per slot however many WATCHes), or `None` for every primary.
+type WatchRoutes = Option<std::collections::HashMap<u16, String>>;
 
 /// Where a WATCH lands, for the pool release reset.
 #[derive(Debug, PartialEq)]
@@ -3434,7 +3434,7 @@ impl Client {
                     unresettable: Arc::new(AtomicBool::new(false)),
                     multi_seen: Arc::new(AtomicBool::new(false)),
                     watch_seen: Arc::new(AtomicBool::new(false)),
-                    watch_routes: Arc::new(std::sync::Mutex::new(Some(Vec::new()))),
+                    watch_routes: Arc::new(std::sync::Mutex::new(Some(Default::default()))),
                     last_iam_generation: Arc::new(AtomicU64::new(0)),
                     is_pool_managed: Arc::new(AtomicBool::new(false)),
                     iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -3742,13 +3742,13 @@ impl Client {
                 .watch_routes
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
-                .replace(Vec::new());
+                .replace(Default::default());
             let per_node = match routes {
                 Some(recorded) if is_cluster && !recorded.is_empty() => {
                     let mut owners = std::collections::HashMap::new();
-                    for (route, _) in &recorded {
-                        if let Ok(address) = self.address_for_slot(route.slot()).await {
-                            owners.insert(route.slot(), address);
+                    for &slot in recorded.keys() {
+                        if let Ok(address) = self.address_for_slot(slot).await {
+                            owners.insert(slot, address);
                         }
                     }
                     Self::unwatch_targets(recorded, |slot| owners.get(&slot).cloned())
@@ -3883,10 +3883,14 @@ impl Client {
             Some(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::MultiSlot((routes, _)), _))) => {
                 routes.into_iter().map(|(route, _)| route).collect()
             }
-            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary))
+            // `Random` too: the cluster client sends a write such as WATCH to a
+            // random primary.
+            Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::Random | SingleNodeRoutingInfo::RandomPrimary,
+            ))
             | Some(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, _)))
             | None => return WatchTarget::AnyPrimary,
-            // Random, by address or all nodes: may include a replica.
+            // By address or all nodes: may include a replica.
             Some(_) => Vec::new(),
         };
         if routes.is_empty() || routes.iter().any(|r| r.slot_addr() != SlotAddr::Master) {
@@ -3911,15 +3915,31 @@ impl Client {
                 .map(|route| {
                     self.try_address_for_slot(route.slot())
                         .ok()
-                        .map(|address| (route, address))
+                        .map(|address| (route.slot(), address))
                 })
                 .collect::<Option<Vec<_>>>(),
             WatchTarget::AnyPrimary => None,
         };
-        let mut known = self.watch_routes.lock().unwrap_or_else(|e| e.into_inner());
-        match (known.as_mut(), routes) {
-            (Some(known), Some(routes)) => known.extend(routes),
-            _ => *known = None,
+        Self::merge_watch_routes(
+            &mut self.watch_routes.lock().unwrap_or_else(|e| e.into_inner()),
+            routes,
+        );
+    }
+
+    /// Fold one WATCH's `(slot, owner)` pairs into `known`, keeping one entry per
+    /// slot so a WATCH loop can't grow it. `None` (every primary) for an unknown
+    /// target, or for a slot already recorded under another owner: it moved
+    /// between WATCHes, so the earlier WATCH may be on the old owner.
+    fn merge_watch_routes(known: &mut WatchRoutes, routes: Option<Vec<(u16, String)>>) {
+        let (Some(map), Some(routes)) = (known.as_mut(), routes) else {
+            *known = None;
+            return;
+        };
+        for (slot, address) in routes {
+            if map.entry(slot).or_insert_with(|| address.clone()) != &address {
+                *known = None;
+                return;
+            }
         }
     }
 
@@ -3928,15 +3948,18 @@ impl Client {
     /// when a slot moved or an owner is unknown: the WATCH may be on the old owner.
     /// An ASK-redirected WATCH isn't seen here (ASK doesn't update the slot map).
     fn unwatch_targets(
-        recorded: Vec<(Route, String)>,
+        recorded: std::collections::HashMap<u16, String>,
         owner_now: impl Fn(u16) -> Option<String>,
     ) -> Option<Vec<Route>> {
+        use redis::cluster_routing::SlotAddr;
         let mut by_address = std::collections::HashMap::new();
-        for (route, address) in recorded {
-            if owner_now(route.slot()).as_ref() != Some(&address) {
+        for (slot, address) in recorded {
+            if owner_now(slot).as_ref() != Some(&address) {
                 return None;
             }
-            by_address.entry(address).or_insert(route);
+            by_address
+                .entry(address)
+                .or_insert(Route::new(slot, SlotAddr::Master));
         }
         (!by_address.is_empty()).then(|| by_address.into_values().collect())
     }
@@ -4223,7 +4246,7 @@ impl Client {
                 unresettable: Arc::new(AtomicBool::new(false)),
                 multi_seen: Arc::new(AtomicBool::new(false)),
                 watch_seen: Arc::new(AtomicBool::new(false)),
-                watch_routes: Arc::new(std::sync::Mutex::new(Some(Vec::new()))),
+                watch_routes: Arc::new(std::sync::Mutex::new(Some(Default::default()))),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -4309,7 +4332,7 @@ pub fn create_test_glide_client() -> Client {
             unresettable: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             multi_seen: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             watch_seen: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            watch_routes: Arc::new(std::sync::Mutex::new(Some(Vec::new()))),
+            watch_routes: Arc::new(std::sync::Mutex::new(Some(Default::default()))),
             last_iam_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             is_pool_managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -5276,7 +5299,7 @@ mod tests {
                 unresettable: Arc::new(AtomicBool::new(false)),
                 multi_seen: Arc::new(AtomicBool::new(false)),
                 watch_seen: Arc::new(AtomicBool::new(false)),
-                watch_routes: Arc::new(std::sync::Mutex::new(Some(Vec::new()))),
+                watch_routes: Arc::new(std::sync::Mutex::new(Some(Default::default()))),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -5606,7 +5629,7 @@ mod tests {
             (node(SlotAddr::ReplicaRequired), WatchTarget::MaybeReplica),
             (
                 Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
-                WatchTarget::MaybeReplica,
+                WatchTarget::AnyPrimary,
             ),
             (
                 Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
@@ -5625,18 +5648,41 @@ mod tests {
         }
     }
 
+    /// Repeated WATCHes on a slot keep one entry; a slot seen under a new owner, or
+    /// an unknown target, falls back to every primary.
+    #[test]
+    fn merge_watch_routes_keeps_one_entry_per_slot() {
+        let pair = |slot: u16, owner: &str| (slot, owner.to_string());
+        let mut known: super::WatchRoutes = Some(Default::default());
+        for _ in 0..1000 {
+            Client::merge_watch_routes(&mut known, Some(vec![pair(4, "n1:1"), pair(9, "n2:1")]));
+        }
+        assert_eq!(
+            known.as_ref().map(|m| m.len()),
+            Some(2),
+            "a WATCH loop must not grow it"
+        );
+
+        Client::merge_watch_routes(&mut known, Some(vec![pair(4, "n3:1")]));
+        assert!(known.is_none(), "a slot seen under a new owner falls back");
+        Client::merge_watch_routes(&mut known, Some(vec![pair(5, "n1:1")]));
+        assert!(known.is_none(), "the fallback sticks until release");
+
+        let mut known: super::WatchRoutes = Some(Default::default());
+        Client::merge_watch_routes(&mut known, None);
+        assert!(known.is_none(), "an unknown target falls back");
+    }
+
     /// Release targets one UNWATCH per primary only while every watched slot still
     /// has its WATCH-time owner; a moved slot or an unknown owner falls back to
     /// every primary, since the WATCH may be on the old owner.
     #[test]
     fn unwatch_targets_falls_back_when_a_slot_moved() {
-        use redis::cluster_routing::{Route, SlotAddr};
         let recorded = || {
-            vec![
-                (Route::new(1, SlotAddr::Master), "n1:1".to_string()),
-                (Route::new(2, SlotAddr::Master), "n1:1".to_string()),
-                (Route::new(3, SlotAddr::Master), "n2:1".to_string()),
-            ]
+            [(1, "n1:1"), (2, "n1:1"), (3, "n2:1")]
+                .into_iter()
+                .map(|(slot, owner)| (slot, owner.to_string()))
+                .collect::<std::collections::HashMap<u16, String>>()
         };
         let owner = |moved: Option<u16>| {
             move |slot: u16| match slot {
