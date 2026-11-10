@@ -178,9 +178,9 @@ jobs:
               with:
                   path: |
                       glide-core/target
-                  key: ${{ matrix.host.TARGET }}-glide-core-${{ hashFiles('glide-core/Cargo.lock') }}
+                  key: ${{ matrix.host.TARGET }}-glide-core-v2-${{ hashFiles('glide-core/Cargo.lock') }}
                   restore-keys: |
-                      ${{ matrix.host.TARGET }}-glide-core-
+                      ${{ matrix.host.TARGET }}-glide-core-v2-
 
             - uses: ./.github/actions/setup-dns-tests
               with:
