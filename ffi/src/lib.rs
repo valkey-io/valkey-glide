@@ -2601,6 +2601,53 @@ fn dispatch_async_push_notification(
     true
 }
 
+/// Runs `future` on a worker thread of `rt` and blocks the caller until it finishes.
+///
+/// Foreign callers choose the calling thread, and its stack can be too small for a connect:
+/// musl gives non-main threads 128 KiB, while a TLS cluster connect needs more. Tokio workers
+/// have 2 MiB stacks. A panic in `future` resumes on the caller, as if the caller had polled it.
+fn block_on_worker<F>(rt: &Runtime, future: F) -> Result<F::Output, String>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    match rt.block_on(rt.spawn(future)) {
+        Ok(output) => Ok(output),
+        Err(err) if err.is_panic() => std::panic::resume_unwind(err.into_panic()),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests_block_on_worker {
+    use super::*;
+
+    fn runtime() -> Runtime {
+        Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn runs_the_future_off_the_calling_thread() {
+        let caller = std::thread::current().id();
+        let polled_on = block_on_worker(&runtime(), async { std::thread::current().id() });
+        assert_ne!(polled_on.unwrap(), caller);
+    }
+
+    #[test]
+    fn a_panic_resumes_on_the_caller_with_its_payload() {
+        let rt = runtime();
+        let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            block_on_worker(&rt, async { std::panic::panic_any("connect panicked") })
+        }))
+        .unwrap_err();
+        assert_eq!(payload.downcast_ref::<&str>(), Some(&"connect panicked"));
+    }
+}
+
 fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
@@ -2717,9 +2764,11 @@ fn create_client_internal(
                 .credentials_provider = Some(Arc::new(move || provider.call()));
         }
 
-        create_rt
-            .block_on(GlideClient::new(connection_request, Some(push_tx)))
-            .map_err(|err| err.to_string())
+        block_on_worker(
+            create_rt,
+            GlideClient::new(connection_request, Some(push_tx)),
+        )
+        .and_then(|client| client.map_err(|err| err.to_string()))
     };
     let client = match client {
         Ok(client) => client,
@@ -7796,8 +7845,10 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         }
     });
 
-    let monitor_client = match runtime
-        .block_on(async { MonitorClient::new(&address, redis_conn_info, tls_mode, on_line).await })
+    let monitor_client = match block_on_worker(&runtime, async move {
+        MonitorClient::new(&address, redis_conn_info, tls_mode, on_line).await
+    })
+    .and_then(|client| client.map_err(|err| err.to_string()))
     {
         Ok(c) => c,
         Err(e) => {
