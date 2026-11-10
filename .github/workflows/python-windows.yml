@@ -181,6 +181,7 @@ jobs:
               env:
                   GLIDE_NAME: GlidePy
                   GLIDE_VERSION: ${{ env.BUILD_VERSION }}
+                  MATURIN_PEP517_ARGS: --locked
                   TARGET_PYTHON: ${{ steps.target_python.outputs.python-path }}
 
             - name: Build Python Async client wheel
@@ -189,6 +190,7 @@ jobs:
               env:
                   GLIDE_NAME: GlidePy
                   GLIDE_VERSION: ${{ env.BUILD_VERSION }}
+                  MATURIN_PEP517_ARGS: --locked
                   TARGET_PYTHON: ${{ steps.target_python.outputs.python-path }}
 
             - name: Build Python Sync client wheel
