@@ -1,0 +1,83 @@
+name: Cargo lockfiles
+
+permissions:
+    contents: read
+
+on:
+    push:
+        branches:
+            - main
+            - release-*
+            - v*
+        paths:
+            - "**/Cargo.toml"
+            - "**/Cargo.lock"
+            - "**/.cargo/config.toml"
+            - .github/workflows/cargo-lockfiles.yml
+            - .github/actions/install-rust/action.yml
+    pull_request:
+        paths:
+            - "**/Cargo.toml"
+            - "**/Cargo.lock"
+            - "**/.cargo/config.toml"
+            - .github/workflows/cargo-lockfiles.yml
+            - .github/actions/install-rust/action.yml
+    workflow_dispatch:
+
+concurrency:
+    group: cargo-lockfiles-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    check:
+        name: Check every Cargo.lock is current
+        runs-on: ubuntu-24.04
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Install Rust toolchain
+              uses: ./.github/actions/install-rust
+
+            # A path dependency's manifest (glide-core, glide-logger, ...) is
+            # recorded in every lockfile that depends on it, and those
+            # workspaces' own CI does not trigger on that manifest. Checking
+            # all lockfiles here keeps a manifest change from leaving one stale
+            # for the next unrelated --locked build to trip over.
+            #
+            # Run inside each lockfile's directory so cargo reads the same
+            # .cargo/config.toml the build there reads. RUSTUP_TOOLCHAIN keeps
+            # the resolution on stable even where a rust-toolchain.toml pins
+            # another toolchain.
+            - name: Check lockfiles with cargo metadata --locked
+              shell: bash
+              run: |
+                  set -uo pipefail
+                  lockfiles="$(git ls-files '*Cargo.lock')" || exit 1
+                  if [[ -z "$lockfiles" ]]; then
+                    echo "::error::No committed Cargo.lock found."
+                    exit 1
+                  fi
+                  stale=()
+                  while IFS= read -r lockfile; do
+                    manifest="$(dirname "$lockfile")/Cargo.toml"
+                    echo "::group::$lockfile"
+                    if (cd "$(dirname "$lockfile")" && RUSTUP_TOOLCHAIN=stable cargo metadata --locked --format-version 1 > /dev/null); then
+                      echo "current"
+                    else
+                      stale+=("$lockfile")
+                      echo "::error file=$lockfile::$lockfile is out of date with $manifest or a path dependency's manifest. Run 'cargo tree' (any cargo command without --locked) in $(dirname "$lockfile") and commit the updated Cargo.lock."
+                    fi
+                    echo "::endgroup::"
+                  done <<< "$lockfiles"
+
+                  if (( ${#stale[@]} > 0 )); then
+                    echo "Stale lockfiles:"
+                    printf '  %s\n' "${stale[@]}"
+                    exit 1
+                  fi
