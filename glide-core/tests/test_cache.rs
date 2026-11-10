@@ -2004,9 +2004,13 @@ pub(crate) mod test_cache {
     }
 
     /// Returns the (flags, prefixes) reported by `CLIENT TRACKINGINFO` for the client's
-    /// connection. In cluster mode the reply is a per-node map; every node connection must
+    /// connection. In cluster mode the command is sent to every node (it is routed to a single
+    /// random node by default) and the reply is a per-node map; every node connection must
     /// report the same tracking state, which is asserted before returning it.
-    async fn tracking_info(client: &mut glide_core::client::Client) -> (Vec<String>, Vec<Vec<u8>>) {
+    async fn tracking_info(
+        client: &mut glide_core::client::Client,
+        use_cluster: bool,
+    ) -> (Vec<String>, Vec<Vec<u8>>) {
         fn as_bytes(value: &Value) -> Vec<u8> {
             match value {
                 Value::BulkString(bytes) => bytes.to_vec(),
@@ -2038,14 +2042,24 @@ pub(crate) mod test_cache {
 
         let mut cmd = redis::cmd("CLIENT");
         cmd.arg("TRACKINGINFO");
-        let reply = client.send_command(&mut cmd, None).await.unwrap();
+        let routing = use_cluster.then_some(redis::cluster_routing::RoutingInfo::MultiNode((
+            redis::cluster_routing::MultipleNodeRoutingInfo::AllNodes,
+            None,
+        )));
+        let reply = client.send_command(&mut cmd, routing).await.unwrap();
         let Value::Map(entries) = reply else {
             panic!("unexpected CLIENT TRACKINGINFO reply: {reply:?}");
         };
         let is_info_map = entries.iter().any(|(field, _)| as_bytes(field) == b"flags");
         if is_info_map {
+            assert!(!use_cluster, "expected a per-node reply in cluster mode");
             return parse(&entries);
         }
+        assert!(
+            entries.len() > 1,
+            "expected a reply from every cluster node, got {}",
+            entries.len()
+        );
         // Cluster multi-node reply: { "host:port" => { flags, redirect, prefixes } }
         let mut per_node = entries.iter().map(|(node, info)| {
             let Value::Map(node_entries) = info else {
@@ -2094,7 +2108,7 @@ pub(crate) mod test_cache {
             )
             .await;
 
-            let (flags, prefixes) = tracking_info(&mut test_basics.client).await;
+            let (flags, prefixes) = tracking_info(&mut test_basics.client, use_cluster).await;
             assert!(flags.iter().any(|flag| flag == "on"), "flags: {flags:?}");
             assert!(flags.iter().any(|flag| flag == "bcast"), "flags: {flags:?}");
             assert_eq!(prefixes, vec![b"xxx:".to_vec()]);
@@ -2129,7 +2143,7 @@ pub(crate) mod test_cache {
             )
             .await;
 
-            let (flags, prefixes) = tracking_info(&mut test_basics.client).await;
+            let (flags, prefixes) = tracking_info(&mut test_basics.client, use_cluster).await;
             assert!(flags.iter().any(|flag| flag == "bcast"), "flags: {flags:?}");
             assert_eq!(prefixes, vec![Vec::<u8>::new()], "empty prefix = all keys");
         });
@@ -2292,6 +2306,19 @@ pub(crate) mod test_cache {
             // without any invalidation involved.
             set(&mut writer.client, &untracked, "u2", use_cluster).await;
             assert_eq!(get(&mut cached.client, &untracked).await, bulk("u2"));
+
+            // MGET with only untracked keys (in different slots in cluster mode): sent to the
+            // server as is, nothing is stored and nothing is counted.
+            let other_untracked = format!("zzz:other{suffix}");
+            set(&mut writer.client, &other_untracked, "o1", use_cluster).await;
+            let mut mget = redis::cmd("MGET");
+            mget.arg(&untracked).arg(&other_untracked);
+            assert_eq!(
+                cached.client.send_command(&mut mget, None).await.unwrap(),
+                Value::Array(vec![bulk("u2"), bulk("o1")])
+            );
+            assert_eq!(entry_count(&cached.client), 0);
+            assert_eq!(total_lookups(&cached.client), 0);
 
             // MGET mixing tracked and untracked keys: both values are returned, only the
             // tracked key is stored.
@@ -2496,8 +2523,15 @@ pub(crate) mod test_cache {
             )
             .await;
 
-            let (_, prefixes) = tracking_info(&mut cached.client).await;
+            let (_, prefixes) = tracking_info(&mut cached.client, use_cluster).await;
             assert_eq!(prefixes, vec![b"xxx:".to_vec()]);
+            let mut client_id = redis::cmd("CLIENT");
+            client_id.arg("ID");
+            let id_before = cached
+                .client
+                .send_command(&mut client_id, None)
+                .await
+                .unwrap();
 
             // Drop every other connection on every node; the cached client must reconnect.
             let mut kill = redis::cmd("CLIENT");
@@ -2521,7 +2555,14 @@ pub(crate) mod test_cache {
                 }
             );
 
-            let (flags, prefixes) = tracking_info(&mut cached.client).await;
+            let id_after = cached
+                .client
+                .send_command(&mut client_id, None)
+                .await
+                .unwrap();
+            assert_ne!(id_before, id_after, "the client is on a new connection");
+
+            let (flags, prefixes) = tracking_info(&mut cached.client, use_cluster).await;
             assert!(flags.iter().any(|flag| flag == "bcast"), "flags: {flags:?}");
             assert_eq!(
                 prefixes,
@@ -2638,7 +2679,7 @@ pub(crate) mod test_cache {
             )
             .await;
 
-            let (_, prefixes) = tracking_info(&mut cached.client).await;
+            let (_, prefixes) = tracking_info(&mut cached.client, use_cluster).await;
             assert_eq!(
                 prefixes,
                 vec![prefix.to_vec()],
@@ -2663,11 +2704,15 @@ pub(crate) mod test_cache {
                 let route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
                     Route::new(get_slot(&raw_key), SlotAddr::Master),
                 ));
-                writer
+                let acked = writer
                     .client
                     .send_command(&mut wait, Some(route))
                     .await
                     .unwrap();
+                assert!(
+                    matches!(acked, Value::Int(replicas) if replicas >= 1),
+                    "no replica acknowledged the write: {acked:?}"
+                );
             }
 
             let mut get_cmd = redis::cmd("GET");
@@ -2696,7 +2741,7 @@ pub(crate) mod test_cache {
 
             // A key with a different first byte is outside the prefix.
             let mut other = vec![0xfe, 0x00, b':'];
-            other.extend_from_slice(b"k");
+            other.extend_from_slice(generate_random_string(8).as_bytes());
             let mut set_other = redis::cmd("SET");
             set_other.arg(other.as_slice()).arg("o");
             writer

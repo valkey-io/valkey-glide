@@ -220,11 +220,21 @@ describe("ClientSideCache", () => {
      */
     async function awaitReplication(writer: CacheClient): Promise<void> {
         const args = ["WAIT", "1", "1000"];
+        // Every primary has one replica; a reply below 1 means the write was not
+        // replicated in time and the assertions that follow would be racy.
+        const reply =
+            writer instanceof GlideClusterClient
+                ? await writer.customCommand(args, { route: "allPrimaries" })
+                : await writer.customCommand(args);
+        const acked =
+            typeof reply === "number"
+                ? [reply]
+                : Object.values(reply as Record<string, number>);
 
-        if (writer instanceof GlideClusterClient) {
-            await writer.customCommand(args, { route: "allPrimaries" });
-        } else {
-            await writer.customCommand(args);
+        expect(acked.length).toBeGreaterThan(0);
+
+        for (const replicas of acked) {
+            expect(replicas).toBeGreaterThanOrEqual(1);
         }
     }
 
