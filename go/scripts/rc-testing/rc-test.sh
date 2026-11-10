@@ -42,4 +42,5 @@ echo "Pointing benchmarks at the RC module..."
     cd benchmarks
     go mod edit -dropreplace=github.com/valkey-io/valkey-glide/go/v2 -require=github.com/valkey-io/valkey-glide/go/v2@"$VERSION"
     go mod tidy
+    go list -m github.com/valkey-io/valkey-glide/go/v2
 )
