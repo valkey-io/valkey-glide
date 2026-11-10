@@ -207,10 +207,7 @@ jobs:
               run: |
                   make -k example-test
 
-            # The benchmark compiles the local go/ source, but an RC run tests the
-            # published module instead.
             - uses: ./.github/actions/test-benchmark
-              if: ${{ !inputs.rc-version }}
               with:
                   language-flag: -go
                   engine-run: ${{ matrix.engine.run }}
