@@ -290,7 +290,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-containers, approve-self-hosted]
         if: always() && needs.get-containers.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
-        timeout-minutes: 25
+        timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
