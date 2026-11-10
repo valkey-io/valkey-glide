@@ -1581,7 +1581,7 @@ pub(crate) mod shared_client_tests {
                     client.current_database(),
                     acquisition_slot,
                 ) {
-                    glide_core::pool::ScopeAcquire::Reserved(reservation) => reservation,
+                    glide_core::pool::ScopeAcquire::Reserved { reservation, .. } => reservation,
                     other => panic!("expected a fresh reservation from an empty pool: {other:?}"),
                 }
             };

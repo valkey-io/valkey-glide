@@ -1527,12 +1527,12 @@ impl DeferredLog {
     }
 }
 
-/// What [`classify_acquire`] decided, plus the log line it owes once the guard
+/// What [`classify_acquire`] decided, plus the log lines it owes once the guard
 /// it consumed is gone.
 #[cfg(feature = "proto")]
 struct Classification {
     next: Classified,
-    log: Option<DeferredLog>,
+    logs: Vec<DeferredLog>,
 }
 
 #[cfg(feature = "proto")]
@@ -1542,14 +1542,14 @@ fn attempt_acquire(
     runtime: &tokio::runtime::Handle,
     routing_slot: Option<u16>,
 ) -> Classified {
-    let Classification { next, log } = classify_acquire(
+    let Classification { next, logs } = classify_acquire(
         scope_pool,
         scope_pool.lock(),
         client_id,
         runtime,
         routing_slot,
     );
-    if let Some(log) = log {
+    for log in logs {
         log.write();
     }
     next
@@ -1574,7 +1574,7 @@ fn classify_acquire(
     if pool.state != PoolState::Running {
         return Classification {
             next: Outcome(Fail(ScopeFailCause::PoolClosed)),
-            log: None,
+            logs: Vec::new(),
         };
     }
 
@@ -1587,22 +1587,27 @@ fn classify_acquire(
     // wrong node. Unresolved never means "use the seed"; whether it means
     // "retry" depends on the cause (see `ScopeTargetUnresolved`).
     let client = get_parent_client(pool.parent_client_id);
-    let (target, log) = match try_resolve_scope_target(client.as_ref(), connection_slot) {
+    let mut logs = Vec::new();
+    let target = match try_resolve_scope_target(client.as_ref(), connection_slot) {
         Ok(target) => {
-            let log = pool
-                .last_unresolved_target
-                .take()
-                .map(|cleared| DeferredLog {
+            if let Some(cleared) = pool.last_unresolved_target.take() {
+                logs.push(DeferredLog {
                     identifier: "acquire_scope_outcome",
                     level: glide_logger::Level::Debug,
                     message: format!(
                         "client {client_id}: scope target resolves again (was: {cleared})"
                     ),
                 });
-            (target, log)
+            }
+            target
         }
         Err(cause) => {
-            let log = unresolved_target_log(&mut pool, client_id, connection_slot, cause);
+            logs.push(unresolved_target_log(
+                &mut pool,
+                client_id,
+                connection_slot,
+                cause,
+            ));
             let next = Outcome(match cause {
                 ScopeTargetUnresolved::ParentUnregistered => {
                     Fail(ScopeFailCause::ParentUnregistered)
@@ -1611,10 +1616,7 @@ fn classify_acquire(
                     Retry(ScopeRetryCause::TargetUnresolved)
                 }
             });
-            return Classification {
-                next,
-                log: Some(log),
-            };
+            return Classification { next, logs };
         }
     };
 
@@ -1627,7 +1629,7 @@ fn classify_acquire(
     let Some(runtime_db) = client.as_ref().map(|c| c.current_database()) else {
         return Classification {
             next: Outcome(Fail(ScopeFailCause::ParentUnregistered)),
-            log,
+            logs,
         };
     };
     let acquisition_slot = acquisition_slot_for(&target, routing_slot);
@@ -1645,13 +1647,26 @@ fn classify_acquire(
                 }
                 return Classification {
                     next: Outcome(Fail(ScopeFailCause::PoolClosed)),
-                    log,
+                    logs,
                 };
             }
             let _ = glide_telemetry::GlideOpenTelemetry::record_scope_acquire();
             Outcome(Acquired(scope_id))
         }
-        ScopeAcquire::Reserved(reservation) => {
+        ScopeAcquire::Reserved {
+            reservation,
+            evicted,
+        } => {
+            if let Some(evicted) = evicted {
+                logs.push(DeferredLog {
+                    identifier: "pool",
+                    level: glide_logger::Level::Debug,
+                    message: format!(
+                        "Evicted idle scope {} targeting {:?} to make room for {:?}",
+                        evicted.scope_id, evicted.target, target
+                    ),
+                });
+            }
             // The guard moves into the creation task, so an early return,
             // cancel, or panic there gives the slot back.
             let pool_clone = scope_pool.clone();
@@ -1680,7 +1695,7 @@ fn classify_acquire(
         }
         ScopeAcquire::Exhausted => Outcome(Retry(ScopeRetryCause::Exhausted)),
     };
-    Classification { next, log }
+    Classification { next, logs }
 }
 
 /// Re-`SELECT` one slot-matching idle connection that is on the wrong database onto
@@ -2209,7 +2224,7 @@ mod tests {
         let reservation = {
             let mut guard = pool.lock();
             match guard.try_acquire(registry, ScopeTarget::Standalone, 0, None) {
-                ScopeAcquire::Reserved(r) => r,
+                ScopeAcquire::Reserved { reservation, .. } => reservation,
                 other => panic!("expected a reservation, got {other:?}"),
             }
         };
@@ -3233,7 +3248,7 @@ mod tests {
                 0,
                 None,
             ) {
-                ScopeAcquire::Reserved(reservation) => reservation,
+                ScopeAcquire::Reserved { reservation, .. } => reservation,
                 other => panic!("expected a reservation, got {other:?}"),
             };
             assert_eq!(pool.idle.len(), 1);
@@ -3246,7 +3261,7 @@ mod tests {
                 0,
                 None,
             ) {
-                ScopeAcquire::Reserved(reservation) => reservation,
+                ScopeAcquire::Reserved { reservation, .. } => reservation,
                 other => panic!("expected a reservation, got {other:?}"),
             };
             assert_eq!(pool.idle.len(), 1);
@@ -3334,7 +3349,7 @@ mod tests {
                 0,
                 None,
             ) {
-                ScopeAcquire::Reserved(reservation) => reservation,
+                ScopeAcquire::Reserved { reservation, .. } => reservation,
                 other => panic!("expected a reservation, got {other:?}"),
             };
             assert_eq!(pool.idle.len(), 1, "exactly one idle connection evicted");

@@ -1247,6 +1247,14 @@ impl Drop for ScopeReservation {
     }
 }
 
+/// An idle connection [`ScopePool::try_acquire`] dropped to make room for a
+/// connection to another target.
+#[derive(Debug)]
+pub struct EvictedScope {
+    pub scope_id: u64,
+    pub target: ScopeTarget,
+}
+
 /// Outcome of [`ScopePool::try_acquire`], which owns the `max_total` reservation
 /// for the acquire path. The prewarm path reserves through the same guard.
 #[derive(Debug)]
@@ -1255,7 +1263,12 @@ pub enum ScopeAcquire {
     Reused(u64),
     /// A slot was reserved against `max_total`; the caller fills it. The
     /// [`ScopeReservation`] gives the slot back unless the creator commits it.
-    Reserved(ScopeReservation),
+    /// `evicted` names the idle connection dropped to free the slot, if any, so
+    /// the caller can log it once the pool lock is released.
+    Reserved {
+        reservation: ScopeReservation,
+        evicted: Option<EvictedScope>,
+    },
     /// The only reusable idle connection is on a database other than the parent's runtime
     /// database. Left in the idle queue; the caller must re-`SELECT` it onto the runtime
     /// database and retry, so the borrower never observes a connection on the wrong database.
@@ -1388,27 +1401,27 @@ impl ScopePool {
             return ScopeAcquire::NeedsResync;
         }
 
+        let mut evicted = None;
         if self.total_count.load(Ordering::Acquire) >= self.config.max_total {
             // Full, and every idle connection points at a different target. Evict
             // the oldest idle one (front of the LIFO deque) to make room rather
             // than reporting exhaustion while capacity sits idle on other primaries.
             // Only when nothing is idle at all is the pool truly exhausted.
-            let Some(evicted) = self.idle.pop_front() else {
+            let Some(conn) = self.idle.pop_front() else {
                 return ScopeAcquire::Exhausted;
             };
             saturating_dec(&self.total_count);
-            glide_logger::log_debug(
-                "pool",
-                format!(
-                    "Evicted idle scope {} targeting {:?} to make room for {:?}",
-                    evicted.scope_id, evicted.target, target
-                ),
-            );
-            drop(evicted);
+            evicted = Some(EvictedScope {
+                scope_id: conn.scope_id,
+                target: conn.target,
+            });
         }
 
         match self.reserve_slot_inner() {
-            Some(reservation) => ScopeAcquire::Reserved(reservation),
+            Some(reservation) => ScopeAcquire::Reserved {
+                reservation,
+                evicted,
+            },
             None => ScopeAcquire::Exhausted,
         }
     }
@@ -2239,7 +2252,7 @@ mod scope_pool_tests {
                     0,
                     None,
                 ) {
-                    ScopeAcquire::Reserved(guard) => guards.push(guard),
+                    ScopeAcquire::Reserved { reservation, .. } => guards.push(reservation),
                     other => panic!(
                         "max_total={max_total}: reservation {slot} must be granted, got {other:?}"
                     ),
@@ -4122,11 +4135,11 @@ mod scope_pool_tests {
 
         // Borrower #1 reserves and holds its slot (its creation is in flight).
         let _r1 = match pool.try_acquire(&registry, target.clone(), 0, None) {
-            ScopeAcquire::Reserved(r) => r,
+            ScopeAcquire::Reserved { reservation, .. } => reservation,
             other => panic!("borrower #1 must reserve, got {other:?}"),
         };
         let _r2 = match pool.try_acquire(&registry, target, 0, None) {
-            ScopeAcquire::Reserved(r) => r,
+            ScopeAcquire::Reserved { reservation, .. } => reservation,
             other => panic!(
                 "a distinct concurrent borrower of the same target must reserve \
                  (not serialize), got {other:?}"
