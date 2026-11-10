@@ -190,10 +190,9 @@ jobs:
               with:
                   path: |
                       java/target
-                  key: ${{ matrix.host.TARGET }}-java
+                  key: ${{ matrix.host.TARGET }}-java-${{ hashFiles('java/Cargo.lock') }}
                   restore-keys: |
-                      ${{ matrix.host.TARGET }}-glide-core
-                      ${{ matrix.host.TARGET }}
+                      ${{ matrix.host.TARGET }}-java-
 
             - name: Cache Gradle dependencies
               uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -317,10 +316,9 @@ jobs:
               with:
                   path: |
                       java/target
-                  key: ${{ matrix.host.TARGET }}-java
+                  key: ${{ matrix.host.TARGET }}-java-${{ hashFiles('java/Cargo.lock') }}
                   restore-keys: |
-                      ${{ matrix.host.TARGET }}-glide-core
-                      ${{ matrix.host.TARGET }}
+                      ${{ matrix.host.TARGET }}-java-
 
             - name: Cache Gradle dependencies
               uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -559,8 +557,9 @@ jobs:
               with:
                   path: |
                       java/target
-                  key: ${{ matrix.host.IMAGE }}-java
-                  restore-keys: ${{ matrix.host.IMAGE }}
+                  key: ${{ matrix.host.IMAGE }}-java-${{ hashFiles('java/Cargo.lock') }}
+                  restore-keys: |
+                      ${{ matrix.host.IMAGE }}-java-
 
             - name: Cache Gradle dependencies
               uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
