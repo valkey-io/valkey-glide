@@ -87,16 +87,18 @@ public abstract class AbstractGlideJedisFactory<J extends AbstractGlideJedis>
             return;
         }
         jedis.detachFromPoolForDestroy();
-        if (!jedis.isClosed()) {
-            try {
+        try {
+            if (jedis.isClosed()) {
+                jedis.closeGlideClientForDestroy();
+            } else {
                 jedis.close();
-            } catch (Exception e) {
-                Logger.log(
-                        Logger.Level.WARN,
-                        "GlideJedisFactory",
-                        "Error closing Jedis connection during destroy",
-                        e);
             }
+        } catch (Exception e) {
+            Logger.log(
+                    Logger.Level.WARN,
+                    "GlideJedisFactory",
+                    "Error closing Jedis connection during destroy",
+                    e);
         }
     }
 
@@ -113,11 +115,25 @@ public abstract class AbstractGlideJedisFactory<J extends AbstractGlideJedis>
         }
     }
 
+    /**
+     * Prepares a pooled connection for the next borrower. Matching Jedis {@code
+     * JedisFactory.activateObject}, re-selects the configured database when the previous borrower
+     * left the connection on another one (via {@link AbstractGlideJedis#select(int)}). A failed
+     * SELECT propagates, so Commons Pool destroys the connection instead of lending it.
+     *
+     * @param pooledObject the pooled connection about to be lent
+     * @throws Exception if the configured database cannot be selected
+     */
     @Override
     public void activateObject(PooledObject<J> pooledObject) throws Exception {
         J jedis = pooledObject.getObject();
-        if (jedis != null) {
-            jedis.resetForReuse();
+        if (jedis == null) {
+            return;
+        }
+        jedis.resetForReuse();
+        int database = clientConfig.getDatabase();
+        if (jedis.getDB() != database) {
+            jedis.select(database);
         }
     }
 
