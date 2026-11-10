@@ -1137,7 +1137,7 @@ fn run_worker_message(
             task::spawn_local(async move {
                 // RAII guard: refreshes activity and clears the blocking flag on all exit
                 // paths (normal completion, early return, and task cancellation/drop).
-                let _unmark_guard = pool_blocking_ids
+                let unmark_guard = pool_blocking_ids
                     .and_then(|cid| glide_core::pool::get_blocking_flag(cid).map(|arc| (cid, arc)))
                     .map(|(cid, arc)| UnmarkOnDrop(Some(arc), Some(cid)));
                 if let Some(ref span) = cmd.span() {
@@ -1149,6 +1149,9 @@ fn run_worker_message(
                         Err(err) => Err(err),
                     };
                 let response = build_response(callback_idx, result, cmd.span());
+                // Clear before delivering: the caller may release the client as soon as
+                // the promise settles, and release discards a client still marked blocking.
+                drop(unmark_guard);
                 inflight.fetch_add(1, Ordering::Release);
                 if buffer.push(response)
                     && let Some(wake_callback) = wake.upgrade()
@@ -1168,7 +1171,7 @@ fn run_worker_message(
             task::spawn_local(async move {
                 // RAII guard: refreshes activity and clears the blocking flag on all exit
                 // paths (normal completion, early return, and task cancellation/drop).
-                let _unmark_guard = pool_ids
+                let unmark_guard = pool_ids
                     .and_then(|cid| glide_core::pool::get_blocking_flag(cid).map(|arc| (cid, arc)))
                     .map(|(cid, arc)| UnmarkOnDrop(Some(arc), Some(cid)));
                 let command_span = batch_msg.command_span.clone();
@@ -1185,6 +1188,8 @@ fn run_worker_message(
                 )
                 .await;
                 let response = build_response(callback_idx, result, command_span);
+                // Clear before delivering (see the command task).
+                drop(unmark_guard);
                 inflight.fetch_add(1, Ordering::Release);
                 if buffer.push(response)
                     && let Some(wake_callback) = wake.upgrade()
@@ -1204,7 +1209,7 @@ fn run_worker_message(
             task::spawn_local(async move {
                 // RAII guard: refreshes activity and clears the blocking flag on all exit
                 // paths (normal completion, early return, and task cancellation/drop).
-                let _unmark_guard = pool_ids
+                let unmark_guard = pool_ids
                     .and_then(|cid| glide_core::pool::get_blocking_flag(cid).map(|arc| (cid, arc)))
                     .map(|(cid, arc)| UnmarkOnDrop(Some(arc), Some(cid)));
                 let keys: Vec<&[u8]> = script_msg.keys.iter().map(|k| k.as_ref()).collect();
@@ -1213,6 +1218,8 @@ fn run_worker_message(
                     .invoke_script(&script_msg.hash, &keys, &args, script_msg.routing)
                     .await;
                 let response = build_response(callback_idx, result, None);
+                // Clear before delivering (see the command task).
+                drop(unmark_guard);
                 inflight.fetch_add(1, Ordering::Release);
                 if buffer.push(response)
                     && let Some(wake_callback) = wake.upgrade()

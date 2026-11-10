@@ -1642,7 +1642,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
             // client-not-found, routing/pipeline errors (via ?), normal completion,
             // or cancellation.
             // Guard arms immediately on task entry — counter was already incremented before spawn.
-            let _unmark_guard = UnmarkOnDrop(batch_pre_blocking_arc.clone());
+            let unmark_guard = UnmarkOnDrop(batch_pre_blocking_arc.clone());
 
             let client_result = jni_client::ensure_client_for_handle(handle_id).await;
             match client_result {
@@ -1802,9 +1802,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                         }
                     }
 
+                    // Clear before completing (see the command task).
+                    drop(unmark_guard);
                     complete_callback(jvm, callback_id, result, !expect_utf8_bool);
                 }
                 Err(err) => {
+                    drop(unmark_guard);
                     complete_callback(
                         jvm,
                         callback_id,
@@ -1971,7 +1974,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
             // Guard arms immediately on task entry — counter was already incremented before spawn.
             // This ensures the counter is decremented on every exit path: normal completion,
             // early ?-return inside the inner async block, and task cancellation.
-            let _unmark_guard = UnmarkOnDrop(pre_blocking_arc.clone());
+            let unmark_guard = UnmarkOnDrop(pre_blocking_arc.clone());
             let result: Result<redis::Value, redis::RedisError> = async {
                 let mut client = jni_client::ensure_client_for_handle(handle_id)
                     .await
@@ -2063,6 +2066,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                 }
             }
 
+            // Clear before completing: the caller may release the client as soon as
+            // the future completes, and release discards a client still marked blocking.
+            drop(unmark_guard);
             complete_callback(jvm, callback_id, result, !expect_utf8_bool);
         });
 
@@ -2233,7 +2239,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
             // RAII guard: ensures is_blocking counter is decremented on every exit path —
             // routing errors, client-not-found, normal completion, or cancellation.
             // Guard arms immediately on task entry — counter was already incremented before spawn.
-            let _unmark_guard = UnmarkOnDrop(script_pre_blocking_arc.clone());
+            let unmark_guard = UnmarkOnDrop(script_pre_blocking_arc.clone());
 
             let client_result = ensure_client_for_handle(client_handle_id).await;
             match client_result {
@@ -2248,6 +2254,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                         ) {
                             Ok(r) => r,
                             Err(e) => {
+                                drop(unmark_guard);
                                 complete_callback(
                                     jvm,
                                     callback_id,
@@ -2275,6 +2282,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                         match routing::get_route(Default::default(), Some(&route_cmd)) {
                             Ok(r) => r,
                             Err(e) => {
+                                drop(unmark_guard);
                                 complete_callback(
                                     jvm,
                                     callback_id,
@@ -2319,6 +2327,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                     }
 
                     let binary_mode = expect_utf8 == 0;
+                    // Clear before completing (see the command task).
+                    drop(unmark_guard);
                     complete_callback(jvm, callback_id, result, binary_mode);
                 }
                 Err(err) => {
@@ -2328,6 +2338,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                         err.to_string(),
                     )));
                     let binary_mode = expect_utf8 == 0;
+                    drop(unmark_guard);
                     complete_callback(jvm, callback_id, error, binary_mode);
                 }
             }
