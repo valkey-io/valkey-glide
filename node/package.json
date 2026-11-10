@@ -57,7 +57,7 @@
     ],
     "scripts": {
         "clean:build": "shx rm -rf build-ts dist/*/target rust-client/target rust-client/valkey-glide.*.node src/valkey-glide.*.node build/*.tsbuildinfo",
-        "clean": "shx rm -rf build-ts dist/*/target node_modules rust-client/node_modules */node_modules rust-client/target glide-logs rust-client/valkey-glide.*.node src/valkey-glide.*.node rust-client/index.* src/ProtobufMessage.* *.tsbuildinfo test-report*.html yarn.lock package-lock.json rust-client/package-lock.json rust-client/Cargo.lock",
+        "clean": "shx rm -rf build-ts dist/*/target node_modules rust-client/node_modules */node_modules rust-client/target glide-logs rust-client/valkey-glide.*.node src/valkey-glide.*.node rust-client/index.* src/ProtobufMessage.* *.tsbuildinfo test-report*.html yarn.lock package-lock.json rust-client/package-lock.json",
         "prebuild": "npm ci && npm run clean:build",
         "build": "npm run build-protobuf && npm run build:rust-client && npm run build:ts",
         "build:release": "npm run prereq && npm run build-protobuf && npm run build:rust-client:release && npm run build:ts",

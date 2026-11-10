@@ -16,10 +16,10 @@ on:
             - utils/cluster_manager.py
             - .github/workflows/java.yml
             - .github/actions/install-shared-dependencies/action.yml
-            - .github/workflows/test-benchmark/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/test-benchmark/action.yml
+            - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
-            - .github/workflows/create-test-matrices/action.yml
+            - .github/actions/create-test-matrices/action.yml
             - .github/json_matrices/**
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
@@ -32,10 +32,10 @@ on:
             - utils/cluster_manager.py
             - .github/workflows/java.yml
             - .github/actions/install-shared-dependencies/action.yml
-            - .github/workflows/test-benchmark/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/test-benchmark/action.yml
+            - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
-            - .github/workflows/create-test-matrices/action.yml
+            - .github/actions/create-test-matrices/action.yml
             - .github/json_matrices/**
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
@@ -102,7 +102,7 @@ jobs:
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
-              uses: ./.github/workflows/create-test-matrices
+              uses: ./.github/actions/create-test-matrices
               with:
                   language-name: java
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
@@ -121,7 +121,7 @@ jobs:
                   else
                       FILTER='[.[] | select(.OS != "windows")]'
                   fi
-                  echo "host-matrix=$(echo "$HOST_MATRIX" | jq -c "$FILTER")" >> $GITHUB_OUTPUT
+                  echo "host-matrix=$(echo "$HOST_MATRIX" | jq -c "$FILTER")" >> "$GITHUB_OUTPUT"
 
     approve-self-hosted:
         if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
@@ -190,10 +190,9 @@ jobs:
               with:
                   path: |
                       java/target
-                  key: ${{ matrix.host.TARGET }}-java
+                  key: ${{ matrix.host.TARGET }}-java-${{ hashFiles('java/Cargo.lock') }}
                   restore-keys: |
-                      ${{ matrix.host.TARGET }}-glide-core
-                      ${{ matrix.host.TARGET }}
+                      ${{ matrix.host.TARGET }}-java-
 
             - name: Cache Gradle dependencies
               uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -242,7 +241,7 @@ jobs:
                       ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
                   fi
 
-            - uses: ./.github/workflows/test-benchmark
+            - uses: ./.github/actions/test-benchmark
               with:
                   language-flag: -java
                   engine-run: ${{ matrix.engine.run }}
@@ -317,10 +316,9 @@ jobs:
               with:
                   path: |
                       java/target
-                  key: ${{ matrix.host.TARGET }}-java
+                  key: ${{ matrix.host.TARGET }}-java-${{ hashFiles('java/Cargo.lock') }}
                   restore-keys: |
-                      ${{ matrix.host.TARGET }}-glide-core
-                      ${{ matrix.host.TARGET }}
+                      ${{ matrix.host.TARGET }}-java-
 
             - name: Cache Gradle dependencies
               uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -468,7 +466,7 @@ jobs:
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
-              uses: ./.github/workflows/create-test-matrices
+              uses: ./.github/actions/create-test-matrices
               with:
                   language-name: java
                   run-full-matrix: true
@@ -488,12 +486,13 @@ jobs:
                 host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
         container:
             image: ${{ matrix.host.IMAGE }}
-            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
             - name: Install git and Java
+              env:
+                  TARGET: ${{ matrix.host.TARGET }}
               run: |
                   # Set environment variable to indicate container environment for Gradle
-                  echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
+                  echo "GLIDE_CONTAINER_BUILD=true" >> "$GITHUB_ENV"
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
                     yum update -y
                     # AL2023 uses different package naming for Java 8 vs 11+
@@ -502,19 +501,19 @@ jobs:
                       # Spotless plugin 7.x and Gradle 8.x require JVM 11+ to run
                       yum install -y git tar java-1.8.0-amazon-corretto-devel java-11-amazon-corretto-devel
                       export JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto
-                      echo "JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto" >> $GITHUB_ENV
-                      echo "/usr/lib/jvm/java-11-amazon-corretto/bin" >> $GITHUB_PATH
+                      echo "JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto" >> "$GITHUB_ENV"
+                      echo "/usr/lib/jvm/java-11-amazon-corretto/bin" >> "$GITHUB_PATH"
                     else
                       yum install -y git tar java-${{ matrix.java }}-amazon-corretto-devel
                       export JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto
-                      echo "JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto" >> $GITHUB_ENV
-                      echo "/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto/bin" >> $GITHUB_PATH
+                      echo "JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto" >> "$GITHUB_ENV"
+                      echo "/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto/bin" >> "$GITHUB_PATH"
                     fi
                     # Create gradle user home and disable auto-download
                     mkdir -p ~/.gradle
                     echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
-                    echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
-                  elif [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
+                    echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> "$GITHUB_ENV"
+                  elif [[ "$TARGET" == *"musl"* ]]; then
                     apk add openjdk${{matrix.java}} git bash
                     # Temporarily installing openjdk11 because of issue: https://github.com/valkey-io/valkey-glide/issues/4664
                     apk add openjdk11
@@ -548,7 +547,7 @@ jobs:
               if: ${{ contains(matrix.host.TARGET, 'musl') }}
               run: |
                   export PATH="$HOME/.cargo/bin:$PATH"
-                  echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
+                  echo "PATH=$HOME/.cargo/bin:$PATH" >> "$GITHUB_ENV"
 
                   # Install ziglang and zigbuild
                   pip3 install ziglang --break-system-packages
@@ -558,8 +557,9 @@ jobs:
               with:
                   path: |
                       java/target
-                  key: ${{ matrix.host.IMAGE }}-java
-                  restore-keys: ${{ matrix.host.IMAGE }}
+                  key: ${{ matrix.host.IMAGE }}-java-${{ hashFiles('java/Cargo.lock') }}
+                  restore-keys: |
+                      ${{ matrix.host.IMAGE }}-java-
 
             - name: Cache Gradle dependencies
               uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -613,7 +613,7 @@ jobs:
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - uses: ./.github/workflows/lint-rust
+            - uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: java
                   github-token: ${{ secrets.GITHUB_TOKEN }}

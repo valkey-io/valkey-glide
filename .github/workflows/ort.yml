@@ -64,9 +64,9 @@ jobs:
             - name: Setup target branch and commit
               run: |
                   if [ "$EVENT_NAME" == 'workflow_dispatch' ]; then
-                    echo "TARGET_BRANCH=$INPUT_TARGET_BRANCH" >> $GITHUB_ENV
+                    echo "TARGET_BRANCH=$INPUT_TARGET_BRANCH" >> "$GITHUB_ENV"
                   elif [ "$EVENT_NAME" == 'pull_request' ]; then
-                    echo "TARGET_BRANCH=$HEAD_REF" >> $GITHUB_ENV
+                    echo "TARGET_BRANCH=$HEAD_REF" >> "$GITHUB_ENV"
                   fi
 
             - name: Checkout target branch
@@ -79,7 +79,7 @@ jobs:
 
             - name: Setup target commit
               run: |
-                  echo "TARGET_COMMIT=`git rev-parse HEAD`" >> $GITHUB_ENV
+                  echo "TARGET_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
             - name: Set up JDK 21 for the ORT package
               uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -133,7 +133,7 @@ jobs:
               uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
 
             - name: Run ORT tools for Node
-              uses: ./.github/workflows/run-ort-tools
+              uses: ./.github/actions/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/node"
 
@@ -155,24 +155,24 @@ jobs:
                   python -m pip install -r dev_requirements.txt
 
             - name: Run ORT tools for Python Async Client
-              uses: ./.github/workflows/run-ort-tools
+              uses: ./.github/actions/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/python/glide-async"
 
             - name: Run ORT tools for Python Sync Client
-              uses: ./.github/workflows/run-ort-tools
+              uses: ./.github/actions/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/python/glide-sync"
 
               ### Rust glide-core ###
             - name: Run ORT tools for glide-core
-              uses: ./.github/workflows/run-ort-tools
+              uses: ./.github/actions/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/glide-core"
 
               ### Rust FFI ###
             - name: Run ORT tools for FFI
-              uses: ./.github/workflows/run-ort-tools
+              uses: ./.github/actions/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/ffi"
 
@@ -195,7 +195,7 @@ jobs:
                   ./gradlew publishToMavenLocal -x buildRust -x javadoc
 
             - name: Run ORT tools for Java
-              uses: ./.github/workflows/run-ort-tools
+              uses: ./.github/actions/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/java"
 
@@ -212,7 +212,7 @@ jobs:
                   make generate-protobuf
 
             - name: Run ORT tools for Go
-              uses: ./.github/workflows/run-ort-tools
+              uses: ./.github/actions/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/go"
 
@@ -231,7 +231,7 @@ jobs:
               id: date
               run: |
                   CURR_DATE=$(date +'%Y-%m-%d-%H')
-                  echo "date=${CURR_DATE}" >> $GITHUB_OUTPUT
+                  echo "date=${CURR_DATE}" >> "$GITHUB_OUTPUT"
 
             - name: Upload the final package list
               continue-on-error: true
@@ -273,22 +273,22 @@ jobs:
               ### Check for attributions diff ### (FFI attributions merged to FFI clients' attributions)
             - name: Check for diff
               run: |
-                  cp python/glide-async/ort_results/NOTICE_DEFAULT $PYTHON_ASYNC_ATTRIBUTIONS
-                  cp python/glide-sync/ort_results/NOTICE_DEFAULT $PYTHON_SYNC_ATTRIBUTIONS
-                  cp node/ort_results/NOTICE_DEFAULT $NODE_ATTRIBUTIONS
-                  cp glide-core/ort_results/NOTICE_DEFAULT $RUST_ATTRIBUTIONS
-                  cp java/ort_results/NOTICE_DEFAULT $JAVA_ATTRIBUTIONS
+                  cp python/glide-async/ort_results/NOTICE_DEFAULT "$PYTHON_ASYNC_ATTRIBUTIONS"
+                  cp python/glide-sync/ort_results/NOTICE_DEFAULT "$PYTHON_SYNC_ATTRIBUTIONS"
+                  cp node/ort_results/NOTICE_DEFAULT "$NODE_ATTRIBUTIONS"
+                  cp glide-core/ort_results/NOTICE_DEFAULT "$RUST_ATTRIBUTIONS"
+                  cp java/ort_results/NOTICE_DEFAULT "$JAVA_ATTRIBUTIONS"
                   : Workaround for empty attributions for go packages. See discussions in https://github.com/valkey-io/valkey-glide/pull/3469 and in https://github.com/oss-review-toolkit/ort/issues/10454
-                  curl https://raw.githubusercontent.com/valkey-io/valkey-glide/9c9ef0ae2c2ee865c7867f6ac0d3f9aac054bac8/go/THIRD_PARTY_LICENSES_GO -o $GO_ATTRIBUTIONS
-                  cat go/ort_results/NOTICE_DEFAULT >> $GO_ATTRIBUTIONS
+                  curl https://raw.githubusercontent.com/valkey-io/valkey-glide/9c9ef0ae2c2ee865c7867f6ac0d3f9aac054bac8/go/THIRD_PARTY_LICENSES_GO -o "$GO_ATTRIBUTIONS"
+                  cat go/ort_results/NOTICE_DEFAULT >> "$GO_ATTRIBUTIONS"
                   : Merge FFI attributions into GO and PYTHON_SYNC attributions
-                  cat ffi/ort_results/NOTICE_DEFAULT >> $GO_ATTRIBUTIONS
-                  cat ffi/ort_results/NOTICE_DEFAULT >> $PYTHON_SYNC_ATTRIBUTIONS
-                  GIT_DIFF=`git diff $PYTHON_ASYNC_ATTRIBUTIONS $PYTHON_SYNC_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS`
+                  cat ffi/ort_results/NOTICE_DEFAULT >> "$GO_ATTRIBUTIONS"
+                  cat ffi/ort_results/NOTICE_DEFAULT >> "$PYTHON_SYNC_ATTRIBUTIONS"
+                  GIT_DIFF=$(git diff "$PYTHON_ASYNC_ATTRIBUTIONS" "$PYTHON_SYNC_ATTRIBUTIONS" "$NODE_ATTRIBUTIONS" "$RUST_ATTRIBUTIONS" "$JAVA_ATTRIBUTIONS" "$GO_ATTRIBUTIONS")
                   if [ -n "$GIT_DIFF" ]; then
-                    echo "FOUND_DIFF=true" >> $GITHUB_ENV
+                    echo "FOUND_DIFF=true" >> "$GITHUB_ENV"
                   else
-                    echo "FOUND_DIFF=false" >> $GITHUB_ENV
+                    echo "FOUND_DIFF=false" >> "$GITHUB_ENV"
                   fi
 
               ### Create PR, Note a potential race on the source branch ###

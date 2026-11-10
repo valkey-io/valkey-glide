@@ -19,7 +19,7 @@ on:
             - .github/workflows/glide-logger.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/lint-rust/action.yml
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
@@ -33,7 +33,7 @@ on:
             - .github/workflows/glide-logger.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/lint-rust/action.yml
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
@@ -68,7 +68,7 @@ jobs:
 
               # `--test-threads=1`: Tests install a global logger and share a
               # single `glide-logs` directory, so they cannot run in parallel.
-              run: cargo test --all-features -- --test-threads=1
+              run: cargo test --locked --all-features -- --test-threads=1
 
     lint:
         runs-on: ubuntu-24.04
@@ -78,7 +78,7 @@ jobs:
               with:
                   persist-credentials: false
 
-            - uses: ./.github/workflows/lint-rust
+            - uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: glide-logger
                   github-token: ${{ secrets.GITHUB_TOKEN }}

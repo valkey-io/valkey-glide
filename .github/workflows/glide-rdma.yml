@@ -20,7 +20,7 @@ on:
             - .github/actions/install-libfabric/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/lint-rust/action.yml
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
@@ -35,7 +35,7 @@ on:
             - .github/actions/install-libfabric/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/lint-rust/action.yml
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
@@ -79,11 +79,11 @@ jobs:
 
             - name: Run tests
               working-directory: ./glide-rdma
-              run: cargo test
+              run: cargo test --locked
 
             - name: Run tests with libfabric
               working-directory: ./glide-rdma
-              run: cargo test --features libfabric
+              run: cargo test --locked --features libfabric
 
     lint:
         runs-on: ubuntu-24.04
@@ -93,7 +93,7 @@ jobs:
               with:
                   persist-credentials: false
 
-            - uses: ./.github/workflows/lint-rust
+            - uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: glide-rdma
                   github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -104,7 +104,7 @@ jobs:
             - name: Install libclang for bindgen
               run: sudo apt-get update && sudo apt-get install -y libclang-dev
 
-            - uses: ./.github/workflows/lint-rust
+            - uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: glide-rdma/glide-libfabric-sys
                   github-token: ${{ secrets.GITHUB_TOKEN }}

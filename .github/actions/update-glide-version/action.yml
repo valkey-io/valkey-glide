@@ -1,18 +1,14 @@
 name: Update GLIDE version in the config.toml file
+description: Set the GLIDE version in a package config.toml file
 
 inputs:
     folder_path:
         description: "The folder path of the config.toml file"
         required: true
-        type: string
     named_os:
-        description: "The name of the current operating system"
+        description: "The name of the current operating system (one of: linux, darwin)"
         required: false
         default: "linux"
-        type: string
-        options:
-            - linux
-            - darwin
 runs:
     using: "composite"
     steps:
@@ -22,7 +18,15 @@ runs:
           env:
               NAMED_OS: ${{ inputs.named_os }}
           run: |
-              SED_FOR_MACOS=`if [[ "$NAMED_OS" == "darwin" ]]; then echo "''"; fi`
-              sed -i $SED_FOR_MACOS "s|unknown|${{ env.RELEASE_VERSION }}|g" ./config.toml
+              SED_SCRIPT="s|unknown|${{ env.RELEASE_VERSION }}|g"
+
+              # macOS: BSD sed requires a backup suffix argument.
+              # Empty string means no backup.
+              if [[ "$NAMED_OS" == "darwin" ]]; then
+                sed -i '' "$SED_SCRIPT" ./config.toml
+              else
+                sed -i "$SED_SCRIPT" ./config.toml
+              fi
+
               # log the config.toml file
               cat ./config.toml
