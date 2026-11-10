@@ -189,19 +189,27 @@ modules-test: __it
 
 # pubsub tests - run pubsub tests using testify filter
 pubsub-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -testify.m TestPubSub
+pubsub-test: REPORT_NAME = pubsub-integ-tests
 pubsub-test: __it
 
 # tls tests - run only the TLS-designated tests using testify filter, with a dedicated report
+# a filter that matches nothing, or a run without --tls, still exits 0, so the recipe checks the TLS tests really ran
 tls-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -testify.m Tls
 tls-test: REPORT_NAME = tls-integ-tests
+tls-test: tls = true
 tls-test: __it
+	@grep -q -- '--- PASS: TestGlideTestSuite/[A-Za-z0-9_]*Tls' reports/$(REPORT_NAME).log \
+		&& ! grep -q 'TLS is disabled, skipping TLS tests' reports/$(REPORT_NAME).log \
+		|| { echo "tls-test: the TLS pass ran no TLS tests over TLS"; exit 1; }
 
 # long timeout tests - run subtask with the long timeout flag enabled
 long-timeout-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -long-timeout-tests $(if $(test-filter), -testify.m $(test-filter))
+long-timeout-test: REPORT_NAME = long-timeout-integ-tests
 long-timeout-test: __it
 
 # opentelemetry tests - run subtask with the opentelemetry flag enabled
 opentelemetry-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -otel-test $(if $(test-filter), -testify.m $(test-filter), -testify.m TestOpenTelemetry)
+opentelemetry-test: REPORT_NAME = otel-integ-tests
 opentelemetry-test: __it
 
 # Test command for integration tests
@@ -223,6 +231,6 @@ __it:
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
 	$(if $(cluster-endpoints), --cluster-endpoints=$(cluster-endpoints)) \
-	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/integTest | go-test-report -o reports/$(REPORT_NAME).html -t integ-test > /dev/null)
+	| tee reports/$(REPORT_NAME).log >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/integTest | go-test-report -o reports/$(REPORT_NAME).html -t integ-test > /dev/null)
 # code above ^ is similar to `go test .... -json | go-test-report ....`, but it also prints plain text output to stdout
 # `go test` prints plain text, tee duplicates it to stdout and to `test2json` which is coupled with `go-test-report` to generate the report

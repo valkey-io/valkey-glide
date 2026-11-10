@@ -186,15 +186,19 @@ jobs:
                   AWS_SESSION_TOKEN: test_session_token
               run: |
                   ulimit -n 65536 2>/dev/null || true
+                  # separate make calls: the passes share the __it prerequisite,
+                  # and a failed pass must not stop the ones after it
+                  rc=0
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
-                    make -k integ-test
+                    make -k integ-test || rc=$?
                   else
                     make install-tools build
-                    make -k unit-test integ-test
+                    make -k unit-test integ-test || rc=$?
                   fi
-                  make -k tls-test tls=true
-                  make -k opentelemetry-test
+                  make -k tls-test || rc=$?
+                  make -k opentelemetry-test || rc=$?
+                  exit $rc
 
             - name: Run Example Tests
               # Runs on the newest Valkey engine in the matrix so that examples for
@@ -372,13 +376,18 @@ jobs:
                   AWS_SESSION_TOKEN: test_session_token
               run: |
                   ulimit -n 65536 2>/dev/null || true
+                  # separate make calls: the passes share the __it prerequisite,
+                  # and a failed pass must not stop the ones after it
+                  rc=0
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
-                    make -k integ-test
+                    make -k integ-test || rc=$?
                   else
                     make install-tools build
-                    make -k unit-test integ-test
+                    make -k unit-test integ-test || rc=$?
                   fi
+                  make -k tls-test || rc=$?
+                  exit $rc
 
             - name: Upload test reports
               if: always()
@@ -448,14 +457,17 @@ jobs:
               env:
                   RC_VERSION: ${{ inputs.rc-version }}
               run: |
+                  # separate make calls: the passes share the __it prerequisite,
+                  # and a failed pass must not stop the ones after it
+                  rc=0
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
-                    make -k long-timeout-test test-filter=TestLongTimeout
                   else
                     make install-tools build
-                    make -k long-timeout-test test-filter=TestLongTimeout
                   fi
-                  make -k pubsub-test
+                  make -k long-timeout-test test-filter=TestLongTimeout || rc=$?
+                  make -k pubsub-test || rc=$?
+                  exit $rc
 
             - name: Upload logs and reports
               if: always()
