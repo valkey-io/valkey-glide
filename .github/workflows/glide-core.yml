@@ -159,6 +159,7 @@ jobs:
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
         env:
             VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
+            CARGO_INCREMENTAL: "0"
 
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -177,9 +178,9 @@ jobs:
               with:
                   path: |
                       glide-core/target
-                  key: ${{ matrix.host.TARGET }}-glide-core-${{ hashFiles('glide-core/Cargo.lock') }}
+                  key: ${{ matrix.host.TARGET }}-glide-core-v2-${{ hashFiles('glide-core/Cargo.lock') }}
                   restore-keys: |
-                      ${{ matrix.host.TARGET }}-glide-core-
+                      ${{ matrix.host.TARGET }}-glide-core-v2-
 
             - uses: ./.github/actions/setup-dns-tests
               with:
@@ -210,6 +211,13 @@ jobs:
                   language-flag: -rust
                   engine-run: ${{ matrix.engine.run }}
                   target: ${{ matrix.host.TARGET }}
+
+            # A fresh checkout is newer than the restored dep-info, so cargo rebuilds these
+            # crates on every run; only the registry crates are worth saving.
+            - name: Remove the path crates from the cargo cache
+              if: always()
+              working-directory: ./glide-core
+              run: cargo clean -p glide-core -p glide-core-engine -p glide-logger -p glide-telemetry -p glide-rdma -p glide-libfabric-sys
 
     lint:
         runs-on: ubuntu-24.04
