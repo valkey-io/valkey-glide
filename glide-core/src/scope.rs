@@ -2710,6 +2710,19 @@ mod tests {
         );
     }
 
+    /// The bindings spawn the acquire future on a multi-threaded runtime, so a
+    /// `ScopeGuard` held across one of its `.await`s must fail to compile here,
+    /// not only in a binding crate.
+    #[test]
+    fn acquire_scope_future_is_send() {
+        fn assert_send<T: Send>(_: &T) {}
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("build runtime");
+        let acquire = super::acquire_scope(0, Vec::new(), runtime.handle(), None, Duration::ZERO);
+        assert_send(&acquire);
+    }
+
     /// An acquire holding a pool handle from before parent teardown must not leave
     /// an entry behind once teardown's sweep has run.
     #[tokio::test]
