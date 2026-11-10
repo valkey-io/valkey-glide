@@ -192,6 +192,37 @@ matrix_test!(zrangebyscore_withscores_untyped_with_float, c, {
     assert_eq!(r, vec![("a".to_string(), 1.0), ("b".to_string(), 2.5)]);
 });
 
+// Valkey returns non-integer scores as floats. Typed `zrangebyscore_limit_withscores`
+// decodes scores as `usize` and raises an error if this happens. Callers need to use
+// the untyped version if they want to handle this case. This matches redis-rs behaviour.
+
+matrix_test!(zrangebyscore_limit_withscores_typed_with_float, c, {
+    let k = common::key("z");
+    let _: usize = c
+        .zadd_multiple(&k, &[(1.0, "a"), (2.5, "b")])
+        .await
+        .unwrap();
+    let err = c
+        .zrangebyscore_limit_withscores(&k, "-inf", "+inf", 1, 1)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, GlideError::Request(_)));
+    assert!(err.message().contains("usize"));
+});
+
+matrix_test!(zrangebyscore_limit_withscores_untyped_with_float, c, {
+    let k = common::key("z");
+    let _: usize = c
+        .zadd_multiple(&k, &[(1.0, "a"), (2.5, "b")])
+        .await
+        .unwrap();
+    let r: Vec<(String, f64)> =
+        glide::AsyncCommands::zrangebyscore_limit_withscores(&c, &k, "-inf", "+inf", 1, 1)
+            .await
+            .unwrap();
+    assert_eq!(r, vec![("b".to_string(), 2.5)]);
+});
+
 matrix_test!(zrevrange_withscores, c, {
     let k = common::key("z");
     let _: usize = c
