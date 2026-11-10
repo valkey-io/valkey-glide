@@ -552,7 +552,9 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
     }
 }
 
-/// Release a borrowed client back to the pool. Fire-and-forget.
+/// Release a borrowed client back to the pool. Returns before the release has
+/// landed: the connection-state reset is a server round-trip, so it runs on the
+/// pool runtime and the client rejoins idle when that finishes.
 #[unsafe(no_mangle)]
 pub extern "C" fn glide_pool_release(pool_id: u64, client_id: u64) -> i32 {
     let pool_arc = match pool::get_pool(pool_id) {
@@ -897,7 +899,7 @@ pub unsafe extern "C" fn glide_scope_prewarm(
                     return;
                 }
             };
-            let reservation = match pool_clone.lock().await.reserve_slot() {
+            let reservation = match pool_clone.lock().reserve_slot() {
                 Some(reservation) => reservation,
                 None => return,
             };
@@ -1141,7 +1143,9 @@ pub unsafe extern "C" fn glide_scope_acquire_blocking(
     }
 }
 
-/// Release a scope back to the pool. Fire-and-forget.
+/// Release a scope back to the pool. Waits for the pool lock; the scope is
+/// back in idle (or discarded) when this returns. A dirty connection's cleanup
+/// round-trip still runs on the pool runtime afterwards.
 ///
 /// Returns 0 on success, -1 on error (invalid scope/client).
 #[unsafe(no_mangle)]
