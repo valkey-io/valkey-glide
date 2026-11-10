@@ -9,24 +9,25 @@
 //! turbofish annotations) compile unchanged.
 //!
 //! Each entry carries the command body (mirroring redis-rs's
-//! `implement_commands!`), so the wire encoding matches redis-rs's
-//! (except for the deliberate differences pinned in `differences.json` (e.g.
-//! `hset_multiple` sends `HSET`, not `HMSET`); signature parity is enforced by
-//! the `parity_tests` module (`src/parity_tests/`).
+//! `implement_commands!`). Signature parity is enforced by the
+//! `parity_tests` module (`src/parity_tests/`), and signature
+//! differences are recorded in `src/parity_tests/differences.json`.
 //!
 //! The built command is handed to glide-core **by value** — the same
 //! zero-extra-copy path as the rest of the client. Methods take `&self` (the clients are cheaply
 //! cloneable handles); migrated `&mut` call sites still compile via
 //! auto-borrow.
 //!
-//! Two deliberate deviations trade redis-rs parity for performance and
-//! clarity (parity here is a command-surface contract, not a
-//! connection-plumbing one):
+//! Three deliberate deviations trade redis-rs parity for performance,
+//! clarity, and consistency (parity here is a command-surface contract, not
+//! a connection-plumbing or wire-encoding one):
 //! * the traits are **not** coupled to the `redis` crate's connection-object
 //!   (`ConnectionLike`) machinery — dispatch is GLIDE's owned-send path only;
 //! * the `scan*` methods take `&self` and return GLIDE's own iterators
 //!   ([`crate::commands::scan`]) with the familiar `next_item()` /
-//!   `Iterator` shape, each page dispatched by value (no per-page copies).
+//!   `Iterator` shape, each page dispatched by value (no per-page copies);
+//! * a method may send a different command from its redis-rs counterpart,
+//!   e.g. `hset_multiple` sends `HSET`, not the deprecated `HMSET`.
 //!
 //! Commands beyond this table (the remaining stream commands, geo search,
 //! `JSON.*`, …) live in the per-family extension traits in [`crate::commands`].
