@@ -779,6 +779,7 @@ implement_commands! {
         build_cmd!("LLEN", key)
     }
 
+    // TODO #7641: Return `Option<String>` instead of `String`.
     /// `LMOVE`.
     fn lmove<S: ToSingleValkeyArg, D: ToSingleValkeyArg>(srckey: S, dstkey: D, src_dir: Direction, dst_dir: Direction) -> (String) {
         build_cmd!("LMOVE", srckey, dstkey, src_dir, dst_dir)
@@ -856,6 +857,7 @@ implement_commands! {
         build_cmd!("HGET", key, field)
     }
 
+    // TODO #7641: Return `Vec<Option<String>>` instead of `Vec<String>`.
     /// `HMGET`.
     fn hmget<K: ToSingleValkeyArg, F: ToValkeyArgs>(key: K, fields: F) -> (Vec<String>) {
         build_cmd!("HMGET", key, fields)
@@ -915,6 +917,7 @@ implement_commands! {
         build_cmd!("HLEN", key)
     }
 
+    // TODO #7641: Return `Vec<Option<String>>` instead of `Vec<String>`.
     /// `HGETEX`.
     fn hget_ex<K: ToSingleValkeyArg, F: ToValkeyArgs>(key: K, fields: F, expire_at: Expiry) -> (Vec<String>) {
         build_cmd!("HGETEX", key, expire_at, "FIELDS", fields.num_of_args(), fields)
@@ -1202,6 +1205,7 @@ implement_commands! {
         build_cmd!("ZRANGEBYSCORE", key, min, max)
     }
 
+    // TODO #7641: Return `Vec<(String, f64)>` instead of `Vec<(String, usize)>`.
     /// `ZRANGEBYSCORE WITHSCORES`.
     fn zrangebyscore_withscores<K: ToSingleValkeyArg, M: ToSingleValkeyArg, MM: ToSingleValkeyArg>(key: K, min: M, max: MM) -> (Vec<(String, usize)>) {
         build_cmd!("ZRANGEBYSCORE", key, min, max, "WITHSCORES")
@@ -1212,6 +1216,7 @@ implement_commands! {
         build_cmd!("ZRANGEBYSCORE", key, min, max, "LIMIT", offset, count)
     }
 
+    // TODO #7641: Return `Vec<(String, f64)>` instead of `Vec<(String, usize)>`.
     /// `ZRANGEBYSCORE WITHSCORES LIMIT`.
     fn zrangebyscore_limit_withscores<K: ToSingleValkeyArg, M: ToSingleValkeyArg, MM: ToSingleValkeyArg>(key: K, min: M, max: MM, offset: isize, count: isize) -> (Vec<(String, usize)>) {
         build_cmd!("ZRANGEBYSCORE", key, min, max, "WITHSCORES", "LIMIT", offset, count)
@@ -1282,6 +1287,7 @@ implement_commands! {
         build_cmd!("ZSCORE", key, member)
     }
 
+    // TODO #7641: Return `Vec<Option<f64>>` instead of `Option<Vec<f64>>`.
     /// `ZMSCORE`.
     fn zscore_multiple<K: ToSingleValkeyArg, M: ToValkeyArgs>(key: K, members: &'a [M]) -> (Option<Vec<f64>>) {
         build_cmd!("ZMSCORE", key, members)
@@ -1391,6 +1397,7 @@ implement_commands! {
         build_cmd!("GEODIST", key, member1, member2, unit)
     }
 
+    // TODO #7641: Return `Vec<Option<String>>` instead of `Vec<String>`.
     /// `GEOHASH`.
     fn geo_hash<K: ToSingleValkeyArg, M: ToValkeyArgs>(key: K, members: M) -> (Vec<String>) {
         build_cmd!("GEOHASH", key, members)

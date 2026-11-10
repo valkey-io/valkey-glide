@@ -55,6 +55,7 @@ matrix_test!(zscore, c, {
     assert_eq!(s, None);
 });
 
+// TODO #7641: Update the expected type to `Vec<Option<f64>>`.
 matrix_test!(zmscore, c, {
     let k = common::key("z");
     let _: usize = c
@@ -65,6 +66,9 @@ matrix_test!(zmscore, c, {
     assert_eq!(scores, Some(vec![1.0, 2.0]));
 });
 
+// TODO #7641:
+// - Cover a missing member in `zmscore`.
+// - Remove `zmscore_typed_with_nil` and `zmscore_untyped_with_nil`.
 // The Valkey server returns `nil` when a requested member does not exist.
 // Typed `zscore_multiple` raises an error if this happens. Callers need
 // to use the untyped version if they want to handle this case.
@@ -146,6 +150,7 @@ matrix_test!(zrange_withscores, c, {
     assert_eq!(ws[1].1, 2.0);
 });
 
+// TODO #7641: Update the expected type to `Vec<(String, f64)>`.
 matrix_test!(zrangebyscore_withscores, c, {
     let k = common::key("z");
     let _: usize = c
@@ -161,6 +166,10 @@ matrix_test!(zrangebyscore_withscores, c, {
     assert_eq!(r, vec![("b".to_string(), 2)]);
 });
 
+// TODO #7641:
+// - Cover fractional scores in `zrangebyscore_withscores`.
+// - Remove `zrangebyscore_withscores_typed_with_float` and
+//   `zrangebyscore_withscores_untyped_with_float`.
 // Valkey returns non-integer scores as floats. Typed `zrangebyscore_withscores`
 // decodes scores as `usize` and raises an error if this happens. Callers need to use
 // the untyped version if they want to handle this case. This matches redis-rs behaviour.
@@ -192,6 +201,10 @@ matrix_test!(zrangebyscore_withscores_untyped_with_float, c, {
     assert_eq!(r, vec![("a".to_string(), 1.0), ("b".to_string(), 2.5)]);
 });
 
+// TODO #7641:
+// - Cover fractional scores for `zrangebyscore_limit_withscores` in `zrangebyscore_withscores`.
+// - Remove `zrangebyscore_limit_withscores_typed_with_float` and
+//   `zrangebyscore_limit_withscores_untyped_with_float`.
 // Valkey returns non-integer scores as floats. Typed `zrangebyscore_limit_withscores`
 // decodes scores as `usize` and raises an error if this happens. Callers need to use
 // the untyped version if they want to handle this case. This matches redis-rs behaviour.

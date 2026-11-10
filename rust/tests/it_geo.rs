@@ -90,6 +90,7 @@ matrix_test!(geo_dist, c, {
     assert_eq!(missing, None);
 });
 
+// TODO #7641: Update the expected type to `Vec<Option<String>>`.
 matrix_test!(geo_hash, c, {
     let k = common::key("geo");
     c.geo_add(&k, (palermo(), "Palermo")).await.unwrap();
@@ -98,6 +99,9 @@ matrix_test!(geo_hash, c, {
     assert_eq!(hashes, vec!["sqc8b49rny0".to_string()]);
 });
 
+// TODO #7641:
+// - Cover a missing member in `geo_hash`.
+// - Remove `geo_hash_typed_with_nil` and `geo_hash_untyped_with_nil`.
 // The Valkey server returns `nil` when a requested member does not exist.
 // Typed `geo_hash` raises an error if this happens. Callers need
 // to use the untyped version if they want to handle this case.
