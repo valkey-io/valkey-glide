@@ -180,8 +180,15 @@ example-test:
 REPORT_NAME ?= integ-tests
 
 # integration tests - run subtask with skipping modules tests
+# go test exits 0 when the pool and scope tests skip or never run, so an unfiltered run checks they ran against servers
 integ-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" $(if $(test-filter), -testify.m $(test-filter))
 integ-test: __it
+ifeq ($(test-filter),)
+	@grep -q -- '--- PASS: TestGlideTestSuite/TestPool' reports/$(REPORT_NAME).log \
+		&& grep -q -- '--- PASS: TestGlideTestSuite/TestScope' reports/$(REPORT_NAME).log \
+		&& ! grep -q 'servers in this run' reports/$(REPORT_NAME).log \
+		|| { echo "integ-test: the pool and scope tests did not all run against servers"; exit 1; }
+endif
 
 # modules tests - run substask with default filter
 modules-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter), -testify.m TestModule)
@@ -223,6 +230,6 @@ __it:
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
 	$(if $(cluster-endpoints), --cluster-endpoints=$(cluster-endpoints)) \
-	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/integTest | go-test-report -o reports/$(REPORT_NAME).html -t integ-test > /dev/null)
+	| tee reports/$(REPORT_NAME).log >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/integTest | go-test-report -o reports/$(REPORT_NAME).html -t integ-test > /dev/null)
 # code above ^ is similar to `go test .... -json | go-test-report ....`, but it also prints plain text output to stdout
 # `go test` prints plain text, tee duplicates it to stdout and to `test2json` which is coupled with `go-test-report` to generate the report
