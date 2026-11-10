@@ -21,6 +21,7 @@
 
 ### Fixes
 
+* Java: Publish the classifier-less `valkey-glide-jedis-compat-shared` JAR. The `valkey-glide-jedis-compatibility` and `valkey-glide-jedis-4-compatibility` POMs depend on it, and since 2.6.0-rc1 Maven failed to resolve them with `Could not find artifact io.valkey:valkey-glide-jedis-compat-shared` ([#7603](https://github.com/valkey-io/valkey-glide/issues/7603))
 * Node: Populate actual `lib-ver` instead of `unknown` in `CLIENT INFO` responses ([#7616](https://github.com/valkey-io/valkey-glide/pull/7616))
 * Node: The published package loads with `NAPI_RS_ENFORCE_VERSION_CHECK=1` instead of failing with "Cannot find native binding" ([#7602](https://github.com/valkey-io/valkey-glide/issues/7602))
 * Python: The sync client sends a `memoryview` argument with its byte length (`nbytes`) instead of `len()`. A `memoryview` cast to a wider format (e.g. `.cast("I")`) or with more than one dimension was sent truncated, silently storing a partial value or key; this affected direct commands, batches, `custom_command`, scripts and cluster scan ([#7560](https://github.com/valkey-io/valkey-glide/issues/7560))

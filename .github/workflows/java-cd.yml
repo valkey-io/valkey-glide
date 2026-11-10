@@ -411,6 +411,22 @@ jobs:
                   -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
                   -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
 
+            # Jedis compat POMs depend on the classifier-less compat-shared JAR.
+            - name: Bundle jedis-compat-shared no-classifier JAR
+              working-directory: java
+              shell: bash
+              run: |
+                  jedis_shared_folder=~/.m2/repository/io/valkey/valkey-glide-jedis-compat-shared/$RELEASE_VERSION
+                  if [ ! -d "$jedis_shared_folder" ]; then
+                    echo "Expected Maven local output missing: $jedis_shared_folder" >&2
+                    exit 1
+                  fi
+                  cd "$jedis_shared_folder"
+                  jar -cvf jedis-shared-bundle.jar ./*
+                  ls -ltr
+                  cd -
+                  cp "$jedis_shared_folder/jedis-shared-bundle.jar" jedis-shared-bundle-no-classifier.jar
+
             - name: Build jedis-compatibility (no classifier, no natives)
               working-directory: java
               shell: bash
@@ -482,6 +498,12 @@ jobs:
               with:
                   name: java-uber-jar
                   path: java/bundle-uber-jar.jar
+
+            - name: Upload jedis-compat-shared no-classifier artifact
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: jedis-compat-shared-no-classifier
+                  path: java/jedis-shared-bundle-no-classifier.jar
 
             - name: Upload jedis no-classifier artifact
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -676,7 +698,7 @@ jobs:
                   AUTH_HEADER="Bearer $(echo -n "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
                   ARTIFACT_URL="https://central.sonatype.com/api/v1/publisher/deployments/download/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/valkey-glide-${{ env.RELEASE_VERSION }}.pom"
                   for ((retries = 0; retries < 6; retries++)); do
-                      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: $AUTH_HEADER" "$ARTIFACT_URL")
+                      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: $AUTH_HEADER" "$ARTIFACT_URL" || true)
                       if [ "$HTTP_STATUS" = "200" ]; then
                           echo "Artifact available"
                           exit 0
