@@ -421,11 +421,11 @@ jobs:
                     echo "Expected Maven local output missing: $jedis_shared_folder" >&2
                     exit 1
                   fi
-                  cd $jedis_shared_folder
-                  jar -cvf jedis-shared-bundle.jar *
+                  cd "$jedis_shared_folder"
+                  jar -cvf jedis-shared-bundle.jar ./*
                   ls -ltr
                   cd -
-                  cp $jedis_shared_folder/jedis-shared-bundle.jar jedis-shared-bundle-no-classifier.jar
+                  cp "$jedis_shared_folder/jedis-shared-bundle.jar" jedis-shared-bundle-no-classifier.jar
 
             - name: Build jedis-compatibility (no classifier, no natives)
               working-directory: java
