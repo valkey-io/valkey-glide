@@ -991,7 +991,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: arc-swap:1.9.3
+Package: arc-swap:1.9.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -9335,7 +9335,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: crc32fast:1.5.4
+Package: crc32fast:1.5.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -12820,7 +12820,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: flate2:1.1.10
+Package: flate2:1.1.11
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22497,7 +22497,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: itoa:1.0.18
+Package: itoa:1.0.19
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25237,7 +25237,7 @@ For more information, please refer to <http://unlicense.org/>
 
 ----
 
-Package: mime:0.3.17
+Package: mime:0.3.18
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37135,7 +37135,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-pki-types:1.15.1
+Package: rustls-pki-types:1.16.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -40724,7 +40724,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: smallvec:1.16.4
+Package: smallvec:1.16.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -42229,7 +42229,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:3.0.9
+Package: syn:3.0.10
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -50224,7 +50224,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: webpki-root-certs:1.0.11
+Package: webpki-root-certs:1.0.12
 
 The following copyrights and licenses were found in the source code of this package:
 
