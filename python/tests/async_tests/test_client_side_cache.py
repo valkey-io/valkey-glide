@@ -608,12 +608,16 @@ class TestClientSideCache:
         assert cache.tracking_prefix is None
         assert cache._tracking_prefix_bytes() is None
 
-    @pytest.mark.parametrize("prefix", ["xxx:", b"xxx:"], ids=["str", "bytes"])
-    def test_tracking_prefix_accepts_str_and_bytes(self, prefix):
+    @pytest.mark.parametrize(
+        "prefix, encoded",
+        [("xxx:", b"xxx:"), (b"xxx:", b"xxx:"), ("é:", b"\xc3\xa9:")],
+        ids=["str", "bytes", "non_ascii_str"],
+    )
+    def test_tracking_prefix_accepts_str_and_bytes(self, prefix, encoded):
         """Test that create() accepts a str or bytes prefix and encodes str as UTF-8."""
         cache = build_client_side_cache(server_assisted=True, tracking_prefix=prefix)
         assert cache.tracking_prefix == prefix
-        assert cache._tracking_prefix_bytes() == b"xxx:"
+        assert cache._tracking_prefix_bytes() == encoded
 
     def test_tracking_prefix_rejects_empty_prefix(self):
         """Test that an empty prefix is rejected; omit it to track all keys."""

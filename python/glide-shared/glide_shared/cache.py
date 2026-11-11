@@ -86,6 +86,7 @@ class ClientSideCache:
     tracking_prefix: Optional[Union[str, bytes]] = None
 
     def __post_init__(self) -> None:
+        """Validates the configuration on construction, including direct dataclass use."""
         self._validate_tracking_prefix()
 
     def _validate_tracking_prefix(self) -> None:

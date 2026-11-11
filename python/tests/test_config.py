@@ -1468,6 +1468,7 @@ def test_recovery_requests_queue_size_in_proto():
 
 # Client-side cache tracking prefix tests
 def test_client_side_cache_in_protobuf_request_without_tracking_prefix():
+    """Without a prefix the protobuf field is left unset, not sent as empty."""
     cache = ClientSideCache.create(
         max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True
     )
@@ -1483,6 +1484,7 @@ def test_client_side_cache_in_protobuf_request_without_tracking_prefix():
 
 @pytest.mark.parametrize("prefix", ["xxx:", b"xxx:"], ids=["str", "bytes"])
 def test_client_side_cache_tracking_prefix_in_protobuf_request(prefix):
+    """A str or bytes prefix is sent as bytes for standalone and cluster configs."""
     cache = ClientSideCache.create(
         max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True, tracking_prefix=prefix
     )
@@ -1499,6 +1501,7 @@ def test_client_side_cache_tracking_prefix_in_protobuf_request(prefix):
 
 
 def test_client_side_cache_tracking_prefix_non_utf8_bytes_in_protobuf_request():
+    """A bytes prefix that is not valid UTF-8 reaches the protobuf request unchanged."""
     prefix = b"\xff\xfe:"
     cache = ClientSideCache.create(
         max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True, tracking_prefix=prefix
