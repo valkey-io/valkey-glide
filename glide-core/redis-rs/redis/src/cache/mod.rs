@@ -156,10 +156,11 @@ fn check_tracking_prefix(
     Err(RedisError::from((
         ErrorKind::InvalidClientConfig,
         "Client-side cache is already in use with a different tracking prefix",
+        // Prefix values are left out: they can reveal key or tenant naming.
         format!(
-            "cache_id={cache_id}, existing={:?}, requested={:?}",
-            existing_prefix.map(String::from_utf8_lossy),
-            requested.map(String::from_utf8_lossy)
+            "cache_id={cache_id}, existing_prefix_set={}, requested_prefix_set={}",
+            existing_prefix.is_some(),
+            requested.is_some()
         ),
     )))
 }
@@ -584,12 +585,8 @@ mod tests {
             "error names the cache id: {message}"
         );
         assert!(
-            message.contains("xxx:"),
-            "error shows the existing prefix: {message}"
-        );
-        assert!(
-            message.contains("yyy:"),
-            "error shows the requested prefix: {message}"
+            !message.contains("xxx:") && !message.contains("yyy:"),
+            "prefix values must not appear in the error: {message}"
         );
 
         // The registered cache is untouched.
