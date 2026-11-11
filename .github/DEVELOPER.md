@@ -99,7 +99,7 @@ Defines the supported versions of languages:
 
 - Push to `main` by merging a PR or create a new pull request to run workflows automatically.
 - Use `workflow_dispatch` for manual triggers, accepting a boolean configuration parameter to run all configurations.
-- Scheduled runs are triggered daily to ensure regular testing of all configurations.
+- Scheduled runs are triggered daily to ensure regular testing of all configurations, except that the Java, Python, Node, and Go workflows run only the always-run subset on macOS hosts (see [Workflow Matrices](#workflow-matrices)).
 
 ### Mutual vs. Language-Specific Components
 
@@ -146,11 +146,15 @@ We use dynamic matrices for our CI/CD workflows, which are created using the `cr
     - Engine matrix: Defines the types and versions of the engine to test against, for example Valkey 7.2.5.
     - Host matrix: Defines the host platforms to run the tests on, for example Ubuntu on ARM64.
     - Language-version matrix: Defines the supported versions of languages, for example python 3.9.
+5. On scheduled runs, it also builds a list of matrix `exclude` entries that limit macOS hosts to the engines with `"run": "always"` and the language's `always-run-versions`.
+   The self-hosted macOS pool is too small for the full nightly matrix.
+   Other events get an empty list, so manual full-matrix runs still cover macOS fully.
 
 #### Outputs
 
 - `engine-matrix-output`: The generated engine matrix.
 - `host-matrix-output`: The generated host matrix.
-- `language-version-matrix-output`: The generated language version matrix.
+- `version-matrix-output`: The generated language version matrix.
+- `macos-exclude-output`: The macOS `exclude` entries, used as `strategy.matrix.exclude` by the Java, Python, Node, and Go test jobs.
 
 This dynamic matrix generation allows for flexible and efficient CI/CD workflows, adapting the test configurations based on the type of change and the specific language being tested.
