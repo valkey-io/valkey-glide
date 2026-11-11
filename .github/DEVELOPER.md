@@ -16,7 +16,7 @@ Our CI/CD pipeline tests and builds our project across multiple languages, versi
 ### Test coverage
 
 There are two levels of testing: the basic one and full (_aka_ `full-matrix`).
-Basic amount of testing is executed on every open and merged PR. The full set of tests is executed by the scheduled job.
+Basic amount of testing is executed on every open and merged PR. The full set of tests is executed by the scheduled job (macOS hosts run only the always-run subset, see [Workflow Matrices](#workflow-matrices)).
 A developer can select the level when starting a job, either scheduled or client's pipeline.
 
 <img width="264" alt="Matrices" src="https://github.com/user-attachments/assets/72857f80-078c-4e11-bcc6-75beb0125a9d">
