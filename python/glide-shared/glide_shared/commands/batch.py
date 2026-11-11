@@ -5833,7 +5833,10 @@ class Batch(BaseBatch):
     See [Valkey Transactions (Atomic Batches)](https://valkey.io/topics/transactions/) and [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/topics/pipelining/) for details.
 
     Note for Standalone Mode (Cluster Mode Disabled):
-        Standalone Batches are executed on the primary node.
+        Atomic batches, and non-atomic batches with any command that is not read-only, are executed
+        on the primary node. A non-atomic batch of only read-only commands follows the client's
+        ``ReadFrom`` setting, like a single read-only command, so with a replica setting it may
+        observe replication lag.
 
     Examples:
         ### Atomic Batch - Transaction:

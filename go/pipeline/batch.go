@@ -30,6 +30,11 @@ type BaseBatch[T StandaloneBatch | ClusterBatch] struct {
 //	Each element in the array represents a command given to the batch.
 //	The response for each command depends on the executed Valkey command.
 //	Specific response types are documented alongside each method.
+//
+// Atomic batches, and non-atomic batches with any command that is not read-only, are executed on
+// the primary node. A non-atomic batch of only read-only commands follows the client's ReadFrom
+// setting, like a single read-only command, so with a replica setting it may observe replication
+// lag.
 type StandaloneBatch struct {
 	BaseBatch[StandaloneBatch]
 }
