@@ -572,6 +572,29 @@ func TestScopeAcquirePingRelease(t *testing.T) {
 	}
 }
 
+func TestScopeNoScriptErrorKeepsServerText(t *testing.T) {
+	for _, tc := range scopeModes() {
+		t.Run(tc.name, func(t *testing.T) {
+			skipMode(t, tc.cluster)
+			client := newScopeClient(t, tc.cluster)
+			defer client.Close()
+
+			ctx := context.Background()
+			scope, err := client.ScopedConnection(ctx, 10*time.Second, "")
+			require.NoError(t, err)
+			defer scope.Close()
+
+			_, err = scope.ExecuteCommand(ctx, "EVALSHA", strings.Repeat("f", 40), "0")
+			require.Error(t, err)
+			assert.Regexp(t, "^scope command error: "+strings.TrimPrefix(noScriptPattern, "^"), err.Error())
+
+			_, err = scope.ExecuteCommand(ctx, "EVAL", "return {err='NOSCRIPT'}", "0")
+			require.Error(t, err)
+			assert.Equal(t, "scope command error: NOSCRIPT", err.Error())
+		})
+	}
+}
+
 func TestScopeGetSet(t *testing.T) {
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {

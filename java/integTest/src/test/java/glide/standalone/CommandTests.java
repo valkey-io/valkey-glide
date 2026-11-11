@@ -62,6 +62,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.LuaTimeLimit;
 import glide.api.GlideClient;
+import glide.api.models.Batch;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
@@ -2163,6 +2164,55 @@ public class CommandTests {
         assertTrue(
                 exception.getMessage().toUpperCase().contains("NOSCRIPT"),
                 "Expected NOSCRIPT error after script is fully released and flushed");
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void noscript_error_keeps_the_server_text(GlideClient regularClient) {
+        String noScript = "NOSCRIPT No matching script\\.( Please use EVAL\\.)?";
+        String[] evalSha = {"EVALSHA", "ffffffffffffffffffffffffffffffffffffffff", "0"};
+
+        ExecutionException exception =
+                assertThrows(ExecutionException.class, () -> regularClient.customCommand(evalSha).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        String message = exception.getCause().getMessage();
+        assertTrue(message.matches(noScript), message);
+
+        // A script can return a NOSCRIPT error with no detail text.
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                regularClient
+                                        .customCommand(new String[] {"EVAL", "return {err='NOSCRIPT'}", "0"})
+                                        .get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertEquals("NOSCRIPT", exception.getCause().getMessage());
+
+        Object[] result = regularClient.exec(new Batch(false).customCommand(evalSha), false).get();
+        assertInstanceOf(RequestException.class, result[0]);
+        message = ((RequestException) result[0]).getMessage();
+        assertTrue(message.matches(noScript), message);
+
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> regularClient.exec(new Batch(false).customCommand(evalSha), true).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        message = exception.getCause().getMessage();
+        assertTrue(message.matches(noScript), message);
+
+        // invokeScript puts its own prefix before the server's text.
+        Script script = new Script("return '" + UUID.randomUUID() + "'", false);
+        regularClient.invokeScript(script).get();
+        script.close();
+        assertEquals("OK", regularClient.scriptFlush().get());
+        exception =
+                assertThrows(ExecutionException.class, () -> regularClient.invokeScript(script).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        message = exception.getCause().getMessage();
+        assertTrue(message.matches("Script execution failed - ClientError: " + noScript), message);
     }
 
     @ParameterizedTest(autoCloseArguments = false)

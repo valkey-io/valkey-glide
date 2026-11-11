@@ -772,7 +772,10 @@ pub fn scope_execute<'a>(
                 deferred.resolve(|_| Ok(result));
             }
             Err(e) => {
-                deferred.reject(Error::new(Status::GenericFailure, format!("{e}")));
+                deferred.reject(Error::new(
+                    Status::GenericFailure,
+                    glide_core::errors::error_message(&e),
+                ));
             }
         }
     });

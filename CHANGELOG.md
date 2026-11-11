@@ -6,6 +6,10 @@
 
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
 
+### Breaking Changes
+
+* Core/All: A server `NOSCRIPT` error now carries the server's own text (e.g. `NOSCRIPT No matching script.`, or `NOSCRIPT` when the reply has no detail) instead of `An error was signalled by the server: - NoScriptError: No matching script.`, for command errors and for errors in batch results. An `EVALSHA` caller that falls back to `EVAL` or `SCRIPT LOAD` on a `NOSCRIPT` prefix now recovers after a failover empties the script cache. Code that matched `NoScriptError` should match the `NOSCRIPT` prefix. Prefixes a client adds stay in front of the server's text: Java `invokeScript` (`Script execution failed - ClientError: `), Go isolated scopes (`scope command error: `) and Python isolated scopes (`Scope command error: `). Node isolated scope errors now go through the same message function as other Node errors, so a disconnect reads `Received connection error ...` there too ([#7527](https://github.com/valkey-io/valkey-glide/issues/7527), [#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
+
 ## 2.6
 
 ### Features

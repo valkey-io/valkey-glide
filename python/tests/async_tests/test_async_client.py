@@ -7,6 +7,7 @@ import gc
 import math
 import os
 import platform
+import re
 import sys
 import time
 import warnings
@@ -11777,7 +11778,35 @@ class TestScripts:
         with pytest.raises(RequestError) as exc_info:
             await glide_client.invoke_script(script_2)
 
-        assert "NOSCRIPT" in str(exc_info.value).upper()
+        assert re.match(r"^NOSCRIPT No matching script\.", str(exc_info.value))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_noscript_error_keeps_the_server_text(
+        self, glide_client: TGlideClient
+    ):
+        no_script = r"^NOSCRIPT No matching script\.( Please use EVAL\.)?$"
+        eval_sha: List[TEncodable] = ["EVALSHA", "f" * 40, "0"]
+
+        with pytest.raises(RequestError, match=no_script):
+            await glide_client.custom_command(eval_sha)
+        # A script can return a NOSCRIPT error with no detail text.
+        with pytest.raises(RequestError, match=r"^NOSCRIPT$"):
+            await glide_client.custom_command(["EVAL", "return {err='NOSCRIPT'}", "0"])
+
+        batch = (
+            ClusterBatch(is_atomic=False)
+            if isinstance(glide_client, GlideClusterClient)
+            else Batch(is_atomic=False)
+        )
+        batch.custom_command(eval_sha)
+        result = await glide_client.exec(batch, raise_on_error=False)
+        assert result is not None
+        assert isinstance(result[0], RequestError)
+        assert re.match(no_script, str(result[0]))
+
+        with pytest.raises(RequestError, match=no_script):
+            await glide_client.exec(batch, raise_on_error=True)
 
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])

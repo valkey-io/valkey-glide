@@ -68,7 +68,7 @@ impl GlideError {
     }
 
     pub(crate) fn from_redis_error(err: RedisError) -> Self {
-        let msg = err.to_string();
+        let msg = glide_core::errors::error_text(&err);
         // Mirror glide-core's `error_type` classifier (glide-core/src/errors.rs).
         if err.is_timeout() {
             GlideError::Timeout(msg)
@@ -118,6 +118,24 @@ mod tests {
         let g = GlideError::from_redis_error(err);
         assert!(matches!(g, GlideError::CircuitBreaker(_)));
         assert_eq!(g.class_name(), "CircuitBreakerError");
+    }
+
+    #[test]
+    fn redis_noscript_reply_keeps_the_server_text() {
+        for (wire, expected) in [
+            (
+                &b"-NOSCRIPT No matching script.\r\n"[..],
+                "NOSCRIPT No matching script.",
+            ),
+            (b"-NOSCRIPT\r\n", "NOSCRIPT"),
+        ] {
+            let err = redis::parse_redis_value(wire)
+                .and_then(|reply| reply.extract_error())
+                .expect_err("an error reply is an error");
+            let g = GlideError::from_redis_error(err);
+            assert!(matches!(g, GlideError::Request(_)));
+            assert_eq!(g.message(), expected);
+        }
     }
 
     #[test]
