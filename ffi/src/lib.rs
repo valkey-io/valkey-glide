@@ -2615,6 +2615,10 @@ where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
+    debug_assert!(
+        rt.handle().runtime_flavor() != tokio::runtime::RuntimeFlavor::CurrentThread,
+        "block_on_worker needs worker threads; current_thread polls on the caller"
+    );
     match rt.block_on(rt.spawn(future)) {
         Ok(output) => Ok(output),
         Err(err) if err.is_panic() => std::panic::resume_unwind(err.into_panic()),

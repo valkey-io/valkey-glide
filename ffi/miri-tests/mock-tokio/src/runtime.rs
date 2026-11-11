@@ -16,6 +16,12 @@ pub struct Handle;
 #[derive(Debug)]
 pub struct TryCurrentError;
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum RuntimeFlavor {
+    CurrentThread,
+    MultiThread,
+}
+
 impl Handle {
     pub fn enter(&self) -> EnterGuard {
         EnterGuard
@@ -25,6 +31,10 @@ impl Handle {
     /// current handle.
     pub fn try_current() -> Result<Handle, TryCurrentError> {
         Err(TryCurrentError)
+    }
+
+    pub fn runtime_flavor(&self) -> RuntimeFlavor {
+        RuntimeFlavor::MultiThread
     }
 }
 
