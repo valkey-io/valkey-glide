@@ -922,7 +922,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn pending_count_increments_and_decrements() {
+    async fn pending_count_reflects_registered_entries() {
         // Use the global watchdog since PUBLISHED_PENDING is a single global.
         // #[serial] prevents concurrent tests from perturbing the global counter
         // while we poll for our 2 registered entries.
