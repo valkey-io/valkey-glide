@@ -10307,7 +10307,21 @@ export class BaseClient {
             );
         } catch (err) {
             this.cleanupConnectionRegistrations();
-            throw err;
+
+            if (err instanceof ValkeyError) {
+                throw err;
+            }
+
+            const message = err instanceof Error ? err.message : String(err);
+
+            if (
+                message.toLowerCase().includes("configuration") ||
+                message.toLowerCase().includes("invalid")
+            ) {
+                throw new ConfigurationError(message);
+            }
+
+            throw new ClosingError(message);
         }
     }
 

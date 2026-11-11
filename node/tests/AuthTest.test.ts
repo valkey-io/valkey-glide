@@ -1010,11 +1010,47 @@ describe("Direct client credential registration lifecycle", () => {
                         secretAccessKey: "secret",
                     })),
                 ),
-            ).rejects.toThrow("native setup failure");
+            ).rejects.toThrow(ClosingError);
             expect(removeResolver).toHaveBeenCalledTimes(1);
             expect(removeProvider).toHaveBeenCalledTimes(1);
         },
     );
+
+    it("converts configuration failures during direct client initiation to ConfigurationError", async () => {
+        seams.nativeCreateDirectClient = jest.fn(() =>
+            Promise.reject(
+                new Error(
+                    "Failed to create client: configuration error: invalid cluster setting",
+                ),
+            ),
+        );
+
+        await expect(
+            GlideClient.createClient(
+                config(() => ({
+                    accessKeyId: "access",
+                    secretAccessKey: "secret",
+                })),
+            ),
+        ).rejects.toBeInstanceOf(ConfigurationError);
+    });
+
+    it("converts connection setup failures during direct client initiation to ClosingError", async () => {
+        seams.nativeCreateDirectClient = jest.fn(() =>
+            Promise.reject(
+                new Error("Failed to create client: connection closed"),
+            ),
+        );
+
+        await expect(
+            GlideClient.createClient(
+                config(() => ({
+                    accessKeyId: "access",
+                    secretAccessKey: "secret",
+                })),
+            ),
+        ).rejects.toBeInstanceOf(ClosingError);
+    });
 });
 
 describe("IAM Auth: Direct Custom Credential Providers", () => {
