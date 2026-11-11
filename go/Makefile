@@ -222,10 +222,11 @@ else
     TEST_CMD := CC="gcc -fsanitize=address" go test -v ./integTest/...
 endif
 
+# -count=1 disables the test cache, which would replay a passing run without starting any servers
 __it:
 	mkdir -p reports
 	set -o pipefail; \
-	$(TEST_CMD) \
+	$(TEST_CMD) -count=1 \
 	$(TEST_FILTER) \
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
