@@ -3205,17 +3205,15 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         .as_ref()
         .map(|cache| {
             format!(
-                "\nClient-side cache: id={}, max={}KB, ttl={}ms, eviction={:?}, metrics={}, server_assisted={}, tracking_prefix={:?}",
+                "\nClient-side cache: id={}, max={}KB, ttl={}ms, eviction={:?}, metrics={}, server_assisted={}, tracking_prefix_set={}",
                 cache.cache_id,
                 cache.max_cache_kb,
                 cache.entry_ttl_ms,
                 cache.eviction_policy,
                 cache.enable_metrics,
                 cache.server_assisted,
-                cache
-                    .tracking_prefix
-                    .as_deref()
-                    .map(String::from_utf8_lossy)
+                // Only whether a prefix is set: its value can reveal key naming.
+                cache.tracking_prefix.is_some()
             )
         })
         .unwrap_or_default();
@@ -4454,9 +4452,13 @@ mod tests {
         let sanitized = sanitized_request_string(&request);
         assert!(
             sanitized.contains(
-                "Client-side cache: id=cache-7, max=512KB, ttl=1500ms, eviction=None, metrics=true, server_assisted=true, tracking_prefix=Some(\"xxx:\")"
+                "Client-side cache: id=cache-7, max=512KB, ttl=1500ms, eviction=None, metrics=true, server_assisted=true, tracking_prefix_set=true"
             ),
             "{sanitized}"
+        );
+        assert!(
+            !sanitized.contains("xxx:"),
+            "the prefix value must not be logged: {sanitized}"
         );
 
         let without_cache = ConnectionRequest::default();

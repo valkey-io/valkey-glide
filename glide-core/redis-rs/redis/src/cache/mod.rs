@@ -122,10 +122,11 @@ pub fn get_or_create_cache(
     };
 
     info!(
-        "cache_creation - Creating {policy:?} cache `{cache_id}` (max={}KB, ttl={}ms, tracking_prefix={:?})",
+        "cache_creation - Creating {policy:?} cache `{cache_id}` (max={}KB, ttl={}ms, tracking_prefix_set={})",
         max_cache_kb,
         ttl_ms,
-        cache.core().tracking_prefix().map(String::from_utf8_lossy)
+        // Only whether a prefix is set: its value can reveal key naming.
+        cache.core().tracking_prefix().is_some()
     );
 
     // Store weak reference in registry
