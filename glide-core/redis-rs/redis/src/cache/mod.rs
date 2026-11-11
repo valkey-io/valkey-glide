@@ -635,9 +635,14 @@ mod tests {
         use std::thread;
 
         let cache_id = "test_prefix_concurrent";
+        // The winning thread starts the housekeeping task with `tokio::spawn`, which needs
+        // the runtime context that plain threads do not inherit.
+        let runtime = tokio::runtime::Handle::current();
         let handles: Vec<_> = (0..8)
             .map(|i| {
+                let runtime = runtime.clone();
                 thread::spawn(move || {
+                    let _runtime_guard = runtime.enter();
                     let prefix = format!("p{i}:");
                     create(cache_id, Some(prefix.as_bytes()))
                 })
