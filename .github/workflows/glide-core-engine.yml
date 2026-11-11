@@ -104,13 +104,19 @@ jobs:
               run: cargo build --locked --release
               working-directory: ./glide-core/redis-rs/redis/src
 
+            - uses: ./.github/actions/install-cargo-tool
+              with:
+                  repo: EmbarkStudios/cargo-deny
+                  tag: "0.20.2"
+                  asset: cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz
+                  binary: cargo-deny
+
             - name: Lint glide-core-engine
               shell: bash
               run: |
                   cargo fmt --all -- --check
                   cargo clippy --locked --all-features --all-targets -- -D warnings
                   cargo clippy --locked --all-targets -- -D warnings
-                  cargo install --locked cargo-deny
                   cargo deny --config "${GITHUB_WORKSPACE}/deny.toml" --exclude-dev check all
               working-directory: ./glide-core/redis-rs/redis
 
