@@ -551,7 +551,7 @@ jobs:
 
                   # Install ziglang and zigbuild
                   pip3 install ziglang --break-system-packages
-                  cargo install --locked cargo-zigbuild
+                  cargo install --locked cargo-zigbuild@0.24.1
 
             - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
