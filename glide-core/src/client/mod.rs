@@ -2121,7 +2121,7 @@ impl Client {
                 async move {
                     match client {
                         ClientWrapper::Standalone(mut client) => {
-                            let values = client.send_pipeline(pipeline, offset, 1).await?;
+                            let values = client.send_pipeline(pipeline, offset, 1, false).await?;
                             Client::get_transaction_values(
                                 pipeline,
                                 values,
@@ -2195,7 +2195,10 @@ impl Client {
             self.reconcile_iam_before_dispatch().await?;
             // A raw MULTI stays open after a non-atomic pipeline returns, so track
             // it pre-dispatch for `prepare_for_borrow`'s defer. The SELECT drift is
-            // applied post-dispatch instead (see the store below).
+            // applied post-dispatch instead (see the store below). A MULTI left open
+            // by an earlier batch must queue this one, so it also pins this batch to
+            // the primary.
+            let multi_open = self.multi_active.load(Ordering::Acquire);
             for cmd in pipeline.cmd_iter() {
                 self.track_transaction_state(cmd);
             }
@@ -2218,7 +2221,9 @@ impl Client {
                 async move {
                     let values = match client {
                         ClientWrapper::Standalone(mut client) => {
-                            client.send_pipeline(pipeline, 0, command_count).await
+                            client
+                                .send_pipeline(pipeline, 0, command_count, multi_open)
+                                .await
                         }
 
                         ClientWrapper::Cluster { mut client, .. } => match routing {
@@ -3710,25 +3715,26 @@ impl Client {
     /// `handle_select_command` so all three db trackers stay in step: the reconnect
     /// db (`update_stored_database_id`), the OTel `db_namespace`, and
     /// `current_database` (read by scope connections).
+    ///
+    /// A standalone batch ran the `SELECT` on the primary only, so the standalone
+    /// client also selects the db on its replicas, within `request_timeout`. It runs
+    /// on a cloned client, without the `internal_client` write lock, so a slow
+    /// replica cannot stall other requests.
     async fn apply_batch_select_db(&mut self, db: u32) {
-        let update_result = {
-            let mut guard = self.internal_client.write().await;
-            match &mut *guard {
-                ClientWrapper::Standalone(client) => {
-                    client.synchronize_connection_database(db as i64).await
-                }
-                ClientWrapper::Cluster { client, .. } => {
-                    client.update_connection_database(db as i64).await
-                }
-                ClientWrapper::Lazy(_) => {
-                    unreachable!("Lazy client should have been initialized")
-                }
+        let update_result = match self.get_or_initialize_client().await {
+            Ok(ClientWrapper::Standalone(client)) => {
+                client
+                    .update_database_after_batch_select(db as i64, self.request_timeout)
+                    .await;
+                Ok(())
             }
+            Ok(_) => self.update_stored_database_id(db as i64).await,
+            Err(e) => Err(e),
         };
         if let Err(e) = update_result {
             log_warn(
                 "apply_batch_select_db",
-                format!("failed to synchronize database {db}: {e}"),
+                format!("failed to update reconnect database to {db}: {e}"),
             );
         }
         Arc::make_mut(&mut self.otel_metadata).db_namespace = db.to_string();

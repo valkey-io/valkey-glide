@@ -358,7 +358,7 @@ mod standalone_client_tests {
                     .await
                     .unwrap();
             let result = client
-                .send_pipeline(&pipeline, 0, command_count)
+                .send_pipeline(&pipeline, 0, command_count, false)
                 .await
                 .unwrap();
             assert_eq!(result.len(), command_count);
@@ -413,7 +413,7 @@ mod standalone_client_tests {
             pipeline.add_command(first_get).add_command(second_get);
 
             for _ in 0..2 {
-                let result = client.send_pipeline(&pipeline, 0, 2).await.unwrap();
+                let result = client.send_pipeline(&pipeline, 0, 2, false).await.unwrap();
                 assert_eq!(result, vec![Value::Nil, Value::Nil]);
             }
         });
@@ -519,6 +519,309 @@ mod standalone_client_tests {
             servers[1].get_number_of_received_commands(),
             expected_replica_commands
         );
+    }
+
+    /// A mock that answers the named commands with the given RESP replies; the
+    /// last reply of each script repeats. Any other command fails the request.
+    fn create_scripted_mock(
+        responses: HashMap<String, Value>,
+        scripts: &[(&str, &[&str])],
+    ) -> ServerMock {
+        ServerMock::new_with_command_scripts(
+            responses,
+            scripts
+                .iter()
+                .map(|(name, replies)| {
+                    let replies = replies.iter().map(|reply| reply.to_string()).collect();
+                    (name.to_string(), replies)
+                })
+                .collect(),
+        )
+    }
+
+    fn create_replica_read_client_request(
+        servers: &[ServerMock],
+        read_from: ReadFrom,
+        request_timeout: Option<u32>,
+    ) -> glide_core::connection_request::ConnectionRequest {
+        let addresses = get_mock_addresses(servers);
+        let mut connection_request = create_connection_request(
+            addresses.as_slice(),
+            &TestConfiguration {
+                request_timeout,
+                ..Default::default()
+            },
+        );
+        connection_request.read_from = read_from.into();
+        connection_request
+    }
+
+    async fn send_batch(client: &mut GlideClient, commands: &[redis::Cmd]) -> Value {
+        let mut pipeline = redis::Pipeline::new();
+        for command in commands {
+            pipeline.add_command(command.clone());
+        }
+        client
+            .send_pipeline(
+                &pipeline,
+                None,
+                false,
+                None,
+                redis::PipelineRetryStrategy::default(),
+            )
+            .await
+            .unwrap()
+    }
+
+    fn select_cmd(database_id: u32) -> redis::Cmd {
+        let mut select = redis::cmd("SELECT");
+        select.arg(database_id);
+        select
+    }
+
+    fn get_cmd() -> redis::Cmd {
+        let mut get = redis::cmd("GET");
+        get.arg("key");
+        get
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_batch_select_with_primary_read_from_does_not_select_on_replicas() {
+        let servers = vec![
+            create_scripted_mock(create_primary_responses(), &[("SELECT", &["+OK\r\n"])]),
+            create_scripted_mock(create_replica_response(), &[("SELECT", &["+OK\r\n"])]),
+        ];
+        let connection_request =
+            create_replica_read_client_request(&servers, ReadFrom::Primary, None);
+
+        block_on_all(async {
+            let mut client = GlideClient::new(connection_request.into(), None)
+                .await
+                .unwrap();
+            assert_eq!(
+                send_batch(&mut client, &[select_cmd(1)]).await,
+                Value::Array(vec![Value::Okay])
+            );
+        });
+
+        assert_eq!(servers[0].get_number_of_received_commands(), 1);
+        assert_eq!(servers[1].get_number_of_received_commands(), 0);
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_batch_select_with_unresponsive_replica_is_bounded_and_does_not_block_requests() {
+        let request_timeout = std::time::Duration::from_millis(1_000);
+        let servers = vec![
+            create_scripted_mock(
+                create_primary_responses(),
+                &[("SELECT", &["+OK\r\n"]), ("GET", &["$-1\r\n"])],
+            ),
+            // The replica never answers SELECT.
+            create_scripted_mock(create_replica_response(), &[("SELECT", &[""])]),
+        ];
+        let connection_request = create_replica_read_client_request(
+            &servers,
+            ReadFrom::PreferReplica,
+            Some(request_timeout.as_millis() as u32),
+        );
+
+        block_on_all(async {
+            let client = GlideClient::new(connection_request.into(), None)
+                .await
+                .unwrap();
+            let mut batch_client = client.clone();
+            let batch = tokio::spawn(async move {
+                let started = std::time::Instant::now();
+                let result = send_batch(&mut batch_client, &[select_cmd(1)]).await;
+                (result, started.elapsed())
+            });
+            while servers[1].get_number_of_received_commands() == 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+
+            // The replica SELECT is pending. Other requests proceed, and the stale
+            // replica is skipped.
+            let mut reader = client.clone();
+            let get_started = std::time::Instant::now();
+            assert_eq!(
+                reader.send_command(&mut get_cmd(), None).await.unwrap(),
+                Value::Nil
+            );
+            assert!(get_started.elapsed() < request_timeout / 2);
+            assert!(!batch.is_finished());
+
+            let (result, elapsed) = batch.await.unwrap();
+            assert_eq!(result, Value::Array(vec![Value::Okay]));
+            assert!(
+                elapsed < request_timeout * 2,
+                "batch SELECT took {elapsed:?}"
+            );
+        });
+
+        assert_eq!(servers[0].get_number_of_received_commands(), 2);
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_batch_select_retries_replica_until_it_selects() {
+        let servers = vec![
+            create_scripted_mock(
+                create_primary_responses(),
+                &[("SELECT", &["+OK\r\n"]), ("GET", &["$-1\r\n"])],
+            ),
+            create_scripted_mock(
+                create_replica_response(),
+                &[
+                    ("SELECT", &["-ERR busy\r\n", "+OK\r\n"]),
+                    ("GET", &["$-1\r\n"]),
+                ],
+            ),
+        ];
+        let connection_request =
+            create_replica_read_client_request(&servers, ReadFrom::PreferReplica, None);
+
+        block_on_all(async {
+            let mut client = GlideClient::new(connection_request.into(), None)
+                .await
+                .unwrap();
+            send_batch(&mut client, &[select_cmd(1)]).await;
+            assert_eq!(
+                client.send_command(&mut get_cmd(), None).await.unwrap(),
+                Value::Nil
+            );
+            assert_eq!(servers[0].get_number_of_received_commands(), 2);
+            assert_eq!(servers[1].get_number_of_received_commands(), 1);
+
+            // Reads use the replica once the background retry selects the database
+            // there: one failed SELECT, one successful SELECT, then the GET.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while servers[1].get_number_of_received_commands() < 3 {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "replica never retried"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                assert_eq!(
+                    client.send_command(&mut get_cmd(), None).await.unwrap(),
+                    Value::Nil
+                );
+            }
+        });
+
+        assert_eq!(servers[1].get_number_of_received_commands(), 3);
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_batch_select_skips_only_replicas_that_failed_to_select() {
+        // The primary and the failing replica have no GET reply, so a read sent to
+        // either fails the request.
+        let servers = vec![
+            create_scripted_mock(create_primary_responses(), &[("SELECT", &["+OK\r\n"])]),
+            create_scripted_mock(create_replica_response(), &[("SELECT", &["-ERR busy\r\n"])]),
+            create_scripted_mock(
+                create_replica_response(),
+                &[("SELECT", &["+OK\r\n"]), ("GET", &["$-1\r\n"])],
+            ),
+        ];
+        let connection_request =
+            create_replica_read_client_request(&servers, ReadFrom::PreferReplica, None);
+
+        block_on_all(async {
+            let mut client = GlideClient::new(connection_request.into(), None)
+                .await
+                .unwrap();
+            send_batch(&mut client, &[select_cmd(1)]).await;
+            for _ in 0..4 {
+                assert_eq!(
+                    client.send_command(&mut get_cmd(), None).await.unwrap(),
+                    Value::Nil
+                );
+            }
+        });
+
+        assert_eq!(servers[0].get_number_of_received_commands(), 1);
+        assert_eq!(servers[2].get_number_of_received_commands(), 5);
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_single_select_restores_replica_reads_after_failed_batch_select() {
+        let servers = vec![
+            create_scripted_mock(create_primary_responses(), &[("SELECT", &["+OK\r\n"])]),
+            create_scripted_mock(
+                create_replica_response(),
+                &[
+                    ("SELECT", &["-ERR busy\r\n", "+OK\r\n"]),
+                    ("GET", &["$-1\r\n"]),
+                ],
+            ),
+        ];
+        let connection_request =
+            create_replica_read_client_request(&servers, ReadFrom::PreferReplica, None);
+
+        block_on_all(async {
+            let mut client = GlideClient::new(connection_request.into(), None)
+                .await
+                .unwrap();
+            send_batch(&mut client, &[select_cmd(1)]).await;
+            // A single SELECT reaches every node, so the replica is current again.
+            assert_eq!(
+                client.send_command(&mut select_cmd(1), None).await.unwrap(),
+                Value::Okay
+            );
+            assert_eq!(
+                client.send_command(&mut get_cmd(), None).await.unwrap(),
+                Value::Nil
+            );
+        });
+
+        assert_eq!(servers[0].get_number_of_received_commands(), 2);
+        assert_eq!(servers[1].get_number_of_received_commands(), 3);
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_readonly_pipeline_while_multi_open_uses_primary() {
+        let servers = vec![
+            create_scripted_mock(
+                create_primary_responses(),
+                &[
+                    ("MULTI", &["+OK\r\n"]),
+                    ("GET", &["+QUEUED\r\n"]),
+                    ("EXEC", &["*1\r\n$-1\r\n"]),
+                ],
+            ),
+            create_scripted_mock(create_replica_response(), &[("GET", &["$-1\r\n"])]),
+        ];
+        let connection_request =
+            create_replica_read_client_request(&servers, ReadFrom::PreferReplica, None);
+
+        block_on_all(async {
+            let mut client = GlideClient::new(connection_request.into(), None)
+                .await
+                .unwrap();
+            send_batch(&mut client, &[redis::cmd("MULTI")]).await;
+            assert_eq!(
+                send_batch(&mut client, &[get_cmd()]).await,
+                Value::Array(vec![Value::SimpleString("QUEUED".to_string())])
+            );
+            assert_eq!(
+                send_batch(&mut client, &[redis::cmd("EXEC")]).await,
+                Value::Array(vec![Value::Array(vec![Value::Nil])])
+            );
+        });
+
+        assert_eq!(servers[0].get_number_of_received_commands(), 3);
+        assert_eq!(servers[1].get_number_of_received_commands(), 0);
     }
 
     #[rstest]
