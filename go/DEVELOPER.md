@@ -204,6 +204,7 @@ make long-timeout-test
 #### Running Specific Tests
 
 For all of the above tests, we can specify individual tests, or tests matching a pattern, using the `test-filter=<regex>` parameter to specify a filter pattern to use.
+`pubsub-test` ignores `test-filter` and always runs the `TestPubSub` tests.
 
 ```bash
 # Run with a specific prefix (ex. run all tests that start with TestSet)
@@ -323,6 +324,7 @@ If `-vss-test` is not passed, the FT example functions return immediately withou
 #### Test Reports and Results
 
 Alongside terminal output, test reports are generated in `reports` folder.
+Each integration pass writes its own `reports/<name>.log` and `reports/<name>.html` (for example `integ-tests`, `tls-integ-tests`, `modules-integ-tests`), so several passes can run in one `make` call without overwriting each other.
 
 An example of what the report looks like when an error occurs:
 
