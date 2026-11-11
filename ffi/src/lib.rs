@@ -2601,7 +2601,8 @@ fn dispatch_async_push_notification(
     true
 }
 
-/// Explicit so `RUST_MIN_STACK` in the host process cannot shrink the threads that run a connect.
+/// Stack size of every runtime thread that runs a connect. It is exact: `RUST_MIN_STACK` in the
+/// host process neither shrinks nor grows these threads.
 const RUNTIME_THREAD_STACK_SIZE: usize = 2 * 1024 * 1024;
 
 /// Runs `future` on a worker thread of `rt` and blocks the caller until it finishes.
