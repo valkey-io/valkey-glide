@@ -90,13 +90,7 @@ static POOL_ADAPTER_MAP: std::sync::OnceLock<dashmap::DashMap<usize, (u64, u64)>
 
 fn get_pool_runtime() -> &'static tokio::runtime::Runtime {
     POOL_RUNTIME.get_or_init(|| {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .worker_threads(2)
-            .thread_name("glide-pool")
-            .thread_stack_size(RUNTIME_THREAD_STACK_SIZE)
-            .build()
-            .expect("Failed to create pool runtime")
+        worker_runtime("glide-pool", Some(2)).expect("Failed to create pool runtime")
     })
 }
 

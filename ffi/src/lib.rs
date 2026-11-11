@@ -2605,18 +2605,33 @@ fn dispatch_async_push_notification(
 /// host process neither shrinks nor grows these threads.
 const RUNTIME_THREAD_STACK_SIZE: usize = 2 * 1024 * 1024;
 
+/// Builds a multi-thread runtime whose threads have [`RUNTIME_THREAD_STACK_SIZE`] stacks.
+/// `worker_threads` of `None` keeps tokio's default worker count.
+#[allow(clippy::disallowed_methods)] // the one place allowed to build a multi-thread runtime
+fn worker_runtime(name: &str, worker_threads: Option<usize>) -> std::io::Result<Runtime> {
+    let mut builder = Builder::new_multi_thread();
+    builder
+        .enable_all()
+        .thread_name(name)
+        .thread_stack_size(RUNTIME_THREAD_STACK_SIZE);
+    if let Some(count) = worker_threads {
+        builder.worker_threads(count);
+    }
+    builder.build()
+}
+
 /// Runs `future` on a worker thread of `rt` and blocks the caller until it finishes.
 ///
 /// Foreign callers choose the calling thread, and its stack can be too small for a connect:
 /// musl gives non-main threads 128 KiB, while a TLS cluster connect needs more. Runtimes built
-/// here give their workers [`RUNTIME_THREAD_STACK_SIZE`]. A panic in `future` resumes on the
-/// caller, as if the caller had polled it.
+/// by [`worker_runtime`] give their workers [`RUNTIME_THREAD_STACK_SIZE`]. A panic in `future`
+/// resumes on the caller, as if the caller had polled it.
 fn block_on_worker<F>(rt: &Runtime, future: F) -> Result<F::Output, String>
 where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
-    debug_assert!(
+    assert!(
         rt.handle().runtime_flavor() != tokio::runtime::RuntimeFlavor::CurrentThread,
         "block_on_worker needs worker threads; current_thread polls on the caller"
     );
@@ -2632,11 +2647,7 @@ mod tests_block_on_worker {
     use super::*;
 
     fn runtime() -> Runtime {
-        Builder::new_multi_thread()
-            .worker_threads(1)
-            .enable_all()
-            .build()
-            .unwrap()
+        worker_runtime("test worker", Some(1)).unwrap()
     }
 
     #[test]
@@ -2698,16 +2709,10 @@ fn create_client_internal(
                 .and_then(|s| s.parse::<usize>().ok())
                 .unwrap_or(1)
                 .max(1);
-            Builder::new_multi_thread()
-                .enable_all()
-                .worker_threads(worker_threads)
-                .thread_name("Valkey-GLIDE thread")
-                .thread_stack_size(RUNTIME_THREAD_STACK_SIZE)
-                .build()
-                .map_err(|err| {
-                    let redis_error: redis::RedisError = err.into();
-                    errors::error_message(&redis_error)
-                })?
+            worker_runtime("Valkey-GLIDE thread", Some(worker_threads)).map_err(|err| {
+                let redis_error: redis::RedisError = err.into();
+                errors::error_message(&redis_error)
+            })?
         }
     };
 
@@ -2717,16 +2722,10 @@ fn create_client_internal(
     // current_thread runtime which only polls tasks inside block_on.
     let background_runtime = match &client_type {
         ClientType::SyncClient => Some(
-            Builder::new_multi_thread()
-                .enable_all()
-                .worker_threads(1)
-                .thread_name("Valkey-GLIDE background")
-                .thread_stack_size(RUNTIME_THREAD_STACK_SIZE)
-                .build()
-                .map_err(|err| {
-                    let redis_error: redis::RedisError = err.into();
-                    errors::error_message(&redis_error)
-                })?,
+            worker_runtime("Valkey-GLIDE background", Some(1)).map_err(|err| {
+                let redis_error: redis::RedisError = err.into();
+                errors::error_message(&redis_error)
+            })?,
         ),
         _ => None,
     };
@@ -7813,11 +7812,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         cache: None,
     };
 
-    let runtime = match Builder::new_multi_thread()
-        .enable_all()
-        .thread_stack_size(RUNTIME_THREAD_STACK_SIZE)
-        .build()
-    {
+    let runtime = match worker_runtime("Valkey-GLIDE monitor", None) {
         Ok(r) => r,
         Err(e) => {
             let err_msg =
