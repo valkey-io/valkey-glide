@@ -13,6 +13,10 @@ on:
             - python/**
             - glide-core/src/**
             - glide-core/redis-rs/redis/src/**/**
+            - glide-core/Cargo.toml
+            - glide-core/build.rs
+            - ffi/**
+            - glide-logger/**
             - utils/cluster_manager.py
             - .github/workflows/python.yml
             - .github/actions/build-python-wrapper/action.yml
@@ -31,6 +35,10 @@ on:
             - python/**
             - glide-core/src/**
             - glide-core/redis-rs/redis/src/**
+            - glide-core/Cargo.toml
+            - glide-core/build.rs
+            - ffi/**
+            - glide-logger/**
             - utils/cluster_manager.py
             - .github/workflows/python.yml
             - .github/actions/build-python-wrapper/action.yml
