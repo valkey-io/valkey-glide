@@ -1,10 +1,10 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use crate::task::JoinHandle;
 use std::{
     future::Future,
     task::{Context, Poll},
 };
-use crate::task::JoinHandle;
 
 pub struct Runtime;
 
@@ -54,7 +54,7 @@ impl Runtime {
         let context = &mut Context::from_waker(waker);
         match std::pin::pin!(future).poll(context) {
             Poll::Ready(result) => result,
-            _ => panic!("No result found")
+            _ => panic!("No result found"),
         }
     }
 
