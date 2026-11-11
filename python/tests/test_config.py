@@ -390,7 +390,6 @@ def test_convert_config_with_azaffinity_all_nodes_to_protobuf():
     assert request.client_az == az
 
 
-
 def test_config_rejects_whitespace_only_client_az():
     strategies = [
         ReadFrom.AZ_AFFINITY,
