@@ -2291,7 +2291,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                             redis::RedisError::from((
                                 redis::ErrorKind::ClientError,
                                 "Script execution failed",
-                                e.to_string(),
+                                glide_core::errors::error_text(&e),
                             ))
                         });
 

@@ -5712,8 +5712,55 @@ export function runBaseTests(config: {
 
                 // Now it should throw a NOSCRIPT error
                 await expect(client.invokeScript(script2)).rejects.toThrowError(
-                    /NoScriptError/,
+                    /^NOSCRIPT /,
                 );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `NOSCRIPT error keeps the server's text_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const noScript =
+                    /^NOSCRIPT No matching script\.( Please use EVAL\.)?$/;
+                const evalSha = ["EVALSHA", "f".repeat(40), "0"];
+
+                await expect(client.customCommand(evalSha)).rejects.toThrow(
+                    noScript,
+                );
+                // A script can return a NOSCRIPT error with no detail text.
+                await expect(
+                    client.customCommand([
+                        "EVAL",
+                        "return {err='NOSCRIPT'}",
+                        "0",
+                    ]),
+                ).rejects.toThrow(/^NOSCRIPT$/);
+
+                const isCluster = client instanceof GlideClusterClient;
+                const batch = isCluster
+                    ? new ClusterBatch(false)
+                    : new Batch(false);
+                batch.customCommand(evalSha);
+                const result = isCluster
+                    ? await (client as GlideClusterClient).exec(
+                          batch as ClusterBatch,
+                          false,
+                      )
+                    : await (client as GlideClient).exec(batch as Batch, false);
+                expect(result?.[0]).toBeInstanceOf(RequestError);
+                expect((result?.[0] as RequestError).message).toMatch(noScript);
+
+                await expect(
+                    isCluster
+                        ? (client as GlideClusterClient).exec(
+                              batch as ClusterBatch,
+                              true,
+                          )
+                        : (client as GlideClient).exec(batch as Batch, true),
+                ).rejects.toThrow(noScript);
             }, protocol);
         },
         config.timeout,

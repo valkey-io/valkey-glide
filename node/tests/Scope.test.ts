@@ -43,6 +43,17 @@ function makeKey(prefix: string): string {
     return `scope-test-${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** A NOSCRIPT reply, with and without detail text, keeps the server's text. */
+async function expectNoScriptErrors(scope: IsolatedScope): Promise<void> {
+    await expect(
+        scope.executeCommand("EVALSHA", "f".repeat(40), "0"),
+    ).rejects.toThrow(/^NOSCRIPT No matching script\.( Please use EVAL\.)?$/);
+    // A script can return a NOSCRIPT error with no detail text.
+    await expect(
+        scope.executeCommand("EVAL", "return {err='NOSCRIPT'}", "0"),
+    ).rejects.toThrow(/^NOSCRIPT$/);
+}
+
 describe("IsolatedScope", () => {
     let cluster: ValkeyCluster;
     let client: GlideClient;
@@ -92,6 +103,20 @@ describe("IsolatedScope", () => {
             expect(scope.isReleased).toBe(false);
             scope.release();
             expect(scope.isReleased).toBe(true);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "NOSCRIPT error keeps the server's text",
+        async () => {
+            const scope = await IsolatedScope.acquire(client, connReqBytes);
+
+            try {
+                await expectNoScriptErrors(scope);
+            } finally {
+                scope.release();
+            }
         },
         TIMEOUT,
     );
@@ -818,6 +843,20 @@ describe("IsolatedScope (cluster)", () => {
     // shards, different nodes), so a scope routed to the wrong node fails
     // with MOVED.
     const routedKeys = ["{a}", "{b}", "{c}"].map((tag) => makeKey(tag));
+
+    it(
+        "NOSCRIPT error keeps the server's text on a cluster scope",
+        async () => {
+            const scope = await client.scopedConnection();
+
+            try {
+                await expectNoScriptErrors(scope);
+            } finally {
+                scope.release();
+            }
+        },
+        TIMEOUT,
+    );
 
     it(
         "scopedConnection(routingKey) routes on a cluster client",
