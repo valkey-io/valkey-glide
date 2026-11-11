@@ -97,6 +97,7 @@ async fn raise_on_error_false_returns_inline() {
     assert!(matches!(results[2], glide::ValkeyValue::ServerError(_)));
 }
 
+// TODO #7654: Add a queue-time error case that expects `GlideError::ExecAbort`.
 #[tokio::test]
 async fn error_inside_transaction_runtime() {
     let server = common::TestServer::start();
