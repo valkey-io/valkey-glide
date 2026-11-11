@@ -772,9 +772,11 @@ pub fn scope_execute<'a>(
                 deferred.resolve(|_| Ok(result));
             }
             Err(e) => {
+                // A scope's dedicated connection is not reconnected, so skip
+                // error_message's reconnect notice.
                 deferred.reject(Error::new(
                     Status::GenericFailure,
-                    glide_core::errors::error_message(&e),
+                    glide_core::errors::error_text(&e),
                 ));
             }
         }
