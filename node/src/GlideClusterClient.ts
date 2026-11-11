@@ -825,8 +825,8 @@ export class GlideClusterClient extends BaseClient {
     } {
         return super.serializeConnectionRequest(
             options,
-            (opts: BaseClientConfiguration) =>
-                new GlideClusterClient(opts as GlideClusterClientConfiguration),
+            (opts: GlideClusterClientConfiguration) =>
+                new GlideClusterClient(opts),
         );
     }
 

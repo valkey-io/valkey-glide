@@ -1812,7 +1812,9 @@ export class BaseClient {
         this.dropOtelSpanForCallback(response.callbackIdx);
     };
 
-    protected constructor(options: BaseClientConfiguration) {
+    protected constructor(
+        options: BaseClientConfiguration = { addresses: [] },
+    ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
 
