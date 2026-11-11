@@ -211,6 +211,29 @@ matrix_test!(zrevrange_withscores, c, {
         .await
         .unwrap();
     assert_eq!(r, vec![("a".to_string(), 1.0)]);
+
+    // Generic-trait tests from #7633: ZRANGE ... WITHSCORES normalizes to a map of member
+    // to score on both RESP2 and RESP3, decoding into HashMap<String, f64>.
+    let r_generic: std::collections::HashMap<String, f64> =
+        glide::AsyncCommands::zrangebyscore_withscores(&c, &k, "-inf", "+inf")
+            .await
+            .unwrap();
+    let mut expected_map = std::collections::HashMap::new();
+    expected_map.insert("a".to_string(), 1.0);
+    expected_map.insert("b".to_string(), 2.5);
+    assert_eq!(r_generic, expected_map);
+
+    let r_rev_generic: std::collections::HashMap<String, f64> =
+        glide::AsyncCommands::zrevrange_withscores(&c, &k, 0, -1)
+            .await
+            .unwrap();
+    assert_eq!(r_rev_generic, expected_map);
+
+    let r_revbyscore_generic: std::collections::HashMap<String, f64> =
+        glide::AsyncCommands::zrevrangebyscore_withscores(&c, &k, "+inf", "-inf")
+            .await
+            .unwrap();
+    assert_eq!(r_revbyscore_generic, expected_map);
 });
 
 matrix_test!(zrangebyscore, c, {
