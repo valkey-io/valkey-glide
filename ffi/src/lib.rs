@@ -2070,6 +2070,20 @@ impl ClientAdapter {
     where
         Fut: Future<Output = RedisResult<Value>> + Send + 'static,
     {
+        self.execute_request_inner(request_id, request_future, response_buf, true)
+    }
+
+    /// `connects` is false for requests whose success does not prove a lazy client connected.
+    fn execute_request_inner<Fut>(
+        &self,
+        request_id: usize,
+        request_future: Fut,
+        response_buf: Option<ResponseBuffer>,
+        connects: bool,
+    ) -> *mut CommandResult
+    where
+        Fut: Future<Output = RedisResult<Value>> + Send + 'static,
+    {
         match self.core.client_type {
             ClientType::AsyncClient {
                 success_callback,
@@ -2146,7 +2160,7 @@ impl ClientAdapter {
                             err,
                         )))
                     });
-                    if result.is_ok() {
+                    if connects && result.is_ok() {
                         self.lazy_connect_pending.store(false, Ordering::Relaxed);
                     }
                     result
@@ -5914,9 +5928,12 @@ pub unsafe extern "C-unwind" fn refresh_iam_token(
     };
 
     let mut client = client_adapter.core.client.clone();
-    client_adapter.execute_request(request_id, async move {
-        client.refresh_iam_token().await.map(|_| Value::Okay)
-    })
+    client_adapter.execute_request_inner(
+        request_id,
+        async move { client.refresh_iam_token().await.map(|_| Value::Okay) },
+        None,
+        false,
+    )
 }
 
 /// Get cache metrics for the client.
