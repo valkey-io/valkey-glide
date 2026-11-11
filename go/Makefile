@@ -176,41 +176,33 @@ example-test:
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2 \
 	| go-test-report -o reports/example-tests.html -t example-test > /dev/null)
 
-# report file name (without extension) written under reports/ by __it; override per target to avoid overwriting
-REPORT_NAME ?= integ-tests
-
 # integration tests - run subtask with skipping modules tests
 integ-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" $(if $(test-filter), -testify.m $(test-filter))
-integ-test: __it
+integ-test: reports/integ-tests.log
 
 # modules tests - run substask with default filter
 modules-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter), -testify.m TestModule)
-modules-test: __it
+modules-test: reports/modules-integ-tests.log
 
 # pubsub tests - run pubsub tests using testify filter
 pubsub-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -testify.m TestPubSub
-pubsub-test: REPORT_NAME = pubsub-integ-tests
-pubsub-test: __it
+pubsub-test: reports/pubsub-integ-tests.log
 
-# tls tests - run only the TLS-designated tests using testify filter, with a dedicated report
-# a filter that matches nothing, or a run without --tls, still exits 0, so the recipe checks the TLS tests really ran
+# tls tests - run only the TLS-designated tests over TLS, with a dedicated report
+# a filter that matches nothing still exits 0, so the recipe checks the TLS tests really ran
 tls-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -testify.m Tls
-tls-test: REPORT_NAME = tls-integ-tests
-tls-test: tls = true
-tls-test: __it
-	@grep -q -- '--- PASS: TestGlideTestSuite/[A-Za-z0-9_]*Tls' reports/$(REPORT_NAME).log \
-		&& ! grep -q 'TLS is disabled, skipping TLS tests' reports/$(REPORT_NAME).log \
-		|| { echo "tls-test: the TLS pass ran no TLS tests over TLS"; exit 1; }
+tls-test: override tls = true
+tls-test: reports/tls-integ-tests.log
+	@grep -q -- '--- PASS: TestGlideTestSuite/[A-Za-z0-9_]*Tls' $< \
+		|| { echo "tls-test: the TLS pass ran no TLS tests"; exit 1; }
 
 # long timeout tests - run subtask with the long timeout flag enabled
 long-timeout-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -long-timeout-tests $(if $(test-filter), -testify.m $(test-filter))
-long-timeout-test: REPORT_NAME = long-timeout-integ-tests
-long-timeout-test: __it
+long-timeout-test: reports/long-timeout-integ-tests.log
 
 # opentelemetry tests - run subtask with the opentelemetry flag enabled
 opentelemetry-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -otel-test $(if $(test-filter), -testify.m $(test-filter), -testify.m TestOpenTelemetry)
-opentelemetry-test: REPORT_NAME = otel-integ-tests
-opentelemetry-test: __it
+opentelemetry-test: reports/otel-integ-tests.log
 
 # Test command for integration tests
 ifeq ($(IS_MUSL), true)
@@ -223,7 +215,12 @@ else
     TEST_CMD := CC="gcc -fsanitize=address" go test -v ./integTest/...
 endif
 
-__it:
+# each pass writes its own reports/<name>.log and .html, so several passes can run in one make call
+# keep the log when make is interrupted (for example a CI timeout), it is the artifact that shows how far the run got
+.PRECIOUS: reports/%.log
+.PHONY: FORCE
+FORCE:
+reports/%.log: FORCE
 	mkdir -p reports
 	set -o pipefail; \
 	$(TEST_CMD) \
@@ -231,6 +228,6 @@ __it:
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
 	$(if $(cluster-endpoints), --cluster-endpoints=$(cluster-endpoints)) \
-	| tee reports/$(REPORT_NAME).log >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/integTest | go-test-report -o reports/$(REPORT_NAME).html -t integ-test > /dev/null)
+	| tee $@ >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/integTest | go-test-report -o reports/$*.html -t integ-test > /dev/null)
 # code above ^ is similar to `go test .... -json | go-test-report ....`, but it also prints plain text output to stdout
 # `go test` prints plain text, tee duplicates it to stdout and to `test2json` which is coupled with `go-test-report` to generate the report
