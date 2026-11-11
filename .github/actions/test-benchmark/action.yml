@@ -4,6 +4,13 @@ description: Build one language's benchmark program and run it once against a lo
 # This action decides whether the calling matrix cell runs the check; callers
 # pass the cell's facts and carry no `if:` of their own, so the rule lives in
 # one place and every language is checked under the same conditions.
+#
+# It does not run on pull requests. The check exists to catch a benchmark
+# program that no longer compiles against the client; the push run after a
+# merge names the one PR that broke it, and the nightly and dispatched runs
+# keep running it on the same cells as a push. On a pull request it is a second
+# release build of the client (4-12 minutes on the Node, Rust and Python cells)
+# that nothing shipped depends on.
 
 inputs:
     language-flag:
@@ -36,13 +43,16 @@ runs:
           shell: bash
           env:
               LANGUAGE_FLAG: ${{ inputs.language-flag }}
+              EVENT_NAME: ${{ github.event_name }}
               ENGINE_RUN: ${{ inputs.engine-run }}
               TARGET: ${{ inputs.target }}
               LANGUAGE_VERSION: ${{ inputs.language-version }}
               BASE_LANGUAGE_VERSION: ${{ inputs.base-language-version }}
           run: |
               decision=RUN
-              if [[ "$ENGINE_RUN" != "always" ]]; then
+              if [[ "$EVENT_NAME" == "pull_request" ]]; then
+                  decision="SKIP (event is pull_request)"
+              elif [[ "$ENGINE_RUN" != "always" ]]; then
                   decision="SKIP (engine.run is '${ENGINE_RUN:-unset}', not 'always')"
               elif [[ "$TARGET" != "x86_64-unknown-linux-gnu" ]]; then
                   decision="SKIP (target is $TARGET)"
