@@ -928,8 +928,11 @@ mod tests {
         // while we poll for our 2 registered entries.
         let watchdog = TimeoutWatchdog::global();
 
-        let rx1 = watchdog.register(Duration::from_millis(500), Instant::now());
-        let rx2 = watchdog.register(Duration::from_millis(500), Instant::now());
+        // The watchdog publishes 0 as soon as these entries fire, so the deadline
+        // must outlast the whole poll bound below or a slow scheduler reads 0.
+        let timeout = Duration::from_secs(10);
+        let rx1 = watchdog.register(timeout, Instant::now());
+        let rx2 = watchdog.register(timeout, Instant::now());
 
         // Poll until the watchdog thread drains the channel and publishes our
         // two entries, or until a deadline expires. A fixed sleep is not
@@ -946,9 +949,9 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
-        // Wait for both to fire
-        let _ = rx1.await;
-        let _ = rx2.await;
+        // Cancel rather than wait for them to fire.
+        drop(rx1);
+        drop(rx2);
     }
 
     #[tokio::test]
