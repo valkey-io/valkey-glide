@@ -13,7 +13,6 @@ from tests.utils.utils import (
     assert_cache_hit,
     assert_client_tracking_info,
     build_client_side_cache,
-    cache_hits,
     get_random_string,
     read_until_cached,
     wait_for,
@@ -879,11 +878,11 @@ class TestClientSideCache:
 
         # MGET mixing tracked and untracked keys: complete ordered result, only the
         # tracked key is stored (and only the tracked key is a lookup).
-        await read_until_cached(
+        mgets = await read_until_cached(
             cached, lambda: cached.mget([tracked, untracked]), [b"t1", b"u2"]
         )
         assert cached.get_cache_entry_count() == 1
-        assert cache_hits(cached) == 0
+        assert cached.get_cache_total_lookups() == mgets
 
         # Second MGET: the tracked key hits, the untracked key reflects a fresh write.
         assert await writer.set(untracked, "u3") == "OK"

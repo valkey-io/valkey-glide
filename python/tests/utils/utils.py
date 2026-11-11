@@ -439,9 +439,10 @@ def sync_wait_for(
 # Server-assisted invalidations for a write arrive on every node connection of a
 # client: the primary sends one when the key is written and each replica sends
 # another when it applies the replicated write. A late duplicate cancels a cache
-# fill that is still in flight, so the first read right after a write may not be
-# stored. Read a freshly written key with ``read_until_cached`` and only assert on
-# cached entries of keys that have not been written since.
+# fill that is still in flight, or drops an entry that was just stored, so the
+# first reads right after a write may not be cached. Read a freshly written key
+# with ``read_until_cached`` and only assert on cached entries of keys that have
+# not been written since.
 
 
 def cache_hits(client) -> int:
@@ -451,32 +452,47 @@ def cache_hits(client) -> int:
 
 async def read_until_cached(
     client: TGlideClient, read: Callable[[], Awaitable[Any]], expected: Any
-) -> None:
-    """Repeats ``read`` until its (tracked, not yet cached) key is stored in the cache.
+) -> int:
+    """Repeats ``read`` until its (tracked, not yet cached) key is served by the cache.
 
-    ``read`` must return ``expected`` every time; it is retried only when the
-    cache entry count did not grow, which means the fill was cancelled.
+    ``read`` must return ``expected`` every time. A grown entry count alone does not
+    prove a stable fill, because a late duplicate invalidation can still drop the
+    entry, so the read is repeated (bounded by ``wait_for``) until it is a cache hit
+    while the cache holds exactly one entry more than at the start.
+
+    Returns:
+        The number of times ``read`` was executed.
     """
+    target = client.get_cache_entry_count() + 1
+    reads = 0
 
-    async def stored() -> bool:
-        before = client.get_cache_entry_count()
+    async def cached() -> bool:
+        nonlocal reads
+        hits = cache_hits(client)
         assert await read() == expected
-        return client.get_cache_entry_count() == before + 1
+        reads += 1
+        return cache_hits(client) > hits and client.get_cache_entry_count() == target
 
-    await wait_for(stored, "the read value was not stored in the cache")
+    await wait_for(cached, "the read value was not served from the cache")
+    return reads
 
 
 def sync_read_until_cached(
     client: TSyncGlideClient, read: Callable[[], Any], expected: Any
-) -> None:
+) -> int:
     """Sync twin of ``read_until_cached``."""
+    target = client.get_cache_entry_count() + 1
+    reads = 0
 
-    def stored() -> bool:
-        before = client.get_cache_entry_count()
+    def cached() -> bool:
+        nonlocal reads
+        hits = cache_hits(client)
         assert read() == expected
-        return client.get_cache_entry_count() == before + 1
+        reads += 1
+        return cache_hits(client) > hits and client.get_cache_entry_count() == target
 
-    sync_wait_for(stored, "the read value was not stored in the cache")
+    sync_wait_for(cached, "the read value was not served from the cache")
+    return reads
 
 
 async def assert_cache_hit(
