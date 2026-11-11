@@ -6,6 +6,7 @@ from __future__ import annotations
 import array
 import math
 import os
+import socket
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -570,6 +571,64 @@ class TestGlideClients:
             _, status = os.waitpid(pid, 0)
             if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
                 pytest.fail(f"Child process failed with status {status}")
+
+    @pytest.mark.skipif(not hasattr(os, "fork"), reason="needs os.fork")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_fork_after_failed_create_does_not_reconnect(
+        self, cluster_mode: bool, monkeypatch: pytest.MonkeyPatch
+    ):
+        """A client whose create() failed must not be reconnected in forked children."""
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            closed_port = s.getsockname()[1]
+        address = [NodeAddress("127.0.0.1", closed_port)]
+        config: Union[GlideClientConfiguration, GlideClusterClientConfiguration]
+        if cluster_mode:
+            config = GlideClusterClientConfiguration(
+                addresses=address,
+                advanced_config=AdvancedGlideClusterClientConfiguration(
+                    connection_timeout=500
+                ),
+            )
+        else:
+            config = GlideClientConfiguration(
+                addresses=address,
+                advanced_config=AdvancedGlideClientConfiguration(
+                    connection_timeout=500
+                ),
+            )
+        client_cls = GlideClusterClient if cluster_mode else GlideClient
+
+        connect_pids: List[int] = []
+        original = client_cls._create_core_client
+
+        def spy(self):
+            connect_pids.append(os.getpid())
+            return original(self)
+
+        monkeypatch.setattr(client_cls, "_create_core_client", spy)
+        with pytest.raises(ClosingError):
+            client_cls.create(config)
+        assert connect_pids == [os.getpid()]
+
+        pid = os.fork()
+        if pid == 0:
+            os._exit(1 if os.getpid() in connect_pids else 0)
+
+        deadline = time.monotonic() + 30
+        while True:
+            done, status = os.waitpid(pid, os.WNOHANG)
+            if done:
+                break
+            if time.monotonic() > deadline:
+                os.kill(pid, 9)
+                os.waitpid(pid, 0)
+                pytest.fail("Forked child did not exit")
+            time.sleep(0.01)
+        assert os.WIFEXITED(status), f"Child died with status {status}"
+        assert (
+            os.WEXITSTATUS(status) == 0
+        ), "Fork hook reconnected the failed client in the child"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("ip_address", [IP_ADDRESS_V4, IP_ADDRESS_V6])
