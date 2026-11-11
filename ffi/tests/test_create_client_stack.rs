@@ -225,7 +225,9 @@ fn on_musl_sized_stack(
 /// Runs the child-only `test` in a fresh copy of this binary and asserts it passed.
 fn run_child(test: &str, node: &str, rust_min_stack: Option<usize>) {
     let mut child = Command::new(std::env::current_exe().expect("test binary path"));
-    child.args([test, "--exact"]).env(NODE_ENV, node);
+    child
+        .args([test, "--exact", "--ignored"])
+        .env(NODE_ENV, node);
     if let Some(size) = rust_min_stack {
         child.env("RUST_MIN_STACK", size.to_string());
     }
@@ -254,10 +256,10 @@ fn tls_connects_do_not_depend_on_the_callers_or_the_default_thread_stack() {
 }
 
 #[test]
+#[ignore = "child process of tls_connects_do_not_depend_on_the_callers_or_the_default_thread_stack"]
 fn child_creates_tls_clients_on_a_musl_sized_thread() {
-    let Ok(node) = std::env::var(NODE_ENV) else {
-        return;
-    };
+    let node = std::env::var(NODE_ENV)
+        .unwrap_or_else(|_| panic!("run by its parent test, which sets {NODE_ENV}"));
     let verified = request(&node, TlsMode::SecureTls);
     for (name, client_type) in [("async", async_client()), ("sync", ClientType::SyncClient)] {
         let request = verified.clone();
@@ -273,10 +275,10 @@ fn child_creates_tls_clients_on_a_musl_sized_thread() {
 }
 
 #[test]
+#[ignore = "child process of tls_connects_do_not_depend_on_the_callers_or_the_default_thread_stack"]
 fn child_connects_monitor_and_scope_on_runtime_workers() {
-    let Ok(node) = std::env::var(NODE_ENV) else {
-        return;
-    };
+    let node = std::env::var(NODE_ENV)
+        .unwrap_or_else(|_| panic!("run by its parent test, which sets {NODE_ENV}"));
     let insecure = request(&node, TlsMode::InsecureTls);
     let result = on_musl_sized_stack("monitor", move || create_monitor_and_close(&insecure));
     assert_eq!(result, Ok(()), "TLS monitor client");
