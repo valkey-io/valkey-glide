@@ -83,9 +83,7 @@ def test_logged_pid_of_another_process_is_not_killed(tmp_path, locked_server):
             "1:C * oO0OoO0OoO0Oo Valkey is starting oO0OoO0OoO0Oo\n"
             f"1:C * Valkey version=8.0.0, bits=64, commit=0, modified=0, pid={other.pid}, just started\n"
         )
-        stop_cluster(
-            "127.0.0.1", str(tmp_path), False, None, None, keep_folder=True
-        )
+        stop_cluster("127.0.0.1", str(tmp_path), False, None, None, keep_folder=True)
         with pytest.raises(subprocess.TimeoutExpired):
             other.wait(timeout=1)
         assert _running(server.pid)

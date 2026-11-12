@@ -1255,7 +1255,12 @@ def stop_clusters(
 
 def process_command_line(pid: int) -> str:
     try:
-        return Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+        return (
+            Path(f"/proc/{pid}/cmdline")
+            .read_bytes()
+            .replace(b"\0", b" ")
+            .decode(errors="replace")
+        )
     except OSError:
         pass
     try:
@@ -1280,12 +1285,16 @@ def kill_logged_server(node_folder: str):
     except OSError:
         pids = []
     if not pids:
-        logging.warning(f"No logged pid in {node_folder}; the server may still be running")
+        logging.warning(
+            f"No logged pid in {node_folder}; the server may still be running"
+        )
         return
     pid = int(pids[-1])
     port = os.path.basename(node_folder)
     if not re.search(rf":{port}(\D|$)", process_command_line(pid)):
-        logging.warning(f"Pid {pid} from {node_folder} is not the server on port {port}; not killing it")
+        logging.warning(
+            f"Pid {pid} from {node_folder} is not the server on port {port}; not killing it"
+        )
         return
     try:
         os.kill(pid, signal.SIGKILL)
