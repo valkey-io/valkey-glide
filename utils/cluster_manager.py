@@ -1257,9 +1257,16 @@ def process_command_line(pid: int) -> str:
     try:
         return Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
     except OSError:
+        pass
+    try:
         return subprocess.run(
-            ["ps", "-p", str(pid), "-o", "command="], capture_output=True, text=True
+            ["ps", "-p", str(pid), "-o", "command="],
+            capture_output=True,
+            text=True,
+            timeout=5,
         ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
 
 
 def kill_logged_server(node_folder: str):

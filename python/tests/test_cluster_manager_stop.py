@@ -102,5 +102,17 @@ def test_folder_without_logged_pid_warns(tmp_path, caplog):
     assert "No logged pid" in caplog.text
 
 
+def test_unknown_command_line_without_ps_warns(tmp_path, caplog, monkeypatch):
+    dead = subprocess.Popen(["sleep", "60"])
+    dead.kill()
+    dead.wait()
+    node_folder = tmp_path / "6379"
+    node_folder.mkdir()
+    (node_folder / "server.log").write_text(f"pid={dead.pid}, just started\n")
+    monkeypatch.setenv("PATH", str(tmp_path))
+    kill_logged_server(str(node_folder))
+    assert "not the server on port 6379" in caplog.text
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))

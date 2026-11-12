@@ -96,7 +96,7 @@ def serversStarted = false
 tasks.register('clearDirs', Delete) {
     delete "${project.rootDir}/../utils/clusters"
     // Every cluster folder created from here on belongs to this build.
-    doLast { serversStarted = true }
+    doFirst { serversStarted = true }
 }
 
 tasks.register('startCluster') {
