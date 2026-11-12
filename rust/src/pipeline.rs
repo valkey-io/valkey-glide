@@ -63,6 +63,10 @@ impl Pipeline {
     }
 
     /// Append argument(s) to the last started command.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no command has been started yet with [`Pipeline::cmd`].
     pub fn arg<A: ToValkeyArgs>(&mut self, arg: A) -> &mut Self {
         arg.write_valkey_args(self);
         self
