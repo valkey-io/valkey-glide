@@ -203,8 +203,8 @@ tls-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -testify.m 
 tls-test: REPORT_NAME = tls-integ-tests
 tls-test: __it
 
-# long timeout tests - run subtask with the long timeout flag enabled
-long-timeout-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -long-timeout-tests $(if $(test-filter), -testify.m $(test-filter))
+# long timeout tests - run subtask with the long timeout flag enabled and default filter
+long-timeout-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -long-timeout-tests $(if $(test-filter), -testify.m $(test-filter), -testify.m TestLongTimeout)
 long-timeout-test: __it
 
 # opentelemetry tests - run subtask with the opentelemetry flag enabled
