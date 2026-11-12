@@ -731,6 +731,7 @@ class TestClientSideCache:
         assert await writer.set(key, "v2") == "OK"
 
         async def sees_v2():
+            """Whether the client reads the value written after the cached one."""
             return await client.get(key) == b"v2"
 
         await wait_for(sees_v2, "the binary-prefixed key was not invalidated")
@@ -816,6 +817,7 @@ class TestClientSideCache:
         assert await writer.set(key_a, "a2") == "OK"
 
         async def client_a_sees_a2():
+            """Whether client A reads the new value of its ``xxx:`` key."""
             return await client_a.get(key_a) == b"a2"
 
         await wait_for(
@@ -828,6 +830,7 @@ class TestClientSideCache:
         assert await writer.set(key_b, "b2") == "OK"
 
         async def client_b_sees_b2():
+            """Whether client B reads the new value of its ``yyy:`` key."""
             return await client_b.get(key_b) == b"b2"
 
         await wait_for(
@@ -899,6 +902,7 @@ class TestClientSideCache:
         assert await writer.set(tracked, "t2") == "OK"
 
         async def mget_sees_t2():
+            """Whether MGET returns the new value of the tracked key."""
             return await cached.mget([tracked, untracked]) == [b"t2", b"u3"]
 
         await wait_for(mget_sees_t2, "the tracked MGET key was not invalidated")
@@ -992,6 +996,7 @@ class TestClientSideCache:
         assert await client.flushall() == "OK"
 
         async def cache_is_empty():
+            """Whether the client's cache holds no entries."""
             return client.get_cache_entry_count() == 0
 
         await wait_for(cache_is_empty, "the null invalidation did not flush the cache")

@@ -1401,6 +1401,7 @@ fn test_create_client_from_uri_invalid_eviction_policy() {
     }
 }
 
+/// A server-assisted cache with a `tracking_prefix` option is accepted.
 #[test]
 fn test_create_client_from_uri_with_server_assisted_cache_and_tracking_prefix() {
     let server = Server::new();
@@ -1445,6 +1446,7 @@ fn test_create_client_from_uri_with_server_assisted_cache_and_tracking_prefix() 
     }
 }
 
+/// A server-assisted cache without a tracking prefix is accepted.
 #[test]
 fn test_create_client_from_uri_with_server_assisted_cache_without_prefix() {
     let server = Server::new();
@@ -1520,6 +1522,7 @@ fn client_side_cache_error(options_json: &str) -> String {
     error
 }
 
+/// A tracking prefix is rejected unless the cache is server-assisted.
 #[test]
 fn test_create_client_from_uri_tracking_prefix_requires_server_assisted() {
     let error = client_side_cache_error(
@@ -1538,6 +1541,7 @@ fn test_create_client_from_uri_tracking_prefix_requires_server_assisted() {
     );
 }
 
+/// An empty tracking prefix is rejected.
 #[test]
 fn test_create_client_from_uri_tracking_prefix_must_not_be_empty() {
     let error = client_side_cache_error(
@@ -1557,6 +1561,7 @@ fn test_create_client_from_uri_tracking_prefix_must_not_be_empty() {
     );
 }
 
+/// A tracking prefix that is not a string is rejected.
 #[test]
 fn test_create_client_from_uri_tracking_prefix_must_be_a_string() {
     let error = client_side_cache_error(
@@ -1576,6 +1581,7 @@ fn test_create_client_from_uri_tracking_prefix_must_be_a_string() {
     );
 }
 
+/// A `server_assisted` option that is not a boolean is rejected.
 #[test]
 fn test_create_client_from_uri_server_assisted_must_be_a_boolean() {
     let error = client_side_cache_error(
@@ -1594,6 +1600,7 @@ fn test_create_client_from_uri_server_assisted_must_be_a_boolean() {
     );
 }
 
+/// A server-assisted cache is rejected when the protocol is not RESP3.
 #[test]
 fn test_create_client_from_uri_server_assisted_requires_resp3() {
     let error = client_side_cache_error(

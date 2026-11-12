@@ -547,10 +547,12 @@ mod tests {
 
     // ==================== Tracking prefix ====================
 
+    /// Creates (or retrieves) a default cache registered as `cache_id` with `prefix`.
     fn create(cache_id: &str, prefix: Option<&[u8]>) -> RedisResult<Arc<dyn GlideCache>> {
         get_or_create_cache(cache_id, 1024, 0, None, false, prefix.map(<[u8]>::to_vec))
     }
 
+    /// A new cache stores the tracking prefix it was created with.
     #[tokio::test]
     async fn test_create_cache_stores_tracking_prefix() {
         let cache_id = "test_prefix_stored";
@@ -563,6 +565,7 @@ mod tests {
         cleanup_cache("test_prefix_stored_none");
     }
 
+    /// Reusing a cache id with the same prefix returns the registered cache.
     #[tokio::test]
     async fn test_same_cache_id_with_same_prefix_returns_same_instance() {
         let cache_id = "test_prefix_same";
@@ -572,6 +575,7 @@ mod tests {
         cleanup_cache(cache_id);
     }
 
+    /// Reusing a cache id with a different prefix is rejected, without prefix values in the error.
     #[tokio::test]
     async fn test_same_cache_id_with_different_prefix_is_rejected() {
         let cache_id = "test_prefix_mismatch";
@@ -596,6 +600,7 @@ mod tests {
         cleanup_cache(cache_id);
     }
 
+    /// A prefixed and an unprefixed cache cannot share an id, in either order.
     #[tokio::test]
     async fn test_prefixed_and_unprefixed_cache_cannot_share_an_id() {
         let cache_id = "test_prefix_vs_none";
@@ -616,6 +621,7 @@ mod tests {
         cleanup_cache(cache_id);
     }
 
+    /// Once every reference is dropped, the id can be reused with a different prefix.
     #[tokio::test]
     async fn test_cache_recreated_with_new_prefix_after_all_references_dropped() {
         let cache_id = "test_prefix_recreate";
@@ -628,6 +634,7 @@ mod tests {
         cleanup_cache(cache_id);
     }
 
+    /// Concurrent creations with different prefixes leave exactly one owner of the cache id.
     #[tokio::test]
     async fn test_concurrent_creation_with_different_prefixes_lets_exactly_one_win() {
         use std::thread;

@@ -205,6 +205,7 @@ describe("ClientSideCache", () => {
         return (await client.clientTrackingInfo()) as ClientTrackingInfo;
     }
 
+    /** Asserts that `info` reports BCAST tracking scoped to exactly `prefixes`. */
     function expectPrefixes(info: ClientTrackingInfo, prefixes: string[]) {
         expect(info.flags.has("on")).toBe(true);
         expect(info.flags.has("bcast")).toBe(true);

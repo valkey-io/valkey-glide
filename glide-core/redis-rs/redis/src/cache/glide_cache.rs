@@ -1481,6 +1481,7 @@ mod tests {
 
     // ==================== Tracking prefix ====================
 
+    /// Creates an LRU cache with metrics enabled that is restricted to `prefix`.
     fn prefixed_cache(prefix: &[u8]) -> std::sync::Arc<dyn GlideCache> {
         crate::cache::lru_cache::new_lru_cache(CacheConfig {
             max_memory_bytes: 10_000,
@@ -1490,12 +1491,14 @@ mod tests {
         })
     }
 
+    /// Builds `GET <key>`.
     fn get_cmd(key: &[u8]) -> Cmd {
         let mut cmd = Cmd::new();
         cmd.arg("GET").arg(key);
         cmd
     }
 
+    /// Without a prefix every key is tracked.
     #[test]
     fn test_is_tracked_without_prefix_accepts_every_key() {
         let core = CacheCore::new(CacheConfig {
@@ -1510,6 +1513,7 @@ mod tests {
         assert!(core.is_tracked(&[0xff, 0x00, 0x01]));
     }
 
+    /// With a prefix only keys starting with it are tracked.
     #[test]
     fn test_is_tracked_with_prefix_matches_only_prefixed_keys() {
         let core = CacheCore::new(CacheConfig {
@@ -1537,6 +1541,7 @@ mod tests {
         );
     }
 
+    /// A non-UTF-8 prefix is matched byte by byte.
     #[test]
     fn test_is_tracked_with_binary_prefix() {
         let prefix = [0xff, 0x00, b':'];
@@ -1551,6 +1556,7 @@ mod tests {
         assert!(!core.is_tracked(b"xxx:k"));
     }
 
+    /// A key outside the prefix bypasses the cache and is not counted in the metrics.
     #[test]
     fn test_get_cached_cmd_bypasses_untracked_key_without_touching_metrics() {
         let cache = prefixed_cache(b"xxx:");
@@ -1567,6 +1573,7 @@ mod tests {
         assert_eq!(metrics.total_lookups(), 0, "bypassed keys are not lookups");
     }
 
+    /// A key under the prefix is cached.
     #[test]
     fn test_get_cached_cmd_caches_tracked_key() {
         let cache = prefixed_cache(b"xxx:");
@@ -1585,6 +1592,7 @@ mod tests {
         assert_eq!(metrics.misses(), 1);
     }
 
+    /// The fill variant bypasses the cache for a key outside the prefix.
     #[test]
     fn test_get_cached_cmd_with_fill_bypasses_untracked_key() {
         let cache = prefixed_cache(b"xxx:");
@@ -1601,6 +1609,7 @@ mod tests {
         assert_eq!(cache.metrics().unwrap().total_lookups(), 0);
     }
 
+    /// The fill variant caches a key under the prefix.
     #[test]
     fn test_get_cached_cmd_with_fill_caches_tracked_key() {
         let cache = prefixed_cache(b"xxx:");
@@ -1617,6 +1626,7 @@ mod tests {
         assert_eq!(cache.entry_count(), 1);
     }
 
+    /// The prefix filter applies to hash and set commands, not only to strings.
     #[test]
     fn test_prefix_applies_to_hash_and_set_commands() {
         let cache = prefixed_cache(b"xxx:");
@@ -1636,6 +1646,7 @@ mod tests {
         }
     }
 
+    /// MGET keys outside the prefix are fetched from the server but never cached.
     #[test]
     fn test_mget_untracked_keys_are_fetched_but_never_cached() {
         let cache = prefixed_cache(b"xxx:");
@@ -1700,6 +1711,7 @@ mod tests {
         assert_eq!(metrics.misses(), 2);
     }
 
+    /// An MGET without any key under the prefix bypasses the cache path.
     #[test]
     fn test_mget_with_only_untracked_keys_bypasses_the_cache_path() {
         let cache = prefixed_cache(b"xxx:");
@@ -1718,6 +1730,7 @@ mod tests {
         assert_eq!(cache.metrics().unwrap().total_lookups(), 0);
     }
 
+    /// An MGET key outside the prefix does not register a pending fill.
     #[test]
     fn test_mget_untracked_key_does_not_register_a_fill() {
         let cache = prefixed_cache(b"xxx:");
@@ -1742,6 +1755,7 @@ mod tests {
         assert_eq!(cache.get(b"yyy:b", CachedKeyType::String), None);
     }
 
+    /// Flushing a prefixed cache clears its entries and blocks pending fills.
     #[test]
     fn test_prefixed_cache_flush_clears_entries_and_blocks_pending_fills() {
         let cache = prefixed_cache(b"xxx:");

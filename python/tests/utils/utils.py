@@ -467,6 +467,7 @@ async def read_until_cached(
     reads = 0
 
     async def cached() -> bool:
+        """Runs ``read`` once; true when it was a hit with the entry in place."""
         nonlocal reads
         hits = cache_hits(client)
         assert await read() == expected
@@ -485,6 +486,7 @@ def sync_read_until_cached(
     reads = 0
 
     def cached() -> bool:
+        """Runs ``read`` once; true when it was a hit with the entry in place."""
         nonlocal reads
         hits = cache_hits(client)
         assert read() == expected
