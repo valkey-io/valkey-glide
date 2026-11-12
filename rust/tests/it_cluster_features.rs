@@ -9,11 +9,76 @@ use glide::commands::pubsub::PubSubCommands;
 use glide::{
     AsyncTypedCommands, CustomCommand, FromValkeyValue, GlideClusterClient,
     GlideClusterClientConfiguration, PipelineOptions, PubSubMessageKind, Route, ScriptingCommands,
-    SortedSetCommands, pipe,
+    SingleNodeRoute, SortedSetCommands, pipe,
 };
+use redis::cluster_topology::get_slot;
 use std::time::Duration;
 
-// TODO #7673: Update for the single-node route type, and cover a routed batch.
+/// One primary from `CLUSTER NODES`: its node id, port, and owned slot ranges.
+#[derive(Debug)]
+struct ClusterNode {
+    id: String,
+    port: u16,
+    ranges: Vec<(u16, u16)>,
+}
+
+/// Read the live cluster topology with an unrouted `CLUSTER NODES` and parse
+/// each primary's id, port, and owned slot ranges. The expected node id for a
+/// routed batch comes from this snapshot, not from the route under test.
+async fn cluster_nodes(c: &GlideClusterClient) -> Vec<ClusterNode> {
+    let mut pipeline = pipe();
+    pipeline.cmd("CLUSTER").arg("NODES");
+    let results = c
+        .exec(&pipeline, true, None, &PipelineOptions::new())
+        .await
+        .unwrap();
+    let text = String::from_valkey_value(&results[0]).unwrap();
+    let mut nodes = Vec::new();
+    for line in text.lines() {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        if fields.len() < 9 {
+            continue;
+        }
+        let addr = fields[1].split('@').next().unwrap_or("");
+        let Some((_, port)) = addr.rsplit_once(':') else {
+            continue;
+        };
+        let Ok(port) = port.parse::<u16>() else {
+            continue;
+        };
+        let mut ranges = Vec::new();
+        for token in &fields[8..] {
+            if token.starts_with('[') {
+                continue; // slot being imported/migrated, not owned
+            }
+            if let Some((start, end)) = token.split_once('-') {
+                if let (Ok(start), Ok(end)) = (start.parse::<u16>(), end.parse::<u16>()) {
+                    ranges.push((start, end));
+                }
+            } else if let Ok(slot) = token.parse::<u16>() {
+                ranges.push((slot, slot));
+            }
+        }
+        if ranges.is_empty() {
+            continue; // replica: owns no slots
+        }
+        nodes.push(ClusterNode {
+            id: fields[0].to_string(),
+            port,
+            ranges,
+        });
+    }
+    nodes
+}
+
+/// The primary owning `slot`, from a topology snapshot.
+fn slot_owner(nodes: &[ClusterNode], slot: u16) -> &ClusterNode {
+    nodes
+        .iter()
+        .find(|n| n.ranges.iter().any(|(s, e)| slot >= *s && slot <= *e))
+        .unwrap_or_else(|| panic!("no primary owns slot {slot}"))
+}
+
 timed_tokio_test!(
     async fn cluster_exec_with_options() {
         let cluster = common::ClusterHarness::start().await;
@@ -47,6 +112,169 @@ timed_tokio_test!(
 
         // res2[0] = SET reply (OK), res2[1] = INCR reply (6)
         assert_eq!(i64::from_valkey_value(&res2[1]).unwrap(), 6);
+    }
+);
+
+timed_tokio_test!(
+    async fn cluster_exec_with_single_node_route() {
+        let cluster = common::ClusterHarness::start().await;
+        let c = cluster.client().await;
+        let nodes = cluster_nodes(&c).await;
+        assert!(
+            nodes.len() >= 2,
+            "expected at least two primaries, got {nodes:?}"
+        );
+
+        // `CLUSTER MYID` is keyless, so it stays on the routed node: the
+        // returned id proves the route selected that node. Dropping the
+        // route sends it to a random node instead.
+        for node in nodes.iter().take(2) {
+            let mut pipeline = pipe();
+            pipeline.cmd("CLUSTER").arg("MYID");
+            let results = c
+                .exec(
+                    &pipeline,
+                    true,
+                    Some(SingleNodeRoute::ByAddress {
+                        host: "127.0.0.1".to_string(),
+                        port: node.port,
+                    }),
+                    &PipelineOptions::new(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(results.len(), 1);
+            assert_eq!(
+                String::from_valkey_value(&results[0]).unwrap(),
+                node.id.as_str(),
+                "MYID routed by address to port {} must be that node's id",
+                node.port
+            );
+        }
+
+        // Slot-id route: a slot taken from the second primary's ranges.
+        let slot = nodes[1].ranges[0].0;
+        let mut pipeline = pipe();
+        pipeline.cmd("CLUSTER").arg("MYID");
+        let results = c
+            .exec(
+                &pipeline,
+                true,
+                Some(SingleNodeRoute::SlotId {
+                    slot_id: slot,
+                    slot_type: glide::SlotType::Primary,
+                }),
+                &PipelineOptions::new(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            String::from_valkey_value(&results[0]).unwrap(),
+            nodes[1].id.as_str(),
+            "MYID routed to slot {slot} must be its owner's id"
+        );
+
+        // Slot-key route: the key's slot owner.
+        let k = common::tkey("csr", "k");
+        let slot = get_slot(k.as_bytes());
+        let owner = slot_owner(&nodes, slot);
+        let mut pipeline = pipe();
+        pipeline.cmd("CLUSTER").arg("MYID");
+        let results = c
+            .exec(
+                &pipeline,
+                true,
+                Some(SingleNodeRoute::slot_key(
+                    k.as_str(),
+                    glide::SlotType::Primary,
+                )),
+                &PipelineOptions::new(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            String::from_valkey_value(&results[0]).unwrap(),
+            owner.id.as_str(),
+            "MYID routed by the key's slot must be the slot owner's id"
+        );
+
+        // Slot-key routed batch on same-slot keys.
+        let mut routed = pipe();
+        routed.set(&k, "1").incr(&k, 1i64).get(&k);
+        let results = c
+            .exec(
+                &routed,
+                true,
+                Some(SingleNodeRoute::slot_key(
+                    k.as_str(),
+                    glide::SlotType::Primary,
+                )),
+                &PipelineOptions::new(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 3);
+        assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 2);
+        assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "2");
+    }
+);
+
+timed_tokio_test!(
+    async fn cluster_exec_with_single_node_route_atomic() {
+        let cluster = common::ClusterHarness::start().await;
+        let c = cluster.client().await;
+        let nodes = cluster_nodes(&c).await;
+        assert!(
+            nodes.len() >= 2,
+            "expected at least two primaries, got {nodes:?}"
+        );
+
+        // An atomic batch is one unit, so a keyless `CLUSTER MYID` inside
+        // it still reports the node the transaction ran on. This exercises
+        // the `send_transaction` path; the non-atomic test above only
+        // covers `send_pipeline`.
+        for node in nodes.iter().take(2) {
+            let mut tx = pipe();
+            tx.atomic().cmd("CLUSTER").arg("MYID");
+            let results = c
+                .exec(
+                    &tx,
+                    true,
+                    Some(SingleNodeRoute::ByAddress {
+                        host: "127.0.0.1".to_string(),
+                        port: node.port,
+                    }),
+                    &PipelineOptions::new(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(results.len(), 1);
+            assert_eq!(
+                String::from_valkey_value(&results[0]).unwrap(),
+                node.id.as_str(),
+                "MYID in a transaction routed by address to port {} must be that node's id",
+                node.port
+            );
+        }
+
+        // A valid single-node route delivers an atomic batch of key commands.
+        let k = common::tkey("csa", "k");
+        let mut tx = pipe();
+        tx.atomic().set(&k, "5").incr(&k, 1i64);
+        let results = c
+            .exec(
+                &tx,
+                true,
+                Some(SingleNodeRoute::slot_key(
+                    k.as_str(),
+                    glide::SlotType::Primary,
+                )),
+                &PipelineOptions::new(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 6);
     }
 );
 

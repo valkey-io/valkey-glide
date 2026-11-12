@@ -380,16 +380,25 @@ impl GlideClusterClient {
     // TODO #7672: Return `ValkeyResult<Option<Vec<ValkeyValue>>>`
     // with `None` for a transaction aborted by `WATCH`.
     /// Execute a [`crate::Pipeline`] with GLIDE execution options,
-    /// optionally routed. See [`crate::GlideClient::exec`].
+    /// optionally routed to a single node. See [`crate::GlideClient::exec`].
+    ///
+    /// The route is a [`crate::SingleNodeRoute`]: an explicit batch route
+    /// must select a single node, so multi-node routes are not accepted
+    /// here. Passing no route leaves automatic pipeline routing in place.
+    /// For single commands that fan out to multiple nodes, use the
+    /// `*_with_route` helpers.
+    ///
+    /// If a redirection error occurs, an atomic batch (transaction) is
+    /// redirected as a whole, while a non-atomic batch (pipeline) retries
+    /// only the commands that encountered the redirection.
     pub async fn exec(
         &self,
         pipeline: &crate::pipeline::Pipeline,
         raise_on_error: bool,
-        // TODO #7673: Accept only single-node routes.
-        route: Option<Route>,
+        route: Option<crate::SingleNodeRoute>,
         options: &PipelineOptions,
     ) -> ValkeyResult<Vec<ValkeyValue>> {
-        let routing = route.map(|r| r.to_routing_info(None));
+        let routing = route.map(|r| r.to_routing_info());
         run_pipeline(&self.inner, pipeline, routing, raise_on_error, options).await
     }
 
