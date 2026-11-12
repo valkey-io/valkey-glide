@@ -158,6 +158,7 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    // TODO #7673: Add a test that a batch with a multi-node route returns an error.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]

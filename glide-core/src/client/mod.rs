@@ -2156,6 +2156,8 @@ impl Client {
                                         .route_pipeline(pipeline, offset, 1, Some(route), None)
                                         .await?
                                 }
+                                // TODO #7673: Return a client error for `RoutingInfo::MultiNode`;
+                                // keep this path for `None`.
                                 _ => {
                                     client
                                         .req_packed_commands(pipeline, offset, 1, None)
@@ -2253,6 +2255,8 @@ impl Client {
                                     )
                                     .await
                             }
+                            // TODO #7673: Return a client error for `RoutingInfo::MultiNode`;
+                            // keep this path for `None`.
                             _ => {
                                 client
                                     .route_pipeline(

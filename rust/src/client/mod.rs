@@ -384,6 +384,7 @@ impl GlideClusterClient {
         &self,
         pipeline: &crate::pipeline::Pipeline,
         raise_on_error: bool,
+        // TODO #7673: Accept only single-node routes.
         route: Option<Route>,
         options: &PipelineOptions,
     ) -> ValkeyResult<Vec<ValkeyValue>> {
