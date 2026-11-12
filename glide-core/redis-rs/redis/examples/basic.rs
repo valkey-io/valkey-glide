@@ -1,4 +1,3 @@
-#![allow(unknown_lints, dependency_on_unit_never_type_fallback)]
 use redis::{transaction, Commands};
 
 use std::collections::HashMap;

@@ -1,6 +1,6 @@
 [package]
 name = "valkey-glide"
-version = "0.10.0-rc.1"
+version = "0.10.0"
 
 # About
 description = "Valkey GLIDE — native Rust client for Valkey and Redis OSS, built on glide-core."
@@ -26,8 +26,8 @@ path = "src/lib.rs"
 
 # GLIDE dependencies
 glide-logger = { path = "../glide-logger", version = "0.1.1" }
-glide-core-engine = { path = "../glide-core/redis-rs/redis", version = "0.1.2", features = ["aio", "tokio-comp", "cluster", "cluster-async"] }
-glide-core = { path = "../glide-core", version = "0.2.0" }
+glide-core-engine = { path = "../glide-core/redis-rs/redis", version = "0.2.0", features = ["aio", "tokio-comp", "cluster", "cluster-async"] }
+glide-core = { path = "../glide-core", version = "0.3.0" }
 
 # External dependencies
 async-trait = "0.1"

@@ -106,6 +106,18 @@ jobs:
                   crate: glide-telemetry
                   publish: ${{ inputs.publish }}
 
+            - name: Publish glide-libfabric-sys
+              uses: ./.github/actions/publish-rust-crate
+              with:
+                  crate: glide-rdma/glide-libfabric-sys
+                  publish: ${{ inputs.publish }}
+
+            - name: Publish glide-rdma
+              uses: ./.github/actions/publish-rust-crate
+              with:
+                  crate: glide-rdma
+                  publish: ${{ inputs.publish }}
+
             - name: Publish glide-core-engine
               uses: ./.github/actions/publish-rust-crate
               with:
