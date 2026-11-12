@@ -1,6 +1,6 @@
 [package]
 name = "glide-rdma"
-version = "0.1.1"
+version = "0.2.0"
 
 # About
 description = "RDMA support for Valkey GLIDE. This crate isn't intended to be used directly."

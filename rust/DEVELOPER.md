@@ -44,7 +44,7 @@ released version, the internal dependencies are declared with **both** `path`
 and `version` in `Cargo.toml`:
 
 ```toml
-glide-core = { path = "../glide-core", version = "0.2.1" }
+glide-core = { path = "../glide-core", version = "0.3.0" }
 ```
 
 Cargo uses `path` when building locally, and `version` when the crate is resolved
