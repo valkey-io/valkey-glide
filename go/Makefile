@@ -176,40 +176,40 @@ example-test:
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2 \
 	| go-test-report -o reports/example-tests.html -t example-test > /dev/null)
 
-# report file name (without extension) written under reports/ by __it; override per target to avoid overwriting
-REPORT_NAME ?= integ-tests
-
 # integration tests - run subtask with skipping modules tests
 # go test exits 0 when the pool and scope tests skip or never run, so an unfiltered run checks they ran against servers
 integ-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" $(if $(test-filter), -testify.m $(test-filter))
-integ-test: __it
+integ-test: reports/integ-tests.log
 ifeq ($(test-filter),)
-	@grep -q -- '--- PASS: TestGlideTestSuite/TestPool' reports/$(REPORT_NAME).log \
-		&& grep -q -- '--- PASS: TestGlideTestSuite/TestScope' reports/$(REPORT_NAME).log \
-		&& ! grep -q 'servers in this run' reports/$(REPORT_NAME).log \
+	@grep -q -- '--- PASS: TestGlideTestSuite/TestPool' $< \
+		&& grep -q -- '--- PASS: TestGlideTestSuite/TestScope' $< \
+		&& ! grep -q 'servers in this run' $< \
 		|| { echo "integ-test: the pool and scope tests did not all run against servers"; exit 1; }
 endif
 
 # modules tests - run substask with default filter
 modules-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter), -testify.m TestModule)
-modules-test: __it
+modules-test: reports/modules-integ-tests.log
 
 # pubsub tests - run pubsub tests using testify filter
 pubsub-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -testify.m TestPubSub
-pubsub-test: __it
+pubsub-test: reports/pubsub-integ-tests.log
 
-# tls tests - run only the TLS-designated tests using testify filter, with a dedicated report
+# tls tests - run only the TLS-designated tests over TLS, with a dedicated report
+# a filter that matches nothing still exits 0, so the recipe checks the TLS tests really ran
 tls-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -testify.m Tls
-tls-test: REPORT_NAME = tls-integ-tests
-tls-test: __it
+tls-test: override tls = true
+tls-test: reports/tls-integ-tests.log
+	@grep -q -- '--- PASS: TestGlideTestSuite/[A-Za-z0-9_]*Tls' $< \
+		|| { echo "tls-test: the TLS pass ran no TLS tests"; exit 1; }
 
 # long timeout tests - run subtask with the long timeout flag enabled and default filter
 long-timeout-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -long-timeout-tests $(if $(test-filter), -testify.m $(test-filter), -testify.m TestLongTimeout)
-long-timeout-test: __it
+long-timeout-test: reports/long-timeout-integ-tests.log
 
 # opentelemetry tests - run subtask with the opentelemetry flag enabled
 opentelemetry-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -otel-test $(if $(test-filter), -testify.m $(test-filter), -testify.m TestOpenTelemetry)
-opentelemetry-test: __it
+opentelemetry-test: reports/otel-integ-tests.log
 
 # Test command for integration tests
 ifeq ($(IS_MUSL), true)
@@ -222,8 +222,13 @@ else
     TEST_CMD := CC="gcc -fsanitize=address" go test -v ./integTest/...
 endif
 
+# each pass writes its own reports/<name>.log and .html, so several passes can run in one make call
+# keep the log when make is interrupted (for example a CI timeout), it is the artifact that shows how far the run got
 # -count=1 disables the test cache, which would replay a passing run without starting any servers
-__it:
+.PRECIOUS: reports/%.log
+.PHONY: FORCE
+FORCE:
+reports/%.log: FORCE
 	mkdir -p reports
 	set -o pipefail; \
 	$(TEST_CMD) -count=1 \
@@ -231,6 +236,6 @@ __it:
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
 	$(if $(cluster-endpoints), --cluster-endpoints=$(cluster-endpoints)) \
-	| tee reports/$(REPORT_NAME).log >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/integTest | go-test-report -o reports/$(REPORT_NAME).html -t integ-test > /dev/null)
+	| tee $@ >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/v2/integTest | go-test-report -o reports/$*.html -t integ-test > /dev/null)
 # code above ^ is similar to `go test .... -json | go-test-report ....`, but it also prints plain text output to stdout
 # `go test` prints plain text, tee duplicates it to stdout and to `test2json` which is coupled with `go-test-report` to generate the report

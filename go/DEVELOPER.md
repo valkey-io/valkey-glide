@@ -204,6 +204,7 @@ make long-timeout-test
 #### Running Specific Tests
 
 For all of the above tests, we can specify individual tests, or tests matching a pattern, using the `test-filter=<regex>` parameter to specify a filter pattern to use.
+`pubsub-test` ignores `test-filter` and always runs the `TestPubSub` tests.
 
 ```bash
 # Run with a specific prefix (ex. run all tests that start with TestSet)
@@ -223,7 +224,8 @@ make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:
 ```
 
 The integration suite therefore runs in one of two modes: plaintext by default, or TLS when you pass `tls=true`.
-CI runs the full suite in plaintext and the TLS-designated tests (those with `Tls` in the method name) with `make tls-test tls=true`, so a break in either mode shows up.
+CI runs the full suite in plaintext and the TLS-designated tests (those with `Tls` in the method name) with `make tls-test`, so a break in either mode shows up.
+`tls-test` always runs over TLS and fails if no TLS-designated test passed, so a filter that matches nothing cannot pass silently.
 TLS-only tests skip themselves in a plaintext run, and the plaintext-only tests skip in a TLS run.
 
 Running the TLS suite against your own `standalone-endpoints` or `cluster-endpoints` is not supported for servers whose certificates are not signed by a platform certificate authority.
@@ -322,6 +324,7 @@ If `-vss-test` is not passed, the FT example functions return immediately withou
 #### Test Reports and Results
 
 Alongside terminal output, test reports are generated in `reports` folder.
+Each integration pass writes its own `reports/<name>.log` and `reports/<name>.html` (for example `integ-tests`, `tls-integ-tests`, `modules-integ-tests`), so several passes can run in one `make` call without overwriting each other.
 
 An example of what the report looks like when an error occurs:
 

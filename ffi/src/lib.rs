@@ -2601,6 +2601,73 @@ fn dispatch_async_push_notification(
     true
 }
 
+/// Stack size of every runtime thread that runs a connect. It is exact: `RUST_MIN_STACK` in the
+/// host process neither shrinks nor grows these threads.
+const RUNTIME_THREAD_STACK_SIZE: usize = 2 * 1024 * 1024;
+
+/// Builds a multi-thread runtime whose threads have [`RUNTIME_THREAD_STACK_SIZE`] stacks.
+/// `worker_threads` of `None` keeps tokio's default worker count.
+#[allow(clippy::disallowed_methods)] // the one place allowed to build a multi-thread runtime
+fn worker_runtime(name: &str, worker_threads: Option<usize>) -> std::io::Result<Runtime> {
+    let mut builder = Builder::new_multi_thread();
+    builder
+        .enable_all()
+        .thread_name(name)
+        .thread_stack_size(RUNTIME_THREAD_STACK_SIZE);
+    if let Some(count) = worker_threads {
+        builder.worker_threads(count);
+    }
+    builder.build()
+}
+
+/// Runs `future` on a worker thread of `rt` and blocks the caller until it finishes.
+///
+/// Foreign callers choose the calling thread, and its stack can be too small for a connect:
+/// musl gives non-main threads 128 KiB, while a TLS cluster connect needs more. Runtimes built
+/// by [`worker_runtime`] give their workers [`RUNTIME_THREAD_STACK_SIZE`]. A panic in `future`
+/// resumes on the caller, as if the caller had polled it.
+fn block_on_worker<F>(rt: &Runtime, future: F) -> Result<F::Output, String>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    assert!(
+        rt.handle().runtime_flavor() != tokio::runtime::RuntimeFlavor::CurrentThread,
+        "block_on_worker needs worker threads; current_thread polls on the caller"
+    );
+    match rt.block_on(rt.spawn(future)) {
+        Ok(output) => Ok(output),
+        Err(err) if err.is_panic() => std::panic::resume_unwind(err.into_panic()),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+#[cfg(all(test, not(miri)))]
+mod tests_block_on_worker {
+    use super::*;
+
+    fn runtime() -> Runtime {
+        worker_runtime("test worker", Some(1)).unwrap()
+    }
+
+    #[test]
+    fn runs_the_future_off_the_calling_thread() {
+        let caller = std::thread::current().id();
+        let polled_on = block_on_worker(&runtime(), async { std::thread::current().id() });
+        assert_ne!(polled_on.unwrap(), caller);
+    }
+
+    #[test]
+    fn a_panic_resumes_on_the_caller_with_its_payload() {
+        let rt = runtime();
+        let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            block_on_worker(&rt, async { std::panic::panic_any("connect panicked") })
+        }))
+        .unwrap_err();
+        assert_eq!(payload.downcast_ref::<&str>(), Some(&"connect panicked"));
+    }
+}
+
 fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
@@ -2642,15 +2709,10 @@ fn create_client_internal(
                 .and_then(|s| s.parse::<usize>().ok())
                 .unwrap_or(1)
                 .max(1);
-            Builder::new_multi_thread()
-                .enable_all()
-                .worker_threads(worker_threads)
-                .thread_name("Valkey-GLIDE thread")
-                .build()
-                .map_err(|err| {
-                    let redis_error: redis::RedisError = err.into();
-                    errors::error_message(&redis_error)
-                })?
+            worker_runtime("Valkey-GLIDE thread", Some(worker_threads)).map_err(|err| {
+                let redis_error: redis::RedisError = err.into();
+                errors::error_message(&redis_error)
+            })?
         }
     };
 
@@ -2660,15 +2722,10 @@ fn create_client_internal(
     // current_thread runtime which only polls tasks inside block_on.
     let background_runtime = match &client_type {
         ClientType::SyncClient => Some(
-            Builder::new_multi_thread()
-                .enable_all()
-                .worker_threads(1)
-                .thread_name("Valkey-GLIDE background")
-                .build()
-                .map_err(|err| {
-                    let redis_error: redis::RedisError = err.into();
-                    errors::error_message(&redis_error)
-                })?,
+            worker_runtime("Valkey-GLIDE background", Some(1)).map_err(|err| {
+                let redis_error: redis::RedisError = err.into();
+                errors::error_message(&redis_error)
+            })?,
         ),
         _ => None,
     };
@@ -2717,9 +2774,11 @@ fn create_client_internal(
                 .credentials_provider = Some(Arc::new(move || provider.call()));
         }
 
-        create_rt
-            .block_on(GlideClient::new(connection_request, Some(push_tx)))
-            .map_err(|err| err.to_string())
+        block_on_worker(
+            create_rt,
+            GlideClient::new(connection_request, Some(push_tx)),
+        )
+        .and_then(|client| client.map_err(|err| err.to_string()))
     };
     let client = match client {
         Ok(client) => client,
@@ -7753,7 +7812,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         cache: None,
     };
 
-    let runtime = match Builder::new_multi_thread().enable_all().build() {
+    let runtime = match worker_runtime("Valkey-GLIDE monitor", None) {
         Ok(r) => r,
         Err(e) => {
             let err_msg =
@@ -7796,8 +7855,10 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         }
     });
 
-    let monitor_client = match runtime
-        .block_on(async { MonitorClient::new(&address, redis_conn_info, tls_mode, on_line).await })
+    let monitor_client = match block_on_worker(&runtime, async move {
+        MonitorClient::new(&address, redis_conn_info, tls_mode, on_line).await
+    })
+    .and_then(|client| client.map_err(|err| err.to_string()))
     {
         Ok(c) => c,
         Err(e) => {
