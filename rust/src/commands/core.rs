@@ -1196,24 +1196,24 @@ implement_commands! {
         build_cmd!("ZREVRANGEBYLEX", key, max, min, "LIMIT", offset, count)
     }
 
-    /// `ZRANGEBYSCORE`.
+    /// `ZRANGEBYSCORE` (sent as `ZRANGE ... BYSCORE`).
     fn zrangebyscore<K: ToSingleValkeyArg, M: ToSingleValkeyArg, MM: ToSingleValkeyArg>(key: K, min: M, max: MM) -> (Vec<String>) {
-        build_cmd!("ZRANGEBYSCORE", key, min, max)
+        build_cmd!("ZRANGE", key, min, max, "BYSCORE")
     }
 
-    /// `ZRANGEBYSCORE WITHSCORES`.
+    /// `ZRANGEBYSCORE WITHSCORES` (sent as `ZRANGE ... BYSCORE WITHSCORES`).
     fn zrangebyscore_withscores<K: ToSingleValkeyArg, M: ToSingleValkeyArg, MM: ToSingleValkeyArg>(key: K, min: M, max: MM) -> (Vec<(String, usize)>) {
-        build_cmd!("ZRANGEBYSCORE", key, min, max, "WITHSCORES")
+        build_cmd!("ZRANGE", key, min, max, "BYSCORE", "WITHSCORES")
     }
 
-    /// `ZRANGEBYSCORE LIMIT`.
+    /// `ZRANGEBYSCORE LIMIT` (sent as `ZRANGE ... BYSCORE LIMIT`).
     fn zrangebyscore_limit<K: ToSingleValkeyArg, M: ToSingleValkeyArg, MM: ToSingleValkeyArg>(key: K, min: M, max: MM, offset: isize, count: isize) -> (Vec<String>) {
-        build_cmd!("ZRANGEBYSCORE", key, min, max, "LIMIT", offset, count)
+        build_cmd!("ZRANGE", key, min, max, "BYSCORE", "LIMIT", offset, count)
     }
 
-    /// `ZRANGEBYSCORE WITHSCORES LIMIT`.
+    /// `ZRANGEBYSCORE WITHSCORES LIMIT` (sent as `ZRANGE ... BYSCORE WITHSCORES LIMIT`).
     fn zrangebyscore_limit_withscores<K: ToSingleValkeyArg, M: ToSingleValkeyArg, MM: ToSingleValkeyArg>(key: K, min: M, max: MM, offset: isize, count: isize) -> (Vec<(String, usize)>) {
-        build_cmd!("ZRANGEBYSCORE", key, min, max, "WITHSCORES", "LIMIT", offset, count)
+        build_cmd!("ZRANGE", key, min, max, "BYSCORE", "WITHSCORES", "LIMIT", offset, count)
     }
 
     /// `ZRANK`.
@@ -1241,34 +1241,34 @@ implement_commands! {
         build_cmd!("ZREMRANGEBYSCORE", key, min, max)
     }
 
-    /// `ZREVRANGE`.
+    /// `ZREVRANGE` (sent as `ZRANGE ... REV`).
     fn zrevrange<K: ToSingleValkeyArg>(key: K, start: isize, stop: isize) -> (Vec<String>) {
-        build_cmd!("ZREVRANGE", key, start, stop)
+        build_cmd!("ZRANGE", key, start, stop, "REV")
     }
 
-    /// `ZREVRANGE WITHSCORES`.
+    /// `ZREVRANGE WITHSCORES` (sent as `ZRANGE ... REV WITHSCORES`).
     fn zrevrange_withscores<K: ToSingleValkeyArg>(key: K, start: isize, stop: isize) -> (Vec<(String, f64)>) {
-        build_cmd!("ZREVRANGE", key, start, stop, "WITHSCORES")
+        build_cmd!("ZRANGE", key, start, stop, "REV", "WITHSCORES")
     }
 
-    /// `ZREVRANGEBYSCORE`.
+    /// `ZREVRANGEBYSCORE` (sent as `ZRANGE ... BYSCORE REV`).
     fn zrevrangebyscore<K: ToSingleValkeyArg, MM: ToSingleValkeyArg, M: ToSingleValkeyArg>(key: K, max: MM, min: M) -> (Vec<String>) {
-        build_cmd!("ZREVRANGEBYSCORE", key, max, min)
+        build_cmd!("ZRANGE", key, max, min, "BYSCORE", "REV")
     }
 
-    /// `ZREVRANGEBYSCORE WITHSCORES`.
+    /// `ZREVRANGEBYSCORE WITHSCORES` (sent as `ZRANGE ... BYSCORE REV WITHSCORES`).
     fn zrevrangebyscore_withscores<K: ToSingleValkeyArg, MM: ToSingleValkeyArg, M: ToSingleValkeyArg>(key: K, max: MM, min: M) -> (Vec<(String, f64)>) {
-        build_cmd!("ZREVRANGEBYSCORE", key, max, min, "WITHSCORES")
+        build_cmd!("ZRANGE", key, max, min, "BYSCORE", "REV", "WITHSCORES")
     }
 
-    /// `ZREVRANGEBYSCORE LIMIT`.
+    /// `ZREVRANGEBYSCORE LIMIT` (sent as `ZRANGE ... BYSCORE REV LIMIT`).
     fn zrevrangebyscore_limit<K: ToSingleValkeyArg, MM: ToSingleValkeyArg, M: ToSingleValkeyArg>(key: K, max: MM, min: M, offset: isize, count: isize) -> (Vec<String>) {
-        build_cmd!("ZREVRANGEBYSCORE", key, max, min, "LIMIT", offset, count)
+        build_cmd!("ZRANGE", key, max, min, "BYSCORE", "REV", "LIMIT", offset, count)
     }
 
-    /// `ZREVRANGEBYSCORE WITHSCORES LIMIT`.
+    /// `ZREVRANGEBYSCORE WITHSCORES LIMIT` (sent as `ZRANGE ... BYSCORE REV WITHSCORES LIMIT`).
     fn zrevrangebyscore_limit_withscores<K: ToSingleValkeyArg, MM: ToSingleValkeyArg, M: ToSingleValkeyArg>(key: K, max: MM, min: M, offset: isize, count: isize) -> (Vec<(String, f64)>) {
-        build_cmd!("ZREVRANGEBYSCORE", key, max, min, "WITHSCORES", "LIMIT", offset, count)
+        build_cmd!("ZRANGE", key, max, min, "BYSCORE", "REV", "WITHSCORES", "LIMIT", offset, count)
     }
 
     /// `ZREVRANK`.
