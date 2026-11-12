@@ -36,6 +36,9 @@ resp_test!(spublish_no_subscribers, c, {
     assert_eq!(c.spublish(&chan, "msg").await.unwrap(), 0);
 });
 
+// TODO #7686: Restructure these tests to match the C# client's Pub/Sub tests: parameterize over
+// standalone / cluster, channel mode and subscribe mode (config, lazy, blocking), and replace
+// `wait_for_numsub` with an `assert_subscribed` helper that only polls for lazy subscriptions.
 timed_tokio_test!(
     async fn runtime_subscribe_receives_then_unsubscribe() {
         let server = common::TestServer::start();
