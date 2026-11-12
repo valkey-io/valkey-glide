@@ -184,7 +184,7 @@ dependencies = [
 
 [[package]]
 name = "glide-libfabric-sys"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cc",
  "libc",
@@ -203,7 +203,7 @@ dependencies = [
 
 [[package]]
 name = "glide-rdma"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "crc-fast",
  "glide-libfabric-sys",
