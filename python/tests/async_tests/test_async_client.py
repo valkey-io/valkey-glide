@@ -106,6 +106,7 @@ from glide_shared.constants import (
     TFunctionStatsSingleNodeResponse,
     TResult,
 )
+from glide_shared.exceptions import TimeoutError as GlideTimeoutError
 from glide_shared.routes import (
     AllNodes,
     AllPrimaries,
@@ -10968,6 +10969,130 @@ class TestClusterRoutes:
     async def test_info_random_route(self, glide_client: GlideClusterClient):
         info = await glide_client.info([InfoSection.SERVER], RandomNode())
         assert b"# Server" in info
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_info_allow_partial_results_keeps_replies_when_a_primary_is_slow(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        client = cast(
+            GlideClusterClient,
+            await create_client(
+                request, cluster_mode, protocol=protocol, request_timeout=1000
+            ),
+        )
+        # A second client pauses the primary, so the pause is not queued
+        # behind the client under test.
+        pauser = cast(
+            GlideClusterClient,
+            await create_client(request, cluster_mode, protocol=protocol),
+        )
+        try:
+            primaries = sorted(cast(Dict[bytes, bytes], await client.info()).keys())
+            host, port = primaries[0].decode().rsplit(":", 1)
+            route = ByAddressRoute(host, int(port))
+
+            async def primary_answers() -> bool:
+                try:
+                    await pauser.custom_command(["PING"], route)
+                    return True
+                except RequestError:
+                    return False
+
+            # Long enough for both calls below to see the node as slow.
+            await pauser.custom_command(["CLIENT", "PAUSE", "4500", "ALL"], route)
+            try:
+                # Without the option, one slow primary fails the whole call.
+                with pytest.raises(GlideTimeoutError):
+                    await client.info()
+
+                result = await client.info(allow_partial_results=True)
+                assert isinstance(result, dict)
+                assert sorted(result.keys()) == primaries
+                assert isinstance(result[primaries[0]], GlideTimeoutError)
+                for address in primaries[1:]:
+                    assert b"# Server" in cast(bytes, result[address])
+            finally:
+                # CLIENT UNPAUSE would wait for the pause too; wait for it to end.
+                await wait_for(primary_answers, "paused primary did not recover")
+
+            # With every node healthy, the option returns the same replies.
+            healthy = await client.info(allow_partial_results=True)
+            assert isinstance(healthy, dict)
+            assert sorted(healthy.keys()) == primaries
+            for reply in healthy.values():
+                assert b"# Server" in cast(bytes, reply)
+
+            # A single-node route still returns the node's reply as bytes.
+            single = await client.info(route=route, allow_partial_results=True)
+            assert b"# Server" in cast(bytes, single)
+        finally:
+            await client.close()
+            await pauser.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_info_allow_partial_results_keeps_the_error_reply_of_a_denied_primary(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        admin = cast(
+            GlideClusterClient,
+            await create_client(request, cluster_mode, protocol=protocol),
+        )
+        username = f"partial-{get_random_string(10)}"
+        password = "password"
+        denied: Optional[GlideClusterClient] = None
+        try:
+            await admin.custom_command(
+                ["ACL", "SETUSER", username, "on", f">{password}", "~*", "&*", "+@all"],
+                AllNodes(),
+            )
+            denied = cast(
+                GlideClusterClient,
+                await create_client(
+                    request,
+                    cluster_mode,
+                    protocol=protocol,
+                    credentials=ServerCredentials(password=password, username=username),
+                ),
+            )
+            primaries = sorted(cast(Dict[bytes, bytes], await denied.info()).keys())
+            host, port = primaries[0].decode().rsplit(":", 1)
+            await admin.custom_command(
+                ["ACL", "SETUSER", username, "-info"], ByAddressRoute(host, int(port))
+            )
+
+            # Without the option, the denied primary fails the whole call.
+            with pytest.raises(RequestError) as plain:
+                await denied.info()
+
+            result = await denied.info(allow_partial_results=True)
+            assert isinstance(result, dict)
+            assert sorted(result.keys()) == primaries
+            error = result[primaries[0]]
+            assert isinstance(error, RequestError)
+            assert not isinstance(error, GlideTimeoutError)
+            assert str(error) == str(plain.value)
+            for address in primaries[1:]:
+                assert b"# Server" in cast(bytes, result[address])
+
+            # With every primary denied, the call returns an error for each.
+            await admin.custom_command(
+                ["ACL", "SETUSER", username, "-info"], AllPrimaries()
+            )
+            failed = await denied.info(allow_partial_results=True)
+            assert isinstance(failed, dict)
+            assert sorted(failed.keys()) == primaries
+            for reply in failed.values():
+                assert isinstance(reply, RequestError)
+                assert not isinstance(reply, GlideTimeoutError)
+        finally:
+            if denied is not None:
+                await denied.close()
+            try:
+                await admin.custom_command(["ACL", "DELUSER", username], AllNodes())
+            finally:
+                await admin.close()
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

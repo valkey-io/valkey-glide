@@ -32,6 +32,7 @@ pub use cluster_topology::*;
 
 pub use redis::SHARED_ARG_INLINE_MAX;
 pub use redis::ToRedisArgs;
+pub use redis::{ServerError, TIMEOUT_ERROR_CODE, parse_redis_value};
 
 pub struct Cmd {
     command_bytes: Vec<u8>,
@@ -62,6 +63,10 @@ impl Cmd {
 
     pub fn span(&self) -> Option<GlideSpan> {
         None
+    }
+
+    pub fn set_allow_partial_results(&mut self, _allow: bool) -> &mut Cmd {
+        self
     }
 
     pub fn command(&self) -> Option<Vec<u8>> {

@@ -373,6 +373,60 @@ impl GlideClusterClient {
         ValkeyValue::from_redis(value)
     }
 
+    /// Get server information from several nodes, keeping the replies of the
+    /// nodes that answered when other nodes fail (`INFO` with partial results).
+    ///
+    /// Sends `INFO` with `sections` (the default sections when empty) to
+    /// `route`, or to all primaries when `route` is `None`. Returns an entry for
+    /// every target node, keyed by node address: the node's reply, or the error
+    /// for that node. A node that has not answered by the request timeout
+    /// minus a margin of a tenth of it, kept between 2 ms and 100 ms (a
+    /// quarter of it under 8 ms), holds [`GlideError::Timeout`], and the call
+    /// itself fails with [`GlideError::Timeout`] if it has not finished by the
+    /// request timeout plus the same margin. The call still fails when no
+    /// target node can be reached. `route` must be [`Route::AllNodes`] or
+    /// [`Route::AllPrimaries`], since a single node's reply has no address to
+    /// key it by; for a single node, send `INFO` with
+    /// [`GlideClusterClient::route_command`] instead.
+    pub async fn info_with_partial_results(
+        &self,
+        sections: &[crate::commands::options::InfoSection],
+        route: Option<Route>,
+    ) -> ValkeyResult<std::collections::HashMap<String, ValkeyResult<String>>> {
+        let route = route.unwrap_or(Route::AllPrimaries);
+        if !matches!(route, Route::AllNodes | Route::AllPrimaries) {
+            return Err(GlideError::Request(format!(
+                "info_with_partial_results needs a multi-node route, got {route:?}"
+            )));
+        }
+        let mut cmd = crate::cmd::cmd("INFO").with_arg(sections);
+        cmd.as_redis_mut().set_allow_partial_results(true);
+        let routing = route.to_routing_info(Some(cmd.as_redis()));
+        let mut client = self.inner.clone();
+        let value = client
+            .send_command(cmd.as_redis_mut(), Some(routing))
+            .await
+            .map_err(GlideError::from_redis_error)?;
+        let Value::Map(entries) = value else {
+            return Err(GlideError::Request(format!(
+                "unexpected INFO reply: {value:?}"
+            )));
+        };
+        entries
+            .into_iter()
+            .map(|(address, reply)| {
+                let address = String::from_owned_valkey_value(ValkeyValue::from_redis(address)?)?;
+                let reply = match reply {
+                    Value::ServerError(err) => Err(GlideError::from_redis_error(err.into())),
+                    reply => {
+                        ValkeyValue::from_redis(reply).and_then(String::from_owned_valkey_value)
+                    }
+                };
+                Ok((address, reply))
+            })
+            .collect()
+    }
+
     /// Execute a [`crate::Pipeline`] with GLIDE execution options,
     /// optionally routed. See [`crate::GlideClient::exec`].
     pub async fn exec(

@@ -103,6 +103,98 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<ClusterValue<String>> info(Section[] sections, Route route);
 
     /**
+     * Gets information and statistics about the server from all primary nodes using the {@link
+     * Section#DEFAULT} option, keeping the replies of the nodes that answered when other nodes fail.
+     * Same as {@link #infoWithPartialResults(Section[])} with no sections.
+     *
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
+     * @return See {@link #infoWithPartialResults(Section[])}.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object> payload = clusterClient.infoWithPartialResults().get();
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object>> infoWithPartialResults();
+
+    /**
+     * Gets information and statistics about the server using the {@link Section#DEFAULT} option,
+     * keeping the replies of the nodes that answered when other nodes fail. Same as {@link
+     * #infoWithPartialResults(Section[], Route)} with no sections.
+     *
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return See {@link #infoWithPartialResults(Section[], Route)}.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object> payload = clusterClient.infoWithPartialResults(ALL_NODES).get();
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object>> infoWithPartialResults(Route route);
+
+    /**
+     * Gets information and statistics about the server from all primary nodes, keeping the replies of
+     * the nodes that answered when other nodes fail.<br>
+     * Unlike {@link #info(Section[])}, a node that fails does not fail the call: its entry holds the
+     * error for that node instead of its reply.<br>
+     * A node that has not answered by the request timeout minus a margin of a tenth of it, kept
+     * between 2 ms and 100 ms (a quarter of it under 8 ms), holds a {@link
+     * glide.api.models.exceptions.TimeoutException}, and the call itself fails with a {@link
+     * glide.api.models.exceptions.TimeoutException} if it has not finished by the request timeout.
+     * The call still fails when no target node can be reached.
+     *
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
+     * @param sections A list of {@link InfoOptions.Section} values specifying which sections of
+     *     information to retrieve. When the list is empty, the {@link InfoOptions.Section#DEFAULT}
+     *     option is assumed.
+     * @return A <code>Map{@literal <String, Object>}</code> with each primary address as the key. The
+     *     value is the node's reply as a <code>String</code>, or a {@link
+     *     glide.api.models.exceptions.TimeoutException} if the node did not answer in time, or a
+     *     {@link glide.api.models.exceptions.RequestException} for any other failure.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object> payload = clusterClient.infoWithPartialResults(new Section[0]).get();
+     * for (Map.Entry<String, Object> entry : payload.getMultiValue().entrySet()) {
+     *     if (entry.getValue() instanceof TimeoutException) {
+     *         System.out.println(entry.getKey() + " timed out");
+     *     }
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object>> infoWithPartialResults(Section[] sections);
+
+    /**
+     * Gets information and statistics about the server, keeping the replies of the nodes that
+     * answered when other nodes fail.<br>
+     * Unlike {@link #info(Section[], Route)}, a node that fails does not fail the call: its entry
+     * holds the error for that node instead of its reply.<br>
+     * A node that has not answered by the request timeout minus a margin of a tenth of it, kept
+     * between 2 ms and 100 ms (a quarter of it under 8 ms), holds a {@link
+     * glide.api.models.exceptions.TimeoutException}, and the call itself fails with a {@link
+     * glide.api.models.exceptions.TimeoutException} if it has not finished by the request timeout.
+     * The call still fails when no target node can be reached.
+     *
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
+     * @param sections A list of {@link InfoOptions.Section} values specifying which sections of
+     *     information to retrieve. When the list is empty, the {@link InfoOptions.Section#DEFAULT}
+     *     option is assumed.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A <code>String</code> with the information for the sections requested when <code>
+     *     route</code> is a single node. Otherwise a <code>Map{@literal <String, Object>}</code> with
+     *     each address as the key. The value is the node's reply as a <code>String</code>, or a
+     *     {@link glide.api.models.exceptions.TimeoutException} if the node did not answer in time, or
+     *     a {@link glide.api.models.exceptions.RequestException} for any other failure.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object> payload =
+     *         clusterClient.infoWithPartialResults(new Section[] { Section.STATS }, ALL_NODES).get();
+     * payload.getMultiValue().forEach((address, reply) -> System.out.println(address + ": " + reply));
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object>> infoWithPartialResults(Section[] sections, Route route);
+
+    /**
      * Rewrites the configuration file with the current configuration.<br>
      * The command will be routed automatically to all nodes.
      *

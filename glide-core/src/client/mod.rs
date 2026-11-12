@@ -750,6 +750,58 @@ pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
     }
 }
 
+/// A partial-results fan-out stops waiting for nodes this long before
+/// `request_timeout`, and the timeout watchdog of such a request fires this long
+/// after it. The gap lets the reply reach the caller before the watchdog fails
+/// the whole request; if the runtime is too busy to use it, the request fails
+/// with a timeout, as it does without partial results. The margin is at least
+/// 2 ms (at most a quarter of the timeout), since a smaller gap is within timer
+/// jitter.
+fn partial_results_margin(request_timeout: Duration) -> Duration {
+    (request_timeout / 10)
+        .max(Duration::from_millis(2).min(request_timeout / 4))
+        .min(Duration::from_millis(100))
+}
+
+/// Reads a partial result, which holds each failed node's error as a value, for
+/// the timeout metric and the circuit breaker. Returns whether a node timed out,
+/// and, when no node answered, the error the breaker should see in place of the
+/// plain call's: a node's I/O or dropped-connection error if there is one, else
+/// a timeout if a node timed out. Other node errors, such as error replies, are
+/// not counted, as for a plain call.
+fn partial_results_failure(entries: &[(Value, Value)]) -> (bool, Option<RedisError>) {
+    let mut answered = false;
+    let mut timed_out = false;
+    let mut connection_error = None;
+    for (_, value) in entries {
+        let Value::ServerError(error) = value else {
+            answered = true;
+            continue;
+        };
+        // A client-side error keeps its kind's name as the code. A server reply
+        // with one of these codes would also count; no server sends one.
+        let kind = match error.err_code() {
+            redis::TIMEOUT_ERROR_CODE => {
+                timed_out = true;
+                continue;
+            }
+            "IoError" => ErrorKind::IoError,
+            "FatalSendError" => ErrorKind::FatalSendError,
+            "FatalReceiveError" => ErrorKind::FatalReceiveError,
+            _ => continue,
+        };
+        connection_error.get_or_insert(kind);
+    }
+    let failure = if answered {
+        None
+    } else if let Some(kind) = connection_error {
+        Some((kind, "No node answered").into())
+    } else {
+        timed_out.then(|| io::Error::from(io::ErrorKind::TimedOut).into())
+    };
+    (timed_out, failure)
+}
+
 fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Option<Duration>> {
     let command = cmd.command().unwrap_or_default();
     let timeout = match command.as_slice() {
@@ -1447,7 +1499,7 @@ impl Client {
         &'a mut self,
         permit: DispatchPermit,
         cmd: &'a mut Cmd,
-        routing: Option<RoutingInfo>,
+        mut routing: Option<RoutingInfo>,
     ) -> RedisResult<Value> {
         let (client, tracker) = permit.into_parts();
         let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
@@ -1492,6 +1544,21 @@ impl Client {
         cmd.set_is_blocking(is_blocking_cmd);
         let owned_cmd = cmd.clone();
 
+        // Partial results apply only to a cluster fan-out that redis-rs collects
+        // per node; every other request keeps its timeout and accounting as is.
+        let fans_out = |routing: &RoutingInfo| match routing {
+            RoutingInfo::MultiNode((nodes, policy)) => nodes.allows_partial_results(*policy),
+            RoutingInfo::SingleNode(_) => false,
+        };
+        let mut partial_results = false;
+        if cmd.allow_partial_results() && matches!(client, ClientWrapper::Cluster { .. }) {
+            // A fan-out resolved here is passed on, so it is not resolved twice.
+            if routing.is_none() {
+                routing = RoutingInfo::for_routable(cmd).filter(fans_out);
+            }
+            partial_results = routing.as_ref().is_some_and(fans_out);
+        }
+
         // Captured by the timeout path for watchdog-informed CB decisions.
         let mut timeout_cause: Option<crate::timeout_watchdog::TimeoutCause> = None;
 
@@ -1504,14 +1571,22 @@ impl Client {
                         as usize,
                 );
 
+                // Single Instant::now() shared between watchdog, latency tracking
+                // and the partial-results deadline
+                let cmd_start = Instant::now();
+
+                let mut owned_cmd = owned_cmd;
+                let mut watchdog_duration = duration;
+                if partial_results {
+                    let margin = partial_results_margin(duration);
+                    owned_cmd.set_fan_out_deadline(Some(cmd_start + duration - margin));
+                    watchdog_duration += margin;
+                }
                 // Wrap Cmd in Arc so the timeout arm can still read watchdog fields after execute takes ownership
                 let owned_cmd = Arc::new(owned_cmd);
 
-                // Single Instant::now() shared between watchdog and latency tracking
-                let cmd_start = Instant::now();
-
                 let timeout_rx = crate::timeout_watchdog::TimeoutWatchdog::global()
-                    .register(duration, cmd_start);
+                    .register(watchdog_duration, cmd_start);
                 // Defer the expensive Debug-format of the route to the (rare)
                 // timeout path. Cloning the routing is cheap for the common
                 // single-node case (no heap allocation); previously a String was
@@ -1633,9 +1708,26 @@ impl Client {
             }
         };
 
+        // A partial result holds node failures as values: a node timeout counts
+        // once for the timeout metric, and a result in which no node answered
+        // goes to the circuit breaker as the error the plain call would return.
+        let partial_failure = if partial_results && let Ok(Value::Map(entries)) = &result {
+            let (timed_out, failure) = partial_results_failure(entries);
+            if timed_out && let Err(e) = GlideOpenTelemetry::record_timeout_error() {
+                log_error(
+                    "OpenTelemetry:timeout_error",
+                    format!("Failed to record timeout error: {e}"),
+                );
+            }
+            failure
+        } else {
+            None
+        };
+
         // Report result to client-wide circuit breaker
         if let Some(cb) = &self.circuit_breaker {
-            let (is_error, error_kind) = match result.as_ref() {
+            let (is_error, error_kind) = match partial_failure.as_ref().map_or(result.as_ref(), Err)
+            {
                 Ok(_) => (false, None),
                 Err(e) => {
                     let counts = if e.is_timeout() {
@@ -4104,6 +4196,7 @@ mod tests {
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, RequestTimeoutOption, TimeUnit,
         get_request_timeout, is_blocking_command, is_blocking_command_name,
+        partial_results_failure, partial_results_margin,
     };
 
     use super::{
@@ -4798,6 +4891,67 @@ mod tests {
         let result = get_timeout_from_cmd_arg(&cmd, cmd.args_iter().len() - 1, TimeUnit::Seconds);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), RequestTimeoutOption::NoTimeout,);
+    }
+
+    #[test]
+    fn test_partial_results_margin_is_a_tenth_of_the_timeout_from_2ms_to_100ms() {
+        assert_eq!(
+            partial_results_margin(Duration::from_millis(250)),
+            Duration::from_millis(25)
+        );
+        // At least 2 ms, but at most a quarter of the timeout.
+        assert_eq!(
+            partial_results_margin(Duration::from_millis(10)),
+            Duration::from_millis(2)
+        );
+        assert_eq!(
+            partial_results_margin(Duration::from_millis(5)),
+            Duration::from_micros(1250)
+        );
+        assert_eq!(
+            partial_results_margin(Duration::from_secs(5)),
+            Duration::from_millis(100)
+        );
+        assert_eq!(partial_results_margin(Duration::ZERO), Duration::ZERO);
+    }
+
+    #[test]
+    fn test_partial_results_failure_stands_for_the_plain_error_when_no_node_answered() {
+        let node = |value| (redis::Value::BulkString(b"a:1".to_vec().into()), value);
+        let reply = || node(redis::Value::BulkString(b"# Server".to_vec().into()));
+        let timeout = || {
+            node(redis::Value::ServerError(
+                redis::ServerError::ExtensionError {
+                    code: redis::TIMEOUT_ERROR_CODE.into(),
+                    detail: Some("timed out".into()),
+                },
+            ))
+        };
+        let failed = |error: redis::RedisError| node(redis::Value::ServerError(error.into()));
+        let denied = || node(redis::parse_redis_value(b"-NOPERM no permissions\r\n").unwrap());
+
+        // Every node timed out: a timeout for the metric and for the breaker.
+        let (timed_out, failure) = partial_results_failure(&[timeout(), timeout()]);
+        assert!(timed_out);
+        assert!(failure.unwrap().is_timeout());
+
+        // A node answered: the metric still sees the timeout, the breaker a success.
+        let (timed_out, failure) = partial_results_failure(&[reply(), timeout()]);
+        assert!(timed_out);
+        assert!(failure.is_none());
+
+        // A connection error counts before a timeout, with its kind.
+        let reset = std::io::Error::from(std::io::ErrorKind::ConnectionReset).into();
+        let (_, failure) = partial_results_failure(&[timeout(), failed(reset), denied()]);
+        assert_eq!(failure.unwrap().kind(), redis::ErrorKind::IoError);
+        let lost = (redis::ErrorKind::FatalReceiveError, "lost").into();
+        let (_, failure) = partial_results_failure(&[denied(), failed(lost)]);
+        assert_eq!(failure.unwrap().kind(), redis::ErrorKind::FatalReceiveError);
+
+        // Error replies do not count, as for the plain call.
+        let (timed_out, failure) = partial_results_failure(&[denied(), denied()]);
+        assert!(!timed_out);
+        assert!(failure.is_none());
     }
 
     #[test]
