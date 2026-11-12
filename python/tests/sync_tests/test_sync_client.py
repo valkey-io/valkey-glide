@@ -578,10 +578,11 @@ class TestGlideClients:
         self, cluster_mode: bool, monkeypatch: pytest.MonkeyPatch
     ):
         """A client whose create() failed must not be reconnected in forked children."""
-        with socket.socket() as s:
-            s.bind(("127.0.0.1", 0))
-            closed_port = s.getsockname()[1]
-        address = [NodeAddress("127.0.0.1", closed_port)]
+        # Bound but not listening: connects are refused, and no other process
+        # can take the port while create() runs.
+        reserved = socket.socket()
+        reserved.bind(("127.0.0.1", 0))
+        address = [NodeAddress("127.0.0.1", reserved.getsockname()[1])]
         config: Union[GlideClientConfiguration, GlideClusterClientConfiguration]
         if cluster_mode:
             config = GlideClusterClientConfiguration(
@@ -607,7 +608,7 @@ class TestGlideClients:
             return original(self)
 
         monkeypatch.setattr(client_cls, "_create_core_client", spy)
-        with pytest.raises(ClosingError):
+        with reserved, pytest.raises(ClosingError):
             client_cls.create(config)
         assert connect_pids == [os.getpid()]
 
