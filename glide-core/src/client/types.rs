@@ -742,6 +742,7 @@ mod tests {
     mod client_side_cache_validation_tests {
         use crate::client::types::ClientSideCache;
 
+        /// Builds a cache configuration with the given server-assisted flag and tracking prefix.
         fn cache(server_assisted: bool, tracking_prefix: Option<&[u8]>) -> ClientSideCache {
             ClientSideCache {
                 cache_id: "id".to_string(),
@@ -754,24 +755,28 @@ mod tests {
             }
         }
 
+        /// A configuration without a prefix is valid with or without server-assisted mode.
         #[test]
         fn test_no_prefix_is_valid_with_or_without_server_assisted() {
             assert!(cache(false, None).validate().is_ok());
             assert!(cache(true, None).validate().is_ok());
         }
 
+        /// A text or binary prefix is valid in server-assisted mode.
         #[test]
         fn test_prefix_with_server_assisted_is_valid() {
             assert!(cache(true, Some(b"xxx:")).validate().is_ok());
             assert!(cache(true, Some(&[0xff, 0x00])).validate().is_ok());
         }
 
+        /// A prefix is rejected without server-assisted mode.
         #[test]
         fn test_prefix_requires_server_assisted() {
             let err = cache(false, Some(b"xxx:")).validate().unwrap_err();
             assert!(err.contains("server_assisted"), "{err}");
         }
 
+        /// An empty prefix is rejected.
         #[test]
         fn test_empty_prefix_is_rejected() {
             let err = cache(true, Some(b"")).validate().unwrap_err();
@@ -785,6 +790,7 @@ mod tests {
         use crate::connection_request as protobuf;
         use ::protobuf::EnumOrUnknown;
 
+        /// Converts a protobuf connection request carrying `cache` into a `ConnectionRequest`.
         fn request_with_cache(cache: protobuf::ClientSideCache) -> ConnectionRequest {
             let mut proto_request = protobuf::ConnectionRequest::new();
             proto_request.addresses.push(protobuf::NodeAddress {
@@ -796,6 +802,7 @@ mod tests {
             proto_request.into()
         }
 
+        /// A protobuf cache without a prefix converts to a configuration without one.
         #[test]
         fn test_client_side_cache_conversion_without_prefix() {
             let request = request_with_cache(protobuf::ClientSideCache {
@@ -809,6 +816,7 @@ mod tests {
             assert_eq!(cache.tracking_prefix, None);
         }
 
+        /// The conversion keeps the prefix bytes unchanged.
         #[test]
         fn test_client_side_cache_conversion_keeps_prefix_bytes() {
             let request = request_with_cache(protobuf::ClientSideCache {
@@ -826,6 +834,7 @@ mod tests {
             assert!(cache.validate().is_ok());
         }
 
+        /// The conversion keeps an empty prefix so that validation can reject it.
         #[test]
         fn test_client_side_cache_conversion_preserves_empty_prefix_for_validation() {
             // An explicitly empty prefix is kept (not turned into None) so that validation

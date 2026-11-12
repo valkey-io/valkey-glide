@@ -2189,6 +2189,8 @@ func TestNewClientSideCache_ServerAssistedExplicitlyDisabled(t *testing.T) {
 	assert.False(t, cache.ServerAssisted)
 }
 
+// TestNewClientSideCache_TrackingPrefixDefaultEmpty verifies that a new cache has no tracking prefix and leaves the
+// protobuf field unset.
 func TestNewClientSideCache_TrackingPrefixDefaultEmpty(t *testing.T) {
 	cache, err := NewClientSideCache(1024, 60000)
 	assert.NoError(t, err)
@@ -2199,6 +2201,8 @@ func TestNewClientSideCache_TrackingPrefixDefaultEmpty(t *testing.T) {
 	assert.Nil(t, pb.TrackingPrefix, "no prefix must leave the optional protobuf field unset")
 }
 
+// TestClientSideCache_WithTrackingPrefix_SetsFieldAndProtobuf verifies that WithTrackingPrefix sets the
+// field and the protobuf value.
 func TestClientSideCache_WithTrackingPrefix_SetsFieldAndProtobuf(t *testing.T) {
 	cache, err := NewClientSideCache(1024, 60000)
 	assert.NoError(t, err)
@@ -2213,6 +2217,7 @@ func TestClientSideCache_WithTrackingPrefix_SetsFieldAndProtobuf(t *testing.T) {
 	assert.Equal(t, []byte("xxx:"), pb.TrackingPrefix)
 }
 
+// TestClientSideCache_WithTrackingPrefix_BinaryPrefix verifies that a non-UTF-8 prefix is kept byte for byte.
 func TestClientSideCache_WithTrackingPrefix_BinaryPrefix(t *testing.T) {
 	cache, err := NewClientSideCache(1024, 60000)
 	assert.NoError(t, err)
@@ -2223,6 +2228,7 @@ func TestClientSideCache_WithTrackingPrefix_BinaryPrefix(t *testing.T) {
 	assert.Equal(t, []byte{0xff, 0x00, ':'}, pb.TrackingPrefix, "binary prefixes must be passed byte for byte")
 }
 
+// TestClientSideCache_WithTrackingPrefix_EmptyClearsPrefix verifies that an empty prefix clears a previously set one.
 func TestClientSideCache_WithTrackingPrefix_EmptyClearsPrefix(t *testing.T) {
 	cache, err := NewClientSideCache(1024, 60000)
 	assert.NoError(t, err)
@@ -2234,6 +2240,8 @@ func TestClientSideCache_WithTrackingPrefix_EmptyClearsPrefix(t *testing.T) {
 	assert.Nil(t, pb.TrackingPrefix)
 }
 
+// TestClientSideCache_TrackingPrefixWithoutServerAssisted_Errors verifies that a prefix without
+// server-assisted mode is rejected.
 func TestClientSideCache_TrackingPrefixWithoutServerAssisted_Errors(t *testing.T) {
 	cache, err := NewClientSideCache(1024, 60000)
 	assert.NoError(t, err)
@@ -2244,6 +2252,8 @@ func TestClientSideCache_TrackingPrefixWithoutServerAssisted_Errors(t *testing.T
 	assert.Contains(t, err.Error(), "ServerAssisted")
 }
 
+// TestClientConfiguration_ClientSideCacheTrackingPrefix verifies that the client configuration carries the
+// tracking prefix into the connection request.
 func TestClientConfiguration_ClientSideCacheTrackingPrefix(t *testing.T) {
 	cache, err := NewClientSideCache(1024, 60000)
 	assert.NoError(t, err)
@@ -2271,6 +2281,8 @@ func TestClientConfiguration_ClientSideCacheTrackingPrefix(t *testing.T) {
 	assert.Equal(t, []byte("yyy:"), clusterResult.ClientSideCache.TrackingPrefix)
 }
 
+// TestClientConfiguration_ClientSideCacheTrackingPrefixWithoutServerAssisted_Errors verifies that the client
+// configuration rejects a prefix without server-assisted mode.
 func TestClientConfiguration_ClientSideCacheTrackingPrefixWithoutServerAssisted_Errors(t *testing.T) {
 	cache, err := NewClientSideCache(1024, 60000)
 	assert.NoError(t, err)

@@ -280,6 +280,7 @@ public class BaseClientConfigurationTest {
         assertFalse(cacheDefault.isServerAssisted());
     }
 
+    /** Without a trackingPrefix call the prefix stays null. */
     @Test
     void testTrackingPrefixDefaultsToNull() {
         ClientSideCache cache = ClientSideCache.builder().maxCacheKb(1024).serverAssisted(true).build();
@@ -288,6 +289,7 @@ public class BaseClientConfigurationTest {
         assertNull(ClientSideCache.create(1024, 0).getTrackingPrefix());
     }
 
+    /** A String prefix is accepted in server-assisted mode. */
     @Test
     void testTrackingPrefixAcceptedWithServerAssisted() {
         ClientSideCache cache =
@@ -301,6 +303,7 @@ public class BaseClientConfigurationTest {
                 "xxx:".getBytes(StandardCharsets.UTF_8), cache.getTrackingPrefix().getBytes());
     }
 
+    /** A GlideString prefix is accepted in server-assisted mode. */
     @Test
     void testTrackingPrefixAcceptsGlideString() {
         byte[] rawPrefix = {(byte) 0xff, 'k', ':'};
@@ -313,6 +316,7 @@ public class BaseClientConfigurationTest {
         assertArrayEquals(rawPrefix, cache.getTrackingPrefix().getBytes());
     }
 
+    /** A null prefix is allowed without server-assisted mode. */
     @Test
     void testTrackingPrefixNullIsAllowedWithoutServerAssisted() {
         ClientSideCache fromString =
@@ -324,6 +328,7 @@ public class BaseClientConfigurationTest {
         assertNull(fromGlideString.getTrackingPrefix());
     }
 
+    /** An empty prefix is rejected. */
     @Test
     void testTrackingPrefixRejectsEmptyPrefix() {
         IllegalArgumentException error =
@@ -347,6 +352,7 @@ public class BaseClientConfigurationTest {
                                 .build());
     }
 
+    /** A prefix is rejected without server-assisted mode. */
     @Test
     void testTrackingPrefixRequiresServerAssisted() {
         IllegalArgumentException error =

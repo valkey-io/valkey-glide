@@ -1905,6 +1905,7 @@ pub(crate) mod test_cache {
 
     // ==================== Tracking prefix ====================
 
+    /// Server-assisted cache configuration restricted to `prefix`.
     fn prefixed_cache_config(
         cache_id: &str,
         prefix: &[u8],
@@ -1955,16 +1956,19 @@ pub(crate) mod test_cache {
         }
     }
 
+    /// Sends `GET <key>` and returns the reply.
     async fn get(client: &mut glide_core::client::Client, key: &str) -> Value {
         let mut cmd = redis::cmd("GET");
         cmd.arg(key);
         client.send_command(&mut cmd, None).await.unwrap()
     }
 
+    /// Wraps `value` in a bulk string reply.
     fn bulk(value: &str) -> Value {
         Value::BulkString(value.as_bytes().to_vec().into())
     }
 
+    /// Number of entries currently held by the client's cache.
     fn entry_count(client: &glide_core::client::Client) -> i64 {
         match client.cache_entry_count().unwrap() {
             Value::Int(count) => count,
@@ -1972,6 +1976,7 @@ pub(crate) mod test_cache {
         }
     }
 
+    /// Total number of lookups recorded by the client's cache.
     fn total_lookups(client: &glide_core::client::Client) -> i64 {
         match client.cache_total_lookups().unwrap() {
             Value::Int(count) => count,
@@ -2011,6 +2016,7 @@ pub(crate) mod test_cache {
         client: &mut glide_core::client::Client,
         use_cluster: bool,
     ) -> (Vec<String>, Vec<Vec<u8>>) {
+        /// Bytes of a string-like reply value.
         fn as_bytes(value: &Value) -> Vec<u8> {
             match value {
                 Value::BulkString(bytes) => bytes.to_vec(),
@@ -2020,6 +2026,7 @@ pub(crate) mod test_cache {
             }
         }
 
+        /// Extracts the flags and prefixes from one `CLIENT TRACKINGINFO` reply.
         fn parse(entries: &[(Value, Value)]) -> (Vec<String>, Vec<Vec<u8>>) {
             let mut flags = Vec::new();
             let mut prefixes = Vec::new();

@@ -4430,6 +4430,7 @@ mod tests {
         );
     }
 
+    /// The sanitized request string reports the cache configuration without the prefix value.
     #[test]
     fn test_sanitized_request_string_reports_client_side_cache_config() {
         let request = ConnectionRequest {
