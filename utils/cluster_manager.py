@@ -1253,6 +1253,56 @@ def stop_clusters(
                 pass
 
 
+def process_command_line(pid: int) -> str:
+    try:
+        return (
+            Path(f"/proc/{pid}/cmdline")
+            .read_bytes()
+            .replace(b"\0", b" ")
+            .decode(errors="replace")
+        )
+    except OSError:
+        pass
+    try:
+        return subprocess.run(
+            ["ps", "-p", str(pid), "-o", "command="],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def kill_logged_server(node_folder: str):
+    """SIGKILL a node that refused a graceful shutdown (for example, a test left
+    `requirepass` set), using the pid it logged at startup. The pid is only
+    killed while its process title still names this node's port, so a reused
+    pid is left alone."""
+    try:
+        with open(f"{node_folder}/server.log") as f:
+            pids = re.findall(r"pid=(\d+), just started", f.read())
+    except OSError:
+        pids = []
+    if not pids:
+        logging.warning(
+            f"No logged pid in {node_folder}; the server may still be running"
+        )
+        return
+    pid = int(pids[-1])
+    port = os.path.basename(node_folder)
+    if not re.search(rf":{port}(\D|$)", process_command_line(pid)):
+        logging.warning(
+            f"Pid {pid} from {node_folder} is not the server on port {port}; not killing it"
+        )
+        return
+    try:
+        os.kill(pid, signal.SIGKILL)
+        logging.info(f"Killed server with pid {pid} from {node_folder}")
+    except ProcessLookupError:
+        pass
+
+
 def stop_cluster(
     host: str,
     cluster_folder: str,
@@ -1272,6 +1322,7 @@ def stop_cluster(
                 stop_server(Server(host, int(port)), cluster_folder, use_tls, auth)
             except Exception:
                 all_stopped = False
+                kill_logged_server(it.path)
     if all_stopped:
         logging.debug("All hosts were stopped gracefully")
 
