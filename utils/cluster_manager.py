@@ -1253,6 +1253,24 @@ def stop_clusters(
                 pass
 
 
+def kill_logged_server(node_folder: str):
+    """SIGKILL a node that refused a graceful shutdown (for example, a test left
+    `requirepass` set), using the pid it logged at startup."""
+    try:
+        with open(f"{node_folder}/server.log") as f:
+            pids = re.findall(r"pid=(\d+), just started", f.read())
+    except OSError:
+        pids = []
+    if not pids:
+        logging.warning(f"No logged pid in {node_folder}; the server may still be running")
+        return
+    try:
+        os.kill(int(pids[-1]), signal.SIGKILL)
+        logging.info(f"Killed server with pid {pids[-1]} from {node_folder}")
+    except ProcessLookupError:
+        pass
+
+
 def stop_cluster(
     host: str,
     cluster_folder: str,
@@ -1272,6 +1290,7 @@ def stop_cluster(
                 stop_server(Server(host, int(port)), cluster_folder, use_tls, auth)
             except Exception:
                 all_stopped = False
+                kill_logged_server(it.path)
     if all_stopped:
         logging.debug("All hosts were stopped gracefully")
 

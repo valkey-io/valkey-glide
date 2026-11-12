@@ -75,24 +75,7 @@ ext {
     }
 }
 
-tasks.register('stopAllAfterTests') {
-    doLast {
-        exec {
-            workingDir "${project.rootDir}/../utils"
-            commandLine getClusterCommand(['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'])
-            ignoreExitValue true // ignore fail if servers are stopped before
-        }
-        exec {
-            workingDir "${project.rootDir}/../utils"
-            commandLine getClusterCommand(['python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'cluster', '--keep-folder'])
-            ignoreExitValue true
-        }
-    }
-}
-
-// We need to call for stop before and after the test, but gradle doesn't support executing a task
-// twice. So there are two identical tasks with different names.
-// We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
+// Stops servers left behind by an earlier run that was interrupted or crashed.
 tasks.register('stopAllBeforeTests') {
     doLast {
         exec {
@@ -109,8 +92,11 @@ tasks.register('stopAllBeforeTests') {
 }
 
 // delete dirs to ensure clean state before starting new clusters
+def serversStarted = false
 tasks.register('clearDirs', Delete) {
     delete "${project.rootDir}/../utils/clusters"
+    // Every cluster folder created from here on belongs to this build.
+    doLast { serversStarted = true }
 }
 
 tasks.register('startCluster') {
@@ -222,61 +208,18 @@ clearDirs.finalizedBy 'startStandaloneTls'
 clearDirs.finalizedBy 'startCluster'
 clearDirs.finalizedBy 'startClusterTls'
 clearDirs.finalizedBy 'startClusterForAz'
-// Run comprehensive cleanup after entire build finishes
+// Runs at build end, so the servers go down even if a test or start task fails or the build is
+// cancelled.
 gradle.buildFinished {
-    // Skip pkill when servers are managed by Docker (e.g. test-modules-linux CI job)
-    if (System.getenv('GLIDE_DOCKER_SERVERS') == 'true') {
-        println "Docker-managed servers detected, skipping pkill cleanup."
+    if (!serversStarted || System.getenv('GLIDE_DOCKER_SERVERS') == 'true') {
         return
     }
-
-    println "Finding and stopping all running Valkey processes..."
-    
-    // OS detection
-    def isWindowsRuntime = System.getProperty('os.name').toLowerCase().contains('windows')
-    
-    // Find and kill all Valkey processes
-    try {
-        exec {
-            if (isWindowsRuntime) {
-                commandLine 'wsl', 'pkill', '-f', 'valkey-server'
-            } else {
-                commandLine 'pkill', '-f', 'valkey-server'
-            }
-            ignoreExitValue true
-        }
-    } catch (Exception e) {
-        println "Failed to kill valkey-server processes: ${e.message}"
-    }
-    
-    // Also try redis-server processes
-    try {
-        exec {
-            if (isWindowsRuntime) {
-                commandLine 'wsl', 'pkill', '-f', 'redis-server'
-            } else {
-                commandLine 'pkill', '-f', 'redis-server'
-            }
-            ignoreExitValue true
-        }
-    } catch (Exception e) {
-        println "Failed to kill redis-server processes: ${e.message}"
-    }
-    
-    // Clean up cluster folders
-    try {
+    [[], ['--tls']].each { tlsArgs ->
         exec {
             workingDir "${project.rootDir}/../utils"
-            def cleanupArgs = ['python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder']
-            if (isWindowsRuntime) {
-                commandLine(['wsl'] + cleanupArgs)
-            } else {
-                commandLine cleanupArgs
-            }
+            commandLine getClusterCommand(['python3', 'cluster_manager.py'] + tlsArgs + ['stop', '--prefix', 'cluster', '--keep-folder'])
             ignoreExitValue true
         }
-    } catch (Exception e) {
-        println "Failed to clean up cluster folders: ${e.message}"
     }
 }
 compileTestJava.dependsOn ':client:publishToMavenLocal'
