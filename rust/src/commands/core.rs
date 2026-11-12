@@ -905,6 +905,11 @@ implement_commands! {
     }
 
     /// `HGETALL`.
+    ///
+    /// Note: GLIDE normalizes `HGETALL` responses across RESP2 and RESP3 to a map.
+    /// In generic traits (`AsyncCommands`/`Commands`), decode into `HashMap<String, String>`
+    /// or `Vec<(String, String)>`. Flat `Vec<String>` decoding from `redis-rs` is not supported.
+    /// See [migration.md](../../migration.md#reply-normalization-across-resp2-and-resp3).
     fn hgetall<K: ToSingleValkeyArg>(key: K) -> (std::collections::HashMap<String, String>) {
         build_cmd!("HGETALL", key)
     }
@@ -1122,6 +1127,9 @@ implement_commands! {
     }
 
     /// `ZPOPMAX`.
+    ///
+    /// Note: GLIDE normalizes `ZPOPMAX` replies across RESP2 and RESP3 to map pairs.
+    /// See [migration.md](../../migration.md#reply-normalization-across-resp2-and-resp3).
     fn zpopmax<K: ToSingleValkeyArg>(key: K, count: isize) -> (Vec<(String, f64)>) {
         build_cmd!("ZPOPMAX", key, count)
     }
@@ -1132,6 +1140,9 @@ implement_commands! {
     }
 
     /// `ZPOPMIN`.
+    ///
+    /// Note: GLIDE normalizes `ZPOPMIN` replies across RESP2 and RESP3 to map pairs.
+    /// See [migration.md](../../migration.md#reply-normalization-across-resp2-and-resp3).
     fn zpopmin<K: ToSingleValkeyArg>(key: K, count: isize) -> (Vec<(String, f64)>) {
         build_cmd!("ZPOPMIN", key, count)
     }
@@ -1162,6 +1173,9 @@ implement_commands! {
     }
 
     /// `ZRANDMEMBER WITHSCORES`.
+    ///
+    /// Note: GLIDE normalizes `ZRANDMEMBER ... WITHSCORES` replies across RESP2 and RESP3 to pairs.
+    /// See [migration.md](../../migration.md#reply-normalization-across-resp2-and-resp3).
     fn zrandmember_withscores<K: ToSingleValkeyArg>(key: K, count: isize) -> Generic {
         build_cmd!("ZRANDMEMBER", key, count, "WITHSCORES")
     }
@@ -1172,6 +1186,11 @@ implement_commands! {
     }
 
     /// `ZRANGE WITHSCORES`.
+    ///
+    /// Note: GLIDE normalizes `ZRANGE ... WITHSCORES` responses to a map on both RESP2 and RESP3.
+    /// In generic traits (`AsyncCommands`/`Commands`), decode into `Vec<(String, f64)>` or
+    /// `HashMap<String, f64>`. Flat `Vec<String>` decoding from `redis-rs` is not supported.
+    /// See [migration.md](../../migration.md#reply-normalization-across-resp2-and-resp3).
     fn zrange_withscores<K: ToSingleValkeyArg>(key: K, start: isize, stop: isize) -> (Vec<(String, f64)>) {
         build_cmd!("ZRANGE", key, start, stop, "WITHSCORES")
     }
