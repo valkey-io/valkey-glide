@@ -20,6 +20,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "utils"))
 
 from cluster_manager import (  # type: ignore[import-not-found]  # noqa: E402
+    NodeCheck,
+    check_node_startup,
     get_cli_command,
     kill_logged_server,
     start_server,
@@ -58,6 +60,8 @@ def locked_server(tmp_path):
         "127.0.0.1", None, str(tmp_path), False, [], False
     )
     assert server.pid > 0
+    # start_server returns once the pid is logged, before the node listens.
+    assert check_node_startup(server, f"{node_folder}/server.log") is NodeCheck.READY
     subprocess.run(
         [get_cli_command(), "-p", str(server.port)]
         + ["CONFIG", "SET", "requirepass", "secret"],
