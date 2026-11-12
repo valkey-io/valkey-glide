@@ -351,9 +351,7 @@ jobs:
             - name: Create secret key ring file
               shell: bash
               run: |
-                  # See create-binaries-to-publish: one absolute path, no per-module copies.
-                  # Set here, not in job-level env: the runner context is unavailable at
-                  # jobs.<id>.env, so $RUNNER_TEMP is resolved in the step instead.
+                  # See the key ring step in create-binaries-to-publish.
                   echo "SECRING_FILE=${RUNNER_TEMP}/secring.gpg" >> "$GITHUB_ENV"
                   echo "BUNDLE_DIR=${RUNNER_TEMP}/bundles" >> "$GITHUB_ENV"
                   echo "$SECRING_GPG" | base64 --decode > "${RUNNER_TEMP}/secring.gpg"
