@@ -2110,6 +2110,15 @@ impl Client {
         raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            // A batch runs on a single node, so a multi-node route has no
+            // meaning here: reject it instead of silently ignoring it and
+            // running the batch on one arbitrary node.
+            if matches!(routing, Some(RoutingInfo::MultiNode(_))) {
+                return Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "batches support only single-node routes",
+                )));
+            }
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             self.reconcile_iam_before_dispatch().await?;
             // Capture the batch's last SELECT now; apply it after dispatch if the
@@ -2207,6 +2216,15 @@ impl Client {
         pipeline_retry_strategy: PipelineRetryStrategy,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            // A batch runs on a single node, so a multi-node route has no
+            // meaning here: reject it instead of silently ignoring it and
+            // running the batch on one arbitrary node.
+            if matches!(routing, Some(RoutingInfo::MultiNode(_))) {
+                return Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "batches support only single-node routes",
+                )));
+            }
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             self.reconcile_iam_before_dispatch().await?;
             // A raw MULTI stays open after a non-atomic pipeline returns, so track
@@ -5458,6 +5476,68 @@ mod tests {
         bracketed.cmd("MULTI").cmd("INCR").arg("a").cmd("EXEC");
         let _ = rt.block_on(client.send_pipeline(&bracketed, None, false, None, strategy));
         assert!(!client.shared.multi_active.load(Ordering::Acquire));
+    }
+
+    /// A batch with a multi-node route must fail with a client error instead of
+    /// silently running on one node (valkey-io/valkey-glide#7673). The lazy
+    /// test client has no server, so a missing validation surfaces as a
+    /// connection error instead — this test fails until the routing is checked
+    /// before dispatch.
+    #[test]
+    fn send_pipeline_rejects_multi_node_route() {
+        use redis::cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo};
+
+        let mut client = create_test_client();
+        let rt = borrow_test_runtime();
+        let strategy = redis::PipelineRetryStrategy::default();
+
+        let mut pipe = redis::pipe();
+        pipe.cmd("CLUSTER").arg("MYID");
+        let err = rt
+            .block_on(client.send_pipeline(
+                &pipe,
+                Some(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllMasters,
+                    None,
+                ))),
+                false,
+                None,
+                strategy,
+            ))
+            .expect_err("a batch with a multi-node route must be rejected");
+        assert_eq!(err.kind(), redis::ErrorKind::ClientError);
+        assert!(
+            err.to_string().contains("single-node"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// Same rejection for atomic batches (MULTI/EXEC transactions).
+    #[test]
+    fn send_transaction_rejects_multi_node_route() {
+        use redis::cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo};
+
+        let mut client = create_test_client();
+        let rt = borrow_test_runtime();
+
+        let mut txn = redis::pipe();
+        txn.atomic().cmd("CLUSTER").arg("MYID");
+        let err = rt
+            .block_on(client.send_transaction(
+                &txn,
+                Some(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    None,
+                ))),
+                None,
+                false,
+            ))
+            .expect_err("a transaction with a multi-node route must be rejected");
+        assert_eq!(err.kind(), redis::ErrorKind::ClientError);
+        assert!(
+            err.to_string().contains("single-node"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
