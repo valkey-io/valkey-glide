@@ -20,6 +20,7 @@ pub(crate) const LIB_NAME: &str = "GlideRust";
 /// Library version reported to the server.
 pub(crate) const LIB_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+// TODO #7691: Remove from the public API once `PubSubSubscriptions::subscribe` is replaced.
 /// The kind of a Pub/Sub channel subscription.
 ///
 /// Mirrors Python's `PubSubChannelModes`.
@@ -50,6 +51,8 @@ impl PubSubChannelMode {
 /// [`crate::GlideClient::try_get_pubsub_message`] (and the cluster equivalents).
 ///
 /// Mirrors Python's `*ClientConfiguration.pubsub_subscriptions`.
+// TODO #7691: Replace with `StandalonePubSubSubscriptions` and `ClusterPubSubSubscriptions`, with
+// `with_channel` / `with_pattern` (and `with_sharded_channel` for cluster only).
 #[derive(Debug, Clone, Default)]
 pub struct PubSubSubscriptions {
     channels: HashMap<PubSubChannelMode, HashSet<Vec<u8>>>,
@@ -674,6 +677,7 @@ macro_rules! impl_common_config_builders {
             }
 
             /// Set Pub/Sub subscriptions to establish on connect.
+            // TODO #7691: Take `StandalonePubSubSubscriptions` or `ClusterPubSubSubscriptions`.
             pub fn subscriptions(mut self, subscriptions: PubSubSubscriptions) -> Self {
                 self.pubsub_subscriptions = Some(subscriptions);
                 self

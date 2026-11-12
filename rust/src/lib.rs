@@ -85,6 +85,7 @@ pub use config::NodeAddress;
 pub use config::NodeDiscoveryMode;
 pub use config::PeriodicChecks;
 pub use config::ProtocolVersion;
+// TODO #7691: Remove this re-export.
 pub use config::PubSubChannelMode;
 pub use config::PubSubSubscriptions;
 pub use config::ReadFrom;

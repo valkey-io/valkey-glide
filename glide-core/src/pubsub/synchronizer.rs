@@ -25,6 +25,8 @@ const CLUSTER_SUBSCRIPTION_KINDS: &[PubSubSubscriptionKind] = &[
     PubSubSubscriptionKind::Sharded,
 ];
 
+// TODO #7690: Reject sharded subscriptions on a standalone client with an error, instead of
+// ignoring them because they aren't in this list.
 const STANDALONE_SUBSCRIPTION_KINDS: &[PubSubSubscriptionKind] = &[
     PubSubSubscriptionKind::Exact,
     PubSubSubscriptionKind::Pattern,

@@ -3248,6 +3248,8 @@ impl Client {
         }
         validate_unix_socket_addresses(&request).map_err(ConnectionError::Configuration)?;
         // TODO #7683: Reject Pub/Sub subscriptions combined with RESP2 with a configuration error.
+        // TODO #7690: Reject sharded subscriptions on a standalone client with a configuration
+        // error.
 
         if let Some(conflict) = request.rdma_conflict() {
             return Err(crate::rdma::RdmaUnavailable::IncompatibleSetting(conflict).into());

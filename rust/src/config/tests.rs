@@ -691,6 +691,7 @@ fn pubsub_subscriptions_lowered_to_core() {
     assert!(pattern.contains(&b"news.*".to_vec()));
 }
 
+// TODO #7691: Update for `ClusterPubSubSubscriptions::with_sharded_channel`.
 #[test]
 fn pubsub_subscriptions_cluster_sharded() {
     let subs = PubSubSubscriptions::new().subscribe(PubSubChannelMode::Sharded, "shard-ch");

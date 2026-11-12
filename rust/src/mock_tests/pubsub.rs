@@ -74,6 +74,7 @@ async fn psubscribe_encodes_patterns() {
     m.assert_args(&["PSUBSCRIBE", "news.*"]);
 }
 
+// TODO #7691: Update for `ssubscribe` moving to the cluster-only `ShardedPubSubCommands`.
 #[tokio::test]
 async fn ssubscribe_encodes_channels() {
     let m = Mock::nil();

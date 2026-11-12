@@ -69,6 +69,7 @@ pub trait PubSubCommands: CommandExecutor {
 
     // TODO #7686: Add `punsubscribe_with_timeout` and `punsubscribe_lazy`.
 
+    // TODO #7691: Move to `ShardedPubSubCommands` (cluster clients only).
     // TODO #7686: Update to wait for server confirmation (`SSUBSCRIBE_BLOCKING`).
     /// Subscribe to one or more shard channels at runtime (`SSUBSCRIBE`, cluster
     /// only). See [`Self::subscribe`] for delivery requirements.
@@ -78,6 +79,7 @@ pub trait PubSubCommands: CommandExecutor {
 
     // TODO #7686: Add `ssubscribe_with_timeout` and `ssubscribe_lazy`.
 
+    // TODO #7691: Move to `ShardedPubSubCommands` (cluster clients only).
     // TODO #7686: Update to wait for server confirmation (`SUNSUBSCRIBE_BLOCKING`).
     /// Unsubscribe from shard channels (`SUNSUBSCRIBE`). An empty slice
     /// unsubscribes from all shard channels.
@@ -197,4 +199,6 @@ fn parse_numsub(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, i64)>> {
     }
 }
 
+// TODO #7691: Implement `ShardedPubSubCommands` only for `GlideClusterClient` and
+// `SyncGlideClusterClient`.
 impl<T: CommandExecutor + ?Sized> PubSubCommands for T {}
