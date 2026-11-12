@@ -321,6 +321,7 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClientUsageError> {
         }
     };
 
+    // TODO #7666: Remove this check once `Client::send_command` rejects empty commands.
     if cmd.args_iter().next().is_none() {
         return Err(ClientUsageError::User(
             "Received command without a command name or arguments".into(),

@@ -68,6 +68,7 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 	})
 }
 
+// TODO #7654: Add a queue-time error case that expects ExecAbortError for atomic batches.
 func (suite *GlideTestSuite) TestBatchRaiseOnError() {
 	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool, t *testing.T) {
 		key1 := "{BatchRaiseOnError}" + uuid.NewString()

@@ -642,6 +642,7 @@ macro_rules! impl_common_config_builders {
                 self
             }
 
+            // TODO #7665: Reject a limit of 0 with `GlideError::Configuration`.
             /// Set the maximum number of concurrent in-flight requests.
             pub fn inflight_requests_limit(mut self, limit: u32) -> Self {
                 self.inflight_requests_limit = Some(limit);

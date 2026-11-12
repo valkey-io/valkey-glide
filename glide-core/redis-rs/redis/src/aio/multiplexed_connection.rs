@@ -663,6 +663,9 @@ where
                     fenced_result: None,
                 };
 
+                // TODO #7666: Stop a request that never gets a reply (e.g. an empty command)
+                // from shifting every later reply, e.g. by closing the connection when a request
+                // times out.
                 self_.in_flight.push_back(entry);
                 Ok(())
             }
