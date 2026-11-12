@@ -4,7 +4,6 @@ package glide.api;
 import com.google.protobuf.ByteString;
 import connection_request.ConnectionRequestOuterClass.AuthenticationInfo;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
-import connection_request.ConnectionRequestOuterClass.NodeAddress;
 import connection_request.ConnectionRequestOuterClass.ProtocolVersion;
 import connection_request.ConnectionRequestOuterClass.TlsMode;
 import glide.api.models.commands.MonitorMsg;
@@ -13,6 +12,7 @@ import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ConnectionException;
 import glide.internal.GlideNativeBridge;
 import glide.internal.MonitorCallback;
+import glide.managers.ConnectionManager;
 import glide.managers.TlsConfigHelper;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -58,6 +58,8 @@ public class MonitorClient implements AutoCloseable {
      * @throws NullPointerException if {@code config} is null.
      * @throws IllegalArgumentException if IAM authentication is configured. The monitor native ABI
      *     does not support IAM authentication.
+     * @throws glide.api.models.exceptions.ConfigurationError if a Unix domain socket address is mixed
+     *     with TCP addresses or used with TLS.
      */
     public static MonitorClient create(@NonNull GlideClientConfiguration config)
             throws ConnectionException {
@@ -73,6 +75,8 @@ public class MonitorClient implements AutoCloseable {
      * @throws ConnectionException if the native monitor client cannot be created.
      * @throws IllegalArgumentException if IAM authentication is configured. The monitor native ABI
      *     does not support IAM authentication.
+     * @throws glide.api.models.exceptions.ConfigurationError if a Unix domain socket address is mixed
+     *     with TCP addresses or used with TLS.
      */
     public static MonitorClient create(
             @NonNull GlideClientConfiguration config, Consumer<MonitorMsg> callback)
@@ -163,6 +167,7 @@ public class MonitorClient implements AutoCloseable {
                     "MonitorClient does not support IAM authentication, including custom IAM"
                             + " credentials providers.");
         }
+        ConnectionManager.validateUnixSocketAddresses(config);
     }
 
     private static byte[] serializeConfig(GlideClientConfiguration config) {
@@ -172,8 +177,7 @@ public class MonitorClient implements AutoCloseable {
                         config.getLibName(), config.getClientInfoTag()));
 
         for (glide.api.models.configuration.NodeAddress addr : config.getAddresses()) {
-            builder.addAddresses(
-                    NodeAddress.newBuilder().setHost(addr.getHost()).setPort(addr.getPort()).build());
+            builder.addAddresses(ConnectionManager.toProtobufAddress(addr));
         }
 
         boolean insecureTls = TlsConfigHelper.resolveInsecureTls(config);
