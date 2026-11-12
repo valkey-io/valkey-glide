@@ -188,13 +188,11 @@ jobs:
                   ulimit -n 65536 2>/dev/null || true
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
-                    make -k integ-test
+                    make -k integ-test tls-test opentelemetry-test
                   else
                     make install-tools build
-                    make -k unit-test integ-test
+                    make -k unit-test integ-test tls-test opentelemetry-test
                   fi
-                  make -k tls-test tls=true
-                  make -k opentelemetry-test
 
             - name: Run Example Tests
               # Runs on the newest Valkey engine in the matrix so that examples for
@@ -286,7 +284,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-containers, approve-self-hosted]
         if: always() && needs.get-containers.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
-        timeout-minutes: 25
+        timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
@@ -374,10 +372,10 @@ jobs:
                   ulimit -n 65536 2>/dev/null || true
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
-                    make -k integ-test
+                    make -k integ-test tls-test
                   else
                     make install-tools build
-                    make -k unit-test integ-test
+                    make -k unit-test integ-test tls-test
                   fi
 
             - name: Upload test reports
@@ -450,12 +448,10 @@ jobs:
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
-                    make -k long-timeout-test test-filter=TestLongTimeout
                   else
                     make install-tools build
-                    make -k long-timeout-test test-filter=TestLongTimeout
                   fi
-                  make -k pubsub-test
+                  make -k long-timeout-test pubsub-test test-filter=TestLongTimeout
 
             - name: Upload logs and reports
               if: always()
