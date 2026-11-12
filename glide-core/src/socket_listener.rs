@@ -558,21 +558,17 @@ async fn send_batch(
         pipeline.add_command(redis_cmd);
     }
 
+    let raise_on_error = request.raise_on_error.unwrap_or_default();
     let res: ClientUsageResult<Value> = match request.is_atomic {
         true => client
-            .send_transaction(
-                &pipeline,
-                routing,
-                request.timeout,
-                request.raise_on_error.unwrap_or_default(),
-            )
+            .send_transaction(&pipeline, routing, request.timeout, raise_on_error)
             .await
             .map_err(|err| err.into()),
         false => client
             .send_pipeline(
                 &pipeline,
                 routing,
-                request.raise_on_error.unwrap_or_default(),
+                raise_on_error,
                 request.timeout,
                 PipelineRetryStrategy {
                     retry_server_error: request.retry_server_error.unwrap_or_default(),
@@ -586,6 +582,7 @@ async fn send_batch(
     let decompressed = crate::compression::try_decompress_batch_response(
         res?,
         client.compression_manager().as_deref(),
+        raise_on_error,
     )
     .map_err(RedisError::from)?;
     Ok(decompressed)

@@ -386,6 +386,7 @@ pub use crate::types::{
     RedisError,
     RedisResult,
     RedisWrite,
+    ServerError,
     ToRedisArgs,
     SERVER_ERROR_DESCRIPTION,
 

@@ -6300,6 +6300,7 @@ pub unsafe extern "C" fn batch(
         let decompressed = glide_core::compression::try_decompress_batch_response(
             result?,
             compression_manager_for_decompression.as_deref(),
+            raise_on_error,
         )?;
         Ok(decompressed)
     })
