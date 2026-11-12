@@ -141,6 +141,8 @@ async fn raw_commands_in_pipeline() {
     assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "10");
 }
 
+// TODO #7672: Add a test case for a transaction aborted
+// by `WATCH` and expect `exec` to return `None`.
 #[tokio::test]
 async fn watch_multi_semantics() {
     let server = common::TestServer::start();
@@ -254,6 +256,8 @@ async fn typed_pipeline_query_async_still_works() {
     assert_eq!((v.as_str(), n), ("x", 5));
 }
 
+// TODO #7672: Add a test case for a cluster transaction aborted
+// by `WATCH` and expect `exec` to return `None`.
 timed_tokio_test!(
     async fn cluster_atomic_transaction_same_slot() {
         let cluster = common::ClusterHarness::start().await;

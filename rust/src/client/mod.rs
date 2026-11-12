@@ -167,6 +167,7 @@ async fn run_pipeline(
     let reply = dispatch_pipeline(core, pipeline, routing, raise_on_error, options).await?;
     match reply {
         ValkeyValue::Array(items) => Ok(items),
+        // TODO #7672: Return `None` for a transaction aborted by `WATCH`, not an empty `Vec`.
         ValkeyValue::Nil => Ok(Vec::new()),
         other => unreachable!("unexpected pipeline reply from Valkey: {other:?}"),
     }
@@ -261,6 +262,8 @@ impl GlideClient {
         try_recv_pubsub_message(&self.pubsub_rx).await
     }
 
+    // TODO #7672: Return `ValkeyResult<Option<Vec<ValkeyValue>>>`
+    // with `None` for a transaction aborted by `WATCH`.
     /// Execute a [`crate::pipeline::Pipeline`] with GLIDE execution options
     /// (per-call timeout, pipeline retry policy) and return the raw per-command
     /// replies. Build with [`crate::pipe()`]; `.atomic()` pipelines run as a
@@ -373,6 +376,8 @@ impl GlideClusterClient {
         ValkeyValue::from_redis(value)
     }
 
+    // TODO #7672: Return `ValkeyResult<Option<Vec<ValkeyValue>>>`
+    // with `None` for a transaction aborted by `WATCH`.
     /// Execute a [`crate::Pipeline`] with GLIDE execution options,
     /// optionally routed. See [`crate::GlideClient::exec`].
     pub async fn exec(
