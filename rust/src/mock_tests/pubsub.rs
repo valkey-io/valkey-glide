@@ -27,6 +27,7 @@ async fn pubsub_numpat_int() {
     m.assert_args(&["PUBSUB", "NUMPAT"]);
 }
 
+// TODO #7688: Update for `pubsub_numsub` returning a `HashMap`.
 #[tokio::test]
 async fn pubsub_numsub_pairs() {
     let m = Mock::array(vec![
@@ -43,6 +44,7 @@ async fn pubsub_numsub_pairs() {
     );
 }
 
+// TODO #7688: Update for `pubsub_shardnumsub` returning a `HashMap`.
 #[tokio::test]
 async fn pubsub_shard_variants() {
     let m = Mock::array(vec![ValkeyValue::BulkString(b"s".to_vec().into())]);

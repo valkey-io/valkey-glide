@@ -122,6 +122,7 @@ pub trait PubSubCommands: CommandExecutor {
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
+    // TODO #7688: Return `HashMap<Bytes, i64>` instead of `Vec<(Bytes, i64)>`.
     /// Get the number of subscribers per channel (`PUBSUB NUMSUB`).
     async fn pubsub_numsub<C: ToValkeyArgs + Send + Sync>(
         &self,
@@ -130,6 +131,7 @@ pub trait PubSubCommands: CommandExecutor {
         self.pubsub_numsub_impl("NUMSUB", channels).await
     }
 
+    // TODO #7688: Return `HashMap<Bytes, i64>` instead of `Vec<(Bytes, i64)>`.
     /// Get the number of subscribers per shard channel (`PUBSUB SHARDNUMSUB`).
     async fn pubsub_shardnumsub<C: ToValkeyArgs + Send + Sync>(
         &self,
@@ -166,6 +168,7 @@ pub trait PubSubCommands: CommandExecutor {
     }
 }
 
+// TODO #7688: Parse into a `HashMap<Bytes, i64>`.
 /// Parse a `PUBSUB NUMSUB` reply (flat `[channel, count, ...]` or RESP3 map).
 fn parse_numsub(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, i64)>> {
     match v {
