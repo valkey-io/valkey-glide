@@ -167,13 +167,13 @@ jobs:
                       ${{ matrix.host.TARGET }}
 
             - name: Ensure worktree is clean before RC changes
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Go RC pre-script baseline
 
             - name: Record declared RC import edit paths
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               run: |
                   find go/integTest -name '*.go' -type f \
                     -exec grep -lF 'github.com/valkey-io/valkey-glide/go/v2/internal/interfaces' {} + \
@@ -188,9 +188,9 @@ jobs:
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
             - name: Validate RC worktree changes
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   rc_major="${RC_VERSION#v}"
                   rc_major="${rc_major%%.*}"
@@ -265,9 +265,9 @@ jobs:
                   base-language-version: ${{ env.BASE_GO_VERSION }}
 
             - name: Validate final RC worktree changes
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   rc_major="${RC_VERSION#v}"
                   rc_major="${rc_major%%.*}"
@@ -301,7 +301,7 @@ jobs:
                   fi
 
             - name: Ensure build and tests leave the worktree clean
-              if: ${{ !github.event.inputs.rc-version }}
+              if: ${{ !inputs.rc-version }}
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Go build, tests, examples, and benchmarks
@@ -447,13 +447,13 @@ jobs:
                   restore-keys: ${{ matrix.host.IMAGE }}
 
             - name: Ensure worktree is clean before RC changes
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Go RC pre-script baseline
 
             - name: Record declared RC import edit paths
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               run: |
                   find go/integTest -name '*.go' -type f \
                     -exec grep -lF 'github.com/valkey-io/valkey-glide/go/v2/internal/interfaces' {} + \
@@ -468,9 +468,9 @@ jobs:
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
             - name: Validate RC worktree changes
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   rc_major="${RC_VERSION#v}"
                   rc_major="${rc_major%%.*}"
@@ -526,9 +526,9 @@ jobs:
                   fi
 
             - name: Validate final RC worktree changes
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   rc_major="${RC_VERSION#v}"
                   rc_major="${rc_major%%.*}"
@@ -562,7 +562,7 @@ jobs:
                   fi
 
             - name: Ensure container build and tests leave the worktree clean
-              if: ${{ !github.event.inputs.rc-version }}
+              if: ${{ !inputs.rc-version }}
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Go container build and tests
@@ -623,13 +623,13 @@ jobs:
                       ${{ matrix.host.TARGET }}
 
             - name: Ensure worktree is clean before RC changes
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Go RC pre-script baseline
 
             - name: Record declared RC import edit paths
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               run: |
                   find go/integTest -name '*.go' -type f \
                     -exec grep -lF 'github.com/valkey-io/valkey-glide/go/v2/internal/interfaces' {} + \
@@ -644,9 +644,9 @@ jobs:
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
             - name: Validate RC worktree changes
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   rc_major="${RC_VERSION#v}"
                   rc_major="${rc_major%%.*}"
@@ -692,9 +692,9 @@ jobs:
                   make -k long-timeout-test pubsub-test test-filter=TestLongTimeout
 
             - name: Validate final RC worktree changes
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   rc_major="${RC_VERSION#v}"
                   rc_major="${rc_major%%.*}"
@@ -728,7 +728,7 @@ jobs:
                   fi
 
             - name: Ensure long-timeout tests leave the worktree clean
-              if: ${{ !github.event.inputs.rc-version }}
+              if: ${{ !inputs.rc-version }}
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: Go long-timeout and PubSub tests
