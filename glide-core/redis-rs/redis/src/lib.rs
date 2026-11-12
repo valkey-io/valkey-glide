@@ -478,3 +478,7 @@ mod pubsub_synchronizer;
 mod push_manager;
 mod retry_strategies;
 mod types;
+
+/// Layout fingerprint of [`Value`], for a binary that hands one to a separately compiled
+/// library.
+pub mod value_abi;
