@@ -9,7 +9,7 @@ use glide::commands::pubsub::PubSubCommands;
 use glide::{
     AsyncTypedCommands, CustomCommand, FromValkeyValue, GlideClusterClient,
     GlideClusterClientConfiguration, PipelineOptions, PubSubMessageKind, Route, ScriptingCommands,
-    SortedSetCommands, pipe,
+    SingleNodeRoute, SortedSetCommands, pipe,
 };
 use std::time::Duration;
 
@@ -46,6 +46,54 @@ timed_tokio_test!(
 
         // res2[0] = SET reply (OK), res2[1] = INCR reply (6)
         assert_eq!(i64::from_valkey_value(&res2[1]).unwrap(), 6);
+    }
+);
+
+timed_tokio_test!(
+    async fn cluster_exec_with_single_node_route() {
+        let cluster = common::ClusterHarness::start().await;
+        let c = cluster.client().await;
+
+        // A batch routed to a single node returns exactly one reply per
+        // command. Before the fix, `exec` accepted multi-node routes and a
+        // batch with `Route::AllPrimaries` silently ran on one node; that
+        // misuse is now unrepresentable: `exec` takes `SingleNodeRoute`.
+        // This test exercises a routed batch end to end (success + values);
+        // routing precision itself is pinned by the unit tests in routes.rs.
+        let mut pipeline = pipe();
+        pipeline.cmd("CLUSTER").arg("MYID");
+        let results = c
+            .exec(
+                &pipeline,
+                true,
+                Some(SingleNodeRoute::RandomNode),
+                &PipelineOptions::new(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        let node_id = String::from_valkey_value(&results[0]).unwrap();
+        assert!(!node_id.is_empty(), "expected a node id, got {node_id:?}");
+
+        // Slot-key routed batch on same-slot keys.
+        let k = common::tkey("csr", "k");
+        let mut routed = pipe();
+        routed.set(&k, "1").incr(&k, 1i64).get(&k);
+        let results = c
+            .exec(
+                &routed,
+                true,
+                Some(SingleNodeRoute::slot_key(
+                    k.as_str(),
+                    glide::SlotType::Primary,
+                )),
+                &PipelineOptions::new(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 3);
+        assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 2);
+        assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "2");
     }
 );
 

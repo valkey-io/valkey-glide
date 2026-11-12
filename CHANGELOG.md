@@ -2,8 +2,13 @@
 
 ## Pending 2.7
 
+### Breaking Changes
+
+* Rust: `GlideClusterClient::exec` and `SyncGlideClusterClient::exec` now take `Option<SingleNodeRoute>` instead of `Option<Route>`; batches run on a single node, so multi-node routes are no longer accepted. Use `Route` with the `*_with_route` helpers for single commands that fan out to multiple nodes ([#7673](https://github.com/valkey-io/valkey-glide/issues/7673))
+
 ### Fixes
 
+* Core: batches (pipelines and transactions) now reject a multi-node route with a client error instead of silently running on one node ([#7673](https://github.com/valkey-io/valkey-glide/issues/7673))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
 * Core/FFI: create clients on a runtime worker so the connect does not use the caller's stack ([#7644](https://github.com/valkey-io/valkey-glide/pull/7644))
 
