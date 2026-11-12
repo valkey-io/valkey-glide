@@ -647,6 +647,7 @@ class TestAuthCommands:
                 if (
                     "AllConnectionsUnavailable" in str(e)
                     or "Connection in recovery" in str(e)
+                    or "receiver was dropped" in str(e)
                 ) and i < max_retries - 1:
                     await anyio.sleep(0.5)
                     continue
@@ -661,6 +662,7 @@ class TestAuthCommands:
                 if (
                     "AllConnectionsUnavailable" in str(e)
                     or "Connection in recovery" in str(e)
+                    or "receiver was dropped" in str(e)
                 ) and i < max_retries - 1:
                     await anyio.sleep(0.5)
                     continue
