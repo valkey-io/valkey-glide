@@ -99,6 +99,7 @@ jobs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.filter-hosts.outputs.host-matrix }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
+            macos-exclude-output: ${{ steps.get-matrices.outputs.macos-exclude-output }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
@@ -143,6 +144,7 @@ jobs:
                 java: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
+                exclude: ${{ fromJson(needs.get-matrices.outputs.macos-exclude-output) }}
         runs-on: ${{ matrix.host.RUNNER }}
         env:
             VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
@@ -273,6 +275,7 @@ jobs:
                 java: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
+                exclude: ${{ fromJson(needs.get-matrices.outputs.macos-exclude-output) }}
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
