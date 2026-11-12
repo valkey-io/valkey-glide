@@ -1266,7 +1266,7 @@ impl Client {
                 .await
                 .map_err(|e| {
                     RedisError::from((
-                        ErrorKind::IoError,
+                        ErrorKind::AllConnectionsUnavailable,
                         "Standalone connect failed",
                         format!("{e:?}"),
                     ))

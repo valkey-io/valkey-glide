@@ -55,8 +55,8 @@ async fn standalone_lazy_defers_connection_error() {
             // Deferred: construction succeeded; the command must fail.
             let res: glide::ValkeyResult<Option<String>> = c.get(common::key("k")).await;
             assert!(
-                res.is_err(),
-                "expected first command to fail against a dead server"
+                matches!(res, Err(glide::GlideError::Connection(_))),
+                "expected first command to fail with GlideError::Connection against a dead server, got {res:?}"
             );
         }
         Err(_) => {
