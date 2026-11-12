@@ -10,6 +10,7 @@ pub(crate) mod test_cache {
     use glide_core::connection_request::EvictionPolicy;
     use glide_core::connection_request::ProtocolVersion;
     use redis::cache::glide_cache::CachedKeyType;
+    use redis::cluster_routing::{Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr};
     use redis::{Value, cluster_topology::get_slot};
     use rstest::rstest;
     use utilities::cluster::*;
@@ -1900,6 +1901,108 @@ pub(crate) mod test_cache {
                 result.is_err(),
                 "server_assisted=true with RESP2 should fail at connection time"
             );
+        });
+    }
+
+    /// Test that a server-assisted cache drops its entries when a tracking connection
+    /// closes. Invalidations the server sends while the client is disconnected never
+    /// arrive, so an entry cached before the drop could otherwise be served stale after
+    /// the reconnect, until its TTL runs out.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_server_assisted_cache_flushed_when_connection_drops(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        block_on_all(async move {
+            // Dedicated servers: the kill below closes every other client's connections.
+            let cached_configuration = TestConfiguration {
+                shared_server: false,
+                protocol: ProtocolVersion::RESP3,
+                client_side_cache: Some(ClientSideCache {
+                    cache_id: format!("server_assisted_flush_on_disconnect_{use_cluster}").into(),
+                    max_cache_kb: 1024,
+                    // No TTL: only an invalidation or a flush can remove the entry.
+                    entry_ttl_ms: 0,
+                    eviction_policy: None,
+                    enable_metrics: true,
+                    server_assisted: true,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            // A replica would deliver the write's invalidation on a connection the kill
+            // below does not reach, so the cluster has none.
+            let (mut cached_client, mut writer, _backing) = if use_cluster {
+                let cluster = RedisCluster::new(false, &None, Some(3), Some(0));
+                let cached_client =
+                    create_cluster_client(Some(&cluster), cached_configuration).await;
+                let writer =
+                    create_cluster_client(Some(&cluster), TestConfiguration::default()).await;
+                (cached_client, writer, BackingServer::Cluster(Some(cluster)))
+            } else {
+                let cached = setup_test_basics(false, cached_configuration).await;
+                let writer = create_client(&cached.server, TestConfiguration::default()).await;
+                (cached.client, writer, cached.server)
+            };
+
+            let key = "server-assisted-flush-on-disconnect";
+            let mut set_cmd = redis::cmd("SET");
+            set_cmd.arg(key).arg("before");
+            writer.send_command(&mut set_cmd, None).await.unwrap();
+            let mut get_cmd = redis::cmd("GET");
+            get_cmd.arg(key);
+            assert_eq!(
+                cached_client
+                    .send_command(&mut get_cmd, None)
+                    .await
+                    .unwrap(),
+                Value::BulkString(b"before".to_vec().into())
+            );
+            assert_eq!(cached_client.cache_entry_count().unwrap(), Value::Int(1));
+
+            // Close the cached client's connections on the key's node and change the key
+            // in one transaction, so the write lands after they are gone and its
+            // invalidation is never delivered.
+            let mut kill_and_write = redis::pipe();
+            kill_and_write
+                .atomic()
+                .cmd("CLIENT")
+                .arg("KILL")
+                .arg("SKIPME")
+                .arg("YES")
+                .cmd("SET")
+                .arg(key)
+                .arg("after");
+            let route = use_cluster.then(|| {
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    get_slot(key.as_bytes()),
+                    SlotAddr::Master,
+                )))
+            });
+            writer
+                .send_transaction(&kill_and_write, route, None, true)
+                .await
+                .unwrap();
+
+            // No request has to notice the disconnect for the entry to go.
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                while cached_client.cache_entry_count().unwrap() != Value::Int(0) {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("the cache must be flushed when a tracking connection closes");
+
+            // Once reconnected, the read goes to the server and returns the current value.
+            let value = retry(|| async {
+                let mut client = cached_client.clone();
+                let mut get_cmd = redis::cmd("GET");
+                get_cmd.arg(key);
+                client.send_command(&mut get_cmd, None).await.ok()
+            })
+            .await;
+            assert_eq!(value, Value::BulkString(b"after".to_vec().into()));
         });
     }
 }
