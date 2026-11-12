@@ -686,6 +686,8 @@ macro_rules! impl_common_config_builders {
             ///
             /// Note: runtime subscriptions are session-scoped — unlike connect-time
             /// subscriptions they are not automatically restored after a reconnect.
+            // TODO #7683: Reject `enable_pubsub` combined with RESP2 with
+            // `GlideError::Configuration`.
             #[must_use]
             pub fn enable_pubsub(mut self) -> Self {
                 self.force_pubsub_channel = true;

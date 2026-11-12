@@ -2573,6 +2573,7 @@ impl Client {
         })
     }
 }
+// TODO #7683: Reject runtime subscribe commands on a RESP2 client.
 /// Trait for executing PubSub commands on the internal client wrapper
 pub trait PubSubCommandApplier: Send + Sync {
     /// Send a subscription command (SUBSCRIBE, UNSUBSCRIBE, etc.)
@@ -3246,6 +3247,7 @@ impl Client {
             })?;
         }
         validate_unix_socket_addresses(&request).map_err(ConnectionError::Configuration)?;
+        // TODO #7683: Reject Pub/Sub subscriptions combined with RESP2 with a configuration error.
 
         if let Some(conflict) = request.rdma_conflict() {
             return Err(crate::rdma::RdmaUnavailable::IncompatibleSetting(conflict).into());
