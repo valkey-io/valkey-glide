@@ -1164,7 +1164,7 @@ impl StandaloneClient {
     }
 
     /// Sends a batch to one node. A non-atomic batch of only read-only commands
-    /// (see [`is_readonly_nonatomic_pipeline`]) uses the client's read-from strategy;
+    /// (see `is_readonly_nonatomic_pipeline`) uses the client's read-from strategy;
     /// any other batch goes to the primary.
     pub async fn send_pipeline(
         &mut self,

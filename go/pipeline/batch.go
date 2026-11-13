@@ -32,8 +32,10 @@ type BaseBatch[T StandaloneBatch | ClusterBatch] struct {
 //	Specific response types are documented alongside each method.
 //
 // Atomic batches, batches sent while a raw MULTI is open, and non-atomic batches containing a
-// write, connection-state, admin or cursor command (e.g. SELECT, CLIENT SETNAME, SCAN) run on the
-// primary node. Other non-atomic batches follow the client's ReadFrom setting, so with a replica
+// command that writes, changes connection or server state, or uses a cursor (e.g. SELECT,
+// CLIENT SETNAME, CONFIG SET, SCAN) run on the primary node. HTTL, HPTTL, HEXPIRETIME and
+// HPEXPIRETIME also keep a batch on the primary. Other non-atomic batches, including read-only
+// admin commands such as CONFIG GET, follow the client's ReadFrom setting, so with a replica
 // setting they may observe replication lag.
 type StandaloneBatch struct {
 	BaseBatch[StandaloneBatch]
