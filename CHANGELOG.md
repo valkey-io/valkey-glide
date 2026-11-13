@@ -2,6 +2,10 @@
 
 ## Pending 2.7
 
+### Features
+
+* Python: Add CPython 3.15 wheels for the async and sync clients ([#7321](https://github.com/valkey-io/valkey-glide/issues/7321))
+
 ### Fixes
 
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
