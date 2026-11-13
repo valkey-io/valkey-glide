@@ -26,60 +26,29 @@ import (
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// firstEndpoint returns the first address in an endpoints flag, or the given fallback when the flag is
-// empty. skipMode skips every pool and scope test when the flag is empty, so the fallback just records
-// the conventional port.
-func firstEndpoint(endpoints *string, fallbackHost string, fallbackPort int) config.NodeAddress {
-	host, port := fallbackHost, fallbackPort
-	if endpoints != nil && *endpoints != "" {
-		parts := strings.SplitN(*endpoints, ",", 2)
-		hostPort := strings.SplitN(parts[0], ":", 2)
-		if len(hostPort) == 2 {
-			host = hostPort[0]
-			if p, err := strconv.Atoi(hostPort[1]); err == nil {
-				port = p
-			}
-		}
-	}
-	return config.NodeAddress{Host: host, Port: port}
-}
-
-func standaloneConfig() *config.ClientConfiguration {
-	return clientConfigFor(firstEndpoint(standaloneHosts, "localhost", 6379))
-}
-
 // standaloneConfigForClusterNode returns a standalone ClientConfiguration
 // pointed at the first cluster node. This allows using ScopedConnection against
 // a cluster node for single-slot operations with hash-tagged keys.
-func standaloneConfigForClusterNode() *config.ClientConfiguration {
-	return clientConfigFor(firstEndpoint(clusterHosts, "localhost", 7000))
+func (suite *GlideTestSuite) standaloneConfigForClusterNode() *config.ClientConfiguration {
+	return clientConfigFor(suite.clusterHosts[0])
 }
 
-func compressedStandaloneConfig() *config.ClientConfiguration {
+func (suite *GlideTestSuite) compressedStandaloneConfig() *config.ClientConfiguration {
 	compressionConfig := config.NewCompressionConfiguration().
 		WithBackend(config.ZSTD).
 		WithMinCompressionSize(64)
-	cfg := standaloneConfig()
+	cfg := suite.defaultClientConfig()
 	return cfg.WithCompressionConfiguration(compressionConfig)
 }
 
-func compressedClusterNodeConfig() *config.ClientConfiguration {
+func (suite *GlideTestSuite) compressedClusterNodeConfig() *config.ClientConfiguration {
 	compressionConfig := config.NewCompressionConfiguration().
 		WithBackend(config.ZSTD).
 		WithMinCompressionSize(64)
-	cfg := standaloneConfigForClusterNode()
+	cfg := suite.standaloneConfigForClusterNode()
 	return cfg.WithCompressionConfiguration(compressionConfig)
 }
 
-func clusterConfig() *config.ClusterClientConfiguration {
-	return clusterClientConfigFor(firstEndpoint(clusterHosts, "localhost", 7000))
-}
-
-func clusterAvailable() bool {
-	return clusterHosts != nil && *clusterHosts != ""
-}
-
-// skipIfNoStandaloneEndpoints skips the test if no --standalone-endpoints flag
 func getClusterServerVersion(t *testing.T, client *glide.ClusterClient) string {
 	ctx := context.Background()
 	info, err := client.CustomCommand(ctx, []string{"INFO", "SERVER"})
@@ -160,29 +129,27 @@ type scopeTestClient interface {
 }
 
 // newScopeClient creates a Client or ClusterClient appropriate for the mode.
-func newScopeClient(t *testing.T, cluster bool) scopeTestClient {
+func (suite *GlideTestSuite) newScopeClient(t *testing.T, cluster bool) scopeTestClient {
 	t.Helper()
 	if cluster {
-		client, err := glide.NewClusterClient(clusterConfig())
+		client, err := glide.NewClusterClient(suite.defaultClusterClientConfig())
 		require.NoError(t, err)
 		return client
 	}
-	client, err := glide.NewClient(standaloneConfig())
+	client, err := glide.NewClient(suite.defaultClientConfig())
 	require.NoError(t, err)
 	return client
 }
 
-// skipMode skips the subtest if the required endpoints aren't available.
-func skipMode(t *testing.T, cluster bool) {
+// skipMode skips a mode the run has no servers for, which happens only when endpoints are given for the
+// other mode alone. An unfiltered `make integ-test` fails on that skip.
+func (suite *GlideTestSuite) skipMode(t *testing.T, cluster bool) {
 	t.Helper()
-	if cluster {
-		if !clusterAvailable() {
-			t.Skip("No cluster endpoints configured")
-		}
-	} else {
-		if standaloneHosts == nil || *standaloneHosts == "" {
-			t.Skip("No --standalone-endpoints provided")
-		}
+	if cluster && len(suite.clusterHosts) == 0 {
+		t.Skip("no cluster servers in this run")
+	}
+	if !cluster && len(suite.standaloneHosts) == 0 {
+		t.Skip("no standalone servers in this run")
 	}
 }
 
@@ -191,13 +158,13 @@ func skipMode(t *testing.T, cluster bool) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // newPool creates a ClientPool appropriate for the mode.
-func newPool(t *testing.T, cluster bool, poolCfg glide.PoolConfig) *glide.ClientPool {
+func (suite *GlideTestSuite) newPool(t *testing.T, cluster bool, poolCfg glide.PoolConfig) *glide.ClientPool {
 	t.Helper()
 	var cfg *config.ClientConfiguration
 	if cluster {
-		cfg = standaloneConfigForClusterNode()
+		cfg = suite.standaloneConfigForClusterNode()
 	} else {
-		cfg = standaloneConfig()
+		cfg = suite.defaultClientConfig()
 	}
 	pool, err := glide.NewClientPool(cfg, poolCfg)
 	require.NoError(t, err)
@@ -213,11 +180,12 @@ func waitForPoolReady(t *testing.T, pool *glide.ClientPool, minIdle int) {
 	}
 }
 
-func TestPoolCreateAndMetrics(t *testing.T) {
+func (suite *GlideTestSuite) TestPoolCreateAndMetrics() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			pool := newPool(t, tc.cluster, glide.PoolConfig{
+			suite.skipMode(t, tc.cluster)
+			pool := suite.newPool(t, tc.cluster, glide.PoolConfig{
 				MaxSize:        3,
 				MinIdle:        2,
 				AcquireTimeout: 10 * time.Second,
@@ -232,11 +200,12 @@ func TestPoolCreateAndMetrics(t *testing.T) {
 	}
 }
 
-func TestPoolAcquireAndCommands(t *testing.T) {
+func (suite *GlideTestSuite) TestPoolAcquireAndCommands() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			pool := newPool(t, tc.cluster, glide.PoolConfig{
+			suite.skipMode(t, tc.cluster)
+			pool := suite.newPool(t, tc.cluster, glide.PoolConfig{
 				MaxSize:        3,
 				MinIdle:        1,
 				AcquireTimeout: 10 * time.Second,
@@ -267,11 +236,12 @@ func TestPoolAcquireAndCommands(t *testing.T) {
 	}
 }
 
-func TestPoolReuse(t *testing.T) {
+func (suite *GlideTestSuite) TestPoolReuse() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			pool := newPool(t, tc.cluster, glide.PoolConfig{
+			suite.skipMode(t, tc.cluster)
+			pool := suite.newPool(t, tc.cluster, glide.PoolConfig{
 				MaxSize:        3,
 				MinIdle:        1,
 				AcquireTimeout: 10 * time.Second,
@@ -293,11 +263,12 @@ func TestPoolReuse(t *testing.T) {
 	}
 }
 
-func TestPoolExhaustionTimeout(t *testing.T) {
+func (suite *GlideTestSuite) TestPoolExhaustionTimeout() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			pool := newPool(t, tc.cluster, glide.PoolConfig{
+			suite.skipMode(t, tc.cluster)
+			pool := suite.newPool(t, tc.cluster, glide.PoolConfig{
 				MaxSize:        1,
 				MinIdle:        1,
 				AcquireTimeout: 10 * time.Second,
@@ -318,11 +289,12 @@ func TestPoolExhaustionTimeout(t *testing.T) {
 	}
 }
 
-func TestPoolConcurrentAccess(t *testing.T) {
+func (suite *GlideTestSuite) TestPoolConcurrentAccess() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			pool := newPool(t, tc.cluster, glide.PoolConfig{
+			suite.skipMode(t, tc.cluster)
+			pool := suite.newPool(t, tc.cluster, glide.PoolConfig{
 				MaxSize:        4,
 				MinIdle:        4,
 				AcquireTimeout: 15 * time.Second,
@@ -390,7 +362,8 @@ func awaitSignals(ch <-chan struct{}, n int, timeout time.Duration) bool {
 // and each holds its client through round 0 — should_create() only fires on an empty idle list, so
 // one holder per slot drains idle as fast as warmup fills it. Repeated over fresh pools because the
 // connectivity probe in NewClientPool sometimes closes the window first.
-func TestPoolDoesNotExceedMaxSizeUnderWarmupBurst(t *testing.T) {
+func (suite *GlideTestSuite) TestPoolDoesNotExceedMaxSizeUnderWarmupBurst() {
+	t := suite.T()
 	const (
 		maxSize = 64
 		// One holder per slot: more would deadlock against a pool that holds exactly MaxSize.
@@ -401,7 +374,7 @@ func TestPoolDoesNotExceedMaxSizeUnderWarmupBurst(t *testing.T) {
 
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
 
 			for attempt := 0; attempt < attempts; attempt++ {
 				func() {
@@ -480,7 +453,7 @@ func TestPoolDoesNotExceedMaxSizeUnderWarmupBurst(t *testing.T) {
 						}(i)
 					}
 
-					pool := newPool(t, tc.cluster, glide.PoolConfig{
+					pool := suite.newPool(t, tc.cluster, glide.PoolConfig{
 						MaxSize:        maxSize,
 						MinIdle:        maxSize,
 						AcquireTimeout: 20 * time.Second,
@@ -525,11 +498,12 @@ func TestPoolDoesNotExceedMaxSizeUnderWarmupBurst(t *testing.T) {
 	}
 }
 
-func TestPoolCloseRejectsAcquire(t *testing.T) {
+func (suite *GlideTestSuite) TestPoolCloseRejectsAcquire() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			pool := newPool(t, tc.cluster, glide.PoolConfig{
+			suite.skipMode(t, tc.cluster)
+			pool := suite.newPool(t, tc.cluster, glide.PoolConfig{
 				MaxSize:        2,
 				MinIdle:        1,
 				AcquireTimeout: 10 * time.Second,
@@ -550,11 +524,12 @@ func TestPoolCloseRejectsAcquire(t *testing.T) {
 // IsolatedScope tests (parameterized: standalone + cluster)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-func TestScopeAcquirePingRelease(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeAcquirePingRelease() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			client := newScopeClient(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
+			client := suite.newScopeClient(t, tc.cluster)
 			defer client.Close()
 
 			ctx := context.Background()
@@ -572,11 +547,12 @@ func TestScopeAcquirePingRelease(t *testing.T) {
 	}
 }
 
-func TestScopeGetSet(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeGetSet() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			client := newScopeClient(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
+			client := suite.newScopeClient(t, tc.cluster)
 			defer client.Close()
 
 			ctx := context.Background()
@@ -598,11 +574,12 @@ func TestScopeGetSet(t *testing.T) {
 	}
 }
 
-func TestScopeReturnsEmptyForMissingKey(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeReturnsEmptyForMissingKey() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			client := newScopeClient(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
+			client := suite.newScopeClient(t, tc.cluster)
 			defer client.Close()
 
 			ctx := context.Background()
@@ -618,11 +595,12 @@ func TestScopeReturnsEmptyForMissingKey(t *testing.T) {
 	}
 }
 
-func TestScopeWatchMultiExec(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeWatchMultiExec() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			client := newScopeClient(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
+			client := suite.newScopeClient(t, tc.cluster)
 			defer client.Close()
 
 			ctx := context.Background()
@@ -657,11 +635,12 @@ func TestScopeWatchMultiExec(t *testing.T) {
 	}
 }
 
-func TestScopeRaisesAfterRelease(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeRaisesAfterRelease() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			client := newScopeClient(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
+			client := suite.newScopeClient(t, tc.cluster)
 			defer client.Close()
 
 			ctx := context.Background()
@@ -677,11 +656,12 @@ func TestScopeRaisesAfterRelease(t *testing.T) {
 	}
 }
 
-func TestScopeWatchConflictAbortsExec(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeWatchConflictAbortsExec() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			client := newScopeClient(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
+			client := suite.newScopeClient(t, tc.cluster)
 			defer client.Close()
 
 			ctx := context.Background()
@@ -716,11 +696,12 @@ func TestScopeWatchConflictAbortsExec(t *testing.T) {
 	}
 }
 
-func TestScopeOCCConcurrentIncrement(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeOCCConcurrentIncrement() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			client := newScopeClient(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
+			client := suite.newScopeClient(t, tc.cluster)
 			defer client.Close()
 
 			ctx := context.Background()
@@ -778,11 +759,12 @@ func TestScopeOCCConcurrentIncrement(t *testing.T) {
 	}
 }
 
-func TestScopeCloseIsIdempotent(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeCloseIsIdempotent() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			client := newScopeClient(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
+			client := suite.newScopeClient(t, tc.cluster)
 			defer client.Close()
 
 			ctx := context.Background()
@@ -797,11 +779,12 @@ func TestScopeCloseIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestScopePoolReuse(t *testing.T) {
+func (suite *GlideTestSuite) TestScopePoolReuse() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			client := newScopeClient(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
+			client := suite.newScopeClient(t, tc.cluster)
 			defer client.Close()
 
 			ctx := context.Background()
@@ -827,18 +810,19 @@ func TestScopePoolReuse(t *testing.T) {
 // Scope Connection Modifier Parity Tests (parameterized)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-func TestScopeCompressionWritesParity(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeCompressionWritesParity() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
 
 			var compressedCfg, rawCfg *config.ClientConfiguration
 			if tc.cluster {
-				compressedCfg = compressedClusterNodeConfig()
-				rawCfg = standaloneConfigForClusterNode()
+				compressedCfg = suite.compressedClusterNodeConfig()
+				rawCfg = suite.standaloneConfigForClusterNode()
 			} else {
-				compressedCfg = compressedStandaloneConfig()
-				rawCfg = standaloneConfig()
+				compressedCfg = suite.compressedStandaloneConfig()
+				rawCfg = suite.defaultClientConfig()
 			}
 
 			compressedClient, err := glide.NewClient(compressedCfg)
@@ -876,16 +860,17 @@ func TestScopeCompressionWritesParity(t *testing.T) {
 	}
 }
 
-func TestScopeCompressionReadsParity(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeCompressionReadsParity() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
 
 			var compressedCfg *config.ClientConfiguration
 			if tc.cluster {
-				compressedCfg = compressedClusterNodeConfig()
+				compressedCfg = suite.compressedClusterNodeConfig()
 			} else {
-				compressedCfg = compressedStandaloneConfig()
+				compressedCfg = suite.compressedStandaloneConfig()
 			}
 
 			compressedClient, err := glide.NewClient(compressedCfg)
@@ -912,14 +897,15 @@ func TestScopeCompressionReadsParity(t *testing.T) {
 	}
 }
 
-func TestScopeDatabaseInheritance(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeDatabaseInheritance() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
 
 			if tc.cluster {
 				// SELECT in cluster requires Valkey 9+
-				checkClient, err := glide.NewClusterClient(clusterConfig())
+				checkClient, err := glide.NewClusterClient(suite.defaultClusterClientConfig())
 				require.NoError(t, err)
 				ver := getClusterServerVersion(t, checkClient)
 				checkClient.Close()
@@ -931,9 +917,9 @@ func TestScopeDatabaseInheritance(t *testing.T) {
 			// Client configured for database 2
 			var cfg *config.ClientConfiguration
 			if tc.cluster {
-				cfg = standaloneConfigForClusterNode().WithDatabaseId(2)
+				cfg = suite.standaloneConfigForClusterNode().WithDatabaseId(2)
 			} else {
-				cfg = standaloneConfig().WithDatabaseId(2)
+				cfg = suite.defaultClientConfig().WithDatabaseId(2)
 			}
 
 			client, err := glide.NewClient(cfg)
@@ -961,9 +947,9 @@ func TestScopeDatabaseInheritance(t *testing.T) {
 			// A client on database 0 should NOT see the key
 			var db0Cfg *config.ClientConfiguration
 			if tc.cluster {
-				db0Cfg = standaloneConfigForClusterNode()
+				db0Cfg = suite.standaloneConfigForClusterNode()
 			} else {
-				db0Cfg = standaloneConfig()
+				db0Cfg = suite.defaultClientConfig()
 			}
 			db0Client, err := glide.NewClient(db0Cfg)
 			require.NoError(t, err)
@@ -978,11 +964,12 @@ func TestScopeDatabaseInheritance(t *testing.T) {
 	}
 }
 
-func TestScopeInflightLimit(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeInflightLimit() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			client := newScopeClient(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
+			client := suite.newScopeClient(t, tc.cluster)
 			defer client.Close()
 
 			ctx := context.Background()
@@ -1007,17 +994,18 @@ func TestScopeInflightLimit(t *testing.T) {
 	}
 }
 
-func TestPoolPublish(t *testing.T) {
+func (suite *GlideTestSuite) TestPoolPublish() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
 
 			pool, err := glide.NewClientPool(
 				func() *config.ClientConfiguration {
 					if tc.cluster {
-						return standaloneConfigForClusterNode()
+						return suite.standaloneConfigForClusterNode()
 					}
-					return standaloneConfig()
+					return suite.defaultClientConfig()
 				}(),
 				glide.PoolConfig{
 					MaxSize:        2,
@@ -1047,14 +1035,15 @@ func TestPoolPublish(t *testing.T) {
 	}
 }
 
-func TestScopeReleaseResetsDatabase(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeReleaseResetsDatabase() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
 
 			if tc.cluster {
 				// SELECT in cluster requires Valkey 9+
-				checkClient, err := glide.NewClusterClient(clusterConfig())
+				checkClient, err := glide.NewClusterClient(suite.defaultClusterClientConfig())
 				require.NoError(t, err)
 				ver := getClusterServerVersion(t, checkClient)
 				checkClient.Close()
@@ -1063,7 +1052,7 @@ func TestScopeReleaseResetsDatabase(t *testing.T) {
 				}
 			}
 
-			client := newScopeClient(t, tc.cluster)
+			client := suite.newScopeClient(t, tc.cluster)
 			defer client.Close()
 
 			ctx := context.Background()
@@ -1093,9 +1082,9 @@ func TestScopeReleaseResetsDatabase(t *testing.T) {
 			// Cleanup key on db 4
 			var cleanupCfg *config.ClientConfiguration
 			if tc.cluster {
-				cleanupCfg = standaloneConfigForClusterNode().WithDatabaseId(4)
+				cleanupCfg = suite.standaloneConfigForClusterNode().WithDatabaseId(4)
 			} else {
-				cleanupCfg = standaloneConfig().WithDatabaseId(4)
+				cleanupCfg = suite.defaultClientConfig().WithDatabaseId(4)
 			}
 			cleanupClient, _ := glide.NewClient(cleanupCfg)
 			if cleanupClient != nil {
@@ -1108,9 +1097,11 @@ func TestScopeReleaseResetsDatabase(t *testing.T) {
 
 // TestPoolRejectsPubsubConfig verifies that pool creation fails fast when the
 // client configuration has pubsub subscriptions.
-func TestPoolRejectsPubsubConfig(t *testing.T) {
+func (suite *GlideTestSuite) TestPoolRejectsPubsubConfig() {
+	t := suite.T()
 	t.Run("standalone_with_pubsub", func(t *testing.T) {
-		cfg := standaloneConfig().
+		suite.skipMode(t, false)
+		cfg := suite.defaultClientConfig().
 			WithSubscriptionConfig(
 				config.NewStandaloneSubscriptionConfig().
 					WithSubscription(config.ExactChannelMode, "test-channel"),
@@ -1126,11 +1117,9 @@ func TestPoolRejectsPubsubConfig(t *testing.T) {
 	})
 
 	t.Run("cluster_with_pubsub", func(t *testing.T) {
-		if !clusterAvailable() {
-			t.Skip("No cluster endpoints configured")
-		}
+		suite.skipMode(t, true)
 
-		cfg := clusterConfig().
+		cfg := suite.defaultClusterClientConfig().
 			WithSubscriptionConfig(
 				config.NewClusterSubscriptionConfig().
 					WithSubscription(config.ExactClusterChannelMode, "test-channel"),
@@ -1150,12 +1139,13 @@ func TestPoolRejectsPubsubConfig(t *testing.T) {
 // Additional Pool & Scope tests
 // ═══════════════════════════════════════════════════════════════════════════════
 
-func TestPoolPublishConcurrent(t *testing.T) {
+func (suite *GlideTestSuite) TestPoolPublishConcurrent() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
 
-			pool := newPool(t, tc.cluster, glide.PoolConfig{
+			pool := suite.newPool(t, tc.cluster, glide.PoolConfig{
 				MaxSize:        4,
 				MinIdle:        4,
 				AcquireTimeout: 10 * time.Second,
@@ -1209,14 +1199,13 @@ func TestPoolPublishConcurrent(t *testing.T) {
 	}
 }
 
-func TestPoolBlockingCmdIsolation(t *testing.T) {
+func (suite *GlideTestSuite) TestPoolBlockingCmdIsolation() {
+	t := suite.T()
 	// Proves that a blocking command on one pool client does not block another.
 	t.Run("standalone", func(t *testing.T) {
-		if standaloneHosts == nil || *standaloneHosts == "" {
-			t.Skip("No --standalone-endpoints provided")
-		}
+		suite.skipMode(t, false)
 
-		pool := newPool(t, false, glide.PoolConfig{
+		pool := suite.newPool(t, false, glide.PoolConfig{
 			MaxSize:        2,
 			MinIdle:        2,
 			AcquireTimeout: 10 * time.Second,
@@ -1284,11 +1273,12 @@ func TestPoolBlockingCmdIsolation(t *testing.T) {
 	})
 }
 
-func TestScopeConnectionReuse(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeConnectionReuse() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			client := newScopeClient(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
+			client := suite.newScopeClient(t, tc.cluster)
 			defer client.Close()
 
 			ctx := context.Background()
@@ -1310,11 +1300,12 @@ func TestScopeConnectionReuse(t *testing.T) {
 	}
 }
 
-func TestScopeConcurrentMultiple(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeConcurrentMultiple() {
+	t := suite.T()
 	for _, tc := range scopeModes() {
 		t.Run(tc.name, func(t *testing.T) {
-			skipMode(t, tc.cluster)
-			client := newScopeClient(t, tc.cluster)
+			suite.skipMode(t, tc.cluster)
+			client := suite.newScopeClient(t, tc.cluster)
 			defer client.Close()
 
 			ctx := context.Background()
@@ -1392,12 +1383,11 @@ func TestScopeConcurrentMultiple(t *testing.T) {
 //
 // Standalone-only: cluster-aware pool wrappers (GetClient returning *ClusterClient) are not
 // yet supported — tracked as a separate enhancement.
-func TestPoolBorrowedClientScopedConnection(t *testing.T) {
-	if standaloneHosts == nil || *standaloneHosts == "" {
-		t.Skip("No --standalone-endpoints provided")
-	}
+func (suite *GlideTestSuite) TestPoolBorrowedClientScopedConnection() {
+	t := suite.T()
+	suite.skipMode(t, false)
 
-	pool := newPool(t, false, glide.PoolConfig{
+	pool := suite.newPool(t, false, glide.PoolConfig{
 		MaxSize:        2,
 		MinIdle:        1,
 		AcquireTimeout: 10 * time.Second,
@@ -1475,9 +1465,10 @@ func holdWholeScopePool(t *testing.T, client scopeTestClient) []*glide.IsolatedS
 
 // An acquire stops as soon as its outcome is known: the error type names the
 // cause, and a cause that waiting cannot fix is reported without waiting.
-func TestScopeAcquireExhaustedPoolTimesOutNamingTheCause(t *testing.T) {
-	skipMode(t, false)
-	client := newScopeClient(t, false)
+func (suite *GlideTestSuite) TestScopeAcquireExhaustedPoolTimesOutNamingTheCause() {
+	t := suite.T()
+	suite.skipMode(t, false)
+	client := suite.newScopeClient(t, false)
 	defer client.Close()
 
 	held := holdWholeScopePool(t, client)
@@ -1498,9 +1489,10 @@ func TestScopeAcquireExhaustedPoolTimesOutNamingTheCause(t *testing.T) {
 	assert.Less(t, elapsed, time.Second)
 }
 
-func TestScopeAcquireEndsWhenClientClosesMidWait(t *testing.T) {
-	skipMode(t, false)
-	client, err := glide.NewClient(standaloneConfig())
+func (suite *GlideTestSuite) TestScopeAcquireEndsWhenClientClosesMidWait() {
+	t := suite.T()
+	suite.skipMode(t, false)
+	client, err := glide.NewClient(suite.defaultClientConfig())
 	require.NoError(t, err)
 	holdWholeScopePool(t, client)
 
@@ -1517,7 +1509,8 @@ func TestScopeAcquireEndsWhenClientClosesMidWait(t *testing.T) {
 	assert.Less(t, elapsed, 2*time.Second, "waited %v past the close for a 5s deadline", elapsed)
 }
 
-func TestScopeAcquireLazyMtlsParentFailsWithoutWaiting(t *testing.T) {
+func (suite *GlideTestSuite) TestScopeAcquireLazyMtlsParentFailsWithoutWaiting() {
+	t := suite.T()
 	// A lazily connected client with TLS material never dials, so there is
 	// nothing for a scoped connection to inherit. Any certificate serves as the
 	// material; read the committed glide-core fixture rather than utils/tls_crts/,
@@ -1547,9 +1540,10 @@ func TestScopeAcquireLazyMtlsParentFailsWithoutWaiting(t *testing.T) {
 }
 
 // A caller that stops waiting must not keep the slot the core later grants it.
-func TestScopeAcquireAbandonedByCallerReturnsItsSlot(t *testing.T) {
-	skipMode(t, false)
-	client := newScopeClient(t, false)
+func (suite *GlideTestSuite) TestScopeAcquireAbandonedByCallerReturnsItsSlot() {
+	t := suite.T()
+	suite.skipMode(t, false)
+	client := suite.newScopeClient(t, false)
 	defer client.Close()
 
 	held := holdWholeScopePool(t, client)
