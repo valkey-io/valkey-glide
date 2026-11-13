@@ -586,16 +586,26 @@ mod standalone_client_tests {
     }
 
     /// A batch `RESET` returns the primary to db 0, so replicas must select db 0
-    /// again before they serve reads.
+    /// again before they serve reads, also when the batch selected another db
+    /// before the `RESET`.
     #[rstest]
+    #[case::reset_only(false)]
+    #[case::select_then_reset(true)]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_batch_reset_selects_database_zero_on_replicas() {
+    fn test_batch_reset_selects_database_zero_on_replicas(#[case] select_first: bool) {
         let servers = vec![
             create_scripted_mock(create_primary_responses(), &[("GET", &["$-1\r\n"])]),
             create_scripted_mock(create_replica_response(), &[("GET", &["$-1\r\n"])]),
         ];
         servers[0].add_response(&select_cmd(1), "+OK\r\n".to_string());
+        let mut reset_batch = vec![redis::cmd("RESET")];
+        let mut reset_replies = vec![Value::SimpleString("RESET".to_string())];
+        if select_first {
+            servers[0].add_response(&select_cmd(2), "+OK\r\n".to_string());
+            reset_batch.insert(0, select_cmd(2));
+            reset_replies.insert(0, Value::Okay);
+        }
         servers[0].add_response(&redis::cmd("RESET"), "+RESET\r\n".to_string());
         // Exact matches, so the replica must receive `SELECT 1`, then `SELECT 0`.
         servers[1].add_response(&select_cmd(1), "+OK\r\n".to_string());
@@ -607,13 +617,16 @@ mod standalone_client_tests {
             let mut client = GlideClient::new(connection_request.into(), None)
                 .await
                 .unwrap();
-            send_batch(&mut client, &[select_cmd(1)]).await;
+            assert_eq!(
+                send_batch(&mut client, &[select_cmd(1)]).await,
+                Value::Array(vec![Value::Okay])
+            );
             // SELECT 1, then a GET.
             get_until_received(&mut client, &servers[1], 2).await;
 
             assert_eq!(
-                send_batch(&mut client, &[redis::cmd("RESET")]).await,
-                Value::Array(vec![Value::SimpleString("RESET".to_string())])
+                send_batch(&mut client, &reset_batch).await,
+                Value::Array(reset_replies)
             );
             // No reads until the replica has selected db 0: without the sync, the
             // replica would stay on db 1 and receive nothing more.

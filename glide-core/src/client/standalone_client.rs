@@ -1318,11 +1318,15 @@ impl StandaloneClient {
             .store(database_id, Ordering::Release);
     }
 
-    /// Records a database that a batch `SELECT` changed on the primary only. Reads
-    /// skip every replica until the background sync task has run the same `SELECT`
-    /// on it, each attempt bounded by `timeout`. A client that never reads from
-    /// replicas only records the database for reconnects.
-    pub(super) fn update_database_after_batch_select(&self, database_id: i64, timeout: Duration) {
+    /// Records a database that a batch `SELECT` or `RESET` changed on the primary
+    /// only. Reads skip every replica until the background sync task has selected
+    /// the database on it, each attempt bounded by `timeout`. A client that never
+    /// reads from replicas only records the database for reconnects.
+    pub(super) fn update_database_after_batch_db_change(
+        &self,
+        database_id: i64,
+        timeout: Duration,
+    ) {
         self.store_connection_database(database_id);
         self.inner.database_sync.next_generation();
         if self.reads_from_replicas() {
@@ -1758,6 +1762,7 @@ mod tests {
             "RESET",
             "SCRIPT LOAD",
             "SELECT",
+            "SLOWLOG GET",
             "SLOWLOG RESET",
             // Connection state.
             "CLIENT CACHING",
@@ -1808,6 +1813,30 @@ mod tests {
                 .arg(words.collect::<Vec<_>>());
             primary_only.get("key");
             assert!(!is_readonly_nonatomic_pipeline(&primary_only), "{command}");
+        }
+
+        // Read-only admin commands that are not sent to every node may use replicas,
+        // as the binding docs state.
+        for command in ["CONFIG GET", "INFO"] {
+            let mut words = command.split(' ');
+            let mut admin_read = redis::Pipeline::new();
+            admin_read
+                .cmd(words.next().unwrap())
+                .arg(words.collect::<Vec<_>>());
+            assert!(is_readonly_nonatomic_pipeline(&admin_read), "{command}");
+        }
+
+        // Not yet in `is_readonly_cmd` (#7703), so they keep a batch on the primary,
+        // as the binding docs state.
+        for command in ["HTTL", "HPTTL", "HEXPIRETIME", "HPEXPIRETIME"] {
+            let mut field_ttl = redis::Pipeline::new();
+            field_ttl
+                .cmd(command)
+                .arg("key")
+                .arg("FIELDS")
+                .arg(1)
+                .arg("f");
+            assert!(!is_readonly_nonatomic_pipeline(&field_ttl), "{command}");
         }
 
         let mut aggregate = redis::Pipeline::new();

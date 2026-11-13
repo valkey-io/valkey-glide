@@ -3694,11 +3694,11 @@ mod scope_pool_tests {
     }
 
     /// `reset_connection_state` must restore the configured db when a SELECT may
-    /// have landed untracked — not only when `current_database` shows drift. An
-    /// earlier batch SELECT that the server applied, followed by a rejected one,
-    /// leaves the connection on the new db while `current_database` still reads the
-    /// configured value; the `db_maybe_dirty` flag is what makes release fail safe
-    /// here. A-B: without the flag (drift-only check) this leaks the wrong db.
+    /// have landed untracked — not only when `current_database` shows drift. With
+    /// `raise_on_error=true`, a batch SELECT that the server applied, followed by a
+    /// rejected one, fails the batch and leaves the connection on the new db while
+    /// `current_database` still reads the configured value; the `db_maybe_dirty`
+    /// flag is what makes release fail safe here. A-B: without the flag (drift-only check) this leaks the wrong db.
     #[tokio::test]
     async fn release_restores_db_when_current_database_underreports() {
         use redis::FromRedisValue as _;
@@ -3717,13 +3717,13 @@ mod scope_pool_tests {
                 .expect("client connects to the test server")
         };
 
-        // SELECT 3 applies; SELECT 99 is rejected. `last_select_db` sees only the
-        // last (99 → ServerError → not recorded), so current_database stays 0 while
-        // the connection is really on db 3.
+        // SELECT 3 applies; SELECT 99 is rejected, so with raise_on_error the batch
+        // fails and no change is recorded: current_database stays 0 while the
+        // connection is really on db 3.
         let mut pipe = redis::pipe();
         pipe.cmd("SELECT").arg(3).cmd("SELECT").arg(99);
         let _ = client
-            .send_pipeline(&pipe, None, false, None, Default::default())
+            .send_pipeline(&pipe, None, true, None, Default::default())
             .await;
         assert_eq!(
             client.current_database(),
