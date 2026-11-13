@@ -5833,7 +5833,13 @@ class Batch(BaseBatch):
     See [Valkey Transactions (Atomic Batches)](https://valkey.io/topics/transactions/) and [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/topics/pipelining/) for details.
 
     Note for Standalone Mode (Cluster Mode Disabled):
-        Standalone Batches are executed on the primary node.
+        Atomic batches, batches sent while a raw `MULTI` is open, and non-atomic batches containing
+        a command that writes, changes connection or server state, uses a cursor, or is sent to every
+        node when run on its own (e.g. `SELECT`, `CLIENT SETNAME`, `CONFIG SET`, `SLOWLOG GET`,
+        `SCAN`) run on the primary node. `HTTL`, `HPTTL`, `HEXPIRETIME` and `HPEXPIRETIME` also
+        keep a batch on the primary. Other non-atomic batches, including ones with read-only admin
+        commands such as `CONFIG GET` or `INFO`, follow the client's `ReadFrom` setting, so with a
+        replica setting they may observe replication lag.
 
     Examples:
         ### Atomic Batch - Transaction:

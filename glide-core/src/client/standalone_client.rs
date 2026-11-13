@@ -10,13 +10,14 @@ use glide_logger::log_info;
 use glide_logger::log_warn;
 use glide_telemetry::Telemetry;
 use redis::aio::ConnectionLike;
-use redis::cluster_routing::{self, ResponsePolicy, Routable, RoutingInfo, is_readonly_cmd};
+use redis::cluster_routing::{
+    self, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo, SlotAddr, is_readonly_cmd,
+};
 use redis::{AddressResolver, PushInfo, RedisError, RedisResult, RetryStrategy, Value};
-use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Weak};
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::{Notify, mpsc};
 use tokio::task;
 
 /// Build a [`crate::tls_reload::CertReloadManager`] when path-based mTLS is
@@ -83,12 +84,83 @@ enum ReadFrom {
     },
 }
 
+/// Shortest and longest wait before retrying replicas that missed a database change.
+const REPLICA_SYNC_MIN_RETRY_DELAY: Duration = Duration::from_secs(1);
+const REPLICA_SYNC_MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
+
+/// Tracks which replicas are on the client's current database.
+///
+/// A `SELECT` inside a batch runs on the primary only. A background task then runs
+/// it on each replica, and reads skip a replica until it has, so reads sent after
+/// the batch returns do not see the previous database.
+#[derive(Debug)]
+struct DatabaseSync {
+    /// Incremented on every database change.
+    generation: AtomicU64,
+    /// The database replicas should be on. A batch `SELECT` writes it before
+    /// incrementing `generation`, so the sync task, which reads `generation` first,
+    /// sees that database or a later one. A `SELECT` sent to every node writes it
+    /// after marking every replica applied, so the task has nothing to send for it.
+    database_id: AtomicI64,
+    /// The last generation each node has applied, indexed like `nodes`.
+    /// The primary's entry is unused: every database change reaches it.
+    node_generations: Vec<AtomicU64>,
+    /// Held while sending `SELECT` to replicas, so the sync task and a `SELECT`
+    /// sent to every node cannot interleave on one replica.
+    replica_select_lock: tokio::sync::Mutex<()>,
+    /// Whether the sync task is running. At most one runs per client.
+    sync_task_running: AtomicBool,
+    /// Wakes the sync task from its retry delay when the database changes.
+    database_changed: Arc<Notify>,
+}
+
+impl DatabaseSync {
+    fn new(node_count: usize) -> Self {
+        Self {
+            generation: AtomicU64::new(0),
+            database_id: AtomicI64::new(0),
+            node_generations: (0..node_count).map(|_| AtomicU64::new(0)).collect(),
+            replica_select_lock: tokio::sync::Mutex::new(()),
+            sync_task_running: AtomicBool::new(false),
+            database_changed: Arc::new(Notify::new()),
+        }
+    }
+
+    /// Starts a database change; replicas are stale until they apply it.
+    fn next_generation(&self) -> u64 {
+        self.generation.fetch_add(1, Ordering::AcqRel) + 1
+    }
+
+    fn is_latest(&self, generation: u64) -> bool {
+        self.generation.load(Ordering::Acquire) == generation
+    }
+
+    fn node_has_applied(&self, index: usize, generation: u64) -> bool {
+        self.node_generations[index].load(Ordering::Acquire) >= generation
+    }
+
+    fn node_is_current(&self, index: usize) -> bool {
+        self.node_has_applied(index, self.generation.load(Ordering::Acquire))
+    }
+
+    fn mark_node_applied(&self, index: usize, generation: u64) {
+        self.node_generations[index].fetch_max(generation, Ordering::AcqRel);
+    }
+
+    fn mark_all_applied(&self, generation: u64) {
+        for index in 0..self.node_generations.len() {
+            self.mark_node_applied(index, generation);
+        }
+    }
+}
+
 #[derive(Debug)]
 struct DropWrapper {
     /// Connection to the primary node in the client.
     primary_index: usize,
     nodes: Vec<ReconnectingConnection>,
     read_from: ReadFrom,
+    database_sync: DatabaseSync,
     /// When true, write commands are blocked and INFO REPLICATION is skipped during connection.
     read_only: bool,
     /// Owns the background mTLS certificate reload task, when path-based reload is
@@ -700,11 +772,13 @@ impl StandaloneClient {
         // Successfully created new client. Update the telemetry
         Telemetry::incr_total_clients(1);
 
+        let database_sync = DatabaseSync::new(nodes.len());
         Ok(Self {
             inner: Arc::new(DropWrapper {
                 primary_index,
                 nodes,
                 read_from,
+                database_sync,
                 read_only,
                 _cert_material_manager: cert_material_manager,
                 cert_material,
@@ -722,8 +796,18 @@ impl StandaloneClient {
         self.inner.nodes.get(self.inner.primary_index).unwrap()
     }
 
-    /// Round-robins through replicas (skipping the primary) and returns the first connected one.
-    /// Falls back to the primary if no replica is connected.
+    /// Whether reads can go to a replica.
+    fn reads_from_replicas(&self) -> bool {
+        self.inner.nodes.len() > 1 && !matches!(self.inner.read_from, ReadFrom::Primary)
+    }
+
+    /// Whether the node at `index` is on the client's current database. See [`DatabaseSync`].
+    fn is_on_current_database(&self, index: usize) -> bool {
+        index == self.inner.primary_index || self.inner.database_sync.node_is_current(index)
+    }
+
+    /// Round-robins through replicas (skipping the primary) and returns the first connected one
+    /// that is on the current database. Falls back to the primary if there is none.
     fn round_robin_read_from_replica(
         &self,
         latest_read_replica_index: &Arc<AtomicUsize>,
@@ -744,7 +828,7 @@ impl StandaloneClient {
             let Some(connection) = self.inner.nodes.get(index) else {
                 continue;
             };
-            if connection.is_connected() {
+            if self.is_on_current_database(index) && connection.is_connected() {
                 let _ = latest_read_replica_index.compare_exchange_weak(
                     initial_index,
                     index,
@@ -773,7 +857,7 @@ impl StandaloneClient {
             let Some(connection) = self.inner.nodes.get(index) else {
                 continue;
             };
-            if connection.is_connected() {
+            if self.is_on_current_database(index) && connection.is_connected() {
                 let _ = latest_read_node_index.compare_exchange_weak(
                     initial_index,
                     index,
@@ -787,8 +871,8 @@ impl StandaloneClient {
 
     /// Round-robins through nodes and returns the first one whose availability zone
     /// matches `client_az`. Skips the primary unless `include_primary` is set.
-    /// Nodes that are not currently connected are skipped rather than awaited.
-    /// Returns `None` if no match is found.
+    /// Nodes that are not currently connected, or not yet on the current database,
+    /// are skipped rather than awaited. Returns `None` if no match is found.
     async fn get_next_local_node(
         &self,
         latest_read_node_index: &Arc<AtomicUsize>,
@@ -808,6 +892,9 @@ impl StandaloneClient {
             // Calculate index based on initial index and check count.
             let index = (initial_index + retries) % self.inner.nodes.len();
             if !include_primary && index == self.inner.primary_index {
+                continue;
+            }
+            if !self.is_on_current_database(index) {
                 continue;
             }
             let node = &self.inner.nodes[index];
@@ -1030,6 +1117,26 @@ impl StandaloneClient {
         Self::send_request(cmd, reconnecting_connection).await
     }
 
+    /// Sends `SELECT` or `RESET`, which change the database, to every node.
+    ///
+    /// Holding the replica `SELECT` lock keeps the replica sync task from sending an
+    /// earlier batch's `SELECT` to a replica after this one. The new generation, set
+    /// before the lock is released, then ends that task's work.
+    async fn send_database_change_to_all_nodes(
+        &mut self,
+        cmd: &redis::Cmd,
+        response_policy: Option<ResponsePolicy>,
+    ) -> RedisResult<Value> {
+        let inner = self.inner.clone();
+        let sync = &inner.database_sync;
+        let _guard = sync.replica_select_lock.lock().await;
+        let result = self.send_request_to_all_nodes(cmd, response_policy).await;
+        if result.is_ok() {
+            sync.mark_all_applied(sync.next_generation());
+        }
+        result
+    }
+
     pub async fn send_command(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
         let Some(cmd_bytes) = Routable::command(cmd) else {
             return self.send_request_to_single_node(cmd, false).await;
@@ -1045,19 +1152,48 @@ impl StandaloneClient {
 
         if RoutingInfo::is_all_nodes(cmd_bytes.as_slice()) {
             let response_policy = ResponsePolicy::for_command(cmd_bytes.as_slice());
+            if matches!(cmd_bytes.as_slice(), b"SELECT" | b"RESET") {
+                return self
+                    .send_database_change_to_all_nodes(cmd, response_policy)
+                    .await;
+            }
             return self.send_request_to_all_nodes(cmd, response_policy).await;
         }
         self.send_request_to_single_node(cmd, is_readonly_cmd(cmd_bytes.as_slice()))
             .await
     }
 
+    /// Sends a batch to one node. A non-atomic batch of only read-only commands
+    /// (see `is_readonly_nonatomic_pipeline`) uses the client's read-from strategy;
+    /// any other batch goes to the primary.
     pub async fn send_pipeline(
         &mut self,
         pipeline: &redis::Pipeline,
         offset: usize,
         count: usize,
     ) -> RedisResult<Vec<Value>> {
-        let reconnecting_connection = self.get_primary_connection();
+        let readonly = self.reads_from_replicas() && is_readonly_nonatomic_pipeline(pipeline);
+        let reconnecting_connection = self.get_connection(readonly).await;
+        Self::send_pipeline_to(reconnecting_connection, pipeline, offset, count).await
+    }
+
+    /// Sends a batch to the primary, whatever its commands. Used for transactions,
+    /// and for batches sent while a raw `MULTI` is open, which the primary must queue.
+    pub async fn send_pipeline_to_primary(
+        &mut self,
+        pipeline: &redis::Pipeline,
+        offset: usize,
+        count: usize,
+    ) -> RedisResult<Vec<Value>> {
+        Self::send_pipeline_to(self.get_primary_connection(), pipeline, offset, count).await
+    }
+
+    async fn send_pipeline_to(
+        reconnecting_connection: &ReconnectingConnection,
+        pipeline: &redis::Pipeline,
+        offset: usize,
+        count: usize,
+    ) -> RedisResult<Vec<Value>> {
         let mut connection = reconnecting_connection.get_connection().await?;
         let result = connection
             .send_packed_commands(pipeline, offset, count)
@@ -1164,13 +1300,38 @@ impl StandaloneClient {
         Ok(Value::Okay)
     }
 
-    /// Update the database id used to establish connection with the servers.
+    /// Update the database id used to establish connection with the servers. Called
+    /// after a `SELECT` or `RESET` that reached every node, which
+    /// [`send_command`](Self::send_command) already marked on every replica.
     pub async fn update_connection_database(&self, database_id: i64) -> RedisResult<Value> {
+        self.store_connection_database(database_id);
+        Ok(Value::Okay)
+    }
+
+    fn store_connection_database(&self, database_id: i64) {
         for node in self.inner.nodes.iter() {
             node.update_connection_database(database_id);
         }
+        self.inner
+            .database_sync
+            .database_id
+            .store(database_id, Ordering::Release);
+    }
 
-        Ok(Value::Okay)
+    /// Records a database that a batch `SELECT` or `RESET` changed on the primary
+    /// only. Reads skip every replica until the background sync task has selected
+    /// the database on it, each attempt bounded by `timeout`. A client that never
+    /// reads from replicas only records the database for reconnects.
+    pub(super) fn update_database_after_batch_db_change(
+        &self,
+        database_id: i64,
+        timeout: Duration,
+    ) {
+        self.store_connection_database(database_id);
+        self.inner.database_sync.next_generation();
+        if self.reads_from_replicas() {
+            start_replica_sync(&self.inner, timeout);
+        }
     }
 
     /// Update the client_name used to create the connection.
@@ -1321,6 +1482,193 @@ fn get_read_from(read_from: Option<super::ReadFrom>) -> ReadFrom {
     }
 }
 
+/// Runs `SELECT database_id` on each replica that has not applied `generation`, and
+/// marks each replica that succeeds. Fails if any replica fails, or if `timeout`
+/// elapses first (including the wait for the lock). Does nothing once a later
+/// database change has started.
+async fn select_database_on_replicas(
+    inner: &DropWrapper,
+    generation: u64,
+    database_id: i64,
+    timeout: Duration,
+) -> RedisResult<()> {
+    let sync = &inner.database_sync;
+    let attempt = async {
+        let _guard = sync.replica_select_lock.lock().await;
+        if !sync.is_latest(generation) {
+            return Ok(());
+        }
+        let mut select = redis::cmd("SELECT");
+        select.arg(database_id);
+        let select = &select;
+        let stale_replicas = inner.nodes.iter().enumerate().filter(|(index, _)| {
+            *index != inner.primary_index && !sync.node_has_applied(*index, generation)
+        });
+        future::join_all(stale_replicas.map(|(index, node)| async move {
+            let Some(mut connection) = node.try_get_connection().await else {
+                return Err(RedisError::from((
+                    redis::ErrorKind::AllConnectionsUnavailable,
+                    "replica is reconnecting",
+                )));
+            };
+            match connection.send_packed_command(select).await {
+                Ok(_) => {
+                    sync.mark_node_applied(index, generation);
+                    Ok(())
+                }
+                Err(err) => {
+                    if err.is_unrecoverable_error() {
+                        node.reconnect(ReconnectReason::ConnectionDropped);
+                    }
+                    Err(err)
+                }
+            }
+        }))
+        .await
+        .into_iter()
+        .collect::<RedisResult<()>>()
+    };
+    tokio::time::timeout(timeout, attempt)
+        .await
+        .unwrap_or_else(|_| Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into()))
+}
+
+/// Starts the replica sync task, or wakes it if it is already running.
+fn start_replica_sync(inner: &Arc<DropWrapper>, timeout: Duration) {
+    let sync = &inner.database_sync;
+    if sync.sync_task_running.swap(true, Ordering::AcqRel) {
+        sync.database_changed.notify_one();
+        return;
+    }
+    task::spawn(sync_replica_databases(
+        Arc::downgrade(inner),
+        sync.database_changed.clone(),
+        timeout,
+    ));
+}
+
+/// Brings every replica to the latest database, then exits. Failed attempts are
+/// retried with exponential backoff, or at once when the database changes again.
+/// Holds only a weak reference while waiting, and stops once the client is dropped.
+async fn sync_replica_databases(
+    inner: Weak<DropWrapper>,
+    database_changed: Arc<Notify>,
+    timeout: Duration,
+) {
+    let mut retry_delay = REPLICA_SYNC_MIN_RETRY_DELAY;
+    loop {
+        let Some(client) = inner.upgrade() else {
+            return;
+        };
+        let sync = &client.database_sync;
+        let generation = sync.generation.load(Ordering::Acquire);
+        let database_id = sync.database_id.load(Ordering::Acquire);
+        match select_database_on_replicas(&client, generation, database_id, timeout).await {
+            Ok(()) if sync.is_latest(generation) => {
+                sync.sync_task_running.store(false, Ordering::Release);
+                // A change made before the store above saw this task running and
+                // only woke it, so keep going unless another task has taken over.
+                if sync.is_latest(generation) || sync.sync_task_running.swap(true, Ordering::AcqRel)
+                {
+                    return;
+                }
+                retry_delay = REPLICA_SYNC_MIN_RETRY_DELAY;
+                continue;
+            }
+            // A later change started during the attempt; sync it now.
+            Ok(()) => {
+                retry_delay = REPLICA_SYNC_MIN_RETRY_DELAY;
+                continue;
+            }
+            Err(err) => log_debug(
+                "replica database sync",
+                format!(
+                    "selecting database {database_id} on replicas failed, retrying in {retry_delay:?}: {err}"
+                ),
+            ),
+        }
+        drop(client);
+        tokio::select! {
+            () = tokio::time::sleep(retry_delay) => {
+                retry_delay = (retry_delay * 2).min(REPLICA_SYNC_MAX_RETRY_DELAY);
+            }
+            () = database_changed.notified() => retry_delay = REPLICA_SYNC_MIN_RETRY_DELAY,
+        }
+    }
+}
+
+fn is_readonly_nonatomic_pipeline(pipeline: &redis::Pipeline) -> bool {
+    !pipeline.is_atomic()
+        && pipeline.cmd_iter().all(|command| {
+            let Some(command_name) = Routable::command(command.as_ref()) else {
+                return false;
+            };
+            is_readonly_cmd(command_name.as_slice())
+                && !requires_primary_pipeline_routing(command.as_ref(), command_name.as_slice())
+        })
+}
+
+/// Whether a command that `is_readonly_cmd` accepts must still keep its pipeline
+/// on the primary. `is_readonly_cmd` lists every command a replica accepts, including
+/// administrative commands and commands that change connection state.
+fn requires_primary_pipeline_routing(command: &redis::Cmd, command_name: &[u8]) -> bool {
+    // A single-command request sends these to every node (`SELECT`, `AUTH`,
+    // `CLIENT SETNAME`, `RESET`, `CONFIG SET`, ...); a pipeline reaches one node only.
+    RoutingInfo::is_all_nodes(command_name)
+        // Other commands that change connection state.
+        || matches!(
+            command_name,
+            b"CLIENT CACHING"
+                | b"CLIENT CAPA"
+                | b"CLIENT NO-EVICT"
+                | b"CLIENT NO-TOUCH"
+                | b"CLIENT REPLY"
+                | b"CLIENT TRACKING"
+                | b"HELLO"
+                | b"PSUBSCRIBE"
+                | b"PUNSUBSCRIBE"
+                | b"SCRIPT DEBUG"
+                | b"SSUBSCRIBE"
+                | b"SUBSCRIBE"
+                | b"SUNSUBSCRIBE"
+                | b"UNSUBSCRIBE"
+        )
+        // Commands that change server state.
+        || matches!(
+            command_name,
+            b"ACL LOAD"
+                | b"BGREWRITEAOF"
+                | b"BGSAVE"
+                | b"CLIENT PAUSE"
+                | b"CLIENT UNBLOCK"
+                | b"CLIENT UNPAUSE"
+                | b"CLUSTER FAILOVER"
+                | b"CLUSTER REPLICATE"
+                | b"CLUSTER SAVECONFIG"
+                | b"LATENCY RESET"
+                | b"MEMORY PURGE"
+                | b"MODULE LOAD"
+                | b"MODULE LOADEX"
+                | b"MODULE UNLOAD"
+                | b"PUBLISH"
+                | b"REPLICAOF"
+                | b"SAVE"
+                | b"SHUTDOWN"
+                | b"SPUBLISH"
+        )
+        // Cursor commands: the next call must reach the same node, and a
+        // round-robin strategy may pick another replica.
+        || matches!(command_name, b"SCAN" | b"HSCAN" | b"SSCAN" | b"ZSCAN")
+        // `FT.AGGREGATE ... WITHCURSOR`, which cluster routing sends to a primary.
+        || (command_name == b"FT.AGGREGATE"
+            && matches!(
+                RoutingInfo::for_routable(command),
+                Some(RoutingInfo::SingleNode(
+                    SingleNodeRoutingInfo::SpecificNode(route)
+                )) if route.slot_addr() == SlotAddr::Master
+            ))
+}
+
 /// Parse replica addresses from a primary's INFO REPLICATION response.
 /// Format: slave0:ip=10.1.35.66,port=6379,state=online,offset=144849,lag=0
 fn parse_replica_addresses(replication_info: &str) -> Vec<NodeAddress> {
@@ -1390,6 +1738,145 @@ fn address_is_known(addr: &NodeAddress, existing: &[String], discovered: &[NodeA
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn readonly_pipeline_requires_all_commands_to_be_readonly_and_non_atomic() {
+        let mut readonly = redis::Pipeline::new();
+        readonly.get("key-1").get("key-2");
+        assert!(is_readonly_nonatomic_pipeline(&readonly));
+
+        let mut mixed = redis::Pipeline::new();
+        mixed.get("key").set("key", "value");
+        assert!(!is_readonly_nonatomic_pipeline(&mixed));
+
+        // Each command passes `is_readonly_cmd`, so only the primary-routing check
+        // keeps it off replicas. Covers the explicit lists and a sample of the
+        // all-nodes commands.
+        for command in [
+            // All-nodes commands.
+            "ACL SETUSER",
+            "AUTH",
+            "CLIENT SETINFO",
+            "CLIENT SETNAME",
+            "CONFIG SET",
+            "RESET",
+            "SCRIPT LOAD",
+            "SELECT",
+            "SLOWLOG GET",
+            "SLOWLOG RESET",
+            // Connection state.
+            "CLIENT CACHING",
+            "CLIENT CAPA",
+            "CLIENT NO-EVICT",
+            "CLIENT NO-TOUCH",
+            "CLIENT REPLY",
+            "CLIENT TRACKING",
+            "HELLO",
+            "PSUBSCRIBE",
+            "PUNSUBSCRIBE",
+            "SCRIPT DEBUG",
+            "SSUBSCRIBE",
+            "SUBSCRIBE",
+            "SUNSUBSCRIBE",
+            "UNSUBSCRIBE",
+            // Server state.
+            "ACL LOAD",
+            "BGREWRITEAOF",
+            "BGSAVE",
+            "CLIENT PAUSE",
+            "CLIENT UNBLOCK",
+            "CLIENT UNPAUSE",
+            "CLUSTER FAILOVER",
+            "CLUSTER REPLICATE",
+            "CLUSTER SAVECONFIG",
+            "LATENCY RESET",
+            "MEMORY PURGE",
+            "MODULE LOAD",
+            "MODULE LOADEX",
+            "MODULE UNLOAD",
+            "PUBLISH",
+            "REPLICAOF",
+            "SAVE",
+            "SHUTDOWN",
+            "SPUBLISH",
+            // Cursors.
+            "HSCAN",
+            "SCAN",
+            "SSCAN",
+            "ZSCAN",
+        ] {
+            assert!(is_readonly_cmd(command.as_bytes()), "{command}");
+            let mut words = command.split(' ');
+            let mut primary_only = redis::Pipeline::new();
+            primary_only
+                .cmd(words.next().unwrap())
+                .arg(words.collect::<Vec<_>>());
+            primary_only.get("key");
+            assert!(!is_readonly_nonatomic_pipeline(&primary_only), "{command}");
+        }
+
+        // Read-only admin commands that are not sent to every node may use replicas,
+        // as the binding docs state.
+        for command in ["CONFIG GET", "INFO"] {
+            let mut words = command.split(' ');
+            let mut admin_read = redis::Pipeline::new();
+            admin_read
+                .cmd(words.next().unwrap())
+                .arg(words.collect::<Vec<_>>());
+            assert!(is_readonly_nonatomic_pipeline(&admin_read), "{command}");
+        }
+
+        // Not yet in `is_readonly_cmd` (#7703), so they keep a batch on the primary,
+        // as the binding docs state.
+        for command in ["HTTL", "HPTTL", "HEXPIRETIME", "HPEXPIRETIME"] {
+            let mut field_ttl = redis::Pipeline::new();
+            field_ttl
+                .cmd(command)
+                .arg("key")
+                .arg("FIELDS")
+                .arg(1)
+                .arg("f");
+            assert!(!is_readonly_nonatomic_pipeline(&field_ttl), "{command}");
+        }
+
+        let mut aggregate = redis::Pipeline::new();
+        aggregate.cmd("FT.AGGREGATE").arg("index").arg("*");
+        assert!(is_readonly_nonatomic_pipeline(&aggregate));
+        aggregate.arg("WITHCURSOR");
+        assert!(!is_readonly_nonatomic_pipeline(&aggregate));
+
+        readonly.atomic();
+        assert!(!is_readonly_nonatomic_pipeline(&readonly));
+    }
+
+    #[test]
+    fn database_sync_tracks_replicas_per_generation() {
+        let sync = DatabaseSync::new(3);
+        assert!((0..3).all(|index| sync.node_is_current(index)));
+
+        let first = sync.next_generation();
+        assert!(sync.is_latest(first));
+        assert!((0..3).all(|index| !sync.node_is_current(index)));
+
+        sync.mark_node_applied(1, first);
+        assert!(sync.node_is_current(1));
+        assert!(!sync.node_is_current(2));
+
+        // A later change makes every replica stale again, including one that
+        // applied the earlier change.
+        let second = sync.next_generation();
+        assert!(!sync.is_latest(first));
+        assert!(!sync.node_is_current(1));
+        assert!(sync.node_has_applied(1, first));
+
+        // A late success for the earlier change cannot move a node backwards.
+        sync.mark_node_applied(2, second);
+        sync.mark_node_applied(2, first);
+        assert!(sync.node_is_current(2));
+
+        sync.mark_all_applied(sync.next_generation());
+        assert!((0..3).all(|index| sync.node_is_current(index)));
+    }
 
     #[test]
     fn test_parse_replica_addresses_basic() {

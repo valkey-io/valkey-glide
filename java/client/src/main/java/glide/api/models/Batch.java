@@ -26,7 +26,15 @@ import lombok.NonNull;
  * @see <a href="https://valkey.io/docs/topics/transactions/">Valkey Transactions (Atomic
  *     Batches)</a>
  * @see <a href="https://valkey.io/topics/pipelining">Valkey Pipelines (Non-Atomic Batches)</a>
- * @remarks Standalone Batches are executed on the primary node.
+ * @remarks Standalone atomic batches, batches sent while a raw {@code MULTI} is open, and
+ *     non-atomic batches containing a command that writes, changes connection or server state, uses
+ *     a cursor, or is sent to every node when run on its own (e.g. {@code SELECT}, {@code CLIENT
+ *     SETNAME}, {@code CONFIG SET}, {@code SLOWLOG GET}, {@code SCAN}) run on the primary node.
+ *     {@code HTTL}, {@code HPTTL}, {@code HEXPIRETIME} and {@code HPEXPIRETIME} also keep a batch
+ *     on the primary. Other non-atomic batches, including ones with read-only admin commands such
+ *     as {@code CONFIG GET} or {@code INFO}, follow the client's {@link
+ *     glide.api.models.configuration.ReadFrom} setting, so with a replica setting they may observe
+ *     replication lag.
  * @example
  *     <pre>{@code
  * // Example of Atomic Batch (Transaction)
