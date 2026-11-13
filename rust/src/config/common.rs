@@ -588,6 +588,8 @@ pub(crate) fn duration_as_millis_u32(d: Duration) -> u32 {
 macro_rules! impl_common_config_builders {
     ($ty:ty) => {
         impl $ty {
+            // TODO #7702: Rename the consuming builder methods below (`tls`, `credentials`, ...) to
+            // `with_*` for consistency with the other builders in this crate.
             /// Configure for a single `host:port`.
             pub fn with_address(host: impl Into<String>, port: u16) -> Self {
                 Self::new(vec![NodeAddress::new(host, port)])

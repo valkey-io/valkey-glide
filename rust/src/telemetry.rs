@@ -48,6 +48,8 @@ use std::time::Duration;
 /// (see [`OpenTelemetryConfig::builder`]).
 pub const DEFAULT_TRACE_SAMPLE_PERCENT: u32 = DEFAULT_TRACE_SAMPLE_PERCENTAGE;
 
+// TODO #7701: Remove `TelemetryExporter` in favor of endpoint strings on `TracesConfig` /
+// `MetricsConfig`, matching the other GLIDE clients.
 /// Where a telemetry signal (traces or metrics) is exported to.
 ///
 /// Mirrors `GlideOpenTelemetrySignalsExporter`.
@@ -127,6 +129,7 @@ impl OpenTelemetryConfigBuilder {
     /// commands (0–100). `None` uses [`DEFAULT_TRACE_SAMPLE_PERCENT`]. A
     /// percentage above 100 is rejected by [`init`].
     #[must_use]
+    // TODO #7701: Replace with `with_traces(TracesConfig)`.
     pub fn with_trace_exporter(
         mut self,
         exporter: TelemetryExporter,
@@ -140,6 +143,7 @@ impl OpenTelemetryConfigBuilder {
 
     /// Enable metrics export to `exporter`.
     #[must_use]
+    // TODO #7701: Replace with `with_metrics(MetricsConfig)`.
     pub fn with_metrics_exporter(mut self, exporter: TelemetryExporter) -> Self {
         self.inner = self.inner.with_metrics_exporter(exporter.to_core());
         self
