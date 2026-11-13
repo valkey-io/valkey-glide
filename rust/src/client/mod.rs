@@ -310,6 +310,7 @@ impl GlideClient {
 
 #[async_trait]
 impl CommandExecutor for GlideClient {
+    // TODO #7699: Create a span for each sampled command and attach it with `Cmd::set_span`.
     async fn execute_command(
         &self,
         mut cmd: Cmd,
@@ -480,6 +481,7 @@ impl GlideClusterClient {
 
 #[async_trait]
 impl CommandExecutor for GlideClusterClient {
+    // TODO #7699: Create a span for each sampled command and attach it with `Cmd::set_span`.
     async fn execute_command(
         &self,
         mut cmd: Cmd,

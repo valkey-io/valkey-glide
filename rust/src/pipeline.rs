@@ -103,6 +103,7 @@ impl ValkeyWrite for Pipeline {
     }
 }
 
+// TODO #7699: Create a span for each sampled batch, with child spans for its commands.
 /// Dispatches a [`Pipeline`] and returns the reply as a [`ValkeyValue`].
 pub(crate) async fn dispatch_pipeline(
     core: &CoreClient,
