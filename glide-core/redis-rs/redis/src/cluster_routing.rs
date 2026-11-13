@@ -1630,6 +1630,7 @@ impl IntoIterator for &ShardAddrs {
 pub struct Route(u16, SlotAddr);
 
 impl Route {
+    // TODO #7681: Reject slot IDs above 16383 when building a slot-ID route.
     /// Returns a new Route.
     pub fn new(slot: u16, slot_addr: SlotAddr) -> Self {
         Self(slot, slot_addr)

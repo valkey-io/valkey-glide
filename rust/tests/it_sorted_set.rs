@@ -188,6 +188,8 @@ matrix_test!(zrangebyscore_withscores_typed_with_float, c, {
     assert!(err.message().contains("usize"));
 });
 
+// TODO #7633: Decode the generic replies into `HashMap<String, f64>` (which fails on RESP3 until
+// the commands send `ZRANGE`), and cover `zrevrange_withscores` and `zrevrangebyscore_withscores`.
 matrix_test!(zrangebyscore_withscores_untyped_with_float, c, {
     let k = common::key("z");
     let _: usize = c

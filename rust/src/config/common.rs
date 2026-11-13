@@ -169,6 +169,7 @@ impl NodeDiscoveryMode {
 
 /// A server address (host + port).
 ///
+// TODO #7645: Add a way to build a Unix socket address for standalone clients.
 /// Mirrors Python `NodeAddress`. Defaults to `localhost:6379`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeAddress {
@@ -199,6 +200,7 @@ impl NodeAddress {
         CoreNodeAddress {
             host: self.host.clone(),
             port: self.port,
+            // TODO #7645: Pass the Unix socket path, once `NodeAddress` can hold one.
             unix_socket_path: None,
         }
     }
@@ -536,6 +538,7 @@ pub(crate) fn split_connection_addr(
             };
             Ok((NodeAddress::new(host, port), tls))
         }
+        // TODO #7645: Accept Unix socket URLs for standalone clients; glide-core supports them.
         redis::ConnectionAddr::Unix(_) => Err(crate::error::GlideError::Configuration(
             "unix-socket connections are not supported by glide-core".into(),
         )),

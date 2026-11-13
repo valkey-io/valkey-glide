@@ -192,4 +192,5 @@ pub use pipeline_options::PipelineOptions;
 
 // External types.
 pub use bytes::Bytes;
+// TODO #7664: Re-export `BigUint` too, once both implement `ToValkeyArgs` and `FromValkeyValue`.
 pub use num_bigint::BigInt;

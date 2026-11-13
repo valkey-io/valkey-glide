@@ -683,6 +683,8 @@ fn get_route(
         ))),
         Value::SlotIdRoute(slot_id_route) => Ok(Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
+                // TODO #7681: Use a checked conversion (`u16::try_from`) and reject out-of-range
+                // slots.
                 slot_id_route.slot_id as u16,
                 get_slot_addr(&slot_id_route.slot_type)?,
             )),

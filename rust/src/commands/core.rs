@@ -907,6 +907,7 @@ implement_commands! {
         build_cmd!("HVALS", key)
     }
 
+    // TODO #7632: Note that glide-core returns a map on RESP2 too, and link to `migration.md`.
     /// `HGETALL`.
     fn hgetall<K: ToSingleValkeyArg>(key: K) -> (std::collections::HashMap<String, String>) {
         build_cmd!("HGETALL", key)
@@ -1175,6 +1176,8 @@ implement_commands! {
         build_cmd!("ZRANGE", key, start, stop)
     }
 
+    // TODO #7632: Note that glide-core returns `(member, score)` pairs on RESP2 too, and link to
+    // `migration.md`.
     /// `ZRANGE WITHSCORES`.
     fn zrange_withscores<K: ToSingleValkeyArg>(key: K, start: isize, stop: isize) -> (Vec<(String, f64)>) {
         build_cmd!("ZRANGE", key, start, stop, "WITHSCORES")
@@ -1200,6 +1203,8 @@ implement_commands! {
         build_cmd!("ZREVRANGEBYLEX", key, max, min, "LIMIT", offset, count)
     }
 
+    // TODO #7633: Send `ZRANGE ... BYSCORE` instead of the deprecated `ZRANGEBYSCORE`, for this and
+    // the other `zrangebyscore*` methods below.
     /// `ZRANGEBYSCORE`.
     fn zrangebyscore<K: ToSingleValkeyArg, M: ToSingleValkeyArg, MM: ToSingleValkeyArg>(key: K, min: M, max: MM) -> (Vec<String>) {
         build_cmd!("ZRANGEBYSCORE", key, min, max)
@@ -1247,6 +1252,8 @@ implement_commands! {
         build_cmd!("ZREMRANGEBYSCORE", key, min, max)
     }
 
+    // TODO #7633: Send `ZRANGE ... REV` (`... BYSCORE REV`) instead of the deprecated `ZREVRANGE` /
+    // `ZREVRANGEBYSCORE`, for this and the other `zrevrange*` methods below.
     /// `ZREVRANGE`.
     fn zrevrange<K: ToSingleValkeyArg>(key: K, start: isize, stop: isize) -> (Vec<String>) {
         build_cmd!("ZREVRANGE", key, start, stop)
