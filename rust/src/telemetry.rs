@@ -30,10 +30,11 @@
 //! # }
 //! ```
 //!
-//! # Runtime requirement
-//! [`init`] installs background batch exporters on the Tokio runtime, so it must
-//! be called from **within a Tokio runtime context** (e.g. inside
-//! `#[tokio::main]` or a `Runtime::block_on`).
+//! # Runtime
+//! [`init`] runs the HTTP and gRPC exporters' background batch workers on
+//! GLIDE's own Tokio runtime, so it can be called from synchronous code or from
+//! within any Tokio runtime, and the exporters keep running if the caller's
+//! runtime shuts down.
 
 use crate::ValkeyResult;
 use crate::error::GlideError;
@@ -184,17 +185,23 @@ pub fn init(config: OpenTelemetryConfig) -> ValkeyResult<()> {
         ));
     }
 
-    // The HTTP and gRPC exporters spawn background tasks, so a Tokio runtime must be in scope.
-    // If there is no existing runtime in scope, use GLIDE's runtime.
-    if tokio::runtime::Handle::try_current().is_ok() {
-        return initialise(config);
-    }
-
-    let glide_runtime = glide_core::client::get_or_init_runtime()
-        .map_err(|e| GlideError::Configuration(format!("Failed to get or init runtime: {e}")))?;
+    // The HTTP and gRPC exporters spawn their batch workers with `tokio::spawn`. Run them on
+    // GLIDE's runtime, as the FFI layer does, so they outlive the caller's runtime.
+    let glide_runtime = glide_runtime()?;
     let _runtime_guard = glide_runtime.runtime.enter();
 
     initialise(config)
+}
+
+/// Returns GLIDE's runtime, initializing it if needed.
+///
+/// `get_or_init_runtime` blocks on a channel the first time it runs, which panics inside a
+/// Tokio runtime, so it's called on a separate thread.
+fn glide_runtime() -> ValkeyResult<&'static glide_core::client::GlideRt> {
+    std::thread::spawn(glide_core::client::get_or_init_runtime)
+        .join()
+        .map_err(|_| GlideError::Configuration("Failed to get or init runtime".to_string()))?
+        .map_err(|e| GlideError::Configuration(format!("Failed to get or init runtime: {e}")))
 }
 
 /// Hands the configuration to glide-core, with a Tokio runtime already in scope.
