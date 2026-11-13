@@ -170,8 +170,7 @@ impl OpenTelemetryConfigBuilder {
 /// Initialise process-global OpenTelemetry with the given configuration.
 ///
 /// Idempotent: the first successful call wins and later calls are no-ops
-/// (returning `Ok`). Must be called from within a Tokio runtime (see the
-/// [module docs](self)).
+/// (returning `Ok`).
 ///
 /// # Errors
 /// Returns [`GlideError::Configuration`] if the configuration is invalid
@@ -185,6 +184,21 @@ pub fn init(config: OpenTelemetryConfig) -> ValkeyResult<()> {
         ));
     }
 
+    // The HTTP and gRPC exporters spawn background tasks, so a Tokio runtime must be in scope.
+    // If there is no existing runtime in scope, use GLIDE's runtime.
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return initialise(config);
+    }
+
+    let glide_runtime = glide_core::client::get_or_init_runtime()
+        .map_err(|e| GlideError::Configuration(format!("Failed to get or init runtime: {e}")))?;
+    let _runtime_guard = glide_runtime.runtime.enter();
+
+    initialise(config)
+}
+
+/// Hands the configuration to glide-core, with a Tokio runtime already in scope.
+fn initialise(config: OpenTelemetryConfig) -> ValkeyResult<()> {
     GlideOpenTelemetry::initialise(config.inner.build())
         .map_err(|e| GlideError::Configuration(format!("OpenTelemetry init failed: {e}")))
 }
