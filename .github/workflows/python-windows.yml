@@ -242,14 +242,14 @@ jobs:
                   & "$env:RUNNER_TEMP\smoke-async\Scripts\python.exe" -m pytest --noconftest -o "addopts=" python\tests\test_windows_wheels.py python\tests\async_tests\test_pipe_reader.py
 
             - name: Upload Python Async client wheel
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
                   name: windows-ci-${{ matrix.build.TARGET }}-py${{ matrix.build.PYTHON_VERSION }}-async
                   path: python/glide-async/wheels
                   if-no-files-found: error
 
             - name: Upload Python Sync client wheel
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
                   name: windows-ci-${{ matrix.build.TARGET }}-py${{ matrix.build.PYTHON_VERSION }}-sync
                   path: python/glide-sync/wheels
