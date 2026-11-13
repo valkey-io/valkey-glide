@@ -1544,7 +1544,7 @@ pub(crate) mod shared_client_tests {
         client: Client,
         client_id: u64,
         scope_id: u64,
-        pool: std::sync::Arc<tokio::sync::Mutex<glide_core::pool::ScopePool>>,
+        pool: std::sync::Arc<glide_core::pool::ScopeMutex>,
         released: std::cell::Cell<bool>,
     }
 
@@ -1574,14 +1574,14 @@ pub(crate) mod shared_client_tests {
                 glide_core::pool::ScopeTarget::ClusterPrimary(_) => Some(routing_slot),
             };
             let reservation = {
-                let mut guard = pool.lock().await;
+                let mut guard = pool.lock();
                 match guard.try_acquire(
                     glide_core::pool::get_scope_registry(),
                     target.clone(),
                     client.current_database(),
                     acquisition_slot,
                 ) {
-                    glide_core::pool::ScopeAcquire::Reserved(reservation) => reservation,
+                    glide_core::pool::ScopeAcquire::Reserved { reservation, .. } => reservation,
                     other => panic!("expected a fresh reservation from an empty pool: {other:?}"),
                 }
             };
@@ -1595,7 +1595,7 @@ pub(crate) mod shared_client_tests {
             .await;
 
             let scope_id = {
-                let mut guard = pool.lock().await;
+                let mut guard = pool.lock();
                 match guard.try_acquire(
                     glide_core::pool::get_scope_registry(),
                     target,
@@ -1875,7 +1875,7 @@ pub(crate) mod shared_client_tests {
 
             // A clean protocol error leaves the connection reusable: it is returned
             // to idle and still counted, rather than discarded.
-            let pool = scope.pool.lock().await;
+            let pool = scope.pool.lock();
             assert!(
                 !pool.idle.is_empty(),
                 "connection with a clean protocol error was discarded instead of reused"
@@ -1937,7 +1937,7 @@ pub(crate) mod shared_client_tests {
 
             // The discarded connection must not be reusable: not parked as idle,
             // not tracked as in-use, and not counted toward the pool total.
-            let pool = scope.pool.lock().await;
+            let pool = scope.pool.lock();
             assert!(
                 pool.idle.is_empty(),
                 "cancelled blocking connection was returned to the idle pool"
@@ -1983,7 +1983,7 @@ pub(crate) mod shared_client_tests {
 
             // A seated + acquired scope means the slot is counted.
             {
-                let pool = scope.pool.lock().await;
+                let pool = scope.pool.lock();
                 assert_eq!(
                     pool.total_count.load(std::sync::atomic::Ordering::Acquire),
                     1,
@@ -2008,7 +2008,7 @@ pub(crate) mod shared_client_tests {
             // pool lock ourselves (as release_scope's Ok arm does) and stay inside
             // the runtime so the best-effort cleanup task has a reactor.
             {
-                let mut pool = scope.pool.lock().await;
+                let mut pool = scope.pool.lock();
                 let reclaimed = pool.release(scope.scope_id, registry);
                 assert!(reclaimed, "release should report the scope was reclaimed");
 
@@ -2240,7 +2240,7 @@ pub(crate) mod shared_client_tests {
             assert!(blpop.await.expect("join").is_err());
 
             let registry = glide_core::pool::get_scope_registry();
-            let mut pool = scope.pool.lock().await;
+            let mut pool = scope.pool.lock();
             assert!(pool.release(scope.scope_id, registry));
             assert!(
                 pool.idle.is_empty(),
@@ -5640,7 +5640,7 @@ pub(crate) mod shared_client_tests {
                 .expect("scope works before the password changes");
             scope::release_scope(scope_a, client_id, &runtime);
             let pool = glide_core::pool::get_or_create_scope_pool(client_id, bytes.clone()).pool;
-            retry(|| async { (pool.lock().await.idle.len() == 1).then_some(()) }).await;
+            retry(|| async { (pool.lock().idle.len() == 1).then_some(()) }).await;
 
             // `<OLD_PASSWORD` removes the old password, so any later AUTH with it
             // is rejected.
@@ -5795,7 +5795,7 @@ pub(crate) mod shared_client_tests {
 
             scope.release();
 
-            let pool = scope.pool.lock().await;
+            let pool = scope.pool.lock();
             assert!(
                 pool.idle.is_empty(),
                 "a connection whose re-auth failed must not be returned to idle"
@@ -6368,12 +6368,16 @@ pub(crate) mod shared_client_tests {
     /// 1. (all versions) A MULTI opened on `AllNodes` must be cleared on every node
     ///    on release: re-acquire and assert `PING` to each primary returns `PONG`
     ///    (an open MULTI replies `QUEUED`). Fails deterministically on the pre-fix
-    ///    single-node DISCARD, which leaves ≥2 of 3 primaries dirty.
+    ///    single-node DISCARD, which leaves ≥2 of 3 primaries dirty. Releasing that
+    ///    no-MULTI borrow must also re-idle despite every node's "DISCARD without
+    ///    MULTI".
     /// 2. (all versions) A MULTI opened on a SINGLE primary must still re-idle: the
     ///    release DISCARD fans out to `AllNodes`, so the owner answers `+OK` while
     ///    the siblings answer "DISCARD without MULTI" and the aggregate is `Err` —
     ///    which must be tolerated, not read as a reset failure that discards the
     ///    connection. Exercises the classify-by-message branch on a live cluster.
+    ///    A primary left with `CLIENT REPLY OFF` must instead be discarded, even
+    ///    though a sibling's "DISCARD without MULTI" can return before it times out.
     /// 3. (Valkey 9.0+ multi-db clusters) A borrow that `SELECT`ed another db must
     ///    be restored to the configured db on release — guards against the wrong
     ///    fix of skipping `SELECT` by topology, which would leak db 7.
@@ -6382,11 +6386,10 @@ pub(crate) mod shared_client_tests {
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_cluster_pool_release_returns_clean_connection_to_idle() {
-        use glide_core::pool::{ClientPool, PoolConfig, release_client_async};
+        use glide_core::pool::{ClientPool, PoolConfig, PoolMutex, release_client_async};
         use protobuf::Message as _;
         use std::sync::Arc;
         use std::time::Duration;
-        use tokio::sync::Mutex as TokioMutex;
 
         block_on_all(async {
             // Dedicated 3-shard cluster: a known N≥2 so the AllNodes-vs-one-node
@@ -6418,16 +6421,26 @@ pub(crate) mod shared_client_tests {
                 configured_database_id: 0,
                 abandon_timeout: Duration::ZERO,
             };
-            let pool_arc = Arc::new(TokioMutex::new(
+            let pool_arc = Arc::new(PoolMutex::new(
                 ClientPool::new(pool_config).expect("valid pool config"),
             ));
 
             // ── borrow helpers ──────────────────────────────────────────────
-            let add_and_acquire = |pool_arc: Arc<TokioMutex<ClientPool>>, client: Client| async move {
-                let mut pool = pool_arc.lock().await;
+            let add_and_acquire = |pool_arc: &Arc<PoolMutex>, client: Client| {
+                let mut pool = pool_arc.lock();
                 let id = pool.add_client(client);
                 assert_eq!(pool.try_acquire(), id as i64, "the fresh client is idle");
                 id
+            };
+            // The pool lock is released before anything is awaited on the client.
+            let borrowed = |pool_arc: &Arc<PoolMutex>, client_id: u64| -> Client {
+                pool_arc
+                    .lock()
+                    .in_use
+                    .get(&client_id)
+                    .expect("borrowed entry")
+                    .client
+                    .clone()
             };
 
             let all_nodes = || RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
@@ -6436,19 +6449,17 @@ pub(crate) mod shared_client_tests {
             let client = Client::new(connection_request.clone().into(), None)
                 .await
                 .expect("cluster client creation");
-            let client_id = add_and_acquire(pool_arc.clone(), client).await;
+            let client_id = add_and_acquire(&pool_arc, client);
             {
-                let pool = pool_arc.lock().await;
-                let mut entry = pool.in_use.get_mut(&client_id).expect("borrowed entry");
-                entry
-                    .client
+                let mut client = borrowed(&pool_arc, client_id);
+                client
                     .send_command(&mut redis::cmd("MULTI"), Some(all_nodes()))
                     .await
                     .expect("MULTI on all primaries");
             }
             release_client_async(pool_arc.clone(), client_id).await;
             {
-                let mut pool = pool_arc.lock().await;
+                let mut pool = pool_arc.lock();
                 assert_eq!(
                     pool.idle_count(),
                     1,
@@ -6465,10 +6476,8 @@ pub(crate) mod shared_client_tests {
                 );
             }
             {
-                let pool = pool_arc.lock().await;
-                let mut entry = pool.in_use.get_mut(&client_id).expect("reused entry");
-                let reply = entry
-                    .client
+                let mut client = borrowed(&pool_arc, client_id);
+                let reply = client
                     .send_command(&mut redis::cmd("PING"), Some(all_nodes()))
                     .await
                     .expect("PING all primaries on the reused connection");
@@ -6491,6 +6500,18 @@ pub(crate) mod shared_client_tests {
                     );
                 }
             }
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock();
+                assert_eq!(
+                    pool.idle_count(),
+                    1,
+                    "a no-MULTI cluster release must re-idle"
+                );
+                assert!(pool.drain_discarded_ids().is_empty());
+                // Keep it borrowed so section 2 starts from the same pool state.
+                assert_eq!(pool.try_acquire(), client_id as i64);
+            }
 
             // ── 2. MULTI open on a SINGLE primary: release must still re-idle ──
             // The production shape the AllNodes DISCARD aggregation must tolerate:
@@ -6502,7 +6523,7 @@ pub(crate) mod shared_client_tests {
             let client = Client::new(connection_request.clone().into(), None)
                 .await
                 .expect("cluster client creation");
-            let client_id = add_and_acquire(pool_arc.clone(), client).await;
+            let client_id = add_and_acquire(&pool_arc, client);
             let one_primary = {
                 let key = format!("{{{}}}:pool7301multi", generate_random_string(8));
                 RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
@@ -6511,17 +6532,15 @@ pub(crate) mod shared_client_tests {
                 )))
             };
             {
-                let pool = pool_arc.lock().await;
-                let mut entry = pool.in_use.get_mut(&client_id).expect("borrowed entry");
-                entry
-                    .client
+                let mut client = borrowed(&pool_arc, client_id);
+                client
                     .send_command(&mut redis::cmd("MULTI"), Some(one_primary.clone()))
                     .await
                     .expect("MULTI on a single primary");
             }
             release_client_async(pool_arc.clone(), client_id).await;
             {
-                let mut pool = pool_arc.lock().await;
+                let mut pool = pool_arc.lock();
                 assert_eq!(
                     pool.idle_count(),
                     1,
@@ -6540,10 +6559,8 @@ pub(crate) mod shared_client_tests {
                 );
             }
             {
-                let pool = pool_arc.lock().await;
-                let mut entry = pool.in_use.get_mut(&client_id).expect("reused entry");
-                let reply = entry
-                    .client
+                let mut client = borrowed(&pool_arc, client_id);
+                let reply = client
                     .send_command(&mut redis::cmd("PING"), Some(all_nodes()))
                     .await
                     .expect("PING all primaries on the reused connection");
@@ -6561,6 +6578,39 @@ pub(crate) mod shared_client_tests {
                 }
             }
 
+            // ── 2b. a node left unable to reply must be discarded, not re-idled ──
+            // Short timeout: CLIENT REPLY OFF and the release liveness PING time out.
+            let short_timeout = create_connection_request(
+                &addresses,
+                &TestConfiguration {
+                    cluster_mode: ClusterMode::Enabled,
+                    request_timeout: Some(500),
+                    ..Default::default()
+                },
+            );
+            let client = Client::new(short_timeout.into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(&pool_arc, client);
+            {
+                let mut client = borrowed(&pool_arc, client_id);
+                let _ = client
+                    .send_command(
+                        redis::cmd("CLIENT").arg("REPLY").arg("OFF"),
+                        Some(one_primary.clone()),
+                    )
+                    .await;
+            }
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock();
+                assert_eq!(
+                    pool.drain_discarded_ids(),
+                    vec![client_id],
+                    "a CLIENT REPLY OFF node must fail the reset and be discarded"
+                );
+            }
+
             // ── 3. db drift must be restored (Valkey 9.0+ multi-db cluster) ──
             let mut version_probe = Client::new(connection_request.clone().into(), None)
                 .await
@@ -6569,7 +6619,7 @@ pub(crate) mod shared_client_tests {
                 let client = Client::new(connection_request.into(), None)
                     .await
                     .expect("cluster client creation");
-                let client_id = add_and_acquire(pool_arc.clone(), client).await;
+                let client_id = add_and_acquire(&pool_arc, client);
                 // Drift to db 7 on a single primary (reachable in production via
                 // customCommand), using a hash-tagged key's slot.
                 let key = format!("{{{}}}:pool7301", generate_random_string(8));
@@ -6577,19 +6627,17 @@ pub(crate) mod shared_client_tests {
                     Route::new(get_slot(key.as_bytes()), SlotAddr::Master),
                 ));
                 {
-                    let pool = pool_arc.lock().await;
-                    let mut entry = pool.in_use.get_mut(&client_id).expect("borrowed entry");
+                    let mut client = borrowed(&pool_arc, client_id);
                     let mut select7 = redis::cmd("SELECT");
                     select7.arg("7");
-                    entry
-                        .client
+                    client
                         .send_command(&mut select7, Some(route.clone()))
                         .await
                         .expect("SELECT 7 on a 9.0+ cluster");
                 }
                 release_client_async(pool_arc.clone(), client_id).await;
                 {
-                    let mut pool = pool_arc.lock().await;
+                    let mut pool = pool_arc.lock();
                     assert_eq!(
                         pool.idle_count(),
                         1,
@@ -6602,12 +6650,10 @@ pub(crate) mod shared_client_tests {
                     );
                 }
                 {
-                    let pool = pool_arc.lock().await;
-                    let mut entry = pool.in_use.get_mut(&client_id).expect("reused entry");
+                    let mut client = borrowed(&pool_arc, client_id);
                     let mut info = redis::cmd("CLIENT");
                     info.arg("INFO");
-                    let reply = entry
-                        .client
+                    let reply = client
                         .send_command(&mut info, Some(route))
                         .await
                         .expect("CLIENT INFO on the reused connection");

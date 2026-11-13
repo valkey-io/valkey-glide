@@ -1,9 +1,17 @@
 # Changelog
 
-## Pending 2.6
+## Pending 2.7
+
+### Fixes
+
+* Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
+* Core/FFI: create clients on a runtime worker so the connect does not use the caller's stack ([#7644](https://github.com/valkey-io/valkey-glide/pull/7644))
+
+## 2.6
 
 ### Features
 
+* Go: Add valkey-search 1.3 support, including scoring, cursors, and `FT.HYBRID` ([#7380](https://github.com/valkey-io/valkey-glide/pull/7380))
 * All: Add support for Valkey 9.0 commands:
   * `DELIFEQ` ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Java, Node, Python, Go: Add support for Valkey 9.1 commands:
@@ -12,6 +20,7 @@
 * All: Add support for Valkey 9.2 commands:
   * `SISMEMBER` with `XX` option ([#7202](https://github.com/valkey-io/valkey-glide/issues/7202))
   * `SET` with `IFNE` option ([#7237](https://github.com/valkey-io/valkey-glide/issues/7237))
+* Python/CI: Add experimental Windows AMD64 (CPython 3.9–3.14) and ARM64 (CPython 3.11–3.14) wheel builds for the async and sync clients, including Windows FFI width fixes and a threaded async response-pipe reader. Wheels remain build-only CI artifacts; Windows integration coverage is required before PyPI publishing ([#6826](https://github.com/valkey-io/valkey-glide/pull/6826)).
 * Rust: Implement `ToSingleValkeyArg` and `ToValkeyArgs` for option types ([#7381](https://github.com/valkey-io/valkey-glide/issues/7381))
 * Core: Add `glide-rdma` crate, an RDMA transfer layer over libfabric (loaded at runtime), for later RDMA support ([#7177](https://github.com/valkey-io/valkey-glide/pull/7177))
 * Core: Add opt-in RDMA support to glide-core behind the `rdma` feature: `RdmaConfig` in the connection request, `Client::register_rdma_region` / `rdma_get` / `rdma_set` / `close_rdma`, and the `rdma_parked_bytes` / `rdma_leaked_bytes` counters. Transfers route to the key's primary and have no request timeout. `BLOB.RDMA_*` commands are refused when sent any other way, in every build ([#7412](https://github.com/valkey-io/valkey-glide/pull/7412))
@@ -22,6 +31,8 @@
 
 ### Fixes
 
+* Core, Go, Java, Node, Python: A `ClientPool` call no longer gives up when another thread holds the pool lock; it waits for the lock instead. Go and Python pool metrics read from inside a client callback no longer come back as zeros, Java's `acquire` no longer backs off and retries while an idle client exists, Go, Python and Java `close()` have finished tearing the pool down when they return, and a command's activity refresh is no longer skipped, so the abandon monitor no longer sees a stale timer for a client in use ([#7507](https://github.com/valkey-io/valkey-glide/issues/7507))
+* Core, Go, Java, Node, Python: Releasing a scope has finished when the release call returns, also when another thread holds the scope pool lock at that moment; before, the release was deferred to a background task and the next acquire could find the connection still borrowed ([#7514](https://github.com/valkey-io/valkey-glide/issues/7514))
 * Core: Scoped connections authenticate with the client's current password after `update_connection_password` (or a user-issued `AUTH`/`HELLO`), instead of the password the client was created with: a scope connection built after the rotation sends the new password, and an idle one re-authenticates before its next command once the server has accepted the new password (`immediate_auth`, `AUTH`, `HELLO`); a store-only update leaves open scope connections as they are, like the client's own connection ([#7334](https://github.com/valkey-io/valkey-glide/issues/7334))
 * Core: `GETSET` compresses value when enabled ([#7411](https://github.com/valkey-io/valkey-glide/issues/7411))
 * Core: Reject `SET` with `IFEQ` or `IFNE` when compression is enabled ([#7365](https://github.com/valkey-io/valkey-glide/issues/7365))
@@ -41,6 +52,7 @@
 * Core: A scope pool no longer leaks capacity when connecting to a paused or unreachable shard. A reserved `max_total` slot is now held by an RAII guard that returns it on every creation outcome — including a creation cancelled mid-handshake, which previously leaked the slot until scopes to healthy shards could no longer be opened — and decrements saturate at zero so a give-back cannot wrap into permanent exhaustion. Concurrent retries of a single acquire are deduped to one in-flight creation, so a retry storm against a slow shard can no longer consume the whole pool, while distinct concurrent acquires each still open their own connection ([#6966](https://github.com/valkey-io/valkey-glide/issues/6966), [#7067](https://github.com/valkey-io/valkey-glide/issues/7067))
 * Core/All, Node: Fix ClientPool abandon monitor race for blocking commands ([#7063](https://github.com/valkey-io/valkey-glide/pull/7063))
 * Core: A cluster `ClientPool` no longer leaks a borrow's open transaction to the next borrower, nor discards connections from a pool on a non-zero database. The release-time reset sent `DISCARD` to a single node (leaving an open `MULTI` on the other primaries) and `SELECT <configured_db>` on every release (which a cluster server rejects for a non-zero db, failing the reset so the connection was thrown away); it now routes `DISCARD` to all cluster nodes and sends `SELECT` only when the database may have changed during the borrow ([#7301](https://github.com/valkey-io/valkey-glide/issues/7301))
+* Core: `ClientPool` release again discards a connection it can't reset instead of handing it to the next borrower. Since 2.6.0-rc2 a connection left with `CLIENT REPLY OFF` on any node, including a read replica or one cluster node, returned to the pool and every later command on it timed out; a connection that subscribed during the borrow is now discarded as well ([#7544](https://github.com/valkey-io/valkey-glide/issues/7544))
 * Python: An async client that is garbage-collected without `close()` now closes its connection. The client registry held a strong reference to every client, so clients created on short-lived event loops (`asyncio.run()` in a worker thread) kept their server connections open until the process exited. Such a client now emits a `ResourceWarning`, visible under `PYTHONDEVMODE` or `-W error::ResourceWarning` ([#7122](https://github.com/valkey-io/valkey-glide/issues/7122))
 * Core/All: A `ClientPool` client dropped by idle-timeout eviction, by a failed state reset on release, or by a release cancelled mid-reset is now reported to the binding, which reclaims the adapter or handle it holds for that client. Previously only the abandon monitor reported discards, so every other drop left the binding's side (in FFI, a tokio runtime and its connection) alive until the pool was destroyed; under low traffic the pool accumulated one dead runtime per eviction for its lifetime ([#7168](https://github.com/valkey-io/valkey-glide/issues/7168))
 * Core: Scoped cluster connections are keyed on the resolved primary's address instead of the requested hash slot, so cluster slot 0 is treated as an ordinary slot rather than a wildcard that matched every idle scoped connection. A scope for a key in slot 0 no longer reuses a connection to a different primary and receives an unfollowable `MOVED`, while slots that share a primary now share its idle connections. A slot whose primary cannot currently be resolved (topology not yet fetched, or mid-resharding) fails the acquire with the reason logged instead of connecting to a configured seed node, and a full pool whose idle connections all target other primaries evicts its oldest idle connection instead of reporting exhaustion ([#6975](https://github.com/valkey-io/valkey-glide/issues/6975))

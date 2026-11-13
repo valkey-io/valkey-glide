@@ -27,7 +27,7 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/lint-rust/action.yml
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
@@ -49,7 +49,7 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/lint-rust/action.yml
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
@@ -91,18 +91,18 @@ jobs:
 
             - name: Run glide-ffi tests
               working-directory: ./ffi
-              run: cargo test
+              run: cargo test --locked
 
             - name: Install libfabric
               uses: ./.github/actions/install-libfabric
 
             - name: Run glide-ffi RDMA tests
               working-directory: ./ffi
-              run: cargo test --features rdma
+              run: cargo test --locked --features rdma
 
             - name: Run glide-ffi MIRI tests
               working-directory: ./ffi/miri-tests
-              run: cargo miri test
+              run: cargo miri test --locked
 
     lint:
         runs-on: ubuntu-24.04
@@ -112,7 +112,7 @@ jobs:
               with:
                   persist-credentials: false
 
-            - uses: ./.github/workflows/lint-rust
+            - uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: ffi
                   github-token: ${{ secrets.GITHUB_TOKEN }}

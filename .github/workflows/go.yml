@@ -12,15 +12,23 @@ on:
         paths:
             - glide-core/src/**
             - glide-core/redis-rs/redis/src/**
+            - glide-core/Cargo.toml
+            - glide-core/build.rs
+            - glide-core/redis-rs/redis/Cargo.toml
+            - glide-logger/**
+            - glide-telemetry/**
             - ffi/src/**
+            - ffi/Cargo.toml
+            - ffi/Cargo.lock
+            - ffi/cbindgen.toml
             - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
             - .github/actions/install-shared-dependencies/action.yml
-            - .github/workflows/test-benchmark/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/test-benchmark/action.yml
+            - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
-            - .github/workflows/create-test-matrices/action.yml
+            - .github/actions/create-test-matrices/action.yml
             - .github/json_matrices/**
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
@@ -28,15 +36,23 @@ on:
         paths:
             - glide-core/src/**
             - glide-core/redis-rs/redis/src/**
+            - glide-core/Cargo.toml
+            - glide-core/build.rs
+            - glide-core/redis-rs/redis/Cargo.toml
+            - glide-logger/**
+            - glide-telemetry/**
             - ffi/src/**
+            - ffi/Cargo.toml
+            - ffi/Cargo.lock
+            - ffi/cbindgen.toml
             - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
             - .github/actions/install-shared-dependencies/action.yml
-            - .github/workflows/test-benchmark/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/test-benchmark/action.yml
+            - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
-            - .github/workflows/create-test-matrices/action.yml
+            - .github/actions/create-test-matrices/action.yml
             - .github/json_matrices/**
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
@@ -103,12 +119,12 @@ jobs:
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
-              uses: ./.github/workflows/create-test-matrices
+              uses: ./.github/actions/create-test-matrices
               with:
                   language-name: go
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
-                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
-                  run-with-macos: ${{ github.event.inputs.run-with-macos }}
+                  run-full-matrix: ${{ inputs.full-matrix == true || github.event_name == 'schedule' }}
+                  run-with-macos: ${{ inputs.run-with-macos }}
                   use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
 
     approve-self-hosted:
@@ -166,9 +182,9 @@ jobs:
 
             - name: Run patch to test with RC
               working-directory: go
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
@@ -179,7 +195,7 @@ jobs:
             - name: Install & build & test
               working-directory: go
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
                   VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
                   AWS_ACCESS_KEY_ID: test_access_key
                   AWS_SECRET_ACCESS_KEY: test_secret_key
@@ -188,13 +204,11 @@ jobs:
                   ulimit -n 65536 2>/dev/null || true
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
-                    make -k integ-test
+                    make -k integ-test tls-test opentelemetry-test
                   else
                     make install-tools build
-                    make -k unit-test integ-test
+                    make -k unit-test integ-test tls-test opentelemetry-test
                   fi
-                  make -k tls-test tls=true
-                  make -k opentelemetry-test
 
             - name: Run Example Tests
               # Runs on the newest Valkey engine in the matrix so that examples for
@@ -203,11 +217,11 @@ jobs:
               # version-gated integration tests.
               working-directory: go
               # TODO #7312: Bump to 9.2.0 once released
-              if: ${{ matrix.engine.type == 'valkey' && matrix.engine.version == '9.2.0-rc1' && !github.event.inputs.rc-version }}
+              if: ${{ matrix.engine.type == 'valkey' && matrix.engine.version == '9.2.0-rc1' && !inputs.rc-version }}
               run: |
                   make -k example-test
 
-            - uses: ./.github/workflows/test-benchmark
+            - uses: ./.github/actions/test-benchmark
               with:
                   language-flag: -go
                   engine-run: ${{ matrix.engine.run }}
@@ -229,7 +243,7 @@ jobs:
     lint:
         timeout-minutes: 10
         runs-on: ubuntu-24.04
-        if: ${{ !github.event.inputs.rc-version }}
+        if: ${{ !inputs.rc-version }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -254,7 +268,7 @@ jobs:
                       x86_64-unknown-linux-gnu
 
             - name: lint rust
-              uses: ./.github/workflows/lint-rust
+              uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: ffi
                   github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -266,7 +280,7 @@ jobs:
 
     get-containers:
         runs-on: ubuntu-24.04
-        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
+        if: ${{ inputs.full-matrix == true || github.event_name == 'schedule' }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
@@ -275,7 +289,7 @@ jobs:
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - id: get-matrices
-              uses: ./.github/workflows/create-test-matrices
+              uses: ./.github/actions/create-test-matrices
               with:
                   language-name: go
                   run-full-matrix: true
@@ -286,7 +300,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-containers, approve-self-hosted]
         if: always() && needs.get-containers.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
-        timeout-minutes: 25
+        timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
@@ -295,16 +309,17 @@ jobs:
                 host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
         container:
             image: ${{ matrix.host.IMAGE }}
-            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
             - name: Install git
+              env:
+                  TARGET: ${{ matrix.host.TARGET }}
               run: |
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
                     yum update
                     yum install -y git tar
                     git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                    echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
-                  elif [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
+                    echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> "$GITHUB_ENV"
+                  elif [[ "$TARGET" == *"musl"* ]]; then
                     apk update
                     apk add git bash tar
                     git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -334,7 +349,7 @@ jobs:
               run: |
                   apk add clang lld compiler-rt
                   # Ensure Rust is in PATH for container environments
-                  echo "$HOME/.cargo/bin:$PATH" >> $GITHUB_PATH
+                  echo "$HOME/.cargo/bin:$PATH" >> "$GITHUB_PATH"
 
             - name: Install zig
               if: ${{ contains(matrix.host.TARGET, 'musl') }}
@@ -351,9 +366,9 @@ jobs:
 
             - name: Run patch to test with RC
               working-directory: go
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
@@ -364,7 +379,7 @@ jobs:
             - name: Install & build & test
               working-directory: go
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
                   VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
                   AWS_ACCESS_KEY_ID: test_access_key
                   AWS_SECRET_ACCESS_KEY: test_secret_key
@@ -373,10 +388,10 @@ jobs:
                   ulimit -n 65536 2>/dev/null || true
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
-                    make -k integ-test
+                    make -k integ-test tls-test
                   else
                     make install-tools build
-                    make -k unit-test integ-test
+                    make -k unit-test integ-test tls-test
                   fi
 
             - name: Upload test reports
@@ -436,25 +451,23 @@ jobs:
 
             - name: Run patch to test with RC
               working-directory: go
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
             - name: Install & build & test
               working-directory: go
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
-                    make -k long-timeout-test test-filter=TestLongTimeout
                   else
                     make install-tools build
-                    make -k long-timeout-test test-filter=TestLongTimeout
                   fi
-                  make -k pubsub-test
+                  make -k long-timeout-test pubsub-test test-filter=TestLongTimeout
 
             - name: Upload logs and reports
               if: always()

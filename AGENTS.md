@@ -94,6 +94,7 @@ make java-lint     # Run Java spotlessApply
 make python-lint   # Run Python linters via dev.py
 make node-lint     # Run Node.js linters
 make go-lint       # Run Go linters
+make action-lint   # Run GitHub Actions linters
 
 # Formatting (Markdown/YAML/JSON via prettier)
 make prettier-check

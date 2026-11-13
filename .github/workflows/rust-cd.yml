@@ -88,31 +88,31 @@ jobs:
             # Each crate depends on those above it. If a step fails,
             # re-run the job: already-published versions are skipped.
             - name: Publish glide-logger
-              uses: ./.github/workflows/publish-rust-crate
+              uses: ./.github/actions/publish-rust-crate
               with:
                   crate: glide-logger
                   publish: ${{ inputs.publish }}
 
             - name: Publish glide-telemetry
-              uses: ./.github/workflows/publish-rust-crate
+              uses: ./.github/actions/publish-rust-crate
               with:
                   crate: glide-telemetry
                   publish: ${{ inputs.publish }}
 
             - name: Publish glide-core-engine
-              uses: ./.github/workflows/publish-rust-crate
+              uses: ./.github/actions/publish-rust-crate
               with:
                   crate: glide-core/redis-rs/redis
                   publish: ${{ inputs.publish }}
 
             - name: Publish glide-core
-              uses: ./.github/workflows/publish-rust-crate
+              uses: ./.github/actions/publish-rust-crate
               with:
                   crate: glide-core
                   publish: ${{ inputs.publish }}
 
             - name: Publish valkey-glide
-              uses: ./.github/workflows/publish-rust-crate
+              uses: ./.github/actions/publish-rust-crate
               with:
                   crate: rust
                   publish: ${{ inputs.publish }}

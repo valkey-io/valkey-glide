@@ -43,7 +43,7 @@ use std::sync::Condvar;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::{
     ffi::{CString, c_void},
-    os::raw::{c_char, c_double, c_long, c_ulong},
+    os::raw::{c_char, c_double, c_ulong},
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
@@ -209,13 +209,13 @@ pub struct CommandResponse {
     /// recycled afterwards, so a stale pointer reads (or corrupts) unrelated
     /// future response data rather than faulting.
     pub string_value: *mut c_char,
-    pub string_value_len: c_long,
+    pub string_value_len: i64,
 
     /// Below two values are related to each other.
     /// `array_value` represents the array of CommandResponse.
     /// `array_value_len` represents the length of the array.
     pub array_value: *mut CommandResponse,
-    pub array_value_len: c_long,
+    pub array_value_len: i64,
 
     /// Below two values represent the Map structure inside CommandResponse.
     /// The map is transformed into an array of (map_key: CommandResponse, map_value: CommandResponse) and passed to the foreign language.
@@ -227,7 +227,7 @@ pub struct CommandResponse {
     /// `sets_value` represents the set of CommandResponse.
     /// `sets_value_len` represents the length of the set.
     pub sets_value: *mut CommandResponse,
-    pub sets_value_len: c_long,
+    pub sets_value_len: i64,
 
     /// Pointer to the `ResponseArena` that owns this response tree.
     /// Non-null when this response was allocated via the arena allocator.
@@ -834,9 +834,38 @@ pub unsafe extern "C" fn reinit_async_pipe(pipe_write_fd: i32) {
     // Replace the stale writer. The old one is intentionally leaked —
     // its mutex/condvar are in undefined state post-fork.
     ASYNC_PIPE.store(ptr, std::sync::atomic::Ordering::Release);
+}
 
-    // Also reinitialize the timeout watchdog — its thread is dead post-fork.
-    glide_core::timeout_watchdog::TimeoutWatchdog::reinit_global();
+#[cfg(windows)]
+fn pipe_write_len(remaining: usize) -> libc::c_uint {
+    remaining.min(libc::c_uint::MAX as usize) as libc::c_uint
+}
+
+#[cfg(not(windows))]
+fn pipe_write_len(remaining: usize) -> usize {
+    remaining
+}
+
+#[cfg(test)]
+mod pipe_write_tests {
+    use super::pipe_write_len;
+
+    #[test]
+    fn oversized_write_is_split_at_platform_limit() {
+        #[cfg(windows)]
+        {
+            let total = libc::c_uint::MAX as usize + 17;
+            let first_write = pipe_write_len(total);
+            let second_write = pipe_write_len(total - first_write as usize);
+            assert_eq!(first_write, libc::c_uint::MAX);
+            assert_eq!(second_write, 17);
+        }
+        #[cfg(not(windows))]
+        assert_eq!(
+            pipe_write_len(libc::c_uint::MAX as usize + 1),
+            libc::c_uint::MAX as usize + 1
+        );
+    }
 }
 
 /// Allocate a client id from core's one global sequence, shared by pooled
@@ -1933,12 +1962,9 @@ fn create_pipe_writer(pipe_write_fd: i32) -> &'static SharedPipeWriter {
                 }
                 let mut off = 0;
                 while off < data.len() {
+                    let write_len = pipe_write_len(data.len() - off);
                     let w = unsafe {
-                        libc::write(
-                            fd,
-                            data[off..].as_ptr() as *const libc::c_void,
-                            data.len() - off,
-                        )
+                        libc::write(fd, data[off..].as_ptr() as *const libc::c_void, write_len)
                     };
                     if w > 0 {
                         off += w as usize;
@@ -2175,12 +2201,12 @@ impl ClientAdapter {
                                     Value::BulkString(data) => {
                                         resp.response_type = ResponseType::String;
                                         resp.string_value = data.as_ptr() as *mut c_char;
-                                        resp.string_value_len = data.len() as c_long;
+                                        resp.string_value_len = data.len() as i64;
                                     }
                                     Value::SimpleString(text) => {
                                         resp.response_type = ResponseType::String;
                                         resp.string_value = text.as_ptr() as *mut c_char;
-                                        resp.string_value_len = text.len() as c_long;
+                                        resp.string_value_len = text.len() as i64;
                                     }
                                     _ => unreachable!(),
                                 }
@@ -2575,6 +2601,73 @@ fn dispatch_async_push_notification(
     true
 }
 
+/// Stack size of every runtime thread that runs a connect. It is exact: `RUST_MIN_STACK` in the
+/// host process neither shrinks nor grows these threads.
+const RUNTIME_THREAD_STACK_SIZE: usize = 2 * 1024 * 1024;
+
+/// Builds a multi-thread runtime whose threads have [`RUNTIME_THREAD_STACK_SIZE`] stacks.
+/// `worker_threads` of `None` keeps tokio's default worker count.
+#[allow(clippy::disallowed_methods)] // the one place allowed to build a multi-thread runtime
+fn worker_runtime(name: &str, worker_threads: Option<usize>) -> std::io::Result<Runtime> {
+    let mut builder = Builder::new_multi_thread();
+    builder
+        .enable_all()
+        .thread_name(name)
+        .thread_stack_size(RUNTIME_THREAD_STACK_SIZE);
+    if let Some(count) = worker_threads {
+        builder.worker_threads(count);
+    }
+    builder.build()
+}
+
+/// Runs `future` on a worker thread of `rt` and blocks the caller until it finishes.
+///
+/// Foreign callers choose the calling thread, and its stack can be too small for a connect:
+/// musl gives non-main threads 128 KiB, while a TLS cluster connect needs more. Runtimes built
+/// by [`worker_runtime`] give their workers [`RUNTIME_THREAD_STACK_SIZE`]. A panic in `future`
+/// resumes on the caller, as if the caller had polled it.
+fn block_on_worker<F>(rt: &Runtime, future: F) -> Result<F::Output, String>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    assert!(
+        rt.handle().runtime_flavor() != tokio::runtime::RuntimeFlavor::CurrentThread,
+        "block_on_worker needs worker threads; current_thread polls on the caller"
+    );
+    match rt.block_on(rt.spawn(future)) {
+        Ok(output) => Ok(output),
+        Err(err) if err.is_panic() => std::panic::resume_unwind(err.into_panic()),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+#[cfg(all(test, not(miri)))]
+mod tests_block_on_worker {
+    use super::*;
+
+    fn runtime() -> Runtime {
+        worker_runtime("test worker", Some(1)).unwrap()
+    }
+
+    #[test]
+    fn runs_the_future_off_the_calling_thread() {
+        let caller = std::thread::current().id();
+        let polled_on = block_on_worker(&runtime(), async { std::thread::current().id() });
+        assert_ne!(polled_on.unwrap(), caller);
+    }
+
+    #[test]
+    fn a_panic_resumes_on_the_caller_with_its_payload() {
+        let rt = runtime();
+        let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            block_on_worker(&rt, async { std::panic::panic_any("connect panicked") })
+        }))
+        .unwrap_err();
+        assert_eq!(payload.downcast_ref::<&str>(), Some(&"connect panicked"));
+    }
+}
+
 fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
@@ -2616,15 +2709,10 @@ fn create_client_internal(
                 .and_then(|s| s.parse::<usize>().ok())
                 .unwrap_or(1)
                 .max(1);
-            Builder::new_multi_thread()
-                .enable_all()
-                .worker_threads(worker_threads)
-                .thread_name("Valkey-GLIDE thread")
-                .build()
-                .map_err(|err| {
-                    let redis_error: redis::RedisError = err.into();
-                    errors::error_message(&redis_error)
-                })?
+            worker_runtime("Valkey-GLIDE thread", Some(worker_threads)).map_err(|err| {
+                let redis_error: redis::RedisError = err.into();
+                errors::error_message(&redis_error)
+            })?
         }
     };
 
@@ -2634,15 +2722,10 @@ fn create_client_internal(
     // current_thread runtime which only polls tasks inside block_on.
     let background_runtime = match &client_type {
         ClientType::SyncClient => Some(
-            Builder::new_multi_thread()
-                .enable_all()
-                .worker_threads(1)
-                .thread_name("Valkey-GLIDE background")
-                .build()
-                .map_err(|err| {
-                    let redis_error: redis::RedisError = err.into();
-                    errors::error_message(&redis_error)
-                })?,
+            worker_runtime("Valkey-GLIDE background", Some(1)).map_err(|err| {
+                let redis_error: redis::RedisError = err.into();
+                errors::error_message(&redis_error)
+            })?,
         ),
         _ => None,
     };
@@ -2691,9 +2774,11 @@ fn create_client_internal(
                 .credentials_provider = Some(Arc::new(move || provider.call()));
         }
 
-        create_rt
-            .block_on(GlideClient::new(connection_request, Some(push_tx)))
-            .map_err(|err| err.to_string())
+        block_on_worker(
+            create_rt,
+            GlideClient::new(connection_request, Some(push_tx)),
+        )
+        .and_then(|client| client.map_err(|err| err.to_string()))
     };
     let client = match client {
         Ok(client) => client,
@@ -4373,10 +4458,10 @@ unsafe fn convert_double_pointer_to_vec<'a>(
     result
 }
 
-fn convert_vec_to_pointer<T>(vec: Vec<T>) -> (*mut T, c_long) {
+fn convert_vec_to_pointer<T>(vec: Vec<T>) -> (*mut T, i64) {
     // into_boxed_slice guarantees capacity == len (unlike shrink_to_fit which is a hint).
     // This is critical because from_raw_parts later uses len as capacity for dealloc.
-    let len = vec.len() as c_long;
+    let len = vec.len() as i64;
     let ptr = Box::into_raw(vec.into_boxed_slice()) as *mut T;
     (ptr, len)
 }
@@ -4474,10 +4559,10 @@ impl ResponseArena {
     /// `buf_pool` after release. It is therefore read-only and valid only
     /// until the arena releases its strings (`return_to_pool`); see the
     /// `CommandResponse::string_value` contract.
-    fn store_string(&mut self, data: impl Into<bytes::Bytes>) -> (*mut c_char, c_long) {
+    fn store_string(&mut self, data: impl Into<bytes::Bytes>) -> (*mut c_char, i64) {
         let data = data.into();
         let ptr = data.as_ptr() as *mut c_char;
-        let len = data.len() as c_long;
+        let len = data.len() as i64;
         self.strings.push(data);
         (ptr, len)
     }
@@ -4577,7 +4662,7 @@ impl ResponseArena {
                     self.build_into(ci, item, child_bufs)?;
                 }
                 self.nodes[idx].response_type = ResponseType::Array;
-                self.nodes[idx].array_value_len = child_count as c_long;
+                self.nodes[idx].array_value_len = child_count as i64;
                 self.nodes[idx].array_value = child_start as *mut CommandResponse;
             }
             Value::Map(map) => {
@@ -4598,7 +4683,7 @@ impl ResponseArena {
                     self.nodes[wrapper_start + i].map_value = vi as *mut CommandResponse;
                 }
                 self.nodes[idx].response_type = ResponseType::Map;
-                self.nodes[idx].array_value_len = num_entries as c_long;
+                self.nodes[idx].array_value_len = num_entries as i64;
                 self.nodes[idx].array_value = wrapper_start as *mut CommandResponse;
             }
             Value::Set(arr) => {
@@ -4612,7 +4697,7 @@ impl ResponseArena {
                     self.build_into(ci, item, &[])?;
                 }
                 self.nodes[idx].response_type = ResponseType::Sets;
-                self.nodes[idx].sets_value_len = child_count as c_long;
+                self.nodes[idx].sets_value_len = child_count as i64;
                 self.nodes[idx].sets_value = child_start as *mut CommandResponse;
             }
             Value::ServerError(server_error) => {
@@ -7449,29 +7534,30 @@ pub unsafe extern "C" fn free_log_result(result_ptr: *mut LogResult) {
 /// Statistics structure containing telemetry data.
 ///
 /// This struct provides compression and connection statistics for the client.
+/// All fields use fixed-width integers to preserve counters and timestamps on Windows.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Statistics {
     /// Total number of connections opened to Valkey
-    pub total_connections: c_ulong,
+    pub total_connections: u64,
     /// Total number of GLIDE clients
-    pub total_clients: c_ulong,
+    pub total_clients: u64,
     /// Total number of values compressed
-    pub total_values_compressed: c_ulong,
+    pub total_values_compressed: u64,
     /// Total number of values decompressed
-    pub total_values_decompressed: c_ulong,
+    pub total_values_decompressed: u64,
     /// Total original bytes before compression
-    pub total_original_bytes: c_ulong,
+    pub total_original_bytes: u64,
     /// Total bytes after compression
-    pub total_bytes_compressed: c_ulong,
+    pub total_bytes_compressed: u64,
     /// Total bytes after decompression
-    pub total_bytes_decompressed: c_ulong,
+    pub total_bytes_decompressed: u64,
     /// Number of times compression was skipped
-    pub compression_skipped_count: c_ulong,
+    pub compression_skipped_count: u64,
     /// Number of times subscriptions were out of sync during reconciliation
-    pub subscription_out_of_sync_count: c_ulong,
+    pub subscription_out_of_sync_count: u64,
     /// Timestamp of last successful subscription sync (milliseconds since epoch)
-    pub subscription_last_sync_timestamp: c_ulong,
+    pub subscription_last_sync_timestamp: u64,
 }
 
 /// Get compression and connection statistics.
@@ -7485,16 +7571,16 @@ pub struct Statistics {
 #[unsafe(no_mangle)]
 pub extern "C" fn get_statistics() -> Statistics {
     Statistics {
-        total_connections: Telemetry::total_connections() as c_ulong,
-        total_clients: Telemetry::total_clients() as c_ulong,
-        total_values_compressed: Telemetry::total_values_compressed() as c_ulong,
-        total_values_decompressed: Telemetry::total_values_decompressed() as c_ulong,
-        total_original_bytes: Telemetry::total_original_bytes() as c_ulong,
-        total_bytes_compressed: Telemetry::total_bytes_compressed() as c_ulong,
-        total_bytes_decompressed: Telemetry::total_bytes_decompressed() as c_ulong,
-        compression_skipped_count: Telemetry::compression_skipped_count() as c_ulong,
-        subscription_out_of_sync_count: Telemetry::subscription_out_of_sync_count() as c_ulong,
-        subscription_last_sync_timestamp: Telemetry::subscription_last_sync_timestamp() as c_ulong,
+        total_connections: Telemetry::total_connections() as u64,
+        total_clients: Telemetry::total_clients() as u64,
+        total_values_compressed: Telemetry::total_values_compressed() as u64,
+        total_values_decompressed: Telemetry::total_values_decompressed() as u64,
+        total_original_bytes: Telemetry::total_original_bytes() as u64,
+        total_bytes_compressed: Telemetry::total_bytes_compressed() as u64,
+        total_bytes_decompressed: Telemetry::total_bytes_decompressed() as u64,
+        compression_skipped_count: Telemetry::compression_skipped_count() as u64,
+        subscription_out_of_sync_count: Telemetry::subscription_out_of_sync_count() as u64,
+        subscription_last_sync_timestamp: Telemetry::subscription_last_sync_timestamp(),
     }
 }
 
@@ -7726,7 +7812,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         cache: None,
     };
 
-    let runtime = match Builder::new_multi_thread().enable_all().build() {
+    let runtime = match worker_runtime("Valkey-GLIDE monitor", None) {
         Ok(r) => r,
         Err(e) => {
             let err_msg =
@@ -7769,8 +7855,10 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         }
     });
 
-    let monitor_client = match runtime
-        .block_on(async { MonitorClient::new(&address, redis_conn_info, tls_mode, on_line).await })
+    let monitor_client = match block_on_worker(&runtime, async move {
+        MonitorClient::new(&address, redis_conn_info, tls_mode, on_line).await
+    })
+    .and_then(|client| client.map_err(|err| err.to_string()))
     {
         Ok(c) => c,
         Err(e) => {

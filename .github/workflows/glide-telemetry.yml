@@ -20,7 +20,7 @@ on:
             - .github/workflows/glide-telemetry.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/lint-rust/action.yml
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
@@ -35,7 +35,7 @@ on:
             - .github/workflows/glide-telemetry.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/lint-rust/action.yml
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
@@ -67,7 +67,7 @@ jobs:
 
             - name: Run glide-telemetry tests
               working-directory: ./glide-telemetry
-              run: cargo test --all-features -- --test-threads=1
+              run: cargo test --locked --all-features -- --test-threads=1
               # TODO: Remove `--test-threads=1` once https://github.com/valkey-io/valkey-glide/issues/4057 is resolved
 
     lint:
@@ -78,7 +78,7 @@ jobs:
               with:
                   persist-credentials: false
 
-            - uses: ./.github/workflows/lint-rust
+            - uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: glide-telemetry
                   github-token: ${{ secrets.GITHUB_TOKEN }}

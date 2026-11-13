@@ -52,8 +52,8 @@ jobs:
                   GH_REF: ${{ github.ref }}
               run: |
                   echo "Event: $GH_EVENT_NAME  Ref: $GH_REF"
-                  echo "event_name=$GH_EVENT_NAME" >> $GITHUB_OUTPUT
-                  echo "ref=$GH_REF" >> $GITHUB_OUTPUT
+                  echo "event_name=$GH_EVENT_NAME" >> "$GITHUB_OUTPUT"
+                  echo "ref=$GH_REF" >> "$GITHUB_OUTPUT"
 
             - name: Handle pull request event
               id: pull-request-params
@@ -62,8 +62,8 @@ jobs:
               run: |
                   RELEASE="255.255.255"
                   SHOULD_PUB="false"
-                  echo "release_version=$RELEASE" >> $GITHUB_OUTPUT
-                  echo "should_publish=$SHOULD_PUB" >> $GITHUB_OUTPUT
+                  echo "release_version=$RELEASE" >> "$GITHUB_OUTPUT"
+                  echo "should_publish=$SHOULD_PUB" >> "$GITHUB_OUTPUT"
                   echo "Pull request detected - using development version $RELEASE"
 
             - name: Handle workflow dispatch event
@@ -87,8 +87,8 @@ jobs:
                   # All good - set variables
                   RELEASE="$INPUT_VER"
                   SHOULD_PUB="$INPUT_PUB"
-                  echo "release_version=$RELEASE" >> $GITHUB_OUTPUT
-                  echo "should_publish=$SHOULD_PUB" >> $GITHUB_OUTPUT
+                  echo "release_version=$RELEASE" >> "$GITHUB_OUTPUT"
+                  echo "should_publish=$SHOULD_PUB" >> "$GITHUB_OUTPUT"
                   echo "Manual workflow run - using version $RELEASE (publish=$SHOULD_PUB)"
 
             - name: Handle tag push event
@@ -99,8 +99,8 @@ jobs:
                   if [[ "${{ steps.event-check.outputs.ref }}" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?)$ ]]; then
                     RELEASE="${BASH_REMATCH[1]}"
                     SHOULD_PUB="true"
-                    echo "release_version=$RELEASE" >> $GITHUB_OUTPUT
-                    echo "should_publish=$SHOULD_PUB" >> $GITHUB_OUTPUT
+                    echo "release_version=$RELEASE" >> "$GITHUB_OUTPUT"
+                    echo "should_publish=$SHOULD_PUB" >> "$GITHUB_OUTPUT"
                     echo "Tag push detected - using version $RELEASE from tag"
                   else
                     echo "::error::Invalid tag format. Expected vX.Y.Z or vX.Y.Z-rcN"; exit 1
@@ -122,7 +122,7 @@ jobs:
                   fi
 
                   echo "Using npm tag: $TAG"
-                  echo "npm_tag=$TAG" >> $GITHUB_OUTPUT
+                  echo "npm_tag=$TAG" >> "$GITHUB_OUTPUT"
 
             - name: Consolidate build parameters
               id: get-params
@@ -132,9 +132,11 @@ jobs:
                   NPM_TAG: ${{ steps.determine-npm-tag.outputs.npm_tag }}
                   SHOULD_PUBLISH: ${{ steps.pull-request-params.outputs.should_publish || steps.workflow-dispatch-params.outputs.should_publish || steps.tag-push-params.outputs.should_publish }}
               run: |
-                  echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
-                  echo "npm_tag=$NPM_TAG" >> $GITHUB_OUTPUT
-                  echo "should_publish=$SHOULD_PUBLISH" >> $GITHUB_OUTPUT
+                  {
+                      echo "release_version=$RELEASE_VERSION"
+                      echo "npm_tag=$NPM_TAG"
+                      echo "should_publish=$SHOULD_PUBLISH"
+                  } >> "$GITHUB_OUTPUT"
 
                   echo "Final build parameters:"
                   echo "- Version: $RELEASE_VERSION"
@@ -147,7 +149,7 @@ jobs:
               run: |
                   # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available, replace "ephemeral" with "persistent" in RUNNER.
                   # x86_64-apple-darwin builds on CD_RUNNER (macos-15, arm64) but tests on macos-15-intel: npm resolves the native package by the runner arch, so testing on arm64 would validate the wrong build.
-                  export PLATFORM_MATRIX=$(jq 'map(
+                  PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
                       | .RUNNER = (
                           if (.CD_RUNNER != null)
@@ -168,7 +170,7 @@ jobs:
                       )
                       | if .TARGET == "x86_64-apple-darwin" then .["test-runner"] = "macos-15-intel" else . end
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
-                  echo "platform_matrix=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+                  echo "platform_matrix=${PLATFORM_MATRIX}" >> "$GITHUB_OUTPUT"
                   echo "Platform matrix loaded: ${PLATFORM_MATRIX}"
 
     build-native-modules:
@@ -219,8 +221,10 @@ jobs:
             - name: Install platform dependencies
               if: ${{ matrix.OS != 'windows' }}
               shell: bash
+              env:
+                  TARGET: ${{ matrix.TARGET }}
               run: |
-                  if [[ "${{ matrix.TARGET }}" == *"linux"* ]]; then
+                  if [[ "$TARGET" == *"linux"* ]]; then
                     sudo apt update
                     sudo apt install -y gcc pkg-config openssl libssl-dev
                     # Install zig via direct binary download (works on all runners without snap/pip)
@@ -236,6 +240,8 @@ jobs:
             - name: Build Native Module
               shell: bash
               working-directory: ./node/rust-client
+              env:
+                  TARGET: ${{ matrix.TARGET }}
               run: |
                   mkdir -p ../build-ts
                   npm ci
@@ -244,9 +250,9 @@ jobs:
                     # Windows: native build, no cross-compilation needed
                     npx napi build --release --strip --platform --target "${{ matrix.TARGET }}" \
                       --js ../build-ts/native.js --dts ../build-ts/native.d.ts \
-                      --js-package-name @valkey/valkey-glide
+                      --js-package-name @valkey/valkey-glide -- --locked
 
-                  elif [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
+                  elif [[ "$TARGET" == *"gnu"* ]]; then
                     # Linux GNU: use cargo-zigbuild for cross-compilation
                     npm run build:release:gnu
 
@@ -254,7 +260,7 @@ jobs:
                     # macOS ARM: native build on arm64 runner, no --target needed
                     npx napi build --release --strip --platform \
                       --js ../build-ts/native.js --dts ../build-ts/native.d.ts \
-                      --js-package-name @valkey/valkey-glide $npm_config_build_flags
+                      --js-package-name @valkey/valkey-glide -- --locked
 
                   else
                     # macOS x86 or musl: may need zig for cross-compilation
@@ -265,11 +271,11 @@ jobs:
                     npx napi build --platform --release $additional_param --strip \
                       --target "${{ matrix.TARGET }}" \
                       --js ../build-ts/native.js --dts ../build-ts/native.d.ts \
-                      --js-package-name @valkey/valkey-glide $npm_config_build_flags
+                      --js-package-name @valkey/valkey-glide -- --locked
                   fi
 
-                  mkdir -p ../${{ matrix.TARGET }}
-                  cp -r *.node ../${{ matrix.TARGET }}/
+                  mkdir -p "../$TARGET"
+                  cp -r ./*.node "../$TARGET/"
 
                   echo "Built native module for ${{ matrix.TARGET }}:"
                   ls -la ../${{ matrix.TARGET }}/
@@ -455,13 +461,10 @@ jobs:
                   NPM_TAG: ${{ needs.get-build-parameters.outputs.npm_tag }}
                   NPM_CONFIG_PROVENANCE: true
               run: |
-                  package_name=$(cat package.json | jq -r .name)
-                  version=$(cat package.json | jq -r .version)
+                  package_name=$(jq -r .name package.json)
+                  version=$(jq -r .version package.json)
                   echo "Publishing base package ${package_name}@${version} with tag ${NPM_TAG}"
-                  npm publish --tag ${NPM_TAG} --access public --provenance --scope=@valkey
-
-                  # Check if the publish was successful
-                  if [ $? -ne 0 ]; then
+                  if ! npm publish --tag "${NPM_TAG}" --access public --provenance --scope=@valkey; then
                       echo "::error::Base package publish failed"; exit 1
                   fi
 
@@ -469,7 +472,7 @@ jobs:
 
               # Delete artifacts if not published
             - name: Delete artifacts
-              if: always() && ${{ needs.get-build-parameters.outputs.should_publish == 'false' }}
+              if: ${{ always() && needs.get-build-parameters.outputs.should_publish == 'false' }}
               uses: geekyeggo/delete-artifact@54ab544f12cdb7b71613a16a2b5a37a9ade990af # v2
               with:
                   name: |
@@ -496,7 +499,7 @@ jobs:
               shell: sh
               run: |
                   apk update
-                  apk add bash git python3
+                  apk add bash git python3 jq
 
             - name: Checkout (via action)
               if: ${{ !(matrix.TARGET == 'aarch64-unknown-linux-musl') }}
@@ -509,10 +512,10 @@ jobs:
               shell: bash
               run: |
                   # First, clone the repository
-                  git clone https://github.com/${{ github.repository }} $GITHUB_WORKSPACE
-                  cd $GITHUB_WORKSPACE
+                  git clone https://github.com/${{ github.repository }} "$GITHUB_WORKSPACE"
+                  cd "$GITHUB_WORKSPACE"
                   # Now we can run further git commands
-                  git config --global --add safe.directory $GITHUB_WORKSPACE
+                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
                   git fetch origin ${{ github.sha }}
                   git checkout ${{ github.sha }}
                   git clean -xdf

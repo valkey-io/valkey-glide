@@ -28,9 +28,9 @@ on:
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
             - .github/actions/setup-dns-tests/action.yml
-            - .github/workflows/create-test-matrices/action.yml
-            - .github/workflows/lint-rust/action.yml
-            - .github/workflows/test-benchmark/action.yml
+            - .github/actions/create-test-matrices/action.yml
+            - .github/actions/lint-rust/action.yml
+            - .github/actions/test-benchmark/action.yml
             - .github/json_matrices/**
             - benchmarks/install_and_test.sh
             - benchmarks/utilities/**
@@ -57,9 +57,9 @@ on:
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
             - .github/actions/setup-dns-tests/action.yml
-            - .github/workflows/create-test-matrices/action.yml
-            - .github/workflows/lint-rust/action.yml
-            - .github/workflows/test-benchmark/action.yml
+            - .github/actions/create-test-matrices/action.yml
+            - .github/actions/lint-rust/action.yml
+            - .github/actions/test-benchmark/action.yml
             - .github/json_matrices/**
             - benchmarks/install_and_test.sh
             - benchmarks/utilities/**
@@ -130,12 +130,12 @@ jobs:
               with:
                   persist-credentials: false
             - id: get-matrices
-              uses: ./.github/workflows/create-test-matrices
+              uses: ./.github/actions/create-test-matrices
               with:
                   language-name: rust
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
-                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
-                  run-with-macos: ${{ github.event.inputs.run-with-macos }}
+                  run-full-matrix: ${{ inputs.full-matrix == true || github.event_name == 'schedule' }}
+                  run-with-macos: ${{ inputs.run-with-macos }}
                   use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
 
     approve-self-hosted:
@@ -159,6 +159,7 @@ jobs:
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
         env:
             VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
+            CARGO_INCREMENTAL: "0"
 
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -177,8 +178,9 @@ jobs:
               with:
                   path: |
                       glide-core/target
-                  key: ${{ matrix.host.TARGET }}-glide-core
-                  restore-keys: ${{ matrix.host.TARGET }}
+                  key: ${{ matrix.host.TARGET }}-glide-core-v2-${{ hashFiles('glide-core/Cargo.lock') }}
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core-v2-
 
             - uses: ./.github/actions/setup-dns-tests
               with:
@@ -186,7 +188,7 @@ jobs:
 
             - name: Run glide-core tests
               working-directory: ./glide-core
-              run: cargo test --features "proto,socket-layer,standalone_heartbeat"
+              run: cargo test --locked --features "proto,socket-layer,standalone_heartbeat"
 
             - name: Install libfabric
               uses: ./.github/actions/install-libfabric
@@ -195,29 +197,27 @@ jobs:
             - name: Run glide-core RDMA tests
               working-directory: ./glide-core
               run: |
-                  cargo test --features rdma --lib
-                  cargo test --features rdma --test test_rdma
+                  cargo test --locked --features rdma --lib
+                  cargo test --locked --features rdma --test test_rdma
 
             - name: Check features
               working-directory: ./glide-core
               run: |
-                  cargo check --benches --all-features
-                  cargo check --no-default-features
+                  cargo check --locked --benches --all-features
+                  cargo check --locked --no-default-features
 
-            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              with:
-                  path: |
-                      glide-core/target
-                  key: ${{ matrix.host.TARGET }}-benchmarks/rust
-                  restore-keys: |
-                      ${{ matrix.host.TARGET }}-glide-core
-                      ${{ matrix.host.TARGET }}
-
-            - uses: ./.github/workflows/test-benchmark
+            - uses: ./.github/actions/test-benchmark
               with:
                   language-flag: -rust
                   engine-run: ${{ matrix.engine.run }}
                   target: ${{ matrix.host.TARGET }}
+
+            # A fresh checkout is newer than the restored dep-info, so cargo rebuilds these
+            # crates on every run; only the registry crates are worth saving.
+            - name: Remove the path crates from the cargo cache
+              if: always()
+              working-directory: ./glide-core
+              run: cargo clean -p glide-core -p glide-core-engine -p glide-logger -p glide-telemetry -p glide-rdma -p glide-libfabric-sys
 
     lint:
         runs-on: ubuntu-24.04
@@ -227,13 +227,13 @@ jobs:
               with:
                   persist-credentials: false
 
-            - uses: ./.github/workflows/lint-rust
+            - uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: glide-core
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint glide-core
 
-            - uses: ./.github/workflows/lint-rust
+            - uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: benchmarks/rust
                   github-token: ${{ secrets.GITHUB_TOKEN }}
