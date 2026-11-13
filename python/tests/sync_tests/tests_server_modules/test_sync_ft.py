@@ -4126,6 +4126,35 @@ class TestSyncFt:
     @pytest.mark.requires_search_1_3
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_ft_hybrid_bytes_like_vsim_field(
+        self, glide_sync_client: TSyncGlideClient, protocol: ProtocolVersion
+    ):
+        """The VSIM field must be sent verbatim for bytes, bytearray and
+        memoryview, not as its Python repr."""
+        prefix = "{ft-hybrid-bytes-field-" + str(uuid.uuid4()) + "}:"
+        index = self._create_hybrid_index(glide_sync_client, prefix)
+
+        for field in [b"vec", bytearray(b"vec"), memoryview(b"vec")]:
+            result = cast(
+                List,
+                ft.hybrid(
+                    glide_sync_client,
+                    index,
+                    FtHybridSearchArm("hello"),
+                    FtHybridVsimArm(field, struct.pack("2f", 1.0, 1.0), k=5),
+                ),
+            )
+            keys = {row[b"__key"] for row in result}
+            assert keys == {
+                (prefix + HYBRID_DOC_TEXT_WINNER).encode(),
+                (prefix + HYBRID_DOC_VECTOR_WINNER).encode(),
+            }
+
+        assert ft.dropindex(glide_sync_client, index) == OK
+
+    @pytest.mark.requires_search_1_3
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_ft_hybrid_basic_query(
         self, glide_sync_client: TSyncGlideClient, protocol: ProtocolVersion
     ):

@@ -36,6 +36,13 @@ pub enum RdmaUnavailable {
     #[error("an RDMA configuration requires a provider; none was set")]
     NoProviderConfigured,
 
+    /// The `tcp` provider was asked for, but this build has only `efa-direct`.
+    #[error(
+        "this build of GLIDE has no `tcp` RDMA provider; it is for development and \
+         tests only, in a build with the `rdma-tcp-dev` feature."
+    )]
+    TcpProviderNotBuilt,
+
     /// A node did not recognise the RDMA commands, so whatever module serves them
     /// is not loaded there.
     #[error("node {node} has no RDMA module loaded")]

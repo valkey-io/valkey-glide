@@ -4970,8 +4970,12 @@ class CoreCommands(Protocol):
                     f"Cannot choose both {update_condition.value} and NX."
                 )
 
-        members_scores_list = [
-            str(item) for pair in members_scores.items() for item in pair[::-1]
+        # Only scores are stringified; members are passed through as TEncodable so
+        # bytes and memoryview members are not turned into their Python repr.
+        members_scores_list: List[TEncodable] = [
+            item
+            for member, score in members_scores.items()
+            for item in (str(score), member)
         ]
         args += members_scores_list
 
@@ -5186,7 +5190,7 @@ class CoreCommands(Protocol):
         return cast(
             Mapping[bytes, float],
             await self._execute_command(
-                RequestType.ZPopMax, [key, str(count)] if count else [key]
+                RequestType.ZPopMax, [key, str(count)] if count is not None else [key]
             ),
         )
 
@@ -5257,7 +5261,7 @@ class CoreCommands(Protocol):
                 {b'member3': 7.5 , b'member2': 8.0}  # Indicates that 'member3' with a score of 7.5 and 'member2' with a score
                                                      # of 8.0 have been removed from the sorted set.
         """
-        args: List[TEncodable] = [key, str(count)] if count else [key]
+        args: List[TEncodable] = [key, str(count)] if count is not None else [key]
         return cast(
             Mapping[bytes, float],
             await self._execute_command(RequestType.ZPopMin, args),

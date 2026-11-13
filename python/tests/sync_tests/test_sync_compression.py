@@ -18,9 +18,12 @@ from glide_shared.commands.core_options import (
 from glide_shared.config import (
     CompressionBackend,
     CompressionConfiguration,
+    GlideClientConfiguration,
+    NodeAddress,
     ProtocolVersion,
 )
 from glide_shared.constants import OK, TEncodable
+from glide_shared.exceptions import ClosingError, RequestError
 from glide_sync import GlideClient, GlideClusterClient, TGlideClient
 from pytest import param
 
@@ -70,6 +73,24 @@ def generate_unicode_text(size_bytes: int) -> str:
     chars = "Hello世界🌍Привет مرحبا"
     result = chars * (size_bytes // len(chars.encode("utf-8")) + 1)
     return result.encode("utf-8")[:size_bytes].decode("utf-8", errors="ignore")
+
+
+# Names a real backend so the decoder runs, on a payload it rejects.
+HEADER_SHAPED_PLAIN = b"\x00\x01\x02\x00\x01zzzz"
+
+
+def exec_gets(
+    client: TGlideClient, is_atomic: bool, keys: List[str]
+) -> Optional[List[Any]]:
+    if isinstance(client, GlideClient):
+        batch = Batch(is_atomic=is_atomic)
+        for key in keys:
+            batch.get(key)
+        return client.exec(batch, raise_on_error=True)
+    cluster_batch = ClusterBatch(is_atomic=is_atomic)
+    for key in keys:
+        cluster_batch.get(key)
+    return cast(GlideClusterClient, client).exec(cluster_batch, raise_on_error=True)
 
 
 def generate_mixed_size_list(count: int, min_size: int, max_size: int) -> List[str]:
@@ -286,6 +307,29 @@ class TestBasicCompression:
 
         # Cleanup
         compression_client.delete(cast(List[Union[str, bytes]], keys))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_compression_mget_keeps_header_shaped_neighbour(
+        self, compression_client: TGlideClient, no_compression_client: TGlideClient
+    ):
+        compressed_key = f"{{mget_collision}}_compressed_{get_random_string(8)}"
+        plain_key = f"{{mget_collision}}_plain_{get_random_string(8)}"
+        value = generate_compressible_text(1024)
+        assert compression_client.set(compressed_key, value) == OK
+        assert no_compression_client.set(plain_key, HEADER_SHAPED_PLAIN) == OK
+
+        for keys, expected in (
+            ([compressed_key, plain_key], [value.encode(), HEADER_SHAPED_PLAIN]),
+            ([plain_key, compressed_key], [HEADER_SHAPED_PLAIN, value.encode()]),
+        ):
+            assert (
+                compression_client.mget(cast(List[Union[str, bytes]], keys)) == expected
+            )
+
+        no_compression_client.delete(
+            cast(List[Union[str, bytes]], [compressed_key, plain_key])
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1123,6 +1167,28 @@ class TestCompressionBatch:
         # Cleanup
         compression_client.delete(cast(List[Union[str, bytes]], [key1, key2, key3]))
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("is_atomic", [True, False])
+    def test_compression_batch_keeps_header_shaped_neighbour(
+        self,
+        compression_client: TGlideClient,
+        no_compression_client: TGlideClient,
+        is_atomic: bool,
+    ):
+        compressed_key = f"{{batch_collision}}_compressed_{get_random_string(8)}"
+        plain_key = f"{{batch_collision}}_plain_{get_random_string(8)}"
+        value = generate_compressible_text(1024)
+        assert compression_client.set(compressed_key, value) == OK
+        assert no_compression_client.set(plain_key, HEADER_SHAPED_PLAIN) == OK
+
+        results = exec_gets(compression_client, is_atomic, [compressed_key, plain_key])
+        assert results == [value.encode(), HEADER_SHAPED_PLAIN]
+
+        no_compression_client.delete(
+            cast(List[Union[str, bytes]], [compressed_key, plain_key])
+        )
+
 
 class TestCompressionEdgeCases:
     """Test compression edge cases and error handling."""
@@ -1779,6 +1845,51 @@ class TestCompressionMaxDecompressedSize:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("is_atomic", [True, False])
+    def test_max_decompressed_size_enforced_on_batch(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion, is_atomic: bool
+    ):
+        unlimited_client = create_sync_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            enable_compression=True,
+        )
+        try:
+            key = f"batch_max_test_{get_random_string(8)}"
+            unlimited_client.set(key, generate_compressible_text(10000))
+
+            limited_config = create_sync_client_config(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                enable_compression=False,
+            )
+            limited_config.compression = CompressionConfiguration(
+                enabled=True,
+                backend=CompressionBackend.ZSTD,
+                compression_level=3,
+                min_compression_size=64,
+                max_decompressed_size=100,
+            )
+            limited_client: GlideClient | GlideClusterClient
+            if cluster_mode:
+                limited_client = GlideClusterClient.create(limited_config)
+            else:
+                limited_client = GlideClient.create(limited_config)
+
+            try:
+                with pytest.raises(RequestError, match="size limit exceeded"):
+                    exec_gets(limited_client, is_atomic, [key])
+            finally:
+                limited_client.close()
+
+            unlimited_client.delete([key])
+        finally:
+            unlimited_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_max_decompressed_size_allows_values_within_limit(
         self, request, cluster_mode: bool, protocol: ProtocolVersion
     ):
@@ -1916,3 +2027,19 @@ def assert_incompatible(exc_info: pytest.ExceptionInfo[Exception]) -> None:
     assert (
         "incompatible with compression" in error_msg
     ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+
+def test_invalid_compression_level_raises_closing_error():
+    """
+    The core rejects the level before connecting, so no server is needed. This error raised
+    ClosingError before 2.6 and must keep that type, unlike the core's newer configuration
+    checks, which raise ConfigurationError.
+    """
+    config = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1", 1)],
+        compression=CompressionConfiguration(
+            enabled=True, backend=CompressionBackend.ZSTD, compression_level=100
+        ),
+    )
+    with pytest.raises(ClosingError, match="compression"):
+        GlideClient.create(config)

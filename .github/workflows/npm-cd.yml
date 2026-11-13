@@ -219,7 +219,7 @@ jobs:
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install platform dependencies
-              if: ${{ matrix.OS != 'windows' }}
+              if: ${{ contains(matrix.TARGET, 'linux') }}
               shell: bash
               env:
                   TARGET: ${{ matrix.TARGET }}
@@ -232,9 +232,6 @@ jobs:
                     ZIG_ARCH="$(uname -m)"
                     curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" | sudo tar -xJ -C /usr/local
                     sudo ln -sf "/usr/local/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}/zig" /usr/local/bin/zig
-                  else
-                    brew update
-                    brew install tree
                   fi
 
             - name: Build Native Module
@@ -242,9 +239,15 @@ jobs:
               working-directory: ./node/rust-client
               env:
                   TARGET: ${{ matrix.TARGET }}
+                  RELEASE_VERSION: ${{ needs.get-build-parameters.outputs.release_version }}
+                  # Reported as lib-ver in CLIENT SETINFO; overrides the non-forced "unknown" in .cargo/config.toml.
+                  GLIDE_VERSION: ${{ needs.get-build-parameters.outputs.release_version }}
               run: |
                   mkdir -p ../build-ts
                   npm ci
+
+                  # napi build bakes this version into native.js; it must match the published platform packages.
+                  npm pkg set version="${RELEASE_VERSION}"
 
                   if [[ "${{ matrix.OS }}" == "windows" ]]; then
                     # Windows: native build, no cross-compilation needed
@@ -470,16 +473,6 @@ jobs:
 
                   echo "Packages published successfully"
 
-              # Delete artifacts if not published
-            - name: Delete artifacts
-              if: ${{ always() && needs.get-build-parameters.outputs.should_publish == 'false' }}
-              uses: geekyeggo/delete-artifact@54ab544f12cdb7b71613a16a2b5a37a9ade990af # v2
-              with:
-                  name: |
-                      artifacts-*
-                      js-files-${{ github.run_id }}
-                  failOnError: false
-
     test-published-release:
         needs: [get-build-parameters, prepare-and-publish]
         # Only run tests if the publish was successful
@@ -487,7 +480,8 @@ jobs:
         strategy:
             matrix:
                 include: ${{ fromJson(needs.get-build-parameters.outputs.platform_matrix) }}
-            fail-fast: true
+            # One platform's failure (e.g. a registry propagation miss) must not cancel the others' validation.
+            fail-fast: false
         runs-on: ${{ matrix.test-runner || matrix.RUNNER }}
         container:
             image: ${{ matrix.IMAGE || ''}}
@@ -549,8 +543,11 @@ jobs:
                       apk add --no-cache valkey-cli || apk add --no-cache redis-cli
                   elif [[ "${{ matrix.build_type }}" == "mac" ]]; then
                       echo "Installing Valkey on macOS..."
-                      brew update
-                      brew install valkey || brew install redis
+                      # Homebrew 6 exits non-zero on Intel macOS even when the install succeeds (#6976), and a
+                      # `|| brew install redis` fallback then fails on the conflicting redis-* binaries. Ignore the
+                      # exit code and rely on the server check below. Skipping auto-update and dependency upgrades
+                      # keeps Homebrew from rebuilding outdated formulae from source on Intel.
+                      HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_UPGRADE=1 brew install valkey || echo "::warning::brew install valkey exited non-zero; checking for valkey-server"
                   elif [[ "${{ matrix.build_type }}" == "windows" ]]; then
                       echo "Windows target tested via CodeBuild - skipping local Valkey install"
                       exit 0
@@ -582,7 +579,8 @@ jobs:
                   # test fails with "Cannot find module". Retry the install until the native module
                   # resolves, and assert the installed version matches the published version.
                   RELEASE_VERSION="${{ needs.get-build-parameters.outputs.release_version }}"
-                  MAX_ATTEMPTS=5
+                  # 20 x 15s = ~5 min: npm propagation has taken longer than the old ~60s window (2.6.0-rc2, rc3).
+                  MAX_ATTEMPTS=20
                   DELAY=15
                   for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
                       rm -rf node_modules package-lock.json
@@ -590,7 +588,9 @@ jobs:
                       # version is not visible on an npm edge yet, `npm install` exits non-zero
                       # (ETARGET/404). Guard it with `if` so that (under the default `set -e` shell)
                       # a transient miss is retried instead of aborting the step on the first attempt.
-                      if npm install "@valkey/valkey-glide@${RELEASE_VERSION}" --save; then
+                      # --prefer-online: otherwise npm answers retries from its local cache (packument
+                      # max-age=300) and keeps missing a version published after the first attempt (2.6.0-rc4).
+                      if npm install "@valkey/valkey-glide@${RELEASE_VERSION}" --save --prefer-online; then
                           # Read the version from the installed package.json on disk. The package's
                           # "exports" map only exposes ".", so require("@valkey/valkey-glide/package.json")
                           # would throw ERR_PACKAGE_PATH_NOT_EXPORTED; read the file directly instead.
@@ -609,6 +609,8 @@ jobs:
                       echo "Attempt ${attempt}/${MAX_ATTEMPTS}: version '${INSTALLED_VERSION:-none}' / native module not resolvable yet (likely npm registry propagation). Retrying in ${DELAY}s..."
                       sleep "${DELAY}"
                   done
+                  # Smoke test NAPI version check
+                  NAPI_RS_ENFORCE_VERSION_CHECK=1 node -e "require('@valkey/valkey-glide')"
                   npm run build:utils
                   npm test
 

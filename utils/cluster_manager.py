@@ -3,6 +3,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import argparse
+import ipaddress
 
 try:
     import fcntl  # POSIX only — not available on Windows
@@ -22,6 +23,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from enum import Enum
+from functools import cached_property
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -79,6 +81,10 @@ OPENSSL_CONFIG_CONTENTS = f"""\
 keyUsage = digitalSignature, keyEncipherment
 subjectAltName = IP:{DEFAULT_HOST_IPV4}, IP:{DEFAULT_HOST_IPV6}, DNS:localhost, DNS:{HOSTNAME_TLS}
 """
+
+# Matches a cluster node ID in a CLUSTER SLOTS response.
+# A Valkey/Redis node ID is composed of 40 lowercase hex characters.
+CLUSTER_SLOTS_NODE_ID_REGEX = re.compile(r"^[0-9a-f]{40}$", re.MULTILINE)
 
 
 def get_command(commands: List[str]) -> str:
@@ -334,6 +340,48 @@ class Server:
     def set_primary(self, is_primary: bool):
         self.is_primary = is_primary
 
+    @cached_property
+    def is_dns_name(self) -> bool:
+        """Whether the server's host is a DNS name rather than an IP address."""
+        try:
+            ipaddress.ip_address(self.host)
+            return False
+        except ValueError:
+            return True
+
+    @cached_property
+    def bind_addresses(self) -> List[str]:
+        """The IP addresses to pass for the server to `--bind`."""
+        # Loopback hosts bind to both the IPv4 and IPv6 loopback addresses.
+        if self.host in (DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6, "localhost"):
+            return [DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6]
+
+        # Any other host binds to its IP addresses plus the IPv4 loopback, so that
+        # local and remote clients can connect. Remove duplicates because binding
+        # the same address twice makes the server fail with "Address already in use".
+        return list(dict.fromkeys(self._ip_addresses + [DEFAULT_HOST_IPV4]))
+
+    @cached_property
+    def cluster_create_address(self) -> str:
+        """The IP address to pass for the server to `--cluster create`."""
+        # Send the resolved IP address instead of the host name:
+        # `CLUSTER MEET` only accepts IP addresses, and `redis-cli`
+        # before Redis 7.0 did not resolve host names.
+        return self._ip_addresses[0]
+
+    @cached_property
+    def _ip_addresses(self) -> List[str]:
+        """The server's IP addresses."""
+        if not self.is_dns_name:
+            return [self.host]
+
+        try:
+            addr_infos = socket.getaddrinfo(self.host, None, proto=socket.IPPROTO_TCP)
+        except socket.gaierror as e:
+            raise ValueError(f"Could not resolve host {self.host}: {e}") from e
+
+        return list(dict.fromkeys(str(addr_info[4][0]) for addr_info in addr_infos))
+
 
 def print_servers_json(servers: List[Server]):
     """
@@ -423,35 +471,6 @@ def create_cluster_folder(path: str, prefix: str) -> str:
     logging.debug(f"## Creating cluster folder in {cluster_folder}")
     Path(cluster_folder).mkdir(exist_ok=True)
     return cluster_folder
-
-
-def get_bind_addresses(host: str) -> List[str]:
-    """
-    Returns the addresses a server should bind to for the given host.
-
-    Loopback hosts bind to both the IPv4 and IPv6 loopback addresses. Any other
-    host binds to its resolved addresses plus the IPv4 loopback, so that local
-    and remote clients can connect.
-
-    Args:
-        host (str): The host the server is started with.
-
-    Returns:
-        List[str]: The unique addresses to pass to `--bind`.
-    """
-    if host in (DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6, "localhost"):
-        return [DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6]
-
-    try:
-        addr_infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
-        resolved = [str(addr_info[4][0]) for addr_info in addr_infos]
-    except socket.gaierror:
-        logging.warning(f"Could not resolve host {host}; binding it as given")
-        resolved = [host]
-
-    # Remove duplicates because binding the same address
-    # twice makes the server fail with "Address already in use".
-    return list(dict.fromkeys(resolved + [DEFAULT_HOST_IPV4]))
 
 
 def build_loadmodule_args(module_path: str) -> List[str]:
@@ -544,24 +563,25 @@ def start_server(
         "0",
     ]
 
-    cmd_args.extend(["--bind", *get_bind_addresses(host)])
+    server = Server(host, port)
+    cmd_args.extend(["--bind", *server.bind_addresses])
 
-    # If host is a DNS hostname, set cluster-announce-hostname so
-    # the cluster topology reports DNS names instead of IP addresses.
     if cluster_mode:
         if cluster_node_timeout is not None:
             cmd_args.extend(["--cluster-node-timeout", str(cluster_node_timeout)])
-        try:
-            import ipaddress
-            ipaddress.ip_address(host)
-        except ValueError:
+
+        # Enable cluster-announce-hostname if host is a DNS hostname so that
+        # cluster topology reports hostnames instead of IP addresses (Redis 7.0+).
+        if server_version >= (7, 0, 0) and server.is_dns_name:
             cmd_args.extend(["--cluster-announce-hostname", host])
+
+        # Enable multi-database support (Valkey 9.0+).
+        if server_version >= (9, 0, 0):
+            cmd_args.extend(["--cluster-databases", "16"])
 
     if server_version >= (7, 0, 0):
         cmd_args.extend(["--enable-debug-command", "yes"])
-    # Enable multi-database support in cluster mode for Valkey 9.0+
-    if cluster_mode and server_version >= (9, 0, 0):
-        cmd_args.extend(["--cluster-databases", "16"])
+
     if load_module:
         if len(load_module) == 0:
             raise ValueError(
@@ -581,8 +601,6 @@ def start_server(
         raise Exception(
             f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
         )
-
-    server = Server(host, port)
 
     # Read the process ID from the log file
     # Note that `p.pid` is not good here since we daemonize the process
@@ -746,16 +764,18 @@ def create_cluster(
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
 ):
+    endpoints = [f"{server.cluster_create_address}:{server.port}" for server in servers]
+
     tic = time.perf_counter()
-    servers_tuple = (str(server) for server in servers)
     logging.debug("## Starting cluster creation...")
+
     p = subprocess.Popen(
         [
             get_cli_command(),
             *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
             "--cluster",
             "create",
-            *servers_tuple,
+            *endpoints,
             "--cluster-replicas",
             str(replica_count),
             "--cluster-yes",
@@ -846,40 +866,6 @@ def wait_for_a_message_in_logs(
             )
 
 
-def parse_cluster_nodes(command_output: Optional[str]) -> Optional[dict]:
-    """
-    Parameters
-    ----------
-    command_output: str :
-        The output returned from valkey for the command 'CLUSTER NODES'
-
-    Returns
-    -------
-        A dictionary for the current node's details
-    """
-    if command_output is None:
-        return None
-
-    lines = command_output.splitlines(keepends=False)
-    for line in lines:
-        tokens = line.split(" ")
-        if len(tokens) < 3:
-            continue
-
-        node_id = tokens[0].strip()
-        network = tokens[1].strip()
-        flags = tokens[2].strip()
-
-        if "myself" in flags:
-            # This is us
-            return {
-                "node_id": node_id,
-                "network": network,
-                "is_primary": "master" in flags,
-            }
-    return None
-
-
 def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
     try:
         p = subprocess.Popen(
@@ -911,7 +897,13 @@ def wait_for_all_topology_views(
     Only when a replica finished syncing and loading, it will be included in the CLUSTER SLOTS output.
     """
     for server in servers:
-        cmd_args = [
+
+        # [1] Wait for server to be ready
+        # -------------------------------
+
+        # Server is ready when CLUSTER SLOTS returns
+        # node IDs for the expected number of nodes.
+        cluster_slots_cmd_args = [
             get_cli_command(),
             "-h",
             server.host,
@@ -921,38 +913,56 @@ def wait_for_all_topology_views(
             "cluster",
             "slots",
         ]
-        logging.debug(f"Executing: {cmd_args}")
-        retries = 80
-        while retries >= 0:
-            output = redis_cli_run_command(cmd_args)
-            if output is not None and output.count(f"{server.host}") == len(servers):
-                # Server is ready, get the node's role
-                cmd_args = [
-                    get_cli_command(),
-                    "-h",
-                    server.host,
-                    "-p",
-                    str(server.port),
-                    *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
-                    "cluster",
-                    "nodes",
-                ]
-                cluster_slots_output = redis_cli_run_command(cmd_args)
-                node_info = parse_cluster_nodes(cluster_slots_output)
-                if node_info:
-                    server.set_primary(node_info["is_primary"])
-                logging.debug(f"Server {server} is ready!")
-                break
-            else:
-                retries -= 1
-                time.sleep(1)
-                continue
 
-        if retries < 0:
+        logging.debug(f"Executing: {cluster_slots_cmd_args}")
+
+        for _ in range(81):
+            cluster_slots_output = redis_cli_run_command(cluster_slots_cmd_args)
+            if cluster_slots_output is not None and (
+                len(set(CLUSTER_SLOTS_NODE_ID_REGEX.findall(cluster_slots_output))) == len(servers)
+            ):
+                break
+            time.sleep(1)
+        else:
             raise Exception(
                 f"Timeout exceeded trying to wait for server {server} to know all hosts.\n"
-                f"Current CLUSTER SLOTS output:\n{output}"
+                f"Current CLUSTER SLOTS output:\n{cluster_slots_output}"
             )
+
+        # [2] Determine if server is primary
+        # ----------------------------------
+
+        # Server is a primary when CLUSTER NODES returns
+        # a line with both "myself" and "master" flags.
+        cluster_nodes_cmd_args = [
+            get_cli_command(),
+            "-h",
+            server.host,
+            "-p",
+            str(server.port),
+            *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+            "cluster",
+            "nodes",
+        ]
+
+        cluster_nodes_output = redis_cli_run_command(cluster_nodes_cmd_args)
+        if cluster_nodes_output is None:
+            raise Exception(f"Timed out getting CLUSTER NODES from server {server}")
+
+        # Each line is `<id> <ip:port@cport> <flags> ...`.
+        # Flags is a comma-separated list (e.g. `myself,master` or `slave`).
+        is_primary = False
+        for line in cluster_nodes_output.splitlines():
+            fields = line.split(" ")
+            if len(fields) < 3:
+                continue
+            flags = set(fields[2].split(","))
+            if {"myself", "master"} <= flags:
+                is_primary = True
+                break
+        server.set_primary(is_primary)
+
+        logging.debug(f"Server {server} is ready!")
 
 
 def wait_for_server(

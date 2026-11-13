@@ -30,6 +30,7 @@ from glide_shared.exceptions import (
     ConfigurationError,
     RdmaError,
     RequestError,
+    get_connection_error_class,
     get_request_error_class,
 )
 from glide_shared.ffi_helpers import (
@@ -70,6 +71,26 @@ else:
 _EVALSHA_SPAN_NAME = _SYNC_FFI.ffi.new("char[]", b"EVALSHA")
 
 ENCODING = "utf-8"
+
+
+def _arg_buffer(arg: TEncodable) -> Tuple[Union[bytes, bytearray, memoryview], int]:
+    """
+    Return a command argument as a buffer for `ffi.from_buffer` and its length in bytes.
+
+    The buffer is passed to the FFI without copying. A `memoryview` is measured with
+    `nbytes`, because `len()` counts elements (or the first dimension of an N-D view),
+    not bytes.
+    """
+    if isinstance(arg, str):
+        encoded = arg.encode(ENCODING)
+        return encoded, len(encoded)
+    if isinstance(arg, (bytes, bytearray)):
+        return arg, len(arg)
+    if isinstance(arg, memoryview):
+        return arg, arg.nbytes
+    raise TypeError(f"Unsupported argument type: {type(arg)}")
+
+
 # Beginning of the message of a transfer cancelled by closing the client.
 # Must match glide-core's `rdma::protocol::CANCELLED`.
 _RDMA_CANCELLED = "RDMA transfer cancelled"
@@ -740,7 +761,11 @@ class BaseClient(CoreCommands):
                         if client_response.connection_error_message != self._ffi.NULL
                         else "Unknown error"
                     )
-                    raise ClosingError(error_message)
+                    error_class = get_connection_error_class(
+                        client_response.connection_error_type
+                    )
+                    self._lib.free_connection_response(client_response_ptr)
+                    raise error_class(error_message)
 
                 # Free the connection response to avoid memory leaks
                 self._lib.free_connection_response(client_response_ptr)
@@ -787,9 +812,12 @@ class BaseClient(CoreCommands):
                 if client_response.connection_error_message != self._ffi.NULL
                 else "Unknown error"
             )
+            error_class = get_connection_error_class(
+                client_response.connection_error_type
+            )
             credential_owner.close()
             self._lib.free_connection_response(client_response_ptr)
-            raise ClosingError(error_message)
+            raise error_class(error_message)
 
         core_client = client_response.conn_ptr
         self._lib.free_connection_response(client_response_ptr)
@@ -988,19 +1016,14 @@ class BaseClient(CoreCommands):
         buffers = []  # Keep a reference to prevent premature garbage collection
 
         for arg in args:
-            if isinstance(arg, str):
-                arg_bytes = arg.encode(ENCODING)
-            elif isinstance(arg, (bytes, bytearray, memoryview)):
-                arg_bytes = arg
-            else:
-                raise TypeError(f"Unsupported argument type: {type(arg)}")
+            arg_bytes, arg_len = _arg_buffer(arg)
 
             # Use ffi.from_buffer for zero-copy conversion
             buffers.append(arg_bytes)  # Keep the byte buffer alive
             c_strings.append(
                 self._try_ffi_cast("size_t", self._ffi.from_buffer(arg_bytes))
             )
-            string_lengths.append(len(arg_bytes))
+            string_lengths.append(arg_len)
         # Return C-compatible arrays and keep buffers alive
         return (
             self._ffi.new("size_t[]", c_strings),
@@ -1302,16 +1325,11 @@ class BaseClient(CoreCommands):
             arg_lengths = []
 
             for arg in args:
-                if isinstance(arg, str):
-                    arg_bytes = arg.encode(ENCODING)
-                elif isinstance(arg, (bytes, bytearray, memoryview)):
-                    arg_bytes = arg
-                else:
-                    raise TypeError(f"Unsupported argument type: {type(arg)}")
+                arg_bytes, arg_len = _arg_buffer(arg)
 
                 args_buffers.append(arg_bytes)
                 arg_ptrs.append(self._ffi.from_buffer(arg_bytes))
-                arg_lengths.append(len(arg_bytes))
+                arg_lengths.append(arg_len)
 
             c_arg_array = self._ffi.new("const uint8_t*[]", arg_ptrs)
             c_lengths = self._ffi.new("size_t[]", arg_lengths)

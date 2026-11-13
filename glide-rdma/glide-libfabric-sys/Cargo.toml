@@ -43,10 +43,10 @@
 
 [package]
 name = "glide-libfabric-sys"
-version = "0.1.0"
+version = "0.1.1"
 
 # About
-description = "Libfabric bindings for Valkey GLIDE, vendored from ofi-libfabric-sys. This crate isn't intended to be used directly."
+description = "Libfabric bindings for Valkey GLIDE. This crate isn't intended to be used directly."
 authors = ["Valkey GLIDE Maintainers", "Libfabric Developers <libfabric-users@lists.openfabrics.org>"]
 license = "BSD-2-Clause"
 

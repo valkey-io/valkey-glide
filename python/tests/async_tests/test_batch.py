@@ -32,6 +32,7 @@ from glide_shared.commands.core_options import (
     OnlyIfEqual,
     OnlyIfNotEqual,
 )
+from glide_shared.commands.sorted_set import RangeByIndex
 from glide_shared.commands.stream import StreamAddOptions
 from glide_shared.config import NodeAddress, ProtocolVersion
 from glide_shared.constants import OK, TResult, TSingleNodeRoute
@@ -173,6 +174,63 @@ class TestBatch:
         assert await glide_client.get(key_mv) == data
         assert await glide_client.get(key_ba_key) == b"value1"
         assert await glide_client.get(key_mv_key) == b"value2"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_batch_memoryview_args_sent_by_byte_length(
+        self, glide_client: TGlideClient
+    ):
+        """Test that batch set() accepts memoryview values whose len() is smaller
+        than nbytes (wider item formats and 2-D views)."""
+        data = os.urandom(64)
+        views = [
+            memoryview(data).cast("H"),
+            memoryview(data).cast("I"),
+            memoryview(data).cast("Q"),
+            memoryview(data).cast("B", (2, 32)),
+        ]
+        keys = [get_random_string(10) for _ in views]
+
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(glide_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+        for key, view in zip(keys, views):
+            assert len(view) < view.nbytes == len(data)
+            batch.set(key, view)
+        assert await exec_batch(glide_client, batch) == [OK] * len(views)
+
+        for key in keys:
+            assert await glide_client.get(key) == data
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_batch_zadd_bytes_like_members(self, glide_client: TGlideClient):
+        """Test that batch zadd() stores bytes and memoryview members verbatim."""
+        key = get_random_string(10)
+
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(glide_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+        batch.zadd(
+            key,
+            {
+                b"\x00\xffab": 1.0,
+                b"\x01\xfecd": 2.0,
+                memoryview(b"\x02\xfdef"): 3.0,
+            },
+        )
+        result = await exec_batch(glide_client, batch)
+        assert result == [3]
+
+        assert await glide_client.zrange(key, RangeByIndex(0, -1)) == [
+            b"\x00\xffab",
+            b"\x01\xfecd",
+            b"\x02\xfdef",
+        ]
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

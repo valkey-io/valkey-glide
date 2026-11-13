@@ -19,6 +19,8 @@
 # Environment Variables:
 # - `GLIDE_SYNC_RELEASE=1` — Enables release mode and triggers vendoring during sdist creation.
 # - `GLIDE_SYNC_RDMA=1` — Builds the FFI layer with RDMA support.
+# - `GLIDE_SYNC_RDMA_TCP=1` — With `GLIDE_SYNC_RDMA=1`, also the `tcp` provider, for
+#   development and tests only; `RdmaProvider.Tcp()` is refused by a build without it.
 #
 # Typical usage:
 #   python setup.py build_ext      # Build the Rust shared library
@@ -210,6 +212,7 @@ class build_ext(build_ext_orig):
         # Builds the RDMA support in. libfabric is dynamically loaded only
         # when a client provides an optional RDMA configuration.
         rdma = os.environ.get("GLIDE_SYNC_RDMA", "0") == "1"
+        rdma_tcp = os.environ.get("GLIDE_SYNC_RDMA_TCP", "0") == "1"
         cargo_cmd = [
             "cargo",
             "rustc",
@@ -218,7 +221,9 @@ class build_ext(build_ext_orig):
             "cdylib",
             "--locked",
         ] + (["--release"] if release else [])
-        if rdma:
+        if rdma and rdma_tcp:
+            cargo_cmd += ["--features", "rdma-tcp-dev"]
+        elif rdma:
             cargo_cmd += ["--features", "rdma"]
 
         ffi_path = VENDORED_DEPENDENCIES["ffi"].dist

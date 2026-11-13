@@ -28,6 +28,8 @@ class HybridFilterPolicy(Enum):
     axis from `FtHybridCombine`'s RRF/LINEAR/FUNCTION method -- one controls how the vector search
     itself is pre-filtered, the other controls how the SEARCH and VSIM arms' scores are fused
     after both arms have already run.
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
 
     ADHOC = "ADHOC"
@@ -47,6 +49,8 @@ class FtHybridVsimFilter:
     an ordinary FT.SEARCH-style vector query under the hood (``<filter>=>[KNN ...]``), so the
     filter decides membership and the arm's score stays the vector distance -- it is never
     replaced by a text-relevance score the way a plain hybrid text query's score would be.
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
 
     def __init__(
@@ -111,6 +115,8 @@ class FtHybridSearchArm:
     numeric query, run alongside the VSIM arm and fused with it. A vector query (e.g. a
     ``=>[KNN ...]`` clause) is rejected here -- confirmed live and in
     ``src/commands/ft_hybrid_parser.cc`` -- use `FtHybridVsimArm` for the vector half instead.
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
 
     def __init__(
@@ -127,7 +133,7 @@ class FtHybridSearchArm:
                 Must not be a vector query (e.g. must not contain a ``=>[KNN ...]`` clause); the
                 server rejects that combination.
             scorer (Optional[TEncodable]): The scoring function used to rank this arm's results
-                (valkey-search 1.3.0, ``src/indexes/scoring/scorer.h``). ``"BM25STD"`` is the only
+                (``src/indexes/scoring/scorer.h``). ``"BM25STD"`` is the only
                 value currently registered and selectable; any other value is rejected by the
                 server.
             yield_score_as (Optional[TEncodable]): Exposes this arm's score under the given
@@ -175,6 +181,8 @@ class FtHybridVsimArm:
     - As an explicit ``$name`` string: the caller manages their own entry in
       `FtHybridOptions.params`, exactly like `FtSearchOptions.params`/`FtAggregateOptions.params`
       already work for every other PARAMS-driven query.
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
 
     def __init__(
@@ -286,7 +294,7 @@ class FtHybridVsimArm:
                 )
             param_ref = generated_param_name
         field_ref: TEncodable
-        if isinstance(self.field, (bytes, bytearray)):
+        if isinstance(self.field, (bytes, bytearray, memoryview)):
             field_ref = b"@" + bytes(self.field)
         else:
             field_ref = f"@{self.field}"
@@ -318,6 +326,8 @@ class FtHybridCombine(ABC):
     Abstract base class for the COMBINE clause of FT.HYBRID, controlling how the SEARCH and VSIM
     arms' per-document scores are fused into one ranking. See `FtHybridCombine.RRF`,
     `FtHybridCombine.Linear` and `FtHybridCombine.Function`.
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
 
     RRF: ClassVar[Type["FtHybridRrf"]]
@@ -340,6 +350,8 @@ class FtHybridRrf(FtHybridCombine):
     """
     Fuses the two arms' results using Reciprocal Rank Fusion: each arm's rank (not its raw score)
     contributes ``1 / (constant + rank)`` to the fused score.
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
 
     def __init__(
@@ -390,6 +402,8 @@ class FtHybridLinear(FtHybridCombine):
     live: writing neither `alpha` nor `beta` defaults both to 0.3/0.7 respectively; writing exactly
     one without the other is rejected by the server as more likely a typo than an intentional
     default.
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
 
     def __init__(
@@ -453,6 +467,8 @@ class FtHybridFunction(FtHybridCombine):
 
     This is a valkey-search extension not present in RediSearch's FT.HYBRID (included here
     anyway rather than dropped).
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
 
     def __init__(
@@ -505,6 +521,8 @@ class FtHybridOptions:
     aggregate-suffix tail that follows the mandatory SEARCH, VSIM and optional COMBINE clauses
     (which are passed directly to `glide.async_commands.ft.hybrid`/
     `glide_sync.sync_commands.ft.hybrid`, not through this class).
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
 
     def __init__(

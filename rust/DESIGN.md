@@ -14,9 +14,9 @@ which sit alongside it in the same tree (see the path dependencies in
 
 Because both resolve to the **same in-repo source**, Cargo unifies our
 `redis::Cmd` / `redis::Value` with the exact types `glide-core` expects — no type
-mismatch, no re-wrapping. Building the crate therefore requires a checkout of the
-monorepo, and the path deps mean it is not yet publishable to crates.io (see the
-README's *Status & publishing* section).
+mismatch, no re-wrapping. Each path dependency also declares a `version`, which
+Cargo uses when the crate is published to crates.io (see
+[Publishing to crates.io](DEVELOPER.md#publishing-to-cratesio)).
 
 ## Command dispatch — `CommandExecutor`
 

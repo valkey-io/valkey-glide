@@ -21,8 +21,9 @@ on:
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/lint-rust/action.yml
+
+            # Exclusions
             - "!**/*.md"
-            - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
             - glide-telemetry/**
@@ -36,20 +37,21 @@ on:
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/lint-rust/action.yml
+
+            # Exclusions
             - "!**/*.md"
-            - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
     workflow_call:
 
 concurrency:
-    group: glide-telemetry-${{ github.head_ref || github.ref }}
+    group: glide-telemetry-${{ github.head_ref || github.ref }}-${{ github.workflow }}
     cancel-in-progress: true
 
 env:
     CARGO_TERM_COLOR: always
 
 jobs:
-    test:
+    tests:
         runs-on: ubuntu-24.04
         timeout-minutes: 15
         steps:

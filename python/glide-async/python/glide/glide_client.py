@@ -61,6 +61,7 @@ from glide_shared.exceptions import (
     ConfigurationError,
     ConnectionError,
     RequestError,
+    get_connection_error_class,
     get_request_error_class,
 )
 from glide_shared.ffi_helpers import (
@@ -685,12 +686,12 @@ class _ProviderNativeCreate:
         self.lock = threading.Lock()
         self.abandoned = False
         self.core_client = None
-        self.error: Optional[ClosingError] = None
+        self.error: Optional[Exception] = None
 
     def _run(self) -> None:
         response_ptr = self.lib.create_client_with_credential_provider(*self.args)
         core_client = None
-        error: Optional[ClosingError] = None
+        error: Optional[Exception] = None
         if response_ptr == self.ffi.NULL:
             error = ClosingError("Failed to create client, response pointer is NULL.")
         else:
@@ -703,7 +704,9 @@ class _ProviderNativeCreate:
                     if response.connection_error_message != self.ffi.NULL
                     else "Unknown error"
                 )
-                error = ClosingError(message)
+                error = get_connection_error_class(response.connection_error_type)(
+                    message
+                )
             self.lib.free_connection_response(response_ptr)
         with self.lock:
             if self.abandoned:
@@ -856,8 +859,11 @@ class BaseClient(CoreCommands):
                     if client_response.connection_error_message != self._ffi.NULL
                     else "Unknown error"
                 )
+                error_class = get_connection_error_class(
+                    client_response.connection_error_type
+                )
                 self._lib.free_connection_response(client_response_ptr)
-                raise ClosingError(error_msg)
+                raise error_class(error_msg)
 
             self._lib.free_connection_response(client_response_ptr)
         else:

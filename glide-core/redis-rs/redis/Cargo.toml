@@ -1,6 +1,6 @@
 [package]
 name = "glide-core-engine"
-version = "0.1.1"
+version = "0.2.0"
 
 # About
 description = "Core engine for Valkey GLIDE. This crate isn't intended to be used directly."
@@ -33,8 +33,8 @@ mutex_atomic = "warn"
 [dependencies]
 
 # GLIDE dependencies
-glide-logger = { path = "../../../glide-logger", version = "0.1" }
-glide-telemetry = { path = "../../../glide-telemetry", version = "0.1" }
+glide-logger = { path = "../../../glide-logger", version = "0.1.1" }
+glide-telemetry = { path = "../../../glide-telemetry", version = "0.1.1" }
 
 # These two are generally really common simple dependencies so it does not seem
 # much of a point to optimize these, but these could in theory be removed for
@@ -95,7 +95,7 @@ lazy_static = "1"
 lru = "0.18.0"
 
 # Only needed for RDMA
-glide-rdma = { path = "../../../glide-rdma", version = "0.1", optional = true }
+glide-rdma = { path = "../../../glide-rdma", version = "0.2.0", optional = true }
 
 [features]
 default = [

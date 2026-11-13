@@ -476,7 +476,7 @@ dependencies = [
 
 [[package]]
 name = "glide-core-engine"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "arc-swap",
  "async-trait",
