@@ -374,6 +374,8 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    // TODO #7698: Add a test that a password updated during a reconnect is used by the next
+    // reconnect attempt, for standalone and cluster.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]

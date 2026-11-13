@@ -506,6 +506,7 @@ impl ReconnectingConnection {
                 .cert_material_handle
                 .is_some();
 
+            // TODO #7698: Re-read the stored client on every attempt so a password updated during a reconnect is used.
             // For connections without dynamic credentials, clone the client once
             // before the loop to preserve the original reconnection behavior
             // (password/TLS material is fixed at reconnect start). For IAM or
