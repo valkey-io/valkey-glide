@@ -2864,6 +2864,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                         lib_ver: None,
                         cache: None,
                         server_assisted_cache: false,
+                        tracking_prefix: None,
                     }
                 } else {
                     redis::RedisConnectionInfo {
@@ -2881,6 +2882,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                         lib_ver: None,
                         cache: None,
                         server_assisted_cache: false,
+                        tracking_prefix: None,
                     }
                 };
 

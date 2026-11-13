@@ -1283,7 +1283,8 @@ export interface BaseClientConfiguration {
      *
      * - **Memory Management**: The cache respects the configured memory limit and evicts entries based on the specified policy.
      * - **TTL Support**: Entries can have optional time-to-live values for automatic expiration.
-     * - **Shared Caches**: Multiple clients can share the same cache instance using the same cache ID.
+     * - **Server-Assisted Invalidation**: With `serverAssisted: true` (RESP3) the server invalidates cached keys as soon as they change; an optional `trackingPrefix` limits tracking and caching to one key namespace.
+     * - **Shared Caches**: Multiple clients can share the same cache by using the same `ClientSideCache` instance; they must use the same `trackingPrefix`.
      * - **Metrics**: Optional metrics collection provides insights into cache performance.
      *
      * @example
@@ -10128,6 +10129,10 @@ export class BaseClient {
                 evictionPolicy: cache.evictionPolicy,
                 enableMetrics: cache.enableMetrics,
                 serverAssisted: cache.serverAssisted,
+                trackingPrefix:
+                    cache.trackingPrefix === undefined
+                        ? undefined
+                        : Buffer.from(cache.trackingPrefix),
             });
         }
 

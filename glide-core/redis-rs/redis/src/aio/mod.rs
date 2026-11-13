@@ -143,6 +143,33 @@ where
     }
 }
 
+/// Rejects a connection whose server-side tracking prefix differs from the prefix its cache
+/// filters keys with.
+///
+/// The server only invalidates keys under `connection_info.tracking_prefix`, while the cache
+/// only stores keys under its own prefix. If the two differ, the cache can hold keys the
+/// server never invalidates, so the connection must not be set up at all.
+fn check_tracking_prefix_matches_cache(connection_info: &RedisConnectionInfo) -> RedisResult<()> {
+    let Some(cache) = &connection_info.cache else {
+        return Ok(());
+    };
+    let cache_prefix = cache.core().tracking_prefix();
+    let connection_prefix = connection_info.tracking_prefix.as_deref();
+    if cache_prefix == connection_prefix {
+        return Ok(());
+    }
+    Err(RedisError::from((
+        ErrorKind::InvalidClientConfig,
+        "Tracking prefix of the connection differs from the prefix of its client-side cache",
+        // Prefix values are left out: they can reveal key or tenant naming.
+        format!(
+            "connection_prefix_set={}, cache_prefix_set={}",
+            connection_prefix.is_some(),
+            cache_prefix.is_some()
+        ),
+    )))
+}
+
 // Initial setup for every connection.
 async fn setup_connection<C>(
     connection_info: &RedisConnectionInfo,
@@ -232,25 +259,31 @@ where
                 "server_assisted_cache requires RESP3 protocol",
             )));
         }
-        match cmd("CLIENT")
-            .arg("TRACKING")
-            .arg("ON")
-            .arg("BCAST")
-            .query_async(con)
-            .await
-        {
+        // Broadcasting mode: the server pushes invalidations for every modified key, or only
+        // for keys matching `PREFIX` when one is configured. The prefix is re-registered on
+        // every (re)connection because this setup runs for each new connection.
+        check_tracking_prefix_matches_cache(connection_info)?;
+        let mut tracking = cmd("CLIENT");
+        tracking.arg("TRACKING").arg("ON").arg("BCAST");
+        if let Some(prefix) = &connection_info.tracking_prefix {
+            tracking.arg("PREFIX").arg(prefix.as_slice());
+        }
+        match tracking.query_async(con).await {
             Ok(Value::Okay) => {}
             Err(e) => {
+                // Only the server error text: the configured prefix is left out because it
+                // can reveal key or tenant naming.
                 return Err(RedisError::from((
                     ErrorKind::ClientError,
                     "Failed to enable server-assisted client tracking",
                     e.to_string(),
                 )));
             }
-            _ => {
+            other => {
                 return Err(RedisError::from((
                     ErrorKind::ClientError,
                     "Unexpected response from CLIENT TRACKING ON BCAST",
+                    format!("{other:?}"),
                 )));
             }
         }
@@ -283,3 +316,151 @@ pub use connection_manager::*;
 mod runtime;
 use crate::commands::resp3_hello;
 pub(super) use runtime::*;
+
+#[cfg(test)]
+mod tracking_prefix_tests {
+    use super::{check_tracking_prefix_matches_cache, setup_connection, ConnectionLike};
+    use crate::cache::glide_cache::CacheConfig;
+    use crate::cache::lru_cache::new_lru_cache;
+    use crate::cmd::Arg;
+    use crate::connection::RedisConnectionInfo;
+    use crate::types::{RedisError, RedisFuture, Value};
+    use crate::ErrorKind;
+    use crate::{Cmd, ProtocolVersion};
+
+    /// Builds a connection info with `connection_prefix` and, when `cache_prefix` is `Some`, a
+    /// cache created with that prefix.
+    fn connection_info(
+        cache_prefix: Option<Option<&[u8]>>,
+        connection_prefix: Option<&[u8]>,
+    ) -> RedisConnectionInfo {
+        RedisConnectionInfo {
+            cache: cache_prefix.map(|prefix| {
+                new_lru_cache(CacheConfig {
+                    max_memory_bytes: 1024,
+                    ttl: None,
+                    enable_metrics: false,
+                    tracking_prefix: prefix.map(<[u8]>::to_vec),
+                })
+            }),
+            server_assisted_cache: true,
+            tracking_prefix: connection_prefix.map(<[u8]>::to_vec),
+            ..Default::default()
+        }
+    }
+
+    /// Equal prefixes, or a connection without a cache, pass the check.
+    #[test]
+    fn test_matching_prefixes_are_accepted() {
+        for (cache, connection) in [
+            (Some(None), None),
+            (Some(Some(&b"xxx:"[..])), Some(&b"xxx:"[..])),
+            // Tracking without a local cache has nothing to keep consistent.
+            (None, None),
+            (None, Some(&b"xxx:"[..])),
+        ] {
+            assert!(
+                check_tracking_prefix_matches_cache(&connection_info(cache, connection)).is_ok(),
+                "cache={cache:?}, connection={connection:?}"
+            );
+        }
+    }
+
+    /// Any difference between the connection prefix and the cache prefix is rejected, without
+    /// prefix values in the error.
+    #[test]
+    fn test_mismatching_prefixes_are_rejected() {
+        for (cache, connection) in [
+            (Some(&b"xxx:"[..]), Some(&b"yyy:"[..])),
+            // The server would invalidate only `xxx:` while the cache stores every key.
+            (None, Some(&b"xxx:"[..])),
+            // The server would invalidate every key; rejected as well to keep one rule.
+            (Some(&b"xxx:"[..]), None),
+        ] {
+            let err =
+                check_tracking_prefix_matches_cache(&connection_info(Some(cache), connection))
+                    .unwrap_err();
+            assert_eq!(
+                err.kind(),
+                ErrorKind::InvalidClientConfig,
+                "cache={cache:?}, connection={connection:?}"
+            );
+            let message = err.to_string();
+            assert!(
+                !message.contains("xxx:") && !message.contains("yyy:"),
+                "prefix values must not appear in the error: {message}"
+            );
+        }
+    }
+
+    /// Connection that accepts every setup command except `CLIENT TRACKING`, which it
+    /// rejects with a fixed server error.
+    struct TrackingRejectingConnection;
+
+    impl ConnectionLike for TrackingRejectingConnection {
+        fn req_packed_command<'a>(&'a mut self, cmd: &'a Cmd) -> RedisFuture<'a, Value> {
+            let is_tracking = cmd
+                .args_iter()
+                .any(|arg| matches!(arg, Arg::Simple(bytes) if bytes == b"TRACKING"));
+            Box::pin(async move {
+                if is_tracking {
+                    Err(RedisError::from((
+                        ErrorKind::ResponseError,
+                        "ERR",
+                        "tracking rejected by server".to_string(),
+                    )))
+                } else {
+                    Ok(Value::Okay)
+                }
+            })
+        }
+
+        fn req_packed_commands<'a>(
+            &'a mut self,
+            _cmd: &'a crate::Pipeline,
+            _offset: usize,
+            count: usize,
+            _pipeline_retry_strategy: Option<crate::PipelineRetryStrategy>,
+        ) -> RedisFuture<'a, Vec<Value>> {
+            Box::pin(async move { Ok(vec![Value::Okay; count]) })
+        }
+
+        fn get_db(&self) -> i64 {
+            0
+        }
+
+        fn is_closed(&self) -> bool {
+            false
+        }
+    }
+
+    /// A rejected `CLIENT TRACKING` keeps its error kind, description and the server error
+    /// text, with or without a prefix, and never includes the configured prefix.
+    #[tokio::test]
+    async fn test_tracking_setup_error_omits_the_configured_prefix() {
+        for prefix in [None, Some(&b"tenant-42:"[..])] {
+            let info = RedisConnectionInfo {
+                protocol: ProtocolVersion::RESP3,
+                ..connection_info(None, prefix)
+            };
+            let err = setup_connection(&info, &mut TrackingRejectingConnection, false)
+                .await
+                .unwrap_err();
+
+            assert_eq!(err.kind(), ErrorKind::ClientError, "prefix={prefix:?}");
+            let message = err.to_string();
+            assert!(
+                message.contains("Failed to enable server-assisted client tracking"),
+                "{message}"
+            );
+            assert!(
+                message.contains("tracking rejected by server"),
+                "server error text is kept: {message}"
+            );
+            assert!(
+                !message.contains("tenant-42"),
+                "the configured prefix must not appear in the error: {message}"
+            );
+        }
+    }
+}

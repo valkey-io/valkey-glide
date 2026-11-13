@@ -4,6 +4,7 @@
 
 import { randomUUID } from "crypto";
 
+import type { GlideString } from "./BaseClient.js";
 import { EvictionPolicy } from "./EvictionPolicy.js";
 
 /**
@@ -40,8 +41,37 @@ export interface ClientSideCacheConfig {
      * When enabled, GLIDE sends CLIENT TRACKING ON BCAST during connection setup
      * and the server sends invalidation messages when tracked keys are modified.
      * Requires RESP3 protocol. Defaults to false if not specified.
+     *
+     * The tracking state is owned by the client: do not issue RESET or
+     * CLIENT TRACKING manually on a client with server-assisted caching, because
+     * that stops the invalidations while the cache keeps serving its entries.
      */
     serverAssisted?: boolean;
+
+    /**
+     * Optional key prefix that limits server-assisted tracking and caching to
+     * keys starting with it.
+     *
+     * When set, GLIDE sends `CLIENT TRACKING ON BCAST PREFIX <prefix>` on every
+     * connection (standalone, each cluster node, and each reconnection), so the
+     * server only broadcasts
+     * invalidations for keys starting with this prefix, and the client only
+     * caches those keys. Without a prefix the server broadcasts an invalidation
+     * for every key written by any client, which does not scale when the cached
+     * working set is a small part of the keyspace. Keys outside the prefix are
+     * always fetched from the server, are never cached, do not count as cache
+     * hits or misses and therefore can never be stale; an `MGET` mixing tracked and untracked keys still returns the
+     * full ordered result and only the tracked keys are stored. Matching is a
+     * byte-wise, case-sensitive starts-with check; a key equal to the prefix is
+     * tracked.
+     *
+     * The prefix is fixed for the lifetime of the client and cannot be changed
+     * after connecting. All clients that share the same `ClientSideCache`
+     * instance use the same prefix.
+     * Requires `serverAssisted: true` (and therefore RESP3) and must not be empty.
+     * Defaults to undefined, meaning every key is tracked and cached.
+     */
+    trackingPrefix?: GlideString;
 }
 
 /**
@@ -62,6 +92,13 @@ export interface ClientSideCacheOptions {
      * Whether to enable server-assisted client-side caching.
      */
     serverAssisted?: boolean;
+
+    /**
+     * Optional key prefix that limits server-assisted tracking and caching to
+     * keys starting with it. Requires `serverAssisted: true` and must not be empty.
+     * See {@link ClientSideCacheConfig.trackingPrefix}.
+     */
+    trackingPrefix?: GlideString;
 }
 
 /**
@@ -69,8 +106,9 @@ export interface ClientSideCacheOptions {
  *
  * Client-side caching reduces network round-trips and server load by storing
  * frequently accessed data locally on the client. This class provides
- * configurable TTL-based expiration, multiple eviction policies, and
- * comprehensive metrics tracking.
+ * TTL-based expiration, optional server-assisted invalidation (`serverAssisted`,
+ * RESP3) that can be scoped to a key prefix (`trackingPrefix`), multiple
+ * eviction policies, and metrics tracking.
  *
  * @example
  * ```typescript
@@ -84,6 +122,33 @@ export interface ClientSideCacheOptions {
  *   evictionPolicy: EvictionPolicy.LFU,
  *   enableMetrics: true
  * });
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Server-assisted caching scoped to a key namespace with a tracking prefix.
+ * // Each client only receives invalidations for, and only caches, keys in its
+ * // own namespace. Keys outside the prefix are always read from the server.
+ * const usersCache = ClientSideCache.create(1024, 0, {
+ *   serverAssisted: true,
+ *   trackingPrefix: "users:",
+ * });
+ * const ordersCache = ClientSideCache.create(1024, 0, {
+ *   serverAssisted: true,
+ *   trackingPrefix: "orders:",
+ * });
+ * const usersClient = await GlideClient.createClient({
+ *   addresses,
+ *   protocol: ProtocolVersion.RESP3,
+ *   clientSideCache: usersCache,
+ * });
+ * const ordersClient = await GlideClient.createClient({
+ *   addresses,
+ *   protocol: ProtocolVersion.RESP3,
+ *   clientSideCache: ordersCache,
+ * });
+ * await usersClient.get("users:42");   // cached, invalidated on writes to users:*
+ * await usersClient.get("orders:7");   // served by the server, never cached
  * ```
  */
 export class ClientSideCache {
@@ -119,11 +184,22 @@ export class ClientSideCache {
     readonly serverAssisted: boolean;
 
     /**
+     * Key prefix registered with `CLIENT TRACKING ON BCAST PREFIX <prefix>`.
+     * Only keys starting with it are tracked by the server and cached locally;
+     * keys outside the prefix are always fetched from the server and never cached.
+     * Undefined means every key is tracked and cached.
+     * See {@link ClientSideCacheConfig.trackingPrefix}.
+     */
+    readonly trackingPrefix?: GlideString;
+
+    /**
      * Creates a new ClientSideCache instance.
      *
      * @param config - Configuration options for the cache
      * @throws {Error} If maxCacheKb is not a positive number
      * @throws {Error} If entryTtlMs is negative
+     * @throws {Error} If trackingPrefix is empty
+     * @throws {Error} If trackingPrefix is set without serverAssisted
      */
     constructor(config: ClientSideCacheConfig) {
         if (config.maxCacheKb <= 0) {
@@ -136,12 +212,29 @@ export class ClientSideCache {
             );
         }
 
+        const serverAssisted = config.serverAssisted ?? false;
+
+        if (config.trackingPrefix !== undefined) {
+            if (config.trackingPrefix.length === 0) {
+                throw new Error(
+                    "trackingPrefix must not be empty; omit it to track all keys",
+                );
+            }
+
+            if (!serverAssisted) {
+                throw new Error(
+                    "trackingPrefix requires serverAssisted to be true",
+                );
+            }
+        }
+
         this.cacheId = randomUUID();
         this.maxCacheKb = config.maxCacheKb;
         this.entryTtlMs = config.entryTtlMs;
         this.evictionPolicy = config.evictionPolicy;
         this.enableMetrics = config.enableMetrics ?? false;
-        this.serverAssisted = config.serverAssisted ?? false;
+        this.serverAssisted = serverAssisted;
+        this.trackingPrefix = config.trackingPrefix;
     }
 
     /**
@@ -153,6 +246,7 @@ export class ClientSideCache {
      * @returns A new ClientSideCache instance with auto-generated cache ID
      * @throws {Error} If maxCacheKb is not a positive number
      * @throws {Error} If entryTtlMs is negative
+     * @throws {Error} If trackingPrefix is empty or set without serverAssisted
      *
      * @example
      * ```typescript
@@ -163,6 +257,12 @@ export class ClientSideCache {
      * const cacheWithOptions = ClientSideCache.create(2048, 300000, {
      *   evictionPolicy: EvictionPolicy.LFU,
      *   enableMetrics: false
+     * });
+     *
+     * // Server-assisted cache that only tracks and caches keys under "users:"
+     * const scopedCache = ClientSideCache.create(1024, 0, {
+     *   serverAssisted: true,
+     *   trackingPrefix: "users:"
      * });
      * ```
      */
@@ -177,6 +277,7 @@ export class ClientSideCache {
             evictionPolicy: options?.evictionPolicy,
             enableMetrics: options?.enableMetrics,
             serverAssisted: options?.serverAssisted,
+            trackingPrefix: options?.trackingPrefix,
         });
     }
 }

@@ -6,6 +6,8 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
+from glide_shared.cache import ClientSideCache
+from glide_shared.commands.client_tracking import _parse_client_tracking_info
 from glide_shared.config import (
     AdvancedBaseClientConfiguration,
     AdvancedGlideClientConfiguration,
@@ -1462,3 +1464,85 @@ def test_recovery_requests_queue_size_in_proto():
     )
     request_custom = config_custom._create_a_protobuf_conn_request(cluster_mode=True)
     assert request_custom.recovery_requests_queue_size == 500
+
+
+# Client-side cache tracking prefix tests
+def test_client_side_cache_in_protobuf_request_without_tracking_prefix():
+    """Without a prefix the protobuf field is left unset, not sent as empty."""
+    cache = ClientSideCache.create(
+        max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True
+    )
+    config = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")], client_side_cache=cache
+    )
+    request = config._create_a_protobuf_conn_request()
+
+    assert request.client_side_cache.cache_id == cache.cache_id
+    assert request.client_side_cache.server_assisted is True
+    assert request.client_side_cache.HasField("tracking_prefix") is False
+
+
+@pytest.mark.parametrize("prefix", ["xxx:", b"xxx:"], ids=["str", "bytes"])
+def test_client_side_cache_tracking_prefix_in_protobuf_request(prefix):
+    """A str or bytes prefix is sent as bytes for standalone and cluster configs."""
+    cache = ClientSideCache.create(
+        max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True, tracking_prefix=prefix
+    )
+    for cluster_mode, config_cls in (
+        (False, GlideClientConfiguration),
+        (True, GlideClusterClientConfiguration),
+    ):
+        config = config_cls([NodeAddress("127.0.0.1")], client_side_cache=cache)
+        request = config._create_a_protobuf_conn_request(cluster_mode=cluster_mode)
+
+        assert request.client_side_cache.HasField("tracking_prefix")
+        assert request.client_side_cache.tracking_prefix == b"xxx:"
+        assert request.client_side_cache.server_assisted is True
+
+
+def test_client_side_cache_tracking_prefix_non_utf8_bytes_in_protobuf_request():
+    """A bytes prefix that is not valid UTF-8 reaches the protobuf request unchanged."""
+    prefix = b"\xff\xfe:"
+    cache = ClientSideCache.create(
+        max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True, tracking_prefix=prefix
+    )
+    config = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")], client_side_cache=cache
+    )
+    request = config._create_a_protobuf_conn_request()
+
+    assert request.client_side_cache.tracking_prefix == prefix
+
+
+def test_client_side_cache_tracking_prefix_mutated_after_create_is_revalidated():
+    """The dataclass is mutable: an invalid prefix set after ``create`` must still fail."""
+    cache = ClientSideCache.create(max_cache_kb=1024, entry_ttl_ms=0)
+    cache.tracking_prefix = "xxx:"  # server_assisted is False
+    config = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")], client_side_cache=cache
+    )
+    with pytest.raises(ValueError, match="tracking_prefix requires server_assisted"):
+        config._create_a_protobuf_conn_request()
+
+    cache = ClientSideCache.create(
+        max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True, tracking_prefix="xxx:"
+    )
+    cache.tracking_prefix = ""
+    config = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")], client_side_cache=cache
+    )
+    with pytest.raises(ValueError, match="tracking_prefix must not be empty"):
+        config._create_a_protobuf_conn_request()
+
+
+def test_client_tracking_info_parser_keeps_non_utf8_prefix():
+    """A non-UTF-8 prefix is decoded with surrogateescape and round-trips to bytes."""
+    prefix = b"\xff\xfe:"
+    info = _parse_client_tracking_info(
+        {b"flags": [b"on", b"bcast"], b"redirect": 0, b"prefixes": [prefix, b"xxx:"]}
+    )
+    assert info.flags == {"on", "bcast"}
+    assert info.redirect == 0
+    assert "xxx:" in info.prefixes
+    (raw,) = info.prefixes - {"xxx:"}
+    assert raw.encode("utf-8", "surrogateescape") == prefix

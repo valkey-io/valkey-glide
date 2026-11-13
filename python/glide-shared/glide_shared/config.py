@@ -1169,6 +1169,7 @@ class BaseClientConfiguration:
               even if the configurations are identical.
             - Clients using different DBs cannot share the same cache.
             - Clients using different ACL users cannot share the same cache.
+            - Clients sharing the same cache must use the same ``tracking_prefix``.
 
         address_resolver (Optional[AddressResolver]): Optional callback for resolving server addresses
             before connection. When provided, this callback will be invoked for each configured address
@@ -1388,6 +1389,12 @@ class BaseClientConfiguration:
         if cache_config.eviction_policy:
             cache_request.eviction_policy = cache_config.eviction_policy.value
 
+        # Validates the (mutable) prefix as well: the core rejects the same cases,
+        # but failing before the request is built gives a clearer Python error.
+        tracking_prefix = cache_config._tracking_prefix_bytes()
+        if tracking_prefix is not None:
+            cache_request.tracking_prefix = tracking_prefix
+
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
     ) -> ConnectionRequest:
@@ -1559,6 +1566,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
               even if the configurations are identical.
             - Clients using different DBs cannot share the same cache.
             - Clients using different ACL users cannot share the same cache.
+            - Clients sharing the same cache must use the same ``tracking_prefix``.
         node_discovery_mode (NodeDiscoveryMode): Controls how the client discovers node roles
             and topology in standalone mode. If not set, `STANDARD` will be used.
     """
@@ -1826,6 +1834,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
               even if the configurations are identical.
             - Clients using different DBs cannot share the same cache.
             - Clients using different ACL users cannot share the same cache.
+            - Clients sharing the same cache must use the same ``tracking_prefix``.
 
     Note:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff

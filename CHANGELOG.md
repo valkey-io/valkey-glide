@@ -12,6 +12,7 @@
 ### Features
 
 * Go: Add valkey-search 1.3 support, including scoring, cursors, and `FT.HYBRID` ([#7380](https://github.com/valkey-io/valkey-glide/pull/7380))
+* Core, Java, Python, Node, Go: Add `tracking_prefix` to the client-side cache configuration. With `server_assisted` enabled, GLIDE registers `CLIENT TRACKING ON BCAST PREFIX <prefix>` so a client only receives invalidations for its own key namespace, and the local cache only stores keys under that prefix (keys outside it always go to the server). Clients sharing the same `ClientSideCache` instance must use the same prefix. ([#7503](https://github.com/valkey-io/valkey-glide/issues/7503))
 * All: Add support for Valkey 9.0 commands:
   * `DELIFEQ` ([#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Java, Node, Python, Go: Add support for Valkey 9.1 commands:

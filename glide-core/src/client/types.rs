@@ -137,7 +137,43 @@ pub struct ClientSideCache {
     pub entry_ttl_ms: u64,
     pub eviction_policy: Option<EvictionPolicy>,
     pub enable_metrics: bool,
+    /// Enables server-assisted invalidation (`CLIENT TRACKING ON BCAST`, RESP3 only).
+    ///
+    /// The tracking state is owned by the client: issuing `RESET` or `CLIENT TRACKING`
+    /// manually on such a client stops the invalidations while the cache keeps serving its
+    /// entries, and is not supported.
     pub server_assisted: bool,
+    /// Key prefix registered with the server via `CLIENT TRACKING ON BCAST PREFIX`.
+    /// When set, only keys starting with this prefix receive server invalidations and only
+    /// those keys are stored in the local cache. `None` tracks and caches every key.
+    pub tracking_prefix: Option<Vec<u8>>,
+}
+
+impl ClientSideCache {
+    /// Validates the client-side cache configuration.
+    ///
+    /// Rules:
+    /// - `tracking_prefix` requires `server_assisted = true`, because the prefix is only
+    ///   meaningful as a `CLIENT TRACKING` option.
+    /// - `tracking_prefix` must not be empty. An empty prefix means "all keys" on the server;
+    ///   callers must omit the prefix instead so the intent is explicit.
+    pub fn validate(&self) -> Result<(), String> {
+        if let Some(prefix) = &self.tracking_prefix {
+            if !self.server_assisted {
+                return Err(
+                    "client_side_cache.tracking_prefix requires server_assisted to be enabled"
+                        .to_string(),
+                );
+            }
+            if prefix.is_empty() {
+                return Err(
+                    "client_side_cache.tracking_prefix must not be empty; omit it to track all keys"
+                        .to_string(),
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Authentication information for connecting to Redis/Valkey servers
@@ -579,6 +615,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                     }),
                 enable_metrics: proto_cache.enable_metrics,
                 server_assisted: proto_cache.server_assisted,
+                tracking_prefix: proto_cache.tracking_prefix.as_ref().map(|p| p.to_vec()),
             });
 
         // Convert protobuf compression config to internal compression config
@@ -702,11 +739,117 @@ mod tests {
         assert_eq!(unix.endpoint(), "unix:/run/valkey/valkey.sock");
     }
 
+    mod client_side_cache_validation_tests {
+        use crate::client::types::ClientSideCache;
+
+        /// Builds a cache configuration with the given server-assisted flag and tracking prefix.
+        fn cache(server_assisted: bool, tracking_prefix: Option<&[u8]>) -> ClientSideCache {
+            ClientSideCache {
+                cache_id: "id".to_string(),
+                max_cache_kb: 1,
+                entry_ttl_ms: 0,
+                eviction_policy: None,
+                enable_metrics: false,
+                server_assisted,
+                tracking_prefix: tracking_prefix.map(<[u8]>::to_vec),
+            }
+        }
+
+        /// A configuration without a prefix is valid with or without server-assisted mode.
+        #[test]
+        fn test_no_prefix_is_valid_with_or_without_server_assisted() {
+            assert!(cache(false, None).validate().is_ok());
+            assert!(cache(true, None).validate().is_ok());
+        }
+
+        /// A text or binary prefix is valid in server-assisted mode.
+        #[test]
+        fn test_prefix_with_server_assisted_is_valid() {
+            assert!(cache(true, Some(b"xxx:")).validate().is_ok());
+            assert!(cache(true, Some(&[0xff, 0x00])).validate().is_ok());
+        }
+
+        /// A prefix is rejected without server-assisted mode.
+        #[test]
+        fn test_prefix_requires_server_assisted() {
+            let err = cache(false, Some(b"xxx:")).validate().unwrap_err();
+            assert!(err.contains("server_assisted"), "{err}");
+        }
+
+        /// An empty prefix is rejected.
+        #[test]
+        fn test_empty_prefix_is_rejected() {
+            let err = cache(true, Some(b"")).validate().unwrap_err();
+            assert!(err.contains("must not be empty"), "{err}");
+        }
+    }
+
     mod protobuf_conversion_tests {
         use crate::ConnectionRequest;
         use crate::compression::CompressionBackendType;
         use crate::connection_request as protobuf;
         use ::protobuf::EnumOrUnknown;
+
+        /// Converts a protobuf connection request carrying `cache` into a `ConnectionRequest`.
+        fn request_with_cache(cache: protobuf::ClientSideCache) -> ConnectionRequest {
+            let mut proto_request = protobuf::ConnectionRequest::new();
+            proto_request.addresses.push(protobuf::NodeAddress {
+                host: "localhost".into(),
+                port: 6379,
+                ..Default::default()
+            });
+            proto_request.client_side_cache = ::protobuf::MessageField::some(cache);
+            proto_request.into()
+        }
+
+        /// A protobuf cache without a prefix converts to a configuration without one.
+        #[test]
+        fn test_client_side_cache_conversion_without_prefix() {
+            let request = request_with_cache(protobuf::ClientSideCache {
+                cache_id: "cache".into(),
+                max_cache_kb: 1,
+                server_assisted: true,
+                ..Default::default()
+            });
+            let cache = request.client_side_cache.expect("cache config");
+            assert!(cache.server_assisted);
+            assert_eq!(cache.tracking_prefix, None);
+        }
+
+        /// The conversion keeps the prefix bytes unchanged.
+        #[test]
+        fn test_client_side_cache_conversion_keeps_prefix_bytes() {
+            let request = request_with_cache(protobuf::ClientSideCache {
+                cache_id: "cache".into(),
+                max_cache_kb: 1,
+                server_assisted: true,
+                tracking_prefix: Some(vec![0xff, b'x', b':'].into()),
+                ..Default::default()
+            });
+            let cache = request.client_side_cache.expect("cache config");
+            assert_eq!(
+                cache.tracking_prefix.as_deref(),
+                Some(&[0xff, b'x', b':'][..])
+            );
+            assert!(cache.validate().is_ok());
+        }
+
+        /// The conversion keeps an empty prefix so that validation can reject it.
+        #[test]
+        fn test_client_side_cache_conversion_preserves_empty_prefix_for_validation() {
+            // An explicitly empty prefix is kept (not turned into None) so that validation
+            // can reject it instead of silently tracking every key.
+            let request = request_with_cache(protobuf::ClientSideCache {
+                cache_id: "cache".into(),
+                max_cache_kb: 1,
+                server_assisted: true,
+                tracking_prefix: Some(Vec::new().into()),
+                ..Default::default()
+            });
+            let cache = request.client_side_cache.expect("cache config");
+            assert_eq!(cache.tracking_prefix.as_deref(), Some(&b""[..]));
+            assert!(cache.validate().is_err());
+        }
 
         #[test]
         fn test_lib_name_and_ver() {

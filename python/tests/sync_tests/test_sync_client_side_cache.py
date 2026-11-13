@@ -2,12 +2,22 @@
 import time
 
 import pytest
-from glide_shared import RequestError
+from glide_shared import ClosingError, RequestError
 from glide_shared.cache import ClientSideCache, EvictionPolicy
 from glide_shared.config import ProtocolVersion
+from glide_shared.routes import AllNodes
+from glide_sync import GlideClusterClient as SyncGlideClusterClient
 
 from tests.sync_tests.conftest import create_sync_client
-from tests.utils.utils import build_client_side_cache, get_random_string, sync_wait_for
+from tests.utils.utils import (
+    assert_client_tracking_info,
+    build_client_side_cache,
+    get_random_string,
+    sync_assert_cache_bypassed,
+    sync_assert_cache_hit,
+    sync_read_until_cached,
+    sync_wait_for,
+)
 
 
 class TestSyncClientSideCache:
@@ -580,3 +590,515 @@ class TestSyncClientSideCache:
 
         client_a.close()
         client_b.close()
+
+    # ==================== Tracking prefix ====================
+
+    def test_sync_tracking_prefix_defaults_to_none(self):
+        """Test that tracking_prefix defaults to None (all keys are tracked)."""
+        cache = build_client_side_cache(server_assisted=True)
+        assert cache.tracking_prefix is None
+        assert cache._tracking_prefix_bytes() is None
+
+    @pytest.mark.parametrize(
+        "prefix, encoded",
+        [("xxx:", b"xxx:"), (b"xxx:", b"xxx:"), ("é:", b"\xc3\xa9:")],
+        ids=["str", "bytes", "non_ascii_str"],
+    )
+    def test_sync_tracking_prefix_accepts_str_and_bytes(self, prefix, encoded):
+        """Test that create() accepts a str or bytes prefix and encodes str as UTF-8."""
+        cache = build_client_side_cache(server_assisted=True, tracking_prefix=prefix)
+        assert cache.tracking_prefix == prefix
+        assert cache._tracking_prefix_bytes() == encoded
+
+    def test_sync_tracking_prefix_rejects_empty_prefix(self):
+        """Test that an empty prefix is rejected; omit it to track all keys."""
+        for empty in ("", b""):
+            with pytest.raises(ValueError, match="tracking_prefix must not be empty"):
+                build_client_side_cache(server_assisted=True, tracking_prefix=empty)
+
+    def test_sync_tracking_prefix_requires_server_assisted(self):
+        """Test that a prefix without server_assisted=True is rejected."""
+        with pytest.raises(
+            ValueError, match="tracking_prefix requires server_assisted"
+        ):
+            build_client_side_cache(tracking_prefix="xxx:")
+        with pytest.raises(
+            ValueError, match="tracking_prefix requires server_assisted"
+        ):
+            build_client_side_cache(server_assisted=False, tracking_prefix=b"xxx:")
+
+    def test_sync_tracking_prefix_validated_on_direct_construction(self):
+        """Test that constructing the dataclass directly is validated too."""
+        with pytest.raises(
+            ValueError, match="tracking_prefix requires server_assisted"
+        ):
+            ClientSideCache(
+                cache_id="direct",
+                max_cache_kb=1,
+                entry_ttl_ms=0,
+                tracking_prefix="xxx:",
+            )
+        with pytest.raises(ValueError, match="tracking_prefix must not be empty"):
+            ClientSideCache(
+                cache_id="direct",
+                max_cache_kb=1,
+                entry_ttl_ms=0,
+                server_assisted=True,
+                tracking_prefix="",
+            )
+        with pytest.raises(TypeError, match="tracking_prefix must be a str or bytes"):
+            ClientSideCache(
+                cache_id="direct",
+                max_cache_kb=1,
+                entry_ttl_ms=0,
+                server_assisted=True,
+                tracking_prefix=123,  # type: ignore[arg-type]
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_tracking_prefix_is_registered_with_the_server(
+        self, request, cluster_mode
+    ):
+        """The prefix is registered with CLIENT TRACKING on every node connection."""
+        cache = build_client_side_cache(server_assisted=True, tracking_prefix="xxx:")
+        client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+
+        info = client.client_tracking_info()
+        assert_client_tracking_info(info, on=True, prefix="xxx:")
+
+        if isinstance(client, SyncGlideClusterClient):
+            multi_info = client.client_tracking_info(AllNodes())
+            assert isinstance(multi_info, dict)
+            assert len(multi_info) > 1
+            for node_info in multi_info.values():
+                assert_client_tracking_info(node_info, on=True, prefix="xxx:")
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_tracking_prefix_non_utf8_bytes_end_to_end(
+        self, request, cluster_mode
+    ):
+        """A bytes prefix that is not valid UTF-8 is registered, cached and invalidated."""
+        prefix = b"\xff\xfe:"
+        cache = build_client_side_cache(
+            entry_ttl_ms=0,
+            enable_metrics=True,
+            server_assisted=True,
+            tracking_prefix=prefix,
+        )
+        client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+        writer = create_sync_client(request, cluster_mode=cluster_mode)
+
+        info = client.client_tracking_info()
+        assert_client_tracking_info(
+            info, on=True, prefix=prefix.decode("utf-8", "surrogateescape")
+        )
+        (reported,) = info.prefixes
+        assert reported.encode("utf-8", "surrogateescape") == prefix
+
+        key = prefix + get_random_string(8).encode()
+        assert writer.set(key, "v1") == "OK"
+        sync_read_until_cached(client, lambda: client.get(key), b"v1")
+        assert client.get_cache_entry_count() == 1
+        sync_assert_cache_hit(client, lambda: client.get(key), b"v1")
+
+        # A key outside the binary prefix is bypassed.
+        other = b"\xff:" + get_random_string(8).encode()
+        assert writer.set(other, "o1") == "OK"
+        sync_assert_cache_bypassed(client, lambda: client.get(other), b"o1")
+        assert client.get_cache_entry_count() == 1
+
+        assert writer.set(key, "v2") == "OK"
+
+        sync_wait_for(
+            lambda: client.get(key) == b"v2",
+            "the binary-prefixed key was not invalidated",
+        )
+
+        client.close()
+        writer.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_server_assisted_without_prefix_tracks_all_keys(
+        self, request, cluster_mode
+    ):
+        """Without a prefix the server reports the empty prefix (every key is tracked)."""
+        cache = build_client_side_cache(server_assisted=True)
+        client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+
+        info = client.client_tracking_info()
+        assert_client_tracking_info(info, on=True, prefix="")
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_tracking_prefix_scopes_invalidations_between_clients(
+        self, request, cluster_mode
+    ):
+        """Two clients with different prefixes: each caches and is invalidated only for
+        its own namespace, and reads keys outside its prefix straight from the server.
+        """
+        cache_a = build_client_side_cache(
+            entry_ttl_ms=0,
+            enable_metrics=True,
+            server_assisted=True,
+            tracking_prefix="xxx:",
+        )
+        cache_b = build_client_side_cache(
+            entry_ttl_ms=0,
+            enable_metrics=True,
+            server_assisted=True,
+            tracking_prefix=b"yyy:",
+        )
+        client_a = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache_a,
+        )
+        client_b = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache_b,
+        )
+        writer = create_sync_client(request, cluster_mode=cluster_mode)
+
+        suffix = get_random_string(8)
+        key_a = f"xxx:{suffix}"
+        key_a_stable = f"xxx:{suffix}:stable"  # never written after being cached
+        key_b = f"yyy:{suffix}"
+        assert writer.set(key_a, "a1") == "OK"
+        assert writer.set(key_a_stable, "s1") == "OK"
+        assert writer.set(key_b, "b1") == "OK"
+
+        # Each client caches its own namespace.
+        sync_read_until_cached(client_a, lambda: client_a.get(key_a), b"a1")
+        sync_read_until_cached(client_a, lambda: client_a.get(key_a_stable), b"s1")
+        sync_read_until_cached(client_b, lambda: client_b.get(key_b), b"b1")
+        assert client_a.get_cache_entry_count() == 2
+        assert client_b.get_cache_entry_count() == 1
+        sync_assert_cache_hit(client_a, lambda: client_a.get(key_a), b"a1")
+        sync_assert_cache_hit(client_b, lambda: client_b.get(key_b), b"b1")
+
+        # Keys outside the prefix are served by the server, never cached, not counted.
+        sync_assert_cache_bypassed(client_a, lambda: client_a.get(key_b), b"b1")
+        sync_assert_cache_bypassed(client_b, lambda: client_b.get(key_a), b"a1")
+        assert client_a.get_cache_entry_count() == 2, "client A must not cache yyy:*"
+        assert client_b.get_cache_entry_count() == 1, "client B must not cache xxx:*"
+
+        # A write in namespace A invalidates client A only.
+        assert writer.set(key_a, "a2") == "OK"
+
+        sync_wait_for(
+            lambda: client_a.get(key_a) == b"a2",
+            "client A did not observe the xxx:* invalidation",
+        )
+        assert client_b.get_cache_entry_count() == 1, "client B keeps its yyy:* entry"
+        sync_assert_cache_hit(client_b, lambda: client_b.get(key_b), b"b1")
+
+        # A write in namespace B invalidates client B only.
+        assert writer.set(key_b, "b2") == "OK"
+
+        sync_wait_for(
+            lambda: client_b.get(key_b) == b"b2",
+            "client B did not observe the yyy:* invalidation",
+        )
+        sync_assert_cache_hit(client_a, lambda: client_a.get(key_a_stable), b"s1")
+
+        # Client A reads the updated yyy:* value straight from the server (never stale)
+        # and still does not cache it.
+        sync_assert_cache_bypassed(client_a, lambda: client_a.get(key_b), b"b2")
+
+        client_a.close()
+        client_b.close()
+        writer.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_tracking_prefix_bypasses_cache_for_keys_outside_prefix(
+        self, request, cluster_mode
+    ):
+        """GET and MGET never cache keys outside the prefix; MGET mixing tracked and
+        untracked keys returns a complete, ordered result and stores only the tracked key.
+        """
+        cache = build_client_side_cache(
+            entry_ttl_ms=0,
+            enable_metrics=True,
+            server_assisted=True,
+            tracking_prefix="xxx:",
+        )
+        cached = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+        writer = create_sync_client(request, cluster_mode=cluster_mode)
+
+        suffix = get_random_string(8)
+        tracked = f"xxx:{suffix}"
+        untracked = f"zzz:{suffix}"
+        assert writer.set(tracked, "t1") == "OK"
+        assert writer.set(untracked, "u1") == "OK"
+
+        # GET on an untracked key: served by the server, not cached, not counted.
+        sync_assert_cache_bypassed(cached, lambda: cached.get(untracked), b"u1")
+        sync_assert_cache_bypassed(cached, lambda: cached.get(untracked), b"u1")
+        assert cached.get_cache_entry_count() == 0
+        assert cached.get_cache_total_lookups() == 0
+
+        # The writer changes it and the prefixed client sees the new value immediately.
+        assert writer.set(untracked, "u2") == "OK"
+        sync_assert_cache_bypassed(cached, lambda: cached.get(untracked), b"u2")
+
+        # MGET mixing tracked and untracked keys: complete ordered result, only the
+        # tracked key is stored (and only the tracked key is a lookup).
+        mgets = sync_read_until_cached(
+            cached, lambda: cached.mget([tracked, untracked]), [b"t1", b"u2"]
+        )
+        assert cached.get_cache_entry_count() == 1
+        assert cached.get_cache_total_lookups() == mgets
+
+        # Second MGET: the tracked key hits, the untracked key reflects a fresh write.
+        assert writer.set(untracked, "u3") == "OK"
+        sync_assert_cache_hit(
+            cached, lambda: cached.mget([untracked, tracked]), [b"u3", b"t1"]
+        )
+        assert cached.get_cache_entry_count() == 1
+
+        # The tracked key is still invalidated by the server.
+        assert writer.set(tracked, "t2") == "OK"
+
+        sync_wait_for(
+            lambda: cached.mget([tracked, untracked]) == [b"t2", b"u3"],
+            "the tracked MGET key was not invalidated",
+        )
+
+        cached.close()
+        writer.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_tracking_prefix_bypasses_cache_for_hgetall_and_smembers(
+        self, request, cluster_mode
+    ):
+        """HGETALL and SMEMBERS on keys outside the prefix are never cached either."""
+        cache = build_client_side_cache(
+            entry_ttl_ms=0,
+            enable_metrics=True,
+            server_assisted=True,
+            tracking_prefix="xxx:",
+        )
+        cached = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+        writer = create_sync_client(request, cluster_mode=cluster_mode)
+
+        suffix = get_random_string(8)
+        tracked_hash, untracked_hash = f"xxx:h:{suffix}", f"zzz:h:{suffix}"
+        tracked_set, untracked_set = f"xxx:s:{suffix}", f"zzz:s:{suffix}"
+        for key in (tracked_hash, untracked_hash):
+            assert writer.hset(key, {"f": "v1"}) == 1
+        for key in (tracked_set, untracked_set):
+            assert writer.sadd(key, ["m1"]) == 1
+
+        sync_assert_cache_bypassed(
+            cached, lambda: cached.hgetall(untracked_hash), {b"f": b"v1"}
+        )
+        sync_assert_cache_bypassed(
+            cached, lambda: cached.smembers(untracked_set), {b"m1"}
+        )
+        assert cached.get_cache_entry_count() == 0
+        assert cached.get_cache_total_lookups() == 0
+
+        sync_read_until_cached(
+            cached, lambda: cached.hgetall(tracked_hash), {b"f": b"v1"}
+        )
+        sync_read_until_cached(cached, lambda: cached.smembers(tracked_set), {b"m1"})
+        assert cached.get_cache_entry_count() == 2
+        sync_assert_cache_hit(
+            cached, lambda: cached.hgetall(tracked_hash), {b"f": b"v1"}
+        )
+        sync_assert_cache_hit(cached, lambda: cached.smembers(tracked_set), {b"m1"})
+
+        # Untracked keys always reflect the latest server state.
+        assert writer.hset(untracked_hash, {"f": "v2"}) == 0
+        assert writer.sadd(untracked_set, ["m2"]) == 1
+        sync_assert_cache_bypassed(
+            cached, lambda: cached.hgetall(untracked_hash), {b"f": b"v2"}
+        )
+        sync_assert_cache_bypassed(
+            cached, lambda: cached.smembers(untracked_set), {b"m1", b"m2"}
+        )
+        assert cached.get_cache_entry_count() == 2
+
+        cached.close()
+        writer.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_tracking_prefix_flush_still_clears_cache(self, request, cluster_mode):
+        """FLUSHALL still clears the prefixed cache (the server sends a null invalidation)."""
+        cache = build_client_side_cache(
+            entry_ttl_ms=0,
+            enable_metrics=True,
+            server_assisted=True,
+            tracking_prefix="xxx:",
+        )
+        client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+
+        key = f"xxx:{get_random_string(8)}"
+        assert client.set(key, "value") == "OK"
+        sync_read_until_cached(client, lambda: client.get(key), b"value")
+        assert client.get_cache_entry_count() == 1
+
+        assert client.flushall() == "OK"
+
+        sync_wait_for(
+            lambda: client.get_cache_entry_count() == 0,
+            "the null invalidation did not flush the cache",
+        )
+
+        client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_tracking_prefix_core_configuration_errors(
+        self, request, cluster_mode, monkeypatch
+    ):
+        """The core rejects the same invalid configurations at client creation, before
+        connecting. The Python validation is bypassed here to reach the core check."""
+        monkeypatch.setattr(
+            ClientSideCache, "_validate_tracking_prefix", lambda self: None
+        )
+
+        cache = build_client_side_cache(server_assisted=False, tracking_prefix="xxx:")
+        with pytest.raises(
+            ClosingError, match="tracking_prefix requires server_assisted"
+        ):
+            create_sync_client(
+                request,
+                cluster_mode=cluster_mode,
+                protocol=ProtocolVersion.RESP3,
+                cache=cache,
+            )
+
+        cache = build_client_side_cache(server_assisted=True, tracking_prefix="")
+        with pytest.raises(ClosingError, match="tracking_prefix must not be empty"):
+            create_sync_client(
+                request,
+                cluster_mode=cluster_mode,
+                protocol=ProtocolVersion.RESP3,
+                cache=cache,
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_tracking_prefix_shared_cache(self, request, cluster_mode):
+        """Two clients created with the same prefixed ClientSideCache share the cache."""
+        cache = build_client_side_cache(
+            entry_ttl_ms=0,
+            enable_metrics=True,
+            server_assisted=True,
+            tracking_prefix="xxx:",
+        )
+        client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+        client2 = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+
+        key = f"xxx:{get_random_string(8)}"
+        assert client.set(key, "shared") == "OK"
+        sync_read_until_cached(client, lambda: client.get(key), b"shared")
+        assert client.get_cache_entry_count() == 1
+        assert client2.get_cache_entry_count() == 1, "both clients see the same cache"
+        sync_assert_cache_hit(client2, lambda: client2.get(key), b"shared")
+
+        client.close()
+        client2.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_shared_cache_id_requires_same_tracking_prefix(
+        self, request, cluster_mode
+    ):
+        """Mutating the prefix on the same instance between two client creations
+        (same cache_id, different prefix) makes the second creation fail."""
+        cache = build_client_side_cache(
+            entry_ttl_ms=0,
+            enable_metrics=True,
+            server_assisted=True,
+            tracking_prefix="xxx:",
+        )
+        first = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+
+        # Same id, different prefix: rejected before connecting.
+        cache.tracking_prefix = "yyy:"
+        with pytest.raises(ClosingError, match="different tracking prefix"):
+            create_sync_client(
+                request,
+                cluster_mode=cluster_mode,
+                protocol=ProtocolVersion.RESP3,
+                cache=cache,
+            )
+
+        # Same id, no prefix at all: rejected as well.
+        cache.tracking_prefix = None
+        with pytest.raises(ClosingError, match="different tracking prefix"):
+            create_sync_client(
+                request,
+                cluster_mode=cluster_mode,
+                protocol=ProtocolVersion.RESP3,
+                cache=cache,
+            )
+
+        # The first client is unaffected by the failed attempts.
+        key = f"xxx:{get_random_string(8)}"
+        assert first.set(key, "v") == "OK"
+        sync_read_until_cached(first, lambda: first.get(key), b"v")
+        assert first.get_cache_entry_count() == 1
+
+        # Same id, same prefix again: shares the cache.
+        cache.tracking_prefix = "xxx:"
+        second = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+        assert second.get_cache_entry_count() == 1, "both clients see the same cache"
+
+        first.close()
+        second.close()

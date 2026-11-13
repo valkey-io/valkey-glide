@@ -29,6 +29,14 @@ pub struct CacheConfig {
 
     /// Enable metrics collection (hits, misses, evictions, expirations)
     pub enable_metrics: bool,
+
+    /// Key prefix registered with the server for invalidations
+    /// (`CLIENT TRACKING ON BCAST PREFIX <prefix>`).
+    ///
+    /// When set, only keys starting with this prefix are stored in the cache: a key outside the
+    /// prefix never receives a server invalidation, so caching it would serve stale data until
+    /// its TTL (forever with TTL 0). `None` caches every cacheable key.
+    pub tracking_prefix: Option<Vec<u8>>,
 }
 
 // ==================== Metrics ====================
@@ -236,6 +244,23 @@ impl CacheCore {
     /// Returns the cache configuration
     pub fn config(&self) -> &CacheConfig {
         &self.config
+    }
+
+    /// Returns the tracking prefix this cache is restricted to, if any.
+    pub fn tracking_prefix(&self) -> Option<&[u8]> {
+        self.config.tracking_prefix.as_deref()
+    }
+
+    /// Returns whether `key` can be stored in this cache.
+    ///
+    /// Without a tracking prefix every key is tracked. With one, only keys that start with the
+    /// prefix are tracked, mirroring the server-side `CLIENT TRACKING ... PREFIX` filter so the
+    /// local cache never holds a key the server will not invalidate.
+    pub fn is_tracked(&self, key: &[u8]) -> bool {
+        match &self.config.tracking_prefix {
+            None => true,
+            Some(prefix) => key.starts_with(prefix),
+        }
     }
 
     /// Returns the maximum memory in bytes
@@ -556,6 +581,14 @@ impl<S: EvictionStrategy> GlideCacheImpl<S> {
 // ==================== GlideCache Trait ====================
 
 /// Core caching interface for Glide
+///
+/// The provided command-level methods (`get_cached_cmd`, `set_cached_cmd`,
+/// `get_cached_cmd_with_fill`, `complete_cached_cmd` and the MGET helpers) enforce the
+/// tracking prefix through [`CacheCore::is_tracked`] before touching the store. The
+/// low-level `insert` / `insert_if_active_fill` methods deliberately do not: they are the
+/// store primitives. Implementations that override the command-level methods must keep
+/// calling `self.core().is_tracked(key)` before inserting, otherwise the cache can hold keys
+/// the server never invalidates.
 pub trait GlideCache: Send + Sync + Debug {
     // ==================== Core Access ====================
     /// Access the shared cache core
@@ -665,6 +698,9 @@ pub trait GlideCache: Send + Sync + Debug {
     /// Checks if a command is cacheable and retrieves the cached value if available.
     /// Automatically updates hit/miss statistics.
     ///
+    /// Keys outside the configured tracking prefix are never cached and do not count as
+    /// hits or misses.
+    ///
     /// # Returns
     /// - `Some(value)` if the command is cacheable and the value is in cache
     /// - `None` if the command is not cacheable or the value is not in cache
@@ -672,6 +708,9 @@ pub trait GlideCache: Send + Sync + Debug {
         let cmd_name = cmd.command()?;
         let key_type = cacheable_cmd_type(cmd_name.as_ref())?;
         let cmd_key = RoutingInfo::key_for_command(cmd)?;
+        if !self.core().is_tracked(cmd_key) {
+            return None;
+        }
 
         let result = self.get(cmd_key, key_type);
 
@@ -702,11 +741,17 @@ pub trait GlideCache: Send + Sync + Debug {
         };
 
         if let Some(cmd_key) = RoutingInfo::key_for_command(cmd) {
+            if !self.core().is_tracked(cmd_key) {
+                return;
+            }
             self.insert(cmd_key.to_vec(), key_type, value);
         }
     }
 
     /// Retrieves a cached command result and starts a fill only for a cache miss.
+    ///
+    /// Returns `(None, None)` for non-cacheable commands and for keys outside the tracking
+    /// prefix: the command is sent to the server as usual and its response is not stored.
     fn get_cached_cmd_with_fill(&self, cmd: &Cmd) -> (Option<Value>, Option<CacheFillToken>) {
         let Some(cmd_name) = cmd.command() else {
             return (None, None);
@@ -717,6 +762,9 @@ pub trait GlideCache: Send + Sync + Debug {
         let Some(cmd_key) = RoutingInfo::key_for_command(cmd) else {
             return (None, None);
         };
+        if !self.core().is_tracked(cmd_key) {
+            return (None, None);
+        }
 
         match self.get(cmd_key, key_type) {
             Some(value) => {
@@ -741,6 +789,9 @@ pub trait GlideCache: Send + Sync + Debug {
         let Some(cmd_key) = RoutingInfo::key_for_command(cmd) else {
             return;
         };
+        if !self.core().is_tracked(cmd_key) {
+            return;
+        }
         self.insert_if_active_fill(cmd_key.to_vec(), key_type, value, fill);
     }
 }
@@ -749,8 +800,11 @@ pub trait GlideCache: Send + Sync + Debug {
 pub(crate) trait MGetCacheExt: GlideCache {
     /// Looks up the individual keys of an MGET command in the cache.
     ///
-    /// Returns `None` when `cmd` is not a valid MGET command, leaving the
-    /// caller to execute it unchanged. Metrics are recorded once per key.
+    /// Returns `None` when `cmd` is not a valid MGET command, or when none of its
+    /// keys is inside the tracking prefix, leaving the caller to execute it
+    /// unchanged. Metrics are recorded once per tracked key.
+    /// Keys outside the tracking prefix are always fetched from the server and
+    /// never stored; they do not count as hits or misses.
     fn get_cached_mget(&self, cmd: &Cmd) -> Option<MGetCacheLookup> {
         let mut args = cmd.args_iter();
         match args.next()? {
@@ -767,9 +821,18 @@ pub(crate) trait MGetCacheExt: GlideCache {
         if keys.is_empty() {
             return None;
         }
+        // Nothing can be served from or stored in the cache: send the original
+        // command instead of re-encoding it and re-assembling the response.
+        if !keys.iter().any(|key| self.core().is_tracked(key)) {
+            return None;
+        }
 
         let mut lookup = MGetCacheLookup::with_capacity(keys.len());
         for key in keys {
+            if !self.core().is_tracked(key) {
+                lookup.push_untracked(key.to_vec());
+                continue;
+            }
             match self.get(key, CachedKeyType::String) {
                 Some(value) => {
                     self.increment_hit();
@@ -810,7 +873,9 @@ pub(crate) trait MGetCacheExt: GlideCache {
 
         let missing_keys = std::mem::take(&mut lookup.missing_keys);
         for ((index, key, fill), value) in missing_keys.into_iter().zip(miss_values) {
-            if value != Value::Nil {
+            // `fill` is `None` for keys outside the tracking prefix: return the server value
+            // but never store it, since the server will not invalidate it.
+            if let (Some(fill), false) = (fill, value == Value::Nil) {
                 self.insert_if_active_fill(key, CachedKeyType::String, value.clone(), fill);
             }
             lookup.values[index] = Some(value);
@@ -823,9 +888,12 @@ pub(crate) trait MGetCacheExt: GlideCache {
 impl<T: GlideCache + ?Sized> MGetCacheExt for T {}
 
 /// Cached MGET values and the original positions of keys that were not cached.
+///
+/// `missing_keys` carries a fill token for cache misses and `None` for keys outside the
+/// tracking prefix, which are fetched from the server but never inserted.
 pub(crate) struct MGetCacheLookup {
     values: Vec<Option<Value>>,
-    missing_keys: Vec<(usize, Vec<u8>, CacheFillToken)>,
+    missing_keys: Vec<(usize, Vec<u8>, Option<CacheFillToken>)>,
 }
 
 impl MGetCacheLookup {
@@ -841,7 +909,13 @@ impl MGetCacheLookup {
     }
 
     fn push_miss(&mut self, key: Vec<u8>, fill: CacheFillToken) {
-        self.missing_keys.push((self.values.len(), key, fill));
+        self.missing_keys.push((self.values.len(), key, Some(fill)));
+        self.values.push(None);
+    }
+
+    /// Records a key that must be fetched from the server and must not be cached.
+    fn push_untracked(&mut self, key: Vec<u8>) {
+        self.missing_keys.push((self.values.len(), key, None));
         self.values.push(None);
     }
 
@@ -1101,6 +1175,7 @@ mod tests {
             max_memory_bytes: 10_000,
             ttl: None,
             enable_metrics: true,
+            tracking_prefix: None,
         })
     }
 
@@ -1119,6 +1194,7 @@ mod tests {
                     max_memory_bytes: 10_000,
                     ttl: None,
                     enable_metrics: false,
+                    tracking_prefix: None,
                 }),
                 entries: Mutex::new(HashMap::new()),
                 insert_started: Barrier::new(2),
@@ -1403,6 +1479,314 @@ mod tests {
         assert_eq!(metrics.miss_rate(), 0.25);
     }
 
+    // ==================== Tracking prefix ====================
+
+    /// Creates an LRU cache with metrics enabled that is restricted to `prefix`.
+    fn prefixed_cache(prefix: &[u8]) -> std::sync::Arc<dyn GlideCache> {
+        crate::cache::lru_cache::new_lru_cache(CacheConfig {
+            max_memory_bytes: 10_000,
+            ttl: None,
+            enable_metrics: true,
+            tracking_prefix: Some(prefix.to_vec()),
+        })
+    }
+
+    /// Builds `GET <key>`.
+    fn get_cmd(key: &[u8]) -> Cmd {
+        let mut cmd = Cmd::new();
+        cmd.arg("GET").arg(key);
+        cmd
+    }
+
+    /// Without a prefix every key is tracked.
+    #[test]
+    fn test_is_tracked_without_prefix_accepts_every_key() {
+        let core = CacheCore::new(CacheConfig {
+            max_memory_bytes: 1024,
+            ttl: None,
+            enable_metrics: false,
+            tracking_prefix: None,
+        });
+        assert!(core.tracking_prefix().is_none());
+        assert!(core.is_tracked(b"anything"));
+        assert!(core.is_tracked(b""));
+        assert!(core.is_tracked(&[0xff, 0x00, 0x01]));
+    }
+
+    /// With a prefix only keys starting with it are tracked.
+    #[test]
+    fn test_is_tracked_with_prefix_matches_only_prefixed_keys() {
+        let core = CacheCore::new(CacheConfig {
+            max_memory_bytes: 1024,
+            ttl: None,
+            enable_metrics: false,
+            tracking_prefix: Some(b"xxx:".to_vec()),
+        });
+        assert_eq!(core.tracking_prefix(), Some(&b"xxx:"[..]));
+        assert!(core.is_tracked(b"xxx:1"));
+        assert!(
+            core.is_tracked(b"xxx:"),
+            "a key equal to the prefix is tracked"
+        );
+        assert!(
+            !core.is_tracked(b"xxx"),
+            "a key shorter than the prefix is not tracked"
+        );
+        assert!(!core.is_tracked(b"xx:1"));
+        assert!(!core.is_tracked(b"yyy:1"));
+        assert!(!core.is_tracked(b""));
+        assert!(
+            !core.is_tracked(b"Xxx:1"),
+            "prefix matching is case sensitive"
+        );
+    }
+
+    /// A non-UTF-8 prefix is matched byte by byte.
+    #[test]
+    fn test_is_tracked_with_binary_prefix() {
+        let prefix = [0xff, 0x00, b':'];
+        let core = CacheCore::new(CacheConfig {
+            max_memory_bytes: 1024,
+            ttl: None,
+            enable_metrics: false,
+            tracking_prefix: Some(prefix.to_vec()),
+        });
+        assert!(core.is_tracked(&[0xff, 0x00, b':', b'k']));
+        assert!(!core.is_tracked(&[0xff, 0x01, b':', b'k']));
+        assert!(!core.is_tracked(b"xxx:k"));
+    }
+
+    /// A key outside the prefix bypasses the cache and is not counted in the metrics.
+    #[test]
+    fn test_get_cached_cmd_bypasses_untracked_key_without_touching_metrics() {
+        let cache = prefixed_cache(b"xxx:");
+        let untracked = get_cmd(b"yyy:k");
+
+        assert_eq!(cache.get_cached_cmd(&untracked), None);
+        cache.set_cached_cmd(&untracked, Value::BulkString(b"v".to_vec().into()));
+        assert_eq!(cache.get_cached_cmd(&untracked), None);
+        assert_eq!(cache.entry_count(), 0, "untracked keys are never stored");
+
+        let metrics = cache.metrics().unwrap();
+        assert_eq!(metrics.hits(), 0);
+        assert_eq!(metrics.misses(), 0);
+        assert_eq!(metrics.total_lookups(), 0, "bypassed keys are not lookups");
+    }
+
+    /// A key under the prefix is cached.
+    #[test]
+    fn test_get_cached_cmd_caches_tracked_key() {
+        let cache = prefixed_cache(b"xxx:");
+        let tracked = get_cmd(b"xxx:k");
+
+        assert_eq!(cache.get_cached_cmd(&tracked), None);
+        cache.set_cached_cmd(&tracked, Value::BulkString(b"v".to_vec().into()));
+        assert_eq!(
+            cache.get_cached_cmd(&tracked),
+            Some(Value::BulkString(b"v".to_vec().into()))
+        );
+        assert_eq!(cache.entry_count(), 1);
+
+        let metrics = cache.metrics().unwrap();
+        assert_eq!(metrics.hits(), 1);
+        assert_eq!(metrics.misses(), 1);
+    }
+
+    /// The fill variant bypasses the cache for a key outside the prefix.
+    #[test]
+    fn test_get_cached_cmd_with_fill_bypasses_untracked_key() {
+        let cache = prefixed_cache(b"xxx:");
+        let untracked = get_cmd(b"yyy:k");
+
+        let (value, fill) = cache.get_cached_cmd_with_fill(&untracked);
+        assert!(value.is_none());
+        assert!(fill.is_none(), "no fill is started for an untracked key");
+
+        // Even with a fill token for the key, completing an untracked command must not insert.
+        let fill = cache.core().begin_cache_fill(b"yyy:k");
+        cache.complete_cached_cmd(&untracked, Value::BulkString(b"v".to_vec().into()), fill);
+        assert_eq!(cache.entry_count(), 0);
+        assert_eq!(cache.metrics().unwrap().total_lookups(), 0);
+    }
+
+    /// The fill variant caches a key under the prefix.
+    #[test]
+    fn test_get_cached_cmd_with_fill_caches_tracked_key() {
+        let cache = prefixed_cache(b"xxx:");
+        let tracked = get_cmd(b"xxx:k");
+
+        let (value, fill) = cache.get_cached_cmd_with_fill(&tracked);
+        assert!(value.is_none());
+        let fill = fill.expect("a miss on a tracked key starts a fill");
+        cache.complete_cached_cmd(&tracked, Value::BulkString(b"v".to_vec().into()), fill);
+
+        let (value, fill) = cache.get_cached_cmd_with_fill(&tracked);
+        assert_eq!(value, Some(Value::BulkString(b"v".to_vec().into())));
+        assert!(fill.is_none());
+        assert_eq!(cache.entry_count(), 1);
+    }
+
+    /// The prefix filter applies to hash and set commands, not only to strings.
+    #[test]
+    fn test_prefix_applies_to_hash_and_set_commands() {
+        let cache = prefixed_cache(b"xxx:");
+        for command in ["HGETALL", "SMEMBERS"] {
+            let mut untracked = Cmd::new();
+            untracked.arg(command).arg("yyy:k");
+            let (_, fill) = cache.get_cached_cmd_with_fill(&untracked);
+            assert!(
+                fill.is_none(),
+                "{command} on an untracked key must not start a fill"
+            );
+
+            let mut tracked = Cmd::new();
+            tracked.arg(command).arg("xxx:k");
+            let (_, fill) = cache.get_cached_cmd_with_fill(&tracked);
+            assert!(fill.is_some(), "{command} on a tracked key starts a fill");
+        }
+    }
+
+    /// MGET keys outside the prefix are fetched from the server but never cached.
+    #[test]
+    fn test_mget_untracked_keys_are_fetched_but_never_cached() {
+        let cache = prefixed_cache(b"xxx:");
+        let mut cmd = Cmd::new();
+        cmd.arg("MGET").arg("xxx:a").arg("yyy:b").arg("xxx:c");
+
+        let lookup = cache.get_cached_mget(&cmd).unwrap();
+        assert_eq!(
+            lookup.missing_count(),
+            3,
+            "two tracked misses plus one untracked key all go to the server"
+        );
+        assert_eq!(
+            lookup.missing_keys().collect::<Vec<_>>(),
+            vec![&b"xxx:a"[..], &b"yyy:b"[..], &b"xxx:c"[..]],
+            "server request keeps the original key order"
+        );
+
+        let result = cache
+            .complete_cached_mget(
+                lookup,
+                Value::Array(vec![
+                    Value::BulkString(b"a".to_vec().into()),
+                    Value::BulkString(b"b".to_vec().into()),
+                    Value::BulkString(b"c".to_vec().into()),
+                ]),
+            )
+            .unwrap();
+        assert_eq!(
+            result,
+            Value::Array(vec![
+                Value::BulkString(b"a".to_vec().into()),
+                Value::BulkString(b"b".to_vec().into()),
+                Value::BulkString(b"c".to_vec().into()),
+            ]),
+            "the untracked value is returned to the caller"
+        );
+
+        assert_eq!(cache.entry_count(), 2);
+        assert!(cache.get(b"xxx:a", CachedKeyType::String).is_some());
+        assert!(cache.get(b"xxx:c", CachedKeyType::String).is_some());
+        assert_eq!(
+            cache.get(b"yyy:b", CachedKeyType::String),
+            None,
+            "the untracked key must not be stored"
+        );
+
+        let metrics = cache.metrics().unwrap();
+        assert_eq!(metrics.misses(), 2, "only tracked keys count as misses");
+        assert_eq!(metrics.hits(), 0);
+
+        // Second lookup: tracked keys hit, the untracked key still goes to the server.
+        let lookup = cache.get_cached_mget(&cmd).unwrap();
+        assert!(!lookup.is_complete());
+        assert_eq!(lookup.missing_count(), 1);
+        assert_eq!(
+            lookup.missing_keys().collect::<Vec<_>>(),
+            vec![&b"yyy:b"[..]]
+        );
+        let metrics = cache.metrics().unwrap();
+        assert_eq!(metrics.hits(), 2);
+        assert_eq!(metrics.misses(), 2);
+    }
+
+    /// An MGET without any key under the prefix bypasses the cache path.
+    #[test]
+    fn test_mget_with_only_untracked_keys_bypasses_the_cache_path() {
+        let cache = prefixed_cache(b"xxx:");
+        let mut cmd = Cmd::new();
+        cmd.arg("MGET").arg("yyy:a").arg("zzz:b");
+
+        // No key can be cached, so the caller must send the original command untouched
+        // instead of re-encoding it through the cache MGET path.
+        assert!(cache.get_cached_mget(&cmd).is_none());
+        // ... and the generic single-key path does not treat MGET as cacheable either.
+        let (value, fill) = cache.get_cached_cmd_with_fill(&cmd);
+        assert!(value.is_none());
+        assert!(fill.is_none());
+
+        assert_eq!(cache.entry_count(), 0);
+        assert_eq!(cache.metrics().unwrap().total_lookups(), 0);
+    }
+
+    /// An MGET key outside the prefix does not register a pending fill.
+    #[test]
+    fn test_mget_untracked_key_does_not_register_a_fill() {
+        let cache = prefixed_cache(b"xxx:");
+        let mut cmd = Cmd::new();
+        cmd.arg("MGET").arg("xxx:a").arg("yyy:b");
+        let lookup = cache.get_cached_mget(&cmd).unwrap();
+        assert_eq!(lookup.missing_count(), 2);
+
+        // An invalidation for the untracked key while the request is in flight is harmless:
+        // nothing is pending for it and nothing gets inserted for it afterwards.
+        cache.invalidate_server_assisted(b"yyy:b");
+        cache
+            .complete_cached_mget(
+                lookup,
+                Value::Array(vec![
+                    Value::BulkString(b"a".to_vec().into()),
+                    Value::BulkString(b"b".to_vec().into()),
+                ]),
+            )
+            .unwrap();
+        assert_eq!(cache.entry_count(), 1, "only the tracked key is stored");
+        assert_eq!(cache.get(b"yyy:b", CachedKeyType::String), None);
+    }
+
+    /// Flushing a prefixed cache clears its entries and blocks pending fills.
+    #[test]
+    fn test_prefixed_cache_flush_clears_entries_and_blocks_pending_fills() {
+        let cache = prefixed_cache(b"xxx:");
+        let stored = get_cmd(b"xxx:stored");
+        let (_, fill) = cache.get_cached_cmd_with_fill(&stored);
+        cache.complete_cached_cmd(
+            &stored,
+            Value::BulkString(b"v".to_vec().into()),
+            fill.unwrap(),
+        );
+        assert_eq!(cache.entry_count(), 1);
+
+        // A fill is pending for another tracked key when the null invalidation arrives.
+        let pending = get_cmd(b"xxx:pending");
+        let (_, pending_fill) = cache.get_cached_cmd_with_fill(&pending);
+
+        cache.flush_all_server_assisted();
+        assert_eq!(cache.entry_count(), 0, "flush empties a prefixed cache");
+
+        cache.complete_cached_cmd(
+            &pending,
+            Value::BulkString(b"stale".to_vec().into()),
+            pending_fill.unwrap(),
+        );
+        assert_eq!(
+            cache.entry_count(),
+            0,
+            "a fill started before the flush is discarded"
+        );
+    }
+
     // ==================== CacheEntry ====================
     #[test]
     fn test_cache_entry_not_expired_no_ttl() {
@@ -1443,6 +1827,7 @@ mod tests {
             max_memory_bytes: 1024,
             ttl: Some(Duration::from_secs(60)),
             enable_metrics: true,
+            tracking_prefix: None,
         };
         let core = CacheCore::new(config);
         assert_eq!(core.max_memory(), 1024);
@@ -1455,6 +1840,7 @@ mod tests {
             max_memory_bytes: 1024,
             ttl: None,
             enable_metrics: false,
+            tracking_prefix: None,
         };
         let core = CacheCore::new(config);
         assert!(core.stats.is_none());
@@ -1467,12 +1853,14 @@ mod tests {
             max_memory_bytes: 1024,
             ttl: Some(Duration::from_secs(60)),
             enable_metrics: false,
+            tracking_prefix: None,
         });
         assert!(with_ttl.compute_expires_at().is_some());
         let without_ttl = CacheCore::new(CacheConfig {
             max_memory_bytes: 1024,
             ttl: None,
             enable_metrics: false,
+            tracking_prefix: None,
         });
         assert!(without_ttl.compute_expires_at().is_none());
     }
@@ -1482,6 +1870,7 @@ mod tests {
             max_memory_bytes: 100,
             ttl: None,
             enable_metrics: false,
+            tracking_prefix: None,
         });
         assert!(!core.entry_too_big(50));
         assert!(!core.entry_too_big(100));
@@ -1493,6 +1882,7 @@ mod tests {
             max_memory_bytes: 1000,
             ttl: None,
             enable_metrics: false,
+            tracking_prefix: None,
         });
         assert_eq!(core.current_memory(), 0);
         core.charge(100);
@@ -1511,6 +1901,7 @@ mod tests {
             max_memory_bytes: 100,
             ttl: None,
             enable_metrics: false,
+            tracking_prefix: None,
         });
         assert!(!core.needs_eviction(50));
         assert!(!core.needs_eviction(100));
@@ -1525,6 +1916,7 @@ mod tests {
             max_memory_bytes: 1024,
             ttl: None,
             enable_metrics: true,
+            tracking_prefix: None,
         });
         let stats = core.stats().unwrap();
         stats.record_hit();
@@ -1547,6 +1939,7 @@ mod tests {
             max_memory_bytes: 1024,
             ttl: None,
             enable_metrics: false,
+            tracking_prefix: None,
         });
 
         assert!(core.stats().is_none());

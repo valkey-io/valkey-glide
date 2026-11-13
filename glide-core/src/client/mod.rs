@@ -298,10 +298,14 @@ pub(crate) fn validate_unix_socket_addresses(request: &ConnectionRequest) -> Res
 ///
 /// `iam_token_manager: Option<&Arc<IAMTokenManager>>`
 /// — `Option` because IAM is optional; `&Arc` gives shared, non-owning, cheap access to a shared manager (we only read a token).
+///
+/// # Errors
+/// Returns an error when the client-side cache configuration is invalid or when a cache with
+/// the same `cache_id` is already registered with a different tracking prefix.
 pub async fn get_valkey_connection_info(
     connection_request: &ConnectionRequest,
     iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
-) -> redis::RedisConnectionInfo {
+) -> RedisResult<redis::RedisConnectionInfo> {
     let protocol = connection_request.protocol.unwrap_or_default();
     let db = connection_request.database_id;
     let client_name = connection_request.client_name.clone();
@@ -309,24 +313,21 @@ pub async fn get_valkey_connection_info(
     let lib_ver = connection_request.lib_ver.clone();
     let cache = connection_request
         .client_side_cache
-        .clone()
-        .map(|client_side_cache| {
-            get_or_create_cache(
-                &client_side_cache.cache_id,
-                client_side_cache.max_cache_kb,
-                client_side_cache.entry_ttl_ms,
-                client_side_cache.eviction_policy,
-                client_side_cache.enable_metrics,
-            )
-        });
+        .as_ref()
+        .map(get_or_create_cache_from_config)
+        .transpose()?;
 
     let server_assisted_cache = connection_request
         .client_side_cache
         .as_ref()
         .map(|c| c.server_assisted)
         .unwrap_or(false);
+    let tracking_prefix = connection_request
+        .client_side_cache
+        .as_ref()
+        .and_then(|c| c.tracking_prefix.clone());
 
-    match &connection_request.authentication_info {
+    let info = match &connection_request.authentication_info {
         Some(info) => {
             // If we have IAM configuration and a token manager, use the IAM token as password
             if info.iam_config.is_some() && iam_token_manager.is_some() {
@@ -347,6 +348,7 @@ pub async fn get_valkey_connection_info(
                     lib_ver,
                     cache,
                     server_assisted_cache,
+                    tracking_prefix,
                 }
             } else {
                 // Regular password-based authentication
@@ -360,6 +362,7 @@ pub async fn get_valkey_connection_info(
                     lib_ver,
                     cache,
                     server_assisted_cache,
+                    tracking_prefix,
                 }
             }
         }
@@ -371,9 +374,30 @@ pub async fn get_valkey_connection_info(
             lib_ver,
             cache,
             server_assisted_cache,
+            tracking_prefix,
             ..Default::default()
         },
-    }
+    };
+    Ok(info)
+}
+
+/// Validates a client-side cache configuration and registers (or attaches to) its cache.
+fn get_or_create_cache_from_config(config: &ClientSideCache) -> RedisResult<Arc<dyn GlideCache>> {
+    config.validate().map_err(|msg| {
+        redis::RedisError::from((
+            redis::ErrorKind::InvalidClientConfig,
+            "Invalid client-side cache configuration",
+            msg,
+        ))
+    })?;
+    get_or_create_cache(
+        &config.cache_id,
+        config.max_cache_kb,
+        config.entry_ttl_ms,
+        config.eviction_policy,
+        config.enable_metrics,
+        config.tracking_prefix.clone(),
+    )
 }
 
 use redis::{TlsCertificates, retrieve_tls_certificates};
@@ -2754,7 +2778,7 @@ async fn create_cluster_client(
 )> {
     let tls_mode = request.tls_mode.unwrap_or_default();
 
-    let valkey_connection_info = get_valkey_connection_info(&request, iam_token_manager).await;
+    let valkey_connection_info = get_valkey_connection_info(&request, iam_token_manager).await?;
 
     let has_root_certs = !request.root_certs.is_empty();
     let has_client_cert = !request.client_cert.is_empty();
@@ -2866,8 +2890,9 @@ async fn create_cluster_client(
     }
     builder = builder.use_protocol(request.protocol.unwrap_or_default());
     builder = builder.database_id(valkey_connection_info.db);
-    builder = builder.cache(valkey_connection_info.cache);
     builder = builder.server_assisted_cache(valkey_connection_info.server_assisted_cache);
+    builder = builder.tracking_prefix(valkey_connection_info.tracking_prefix.clone());
+    builder = builder.cache(valkey_connection_info.cache);
     #[cfg(feature = "rdma")]
     {
         builder = builder.rdma_fabric(_rdma_fabric.map(crate::rdma::Fabric::opened));
@@ -3175,8 +3200,26 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
 
     let rdma = request.rdma.log_summary();
 
+    let client_side_cache = request
+        .client_side_cache
+        .as_ref()
+        .map(|cache| {
+            format!(
+                "\nClient-side cache: id={}, max={}KB, ttl={}ms, eviction={:?}, metrics={}, server_assisted={}, tracking_prefix_set={}",
+                cache.cache_id,
+                cache.max_cache_kb,
+                cache.entry_ttl_ms,
+                cache.eviction_policy,
+                cache.enable_metrics,
+                cache.server_assisted,
+                // Only whether a prefix is set: its value can reveal key naming.
+                cache.tracking_prefix.is_some()
+            )
+        })
+        .unwrap_or_default();
+
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{recovery_requests_queue_size}{node_discovery_mode}{client_cert_paths}{cert_reload}{rdma}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{recovery_requests_queue_size}{node_discovery_mode}{client_cert_paths}{cert_reload}{rdma}{client_side_cache}",
     )
 }
 
@@ -3270,15 +3313,16 @@ impl Client {
             _ => None,
         };
 
-        let client_side_cache = request.client_side_cache.as_ref().map(|config| {
-            get_or_create_cache(
-                &config.cache_id,
-                config.max_cache_kb,
-                config.entry_ttl_ms,
-                config.eviction_policy,
-                config.enable_metrics,
-            )
-        });
+        // Validates the cache config (prefix rules) and registers the cache before any
+        // connection is opened, so a misconfiguration fails client creation up front.
+        // `get_valkey_connection_info` later re-attaches to the same registered cache; that
+        // second call is idempotent and cannot fail for a config that passed here.
+        let client_side_cache = request
+            .client_side_cache
+            .as_ref()
+            .map(get_or_create_cache_from_config)
+            .transpose()
+            .map_err(|err| ConnectionError::Configuration(err.to_string()))?;
 
         tokio::time::timeout(client_creation_timeout, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
@@ -4384,6 +4428,42 @@ mod tests {
             sanitized.contains("Addresses: unix:/tmp/valkey.sock, 10.0.0.1:6380"),
             "{sanitized}"
         );
+    }
+
+    /// The sanitized request string reports the cache configuration without the prefix value.
+    #[test]
+    fn test_sanitized_request_string_reports_client_side_cache_config() {
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "10.0.0.1".to_string(),
+                port: 6380,
+                unix_socket_path: None,
+            }],
+            client_side_cache: Some(crate::client::types::ClientSideCache {
+                cache_id: "cache-7".to_string(),
+                max_cache_kb: 512,
+                entry_ttl_ms: 1500,
+                eviction_policy: None,
+                enable_metrics: true,
+                server_assisted: true,
+                tracking_prefix: Some(b"xxx:".to_vec()),
+            }),
+            ..Default::default()
+        };
+        let sanitized = sanitized_request_string(&request);
+        assert!(
+            sanitized.contains(
+                "Client-side cache: id=cache-7, max=512KB, ttl=1500ms, eviction=None, metrics=true, server_assisted=true, tracking_prefix_set=true"
+            ),
+            "{sanitized}"
+        );
+        assert!(
+            !sanitized.contains("xxx:"),
+            "the prefix value must not be logged: {sanitized}"
+        );
+
+        let without_cache = ConnectionRequest::default();
+        assert!(!sanitized_request_string(&without_cache).contains("Client-side cache"));
     }
 
     #[cfg(unix)]

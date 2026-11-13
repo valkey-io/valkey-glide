@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
+import glide.api.models.GlideString;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.Builder;
 import lombok.Getter;
@@ -16,17 +17,31 @@ import lombok.Getter;
  * ClientSideCache} instance. Clients with different {@code ClientSideCache} instances will have
  * separate caches, even if the configurations are identical.
  *
+ * <p>With {@link #isServerAssisted() serverAssisted} enabled, an optional {@link
+ * #getTrackingPrefix() trackingPrefix} restricts both the server-side tracking and the local cache
+ * to the keys that start with that prefix. Keys outside the prefix are always fetched from the
+ * server and are never cached, so they can never be served stale. Without a prefix every key is
+ * tracked and cacheable.
+ *
  * @example
  *     <pre>{@code
  * // Create cache with default settings
- * ClientSideCache cache = ClientSideCache.create(1024, 60000);
+ * ClientSideCache defaultCache = ClientSideCache.create(1024, 60000);
  *
  * // Create cache with custom configuration
- * ClientSideCache cache = ClientSideCache.builder()
+ * ClientSideCache customCache = ClientSideCache.builder()
  *     .maxCacheKb(2048)
  *     .entryTtlMs(300)
  *     .evictionPolicy(EvictionPolicy.LRU)
  *     .enableMetrics(true)
+ *     .build();
+ *
+ * // Server-assisted cache that only tracks and caches keys under "user:"
+ * ClientSideCache scopedCache = ClientSideCache.builder()
+ *     .maxCacheKb(2048)
+ *     .entryTtlMs(0)
+ *     .serverAssisted(true)
+ *     .trackingPrefix("user:")
  *     .build();
  * }</pre>
  */
@@ -64,11 +79,47 @@ public class ClientSideCache {
      * <p>When enabled, GLIDE sends CLIENT TRACKING ON BCAST during connection setup and the server
      * sends invalidation messages when tracked keys are modified. Requires RESP3 protocol. Defaults
      * to false.
+     *
+     * <p>The tracking state is owned by the client: do not issue RESET or CLIENT TRACKING manually on
+     * a client with server-assisted caching, because that stops the invalidations while the cache
+     * keeps serving its entries.
      */
     @Builder.Default private final boolean serverAssisted = false;
 
     /**
-     * Creates a ClientSideCache with auto-generated cache ID and default settings.
+     * Optional key prefix that scopes server-assisted caching to a key namespace. {@code null} (the
+     * default) means every key is tracked and cacheable.
+     *
+     * <p>When set, GLIDE sends {@code CLIENT TRACKING ON BCAST PREFIX <trackingPrefix>} on every
+     * connection (standalone, each cluster node, and each reconnection), so the server only
+     * broadcasts invalidations for keys that start with the prefix. Without a prefix the server
+     * broadcasts an invalidation for <em>every</em> key written by any client, which does not scale
+     * when the cached working set is a small part of the keyspace.
+     *
+     * <p>The local cache only stores keys that start with the prefix. A key outside the prefix is
+     * always fetched from the server, is never cached and does not count as a cache lookup, hit or
+     * miss, so it can never be served stale. A multi-key read such as {@code MGET} that mixes tracked
+     * and untracked keys still returns the full ordered result; only the tracked keys are stored.
+     * Matching is a byte-wise, case-sensitive starts-with check; a key equal to the prefix is
+     * tracked.
+     *
+     * <p>Constraints:
+     *
+     * <ul>
+     *   <li>Requires {@link #isServerAssisted() serverAssisted} to be {@code true} (and therefore
+     *       RESP3).
+     *   <li>Must not be empty. Omit it to track all keys.
+     *   <li>Fixed for the lifetime of the client; it cannot be changed after connecting.
+     *   <li>All clients sharing the same {@code ClientSideCache} instance use the same prefix.
+     *   <li>An empty prefix, or a prefix without {@code serverAssisted}, makes {@code build()} throw
+     *       {@code IllegalArgumentException}.
+     * </ul>
+     */
+    private final GlideString trackingPrefix;
+
+    /**
+     * Creates a ClientSideCache with auto-generated cache ID and default settings (no server-assisted
+     * invalidation and no tracking prefix).
      *
      * @param maxCacheKb Maximum memory limit for the cache in kilobytes.
      * @param entryTtlMs TTL for cache entries in milliseconds. Use 0 for no expiration.
@@ -98,6 +149,30 @@ public class ClientSideCache {
         private ClientSideCacheBuilder cacheId(String cacheId) {
             return this;
         }
+
+        /**
+         * Sets the key prefix that scopes server-assisted caching. See {@link
+         * ClientSideCache#getTrackingPrefix()}.
+         *
+         * @param trackingPrefix The key prefix, encoded as UTF-8. Omit the call to track all keys.
+         * @return This builder.
+         */
+        public ClientSideCacheBuilder trackingPrefix(String trackingPrefix) {
+            this.trackingPrefix = trackingPrefix == null ? null : GlideString.gs(trackingPrefix);
+            return this;
+        }
+
+        /**
+         * Sets the key prefix that scopes server-assisted caching, as raw bytes. See {@link
+         * ClientSideCache#getTrackingPrefix()}.
+         *
+         * @param trackingPrefix The key prefix as raw bytes. Omit the call to track all keys.
+         * @return This builder.
+         */
+        public ClientSideCacheBuilder trackingPrefix(GlideString trackingPrefix) {
+            this.trackingPrefix = trackingPrefix;
+            return this;
+        }
     }
 
     // Private constructor with validation, called by Lombok's generated build() method.
@@ -107,12 +182,23 @@ public class ClientSideCache {
             long entryTtlMs,
             EvictionPolicy evictionPolicy,
             boolean enableMetrics,
-            boolean serverAssisted) {
+            boolean serverAssisted,
+            GlideString trackingPrefix) {
         if (maxCacheKb <= 0) {
             throw new IllegalArgumentException("maxCacheKb must be positive");
         }
         if (entryTtlMs < 0) {
             throw new IllegalArgumentException("entryTtlMs must be non-negative (0 = no expiration)");
+        }
+        if (trackingPrefix != null) {
+            if (trackingPrefix.getBytes().length == 0) {
+                throw new IllegalArgumentException(
+                        "trackingPrefix must not be empty; omit it to track all keys");
+            }
+            if (!serverAssisted) {
+                throw new IllegalArgumentException(
+                        "trackingPrefix requires serverAssisted to be enabled (and RESP3)");
+            }
         }
         this.cacheId = cacheId;
         this.maxCacheKb = maxCacheKb;
@@ -120,5 +206,6 @@ public class ClientSideCache {
         this.evictionPolicy = evictionPolicy;
         this.enableMetrics = enableMetrics;
         this.serverAssisted = serverAssisted;
+        this.trackingPrefix = trackingPrefix;
     }
 }

@@ -3002,7 +3002,7 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///   - `periodic_checks`: Health check configuration with either `manual_interval` (object with `duration_in_sec`) or `disabled` (bool) (object)
 ///   - `iam_credentials`: AWS IAM authentication with `cluster_name`, `region`, `service_type` ("ELASTICACHE" or "MEMORYDB"), and optional `refresh_interval_seconds` (object)
 ///   - `pubsub_subscriptions`: Pre-subscribe to channels on connection - map of channel type (0=Exact, 1=Pattern, 2=Sharded) to array of channel names (object)
-///   - `client_side_cache`: Client-side caching configuration with `max_cache_kb` (u64, required), `entry_ttl_ms` (u64, required, 0 = no expiration), optional `eviction_policy` ("LRU" or "LFU", defaults to LRU), and optional `enable_metrics` (bool, defaults to false). The `cache_id` is auto-generated internally. (object)
+///   - `client_side_cache`: Client-side caching configuration with `max_cache_kb` (u64, required), `entry_ttl_ms` (u64, required, 0 = no expiration), optional `eviction_policy` ("LRU" or "LFU", defaults to LRU), optional `enable_metrics` (bool, defaults to false), optional `server_assisted` (bool, defaults to false; enables `CLIENT TRACKING ON BCAST`, requires RESP3), and optional `tracking_prefix` (non-empty UTF-8 string, binary prefixes cannot be expressed in JSON; only keys starting with it are tracked and cached; an empty prefix, or a prefix without `server_assisted`, makes client creation fail with a configuration error). The `cache_id` is auto-generated internally. (object)
 ///
 /// * `client_type`: Type of client to create (sync/async).
 ///
@@ -3081,11 +3081,14 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///
 /// // Client-side caching
 /// const char* cache_opts = "{"
+///     "\"protocol\": \"RESP3\","
 ///     "\"client_side_cache\": {"
 ///         "\"max_cache_kb\": 2048,"
 ///         "\"entry_ttl_ms\": 60000,"
 ///         "\"eviction_policy\": \"LRU\","
-///         "\"enable_metrics\": true"
+///         "\"enable_metrics\": true,"
+///         "\"server_assisted\": true,"
+///         "\"tracking_prefix\": \"user:\""
 ///     "}"
 /// "}";
 /// create_client_from_uri("valkey://localhost:6379", cache_opts, &client_type, 0);
@@ -4257,6 +4260,23 @@ fn apply_json_options(
             config.enable_metrics = metrics
                 .as_bool()
                 .ok_or_else(|| "client_side_cache.enable_metrics must be a boolean".to_string())?;
+        }
+
+        // server_assisted (optional, defaults to false)
+        if let Some(server_assisted) = cache_obj.get("server_assisted") {
+            config.server_assisted = server_assisted
+                .as_bool()
+                .ok_or_else(|| "client_side_cache.server_assisted must be a boolean".to_string())?;
+        }
+
+        // tracking_prefix (optional). Only the JSON type is checked here; the semantic rules
+        // (requires server_assisted, must not be empty) are enforced once, by the core, when
+        // the client is created, and surface as a configuration error.
+        if let Some(prefix) = cache_obj.get("tracking_prefix") {
+            let prefix = prefix
+                .as_str()
+                .ok_or_else(|| "client_side_cache.tracking_prefix must be a string".to_string())?;
+            config.tracking_prefix = Some(prefix.as_bytes().to_vec().into());
         }
 
         // Auto-generate cache_id after all validation passes (not accepted from JSON input)
@@ -7809,6 +7829,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         },
         lib_ver: None,
         server_assisted_cache: false,
+        tracking_prefix: None,
         cache: None,
     };
 
