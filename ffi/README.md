@@ -50,6 +50,34 @@ installed, and the ones in `tests/ffi_client_tests.rs` also need `valkey-server`
 cargo test --features rdma
 ```
 
+### Device memory
+
+With `device_memory` set in the RDMA configuration, the client opens the fabric with
+`FI_HMEM`, and creating it fails on a provider without it. `register_rdma_device_region`
+registers CUDA memory, and `rdma_get` and `rdma_set` take the region it returns. The
+server then reads and writes the GPU memory directly.
+
+GLIDE never reads device memory and does not call CUDA, so some of the work is the
+caller's. GPU work that writes a window has to finish before `rdma_set` of it, for
+example by synchronizing its stream. A set sends no checksum (`Skip`) or one the caller
+computed (`Known`), and `Compute` is refused. `rdma_get` does not check the bytes that
+landed, and the caller can check them against `RdmaResult::checksum`.
+
+GPU work that reads those bytes has to be submitted after `rdma_get` returns, since work
+already running can see stale data. If the device's
+`CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WRITES_ORDERING` does not cover that work, call
+`cuFlushGPUDirectRDMAWrites` first.
+
+The rest is as for host memory. Run one transfer at a time per region, and leave its
+memory alone until the transfer returns. Reuse or free the memory only once
+`free_rdma_region` returns null, or `rdma_memory_released` returns true for the hold it
+returns. Freeing the hold does not release the memory.
+
+[`tests/test_rdma_device.rs`](tests/test_rdma_device.rs) does all of this on a real GPU
+and server, including cancelling a transfer and freeing its allocation. Its tests are
+ignored because CI has no GPU. It loads `libcuda.so.1` at run time instead of linking
+CUDA, and its module documentation lists what it needs and how to run it.
+
 ## Generating the C Header File
 
 ```bash

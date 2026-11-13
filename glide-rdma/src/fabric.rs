@@ -8,8 +8,9 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use crate::buffer::{HostMemory, RdmaBuffer};
 use crate::closer::Closer;
 use crate::config::FabricConfig;
-use crate::endpoint::{LibfabricEndpoint, Registration};
+use crate::endpoint::{LibfabricEndpoint, RegisteredMemory, Registration};
 use crate::error::RdmaError;
+use crate::memory::{Device, DeviceRuntime, MemoryKind};
 use crate::progress::{ProgressDriver, ProgressGuard};
 use crate::region_ref::RegionRef;
 use crate::session::Handshake;
@@ -59,6 +60,9 @@ struct FabricInner {
     leaked_bytes: AtomicUsize,
     /// [`crate::config::Provider::close_stops_writes`] for this fabric's provider.
     close_stops_writes: bool,
+    /// Opened with [`FabricConfig::with_device_memory`], so device memory can be
+    /// registered.
+    device_memory: bool,
     address: Vec<u8>,
     uses_virtual_addressing: bool,
     /// Every peer address currently in the address vector and how many sessions
@@ -110,6 +114,7 @@ impl RdmaFabric {
                 parked_bytes: AtomicUsize::new(0),
                 leaked_bytes: AtomicUsize::new(0),
                 close_stops_writes: config.provider().close_stops_writes(),
+                device_memory: config.device_memory(),
                 address,
                 uses_virtual_addressing,
                 peers: Mutex::new(HashMap::new()),
@@ -175,14 +180,111 @@ impl RdmaFabric {
         self.register_host(unsafe { HostMemory::from_raw(memory, owner) })
     }
 
+    /// Register device memory, such as CUDA memory, owned outside Rust, by its
+    /// address. `runtime` names the device runtime it belongs to.
+    ///
+    /// The returned buffer is a [`RdmaBuffer<Device>`], which never reads or writes
+    /// the memory: it has no [`RdmaBuffer::as_host`], a set cannot compute a
+    /// checksum of it, and a get hands back the server's checksum without checking
+    /// the landed bytes against it.
+    ///
+    /// The NIC reaches the memory directly, outside the device runtime's ordering,
+    /// and this crate synchronizes nothing with the device. That is left to the
+    /// caller:
+    ///
+    /// * Device work that writes a window must have finished before a set of it is
+    ///   lent, for example by synchronizing its stream. CUDA calls such as
+    ///   `cudaMemset`, or `cudaMemcpy` from pageable host memory, can return before
+    ///   their writes land, unless the allocation has
+    ///   `CU_POINTER_ATTRIBUTE_SYNC_MEMOPS` set.
+    /// * Device work must not touch a window while a get of it is in flight. Device
+    ///   work that reads the landed bytes must be submitted after the get returns,
+    ///   since work already running may see stale ones. On a device whose
+    ///   `CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WRITES_ORDERING` does not order them,
+    ///   the caller first calls `cuFlushGPUDirectRDMAWrites`, which is a no-op where
+    ///   the device does.
+    ///
+    /// The fabric must have been opened with [`FabricConfig::with_device_memory`].
+    /// `owner` is dropped as for [`Self::register_raw`], at once if registration fails.
+    ///
+    /// # Safety
+    ///
+    /// * `memory` must be memory of `runtime`, allocated, and stay at the
+    ///   same address until `owner` is dropped.
+    /// * Nothing else may write the memory while a transfer of it is in flight.
+    pub unsafe fn register_device_raw(
+        &self,
+        memory: NonNull<[u8]>,
+        runtime: DeviceRuntime,
+        owner: impl Send + 'static,
+    ) -> Result<RdmaBuffer<Device>, RdmaError> {
+        if !self.inner.device_memory {
+            return Err(RdmaError::Configuration(
+                "this fabric was opened without device memory; enable device memory in \
+                 the RDMA configuration to register it"
+                    .into(),
+            ));
+        }
+        // SAFETY: the caller upholds the contract above, which covers `from_raw`'s
+        // except that the memory is never read or written through `bytes`.
+        let memory = unsafe { HostMemory::from_raw(memory, owner) };
+        self.register_memory(memory, |endpoint, bytes| {
+            // SAFETY: as for `register_memory`, and `bytes` is memory of `runtime`.
+            unsafe { endpoint.register_remote_device(bytes, runtime) }
+        })
+    }
+
     fn register_host(&self, host: HostMemory) -> Result<RdmaBuffer, RdmaError> {
+        self.register_memory(host, |endpoint, bytes| {
+            // SAFETY: as for `register_memory`.
+            unsafe { endpoint.register_remote(bytes) }
+        })
+    }
+
+    /// Whether the provider opened this fabric with `FI_HMEM`.
+    #[cfg(test)]
+    pub(crate) fn offers_device_memory(&self) -> bool {
+        self.endpoint().offers_device_memory()
+    }
+
+    /// Host memory registered as device memory through `FI_HMEM_SYSTEM`, so tests
+    /// drive the device path on providers without a GPU, whatever the fabric was
+    /// opened with.
+    ///
+    /// # Safety
+    ///
+    /// As for [`Self::register_raw`].
+    #[cfg(test)]
+    pub(crate) unsafe fn register_system_as_device(
+        &self,
+        memory: NonNull<[u8]>,
+        owner: impl Send + 'static,
+    ) -> Result<RdmaBuffer<Device>, RdmaError> {
+        // SAFETY: the caller upholds `register_raw`'s contract.
+        let memory = unsafe { HostMemory::from_raw(memory, owner) };
+        self.register_memory(memory, |endpoint, bytes| {
+            // SAFETY: as for `register_memory`.
+            unsafe { endpoint.register_remote_device(bytes, DeviceRuntime::SystemForTests) }
+        })
+    }
+
+    /// Register `host` with `register`, which may rely on the bytes staying at one
+    /// address until the region is closed.
+    fn register_memory<M: MemoryKind>(
+        &self,
+        host: HostMemory,
+        register: impl FnOnce(
+            &mut LibfabricEndpoint,
+            NonNull<[u8]>,
+        ) -> Result<RegisteredMemory, RdmaError>,
+    ) -> Result<RdmaBuffer<M>, RdmaError> {
         if host.len() == 0 {
             return Err(RdmaError::Configuration("cannot register 0 bytes".into()));
         }
         self.wait_for_closes();
-        // SAFETY: `host` keeps the bytes at one address until it is dropped, and the
+        // `host` keeps the bytes at one address until it is dropped, and the
         // returned RdmaBuffer drops it only after the region is closed.
-        let registered = unsafe { self.endpoint().register_remote(host.bytes_ptr())? };
+        let registered = register(&mut self.endpoint(), host.bytes_ptr())?;
         let registration = Registration::new(registered, self.clone());
         let region_ref = self.region_ref(&registration);
         Ok(RdmaBuffer::new(

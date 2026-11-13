@@ -49,7 +49,7 @@ pub struct RdmaRegion {
     /// without the server's reply or with a `+QUEUED` reply inside a `MULTI`. The
     /// fabric then decides when the memory is safe to let go, and
     /// [`Self::released`] says when it has.
-    buffer: Option<glide_rdma::RdmaBuffer>,
+    buffer: Option<RegionBuffer>,
     /// Set once the fabric has let go of the caller's memory; see [`ForeignOwner`].
     released: Arc<AtomicBool>,
     /// The fabric the buffer was registered with, kept even once the buffer is
@@ -82,11 +82,47 @@ pub struct RdmaMemoryHold {
     leaked: bool,
 }
 
+/// The buffer a [`RdmaRegion`] holds: over host memory, or over device memory from
+/// [`register_rdma_device_region`], which nothing here reads or writes.
+#[cfg(feature = "rdma")]
+#[derive(Debug)]
+enum RegionBuffer {
+    Host(glide_rdma::RdmaBuffer),
+    Device(glide_rdma::RdmaBuffer<glide_rdma::Device>),
+}
+
+#[cfg(feature = "rdma")]
+impl RegionBuffer {
+    /// The fabric the buffer is registered with.
+    fn fabric(&self) -> &glide_rdma::RdmaFabric {
+        match self {
+            Self::Host(buffer) => buffer.fabric(),
+            Self::Device(buffer) => buffer.fabric(),
+        }
+    }
+
+    /// A handle that revokes the buffer's region from another thread.
+    fn revoker(&self) -> glide_rdma::RdmaRevoker {
+        match self {
+            Self::Host(buffer) => buffer.revoker(),
+            Self::Device(buffer) => buffer.revoker(),
+        }
+    }
+
+    /// Whether the buffer's region has been revoked.
+    fn is_revoked(&self) -> bool {
+        match self {
+            Self::Host(buffer) => buffer.is_revoked(),
+            Self::Device(buffer) => buffer.is_revoked(),
+        }
+    }
+}
+
 #[cfg(feature = "rdma")]
 impl RdmaRegion {
     /// A region for a freshly registered `buffer` over the caller's memory, whose
     /// release `released` reports.
-    fn new(buffer: glide_rdma::RdmaBuffer, released: Arc<AtomicBool>) -> Self {
+    fn new(buffer: RegionBuffer, released: Arc<AtomicBool>) -> Self {
         Self {
             fabric: buffer.fabric().clone(),
             revoker: buffer.revoker(),
@@ -96,7 +132,7 @@ impl RdmaRegion {
     }
 
     /// Take the buffer out for a transfer, or say why there is none.
-    fn take(&mut self) -> Result<glide_rdma::RdmaBuffer, RdmaResult> {
+    fn take(&mut self) -> Result<RegionBuffer, RdmaResult> {
         self.buffer.take().ok_or_else(|| RdmaResult {
             region_closed: true,
             ..RdmaResult::rejected(
@@ -109,7 +145,7 @@ impl RdmaRegion {
 
     /// Put back what a transfer handed back, and mark `result` with whether the
     /// region can still transfer.
-    fn finish(&mut self, buffer: Option<glide_rdma::RdmaBuffer>, result: RdmaResult) -> RdmaResult {
+    fn finish(&mut self, buffer: Option<RegionBuffer>, result: RdmaResult) -> RdmaResult {
         self.buffer = buffer;
         RdmaResult {
             region_closed: self.is_closed(),
@@ -121,9 +157,7 @@ impl RdmaRegion {
     /// server was known to be done with the memory, so no buffer came back, or the
     /// region was revoked, for example by [`rdma_close_regions`].
     fn is_closed(&self) -> bool {
-        self.buffer
-            .as_ref()
-            .is_none_or(glide_rdma::RdmaBuffer::is_revoked)
+        self.buffer.as_ref().is_none_or(RegionBuffer::is_revoked)
     }
 }
 
@@ -172,6 +206,16 @@ impl RdmaSetChecksumMode {
             Self::Skip => glide_rdma::SetChecksum::Skip,
             Self::Compute => glide_rdma::SetChecksum::Compute,
             Self::Known => glide_rdma::SetChecksum::Known(checksum),
+        }
+    }
+
+    /// As [`Self::with`], for device memory, or `None` for `Compute`, which would
+    /// have to read the device memory.
+    fn for_device(self, checksum: u32) -> Option<glide_rdma::DeviceSetChecksum> {
+        match self {
+            Self::Skip => Some(glide_rdma::DeviceSetChecksum::Skip),
+            Self::Compute => None,
+            Self::Known => Some(glide_rdma::DeviceSetChecksum::Known(checksum)),
         }
     }
 }
@@ -268,8 +312,9 @@ impl RdmaResult {
     ///
     /// # Safety
     ///
-    /// `region` must be null or a region from [`register_rdma_region`] that
-    /// [`free_rdma_region`] has not been called on.
+    /// `region` must be null or a region from [`register_rdma_region`] or
+    /// [`register_rdma_device_region`] that [`free_rdma_region`] has not been called
+    /// on.
     unsafe fn panicked(region: *mut RdmaRegion) -> Self {
         #[cfg(feature = "rdma")]
         let region_closed = !region.is_null() && unsafe { &*region }.is_closed();
@@ -335,10 +380,13 @@ fn require_sync_client(adapter: &ClientAdapter) -> Result<(), String> {
 /// Run a transfer to completion on the calling thread. Returns the buffer, or
 /// `None` if it was recalled, along with the transfer's result.
 #[cfg(feature = "rdma")]
-fn block_on_transfer<T>(
+fn block_on_transfer<T, M: glide_rdma::MemoryKind>(
     adapter: &ClientAdapter,
-    future: impl Future<Output = glide_core::client::RdmaOutcome<T>>,
-) -> (Option<glide_rdma::RdmaBuffer>, Result<T, redis::RedisError>) {
+    future: impl Future<Output = glide_core::client::RdmaOutcome<T, M>>,
+) -> (
+    Option<glide_rdma::RdmaBuffer<M>>,
+    Result<T, redis::RedisError>,
+) {
     let background = adapter
         .background_runtime
         .as_ref()
@@ -436,7 +484,7 @@ pub unsafe extern "C-unwind" fn register_rdma_region(
 ) -> *mut RdmaRegistration {
     // A panic must not unwind into the caller, which cannot handle it.
     let registration = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        register_region(client_adapter_ptr, memory, length)
+        register_region(client_adapter_ptr, memory, length, false)
     }))
     .unwrap_or_else(|_| RdmaRegistration {
         error_message: into_c_string(
@@ -447,10 +495,70 @@ pub unsafe extern "C-unwind" fn register_rdma_region(
     Box::into_raw(Box::new(registration))
 }
 
+/// Register caller-owned CUDA memory so the server can
+/// transfer data into or out of it directly, without a copy through host memory.
+///
+/// The client must have been created with `device_memory` set in its RDMA
+/// configuration. Nothing in this library reads or writes the memory, so on the
+/// region it returns:
+///
+/// * [`rdma_set`] refuses [`RdmaSetChecksumMode::Compute`]; pass `Skip`, or
+///   `Known` with a CRC-32c the caller computed.
+/// * [`rdma_get`] does not check the bytes that landed: [`RdmaResult::checksum`]
+///   is the server's CRC-32c of them, for the caller to check if it wants to.
+///
+/// The NIC reaches the memory directly, and nothing here synchronizes with the
+/// device:
+///
+/// * Device work that writes a window must have finished before [`rdma_set`] of
+///   it, for example by synchronizing its stream. `cudaMemset`, or `cudaMemcpy`
+///   from pageable host memory, can return before their writes land, unless the
+///   allocation has `CU_POINTER_ATTRIBUTE_SYNC_MEMOPS` set.
+/// * Device work must not touch a window while [`rdma_get`] of it runs. Device
+///   work that reads the landed bytes must be submitted after it returns, since
+///   work already running may see stale ones. On a device whose
+///   `CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WRITES_ORDERING` does not order them, the
+///   caller first calls `cuFlushGPUDirectRDMAWrites`, which is a no-op where the
+///   device does.
+///
+/// Every other function takes the region as it takes one from
+/// [`register_rdma_region`], and [`free_rdma_region`] frees it.
+///
+/// # Returns
+///
+/// As [`register_rdma_region`].
+///
+/// # Safety
+///
+/// As [`register_rdma_region`], except that `memory` must point to `length` bytes
+/// of CUDA device memory, such as from `cudaMalloc`, rather than host memory, and
+/// the caller must not write it while a transfer of it runs. Which GPU it is on
+/// needs no argument: CUDA's unified addressing makes the pointer name it.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn register_rdma_device_region(
+    client_adapter_ptr: *const c_void,
+    memory: *mut u8,
+    length: usize,
+) -> *mut RdmaRegistration {
+    // A panic must not unwind into the caller, which cannot handle it.
+    let registration = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        register_region(client_adapter_ptr, memory, length, true)
+    }))
+    .unwrap_or_else(|_| RdmaRegistration {
+        error_message: into_c_string(
+            "internal error: registering RDMA memory panicked".to_string(),
+        ),
+        region: std::ptr::null_mut(),
+    });
+    Box::into_raw(Box::new(registration))
+}
+
+/// Register host memory, or with `device` CUDA memory.
 fn register_region(
     client_adapter_ptr: *const c_void,
     memory: *mut u8,
     length: usize,
+    device: bool,
 ) -> RdmaRegistration {
     let failed = |message: String| RdmaRegistration {
         error_message: into_c_string(message),
@@ -469,6 +577,7 @@ fn register_region(
 
     #[cfg(not(feature = "rdma"))]
     {
+        let _ = device;
         failed(not_compiled_in())
     }
 
@@ -493,8 +602,21 @@ fn register_region(
         // `free_rdma_region` says it may be freed, which is once `owner` is
         // dropped. Plain memory is usable from any thread. The caller does not
         // touch it while a transfer runs, and this crate never holds a slice of
-        // it past a transfer.
-        match unsafe { adapter.core.client.register_rdma_region_raw(memory, owner) } {
+        // it past a transfer, nor ever of device memory.
+        let registered = if device {
+            unsafe {
+                adapter.core.client.register_rdma_device_region_raw(
+                    memory,
+                    glide_rdma::DeviceRuntime::Cuda,
+                    owner,
+                )
+            }
+            .map(RegionBuffer::Device)
+        } else {
+            unsafe { adapter.core.client.register_rdma_region_raw(memory, owner) }
+                .map(RegionBuffer::Host)
+        };
+        match registered {
             Ok(buffer) => RdmaRegistration {
                 error_message: std::ptr::null(),
                 region: Box::into_raw(Box::new(RdmaRegion::new(buffer, released))),
@@ -530,6 +652,9 @@ fn register_region(
 /// might still be using the memory, so the region is revoked first and cannot
 /// be used again either. [`RdmaResult::region_closed`] says which happened.
 ///
+/// On a region from [`register_rdma_device_region`], the landed bytes are not
+/// checked against the server's checksum; see there.
+///
 /// # Returns
 ///
 /// A [`RdmaResult`] the caller frees with [`free_rdma_result`].
@@ -541,9 +666,9 @@ fn register_region(
 ///   called on it until this call returns.
 /// * `key` must point to `key_len` initialized bytes, which must stay valid for
 ///   the duration of the call.
-/// * `region` must be a region from [`register_rdma_region`] that
-///   [`free_rdma_region`] has not been called on, and no other thread may use
-///   it for the duration of the call.
+/// * `region` must be a region from [`register_rdma_region`] or
+///   [`register_rdma_device_region`] that [`free_rdma_region`] has not been
+///   called on, and no other thread may use it for the duration of the call.
 /// * The caller must not read or write the region's memory until this call
 ///   returns. If it returns with [`RdmaResult::region_closed`] set, the server
 ///   may still write into the memory until [`free_rdma_region`] says it may be
@@ -603,8 +728,20 @@ unsafe fn get(
         };
 
         let mut client = adapter.core.client.clone();
-        let (buffer, outcome) =
-            block_on_transfer(&adapter, client.rdma_get(key, buffer, offset, length));
+        let (buffer, outcome) = match buffer {
+            RegionBuffer::Host(buffer) => {
+                let (buffer, outcome) =
+                    block_on_transfer(&adapter, client.rdma_get(key, buffer, offset, length));
+                (buffer.map(RegionBuffer::Host), outcome)
+            }
+            RegionBuffer::Device(buffer) => {
+                let (buffer, outcome) = block_on_transfer(
+                    &adapter,
+                    client.rdma_get_device(key, buffer, offset, length),
+                );
+                (buffer.map(RegionBuffer::Device), outcome)
+            }
+        };
 
         let result = match outcome {
             Ok(Some(receipt)) => RdmaResult::transferred(&receipt),
@@ -706,10 +843,33 @@ unsafe fn set(
         };
 
         let mut client = adapter.core.client.clone();
-        let (buffer, outcome) = block_on_transfer(
-            &adapter,
-            client.rdma_set(key, buffer, offset, length, checksum_mode.with(checksum)),
-        );
+        let (buffer, outcome) = match buffer {
+            RegionBuffer::Host(buffer) => {
+                let (buffer, outcome) = block_on_transfer(
+                    &adapter,
+                    client.rdma_set(key, buffer, offset, length, checksum_mode.with(checksum)),
+                );
+                (buffer.map(RegionBuffer::Host), outcome)
+            }
+            RegionBuffer::Device(buffer) => {
+                let Some(device_checksum) = checksum_mode.for_device(checksum) else {
+                    return region.finish(
+                        Some(RegionBuffer::Device(buffer)),
+                        RdmaResult::rejected(
+                            "a set of device memory cannot compute a checksum, since this \
+                             library cannot read device memory; pass Skip, or Known with a \
+                             CRC-32c you computed"
+                                .to_string(),
+                        ),
+                    );
+                };
+                let (buffer, outcome) = block_on_transfer(
+                    &adapter,
+                    client.rdma_set_device(key, buffer, offset, length, device_checksum),
+                );
+                (buffer.map(RegionBuffer::Device), outcome)
+            }
+        };
 
         let result = match outcome {
             Ok(()) => RdmaResult::stored(),
@@ -822,7 +982,8 @@ pub unsafe extern "C" fn rdma_close_regions(client_adapter_ptr: *const c_void) -
 ///
 /// # Safety
 ///
-/// * `region` must be null or a region from [`register_rdma_region`].
+/// * `region` must be null or a region from [`register_rdma_region`] or
+///   [`register_rdma_device_region`].
 /// * `free_rdma_region` may be called only once per region.
 /// * No transfer against the region may be in flight, including one that
 ///   [`rdma_close_regions`] cancelled but that has not returned yet.
@@ -1014,7 +1175,8 @@ pub unsafe extern "C" fn free_rdma_memory_hold(hold: *mut RdmaMemoryHold) {
 ///
 /// # Safety
 ///
-/// * `registration` must be null or a pointer from [`register_rdma_region`].
+/// * `registration` must be null or a pointer from [`register_rdma_region`] or
+///   [`register_rdma_device_region`].
 /// * `free_rdma_registration` may be called only once per registration.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_rdma_registration(registration: *mut RdmaRegistration) {
@@ -1200,6 +1362,37 @@ mod tests {
         );
     }
 
+    /// Device memory cannot be read here, so `Compute` has no device counterpart.
+    #[cfg(feature = "rdma")]
+    #[test]
+    fn each_checksum_mode_maps_to_its_device_set_checksum() {
+        use glide_rdma::DeviceSetChecksum;
+        assert_eq!(
+            RdmaSetChecksumMode::Skip.for_device(7),
+            Some(DeviceSetChecksum::Skip)
+        );
+        assert_eq!(RdmaSetChecksumMode::Compute.for_device(7), None);
+        assert_eq!(
+            RdmaSetChecksumMode::Known.for_device(7),
+            Some(DeviceSetChecksum::Known(7))
+        );
+    }
+
+    #[test]
+    fn a_device_registration_checks_its_arguments_as_a_host_one_does() {
+        let mut memory = [0u8; 64];
+        let error = take_registration_error(unsafe {
+            register_rdma_device_region(std::ptr::null(), memory.as_mut_ptr(), memory.len())
+        })
+        .expect("registering without a client must fail");
+        assert_eq!(error, "cannot register a region without a client");
+        let error = take_registration_error(unsafe {
+            register_rdma_device_region(unread_client_ptr(), memory.as_mut_ptr(), 0)
+        })
+        .expect("registering nothing must fail");
+        assert_eq!(error, "cannot register 0 bytes");
+    }
+
     /// Each C mode maps to the matching choice, and only `Known` carries the
     /// caller's checksum: the value passed with the other modes is ignored.
     #[cfg(feature = "rdma")]
@@ -1360,7 +1553,25 @@ mod tests {
             released: released.clone(),
         };
         let buffer = unsafe { fabric.register_raw(memory, owner) }.expect("registers");
-        Box::new(RdmaRegion::new(buffer, released))
+        Box::new(RdmaRegion::new(RegionBuffer::Host(buffer), released))
+    }
+
+    #[cfg(feature = "rdma")]
+    impl RegionBuffer {
+        /// The host buffer, for a test that registered host memory.
+        fn host(&self) -> &glide_rdma::RdmaBuffer {
+            match self {
+                Self::Host(buffer) => buffer,
+                Self::Device(_) => panic!("the test registered host memory"),
+            }
+        }
+
+        fn into_host(self) -> glide_rdma::RdmaBuffer {
+            match self {
+                Self::Host(buffer) => buffer,
+                Self::Device(_) => panic!("the test registered host memory"),
+            }
+        }
     }
 
     /// The region is the caller's own allocation, not a copy, and the caller's
@@ -1375,7 +1586,7 @@ mod tests {
         let region = unsafe { foreign_region_at(&fabric, std::ptr::NonNull::new(memory).unwrap()) };
 
         unsafe { std::ptr::copy_nonoverlapping(b"12345678".as_ptr(), caller, 8) };
-        let host = region.buffer.as_ref().unwrap().as_host();
+        let host = region.buffer.as_ref().unwrap().host().as_host();
         assert_eq!(host.as_ptr(), caller.cast_const());
         assert_eq!(host, b"12345678");
 
@@ -1415,6 +1626,7 @@ mod tests {
             .buffer
             .take()
             .unwrap()
+            .into_host()
             .lend_for_get(b"key", 0, 64)
             .expect("lends");
         loan.recall().expect("the region closes");
@@ -1467,6 +1679,7 @@ mod tests {
             .take()
             .ok()
             .expect("the region has its buffer")
+            .into_host()
             .lend_for_get(b"key", 0, 64)
             .expect("lends");
         loan.recall().expect("the region closes");
@@ -1495,7 +1708,7 @@ mod tests {
         let mut memory = vec![0u8; 64];
         let mut region = foreign_region(&fabric, &mut memory);
         let buffer = region.take().ok().expect("the region has its buffer");
-        buffer.revoke().expect("the region closes");
+        buffer.host().revoke().expect("the region closes");
 
         let cancelled = RdmaResult::rejected("the client was closed".to_string());
         let result = region.finish(Some(buffer), cancelled);
@@ -1617,6 +1830,7 @@ mod tests {
             .buffer
             .take()
             .unwrap()
+            .into_host()
             .lend_for_get(b"key", 0, 64)
             .expect("lends");
         loan.recall().expect("the region closes");

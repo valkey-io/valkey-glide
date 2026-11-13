@@ -43,10 +43,10 @@ impl Default for Regions {
 
 impl Regions {
     /// Run `register` and record the region it returns.
-    pub fn register(
+    pub fn register<M: glide_rdma::MemoryKind>(
         &self,
-        register: impl FnOnce() -> Result<glide_rdma::RdmaBuffer, glide_rdma::RdmaError>,
-    ) -> Result<glide_rdma::RdmaBuffer, redis::RedisError> {
+        register: impl FnOnce() -> Result<glide_rdma::RdmaBuffer<M>, glide_rdma::RdmaError>,
+    ) -> Result<glide_rdma::RdmaBuffer<M>, redis::RedisError> {
         let mut revokers = self.lock();
         if self.is_closed() {
             return Err(protocol::cancelled(
