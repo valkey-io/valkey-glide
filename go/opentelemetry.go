@@ -194,6 +194,7 @@ func (o *OpenTelemetry) Init(openTelemetryConfig OpenTelemetryConfig) error {
 	if otelInitialized {
 		return fmt.Errorf("openTelemetry already initialized, ignoring new config")
 	}
+	// TODO #7706: Remove once glide-telemetry rejects a config with no exporter.
 	// At least one of traces or metrics must be provided
 	if openTelemetryConfig.Traces == nil && openTelemetryConfig.Metrics == nil {
 		return fmt.Errorf("at least one of traces or metrics must be provided for OpenTelemetry configuration")

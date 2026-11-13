@@ -7210,6 +7210,7 @@ pub struct OpenTelemetryMetricsConfig {
 pub unsafe extern "C" fn init_open_telemetry(
     open_telemetry_config: *const OpenTelemetryConfig,
 ) -> *const c_char {
+    // TODO #7706: Remove once glide-telemetry's validate_config rejects this.
     // At least one of traces or metrics must be provided
     if unsafe { (*open_telemetry_config).traces.is_null() }
         && unsafe { (*open_telemetry_config).metrics.is_null() }

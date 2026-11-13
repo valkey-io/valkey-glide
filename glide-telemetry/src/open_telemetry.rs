@@ -772,6 +772,8 @@ impl GlideOpenTelemetry {
     /// Returns an error if the configuration is invalid:
     /// - `flush_interval_ms` cannot be zero
     /// - `trace_sample_percentage` must be between 0 and 100
+    // TODO #7706: Also reject a config with neither traces nor metrics, so each client doesn't
+    // need its own check.
     fn validate_config(config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
         // Validate flush_interval_ms
         if config.flush_interval_ms.is_zero() {

@@ -7,8 +7,8 @@
 //! the other GLIDE wrappers (Python/Node/Go/Java).
 //!
 //! Telemetry is a **process-global, one-shot** setting: call [`init`] exactly
-//! once, early in your program, before creating clients. Subsequent calls are
-//! ignored (the first configuration wins).
+//! once, early in your program, before creating clients. Calls after a
+//! successful [`init`] are ignored. A failed [`init`] can be retried.
 //!
 //! ```rust,no_run
 //! use std::time::Duration;
@@ -91,13 +91,15 @@ impl TelemetryExporter {
     }
 }
 
-/// A fully-built OpenTelemetry configuration, ready to pass to [`init`].
+/// An OpenTelemetry configuration.
 ///
-/// Construct one with [`OpenTelemetryConfig::builder`]. If neither a trace nor a
-/// metrics exporter is configured, initialisation is a no-op.
+/// At least one of a trace or a metrics exporter must be configured.
 #[derive(Clone)]
 pub struct OpenTelemetryConfig {
     inner: GlideOpenTelemetryConfigBuilder,
+    // TODO #7706: Remove once glide-telemetry's `validate_config` rejects a config
+    // with no exporter.
+    has_exporter: bool,
 }
 
 impl OpenTelemetryConfig {
@@ -105,6 +107,7 @@ impl OpenTelemetryConfig {
     pub fn builder() -> OpenTelemetryConfigBuilder {
         OpenTelemetryConfigBuilder {
             inner: GlideOpenTelemetryConfigBuilder::default(),
+            has_exporter: false,
         }
     }
 }
@@ -113,21 +116,25 @@ impl OpenTelemetryConfig {
 #[derive(Clone)]
 pub struct OpenTelemetryConfigBuilder {
     inner: GlideOpenTelemetryConfigBuilder,
+    // TODO #7706: Remove once glide-telemetry's `validate_config` rejects a config
+    // with no exporter.
+    has_exporter: bool,
 }
 
 impl OpenTelemetryConfigBuilder {
-    /// Set the interval between consecutive exports of telemetry data.
+    /// Sets the interval for flushing telemetry data to the collector.
     ///
-    /// Must be non-zero; a zero interval is rejected by [`init`].
+    /// `interval` must be positive – [`init`] rejects a zero interval.
     #[must_use]
     pub fn with_flush_interval(mut self, interval: Duration) -> Self {
         self.inner = self.inner.with_flush_interval(interval);
         self
     }
 
-    /// Enable trace export to `exporter`, sampling `sample_percentage` percent of
-    /// commands (0–100). `None` uses [`DEFAULT_TRACE_SAMPLE_PERCENT`]. A
-    /// percentage above 100 is rejected by [`init`].
+    /// Sets the traces exporter and sample percentage.
+    ///
+    /// `sample_percentage` must be a valid percentage – [`init`] rejects a
+    /// percentage greater than 100.
     #[must_use]
     // TODO #7701: Replace with `with_traces(TracesConfig)`.
     pub fn with_trace_exporter(
@@ -138,20 +145,25 @@ impl OpenTelemetryConfigBuilder {
         self.inner = self
             .inner
             .with_trace_exporter(exporter.to_core(), sample_percentage);
+        self.has_exporter = true;
         self
     }
 
-    /// Enable metrics export to `exporter`.
+    /// Sets the metrics exporter.
     #[must_use]
     // TODO #7701: Replace with `with_metrics(MetricsConfig)`.
     pub fn with_metrics_exporter(mut self, exporter: TelemetryExporter) -> Self {
         self.inner = self.inner.with_metrics_exporter(exporter.to_core());
+        self.has_exporter = true;
         self
     }
 
     /// Finish building the configuration.
     pub fn build(self) -> OpenTelemetryConfig {
-        OpenTelemetryConfig { inner: self.inner }
+        OpenTelemetryConfig {
+            inner: self.inner,
+            has_exporter: self.has_exporter,
+        }
     }
 }
 
@@ -162,10 +174,17 @@ impl OpenTelemetryConfigBuilder {
 /// [module docs](self)).
 ///
 /// # Errors
-/// Returns [`GlideError::Configuration`] if the configuration is invalid (zero
-/// flush interval, trace sample percentage > 100) or an exporter fails to
-/// initialise.
+/// Returns [`GlideError::Configuration`] if the configuration is invalid
+/// or an exporter fails to initialise.
 pub fn init(config: OpenTelemetryConfig) -> ValkeyResult<()> {
+    // TODO #7706: Drop once glide-telemetry's `validate_config` rejects a config with no exporter.
+    if !config.has_exporter {
+        return Err(GlideError::Configuration(
+            "At least one of traces or metrics must be provided for OpenTelemetry configuration"
+                .to_string(),
+        ));
+    }
+
     GlideOpenTelemetry::initialise(config.inner.build())
         .map_err(|e| GlideError::Configuration(format!("OpenTelemetry init failed: {e}")))
 }
@@ -204,6 +223,16 @@ mod tests {
             DEFAULT_TRACE_SAMPLE_PERCENT,
             DEFAULT_TRACE_SAMPLE_PERCENTAGE
         );
+    }
+
+    #[tokio::test]
+    async fn init_rejects_config_without_exporter() {
+        let config = OpenTelemetryConfig::builder()
+            .with_flush_interval(Duration::from_millis(100))
+            .build();
+        let err = init(config).expect_err("a config with no exporter must be rejected");
+        assert!(matches!(err, GlideError::Configuration(_)));
+        assert!(!is_initialized());
     }
 
     #[tokio::test]
