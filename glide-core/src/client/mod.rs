@@ -2112,14 +2112,14 @@ impl Client {
         Box::pin(async move {
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             self.reconcile_iam_before_dispatch().await?;
-            // Capture the batch's last SELECT now; apply it after dispatch if the
+            // Capture the batch's last SELECT or RESET now; apply it after dispatch if the
             // reply shows the server took it, and flag a possible db change (see
             // `db_maybe_dirty`). No MULTI tracking here: redis-rs brackets MULTI/EXEC
             // at pack time and it always closes.
             for cmd in pipeline.cmd_iter() {
                 self.track_subscription(cmd);
             }
-            let drifted_db = self.last_select_db(pipeline);
+            let drifted_db = self.last_db_change(pipeline);
             if drifted_db.is_some() {
                 self.shared.db_maybe_dirty.store(true, Ordering::Release);
             }
@@ -2175,7 +2175,7 @@ impl Client {
                 },
             )
             .await;
-            // Record the drift only if the SELECT reply applied (see
+            // Record the drift only if the SELECT or RESET reply applied (see
             // `batch_reply_applied`).
             if let Some((idx, db)) = drifted_db
                 && Self::batch_reply_applied(&result, idx)
@@ -2220,7 +2220,7 @@ impl Client {
                 self.track_transaction_state(cmd);
                 self.track_subscription(cmd);
             }
-            let drifted_db = self.last_select_db(pipeline);
+            let drifted_db = self.last_db_change(pipeline);
             if drifted_db.is_some() {
                 self.shared.db_maybe_dirty.store(true, Ordering::Release);
             }
@@ -2285,7 +2285,7 @@ impl Client {
                 },
             )
             .await;
-            // Record the drift only if the SELECT reply applied (see
+            // Record the drift only if the SELECT or RESET reply applied (see
             // `batch_reply_applied`).
             if let Some((idx, db)) = drifted_db
                 && Self::batch_reply_applied(&result, idx)
@@ -3743,27 +3743,34 @@ impl Client {
         }
     }
 
-    /// The command index and database id of the last `SELECT` in a batch (or
-    /// `None`). The index is the command's `cmd_iter()` position, which is also its
-    /// reply position in the result array — the caller pairs it with
-    /// [`batch_reply_applied`](Self::batch_reply_applied) to record the drift only
+    /// The command index and database id of the last database change in a batch
+    /// (or `None`): a `SELECT`, or a `RESET`, which returns the connection to db 0.
+    /// The index is the command's `cmd_iter()` position, which is also its reply
+    /// position in the result array — the caller pairs it with
+    /// [`batch_reply_applied`](Self::batch_reply_applied) to record the change only
     /// if the server applied it. A pure read; never mutates db state.
     ///
-    /// Only `SELECT` is tracked, not `RESET` (which also returns the connection to
-    /// db 0). A batch like `[SELECT 3, RESET]` therefore records db 3 while the live
-    /// connection is on db 0, leaving non-pooled scope/reconnect metadata stale.
-    /// Pooled release is unaffected — `db_maybe_dirty` forces the reset `SELECT`
-    /// regardless — and a `RESET` inside a pooled borrow is an unusual pattern, so
-    /// the narrow non-pooled gap is left as a known limitation rather than tracked.
-    fn last_select_db(&self, pipeline: &redis::Pipeline) -> Option<(usize, u32)> {
+    /// A standalone batch runs on one node, so a batch `RESET` leaves replicas on
+    /// their database; recording it as db 0 makes replica reads wait until each
+    /// replica has selected db 0 again. Only the database is tracked: the client
+    /// name, protocol and subscriptions a batch `RESET` clears are not.
+    fn last_db_change(&self, pipeline: &redis::Pipeline) -> Option<(usize, u32)> {
         pipeline
             .cmd_iter()
             .enumerate()
-            .filter(|(_, cmd)| self.is_select_command(cmd))
             .filter_map(|(idx, cmd)| {
-                self.extract_database_id_from_select(cmd)
-                    .ok()
-                    .map(|db| (idx, db as u32))
+                if self.is_select_command(cmd) {
+                    self.extract_database_id_from_select(cmd)
+                        .ok()
+                        .map(|db| (idx, db as u32))
+                } else if cmd
+                    .arg_idx(0)
+                    .is_some_and(|name| name.eq_ignore_ascii_case(b"RESET"))
+                {
+                    Some((idx, 0))
+                } else {
+                    None
+                }
             })
             .last()
     }
@@ -3795,18 +3802,23 @@ impl Client {
         self.shared.current_database.store(db, Ordering::Release);
     }
 
-    /// Whether the `SELECT` at `idx` in the batch actually executed. An executed
-    /// `SELECT` replies `+OK` (`Value::Okay`); anything else means the db did not
-    /// change: a rejected `SELECT` is a `ServerError` (present in an `Ok` array when
+    /// Whether the `SELECT` or `RESET` at `idx` in the batch actually executed. An
+    /// executed `SELECT` replies `+OK` (`Value::Okay`) and an executed `RESET`
+    /// replies `+RESET`; anything else means the db did not change: a rejected
+    /// `SELECT` is a `ServerError` (present in an `Ok` array when
     /// `raise_on_error=false`), a `SELECT` merely *queued* inside a raw `MULTI` with
     /// no `EXEC` replies `QUEUED` (`SimpleString`), and a WATCH-aborted `EXEC`
     /// returns `Nil`. Recording any of these would poison `current_database`
     /// (authoritative for scope connections, which handshake into it).
     fn batch_reply_applied(result: &RedisResult<Value>, idx: usize) -> bool {
-        matches!(
-            result,
-            Ok(Value::Array(values)) if matches!(values.get(idx), Some(Value::Okay))
-        )
+        let Ok(Value::Array(values)) = result else {
+            return false;
+        };
+        match values.get(idx) {
+            Some(Value::Okay) => true,
+            Some(Value::SimpleString(reply)) => reply == "RESET",
+            _ => false,
+        }
     }
 
     /// Reconcile per-borrow IAM authentication on the first command after a borrow.
@@ -5365,19 +5377,19 @@ mod tests {
         }
     }
 
-    /// `last_select_db` returns the command index and db of the last `SELECT` in a
+    /// `last_db_change` returns the command index and db of the last `SELECT` in a
     /// batch (or `None`), as a pure read — it must never touch `current_database`
     /// (authoritative for scope connections, so it must not move for a SELECT the
     /// server never applied). The index lets the caller validate the SELECT's reply.
     #[test]
-    fn last_select_db_extracts_trailing_select() {
+    fn last_db_change_extracts_trailing_select() {
         use std::sync::atomic::Ordering;
         let client = create_test_client();
 
         let mut no_select = redis::pipe();
         no_select.cmd("SET").arg("k").arg("v").cmd("GET").arg("k");
         assert_eq!(
-            client.last_select_db(&no_select),
+            client.last_db_change(&no_select),
             None,
             "a batch with no SELECT must report no drift"
         );
@@ -5392,15 +5404,55 @@ mod tests {
             .cmd("SELECT")
             .arg("7");
         assert_eq!(
-            client.last_select_db(&with_select),
+            client.last_db_change(&with_select),
             Some((2, 7)),
             "the last SELECT's db (at command index 2) is the one left on the connection"
         );
         assert_eq!(
             client.shared.current_database.load(Ordering::Acquire),
             0,
-            "last_select_db must not mutate current_database"
+            "last_db_change must not mutate current_database"
         );
+    }
+
+    /// A batch `RESET` returns the connection to db 0, so it is a database change
+    /// like `SELECT`; whichever comes last decides the db.
+    #[test]
+    fn last_db_change_treats_reset_as_database_zero() {
+        let client = create_test_client();
+
+        let mut select_then_reset = redis::pipe();
+        select_then_reset
+            .cmd("SELECT")
+            .arg("3")
+            .cmd("GET")
+            .arg("k")
+            .cmd("RESET");
+        assert_eq!(client.last_db_change(&select_then_reset), Some((2, 0)));
+
+        let mut reset_then_select = redis::pipe();
+        reset_then_select.cmd("RESET").cmd("SELECT").arg("5");
+        assert_eq!(client.last_db_change(&reset_then_select), Some((1, 5)));
+    }
+
+    /// Only the reply of an executed `SELECT` (`+OK`) or `RESET` (`+RESET`) records
+    /// the change; a `QUEUED`, other or missing reply does not.
+    #[test]
+    fn batch_reply_applied_accepts_only_executed_database_changes() {
+        use redis::Value;
+        let reply = |value: Value| Ok(Value::Array(vec![value]));
+        assert!(Client::batch_reply_applied(&reply(Value::Okay), 0));
+        assert!(Client::batch_reply_applied(
+            &reply(Value::SimpleString("RESET".to_string())),
+            0
+        ));
+        assert!(!Client::batch_reply_applied(
+            &reply(Value::SimpleString("QUEUED".to_string())),
+            0
+        ));
+        assert!(!Client::batch_reply_applied(&reply(Value::Nil), 0));
+        assert!(!Client::batch_reply_applied(&reply(Value::Okay), 1));
+        assert!(!Client::batch_reply_applied(&Ok(Value::Nil), 0));
     }
 
     /// A batch SELECT that fails to dispatch must NOT move `current_database` --

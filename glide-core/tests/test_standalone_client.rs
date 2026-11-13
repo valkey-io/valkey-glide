@@ -585,6 +585,50 @@ mod standalone_client_tests {
         assert_eq!(servers[1].get_number_of_received_commands(), 2);
     }
 
+    /// A batch `RESET` returns the primary to db 0, so replicas must select db 0
+    /// again before they serve reads.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_batch_reset_selects_database_zero_on_replicas() {
+        let servers = vec![
+            create_scripted_mock(create_primary_responses(), &[("GET", &["$-1\r\n"])]),
+            create_scripted_mock(create_replica_response(), &[("GET", &["$-1\r\n"])]),
+        ];
+        servers[0].add_response(&select_cmd(1), "+OK\r\n".to_string());
+        servers[0].add_response(&redis::cmd("RESET"), "+RESET\r\n".to_string());
+        // Exact matches, so the replica must receive `SELECT 1`, then `SELECT 0`.
+        servers[1].add_response(&select_cmd(1), "+OK\r\n".to_string());
+        servers[1].add_response(&select_cmd(0), "+OK\r\n".to_string());
+        let connection_request =
+            create_replica_read_client_request(&servers, ReadFrom::PreferReplica, None);
+
+        block_on_all(async {
+            let mut client = GlideClient::new(connection_request.into(), None)
+                .await
+                .unwrap();
+            send_batch(&mut client, &[select_cmd(1)]).await;
+            // SELECT 1, then a GET.
+            get_until_received(&mut client, &servers[1], 2).await;
+
+            assert_eq!(
+                send_batch(&mut client, &[redis::cmd("RESET")]).await,
+                Value::Array(vec![Value::SimpleString("RESET".to_string())])
+            );
+            // No reads until the replica has selected db 0: without the sync, the
+            // replica would stay on db 1 and receive nothing more.
+            wait_until(
+                || servers[1].get_number_of_received_commands() == 3,
+                "the replica SELECT 0",
+            )
+            .await;
+            get_until_received(&mut client, &servers[1], 4).await;
+        });
+
+        // SELECT 1, GET, SELECT 0, GET.
+        assert_eq!(servers[1].get_number_of_received_commands(), 4);
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
