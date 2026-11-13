@@ -10,6 +10,12 @@ use std::time::Duration;
 
 use glide::telemetry::{self, OpenTelemetryConfig, TelemetryExporter};
 
+// TODO #7701: Update for `TracesConfig` / `MetricsConfig` with endpoint strings, and add tests
+// for a directory path, a missing parent directory and an invalid scheme.
+
+// TODO #7699: Add tests that export spans to a file and check them, for commands, batches and
+// errors.
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn init_file_exporter_is_idempotent_and_reports_initialized() {
     // Not initialised until we ask for it.
@@ -37,9 +43,6 @@ async fn init_file_exporter_is_idempotent_and_reports_initialized() {
         .build();
     telemetry::init(again).expect("second init must be a no-op Ok");
     assert!(telemetry::is_initialized());
-
-    // Shutdown is safe to call.
-    telemetry::shutdown();
 
     let _ = std::fs::remove_dir_all(&dir);
 }

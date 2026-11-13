@@ -135,6 +135,7 @@ matrix_test!(linsert_missing_pivot_returns_neg1, c, {
     assert_eq!(n, -1);
 });
 
+// TODO #7641: Update the expected type to `Option<String>`, and cover an empty source list.
 matrix_test!(lmove, c, {
     let src = common::tkey("ls", "src");
     let dst = common::tkey("ls", "dst");

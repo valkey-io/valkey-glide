@@ -18427,6 +18427,8 @@ public class SharedCommandTests {
         assertEquals(1, result.length);
     }
 
+    // TODO #7654: Add a queue-time error case that expects ExecAbortException for atomic batches.
+
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")

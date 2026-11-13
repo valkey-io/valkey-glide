@@ -538,6 +538,9 @@ impl<T: FromValkeyValue> FromValkeyValue for Vec<T> {
     }
 }
 
+// TODO #7664: Implement `FromValkeyValue` for `BigInt` and `BigUint`, matching redis-rs.
+// TODO #7663: Implement `FromValkeyValue` for `Decimal` and `BigDecimal` behind their features.
+
 /// Converts a `ValkeyValue` to a `HashMap<K, V, S>` value.
 impl<K, V, S> FromValkeyValue for std::collections::HashMap<K, V, S>
 where

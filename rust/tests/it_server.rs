@@ -7,7 +7,15 @@ use glide::FlushAllOptions;
 use glide::FlushDbOptions;
 use glide::{AsyncTypedCommands, ServerManagementCommands};
 
-// TODO #7362: Change to `matrix_test!` once the typed `INFO` methods return per-node replies.
+// TODO #7362: Add `matrix_test!` tests for:
+// - `bgrewriteaof`
+// - `bgsave`
+// - `info_sections`
+// - `latency_doctor`
+// - `latency_graph`
+// - `latency_history`
+// - `latency_latest`
+
 resp_test!(info_returns_expected_fields, c, {
     // Default fields
     for info in common::get_info(&c, &[]).await {

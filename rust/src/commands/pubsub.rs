@@ -22,6 +22,7 @@ use bytes::Bytes;
 /// `PUBSUB ...`).
 #[async_trait]
 pub trait PubSubCommands: CommandExecutor {
+    // TODO #7686: Update to wait for server confirmation (`SUBSCRIBE_BLOCKING`).
     /// Subscribe to one or more exact channels at runtime (`SUBSCRIBE`).
     ///
     /// Received messages are delivered via `get_pubsub_message` /
@@ -36,18 +37,27 @@ pub trait PubSubCommands: CommandExecutor {
         self.pubsub_subscribe_impl("SUBSCRIBE", channels).await
     }
 
+    // TODO #7686: Add `subscribe_with_timeout` and `subscribe_lazy`.
+
+    // TODO #7686: Update to wait for server confirmation (`UNSUBSCRIBE_BLOCKING`).
     /// Unsubscribe from exact channels (`UNSUBSCRIBE`). An empty slice
     /// unsubscribes from all exact channels.
     async fn unsubscribe<C: ToValkeyArgs + Send + Sync>(&self, channels: &[C]) -> ValkeyResult<()> {
         self.pubsub_subscribe_impl("UNSUBSCRIBE", channels).await
     }
 
+    // TODO #7686: Add `unsubscribe_with_timeout` and `unsubscribe_lazy`.
+
+    // TODO #7686: Update to wait for server confirmation (`PSUBSCRIBE_BLOCKING`).
     /// Subscribe to one or more glob patterns at runtime (`PSUBSCRIBE`). See
     /// [`Self::subscribe`] for delivery requirements.
     async fn psubscribe<C: ToValkeyArgs + Send + Sync>(&self, patterns: &[C]) -> ValkeyResult<()> {
         self.pubsub_subscribe_impl("PSUBSCRIBE", patterns).await
     }
 
+    // TODO #7686: Add `psubscribe_with_timeout` and `psubscribe_lazy`.
+
+    // TODO #7686: Update to wait for server confirmation (`PUNSUBSCRIBE_BLOCKING`).
     /// Unsubscribe from patterns (`PUNSUBSCRIBE`). An empty slice unsubscribes
     /// from all patterns.
     async fn punsubscribe<C: ToValkeyArgs + Send + Sync>(
@@ -57,12 +67,20 @@ pub trait PubSubCommands: CommandExecutor {
         self.pubsub_subscribe_impl("PUNSUBSCRIBE", patterns).await
     }
 
+    // TODO #7686: Add `punsubscribe_with_timeout` and `punsubscribe_lazy`.
+
+    // TODO #7691: Move to `ShardedPubSubCommands` (cluster clients only).
+    // TODO #7686: Update to wait for server confirmation (`SSUBSCRIBE_BLOCKING`).
     /// Subscribe to one or more shard channels at runtime (`SSUBSCRIBE`, cluster
     /// only). See [`Self::subscribe`] for delivery requirements.
     async fn ssubscribe<C: ToValkeyArgs + Send + Sync>(&self, channels: &[C]) -> ValkeyResult<()> {
         self.pubsub_subscribe_impl("SSUBSCRIBE", channels).await
     }
 
+    // TODO #7686: Add `ssubscribe_with_timeout` and `ssubscribe_lazy`.
+
+    // TODO #7691: Move to `ShardedPubSubCommands` (cluster clients only).
+    // TODO #7686: Update to wait for server confirmation (`SUNSUBSCRIBE_BLOCKING`).
     /// Unsubscribe from shard channels (`SUNSUBSCRIBE`). An empty slice
     /// unsubscribes from all shard channels.
     async fn sunsubscribe<C: ToValkeyArgs + Send + Sync>(
@@ -72,6 +90,9 @@ pub trait PubSubCommands: CommandExecutor {
         self.pubsub_subscribe_impl("SUNSUBSCRIBE", channels).await
     }
 
+    // TODO #7686: Add `sunsubscribe_with_timeout` and `sunsubscribe_lazy`.
+
+    // TODO #7686: Send the `*_BLOCKING` command with a timeout, except for the lazy variants.
     #[doc(hidden)]
     async fn pubsub_subscribe_impl<C: ToValkeyArgs + Send + Sync>(
         &self,
@@ -103,6 +124,7 @@ pub trait PubSubCommands: CommandExecutor {
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
+    // TODO #7688: Return `HashMap<Bytes, i64>` instead of `Vec<(Bytes, i64)>`.
     /// Get the number of subscribers per channel (`PUBSUB NUMSUB`).
     async fn pubsub_numsub<C: ToValkeyArgs + Send + Sync>(
         &self,
@@ -111,6 +133,7 @@ pub trait PubSubCommands: CommandExecutor {
         self.pubsub_numsub_impl("NUMSUB", channels).await
     }
 
+    // TODO #7688: Return `HashMap<Bytes, i64>` instead of `Vec<(Bytes, i64)>`.
     /// Get the number of subscribers per shard channel (`PUBSUB SHARDNUMSUB`).
     async fn pubsub_shardnumsub<C: ToValkeyArgs + Send + Sync>(
         &self,
@@ -147,6 +170,7 @@ pub trait PubSubCommands: CommandExecutor {
     }
 }
 
+// TODO #7688: Parse into a `HashMap<Bytes, i64>`.
 /// Parse a `PUBSUB NUMSUB` reply (flat `[channel, count, ...]` or RESP3 map).
 fn parse_numsub(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, i64)>> {
     match v {
@@ -175,4 +199,6 @@ fn parse_numsub(v: ValkeyValue) -> ValkeyResult<Vec<(Bytes, i64)>> {
     }
 }
 
+// TODO #7691: Implement `ShardedPubSubCommands` only for `GlideClusterClient` and
+// `SyncGlideClusterClient`.
 impl<T: CommandExecutor + ?Sized> PubSubCommands for T {}

@@ -63,6 +63,10 @@ impl Pipeline {
     }
 
     /// Append argument(s) to the last started command.
+    ///
+    /// # Panics
+    ///
+    /// Panics if no command has been started yet with [`Pipeline::cmd`].
     pub fn arg<A: ToValkeyArgs>(&mut self, arg: A) -> &mut Self {
         arg.write_valkey_args(self);
         self
@@ -99,6 +103,7 @@ impl ValkeyWrite for Pipeline {
     }
 }
 
+// TODO #7699: Create a span for each sampled batch, with child spans for its commands.
 /// Dispatches a [`Pipeline`] and returns the reply as a [`ValkeyValue`].
 pub(crate) async fn dispatch_pipeline(
     core: &CoreClient,

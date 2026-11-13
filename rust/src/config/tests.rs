@@ -404,6 +404,7 @@ fn non_iam_credentials_have_no_iam_config() {
 
 // ---- runtime pub/sub opt-in ------------------------------------------
 
+// TODO #7683: Add tests that `subscriptions` and `enable_pubsub` combined with RESP2 are rejected.
 #[test]
 fn enable_pubsub_sets_flag_standalone() {
     let cfg = GlideClientConfiguration::with_address("h", 1);
@@ -690,6 +691,7 @@ fn pubsub_subscriptions_lowered_to_core() {
     assert!(pattern.contains(&b"news.*".to_vec()));
 }
 
+// TODO #7691: Update for `ClusterPubSubSubscriptions::with_sharded_channel`.
 #[test]
 fn pubsub_subscriptions_cluster_sharded() {
     let subs = PubSubSubscriptions::new().subscribe(PubSubChannelMode::Sharded, "shard-ch");

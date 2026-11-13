@@ -9,6 +9,7 @@ mod common;
 use glide::AsyncTypedCommands;
 use std::collections::HashSet;
 
+// TODO #6872: Add tests for `scan` and `scan_match` on cluster clients.
 resp_test!(scan_full_iteration, c, {
     let prefix = common::key("scan");
     let mut expected = HashSet::new();

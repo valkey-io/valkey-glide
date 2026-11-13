@@ -1581,6 +1581,7 @@ export class BaseClient {
         configuration: connection_request.IConnectionRequest,
     ) {
         if (options.pubsubSubscriptions) {
+            // TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
             if (options.protocol == ProtocolVersion.RESP2) {
                 throw new ConfigurationError(
                     "PubSub subscriptions require RESP3 protocol, but RESP2 was configured.",

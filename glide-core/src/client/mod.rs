@@ -1264,6 +1264,7 @@ impl Client {
                     Some(self.pubsub_synchronizer.clone()),
                 )
                 .await
+                // TODO #7653: Return a connection error, not a request error.
                 .map_err(|e| {
                     RedisError::from((
                         ErrorKind::IoError,
@@ -1401,6 +1402,8 @@ impl Client {
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            // TODO #7666: Reject empty commands here, replacing the check in `get_redis_command`
+            // (`socket_listener.rs`).
             // `BLOB.*` transfers lend a buffer, so only the rdma methods send them.
             crate::rdma::refuse_direct_command(cmd)?;
             // Refresh IAM auth before the command (see `reconcile_iam_before_dispatch`).
@@ -2153,6 +2156,8 @@ impl Client {
                                         .route_pipeline(pipeline, offset, 1, Some(route), None)
                                         .await?
                                 }
+                                // TODO #7673: Return a client error for `RoutingInfo::MultiNode`;
+                                // keep this path for `None`.
                                 _ => {
                                     client
                                         .req_packed_commands(pipeline, offset, 1, None)
@@ -2250,6 +2255,8 @@ impl Client {
                                     )
                                     .await
                             }
+                            // TODO #7673: Return a client error for `RoutingInfo::MultiNode`;
+                            // keep this path for `None`.
                             _ => {
                                 client
                                     .route_pipeline(
@@ -2566,6 +2573,7 @@ impl Client {
         })
     }
 }
+// TODO #7683: Reject runtime subscribe commands on a RESP2 client.
 /// Trait for executing PubSub commands on the internal client wrapper
 pub trait PubSubCommandApplier: Send + Sync {
     /// Send a subscription command (SUBSCRIBE, UNSUBSCRIBE, etc.)
@@ -3239,6 +3247,9 @@ impl Client {
             })?;
         }
         validate_unix_socket_addresses(&request).map_err(ConnectionError::Configuration)?;
+        // TODO #7683: Reject Pub/Sub subscriptions combined with RESP2 with a configuration error.
+        // TODO #7690: Reject sharded subscriptions on a standalone client with a configuration
+        // error.
 
         if let Some(conflict) = request.rdma_conflict() {
             return Err(crate::rdma::RdmaUnavailable::IncompatibleSetting(conflict).into());

@@ -625,6 +625,7 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 		request.NodeDiscoveryMode = protobuf.NodeDiscoveryMode(config.nodeDiscoveryMode)
 	}
 
+	// TODO #7683: Confirm glide-core's error for Pub/Sub with RESP2 surfaces as a configuration error.
 	if config.subscriptionConfig != nil {
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
 	}
@@ -905,6 +906,7 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 		}
 		request.ConnectionTimeout = connectionTimeout
 	}
+	// TODO #7683: Confirm glide-core's error for Pub/Sub with RESP2 surfaces as a configuration error.
 	if config.subscriptionConfig != nil {
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
 	}

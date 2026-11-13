@@ -1667,6 +1667,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         request.node_discovery_mode = self.node_discovery_mode.value
 
         if self.pubsub_subscriptions:
+            # TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
             if self.protocol == ProtocolVersion.RESP2:
                 raise ConfigurationError(
                     "PubSub subscriptions require RESP3 protocol, but RESP2 was configured."
@@ -1940,6 +1941,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             request.periodic_checks_disabled.SetInParent()
 
         if self.pubsub_subscriptions:
+            # TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
             if self.protocol == ProtocolVersion.RESP2:
                 raise ConfigurationError(
                     "PubSub subscriptions require RESP3 protocol, but RESP2 was configured."
