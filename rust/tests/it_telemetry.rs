@@ -44,8 +44,5 @@ async fn init_file_exporter_is_idempotent_and_reports_initialized() {
     telemetry::init(again).expect("second init must be a no-op Ok");
     assert!(telemetry::is_initialized());
 
-    // Shutdown is safe to call.
-    telemetry::shutdown();
-
     let _ = std::fs::remove_dir_all(&dir);
 }

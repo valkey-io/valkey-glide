@@ -175,12 +175,6 @@ pub fn is_initialized() -> bool {
     GlideOpenTelemetry::is_initialized()
 }
 
-/// Shut down OpenTelemetry, flushing any pending signals. Safe to call even if
-/// telemetry was never initialised.
-pub fn shutdown() {
-    GlideOpenTelemetry::shutdown();
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
