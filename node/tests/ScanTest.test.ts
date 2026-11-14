@@ -13,6 +13,7 @@ import {
     GlideString,
     ObjectType,
     ProtocolVersion,
+    RequestError,
 } from "../build-ts";
 import {
     flushAndCloseClient,
@@ -538,6 +539,23 @@ describe("Scan GlideClusterClient", () => {
                 testClient.close();
                 await testCluster.close();
             }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "fails with RequestError if cursor is not an instance of ClusterScanCursor_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            await expect(client.scan("0" as never)).rejects.toThrow(
+                RequestError,
+            );
+            await expect(client.scan("0" as never)).rejects.toThrow(
+                "Invalid cursor parameter: expected instance of ClusterScanCursor, received string. " +
+                    "Use 'new ClusterScanCursor()' to start a cluster scan.",
+            );
         },
         TIMEOUT,
     );
