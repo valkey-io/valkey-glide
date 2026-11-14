@@ -1198,14 +1198,18 @@ pub fn is_readonly_cmd(cmd: &[u8]) -> bool {
             | b"GETRANGE"
             | b"HELLO"
             | b"HEXISTS"
+            | b"HEXPIRETIME"
             | b"HGET"
             | b"HGETALL"
             | b"HKEYS"
             | b"HLEN"
             | b"HMGET"
+            | b"HPEXPIRETIME"
+            | b"HPTTL"
             | b"HRANDFIELD"
             | b"HSCAN"
             | b"HSTRLEN"
+            | b"HTTL"
             | b"HVALS"
             | b"JSON.ARRINDEX"
             | b"JSON.ARRLEN"
@@ -2390,6 +2394,10 @@ mod tests_routing {
         assert!(is_readonly_cmd(b"SENTINEL CKQUORUM"));
         assert!(is_readonly_cmd(b"PSUBSCRIBE"));
         assert!(is_readonly_cmd(b"PUNSUBSCRIBE"));
+        assert!(is_readonly_cmd(b"HTTL"));
+        assert!(is_readonly_cmd(b"HPTTL"));
+        assert!(is_readonly_cmd(b"HEXPIRETIME"));
+        assert!(is_readonly_cmd(b"HPEXPIRETIME"));
 
         assert!(!is_readonly_cmd(b"SENTINEL FAILOVER"));
 
@@ -2532,5 +2540,29 @@ mod tests_routing {
             .arg("1")
             .arg("WITHCURSOR");
         assert_routes_to_primary_of_key(&cmd, "myindex");
+    }
+
+    #[test]
+    fn test_hash_ttl_reads_prefer_replica() {
+        for cmd_name in ["HTTL", "HPTTL", "HEXPIRETIME", "HPEXPIRETIME"] {
+            let mut test_cmd = cmd(cmd_name);
+            test_cmd.arg("mykey").arg("FIELDS").arg(1).arg("field");
+            assert!(is_readonly(&test_cmd), "{cmd_name} must be readonly");
+            let routing = RoutingInfo::for_routable(&test_cmd);
+            let expected_slot = crate::cluster_topology::get_slot(b"mykey");
+            match routing {
+                Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                    assert_eq!(route.slot(), expected_slot);
+                    assert_eq!(
+                        route.slot_addr(),
+                        SlotAddr::ReplicaOptional,
+                        "{cmd_name} must route with ReplicaOptional"
+                    );
+                }
+                other => {
+                    panic!("expected SpecificNode(ReplicaOptional) for {cmd_name}, got {other:?}")
+                }
+            }
+        }
     }
 }
