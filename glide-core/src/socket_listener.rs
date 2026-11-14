@@ -1292,6 +1292,11 @@ pub fn start_socket_listener_internal<InitCallback>(
                 "listen_on_socket",
                 format!("Failed to set socket path permissions: {err:?}"),
             );
+            // Same cleanup as the pool-creation failure: drop the listener so the path is
+            // free, remove the socket file, and report the failure. The path has not been
+            // recorded in `INITIALIZED_SOCKETS` yet, so a retry starts a fresh listener.
+            drop(listener_socket);
+            let _ = std::fs::remove_file(&socket_path_cloned);
             let _ = tx.send(Err(err));
             return;
         }
