@@ -78,6 +78,37 @@ public class IsolatedScopeIntegrationTest {
     }
 
     @Test
+    public void testScopeNoScriptErrorKeepsServerText() throws Exception {
+        GlideClient client = GlideClient.createClient(getTestClientConfig()).get(10, TimeUnit.SECONDS);
+        try (IsolatedScope scope =
+                client.scopedConnection(Duration.ofSeconds(10)).get(10, TimeUnit.SECONDS)) {
+            ExecutionException exception =
+                    assertThrows(
+                            ExecutionException.class,
+                            () ->
+                                    scope
+                                            .executeCommand("EVALSHA", "ffffffffffffffffffffffffffffffffffffffff", "0")
+                                            .get(5, TimeUnit.SECONDS));
+            assertInstanceOf(RequestException.class, exception.getCause());
+            String message = exception.getCause().getMessage();
+            assertTrue(message.matches("NOSCRIPT No matching script\\.( Please use EVAL\\.)?"), message);
+
+            // A script can return a NOSCRIPT error with no detail text.
+            exception =
+                    assertThrows(
+                            ExecutionException.class,
+                            () ->
+                                    scope
+                                            .executeCommand("EVAL", "return {err='NOSCRIPT'}", "0")
+                                            .get(5, TimeUnit.SECONDS));
+            assertInstanceOf(RequestException.class, exception.getCause());
+            assertEquals("NOSCRIPT", exception.getCause().getMessage());
+        } finally {
+            client.close();
+        }
+    }
+
+    @Test
     public void testWatchMultiExecSuccess() throws Exception {
         System.out.println("\n=== Test: WATCH/MULTI/EXEC success ===");
 

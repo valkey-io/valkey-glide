@@ -7,6 +7,10 @@
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
 * Core/FFI: create clients on a runtime worker so the connect does not use the caller's stack ([#7644](https://github.com/valkey-io/valkey-glide/pull/7644))
 
+### Breaking Changes
+
+* Core/All: A server `NOSCRIPT` error now carries the server's own text (e.g. `NOSCRIPT No matching script.`, or `NOSCRIPT` when the reply has no detail) instead of `An error was signalled by the server: - NoScriptError: No matching script.`, for command errors and for errors in batch results. An `EVALSHA` caller that falls back to `EVAL` or `SCRIPT LOAD` on a `NOSCRIPT` prefix now recovers after a failover empties the script cache. Code that matched `NoScriptError` should match the `NOSCRIPT` prefix. Prefixes a client adds stay in front of the server's text: Java `invokeScript` (`Script execution failed - ClientError: `), Go isolated scopes (`scope command error: `) and Python isolated scopes (`Scope command error: `). Rust callers should match `GlideError::message()`, since its `Display` text starts with `RequestError: `. A Rust batch error returned with `raise_on_error` false is still a structured `ValkeyValue::ServerError`, so match `ValkeyServerError::err_code()` against `NOSCRIPT` there ([#7527](https://github.com/valkey-io/valkey-glide/issues/7527), [#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
+
 ## 2.6
 
 ### Features

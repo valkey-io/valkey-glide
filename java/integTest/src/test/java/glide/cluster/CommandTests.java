@@ -4017,6 +4017,56 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
+    public void noscript_error_keeps_the_server_text(GlideClusterClient clusterClient) {
+        String noScript = "NOSCRIPT No matching script\\.( Please use EVAL\\.)?";
+        String[] evalSha = {"EVALSHA", "ffffffffffffffffffffffffffffffffffffffff", "0"};
+
+        ExecutionException exception =
+                assertThrows(ExecutionException.class, () -> clusterClient.customCommand(evalSha).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        String message = exception.getCause().getMessage();
+        assertTrue(message.matches(noScript), message);
+
+        // A script can return a NOSCRIPT error with no detail text.
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                clusterClient
+                                        .customCommand(new String[] {"EVAL", "return {err='NOSCRIPT'}", "0"})
+                                        .get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertEquals("NOSCRIPT", exception.getCause().getMessage());
+
+        Object[] result =
+                clusterClient.exec(new ClusterBatch(false).customCommand(evalSha), false).get();
+        assertInstanceOf(RequestException.class, result[0]);
+        message = ((RequestException) result[0]).getMessage();
+        assertTrue(message.matches(noScript), message);
+
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> clusterClient.exec(new ClusterBatch(false).customCommand(evalSha), true).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        message = exception.getCause().getMessage();
+        assertTrue(message.matches(noScript), message);
+
+        // invokeScript puts its own prefix before the server's text.
+        Script script = new Script("return '" + UUID.randomUUID() + "'", false);
+        clusterClient.invokeScript(script).get();
+        script.close();
+        assertEquals("OK", clusterClient.scriptFlush().get());
+        exception =
+                assertThrows(ExecutionException.class, () -> clusterClient.invokeScript(script).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        message = exception.getCause().getMessage();
+        assertTrue(message.matches("Script execution failed - ClientError: " + noScript), message);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
     public void simple_select_test(GlideClusterClient clusterClient) {
         // Skip test if Valkey version is less than 9.0.0
         assumeTrue(

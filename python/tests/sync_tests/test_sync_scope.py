@@ -50,6 +50,18 @@ class TestIsolatedScopeBasic:
             assert result == "PONG" or result == "OK"
         assert scope.is_released
 
+    def test_scope_noscript_error_keeps_the_server_text(self, client):
+        """A NOSCRIPT reply keeps the server's text after the scope's own prefix."""
+        with client.scoped_connection() as scope:
+            with pytest.raises(
+                RuntimeError,
+                match=r"^Scope command error: NOSCRIPT No matching script\.( Please use EVAL\.)?$",
+            ):
+                scope.execute_command("EVALSHA", "f" * 40, "0")
+            # A script can return a NOSCRIPT error with no detail text.
+            with pytest.raises(RuntimeError, match=r"^Scope command error: NOSCRIPT$"):
+                scope.execute_command("EVAL", "return {err='NOSCRIPT'}", "0")
+
     def test_scope_get_set(self, client):
         """SET and GET on a scoped connection."""
         key = f"scope-test-{uuid.uuid4().hex[:8]}"
