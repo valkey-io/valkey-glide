@@ -29,6 +29,7 @@ on:
             - .github/actions/install-zig/action.yml
             - .github/actions/setup-dns-tests/action.yml
             - .github/actions/create-test-matrices/action.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/test-benchmark/action.yml
             - .github/json_matrices/**
@@ -60,6 +61,7 @@ on:
             - .github/actions/install-zig/action.yml
             - .github/actions/setup-dns-tests/action.yml
             - .github/actions/create-test-matrices/action.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/test-benchmark/action.yml
             - .github/json_matrices/**
@@ -217,6 +219,11 @@ jobs:
                   language-flag: -rust
                   engine-run: ${{ matrix.engine.run }}
                   target: ${{ matrix.host.TARGET }}
+
+            - name: Ensure Rust tests leave the worktree clean
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Rust core tests and benchmarks
 
             # A fresh checkout is newer than the restored dep-info, so cargo rebuilds these
             # crates on every run; only the registry crates are worth saving.

@@ -528,6 +528,48 @@ jobs:
                   print("Async and sync smoke test passed")
                   PYEOF
 
+            - name: Validate tracked changes from PyPI binary build
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  allowed_paths=(
+                    "ffi/.cargo/config.toml"
+                    "python/.gitignore"
+                    "python/glide-async/.cargo/config.toml"
+                    "python/glide-async/pyproject.toml"
+                    "python/glide-shared/pyproject.toml"
+                    "python/glide-sync/pyproject.toml"
+                  )
+                  unexpected_paths=()
+                  changed_paths_file="$(mktemp)"
+                  trap 'rm -f "$changed_paths_file"' EXIT
+                  git diff --name-only -z --no-renames --ita-visible-in-index HEAD -- > "$changed_paths_file"
+
+                  while IFS= read -r -d '' path; do
+                    allowed=false
+                    for allowed_path in "${allowed_paths[@]}"; do
+                      if [[ "$path" == "$allowed_path" ]]; then
+                        allowed=true
+                        break
+                      fi
+                    done
+                    if [[ "$allowed" == false ]]; then
+                      unexpected_paths+=("$path")
+                    fi
+                  done < "$changed_paths_file"
+
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "::error::PyPI binary build changed tracked paths outside its declared release scope"
+                    echo "::group::Tracked status (first 200 entries)"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "::endgroup::"
+                    echo "::group::Unexpected paths (first 200 entries)"
+                    printf 'Unexpected path: %q\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    echo "::endgroup::"
+                    exit 1
+                  fi
+
             ### UPLOAD WHEELS ###
 
             - name: Upload Python Async client wheels
@@ -608,6 +650,45 @@ jobs:
                   cp python/glide-async/wheels/*.whl python/glide-async/dist/
                   cp python/glide-async/sdist/*.tar.gz python/glide-async/dist/
 
+            - name: Validate tracked changes from async PyPI packaging
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  allowed_paths=(
+                    "python/glide-async/pyproject.toml"
+                    "python/glide-shared/pyproject.toml"
+                    "python/glide-sync/pyproject.toml"
+                  )
+                  unexpected_paths=()
+                  changed_paths_file="$(mktemp)"
+                  trap 'rm -f "$changed_paths_file"' EXIT
+                  git diff --name-only -z --no-renames --ita-visible-in-index HEAD -- > "$changed_paths_file"
+
+                  while IFS= read -r -d '' path; do
+                    allowed=false
+                    for allowed_path in "${allowed_paths[@]}"; do
+                      if [[ "$path" == "$allowed_path" ]]; then
+                        allowed=true
+                        break
+                      fi
+                    done
+                    if [[ "$allowed" == false ]]; then
+                      unexpected_paths+=("$path")
+                    fi
+                  done < "$changed_paths_file"
+
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "::error::Async PyPI packaging changed tracked paths outside its declared release scope"
+                    echo "::group::Tracked status (first 200 entries)"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "::endgroup::"
+                    echo "::group::Unexpected paths (first 200 entries)"
+                    printf 'Unexpected path: %q\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    echo "::endgroup::"
+                    exit 1
+                  fi
+
             - name: Async client - Publish binaries and source to PyPI
               # Trusted Publishing (OIDC) with PEP 740 attestations; requires the
               # top-level `id-token: write` permission and a GitHub-hosted runner.
@@ -684,6 +765,45 @@ jobs:
                   # The sdist is already in python/glide-sync/dist (from `build --sdist`);
                   # add the wheels alongside it so a single directory is published.
                   cp python/glide-sync/wheels/*.whl python/glide-sync/dist/
+
+            - name: Validate tracked changes from sync PyPI packaging
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  allowed_paths=(
+                    "python/glide-async/pyproject.toml"
+                    "python/glide-shared/pyproject.toml"
+                    "python/glide-sync/pyproject.toml"
+                  )
+                  unexpected_paths=()
+                  changed_paths_file="$(mktemp)"
+                  trap 'rm -f "$changed_paths_file"' EXIT
+                  git diff --name-only -z --no-renames --ita-visible-in-index HEAD -- > "$changed_paths_file"
+
+                  while IFS= read -r -d '' path; do
+                    allowed=false
+                    for allowed_path in "${allowed_paths[@]}"; do
+                      if [[ "$path" == "$allowed_path" ]]; then
+                        allowed=true
+                        break
+                      fi
+                    done
+                    if [[ "$allowed" == false ]]; then
+                      unexpected_paths+=("$path")
+                    fi
+                  done < "$changed_paths_file"
+
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "::error::Sync PyPI packaging changed tracked paths outside its declared release scope"
+                    echo "::group::Tracked status (first 200 entries)"
+                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "::endgroup::"
+                    echo "::group::Unexpected paths (first 200 entries)"
+                    printf 'Unexpected path: %q\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    echo "::endgroup::"
+                    exit 1
+                  fi
 
             - name: Sync client - Publish binaries and source to PyPI
               # Trusted Publishing (OIDC) with PEP 740 attestations; requires the
