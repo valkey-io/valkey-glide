@@ -33,6 +33,7 @@
 # MODULES_TEST_LANG selects which language's test tail runs (default
 # "python", preserving every existing caller's behaviour byte-for-byte):
 #   MODULES_TEST_LANG=python utils/run-modules-ci-locally.sh   # default
+#   MODULES_TEST_LANG=node utils/run-modules-ci-locally.sh
 #   MODULES_TEST_LANG=go utils/run-modules-ci-locally.sh
 #
 # See BUILD-MODULES-1.3.md for narrated example runs and Mac-vs-CI-runner
@@ -49,6 +50,9 @@
 #     in effect, not in mechanism (see BUILD-MODULES-1.3.md for why: the
 #     CI step runs on a fresh runner and must build from scratch, this
 #     script assumes a dev checkout that's already built).
+#   node: docker, valkey-cli, and the Node client already built (npm ci &&
+#     npm run build) -- matching the Python arm's own assumption that this
+#     script does not rebuild the wrapper itself.
 #   go: docker, valkey-cli, the Rust toolchain + cbindgen (`cargo install
 #     cbindgen`), and `protoc-gen-go` (`go install
 #     google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0`). This script
@@ -140,6 +144,18 @@ case "$MODULES_TEST_LANG" in
             --self-contained-html \
             -rs
         ;;
+    node)
+        cd "${REPO_ROOT}/node"
+        # Single-sourced from .github/workflows/node-modules.yml's "Run modules
+        # tests" step -- these must not drift independently; see
+        # tests/ServerModulesCiSync.test.ts, which greps the workflow file for
+        # this exact arg list and fails the suite if it ever changes there without
+        # a matching update here. Assumes a dev checkout that's already built
+        # (npm ci && npm run build), matching the Python arm's own assumption.
+        npm run test:modules -- \
+            --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
+            --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"
+        ;;
     go)
         cd "${REPO_ROOT}/go"
         export PATH="${HOME}/.cargo/bin:$(go env GOPATH)/bin:${PATH}"
@@ -196,7 +212,7 @@ case "$MODULES_TEST_LANG" in
             --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"
         ;;
     *)
-        echo "ERROR: unknown MODULES_TEST_LANG '${MODULES_TEST_LANG}' (expected python or go)" >&2
+        echo "ERROR: unknown MODULES_TEST_LANG '${MODULES_TEST_LANG}' (expected python, node, or go)" >&2
         exit 1
         ;;
 esac
