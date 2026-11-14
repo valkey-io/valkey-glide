@@ -340,6 +340,21 @@ where
         cmd: &Cmd,
         routing: cluster_routing::RoutingInfo,
     ) -> RedisResult<Value> {
+        if let cluster_routing::RoutingInfo::SingleNode(
+            cluster_routing::SingleNodeRoutingInfo::SpecificNode(ref route),
+        ) = routing
+        {
+            if route.slot() >= crate::cluster_topology::SLOT_SIZE {
+                return Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Invalid slot ID",
+                    format!(
+                        "Invalid slot ID: {}. Slot ID must be between 0 and 16383",
+                        route.slot()
+                    ),
+                )));
+            }
+        }
         log_trace_lazy!("cluster", "route_command");
         let (sender, receiver) = oneshot::channel();
         self.sender
@@ -386,6 +401,18 @@ where
         route: Option<SingleNodeRoutingInfo>,
         pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisResult<Vec<Value>> {
+        if let Some(SingleNodeRoutingInfo::SpecificNode(ref r)) = route {
+            if r.slot() >= crate::cluster_topology::SLOT_SIZE {
+                return Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Invalid slot ID",
+                    format!(
+                        "Invalid slot ID: {}. Slot ID must be between 0 and 16383",
+                        r.slot()
+                    ),
+                )));
+            }
+        }
         let (sender, receiver) = oneshot::channel();
         self.sender
             .send(Message {
@@ -3640,6 +3667,17 @@ where
                     )
             }
             InternalSingleNodeRouting::SpecificNode(route) => {
+                if route.slot() >= crate::cluster_topology::SLOT_SIZE {
+                    return Err((
+                        ErrorKind::ClientError,
+                        "Invalid slot ID",
+                        format!(
+                            "Invalid slot ID: {}. Slot ID must be between 0 and 16383",
+                            route.slot()
+                        ),
+                    )
+                        .into());
+                }
                 // Step 1: Attempt to get the connection directly using the route.
                 let conn_check = {
                     let conn_lock = core.conn_lock.read();
@@ -6991,6 +7029,22 @@ pub(super) mod refresh_task_resolution_tests {
         let (found_address, connection) = lookup.await.expect("connection found after refresh");
         assert_eq!(found_address, address);
         assert_eq!(connection.port, 6381);
+    }
+
+    #[tokio::test]
+    async fn specific_node_routing_rejects_out_of_range_slot() {
+        use crate::cluster_routing::{Route, SlotAddr};
+
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        for invalid_slot in [16384, 20000, 65535] {
+            let route = Route::new(invalid_slot, SlotAddr::Master);
+            let res = get_connection_by_specific_route(&core, route).await;
+            assert!(res.is_err(), "slot {invalid_slot} should be rejected");
+            let err = res.err().unwrap();
+            assert_eq!(err.kind(), ErrorKind::ClientError);
+            assert!(err.to_string().contains("Invalid slot ID"));
+        }
     }
 
     #[tokio::test]
