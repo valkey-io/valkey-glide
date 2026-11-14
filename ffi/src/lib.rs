@@ -2031,6 +2031,9 @@ pub struct ClientAdapter {
     /// client creation are directed here via _guard so they run independently of block_on.
     /// For async/multi_thread clients this is None since the main runtime handles everything.
     background_runtime: ManuallyDrop<Option<Runtime>>,
+    /// Set for a sync client created with `lazy_connect` until one of its commands succeeds.
+    /// Its first command opens the connections, so it runs on a background worker, not the caller.
+    lazy_connect_pending: AtomicBool,
     core: Arc<CommandExecutionCore>,
     pubsub_callback: Arc<std::sync::RwLock<PubSubCallback>>,
 }
@@ -2093,6 +2096,20 @@ impl ClientAdapter {
         request_id: usize,
         request_future: Fut,
         response_buf: Option<ResponseBuffer>,
+    ) -> *mut CommandResult
+    where
+        Fut: Future<Output = RedisResult<Value>> + Send + 'static,
+    {
+        self.execute_request_inner(request_id, request_future, response_buf, true)
+    }
+
+    /// `connects` is false for requests whose success does not prove a lazy client connected.
+    fn execute_request_inner<Fut>(
+        &self,
+        request_id: usize,
+        request_future: Fut,
+        response_buf: Option<ResponseBuffer>,
+        connects: bool,
     ) -> *mut CommandResult
     where
         Fut: Future<Output = RedisResult<Value>> + Send + 'static,
@@ -2163,19 +2180,35 @@ impl ClientAdapter {
                 std::ptr::null_mut()
             }
             ClientType::SyncClient => {
-                // Enter background runtime context inside the future so tokio::spawn
-                // calls within the command (e.g. reconnection, lazy subscribe) land
-                // on the background runtime where TCP I/O is registered.
-                // Note: block_on overrides any context entered before it, so the
-                // guard must be held inside the future being polled.
-                let bg = self
-                    .background_runtime
-                    .as_ref()
-                    .map(|rt| rt.handle().clone());
-                let result = self.runtime.block_on(async {
-                    let _guard = bg.as_ref().map(|h| h.enter());
-                    request_future.await
-                });
+                let result = if self.lazy_connect_pending.load(Ordering::Relaxed)
+                    && let Some(bg) = self.background_runtime.as_ref()
+                {
+                    let result = block_on_worker(bg, request_future).unwrap_or_else(|err| {
+                        Err(RedisError::from((
+                            ErrorKind::ClientError,
+                            "Lazy connect task failed",
+                            err,
+                        )))
+                    });
+                    if connects && result.is_ok() {
+                        self.lazy_connect_pending.store(false, Ordering::Relaxed);
+                    }
+                    result
+                } else {
+                    // Enter background runtime context inside the future so tokio::spawn
+                    // calls within the command (e.g. reconnection, lazy subscribe) land
+                    // on the background runtime where TCP I/O is registered.
+                    // Note: block_on overrides any context entered before it, so the
+                    // guard must be held inside the future being polled.
+                    let bg = self
+                        .background_runtime
+                        .as_ref()
+                        .map(|rt| rt.handle().clone());
+                    self.runtime.block_on(async {
+                        let _guard = bg.as_ref().map(|h| h.enter());
+                        request_future.await
+                    })
+                };
                 Self::handle_result(result, None, None, request_id, response_buf, false)
             }
         }
@@ -2717,6 +2750,8 @@ fn create_client_internal(
         .into());
     }
     let has_external_blocking_provider = credential_provider.is_some();
+    let lazy_connect_pending =
+        matches!(client_type, ClientType::SyncClient) && request.lazy_connect;
     let runtime = match &client_type {
         ClientType::SyncClient => {
             // current_thread runtime: block_on drives the reactor directly on the
@@ -2847,6 +2882,7 @@ fn create_client_internal(
         pipe_client_id: std::sync::atomic::AtomicU64::new(client_id as u64),
         has_external_blocking_provider,
         background_runtime: ManuallyDrop::new(background_runtime),
+        lazy_connect_pending: AtomicBool::new(lazy_connect_pending),
         core,
         pubsub_callback: pubsub_callback_store.clone(),
     });
@@ -5940,9 +5976,12 @@ pub unsafe extern "C-unwind" fn refresh_iam_token(
     };
 
     let mut client = client_adapter.core.client.clone();
-    client_adapter.execute_request(request_id, async move {
-        client.refresh_iam_token().await.map(|_| Value::Okay)
-    })
+    client_adapter.execute_request_inner(
+        request_id,
+        async move { client.refresh_iam_token().await.map(|_| Value::Okay) },
+        None,
+        false,
+    )
 }
 
 /// Get cache metrics for the client.
