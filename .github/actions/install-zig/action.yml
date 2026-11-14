@@ -14,18 +14,31 @@ runs:
           shell: bash
           env:
               TARGET: ${{ inputs.target }}
+              CARGO_ZIGBUILD_VERSION: "0.24.1"
           run: |
               if [[ `cat /etc/os-release | grep "Amazon Linux"` ]]; then
-                  yum install -y python3-pip
+                  yum install -y python3-pip xz
                   pip3 install ziglang
               elif [[ `cat /etc/os-release | grep "Alpine"` ]]; then
-                  apk add py3-pip
+                  apk add py3-pip xz
                   pip3 install ziglang --break-system-packages
               else
-                  sudo apt install -y python3-pip
+                  sudo apt install -y python3-pip xz-utils
                   pip3 install ziglang
               fi
-              for i in 1 2 3; do cargo install --locked cargo-zigbuild && break || { [ "$i" -eq 3 ] && exit 1 || sleep 15; }; done
+
+              asset="cargo-zigbuild-${TARGET}.tar.xz"
+              url="https://github.com/rust-cross/cargo-zigbuild/releases/download/v${CARGO_ZIGBUILD_VERSION}"
+              # No prebuilt binary is published for aarch64-unknown-linux-musl.
+              if curl -fsSL -o "$asset.sha256" "$url/$asset.sha256"; then
+                  curl -fsSL -o "$asset" "$url/$asset"
+                  echo "$(cut -d' ' -f1 "$asset.sha256")  $asset" | sha256sum -c
+                  tar -xJf "$asset" --strip-components=1 -C "${CARGO_HOME:-$HOME/.cargo}/bin" "cargo-zigbuild-${TARGET}/cargo-zigbuild"
+                  rm -f "$asset" "$asset.sha256"
+              else
+                  for i in 1 2 3; do cargo install --locked "cargo-zigbuild@${CARGO_ZIGBUILD_VERSION}" && break || { [ "$i" -eq 3 ] && exit 1 || sleep 15; }; done
+              fi
+              cargo zigbuild --version
 
               # Set environment variable to prevent cargo-zigbuild from auto-detecting malformed targets
               # This will be available for subsequent steps in the workflow

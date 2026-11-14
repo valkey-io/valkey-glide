@@ -106,13 +106,19 @@ jobs:
               run: cargo build --locked --release
               working-directory: ./glide-core/redis-rs/redis/src
 
+            - uses: ./.github/actions/install-cargo-tool
+              with:
+                  repo: EmbarkStudios/cargo-deny
+                  tag: "0.20.2"
+                  asset: cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz
+                  binary: cargo-deny
+
             - name: Lint glide-core-engine
               shell: bash
               run: |
                   cargo fmt --all -- --check
                   cargo clippy --locked --all-features --all-targets -- -D warnings
                   cargo clippy --locked --all-targets -- -D warnings
-                  cargo install --locked cargo-deny
                   cargo deny --config "${GITHUB_WORKSPACE}/deny.toml" --exclude-dev check all
               working-directory: ./glide-core/redis-rs/redis
 
@@ -170,9 +176,15 @@ jobs:
                   name: audit-results-glide-core-engine-${{ github.sha }}
                   path: ./glide-core/redis-rs/redis/audit-results.txt
 
+            - uses: ./.github/actions/install-cargo-tool
+              with:
+                  repo: bnjbvr/cargo-machete
+                  tag: v0.9.2
+                  asset: cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz
+                  binary: cargo-machete
+
             - name: Run cargo machete
               run: |
-                  cargo install --locked cargo-machete
                   cargo machete | tee machete-results.txt
                   if grep -A1 "cargo-machete found the following unused dependencies in this directory:" machete-results.txt | sed -n '2p' | grep -v "^if" > /dev/null; then
                     echo "Machete results summary: Unused dependencies found" >> "$GITHUB_STEP_SUMMARY"
