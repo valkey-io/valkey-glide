@@ -1199,14 +1199,18 @@ pub fn is_readonly_cmd(cmd: &[u8]) -> bool {
             | b"GETRANGE"
             | b"HELLO"
             | b"HEXISTS"
+            | b"HEXPIRETIME"
             | b"HGET"
             | b"HGETALL"
             | b"HKEYS"
             | b"HLEN"
             | b"HMGET"
+            | b"HPEXPIRETIME"
+            | b"HPTTL"
             | b"HRANDFIELD"
             | b"HSCAN"
             | b"HSTRLEN"
+            | b"HTTL"
             | b"HVALS"
             | b"JSON.ARRINDEX"
             | b"JSON.ARRLEN"
@@ -2393,6 +2397,10 @@ mod tests_routing {
         assert!(is_readonly_cmd(b"SENTINEL CKQUORUM"));
         assert!(is_readonly_cmd(b"PSUBSCRIBE"));
         assert!(is_readonly_cmd(b"PUNSUBSCRIBE"));
+        assert!(is_readonly_cmd(b"HTTL"));
+        assert!(is_readonly_cmd(b"HPTTL"));
+        assert!(is_readonly_cmd(b"HEXPIRETIME"));
+        assert!(is_readonly_cmd(b"HPEXPIRETIME"));
 
         assert!(!is_readonly_cmd(b"SENTINEL FAILOVER"));
 
