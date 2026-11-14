@@ -712,7 +712,12 @@ where
         // No new requests will come in after the first call to `close` but we need to complete any
         // in progress requests before closing
         if !self.in_flight.is_empty() {
-            ready!(self.as_mut().poll_flush(cx))?;
+            // `poll_flush` reads replies until the socket has nothing more to give, so it
+            // returns Pending right after the last owed reply arrives, and nothing wakes
+            // this task again. Only wait while replies are still owed.
+            if self.as_mut().poll_flush(cx)?.is_pending() && !self.in_flight.is_empty() {
+                return Poll::Pending;
+            }
         }
         let this = self.as_mut().project();
         this.sink_stream.poll_close(cx).map_err(|err| {
@@ -2309,6 +2314,43 @@ mod tests {
             "closed channel must fail immediately, not via the ~200ms no-progress \
              path; took {elapsed:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn test_driver_stops_when_last_owed_reply_arrives_after_close() {
+        // With every handle gone the driver waits for the replies it still owes. It must
+        // stop once the last one is read, while the server keeps the connection open.
+        let (command_tx, mut command_rx) = mpsc::unbounded_channel();
+        let (mut response_tx, response_rx) = futures_mpsc::channel(1);
+        let sink = ResponseSink {
+            command_tx,
+            response_rx,
+        };
+        let (pipeline, driver) = Pipeline::new(sink, None, None);
+        let driver = tokio::spawn(driver);
+        let connection = MultiplexedConnection::builder(pipeline)
+            .build()
+            .await
+            .unwrap();
+
+        // The caller gives up before the reply arrives, like a timed-out request.
+        let request = tokio::spawn(async move {
+            let mut connection = connection;
+            let mut command = crate::cmd("GET");
+            command.arg("key");
+            connection.send_packed_command(&command).await
+        });
+        command_rx.recv().await.expect("command must be sent");
+        request.abort();
+        let _ = request.await;
+
+        response_tx
+            .try_send(Ok(Value::BulkString(b"value".to_vec().into())))
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(1), driver)
+            .await
+            .expect("the driver must stop once the last owed reply arrives")
+            .unwrap();
     }
 
     /// Runs `total` concurrent commands of `payload` bytes through a pipeline with

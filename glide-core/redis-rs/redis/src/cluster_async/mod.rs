@@ -565,8 +565,40 @@ type ConnectionMap<C> = connections_container::ConnectionsMap<ConnectionFuture<C
 type ConnectionsContainer<C> =
     self::connections_container::ConnectionsContainer<ConnectionFuture<C>>;
 
+/// What `conn_lock` guards: the connections, and whether the client is closed. The flag is
+/// behind the lock so a refresh task can't start a reconnect after `dispose` cleared the refresh
+/// state. It isn't in the container because `refresh_slots` replaces the container.
+pub(crate) struct Connections<C> {
+    /// Set by `dispose`.
+    closed: bool,
+    container: ConnectionsContainer<C>,
+}
+
+impl<C> Connections<C> {
+    fn new(container: ConnectionsContainer<C>) -> Self {
+        Connections {
+            closed: false,
+            container,
+        }
+    }
+}
+
+impl<C> std::ops::Deref for Connections<C> {
+    type Target = ConnectionsContainer<C>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.container
+    }
+}
+
+impl<C> std::ops::DerefMut for Connections<C> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.container
+    }
+}
+
 pub(crate) struct InnerCore<C> {
-    pub(crate) conn_lock: ParkingLotRwLock<ConnectionsContainer<C>>,
+    pub(crate) conn_lock: ParkingLotRwLock<Connections<C>>,
     cluster_params: ParkingLotRwLock<ClusterParams>,
     pending_requests_tx: mpsc::UnboundedSender<PendingRequest<C>>,
     pending_requests_rx: std::sync::Mutex<mpsc::UnboundedReceiver<PendingRequest<C>>>,
@@ -773,6 +805,20 @@ impl<C> Dispose for ClusterConnInner<C> {
             handle.abort()
         }
 
+        // Recovery and per-node reconnect tasks each hold the core, and with it the
+        // connection to every node. A task reconnecting a node that stays down retries
+        // forever, so stop them here or the client's connections outlive the client.
+        if let ConnectionState::Recover(recover) = &self.state {
+            recover.abort();
+        }
+        // A blocking write on purpose: skipping the clear would leak the connections.
+        let mut conn_lock = self.inner.conn_lock.write();
+        // A task that is mid-poll on another thread may still ask for a reconnect;
+        // `closed` makes that a no-op.
+        conn_lock.closed = true;
+        conn_lock.refresh_conn_state.clear_refresh_state();
+        drop(conn_lock);
+
         // Fail any requests buffered in the recovery queue
         fail_queued_senders(&mut self.recovery_queue, "Connection dropped");
 
@@ -969,6 +1015,19 @@ enum RecoverFuture {
     RefreshingSlots(JoinHandle<RedisResult<()>>),
     ReconnectToInitialNodes(JoinHandle<()>),
     Reconnect(JoinHandle<()>),
+}
+
+impl RecoverFuture {
+    /// Stops the recovery task. Dropping a `JoinHandle` only detaches its task, which keeps
+    /// running and keeps the core alive.
+    fn abort(&self) {
+        match self {
+            RecoverFuture::RefreshingSlots(handle) => handle.abort(),
+            RecoverFuture::ReconnectToInitialNodes(handle) | RecoverFuture::Reconnect(handle) => {
+                handle.abort()
+            }
+        }
+    }
 }
 
 enum ConnectionState {
@@ -1249,7 +1308,7 @@ mod iam_token_refresh_tests {
 
         let (pending_requests_tx, pending_requests_rx) = tokio::sync::mpsc::unbounded_channel();
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::default()),
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::default())),
             cluster_params: ParkingLotRwLock::new(params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -1781,12 +1840,12 @@ where
         let slots_refresh_rate_limiter = cluster_params.slots_refresh_rate_limit;
         let (pending_tx, pending_rx) = mpsc::unbounded_channel();
         let inner = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 Default::default(),
                 connections,
                 cluster_params.read_from_replicas.clone(),
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params.clone()),
             pending_requests_tx: pending_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_rx),
@@ -2165,6 +2224,13 @@ where
                 continue;
             }
             let mut conn_lock = inner.conn_lock.write();
+            if conn_lock.closed {
+                log_debug_lazy!(
+                    "cluster",
+                    format!("Skipping refresh for {}: the client is closed", address)
+                );
+                break;
+            }
             // A request to replace the connection doesn't join a task that may keep the existing
             // one; the new task supersedes it (dropping the old state aborts it and wakes waiters).
             let existing_task = conn_lock
@@ -3092,7 +3158,7 @@ where
         new_slots.carry_over_ips_from(&write_guard.slot_map);
         let read_from_replicas =
             inner.get_cluster_param(|params| params.read_from_replicas.clone());
-        *write_guard = ConnectionsContainer::new(
+        write_guard.container = ConnectionsContainer::new(
             new_slots,
             new_connections,
             read_from_replicas,
@@ -5665,12 +5731,12 @@ mod circular_moved_address_normalization_tests {
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
 
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(ClusterParams::default_for_test(None)),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -5761,12 +5827,12 @@ mod circular_moved_address_normalization_tests {
         let (tx, rx) =
             mpsc::unbounded_channel::<PendingRequest<crate::aio::MultiplexedConnection>>();
         let core = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(ClusterParams::default_for_test(None)),
             pending_requests_tx: tx,
             pending_requests_rx: std::sync::Mutex::new(rx),
@@ -6042,12 +6108,12 @@ pub(super) mod refresh_task_resolution_tests {
         );
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
         let core = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 connection_map,
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6214,12 +6280,12 @@ pub(super) mod refresh_task_resolution_tests {
         cluster_params.address_resolver = Some(resolver);
 
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6267,12 +6333,12 @@ pub(super) mod refresh_task_resolution_tests {
         cluster_params.address_resolver = Some(Arc::new(SeedAddressResolver));
 
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6392,12 +6458,12 @@ pub(super) mod refresh_task_resolution_tests {
         params.address_resolver = Some(Arc::new(SeedAddressResolver));
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 connections,
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6529,6 +6595,88 @@ pub(super) mod refresh_task_resolution_tests {
         .expect("already-resolved refresh should install a connection");
 
         assert_eq!(connected_port, 6381);
+    }
+
+    #[tokio::test]
+    async fn dispose_stops_recovery_and_refresh_tasks_and_releases_the_core() {
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+
+        // The connect to port 6381 parks until the test releases it, like a node that
+        // stays down.
+        ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial("resolved-node:6381".to_owned())]),
+            RefreshConnectionType::AllConnections,
+            ExistingConnection::Ignore,
+        )
+        .await;
+        tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
+            .await
+            .expect("the refresh task should start connecting");
+
+        // A recovery task that never finishes on its own.
+        let recovery = tokio::spawn({
+            let core = core.clone();
+            async move {
+                std::future::pending::<()>().await;
+                drop(core);
+            }
+        });
+
+        let weak_core = Arc::downgrade(&core);
+        let connection = Disposable::new(ClusterConnInner {
+            inner: core,
+            in_flight_requests: Default::default(),
+            refresh_error: None,
+            state: ConnectionState::Recover(RecoverFuture::Reconnect(recovery)),
+            periodic_checks_handler: None,
+            connections_validation_handler: None,
+            recovery_queue: std::collections::VecDeque::new(),
+        });
+        drop(connection);
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while weak_core.strong_count() > 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("disposing the connection must release the core and its connections");
+    }
+
+    #[tokio::test]
+    async fn no_reconnect_starts_after_dispose() {
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        drop(Disposable::new(ClusterConnInner {
+            inner: core.clone(),
+            in_flight_requests: Default::default(),
+            refresh_error: None,
+            state: ConnectionState::PollComplete,
+            periodic_checks_handler: None,
+            connections_validation_handler: None,
+            recovery_queue: std::collections::VecDeque::new(),
+        }));
+
+        // A task that was mid-poll on another thread when the client went away asks
+        // for a reconnect to a node that stays down.
+        let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial("resolved-node:6381".to_owned())]),
+            RefreshConnectionType::AllConnections,
+            ExistingConnection::Ignore,
+        )
+        .await;
+
+        assert!(notifiers.is_empty());
+        assert!(core
+            .conn_lock
+            .read()
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .is_empty());
+        assert_eq!(Arc::strong_count(&core), 1, "no task may hold the core");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
@@ -6902,12 +7050,12 @@ pub(super) mod refresh_task_resolution_tests {
         let mut cluster_params = ClusterParams::default_for_test(None);
         cluster_params.address_resolver = Some(Arc::new(InitialRecoveryResolver));
         let core = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),

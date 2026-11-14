@@ -1707,4 +1707,77 @@ mod standalone_client_tests {
             );
         });
     }
+
+    async fn connections_named(admin: &mut redis::aio::MultiplexedConnection, name: &str) -> usize {
+        let list: String = redis::cmd("CLIENT")
+            .arg("LIST")
+            .query_async(admin)
+            .await
+            .unwrap();
+        list.lines()
+            .filter(|line| line.contains(&format!(" name={name} ")))
+            .count()
+    }
+
+    #[rstest]
+    #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
+    fn test_drop_after_request_timed_out_closes_connection() {
+        // A request that timed out while the server was paused is still owed a reply.
+        // Once the client is dropped and the server answers, the connection must close.
+        block_on_all(async {
+            const CLIENT_NAME: &str = "drop-after-timeout";
+            let server = RedisServer::new(ServerType::Tcp { tls: false });
+            let addr = server.get_client_addr();
+            let request = create_connection_request(
+                std::slice::from_ref(&addr),
+                &TestConfiguration {
+                    client_name: Some(CLIENT_NAME.to_string()),
+                    request_timeout: Some(500),
+                    ..Default::default()
+                },
+            );
+            let mut client = GlideClient::new(request.into(), None).await.unwrap();
+
+            let mut admin = redis::Client::open(redis::ConnectionInfo {
+                addr: addr.clone(),
+                redis: redis::RedisConnectionInfo {
+                    protocol: redis::ProtocolVersion::RESP2,
+                    ..Default::default()
+                },
+            })
+            .unwrap()
+            .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+            .await
+            .unwrap();
+            assert_eq!(connections_named(&mut admin, CLIENT_NAME).await, 1);
+
+            // The periodic connection check keeps a handle to the connection until its next
+            // tick (every 3 s), and the connection only starts closing once every handle is
+            // gone. The pause outlasts that, so the reply is still owed when it does.
+            let mut pause = redis::cmd("CLIENT");
+            pause.arg("PAUSE").arg(8000).arg("ALL");
+            let _: () = pause.query_async(&mut admin).await.unwrap();
+            let mut get = redis::cmd("GET");
+            get.arg("key");
+            let result = client.send_command(&mut get, None).await;
+            assert!(
+                result.as_ref().is_err_and(|err| err.is_timeout()),
+                "GET under CLIENT PAUSE: {result:?}"
+            );
+
+            drop(client);
+
+            // CLIENT LIST itself waits for the pause to end.
+            let closed = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+                while connections_named(&mut admin, CLIENT_NAME).await > 0 {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+            })
+            .await;
+            assert!(
+                closed.is_ok(),
+                "the dropped client's connection is still open after the server answered"
+            );
+        });
+    }
 }
