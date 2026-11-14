@@ -1,4 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+#![allow(deprecated)]
 //! Pure-logic configuration tests mirroring Python `tests/test_config.py`.
 //!
 //! Every test asserts that the ergonomic builder structs lower into the
@@ -943,4 +944,130 @@ fn client_identity_debug_redacts_private_key() {
             "private key leaked through Debug: {rendered}"
         );
     }
+}
+
+// ---- builder with_* naming (#7702) -----------------------------------
+
+#[test]
+fn standalone_with_builders_configure_request() {
+    let req = GlideClientConfiguration::with_address("localhost", 6379)
+        .with_tls(TlsConfig::SecureTls)
+        .with_tls_ca_cert(b"custom-ca".to_vec())
+        .with_client_identity(b"cert".to_vec(), b"key".to_vec())
+        .with_credentials(ServerCredentials::password("secret"))
+        .with_read_from(ReadFrom::PreferReplica)
+        .with_request_timeout(Duration::from_millis(500))
+        .with_connection_timeout(Duration::from_millis(250))
+        .with_inflight_requests_limit(100)
+        .with_client_name("test-client")
+        .with_protocol(ProtocolVersion::RESP2)
+        .with_lazy_connect(true)
+        .with_reconnect_strategy(BackoffStrategy {
+            num_of_retries: 3,
+            factor: 2,
+            exponent_base: 2,
+            jitter_percent: None,
+        })
+        .with_subscriptions(PubSubSubscriptions::new().subscribe(PubSubChannelMode::Exact, "ch1"))
+        .with_pubsub()
+        .with_database_id(3)
+        .with_node_discovery_mode(NodeDiscoveryMode::Static)
+        .to_request();
+
+    assert_eq!(req.tls_mode, Some(TlsMode::SecureTls));
+    assert_eq!(req.root_certs, vec![b"custom-ca".to_vec()]);
+    assert_eq!(req.client_cert, b"cert".to_vec());
+    assert_eq!(req.client_key, b"key".to_vec());
+    assert!(req.authentication_info.is_some());
+    assert_eq!(req.read_from, Some(CoreReadFrom::PreferReplica));
+    assert_eq!(req.request_timeout, Some(500));
+    assert_eq!(req.connection_timeout, Some(250));
+    assert_eq!(req.inflight_requests_limit, Some(100));
+    assert_eq!(req.client_name, Some("test-client".to_string()));
+    assert_eq!(req.protocol, Some(redis::ProtocolVersion::RESP2));
+    assert!(req.lazy_connect);
+    assert_eq!(req.database_id, 3);
+    assert_eq!(req.node_discovery_mode, CoreNodeDiscoveryMode::Static);
+    assert!(req.pubsub_subscriptions.is_some());
+}
+
+#[test]
+fn cluster_with_builders_configure_request() {
+    let req = GlideClusterClientConfiguration::with_address("localhost", 7000)
+        .with_tls(TlsConfig::InsecureTls)
+        .with_periodic_checks(PeriodicChecks::ManualInterval(30))
+        .with_request_timeout(Duration::from_millis(750))
+        .to_request();
+
+    assert!(req.cluster_mode_enabled);
+    assert_eq!(req.tls_mode, Some(TlsMode::InsecureTls));
+    assert!(matches!(
+        req.periodic_checks,
+        Some(PeriodicCheck::ManualInterval(d)) if d == Duration::from_secs(30)
+    ));
+    assert_eq!(req.request_timeout, Some(750));
+}
+
+// ---- builder with_* naming (#7702) -----------------------------------
+
+#[test]
+fn standalone_with_builders_configure_request() {
+    let req = GlideClientConfiguration::with_address("localhost", 6379)
+        .with_tls(TlsConfig::SecureTls)
+        .with_tls_ca_cert(b"custom-ca".to_vec())
+        .with_client_identity(b"cert".to_vec(), b"key".to_vec())
+        .with_credentials(ServerCredentials::password("secret"))
+        .with_read_from(ReadFrom::PreferReplica)
+        .with_request_timeout(Duration::from_millis(500))
+        .with_connection_timeout(Duration::from_millis(250))
+        .with_inflight_requests_limit(100)
+        .with_client_name("test-client")
+        .with_protocol(ProtocolVersion::RESP2)
+        .with_lazy_connect(true)
+        .with_reconnect_strategy(BackoffStrategy {
+            num_of_retries: 3,
+            factor: 2,
+            exponent_base: 2,
+            jitter_percent: None,
+        })
+        .with_subscriptions(
+            PubSubSubscriptions::new().subscribe(PubSubChannelMode::Exact, "ch1"),
+        )
+        .with_pubsub()
+        .with_database_id(3)
+        .with_node_discovery_mode(NodeDiscoveryMode::Static)
+        .to_request();
+
+    assert_eq!(req.tls_mode, Some(TlsMode::SecureTls));
+    assert_eq!(req.root_certs, vec![b"custom-ca".to_vec()]);
+    assert_eq!(req.client_cert, b"cert".to_vec());
+    assert_eq!(req.client_key, b"key".to_vec());
+    assert!(req.authentication_info.is_some());
+    assert_eq!(req.read_from, Some(CoreReadFrom::PreferReplica));
+    assert_eq!(req.request_timeout, Some(500));
+    assert_eq!(req.connection_timeout, Some(250));
+    assert_eq!(req.inflight_requests_limit, Some(100));
+    assert_eq!(req.client_name, Some("test-client".to_string()));
+    assert_eq!(req.protocol, Some(redis::ProtocolVersion::RESP2));
+    assert!(req.lazy_connect);
+    assert_eq!(req.database_id, 3);
+    assert_eq!(req.node_discovery_mode, CoreNodeDiscoveryMode::Static);
+    assert!(req.pubsub_subscriptions.is_some());
+}
+
+#[test]
+fn cluster_with_builders_configure_request() {
+    let req = GlideClusterClientConfiguration::with_address("localhost", 7000)
+        .with_tls(TlsConfig::InsecureTls)
+        .with_periodic_checks(PeriodicChecks::ManualInterval(30))
+        .with_request_timeout(Duration::from_millis(750))
+        .to_request();
+
+    assert!(req.cluster_mode_enabled);
+    assert_eq!(req.tls_mode, Some(TlsMode::InsecureTls));
+    assert!(matches!(
+        req.periodic_checks,
+        Some(PeriodicCheck::ManualInterval(d)) if d == Duration::from_secs(30)
+    ));
+    assert_eq!(req.request_timeout, Some(750));
 }

@@ -188,6 +188,7 @@ Then run `cargo test && cargo clippy --all-targets`.
 Follow these development guidelines when applicable:
 
 - **Rust:** [Options](docs/dev/options.md)
+- **Rust builder methods:** Consuming (`self`) builder methods on public configuration and options types use the `with_*` prefix (e.g. `with_tls`, `with_credentials`, `with_request_timeout`).
 
 ## Extending value conversion
 
