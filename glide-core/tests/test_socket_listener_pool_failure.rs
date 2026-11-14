@@ -85,9 +85,12 @@ fn pool_creation_failure_is_reported_through_the_init_callback() {
         error.contains("Failed to create the socket listener worker pool"),
         "{error}"
     );
-    // The tokio-util panic prints the Debug of `io::Error`, whose `kind` field is
-    // locale- and format-independent, unlike the strerror text.
-    assert!(error.contains("TooManyOpenFiles"), "{error}");
+    // The tokio-util panic prints the Debug of `io::Error`. The numeric `code` field
+    // does not depend on the toolchain's `ErrorKind` mapping or on the strerror text.
+    assert!(
+        error.contains(&format!("code: {}", libc::EMFILE)),
+        "{error}"
+    );
     assert!(
         !Path::new(&socket_path).exists(),
         "The socket file should be removed after the failure"
