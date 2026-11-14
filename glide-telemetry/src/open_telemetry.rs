@@ -770,6 +770,7 @@ impl GlideOpenTelemetry {
     /// Returns an error if the configuration is invalid:
     /// - `flush_interval_ms` cannot be zero
     /// - `trace_sample_percentage` must be between 0 and 100
+    /// - at least one of `traces` or `metrics` must be provided
     fn validate_config(config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
         // Validate flush_interval_ms
         if config.flush_interval_ms.is_zero() {
@@ -786,6 +787,15 @@ impl GlideOpenTelemetry {
                 "Trace sample percentage must be between 0 and 100".into(),
             ));
         }
+
+        // At least one of traces or metrics must be provided
+        if config.traces.is_none() && config.metrics.is_none() {
+            return Err(GlideOTELError::Other(
+                "At least one of traces or metrics must be provided for OpenTelemetry configuration"
+                    .to_string(),
+            ));
+        }
+
         Ok(())
     }
 
@@ -1897,5 +1907,44 @@ mod tests {
                 );
             }
         });
+    }
+
+    #[test]
+    fn test_validate_config_rejects_no_exporter() {
+        let config = GlideOpenTelemetryConfigBuilder::default()
+            .with_flush_interval(Duration::from_millis(1000))
+            .build();
+        let result = GlideOpenTelemetry::validate_config(config);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains(
+                "At least one of traces or metrics must be provided for OpenTelemetry configuration"
+            ),
+            "Unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_validate_config_accepts_traces_only() {
+        let config = GlideOpenTelemetryConfigBuilder::default()
+            .with_flush_interval(Duration::from_millis(1000))
+            .with_trace_exporter(
+                GlideOpenTelemetrySignalsExporter::File(PathBuf::from("/tmp/traces.json")),
+                Some(50),
+            )
+            .build();
+        assert!(GlideOpenTelemetry::validate_config(config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_config_accepts_metrics_only() {
+        let config = GlideOpenTelemetryConfigBuilder::default()
+            .with_flush_interval(Duration::from_millis(1000))
+            .with_metrics_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
+                "/tmp/metrics.json",
+            )))
+            .build();
+        assert!(GlideOpenTelemetry::validate_config(config).is_ok());
     }
 }
