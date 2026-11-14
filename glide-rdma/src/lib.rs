@@ -10,6 +10,8 @@
 //!
 //! `RdmaBuffer` and `LentBuffer` loans bytes to the server for the duration of
 //! a transfer. The memory can be accessed again only after the loan ends.
+//! `RdmaSharedBuffer` and `LentWindow` do the same a window at a time, so many
+//! transfers can share one registration.
 
 #[cfg(feature = "libfabric")]
 mod buffer;
@@ -29,6 +31,8 @@ mod libfabric_dl;
 mod progress;
 mod region_ref;
 mod session;
+#[cfg(feature = "libfabric")]
+mod shared;
 
 #[cfg(feature = "libfabric")]
 pub use buffer::{LentBuffer, RdmaBuffer, RdmaRevoker};
@@ -44,3 +48,5 @@ pub use libfabric_dl::{ensure_loaded, header_api_version};
 pub use progress::ProgressGuard;
 pub use region_ref::{InvalidHex, decode_hex, encode_hex};
 pub use session::Handshake;
+#[cfg(feature = "libfabric")]
+pub use shared::{LentWindow, RdmaSharedBuffer};

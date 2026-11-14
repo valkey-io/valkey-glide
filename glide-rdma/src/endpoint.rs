@@ -405,6 +405,7 @@ impl RegistrationState {
         let fid = unsafe { &raw mut (*open.memory_region.as_ptr()).fid };
         let code = open.fabric.fi_close(fid);
         if let Err(error) = check(code, "fi_close") {
+            open.fabric.note_abandoned_region();
             *region = RegionState::Abandoned {
                 code,
                 _fabric: open.fabric,

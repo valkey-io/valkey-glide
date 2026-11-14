@@ -31,6 +31,7 @@ use crate::error::RdmaError;
 use crate::fabric::RdmaFabric;
 use crate::progress::ProgressGuard;
 use crate::region_ref::RegionRef;
+use crate::shared::RdmaSharedBuffer;
 
 /// Memory handed over by the caller, kept at one fixed address until it is freed.
 ///
@@ -310,6 +311,13 @@ impl RdmaBuffer {
 }
 
 impl RdmaBuffer {
+    /// Hand this buffer over to be lent a window at a time.
+    pub(crate) fn into_shared(self) -> RdmaSharedBuffer {
+        let region_ref = self.region_ref.clone();
+        let (registration, host, fabric) = self.into_parts();
+        RdmaSharedBuffer::new(registration, region_ref, host, fabric)
+    }
+
     /// Take the buffer apart without running its `Drop`.
     fn into_parts(self) -> (Registration, HostMemory, RdmaFabric) {
         let this = ManuallyDrop::new(self);
@@ -535,6 +543,10 @@ impl Drop for LentBuffer {
 pub struct RdmaRevoker(RevokeHandle);
 
 impl RdmaRevoker {
+    pub(crate) fn new(handle: RevokeHandle) -> Self {
+        Self(handle)
+    }
+
     /// Revoke the buffer, as [`RdmaBuffer::revoke`] does. A no-op if it is already
     /// revoked or was dropped and its region closed.
     ///
