@@ -6,6 +6,7 @@
 
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
 * Core/FFI: create clients on a runtime worker so the connect does not use the caller's stack ([#7644](https://github.com/valkey-io/valkey-glide/pull/7644))
+* Core: Cap the socket listener worker pool at 8 by default (override with `GLIDE_SOCKET_LISTENER_WORKERS`) and report pool-creation failures through the init callback ([#7586](https://github.com/valkey-io/valkey-glide/issues/7586))
 
 ## 2.6
 
@@ -30,8 +31,16 @@
 
 ### Fixes
 
-
-* Core: Cap the socket listener worker pool at 8 by default (override with `GLIDE_SOCKET_LISTENER_WORKERS`) and report pool-creation failures through the init callback ([#7586](https://github.com/valkey-io/valkey-glide/issues/7586))
+* Core, Go, Java, Node, Python: A `ClientPool` call no longer gives up when another thread holds the pool lock; it waits for the lock instead. Go and Python pool metrics read from inside a client callback no longer come back as zeros, Java's `acquire` no longer backs off and retries while an idle client exists, Go, Python and Java `close()` have finished tearing the pool down when they return, and a command's activity refresh is no longer skipped, so the abandon monitor no longer sees a stale timer for a client in use ([#7507](https://github.com/valkey-io/valkey-glide/issues/7507))
+* Core, Go, Java, Node, Python: Releasing a scope has finished when the release call returns, also when another thread holds the scope pool lock at that moment; before, the release was deferred to a background task and the next acquire could find the connection still borrowed ([#7514](https://github.com/valkey-io/valkey-glide/issues/7514))
+* Java: Jedis compatibility `JedisPool` (4.x and 5.x) now restores its configured database before lending a connection, so a borrower no longer inherits a previous borrower's `select` ([#7604](https://github.com/valkey-io/valkey-glide/issues/7604))
+* Java: Publish the classifier-less `valkey-glide-jedis-compat-shared` JAR. The `valkey-glide-jedis-compatibility` and `valkey-glide-jedis-4-compatibility` POMs depend on it, and since 2.6.0-rc1 Maven failed to resolve them with `Could not find artifact io.valkey:valkey-glide-jedis-compat-shared` ([#7603](https://github.com/valkey-io/valkey-glide/issues/7603))
+* Node: Populate actual `lib-ver` instead of `unknown` in `CLIENT INFO` responses ([#7616](https://github.com/valkey-io/valkey-glide/pull/7616))
+* Node: The published package loads with `NAPI_RS_ENFORCE_VERSION_CHECK=1` instead of failing with "Cannot find native binding" ([#7602](https://github.com/valkey-io/valkey-glide/issues/7602))
+* Python: The sync client sends a `memoryview` argument with its byte length (`nbytes`) instead of `len()`. A `memoryview` cast to a wider format (e.g. `.cast("I")`) or with more than one dimension was sent truncated, silently storing a partial value or key; this affected direct commands, batches, `custom_command`, scripts and cluster scan ([#7560](https://github.com/valkey-io/valkey-glide/issues/7560))
+* Python: `TrimByMinId` (`xadd`/`xtrim`), `ExclusiveIdBound` (`xrange`/`xrevrange`/`xpending_range`) and the `FtHybridVsimArm` field (`ft.hybrid`) send `bytes`, `bytearray` and `memoryview` values verbatim instead of their Python repr, which the server rejected. A `bytes` stream ID returned by `xadd` can now be used as a `TrimByMinId` threshold ([#7558](https://github.com/valkey-io/valkey-glide/issues/7558))
+* Python: `zadd` (async, sync and `Batch`/`ClusterBatch`) no longer stringifies `bytes`, `bytearray` and `memoryview` members into their Python repr; members are now passed through verbatim and only the scores are converted to strings ([#7521](https://github.com/valkey-io/valkey-glide/issues/7521))
+* Java: Don't throw when `AZ_AFFINITY` or `AZ_AFFINITY_REPLICAS_AND_PRIMARY` has no `clientAZ` ([#7536](https://github.com/valkey-io/valkey-glide/pull/7536))
 * Core: Scoped connections authenticate with the client's current password after `update_connection_password` (or a user-issued `AUTH`/`HELLO`), instead of the password the client was created with: a scope connection built after the rotation sends the new password, and an idle one re-authenticates before its next command once the server has accepted the new password (`immediate_auth`, `AUTH`, `HELLO`); a store-only update leaves open scope connections as they are, like the client's own connection ([#7334](https://github.com/valkey-io/valkey-glide/issues/7334))
 * Core: `GETSET` compresses value when enabled ([#7411](https://github.com/valkey-io/valkey-glide/issues/7411))
 * Core: Reject `SET` with `IFEQ` or `IFNE` when compression is enabled ([#7365](https://github.com/valkey-io/valkey-glide/issues/7365))
