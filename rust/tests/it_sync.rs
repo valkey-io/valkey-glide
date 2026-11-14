@@ -126,7 +126,10 @@ fn sync_standalone_custom_command_and_pipeline() {
         .cmd("GET")
         .arg(&bk);
 
-    let results = c.exec(&pipe, true, &PipelineOptions::default()).unwrap();
+    let results = c
+        .exec(&pipe, true, &PipelineOptions::default())
+        .unwrap()
+        .expect("committed");
 
     assert_eq!(results.len(), 4);
     assert_eq!(i64::from_valkey_value(&results[2]).unwrap(), 12);

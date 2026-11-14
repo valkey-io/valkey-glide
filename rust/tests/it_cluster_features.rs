@@ -27,7 +27,11 @@ timed_tokio_test!(
         let opts = PipelineOptions::new()
             .with_timeout(Duration::from_secs(5))
             .with_retry_server_error(true);
-        let results = c.exec(&pipeline, true, None, &opts).await.unwrap();
+        let results = c
+            .exec(&pipeline, true, None, &opts)
+            .await
+            .unwrap()
+            .expect("committed");
 
         assert_eq!(results.len(), 3);
         // results[0] = SET reply (OK), results[1] = INCR reply (2), results[2] = GET reply ("2")
@@ -42,7 +46,8 @@ timed_tokio_test!(
         let res2 = c
             .exec(&tx, true, None, &PipelineOptions::new())
             .await
-            .unwrap();
+            .unwrap()
+            .expect("committed");
 
         // res2[0] = SET reply (OK), res2[1] = INCR reply (6)
         assert_eq!(i64::from_valkey_value(&res2[1]).unwrap(), 6);

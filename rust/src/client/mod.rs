@@ -157,17 +157,24 @@ fn push_to_message(push: PushInfo) -> Option<PubSubMessage> {
 }
 
 /// Executes a [`crate::Pipeline`] and returns command responses.
+///
+/// Returns `Ok(None)` when the server replies with a null bulk (the
+/// transaction was aborted because a `WATCH`-ed key changed). Returns
+/// `Ok(Some(items))` for a normal (possibly empty) array response.
 async fn run_pipeline(
     core: &CoreClient,
     pipeline: &crate::pipeline::Pipeline,
     routing: Option<RoutingInfo>,
     raise_on_error: bool,
     options: &PipelineOptions,
-) -> ValkeyResult<Vec<ValkeyValue>> {
+) -> ValkeyResult<Option<Vec<ValkeyValue>>> {
     let reply = dispatch_pipeline(core, pipeline, routing, raise_on_error, options).await?;
     match reply {
-        ValkeyValue::Array(items) => Ok(items),
-        ValkeyValue::Nil => Ok(Vec::new()),
+        ValkeyValue::Array(items) => Ok(Some(items)),
+        // Valkey replies with a null bulk-string / null array when EXEC is
+        // executed after at least one WATCH-ed key was modified between WATCH
+        // and EXEC — the transaction was aborted.
+        ValkeyValue::Nil => Ok(None),
         other => unreachable!("unexpected pipeline reply from Valkey: {other:?}"),
     }
 }
@@ -268,12 +275,17 @@ impl GlideClient {
     /// [`PipelineExt::query_async`]. When `raise_on_error` is `true`, the
     /// first errored command aborts with an error; otherwise error replies are
     /// returned inline.
+    ///
+    /// Returns `Ok(None)` when the pipeline is atomic and the transaction was
+    /// aborted because a `WATCH`-ed key was modified between `WATCH` and `EXEC`.
+    /// Returns `Ok(Some(replies))` on success (the inner `Vec` may be empty for
+    /// an empty atomic pipeline).
     pub async fn exec(
         &self,
         pipeline: &crate::pipeline::Pipeline,
         raise_on_error: bool,
         options: &PipelineOptions,
-    ) -> ValkeyResult<Vec<ValkeyValue>> {
+    ) -> ValkeyResult<Option<Vec<ValkeyValue>>> {
         run_pipeline(&self.inner, pipeline, None, raise_on_error, options).await
     }
 
@@ -375,13 +387,16 @@ impl GlideClusterClient {
 
     /// Execute a [`crate::Pipeline`] with GLIDE execution options,
     /// optionally routed. See [`crate::GlideClient::exec`].
+    ///
+    /// Returns `Ok(None)` when the pipeline is atomic and the transaction was
+    /// aborted because a `WATCH`-ed key was modified between `WATCH` and `EXEC`.
     pub async fn exec(
         &self,
         pipeline: &crate::pipeline::Pipeline,
         raise_on_error: bool,
         route: Option<Route>,
         options: &PipelineOptions,
-    ) -> ValkeyResult<Vec<ValkeyValue>> {
+    ) -> ValkeyResult<Option<Vec<ValkeyValue>>> {
         let routing = route.map(|r| r.to_routing_info(None));
         run_pipeline(&self.inner, pipeline, routing, raise_on_error, options).await
     }

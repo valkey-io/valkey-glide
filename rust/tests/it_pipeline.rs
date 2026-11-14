@@ -24,7 +24,11 @@ async fn atomic_transaction_ordered_results() {
     let mut p = pipe();
     p.atomic().set(&k, "10").incr(&k, 1).incr(&k, 1).get(&k);
 
-    let results = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
+    let results = c
+        .exec(&p, true, &PipelineOptions::default())
+        .await
+        .unwrap()
+        .expect("committed");
     assert_eq!(results.len(), 4);
     assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 11);
     assert_eq!(i64::from_valkey_value(&results[2]).unwrap(), 12);
@@ -38,7 +42,11 @@ async fn empty_pipeline_returns_empty() {
     let mut p = pipe();
     p.atomic();
 
-    let results = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
+    let results = c
+        .exec(&p, true, &PipelineOptions::default())
+        .await
+        .unwrap()
+        .expect("committed");
     assert!(results.is_empty());
 }
 
@@ -55,7 +63,11 @@ async fn non_atomic_pipeline_depth() {
     }
     p.get(&k);
 
-    let results = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
+    let results = c
+        .exec(&p, true, &PipelineOptions::default())
+        .await
+        .unwrap()
+        .expect("committed");
     // 1 SET + 100 INCR + 1 GET.
     assert_eq!(results.len(), 102);
     assert_eq!(String::from_valkey_value(&results[101]).unwrap(), "100");
@@ -89,7 +101,8 @@ async fn raise_on_error_false_returns_inline() {
     let results = c
         .exec(&p, false, &PipelineOptions::default())
         .await
-        .unwrap();
+        .unwrap()
+        .expect("committed");
 
     assert_eq!(results.len(), 3);
     assert_eq!(results[0], glide::ValkeyValue::Okay);
@@ -116,7 +129,8 @@ async fn error_inside_transaction_runtime() {
     let results = c
         .exec(&p, false, &PipelineOptions::default())
         .await
-        .unwrap();
+        .unwrap()
+        .expect("committed");
     assert_eq!(results.len(), 2);
 }
 
@@ -135,7 +149,11 @@ async fn raw_commands_in_pipeline() {
         .cmd("GET")
         .arg(&k);
 
-    let results = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
+    let results = c
+        .exec(&p, true, &PipelineOptions::default())
+        .await
+        .unwrap()
+        .expect("committed");
     assert_eq!(results.len(), 3);
     assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "10");
 }
@@ -147,18 +165,41 @@ async fn watch_multi_semantics() {
     let k = common::key("w");
     let _: () = c.set(&k, "1").await.unwrap();
 
-    // WATCH/UNWATCH are accepted (framing check). GLIDE multiplexes connections,
-    // so we assert the commands succeed rather than optimistic-lock abort.
+    // WATCH/UNWATCH are accepted (framing check).
     c.watch(&[&k]).await.unwrap();
 
     let mut p = pipe();
     p.atomic().incr(&k, 1);
 
-    let results = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
+    let results = c
+        .exec(&p, true, &PipelineOptions::default())
+        .await
+        .unwrap()
+        .expect("transaction committed");
     assert_eq!(results.len(), 1);
     assert_eq!(i64::from_valkey_value(&results[0]).unwrap(), 2);
 
     c.unwatch().await.unwrap();
+
+    // When a watched key changes before EXEC, the transaction aborts and exec returns Ok(None).
+    let c2 = server.client().await;
+    c.watch(&[&k]).await.unwrap();
+    let _: () = c2.set(&k, "99").await.unwrap();
+
+    let mut p2 = pipe();
+    p2.atomic().incr(&k, 1);
+
+    let aborted = c
+        .exec(&p2, true, &PipelineOptions::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        aborted, None,
+        "WATCH-aborted transaction must return Ok(None)"
+    );
+
+    let val: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(val.as_deref(), Some("99"));
 }
 
 #[tokio::test]
@@ -195,7 +236,11 @@ async fn pipeline_spans_multiple_data_types() {
         .cmd("ZCARD")
         .arg(&z);
 
-    let r = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
+    let r = c
+        .exec(&p, true, &PipelineOptions::default())
+        .await
+        .unwrap()
+        .expect("committed");
     assert_eq!(r.len(), 7);
     assert_eq!(i64::from_valkey_value(&r[4]).unwrap(), 3); // LLEN
     assert_eq!(String::from_valkey_value(&r[5]).unwrap(), "1"); // HGET
@@ -211,7 +256,11 @@ async fn pipeline_preserves_binary_values() {
     let mut p = pipe();
     p.atomic().set(&k, payload.clone()).get(&k);
 
-    let r = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
+    let r = c
+        .exec(&p, true, &PipelineOptions::default())
+        .await
+        .unwrap()
+        .expect("committed");
     assert_eq!(
         Bytes::from_valkey_value(&r[1]).unwrap().as_ref(),
         &payload[..]
@@ -226,7 +275,11 @@ async fn non_atomic_mixed_reads_writes_ordered() {
     let mut p = pipe();
     p.set(&k, "1").get(&k).incr(&k, 1).get(&k).del(&k).get(&k);
 
-    let r = c.exec(&p, true, &PipelineOptions::default()).await.unwrap();
+    let r = c
+        .exec(&p, true, &PipelineOptions::default())
+        .await
+        .unwrap()
+        .expect("committed");
     assert_eq!(r.len(), 6);
     assert_eq!(String::from_valkey_value(&r[1]).unwrap(), "1");
     assert_eq!(i64::from_valkey_value(&r[2]).unwrap(), 2);
@@ -272,7 +325,8 @@ timed_tokio_test!(
         let r = client
             .exec(&p, true, None, &PipelineOptions::default())
             .await
-            .unwrap();
+            .unwrap()
+            .expect("committed");
 
         assert_eq!(r.len(), 5);
         assert_eq!(i64::from_valkey_value(&r[1]).unwrap(), 11);
@@ -295,7 +349,8 @@ timed_tokio_test!(
         let r = client
             .exec(&p, true, None, &PipelineOptions::default())
             .await
-            .unwrap();
+            .unwrap()
+            .expect("committed");
 
         assert_eq!(r.len(), 4);
         assert_eq!(String::from_valkey_value(&r[2]).unwrap(), "1");
@@ -317,7 +372,7 @@ async fn pipeline_with_options_timeout_and_retry() {
         .with_retry_server_error(true)
         .with_retry_connection_error(false);
 
-    let results = c.exec(&p, true, &opts).await.unwrap();
+    let results = c.exec(&p, true, &opts).await.unwrap().expect("committed");
     assert_eq!(results.len(), 3);
     assert_eq!(i64::from_valkey_value(&results[1]).unwrap(), 2);
     assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "2");
@@ -333,7 +388,7 @@ async fn transaction_with_options_timeout() {
     p.atomic().set(&k, "5").incr(&k, 1).get(&k);
 
     let opts = PipelineOptions::new().with_timeout(std::time::Duration::from_secs(5));
-    let results = c.exec(&p, true, &opts).await.unwrap();
+    let results = c.exec(&p, true, &opts).await.unwrap().expect("committed");
     assert_eq!(results.len(), 3);
     assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "6");
 }
