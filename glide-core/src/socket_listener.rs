@@ -1218,12 +1218,66 @@ fn socket_listener_pool_size() -> usize {
 /// for the host fails a worker creation and is reported through the init callback (or, if
 /// a cgroup OOM kill lands first, kills the process). Note also that wrappers whose release
 /// profile sets `panic = "abort"` (glide-ffi, java, node) abort on the panic instead of
-/// reaching the catch arm, so there the graceful reporting applies to dev/test builds only.
+/// reaching the catch arm; the file-descriptor headroom check run before the pool covers the
+/// common `EMFILE` cause pre-emptively (no panic, so no abort), but worker/thread creation
+/// failures from other causes (e.g. `vm.max_map_count` exhaustion) still abort there.
 fn socket_listener_pool_size_from(override_value: Option<&str>, num_cpus: usize) -> usize {
     override_value
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or_else(|| num_cpus.clamp(1, DEFAULT_MAX_SOCKET_LISTENER_WORKERS))
         .max(1)
+}
+
+/// Estimated number of file descriptors one worker of `LocalPoolHandle` costs: a worker
+/// thread plus a `current_thread` runtime with `enable_all` (the epoll fd, its registry
+/// clone and the waker eventfd). See [`DEFAULT_MAX_SOCKET_LISTENER_WORKERS`].
+const FDS_PER_WORKER: u64 = 4;
+
+/// Check the file-descriptor headroom the worker pool of `pool_size` needs against the
+/// process's `RLIMIT_NOFILE` soft limit, and return a ready-to-report error message when
+/// the headroom is insufficient. Pure: the caller measures `limit` and `in_use` on Linux.
+///
+/// The check exists because `LocalPoolHandle::new` panics on a failed worker creation,
+/// and under `panic = "abort"` release builds (glide-ffi, java, node) the panic aborts
+/// the process before the `catch_unwind` backstop can report it. This estimate errs on
+/// the side of refusing a pool that might have fit (the message says "need ~", not the
+/// exact count), which is safe: `EMFILE` from the pool is fatal either way.
+fn fd_headroom_error(limit: u64, in_use: u64, pool_size: usize) -> Option<String> {
+    let needed = FDS_PER_WORKER * pool_size as u64;
+    let available = limit.saturating_sub(in_use);
+    if available >= needed {
+        return None;
+    }
+    Some(format!(
+        "Failed to create the socket listener worker pool of {pool_size} workers: not enough file descriptors (need ~{needed}, {available} available under the RLIMIT_NOFILE soft limit)"
+    ))
+}
+
+/// [`fd_headroom_error`] with the process's actual numbers. Linux only: `RLIMIT_NOFILE`
+/// via `getrlimit`, and the open-descriptor count via `/proc/self/fd`. Returns `None`
+/// when either cannot be read, falling back to the `catch_unwind` backstop.
+#[cfg(target_os = "linux")]
+fn worker_pool_fd_headroom_error(pool_size: usize) -> Option<String> {
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) } != 0 {
+        log_debug(
+            "listen_on_socket",
+            "Failed to read RLIMIT_NOFILE; skipping the file-descriptor headroom check",
+        );
+        return None;
+    }
+    let in_use = std::fs::read_dir("/proc/self/fd").ok()?.count() as u64;
+    fd_headroom_error(limit.rlim_cur, in_use, pool_size)
+}
+
+/// Non-Linux platforms have no portable open-descriptor probe; fall back to the
+/// `catch_unwind` backstop.
+#[cfg(not(target_os = "linux"))]
+fn worker_pool_fd_headroom_error(_pool_size: usize) -> Option<String> {
+    None
 }
 
 /// This function is exposed only for the sake of testing with a nonstandard `socket_path`.
@@ -1312,9 +1366,23 @@ pub fn start_socket_listener_internal<InitCallback>(
         // through the init callback rather than as a refused connection to a socket that
         // nobody listens on. `LocalPoolHandle::new` panics instead of returning an error when
         // a worker runtime or thread cannot be created (e.g. `EMFILE` under a low `nofile`
-        // limit), so the panic is caught here. The socket path has not been recorded in
-        // `INITIALIZED_SOCKETS` yet; only the socket file needs to be cleaned up.
+        // limit), so the panic is caught here as a backstop for non-EMFILE causes; the
+        // EMFILE case is handled pre-emptively by the headroom check below. The socket path
+        // has not been recorded in `INITIALIZED_SOCKETS` yet; only the socket file needs to
+        // be cleaned up.
         let pool_size = socket_listener_pool_size();
+        // Pre-emptive headroom check for the common failure (not enough file descriptors
+        // for the pool's worker runtimes under a low `nofile` soft limit). It must run
+        // instead of the panic because under `panic = "abort"` release builds (glide-ffi,
+        // java, node) the `catch_unwind` backstop below never runs: the panic aborts the
+        // process, with no init-callback error and no socket cleanup.
+        if let Some(message) = worker_pool_fd_headroom_error(pool_size) {
+            log_error("listen_on_socket", message.clone());
+            drop(listener_socket);
+            let _ = std::fs::remove_file(&socket_path_cloned);
+            let _ = tx.send(Err(io::Error::other(message)));
+            return;
+        }
         let local_set_pool = match std::panic::catch_unwind(|| LocalPoolHandle::new(pool_size)) {
             Ok(pool) => pool,
             Err(panic) => {
@@ -1427,5 +1495,34 @@ mod tests {
         assert_eq!(socket_listener_pool_size_from(Some("-1"), 4), 4);
         assert_eq!(socket_listener_pool_size_from(Some("0"), 4), 1);
         assert_eq!(socket_listener_pool_size_from(None, 0), 1);
+    }
+
+    #[test]
+    fn fd_headroom_check_passes_with_enough_descriptors() {
+        // 8 workers need ~32 descriptors; 924 available of a 1024 soft limit.
+        assert_eq!(fd_headroom_error(1024, 100, 8), None);
+        // Exactly the estimated need is allowed: the need is a "~" estimate, not a
+        // measured requirement, so equality is not a failure.
+        assert_eq!(fd_headroom_error(32, 0, 8), None);
+    }
+
+    #[test]
+    fn fd_headroom_check_reports_the_numbers_when_insufficient() {
+        let error =
+            fd_headroom_error(10, 8, 4).expect("The check should refuse a pool without headroom");
+        assert_eq!(
+            error,
+            "Failed to create the socket listener worker pool of 4 workers: not enough file descriptors (need ~16, 2 available under the RLIMIT_NOFILE soft limit)"
+        );
+    }
+
+    #[test]
+    fn fd_headroom_check_handles_more_descriptors_in_use_than_the_limit() {
+        let error = fd_headroom_error(10, 20, 1)
+            .expect("The check should refuse a pool already over the soft limit");
+        assert!(
+            error.contains("0 available under the RLIMIT_NOFILE soft limit"),
+            "{error}"
+        );
     }
 }

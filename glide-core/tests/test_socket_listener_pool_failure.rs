@@ -75,24 +75,40 @@ fn pool_creation_failure_is_reported_through_the_init_callback() {
     let original_limit = nofile_limit();
     let highest = highest_open_fd();
     let _fillers = fill_fd_gaps(highest);
-    // Room for the listener socket, but not for the four descriptors a tokio-util worker
-    // runtime costs (thread, epoll fd, registry clone, waker eventfd). If a tokio upgrade
-    // reduces that count, `bind` + the pool fit in this headroom and `expect_err` fails.
+    // Room for the listener socket and the headroom probe, but not for the four descriptors
+    // a tokio-util worker runtime costs (thread, epoll fd, registry clone, waker eventfd).
+    // If a tokio upgrade reduces that count, `bind` + the pool fit in this headroom and
+    // `expect_err` fails.
     set_nofile_soft_limit(highest as libc::rlim_t + 1 + 3);
+    // Pin the pool size so the pre-check message's pool-size and needed numbers are exact
+    // regardless of the host's CPU count. This test binary contains only this test, so the
+    // process-wide variable interferes with nothing. `set_var` is unsafe in edition 2024:
+    // no other threads read the environment concurrently in this test binary.
+    unsafe { std::env::set_var("GLIDE_SOCKET_LISTENER_WORKERS", "1") };
     let result = start_listener(&socket_path);
     set_nofile_soft_limit(original_limit.rlim_cur);
 
     let error = result.expect_err("The listener should report the pool failure");
+    // The pre-emptive headroom check fires before the pool is built (no panic, so the
+    // failure is also reported under `panic = "abort"` release builds of glide-ffi, java
+    // and node, where `catch_unwind` never runs).
     assert!(
-        error.contains("Failed to create the socket listener worker pool"),
+        error.contains("Failed to create the socket listener worker pool of 1 workers"),
         "{error}"
     );
-    // The tokio-util panic prints the Debug of `io::Error`. The numeric `code` field
-    // does not depend on the toolchain's `ErrorKind` mapping or on the strerror text.
     assert!(
-        error.contains(&format!("code: {}", libc::EMFILE)),
+        error.contains("not enough file descriptors (need ~4, "),
         "{error}"
     );
+    // The available number depends on the probe's own descriptors; assert it is parsed and
+    // below the estimated need of ~4.
+    let available: u64 = error
+        .split("need ~4, ")
+        .nth(1)
+        .and_then(|rest| rest.split_whitespace().next())
+        .and_then(|number| number.parse().ok())
+        .expect("The error should include the available descriptor count");
+    assert!(available < 4, "{error}");
     assert!(
         !Path::new(&socket_path).exists(),
         "The socket file should be removed after the failure"
