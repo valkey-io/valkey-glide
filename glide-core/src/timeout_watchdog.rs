@@ -899,15 +899,17 @@ mod tests {
     #[tokio::test]
     async fn multiple_deadlines_fire_in_order() {
         let watchdog = TimeoutWatchdog::start();
-        let rx1 = watchdog.register(Duration::from_millis(30), Instant::now());
-        let rx2 = watchdog.register(Duration::from_millis(60), Instant::now());
+        let start = Instant::now();
+        let mut rx1 = watchdog.register(Duration::from_millis(30), start);
+        let rx2 = watchdog.register(Duration::from_millis(60), start);
 
-        rx1.await.unwrap();
-        let mid = Instant::now();
+        // The watchdog fires in deadline order on one thread, so once the later
+        // receiver resolves the earlier one must already have been sent. This
+        // avoids asserting a wall-clock gap between the two wake-ups, which
+        // depends on scheduling.
         rx2.await.unwrap();
-        let end = Instant::now();
-
-        assert!(end.duration_since(mid) >= Duration::from_millis(10));
+        assert!(start.elapsed() >= Duration::from_millis(60));
+        assert!(rx1.try_recv().is_ok());
     }
 
     #[tokio::test]
