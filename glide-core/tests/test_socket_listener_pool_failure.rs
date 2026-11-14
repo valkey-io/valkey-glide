@@ -76,9 +76,9 @@ fn pool_creation_failure_is_reported_through_the_init_callback() {
     let highest = highest_open_fd();
     let _fillers = fill_fd_gaps(highest);
     // Room for the listener socket and the headroom probe, but not for the four descriptors
-    // a tokio-util worker runtime costs (thread, epoll fd, registry clone, waker eventfd).
-    // If a tokio upgrade reduces that count, `bind` + the pool fit in this headroom and
-    // `expect_err` fails.
+    // a tokio-util worker runtime costs (epoll fd, registry clone, waker eventfd, plus the
+    // signal-driver socketpair receiver). If a tokio upgrade reduces that count, `bind` +
+    // the pool fit in this headroom and `expect_err` fails.
     set_nofile_soft_limit(highest as libc::rlim_t + 1 + 3);
     // Pin the pool size so the pre-check message's pool-size and needed numbers are exact
     // regardless of the host's CPU count. This test binary contains only this test, so the
