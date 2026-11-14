@@ -136,8 +136,8 @@ execution controls (per-call timeout, pipeline retry policy, cluster routing) ar
 needed. Dispatch goes through `pipeline::dispatch_pipeline`, which hands the built
 pipeline to glide-core **by reference** (zero extra payload copies) —
 `send_transaction` (atomic) or `send_pipeline` — and converts the reply to a
-`ValkeyValue`. The two entry points then diverge: `exec` returns the raw
-`Vec<ValkeyValue>` (aborted transaction → `[]`), while `query_async`/`query` honor
+`ValkeyValue`. The two entry points then diverge: `exec` returns
+`Option<Vec<ValkeyValue>>` (aborted transaction → `None`), while `query_async`/`query` honor
 `.ignore()` markers, decode into `T`, and preserve an aborted transaction's `Nil`
 (matching redis-rs). The clients are deliberately **not** `redis` connection
 objects, so there is no `ConnectionLike` bridge.

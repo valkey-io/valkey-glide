@@ -30,6 +30,7 @@
 
 ### Breaking Changes
 
+* Rust: return Ok(None) when WATCH aborts transaction ([#7714](https://github.com/valkey-io/valkey-glide/pull/7714))
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 

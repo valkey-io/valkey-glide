@@ -126,15 +126,30 @@ fn sync_standalone_custom_command_and_pipeline() {
         .cmd("GET")
         .arg(&bk);
 
-    let results = c.exec(&pipe, true, &PipelineOptions::default()).unwrap();
+    let results = c
+        .exec(&pipe, true, &PipelineOptions::default())
+        .unwrap()
+        .expect("committed");
 
     assert_eq!(results.len(), 4);
     assert_eq!(i64::from_valkey_value(&results[2]).unwrap(), 12);
     assert_eq!(String::from_valkey_value(&results[3]).unwrap(), "12");
+
+    // When a watched key changes before EXEC, sync exec returns Ok(None).
+    let c2 = sync_client(server.port);
+    cmd("WATCH").arg(&bk).exec(&c).unwrap();
+    let _: () = cmd("SET").arg(&bk).arg("99").exec(&c2).unwrap();
+
+    let mut p2 = glide::pipe();
+    p2.atomic().incr(&bk, 1);
+
+    let aborted = c.exec(&p2, true, &PipelineOptions::default()).unwrap();
+    assert_eq!(
+        aborted, None,
+        "SyncGlideClient::exec must return Ok(None) when WATCH aborts transaction"
+    );
 }
 
-// TODO #7672: Add a test case for a transaction aborted by `WATCH`
-// and expect `exec` to return `None`.
 #[test]
 fn sync_standalone_run_full_async_surface() {
     let server = common::TestServer::start();
