@@ -174,9 +174,9 @@ impl TestServer {
         // ephemeral servers spawned in parallel), a freshly-started server can be
         // slow to accept — the default connect timeout can then race and fail.
         let config = GlideClientConfiguration::with_address("127.0.0.1", self.port)
-            .protocol(protocol)
-            .connection_timeout(Duration::from_secs(10))
-            .request_timeout(Duration::from_secs(10));
+            .with_protocol(protocol)
+            .with_connection_timeout(Duration::from_secs(10))
+            .with_request_timeout(Duration::from_secs(10));
         connect_standalone_with_retry(config).await
     }
 

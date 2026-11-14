@@ -25,7 +25,7 @@ timed_tokio_test!(
 timed_tokio_test!(
     async fn tls_cluster_untrusted() {
         let server = ClusterHarness::start_with_tls().await;
-        let untrusted_config = server.config().tls(TlsConfig::SecureTls);
+        let untrusted_config = server.config().with_tls(TlsConfig::SecureTls);
         assert_does_not_connect(untrusted_config).await;
     }
 );

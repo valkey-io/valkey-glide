@@ -15,7 +15,7 @@ const PASSWORD: &str = "s3cr3t-p4ss";
 async fn auth_success_with_correct_password() {
     let server = TestServer::start_with_password(PASSWORD);
     let config = GlideClientConfiguration::with_address("127.0.0.1", server.port)
-        .credentials(ServerCredentials::password(PASSWORD));
+        .with_credentials(ServerCredentials::password(PASSWORD));
     let client = server
         .try_connect(config)
         .await
@@ -30,7 +30,7 @@ async fn auth_success_with_correct_password() {
 async fn auth_failure_with_wrong_password() {
     let server = TestServer::start_with_password(PASSWORD);
     let config = GlideClientConfiguration::with_address("127.0.0.1", server.port)
-        .credentials(ServerCredentials::password("wrong-password"));
+        .with_credentials(ServerCredentials::password("wrong-password"));
     // Either the connect fails during the auth handshake, or a subsequent
     // command fails with an auth error.
     match server.try_connect(config).await {
@@ -60,7 +60,7 @@ async fn auth_with_username_default_user() {
     let server = TestServer::start_with_password(PASSWORD);
     // The built-in `default` user with the configured password.
     let config = GlideClientConfiguration::with_address("127.0.0.1", server.port)
-        .credentials(ServerCredentials::username_password("default", PASSWORD));
+        .with_credentials(ServerCredentials::username_password("default", PASSWORD));
     let client = server
         .try_connect(config)
         .await

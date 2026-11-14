@@ -31,7 +31,8 @@ timed_tokio_test!(
 
         let subs = PubSubSubscriptions::new().subscribe(PubSubChannelMode::Exact, channel.clone());
         let subscriber = GlideClient::connect(
-            GlideClientConfiguration::with_address("127.0.0.1", server.port).subscriptions(subs),
+            GlideClientConfiguration::with_address("127.0.0.1", server.port)
+                .with_subscriptions(subs),
         )
         .await
         .expect("connect subscriber");
@@ -61,7 +62,8 @@ timed_tokio_test!(
         let server = common::TestServer::start();
         let subs = PubSubSubscriptions::new().subscribe(PubSubChannelMode::Pattern, "news.*");
         let subscriber = GlideClient::connect(
-            GlideClientConfiguration::with_address("127.0.0.1", server.port).subscriptions(subs),
+            GlideClientConfiguration::with_address("127.0.0.1", server.port)
+                .with_subscriptions(subs),
         )
         .await
         .expect("connect subscriber");
@@ -89,7 +91,8 @@ timed_tokio_test!(
         let server = common::TestServer::start();
         let subs = PubSubSubscriptions::new().subscribe(PubSubChannelMode::Exact, "quiet");
         let subscriber = GlideClient::connect(
-            GlideClientConfiguration::with_address("127.0.0.1", server.port).subscriptions(subs),
+            GlideClientConfiguration::with_address("127.0.0.1", server.port)
+                .with_subscriptions(subs),
         )
         .await
         .expect("connect subscriber");

@@ -776,6 +776,7 @@ macro_rules! impl_common_config_builders {
             }
 
             /// Enable the Pub/Sub push channel without configuring any connect-time subscriptions.
+            #[deprecated(note = "use `with_pubsub` instead")]
             #[must_use]
             pub fn enable_pubsub(self) -> Self {
                 self.with_pubsub()
