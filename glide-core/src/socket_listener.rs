@@ -1202,6 +1202,18 @@ const SOCKET_LISTENER_WORKERS_ENV: &str = "GLIDE_SOCKET_LISTENER_WORKERS";
 /// machines with up to eight CPUs and bounds the cost everywhere else.
 const DEFAULT_MAX_SOCKET_LISTENER_WORKERS: usize = 8;
 
+/// Upper bound on the worker pool size when `GLIDE_SOCKET_LISTENER_WORKERS` overrides it.
+///
+/// An explicit override is honored beyond the default cap of 8, but is still bounded: a wrong
+/// value (a typo, or unit confusion) must degrade to a bounded failure, not to a machine-wide
+/// stall. `LocalPoolHandle::new` eagerly builds one `current_thread` runtime + OS thread per
+/// worker until something fails, so an absurd value commits several GB of RSS while the caller
+/// is blocked in `rx.recv()` (`start_socket_listener_internal`) holding the `INITIALIZED_SOCKETS`
+/// write lock — stalling every other client creation in the process — and if a cgroup OOM kill
+/// lands first, the process dies without any error reaching the init callback. Sixty-four is far
+/// beyond any sane need for a single client process whose default is 8.
+const MAX_SOCKET_LISTENER_WORKERS: usize = 64;
+
 fn socket_listener_pool_size() -> usize {
     socket_listener_pool_size_from(
         std::env::var(SOCKET_LISTENER_WORKERS_ENV).ok().as_deref(),
@@ -1213,17 +1225,19 @@ fn socket_listener_pool_size() -> usize {
 /// `GLIDE_TOKIO_WORKER_THREADS`, an unparsable value falls back to the default and `0` is
 /// raised to `1`, since `LocalPoolHandle::new` panics on an empty pool.
 ///
-/// An explicit value is not capped, like `GLIDE_TOKIO_WORKER_THREADS`: whoever can set the
-/// environment variable already controls the process configuration, and a value too large
-/// for the host fails a worker creation and is reported through the init callback (or, if
-/// a cgroup OOM kill lands first, kills the process). Note also that wrappers whose release
-/// profile sets `panic = "abort"` (glide-ffi, java, node) abort on the panic instead of
-/// reaching the catch arm, so there the graceful reporting applies to dev/test builds only.
+/// An explicit value is honored beyond the default cap of 8, but is clamped to
+/// [`MAX_SOCKET_LISTENER_WORKERS`] (64). Unlike `GLIDE_TOKIO_WORKER_THREADS`, an uncapped
+/// override here is an env-gated stall/OOM vector: an absurd value commits several GB of RSS
+/// while the caller is blocked in `rx.recv()` (`start_socket_listener_internal`) holding the
+/// `INITIALIZED_SOCKETS` write lock, and if a cgroup OOM kill lands first, the process dies
+/// before any error is reported through the init callback. Note also that wrappers whose
+/// release profile sets `panic = "abort"` (glide-ffi, java, node) abort on the panic instead
+/// of reaching the catch arm, so there the graceful reporting applies to dev/test builds only.
 fn socket_listener_pool_size_from(override_value: Option<&str>, num_cpus: usize) -> usize {
     override_value
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or_else(|| num_cpus.clamp(1, DEFAULT_MAX_SOCKET_LISTENER_WORKERS))
-        .max(1)
+        .clamp(1, MAX_SOCKET_LISTENER_WORKERS)
 }
 
 /// This function is exposed only for the sake of testing with a nonstandard `socket_path`.
@@ -1412,9 +1426,21 @@ mod tests {
     }
 
     #[test]
-    fn pool_size_override_is_not_capped() {
+    fn pool_size_override_is_capped_at_max_socket_listener_workers() {
         assert_eq!(socket_listener_pool_size_from(Some("2"), 288), 2);
         assert_eq!(socket_listener_pool_size_from(Some("32"), 4), 32);
+        assert_eq!(
+            socket_listener_pool_size_from(Some("64"), 4),
+            MAX_SOCKET_LISTENER_WORKERS
+        );
+        assert_eq!(
+            socket_listener_pool_size_from(Some("65"), 4),
+            MAX_SOCKET_LISTENER_WORKERS
+        );
+        assert_eq!(
+            socket_listener_pool_size_from(Some("100000"), 4),
+            MAX_SOCKET_LISTENER_WORKERS
+        );
     }
 
     #[test]
