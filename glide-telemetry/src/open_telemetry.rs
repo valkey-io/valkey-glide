@@ -638,6 +638,9 @@ static SCOPE_RELEASE_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = O
 /// shutdown now goes through the owned [`SdkTracerProvider`].
 static TRACER_PROVIDER: OnceLock<SdkTracerProvider> = OnceLock::new();
 
+/// Holds the meter provider so it can be flushed/shut down explicitly.
+static METER_PROVIDER: OnceLock<SdkMeterProvider> = OnceLock::new();
+
 /// Singleton instance of GlideOpenTelemetry. Ensures that telemetry setup happens only once across the application.
 static OTEL: OnceCell<RwLock<GlideOpenTelemetry>> = OnceCell::new();
 
@@ -949,6 +952,7 @@ impl GlideOpenTelemetry {
             }
         };
 
+        let _ = METER_PROVIDER.set(meter_provider.clone());
         global::set_meter_provider(meter_provider);
 
         Ok(())
@@ -1219,7 +1223,7 @@ impl GlideOpenTelemetry {
         GlideSpan::new(name)
     }
 
-    /// Trigger a shutdown procedure flushing all remaining traces
+    /// Trigger a shutdown procedure flushing all remaining traces and metrics
     pub fn shutdown() {
         if let Some(provider) = TRACER_PROVIDER.get()
             && let Err(e) = provider.shutdown()
@@ -1227,6 +1231,15 @@ impl GlideOpenTelemetry {
             log_warn(
                 "opentelemetry",
                 format!("Failed to shut down tracer provider: {e}"),
+            );
+        }
+
+        if let Some(provider) = METER_PROVIDER.get()
+            && let Err(e) = provider.shutdown()
+        {
+            log_warn(
+                "opentelemetry",
+                format!("Failed to shut down meter provider: {e}"),
             );
         }
     }
