@@ -116,6 +116,92 @@ impl Route {
     }
 }
 
+/// Describes where a batch (pipeline or transaction) should be routed in
+/// cluster mode.
+///
+/// Unlike [`Route`], this type has no multi-node variants: a batch always
+/// runs on a single node, so `AllNodes` / `AllPrimaries` cannot be expressed
+/// here. This mirrors the other GLIDE clients (`SingleNodeRoute` in Java,
+/// Node, Go and C#, `TSingleNodeRoute` in Python). Use [`Route`] for single
+/// commands, where multi-node routing is legitimate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SingleNodeRoute {
+    /// Route to a random node.
+    RandomNode,
+    /// Route to the node owning the slot for `key`.
+    SlotKey {
+        /// The key whose slot determines the target node.
+        key: Vec<u8>,
+        /// Primary or replica.
+        slot_type: SlotType,
+    },
+    /// Route to the node owning the given slot id (0..16383).
+    SlotId {
+        /// The slot id.
+        slot_id: u16,
+        /// Primary or replica.
+        slot_type: SlotType,
+    },
+    /// Route to the node with the given host and port.
+    ByAddress {
+        /// Node hostname.
+        host: String,
+        /// Node port.
+        port: u16,
+    },
+}
+
+impl SingleNodeRoute {
+    /// Convenience constructor for a slot-key route by string key.
+    pub fn slot_key(key: impl Into<Vec<u8>>, slot_type: SlotType) -> Self {
+        SingleNodeRoute::SlotKey {
+            key: key.into(),
+            slot_type,
+        }
+    }
+
+    /// Convert this route into a `glide-core` [`RoutingInfo`].
+    ///
+    /// Always a [`RoutingInfo::SingleNode`]: unlike `Route`, no command is
+    /// needed because single-node routes carry no response aggregation policy.
+    pub(crate) fn to_routing_info(&self) -> RoutingInfo {
+        match self {
+            SingleNodeRoute::RandomNode => RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
+            SingleNodeRoute::SlotKey { key, slot_type } => {
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(CoreRoute::new(
+                    get_slot(key),
+                    slot_type.slot_addr(),
+                )))
+            }
+            SingleNodeRoute::SlotId { slot_id, slot_type } => {
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(CoreRoute::new(
+                    *slot_id,
+                    slot_type.slot_addr(),
+                )))
+            }
+            SingleNodeRoute::ByAddress { host, port } => {
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                    host: host.clone(),
+                    port: *port,
+                })
+            }
+        }
+    }
+}
+
+impl From<SingleNodeRoute> for Route {
+    /// Every single-node route is also a valid [`Route`] for single commands.
+    fn from(route: SingleNodeRoute) -> Self {
+        match route {
+            SingleNodeRoute::RandomNode => Route::RandomNode,
+            SingleNodeRoute::SlotKey { key, slot_type } => Route::SlotKey { key, slot_type },
+            SingleNodeRoute::SlotId { slot_id, slot_type } => Route::SlotId { slot_id, slot_type },
+            SingleNodeRoute::ByAddress { host, port } => Route::ByAddress { host, port },
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! Pure-logic routing tests: every [`Route`] variant is lowered into the
@@ -456,5 +542,102 @@ mod tests {
                 other => panic!("unexpected routing: {other:?}"),
             }
         }
+    }
+
+    // ---- SingleNodeRoute -------------------------------------------------
+    //
+    // The batch route type must never lower to a multi-node RoutingInfo:
+    // every variant maps to RoutingInfo::SingleNode.
+
+    #[test]
+    fn single_node_random_node_maps_to_single_random() {
+        assert!(matches!(
+            SingleNodeRoute::RandomNode.to_routing_info(),
+            RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)
+        ));
+    }
+
+    #[test]
+    fn single_node_slot_key_computes_slot_and_primary() {
+        match SingleNodeRoute::slot_key("mykey", SlotType::Primary).to_routing_info() {
+            RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route)) => {
+                assert_eq!(route.slot(), get_slot(b"mykey"));
+                assert_eq!(route.slot_addr(), SlotAddr::Master);
+            }
+            other => panic!("unexpected routing: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn single_node_slot_key_replica_maps_to_replica_required() {
+        match SingleNodeRoute::slot_key("mykey", SlotType::Replica).to_routing_info() {
+            RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route)) => {
+                assert_eq!(route.slot(), get_slot(b"mykey"));
+                assert_eq!(route.slot_addr(), SlotAddr::ReplicaRequired);
+            }
+            other => panic!("unexpected routing: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn single_node_slot_id_maps() {
+        match (SingleNodeRoute::SlotId {
+            slot_id: 1234,
+            slot_type: SlotType::Primary,
+        })
+        .to_routing_info()
+        {
+            RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route)) => {
+                assert_eq!(route.slot(), 1234);
+                assert_eq!(route.slot_addr(), SlotAddr::Master);
+            }
+            other => panic!("unexpected routing: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn single_node_by_address_maps() {
+        match (SingleNodeRoute::ByAddress {
+            host: "node1".into(),
+            port: 7001,
+        })
+        .to_routing_info()
+        {
+            RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress { host, port }) => {
+                assert_eq!(host, "node1");
+                assert_eq!(port, 7001);
+            }
+            other => panic!("unexpected routing: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn single_node_route_converts_to_matching_route() {
+        // Every SingleNodeRoute variant is a valid Route for single commands.
+        assert_eq!(Route::from(SingleNodeRoute::RandomNode), Route::RandomNode);
+        assert_eq!(
+            Route::from(SingleNodeRoute::slot_key("k", SlotType::Primary)),
+            Route::slot_key("k", SlotType::Primary)
+        );
+        assert_eq!(
+            Route::from(SingleNodeRoute::SlotId {
+                slot_id: 42,
+                slot_type: SlotType::Replica,
+            }),
+            Route::SlotId {
+                slot_id: 42,
+                slot_type: SlotType::Replica,
+            }
+        );
+        assert_eq!(
+            Route::from(SingleNodeRoute::ByAddress {
+                host: "h".into(),
+                port: 1,
+            }),
+            Route::ByAddress {
+                host: "h".into(),
+                port: 1,
+            }
+        );
     }
 }

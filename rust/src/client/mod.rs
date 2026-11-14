@@ -374,15 +374,19 @@ impl GlideClusterClient {
     }
 
     /// Execute a [`crate::Pipeline`] with GLIDE execution options,
-    /// optionally routed. See [`crate::GlideClient::exec`].
+    /// optionally routed to a single node. See [`crate::GlideClient::exec`].
+    ///
+    /// The route is a [`crate::SingleNodeRoute`]: a batch always runs on one
+    /// node, so multi-node routes are not accepted here. For single commands
+    /// that fan out to multiple nodes, use the `*_with_route` helpers.
     pub async fn exec(
         &self,
         pipeline: &crate::pipeline::Pipeline,
         raise_on_error: bool,
-        route: Option<Route>,
+        route: Option<crate::SingleNodeRoute>,
         options: &PipelineOptions,
     ) -> ValkeyResult<Vec<ValkeyValue>> {
-        let routing = route.map(|r| r.to_routing_info(None));
+        let routing = route.map(|r| r.to_routing_info());
         run_pipeline(&self.inner, pipeline, routing, raise_on_error, options).await
     }
 
