@@ -549,6 +549,20 @@ fn inflight_requests_limit_cluster() {
     assert_eq!(req.inflight_requests_limit, Some(42));
 }
 
+#[tokio::test]
+async fn inflight_requests_limit_zero_rejected_at_connect() {
+    use crate::{GlideClient, GlideClusterClient, GlideError};
+
+    let cfg = GlideClientConfiguration::with_address("127.0.0.1", 6379).inflight_requests_limit(0);
+    let res = GlideClient::connect(cfg).await;
+    assert!(matches!(res, Err(GlideError::Configuration(_))));
+
+    let c_cfg =
+        GlideClusterClientConfiguration::with_address("127.0.0.1", 7000).inflight_requests_limit(0);
+    let c_res = GlideClusterClient::connect(c_cfg).await;
+    assert!(matches!(c_res, Err(GlideError::Configuration(_))));
+}
+
 // ---- cluster_mode_enabled -------------------------------------------
 
 #[test]

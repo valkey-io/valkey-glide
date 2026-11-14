@@ -28,7 +28,7 @@ use redis::{
     PushInfo, RedisError, RedisResult, RetryStrategy, ScanStateRC, Value,
 };
 use regex::Regex;
-pub use standalone_client::StandaloneClient;
+pub use standalone_client::{StandaloneClient, StandaloneClientConnectionError};
 use std::io;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, OnceLock};

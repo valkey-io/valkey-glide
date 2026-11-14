@@ -86,9 +86,21 @@ impl GlideError {
 
     pub(crate) fn from_connection_error(err: glide_core::client::ConnectionError) -> Self {
         use glide_core::client::ConnectionError as CE;
+        use glide_core::client::StandaloneClientConnectionError as SCE;
         match err {
             CE::Timeout => GlideError::Timeout("connection attempt timed out".to_string()),
             CE::Configuration(msg) => GlideError::Configuration(msg),
+            CE::Cluster(ref redis_err) if redis_err.kind() == ErrorKind::InvalidClientConfig => {
+                GlideError::Configuration(redis_err.to_string())
+            }
+            CE::Standalone(SCE::FailedConnection(ref errs))
+                if errs
+                    .iter()
+                    .any(|(_, e)| e.kind() == ErrorKind::InvalidClientConfig) =>
+            {
+                GlideError::Configuration(err.to_string())
+            }
+            CE::Standalone(SCE::NoAddressesProvided) => GlideError::Configuration(err.to_string()),
             other => GlideError::Connection(other.to_string()),
         }
     }
@@ -209,6 +221,36 @@ mod tests {
         let redis_err = RedisError::from((ErrorKind::ResponseError, "cluster boom"));
         let g = GlideError::from_connection_error(CE::Cluster(redis_err));
         assert!(matches!(g, GlideError::Connection(_)));
+    }
+
+    #[test]
+    fn connection_cluster_invalid_client_config_maps_to_configuration() {
+        let redis_err = RedisError::from((ErrorKind::InvalidClientConfig, "bad tls config"));
+        let g = GlideError::from_connection_error(CE::Cluster(redis_err));
+        assert!(matches!(g, GlideError::Configuration(_)));
+        assert_eq!(g.class_name(), "ConfigurationError");
+    }
+
+    #[test]
+    fn connection_standalone_invalid_client_config_maps_to_configuration() {
+        use glide_core::client::StandaloneClientConnectionError as SCE;
+        let redis_err = RedisError::from((
+            ErrorKind::InvalidClientConfig,
+            "Root certificate cannot be empty byte string",
+        ));
+        let g = GlideError::from_connection_error(CE::Standalone(SCE::FailedConnection(vec![(
+            None, redis_err,
+        )])));
+        assert!(matches!(g, GlideError::Configuration(_)));
+        assert_eq!(g.class_name(), "ConfigurationError");
+    }
+
+    #[test]
+    fn connection_standalone_no_addresses_maps_to_configuration() {
+        use glide_core::client::StandaloneClientConnectionError as SCE;
+        let g = GlideError::from_connection_error(CE::Standalone(SCE::NoAddressesProvided));
+        assert!(matches!(g, GlideError::Configuration(_)));
+        assert_eq!(g.class_name(), "ConfigurationError");
     }
 
     // ---- class_name() / message() for every variant --------------------

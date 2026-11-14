@@ -233,6 +233,11 @@ pub struct GlideClient {
 impl GlideClient {
     /// Connect using the given standalone configuration.
     pub async fn connect(config: GlideClientConfiguration) -> ValkeyResult<Self> {
+        if config.inflight_requests_limit == Some(0) {
+            return Err(GlideError::Configuration(
+                "inflight_requests_limit must be greater than zero".to_string(),
+            ));
+        }
         let request = config.to_request();
         let has_subs = config
             .pubsub_subscriptions
@@ -338,6 +343,11 @@ pub struct GlideClusterClient {
 impl GlideClusterClient {
     /// Connect using the given cluster configuration.
     pub async fn connect(config: GlideClusterClientConfiguration) -> ValkeyResult<Self> {
+        if config.inflight_requests_limit == Some(0) {
+            return Err(GlideError::Configuration(
+                "inflight_requests_limit must be greater than zero".to_string(),
+            ));
+        }
         let request = config.to_request();
         let has_subs = config
             .pubsub_subscriptions
