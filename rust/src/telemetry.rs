@@ -91,8 +91,8 @@ impl TelemetryExporter {
 
 /// A fully-built OpenTelemetry configuration, ready to pass to [`init`].
 ///
-/// Construct one with [`OpenTelemetryConfig::builder`]. If neither a trace nor a
-/// metrics exporter is configured, initialisation is a no-op.
+/// Construct one with [`OpenTelemetryConfig::builder`]. At least one of traces or
+/// metrics must be provided, otherwise initialisation fails.
 #[derive(Clone)]
 pub struct OpenTelemetryConfig {
     inner: GlideOpenTelemetryConfigBuilder,
@@ -159,8 +159,8 @@ impl OpenTelemetryConfigBuilder {
 ///
 /// # Errors
 /// Returns [`GlideError::Configuration`] if the configuration is invalid (zero
-/// flush interval, trace sample percentage > 100) or an exporter fails to
-/// initialise.
+/// flush interval, trace sample percentage > 100, neither traces nor metrics
+/// configured) or an exporter fails to initialise.
 pub fn init(config: OpenTelemetryConfig) -> ValkeyResult<()> {
     GlideOpenTelemetry::initialise(config.inner.build())
         .map_err(|e| GlideError::Configuration(format!("OpenTelemetry init failed: {e}")))
@@ -226,6 +226,16 @@ mod tests {
             .build();
         let err = init(config).expect_err("sample percentage > 100 must be rejected");
         assert!(matches!(err, GlideError::Configuration(_)));
+    }
+
+    #[tokio::test]
+    async fn init_rejects_no_exporter() {
+        let config = OpenTelemetryConfig::builder()
+            .with_flush_interval(Duration::from_millis(100))
+            .build();
+        let err = init(config).expect_err("config without exporters must be rejected");
+        assert!(matches!(err, GlideError::Configuration(_)));
+        assert!(!is_initialized(), "Failed init must leave is_initialized false");
     }
 
     // NOTE: a successful `init` is process-global and one-shot, so it cannot be
