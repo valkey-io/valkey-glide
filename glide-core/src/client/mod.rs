@@ -1311,6 +1311,19 @@ impl Client {
         let raw_value = match client {
             ClientWrapper::Standalone(mut client) => client.send_command(&cmd).await,
             ClientWrapper::Cluster { mut client, .. } => {
+                if let Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(ref route))) =
+                    routing
+                    && route.slot() >= redis::cluster_topology::SLOT_SIZE
+                {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "Invalid slot ID",
+                        format!(
+                            "Invalid slot ID: {}. Slot ID must be between 0 and 16383",
+                            route.slot()
+                        ),
+                    )));
+                }
                 let final_routing = if let Some(RoutingInfo::SingleNode(
                     SingleNodeRoutingInfo::Random,
                 )) = routing
