@@ -450,6 +450,16 @@ where
         connections: &'a mut HashMap<String, C>,
         route: &Route,
     ) -> RedisResult<(String, &'a mut C)> {
+        if route.slot() >= crate::cluster_topology::SLOT_SIZE {
+            return Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Invalid slot ID",
+                format!(
+                    "Invalid slot ID: {}. Slot ID must be between 0 and 16383",
+                    route.slot()
+                ),
+            )));
+        }
         let slots = self.slots.borrow();
         if let Some(addr) = slots.slot_addr_for_route(route) {
             Ok((
