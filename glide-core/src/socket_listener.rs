@@ -1212,6 +1212,13 @@ fn socket_listener_pool_size() -> usize {
 /// `override_value` is the value of [`SOCKET_LISTENER_WORKERS_ENV`], if set. As for
 /// `GLIDE_TOKIO_WORKER_THREADS`, an unparsable value falls back to the default and `0` is
 /// raised to `1`, since `LocalPoolHandle::new` panics on an empty pool.
+///
+/// An explicit value is not capped, like `GLIDE_TOKIO_WORKER_THREADS`: whoever can set the
+/// environment variable already controls the process configuration, and a value too large
+/// for the host fails a worker creation and is reported through the init callback (or, if
+/// a cgroup OOM kill lands first, kills the process). Note also that wrappers whose release
+/// profile sets `panic = "abort"` (glide-ffi, java, node) abort on the panic instead of
+/// reaching the catch arm, so there the graceful reporting applies to dev/test builds only.
 fn socket_listener_pool_size_from(override_value: Option<&str>, num_cpus: usize) -> usize {
     override_value
         .and_then(|value| value.parse::<usize>().ok())

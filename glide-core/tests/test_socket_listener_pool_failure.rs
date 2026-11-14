@@ -75,7 +75,9 @@ fn pool_creation_failure_is_reported_through_the_init_callback() {
     let original_limit = nofile_limit();
     let highest = highest_open_fd();
     let _fillers = fill_fd_gaps(highest);
-    // Room for the listener socket, but not for the four descriptors of a worker runtime.
+    // Room for the listener socket, but not for the four descriptors a tokio-util worker
+    // runtime costs (thread, epoll fd, registry clone, waker eventfd). If a tokio upgrade
+    // reduces that count, `bind` + the pool fit in this headroom and `expect_err` fails.
     set_nofile_soft_limit(highest as libc::rlim_t + 1 + 3);
     let result = start_listener(&socket_path);
     set_nofile_soft_limit(original_limit.rlim_cur);
@@ -96,8 +98,9 @@ fn pool_creation_failure_is_reported_through_the_init_callback() {
         "The socket file should be removed after the failure"
     );
 
-    // The failed attempt must not be recorded as initialized: a retry on the same path
-    // starts a listener that actually accepts connections.
+    // The failed attempt must not be recorded as initialized: with the limit restored,
+    // the retry verifies cleanup hygiene (socket file removed, path not poisoned in
+    // `INITIALIZED_SOCKETS`), not leak-freedom under the constrained limit.
     let path = start_listener(&socket_path).expect("The retry should succeed");
     UnixStream::connect(&path).expect("The retried listener should accept connections");
     close_socket(&socket_path);
