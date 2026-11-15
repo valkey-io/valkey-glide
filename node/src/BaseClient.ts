@@ -1401,6 +1401,8 @@ export interface AdvancedBaseClientConfiguration {
      * such as enabling an insecure mode that bypasses certificate validation.
      */
     tlsAdvancedConfiguration?: {
+        // TODO #7707: Document that root certificates or IAM authentication with `insecure`
+        // is rejected.
         /**
          * Whether to bypass TLS certificate verification.
          *

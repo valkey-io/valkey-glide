@@ -854,6 +854,7 @@ class TlsAdvancedConfiguration:
         client_key_path: Optional[StrPath] = None,
         cert_reload_interval_seconds: Optional[int] = None,
     ):
+        # TODO #7707: Document that root certificates or IAM authentication with use_insecure_tls is rejected.
         self.use_insecure_tls = use_insecure_tls
         self.root_pem_cacerts = root_pem_cacerts
         self.client_cert_pem = client_cert_pem

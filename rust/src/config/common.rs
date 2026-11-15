@@ -480,6 +480,8 @@ pub enum TlsConfig {
     NoTls,
     /// TLS with full certificate verification.
     SecureTls,
+    // TODO #7707: Document that IAM authentication and custom CA certificates are rejected
+    // with `InsecureTls`.
     /// TLS without certificate verification (testing only).
     InsecureTls,
 }
@@ -604,6 +606,8 @@ macro_rules! impl_common_config_builders {
                 self
             }
 
+            // TODO #7707: Document that combining a custom CA certificate with
+            // `TlsConfig::InsecureTls` is rejected.
             /// Trust a custom CA certificate (PEM bytes) when verifying the server with
             /// [`TlsConfig::SecureTls`]. Enables secure TLS against a server presenting a
             /// certificate signed by a private/self-signed CA. May be called more than

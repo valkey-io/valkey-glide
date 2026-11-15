@@ -2462,6 +2462,7 @@ impl Client {
         tls_mode: TlsMode,
     ) -> Result<Option<std::sync::Arc<crate::iam::IAMTokenManager>>, ConnectionError> {
         if let Some(iam_config) = &auth_info.iam_config {
+            // TODO #7707: Also reject IAM authentication with `TlsMode::InsecureTls`.
             if tls_mode == TlsMode::NoTls {
                 return Err(ConnectionError::IAMError(
                     "IAM authentication requires TLS; refusing to send an IAM token over a plaintext connection".to_string(),
@@ -2767,6 +2768,7 @@ async fn create_cluster_client(
         // of truth for the initial cluster connection.
         (Some(manager.get_params().await), None)
     } else if has_root_certs || has_client_cert || has_client_key {
+        // TODO #7707: Reject root certificates with `TlsMode::InsecureTls`, which ignores them.
         if tls_mode == TlsMode::NoTls {
             return Err(RedisError::from((
                 ErrorKind::InvalidClientConfig,
@@ -3403,6 +3405,7 @@ impl Client {
 
             let client_arc = Arc::new(RwLock::new(client));
 
+            // TODO #7707: Warn once when a password is configured with `TlsMode::NoTls`.
             // Create IAM token manager if needed
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
                 Self::create_iam_token_manager(auth_info, request.tls_mode.unwrap_or_default())
@@ -6246,6 +6249,7 @@ mod tests {
     ///
     /// A-B: the same request over TLS succeeds, so the failure is the `NoTls` guard
     /// firing, not IAM config being rejected unconditionally.
+    // TODO #7707: Add a test that IAM authentication with `TlsMode::InsecureTls` is rejected.
     #[tokio::test]
     #[cfg(feature = "proto")]
     async fn test_iam_without_tls_is_rejected() {
