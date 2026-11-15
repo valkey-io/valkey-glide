@@ -490,18 +490,6 @@ fn compression_error_to_redis(err: glide_core::compression::CompressionError) ->
     RedisError::from((ErrorKind::ClientError, "Compression error", err.to_string()))
 }
 
-fn process_batch_response_for_decompression(
-    response: Value,
-    client: &Client,
-) -> std::result::Result<Value, glide_core::compression::CompressionError> {
-    let compression_manager = client.compression_manager();
-    let Some(manager) = compression_manager.as_deref() else {
-        return Ok(response);
-    };
-
-    glide_core::compression::decompress_batch_response(response, manager)
-}
-
 fn process_command_for_compression(
     cmd: &mut Cmd,
     client: &Client,
@@ -754,19 +742,11 @@ async fn execute_batch(
             .await
     };
 
-    match result {
-        Ok(value) => match process_batch_response_for_decompression(value.clone(), client) {
-            Ok(processed_value) => Ok(processed_value),
-            Err(err) => {
-                log_warn(
-                    "batch_response_decompression",
-                    format!("Failed to decompress batch response: {err}"),
-                );
-                Ok(value)
-            }
-        },
-        Err(err) => Err(err),
-    }
+    let decompressed = glide_core::compression::try_decompress_batch_response(
+        result?,
+        client.compression_manager().as_deref(),
+    )?;
+    Ok(decompressed)
 }
 
 // ============================================================================
@@ -1470,6 +1450,16 @@ pub fn get_provider_direct_open_handle_count() -> u32 {
     PROVIDER_DIRECT_OPEN_HANDLE_COUNT.load(Ordering::SeqCst) as u32
 }
 
+/// napi status for a failed `Client::new`: `InvalidArg` if `is_configuration()` (as for the parse
+/// and `credential_provider_key` errors), else `Unknown`. TS: `ConfigurationError` / `ClosingError`.
+pub(crate) fn client_creation_status(error: &ConnectionError) -> Status {
+    if error.is_configuration() {
+        Status::InvalidArg
+    } else {
+        Status::Unknown
+    }
+}
+
 /// Creates a new direct NAPI client connection with response buffering.
 ///
 /// This function creates a Client using the glide-core library and wraps it
@@ -1595,7 +1585,7 @@ pub fn create_direct_client<'a>(
                 // deferred settlement is queued.
                 drop(credential_provider_claim);
                 deferred.reject(napi::Error::new(
-                    Status::Unknown,
+                    client_creation_status(&err),
                     format!("Failed to create client: {err}"),
                 ));
                 // Release pool reference since client creation failed

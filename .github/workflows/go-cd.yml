@@ -244,7 +244,21 @@ jobs:
                   git commit -m "Automated commit from GitHub Actions"
                   git tag go/$RELEASE_VERSION
                   git push origin go/$RELEASE_VERSION
-                  GOPROXY=proxy.golang.org go list -m github.com/valkey-io/valkey-glide/go/v2@$RELEASE_VERSION
+                  # The proxy fetches the new tag on first request and can answer 404 while that
+                  # fetch is still running (2.6.0-rc3: 404 after ~80s). Retry for up to ~10 min.
+                  MAX_ATTEMPTS=20
+                  DELAY=30
+                  for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+                      if GOPROXY=proxy.golang.org go list -m "github.com/valkey-io/valkey-glide/go/v2@$RELEASE_VERSION"; then
+                          break
+                      fi
+                      if [ "$attempt" -eq "$MAX_ATTEMPTS" ]; then
+                          echo "::error::go/v2@$RELEASE_VERSION not on proxy.golang.org after $MAX_ATTEMPTS attempts."
+                          exit 1
+                      fi
+                      echo "Attempt $attempt/$MAX_ATTEMPTS: not on proxy.golang.org yet. Retrying in ${DELAY}s..."
+                      sleep "$DELAY"
+                  done
 
     extra-post-commit-test:
         needs:
