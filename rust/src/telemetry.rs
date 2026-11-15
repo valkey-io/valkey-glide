@@ -177,6 +177,10 @@ impl OpenTelemetryConfigBuilder {
 /// Returns [`GlideError::Configuration`] if the configuration is invalid
 /// or an exporter fails to initialise.
 pub fn init(config: OpenTelemetryConfig) -> ValkeyResult<()> {
+    if is_initialized() {
+        return Ok(());
+    }
+
     // TODO #7706: Drop once glide-telemetry's `validate_config` rejects a config with no exporter.
     if !config.has_exporter {
         return Err(GlideError::Configuration(

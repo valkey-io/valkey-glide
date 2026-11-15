@@ -36,12 +36,18 @@ async fn init_file_exporter_is_idempotent_and_reports_initialized() {
     telemetry::init(config).expect("file-exporter init should succeed");
     assert!(telemetry::is_initialized());
 
-    // Idempotent: a second init (even with a different config) is a no-op Ok.
-    let again = OpenTelemetryConfig::builder()
+    // Idempotent: a subsequent init call with no exporter config is a no-op Ok.
+    let no_exporter_config = OpenTelemetryConfig::builder().build();
+    telemetry::init(no_exporter_config).expect("subsequent init with no exporter is no-op Ok");
+    assert!(telemetry::is_initialized());
+
+    // Idempotent: a subsequent init call with a different exporter config is a no-op Ok.
+    let diff_exporter_config = OpenTelemetryConfig::builder()
         .with_flush_interval(Duration::from_millis(500))
         .with_trace_exporter(TelemetryExporter::file(&dir), Some(1))
         .build();
-    telemetry::init(again).expect("second init must be a no-op Ok");
+    telemetry::init(diff_exporter_config)
+        .expect("subsequent init with different exporter is a no-op OK");
     assert!(telemetry::is_initialized());
 
     let _ = std::fs::remove_dir_all(&dir);
