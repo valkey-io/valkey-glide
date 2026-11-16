@@ -2861,7 +2861,7 @@ pub(crate) mod shared_client_tests {
                     };
 
                     assert!(
-                        result.iter().all(|r| matches!(r, Value::ServerError(e) if e.err_code().contains("BrokenPipe"))
+                        result.iter().all(|r| matches!(r, Value::ServerError(e) if e.err_code().contains("FatalReceiveError"))
                             ),
                         "Not all responses are ServerError: {result:?}"
                     );

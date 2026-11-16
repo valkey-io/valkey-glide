@@ -1649,18 +1649,23 @@ where
                         self.poll(cx)
                     }
                     RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
-                        let mut request = this.request.take().unwrap();
-                        // TODO should we reset the redirect here?
-                        request.info.reset_routing();
                         log_warn_rate_limited!(
                             "cluster",
                             5,
                             format!("disconnected from {:?}", address)
                         );
-                        let should_retry =
-                            matches!(err.retry_method(), RetryMethod::ReconnectAndRetry);
+                        let request = if matches!(retry_method, RetryMethod::ReconnectAndRetry) {
+                            let mut request = this.request.take().unwrap();
+                            // TODO should we reset the redirect here?
+                            request.info.reset_routing();
+                            Some(request)
+                        } else {
+                            // Not retried, so the caller must get this error instead of a dropped sender.
+                            self.respond(Err(err));
+                            None
+                        };
                         Next::Reconnect {
-                            request: should_retry.then_some(request),
+                            request,
                             target: address,
                             mode: ReconnectMode::CheckExisting,
                         }
