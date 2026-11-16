@@ -503,8 +503,6 @@ pub(crate) mod shared_client_tests {
         });
     }
 
-    // TODO #7698: Add a test that a password updated during a reconnect is used by the next
-    // reconnect attempt, for standalone and cluster.
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_update_connection_password_timeout_is_a_timeout_error() {
@@ -5441,6 +5439,58 @@ pub(crate) mod shared_client_tests {
 
             scope::release_scope(scope_id, client_id, &runtime);
             scope::unregister_client(client_id);
+        });
+    }
+
+    /// Updating the password via `update_connection_password` while a connection
+    /// is dropped must allow the reconnect loop to recover with the new password (#7698).
+    #[cfg(feature = "proto")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_update_connection_password_during_reconnect_loop() {
+        block_on_all(async {
+            let (_server, mut admin_conn, proto_request) =
+                setup_password_local_server("old-password").await;
+            let mut client = Client::new(proto_request.into(), None)
+                .await
+                .expect("Client::new with initial password should succeed");
+
+            let ping_res = client.send_command(&mut redis::cmd("PING"), None).await;
+            assert_eq!(
+                ping_res.expect("initial PING"),
+                Value::SimpleString("PONG".to_string())
+            );
+
+            // Change password on the server
+            set_requirepass(&mut admin_conn, "new-password").await;
+
+            // Drop the connection so the client enters the reconnect loop
+            kill_connection(&mut client).await;
+
+            // Wait briefly to ensure reconnection is attempted with the old password and fails
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+            // Update the connection password while disconnected
+            client
+                .update_connection_password(Some("new-password".to_string()), false)
+                .await
+                .expect("update_connection_password should succeed");
+
+            // Reconnection loop should pick up the new password and recover
+            let pong = retry_until_timeout(
+                || {
+                    let mut client = client.clone();
+                    async move {
+                        client
+                            .send_command(&mut redis::cmd("PING"), None)
+                            .await
+                            .ok()
+                    }
+                },
+                std::time::Duration::from_secs(10),
+            )
+            .await;
+            assert_eq!(pong, Value::SimpleString("PONG".to_string()));
         });
     }
 

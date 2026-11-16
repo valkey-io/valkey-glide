@@ -35,6 +35,7 @@ import {
     flushAndCloseClient,
     getServerVersion,
     parseEndpoints,
+    waitFor,
 } from "./TestUtilities";
 import {
     IAM_TEST_CLUSTER_NAME,
@@ -466,9 +467,22 @@ describe("Auth tests", () => {
                             false,
                         );
                         expect(result).toEqual("OK");
-                        await expect(
-                            client.updateConnectionPassword(NEW_PASSWORD, true),
-                        ).rejects.toThrow(RequestError);
+                        await waitFor(async () => {
+                            try {
+                                return (
+                                    (await client.customCommand(["PING"])) ===
+                                    "PONG"
+                                );
+                            } catch {
+                                return false;
+                            }
+                        }, "Client failed to reconnect with updated password");
+                        expect(
+                            await client.updateConnectionPassword(
+                                NEW_PASSWORD,
+                                true,
+                            ),
+                        ).toEqual("OK");
                     },
                     protocol,
                     clusterMode,
@@ -633,9 +647,22 @@ describe("Auth tests", () => {
                                 false,
                             ),
                         ).toEqual("OK");
-                        await expect(
-                            client.updateConnectionPassword(NEW_PASSWORD, true),
-                        ).rejects.toThrow(RequestError);
+                        await waitFor(async () => {
+                            try {
+                                return (
+                                    (await client.customCommand(["PING"])) ===
+                                    "PONG"
+                                );
+                            } catch {
+                                return false;
+                            }
+                        }, "Client failed to reconnect with updated password");
+                        expect(
+                            await client.updateConnectionPassword(
+                                NEW_PASSWORD,
+                                true,
+                            ),
+                        ).toEqual("OK");
                     },
                     protocol,
                     clusterMode,
