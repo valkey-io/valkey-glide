@@ -526,7 +526,7 @@ pub struct ClientShared {
     watch_seen: Arc<AtomicBool>,
     // Pooled cluster clients only: the primaries WATCHes were sent to (route and
     // owner address at WATCH time), so the release UNWATCH skips nodes the borrow
-    // never used. `None` when a WATCH could be on any primary (a batch,
+    // never used. `Any` when a WATCH could be on any primary (a batch,
     // `RandomPrimary`, an owner lookup that failed), which falls back to all of them.
     watch_routes: Arc<std::sync::Mutex<WatchedPrimaries>>,
     // IAM token generation the live connection last authenticated at. Compared by
@@ -2309,15 +2309,20 @@ impl Client {
             for cmd in pipeline.cmd_iter() {
                 self.track_transaction_state(cmd);
                 self.track_unresettable(cmd);
-                // A batch may split across nodes, so its WATCH target is unknown.
+                // A batch may split across nodes, so its WATCH target is unknown,
+                // unless the batch routing may send it to a replica.
                 if self.is_cluster
                     && self.is_pool_managed.load(Ordering::Acquire)
                     && Self::is_watch(cmd)
                 {
-                    self.watch_routes
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .mark_any();
+                    if Self::classify_watch(cmd, routing.as_ref()) == WatchTarget::MaybeReplica {
+                        self.unresettable.store(true, Ordering::Release);
+                    } else {
+                        self.watch_routes
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .mark_any();
+                    }
                 }
             }
             let drifted_db = self.last_select_db(pipeline);

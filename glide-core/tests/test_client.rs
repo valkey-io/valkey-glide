@@ -6879,24 +6879,48 @@ pub(crate) mod shared_client_tests {
                 redis::ConnectionAddr::Tcp(host, port) => (host.clone(), *port),
                 other => panic!("tcp address expected: {other:?}"),
             };
+            let by_address = || {
+                Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                    host: host.clone(),
+                    port,
+                }))
+            };
             let client = Client::new(connection_request.clone().into(), None)
                 .await
                 .expect("cluster client creation");
             let client_id = add_and_acquire(&pool_arc, client);
             let _ = borrowed(&pool_arc, client_id)
-                .send_command(
-                    redis::cmd("WATCH").arg("by-address"),
-                    Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
-                        host,
-                        port,
-                    })),
-                )
+                .send_command(redis::cmd("WATCH").arg("by-address"), by_address())
                 .await;
             release_client_async(pool_arc.clone(), client_id).await;
             assert_eq!(
                 pool_arc.lock().drain_discarded_ids(),
                 vec![client_id],
                 "a WATCH that may be on a replica must be discarded"
+            );
+
+            // Same for a batch's WATCH. A-B: re-idled when a batch WATCH was always
+            // treated as any primary.
+            let client = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(&pool_arc, client);
+            let mut watch_batch = redis::pipe();
+            watch_batch.cmd("WATCH").arg("by-address");
+            let _ = borrowed(&pool_arc, client_id)
+                .send_pipeline(
+                    &watch_batch,
+                    by_address(),
+                    false,
+                    None,
+                    redis::PipelineRetryStrategy::default(),
+                )
+                .await;
+            release_client_async(pool_arc.clone(), client_id).await;
+            assert_eq!(
+                pool_arc.lock().drain_discarded_ids(),
+                vec![client_id],
+                "a batch WATCH that may be on a replica must be discarded"
             );
 
             // ── 3. db drift must be restored (Valkey 9.0+ multi-db cluster) ──
