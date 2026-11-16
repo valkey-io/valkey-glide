@@ -57,10 +57,10 @@ mod unix_socket_tests {
         assert_eq!(get_result, Value::BulkString(b"unix-value".to_vec().into()));
     }
 
-    /// Asserts that the server sees this client's connection as a Unix socket client
-    /// (the `U` flag in `CLIENT INFO`), and returns the `CLIENT INFO` line.
-    async fn assert_client_uses_socket(
+    /// Checks the connection's transport using the `U` flag in `CLIENT INFO`.
+    async fn assert_client_transport(
         client: &mut impl glide_core::client::GlideClientForTests,
+        expect_unix_socket: bool,
     ) -> String {
         let mut info_cmd = redis::cmd("CLIENT");
         info_cmd.arg("INFO");
@@ -71,9 +71,10 @@ mod unix_socket_tests {
             .split_whitespace()
             .find_map(|field| field.strip_prefix("flags="))
             .unwrap_or_else(|| panic!("no flags in CLIENT INFO: {info}"));
-        assert!(
+        assert_eq!(
             flags.contains('U'),
-            "expected a Unix socket client, got: {info}"
+            expect_unix_socket,
+            "unexpected client transport: {info}"
         );
         info
     }
@@ -86,22 +87,23 @@ mod unix_socket_tests {
         }
     }
 
-    /// Fails if `GLIDE_TEST_UNIX_SOCKET` stops moving the standalone tests onto a socket.
+    /// Checks the actual transport for both enabled and disabled Unix socket mode.
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_standalone_tests_use_unix_socket_when_requested(
+    fn test_standalone_tests_use_requested_transport(
         #[values(false, true)] shared_server: bool,
+        #[values(false, true)] use_tls: bool,
     ) {
-        if std::env::var_os("GLIDE_TEST_UNIX_SOCKET").is_none() {
-            return;
-        }
+        let expect_unix_socket =
+            !use_tls && std::env::var("GLIDE_TEST_UNIX_SOCKET").as_deref() == Ok("1");
         block_on_all(async move {
             let mut test_basics = setup_test_basics_internal(&TestConfiguration {
                 shared_server,
+                use_tls,
                 ..Default::default()
             })
             .await;
-            assert_client_uses_socket(&mut test_basics.client).await;
+            assert_client_transport(&mut test_basics.client, expect_unix_socket).await;
         });
     }
 
@@ -124,7 +126,7 @@ mod unix_socket_tests {
                 .expect("client over a Unix socket should connect");
 
             set_and_get(&mut client, "client-unix-key").await;
-            let info = assert_client_uses_socket(&mut client).await;
+            let info = assert_client_transport(&mut client, true).await;
             assert!(info.contains(" db=3 "), "expected db=3, got: {info}");
         });
     }

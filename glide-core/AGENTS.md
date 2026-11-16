@@ -115,7 +115,7 @@ Then `export VALKEY_GLIDE_DNS_TESTS_ENABLED=1`. Skipped automatically if unset.
 
 ### Unix Socket Tests (glide-core)
 
-`GLIDE_TEST_UNIX_SOCKET` (any value) starts the non-TLS standalone test servers on a Unix socket only, with no TCP port; tests that start a TCP server of their own still use TCP. CI runs it in the nightly full matrix only (the "Run glide-core tests over a Unix socket" step in `glide-core.yml`).
+CI also reruns tests over Unix sockets in the nightly full matrix on Ubuntu. See [Unix Socket Tests](./DEVELOPER.md#unix-socket-tests) for the local command.
 
 ### Timeout Watchdog Diagnostics
 

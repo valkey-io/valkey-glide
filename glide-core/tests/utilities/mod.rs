@@ -43,10 +43,10 @@ pub enum ServerType {
     Unix,
 }
 
-/// The server type for standalone tests. `GLIDE_TEST_UNIX_SOCKET`, set to any value, runs the
+/// The server type for standalone tests. `GLIDE_TEST_UNIX_SOCKET=1` runs the
 /// non-TLS ones over a Unix domain socket.
 pub fn standalone_server_type(tls: bool) -> ServerType {
-    if !tls && env::var_os("GLIDE_TEST_UNIX_SOCKET").is_some() {
+    if !tls && env::var("GLIDE_TEST_UNIX_SOCKET").as_deref() == Ok("1") {
         ServerType::Unix
     } else {
         ServerType::Tcp { tls }

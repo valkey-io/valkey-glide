@@ -111,6 +111,8 @@ protoc --plugin=protoc-gen-mypy=.env/bin/protoc-gen-mypy -Iprotobuf=../glide-cor
 
 `python3 dev.py test` **auto-starts** standalone + cluster servers via `utils/cluster_manager.py` and stops them afterward — you don't start anything manually for a normal run. The `--cluster-endpoints=`/`--standalone-endpoints=` flags below are only for pointing at a server you started yourself (ad-hoc/manual testing); see the root [../AGENTS.md](../AGENTS.md) "Test Servers" section for the `cluster_manager.py` commands. A `valkey-server`/`redis-server` on `PATH` is required either way.
 
+CI also runs Unix socket tests in the nightly full matrix. See [Unix Socket Tests](./DEVELOPER.md#unix-socket-tests) for the local command and test-writing guidance.
+
 ### Test Execution Options
 
 ```bash
