@@ -4,6 +4,7 @@
 
 ### Fixes
 
+* Core: Record applied batch `SELECT` and `RESET` connection state drift even when the batch raises an error, and reject `RESET` in transactions upfront ([#7705](https://github.com/valkey-io/valkey-glide/issues/7705))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
 * Core/FFI: create clients on a runtime worker so the connect does not use the caller's stack ([#7644](https://github.com/valkey-io/valkey-glide/pull/7644))
 

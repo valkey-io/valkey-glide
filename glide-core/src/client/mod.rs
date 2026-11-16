@@ -1991,46 +1991,33 @@ impl Client {
         }
     }
 
-    fn get_transaction_values(
-        pipeline: &redis::Pipeline,
+    fn unpack_transaction_values(
         mut values: Vec<Value>,
-        command_count: usize,
         offset: usize,
-        raise_on_error: bool,
-    ) -> RedisResult<Value> {
+    ) -> RedisResult<Option<Vec<Value>>> {
         assert_eq!(values.len(), 1);
         let value = values.pop();
-        let values = match value {
-            Some(Value::Array(values)) => values,
-            Some(Value::Nil) => {
-                return Ok(Value::Nil);
-            }
+        match value {
+            Some(Value::Array(values)) => Ok(Some(values)),
+            Some(Value::Nil) => Ok(None),
             Some(value) => {
                 if offset == 2 {
-                    vec![value]
+                    Ok(Some(vec![value]))
                 } else {
-                    return Err((
+                    Err((
                         ErrorKind::ResponseError,
                         "Received non-array response for transaction",
                         format!("(response was {:?})", get_value_type(&value)),
                     )
-                        .into());
+                        .into())
                 }
             }
-            _ => {
-                return Err((
-                    ErrorKind::ResponseError,
-                    "Received empty response for transaction",
-                )
-                    .into());
-            }
-        };
-        Self::convert_pipeline_values_to_expected_types(
-            pipeline,
-            values,
-            command_count,
-            raise_on_error,
-        )
+            _ => Err((
+                ErrorKind::ResponseError,
+                "Received empty response for transaction",
+            )
+                .into()),
+        }
     }
 
     fn convert_pipeline_values_to_expected_types(
@@ -2076,6 +2063,12 @@ impl Client {
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             crate::rdma::refuse_direct_in_batch(pipeline)?;
+            if pipeline.cmd_iter().any(|cmd| self.is_reset_command(cmd)) {
+                return Err(redis::RedisError::from((
+                    redis::ErrorKind::ClientError,
+                    "RESET is not permitted in a transaction",
+                )));
+            }
             self.reconcile_iam_before_dispatch().await?;
             // Capture the batch's last SELECT now; apply it after dispatch if the
             // reply shows the server took it, and flag a possible db change (see
@@ -2097,41 +2090,21 @@ impl Client {
             // which is an array containing the results of all the commands in the pipeline.
             let offset = command_count + 1;
 
-            let result = run_with_timeout(
+            let exec_result = run_with_timeout(
                 Some(to_duration(transaction_timeout, self.request_timeout)),
                 async move {
                     match client {
                         ClientWrapper::Standalone(mut client) => {
-                            let values = client.send_pipeline(pipeline, offset, 1).await?;
-                            Client::get_transaction_values(
-                                pipeline,
-                                values,
-                                command_count,
-                                offset,
-                                raise_on_error,
-                            )
+                            client.send_pipeline(pipeline, offset, 1).await
                         }
-                        ClientWrapper::Cluster { mut client, .. } => {
-                            let values = match routing {
-                                Some(RoutingInfo::SingleNode(route)) => {
-                                    client
-                                        .route_pipeline(pipeline, offset, 1, Some(route), None)
-                                        .await?
-                                }
-                                _ => {
-                                    client
-                                        .req_packed_commands(pipeline, offset, 1, None)
-                                        .await?
-                                }
-                            };
-                            Client::get_transaction_values(
-                                pipeline,
-                                values,
-                                command_count,
-                                offset,
-                                raise_on_error,
-                            )
-                        }
+                        ClientWrapper::Cluster { mut client, .. } => match routing {
+                            Some(RoutingInfo::SingleNode(route)) => {
+                                client
+                                    .route_pipeline(pipeline, offset, 1, Some(route), None)
+                                    .await
+                            }
+                            _ => client.req_packed_commands(pipeline, offset, 1, None).await,
+                        },
                         ClientWrapper::Lazy(_) => {
                             unreachable!("Lazy client should have been initialized")
                         }
@@ -2139,14 +2112,26 @@ impl Client {
                 },
             )
             .await;
-            // Record the drift only if the SELECT reply applied (see
-            // `batch_reply_applied`).
-            if let Some((idx, db)) = drifted_db
-                && Self::batch_reply_applied(&result, idx)
-            {
-                self.apply_batch_select_db(db).await;
+
+            let unpacked = exec_result.and_then(|raw| Self::unpack_transaction_values(raw, offset));
+            // Record the drift from raw server replies before raise_on_error converts
+            // any failing command into an Err.
+            if let (Ok(Some(values)), Some((idx, db))) = (unpacked.as_ref(), drifted_db) {
+                let applied = Self::raw_batch_reply_applied(values, idx);
+                if applied {
+                    self.apply_batch_select_db(db).await;
+                }
             }
-            result
+
+            match unpacked? {
+                Some(values) => Client::convert_pipeline_values_to_expected_types(
+                    pipeline,
+                    values,
+                    command_count,
+                    raise_on_error,
+                ),
+                None => Ok(Value::Nil),
+            }
         })
     }
 
@@ -2182,7 +2167,8 @@ impl Client {
                 self.track_subscription(cmd);
             }
             let drifted_db = self.last_select_db(pipeline);
-            if drifted_db.is_some() {
+            let last_reset_idx = self.last_reset_cmd(pipeline);
+            if drifted_db.is_some() || last_reset_idx.is_some() {
                 self.shared.db_maybe_dirty.store(true, Ordering::Release);
             }
             let client = self.get_or_initialize_client().await?;
@@ -2195,10 +2181,10 @@ impl Client {
                 )));
             }
 
-            let result = run_with_timeout(
+            let raw_values = run_with_timeout(
                 Some(to_duration(pipeline_timeout, self.request_timeout)),
                 async move {
-                    let values = match client {
+                    match client {
                         ClientWrapper::Standalone(mut client) => {
                             client.send_pipeline(pipeline, 0, command_count).await
                         }
@@ -2230,25 +2216,50 @@ impl Client {
                         ClientWrapper::Lazy(_) => {
                             unreachable!("Lazy client should have been initialized")
                         }
-                    }?;
-
-                    Client::convert_pipeline_values_to_expected_types(
-                        pipeline,
-                        values,
-                        command_count,
-                        raise_on_error,
-                    )
+                    }
                 },
             )
             .await;
-            // Record the drift only if the SELECT reply applied (see
-            // `batch_reply_applied`).
-            if let Some((idx, db)) = drifted_db
-                && Self::batch_reply_applied(&result, idx)
-            {
-                self.apply_batch_select_db(db).await;
+
+            // Record the drift from raw server replies before raise_on_error converts
+            // any failing command into an Err.
+            if let Ok(ref values) = raw_values {
+                match (drifted_db, last_reset_idx) {
+                    (Some((select_idx, db)), Some(reset_idx)) => {
+                        if select_idx > reset_idx {
+                            if Self::raw_batch_reply_applied(values, select_idx) {
+                                self.apply_batch_select_db(db).await;
+                            } else if Self::raw_batch_reset_applied(values, reset_idx) {
+                                self.apply_batch_reset().await;
+                            }
+                        } else if Self::raw_batch_reset_applied(values, reset_idx) {
+                            self.apply_batch_reset().await;
+                        } else if Self::raw_batch_reply_applied(values, select_idx) {
+                            self.apply_batch_select_db(db).await;
+                        }
+                    }
+                    (Some((select_idx, db)), None) => {
+                        if Self::raw_batch_reply_applied(values, select_idx) {
+                            self.apply_batch_select_db(db).await;
+                        }
+                    }
+                    (None, Some(reset_idx)) => {
+                        if Self::raw_batch_reset_applied(values, reset_idx) {
+                            self.apply_batch_reset().await;
+                        }
+                    }
+                    (None, None) => {}
+                }
             }
-            result
+
+            raw_values.and_then(|values| {
+                Client::convert_pipeline_values_to_expected_types(
+                    pipeline,
+                    values,
+                    command_count,
+                    raise_on_error,
+                )
+            })
         })
     }
 
@@ -3725,15 +3736,8 @@ impl Client {
     /// The command index and database id of the last `SELECT` in a batch (or
     /// `None`). The index is the command's `cmd_iter()` position, which is also its
     /// reply position in the result array — the caller pairs it with
-    /// [`batch_reply_applied`](Self::batch_reply_applied) to record the drift only
+    /// [`raw_batch_reply_applied`](Self::raw_batch_reply_applied) to record the drift only
     /// if the server applied it. A pure read; never mutates db state.
-    ///
-    /// Only `SELECT` is tracked, not `RESET` (which also returns the connection to
-    /// db 0). A batch like `[SELECT 3, RESET]` therefore records db 3 while the live
-    /// connection is on db 0, leaving non-pooled scope/reconnect metadata stale.
-    /// Pooled release is unaffected — `db_maybe_dirty` forces the reset `SELECT`
-    /// regardless — and a `RESET` inside a pooled borrow is an unusual pattern, so
-    /// the narrow non-pooled gap is left as a known limitation rather than tracked.
     fn last_select_db(&self, pipeline: &redis::Pipeline) -> Option<(usize, u32)> {
         pipeline
             .cmd_iter()
@@ -3744,6 +3748,16 @@ impl Client {
                     .ok()
                     .map(|db| (idx, db as u32))
             })
+            .last()
+    }
+
+    /// The command index of the last `RESET` in a batch (or `None`).
+    fn last_reset_cmd(&self, pipeline: &redis::Pipeline) -> Option<usize> {
+        pipeline
+            .cmd_iter()
+            .enumerate()
+            .filter(|(_, cmd)| self.is_reset_command(cmd))
+            .map(|(idx, _)| idx)
             .last()
     }
 
@@ -3762,18 +3776,31 @@ impl Client {
         self.shared.current_database.store(db, Ordering::Release);
     }
 
-    /// Whether the `SELECT` at `idx` in the batch actually executed. An executed
-    /// `SELECT` replies `+OK` (`Value::Okay`); anything else means the db did not
-    /// change: a rejected `SELECT` is a `ServerError` (present in an `Ok` array when
-    /// `raise_on_error=false`), a `SELECT` merely *queued* inside a raw `MULTI` with
-    /// no `EXEC` replies `QUEUED` (`SimpleString`), and a WATCH-aborted `EXEC`
-    /// returns `Nil`. Recording any of these would poison `current_database`
-    /// (authoritative for scope connections, which handshake into it).
-    fn batch_reply_applied(result: &RedisResult<Value>, idx: usize) -> bool {
-        matches!(
-            result,
-            Ok(Value::Array(values)) if matches!(values.get(idx), Some(Value::Okay))
-        )
+    /// Record a batch `RESET`'s outcome by invoking `handle_reset_command`.
+    async fn apply_batch_reset(&mut self) {
+        if let Err(e) = self.handle_reset_command().await {
+            log_warn(
+                "send_pipeline",
+                format!("failed to handle batch RESET: {e}"),
+            );
+        }
+    }
+
+    /// Whether the `SELECT` at `idx` in the raw batch reply array actually executed.
+    /// An executed `SELECT` replies `+OK` (`Value::Okay`); anything else means the db
+    /// did not change.
+    fn raw_batch_reply_applied(values: &[Value], idx: usize) -> bool {
+        matches!(values.get(idx), Some(Value::Okay))
+    }
+
+    /// Whether the `RESET` at `idx` in the raw batch reply array actually executed.
+    /// An executed `RESET` replies `+RESET` (`Value::SimpleString("RESET")`) or `+OK` (`Value::Okay`).
+    fn raw_batch_reset_applied(values: &[Value], idx: usize) -> bool {
+        match values.get(idx) {
+            Some(Value::Okay) => true,
+            Some(Value::SimpleString(s)) => s == "RESET" || s == "OK",
+            _ => false,
+        }
     }
 
     /// Reconcile per-borrow IAM authentication on the first command after a borrow.
