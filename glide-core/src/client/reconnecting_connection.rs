@@ -499,28 +499,6 @@ impl ReconnectingConnection {
         // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
         // background, regardless of whether the calling task is dropped or not.
         task::spawn(async move {
-            let has_iam = connection_clone.inner.backend.iam_token_handle.is_some();
-            let has_cert_reload = connection_clone
-                .inner
-                .backend
-                .cert_material_handle
-                .is_some();
-
-            // For connections without dynamic credentials, clone the client once
-            // before the loop to preserve the original reconnection behavior
-            // (password/TLS material is fixed at reconnect start). For IAM or
-            // cert-reload connections, the client is cloned inside the loop so each
-            // retry picks up the freshest token / certificate written into the
-            // stored client below.
-            let static_client = if !has_iam && !has_cert_reload {
-                Some({
-                    let guard = connection_clone.inner.backend.get_backend_client();
-                    guard.clone()
-                })
-            } else {
-                None
-            };
-
             let infinite_backoff_dur_iterator = connection_clone
                 .connection_options
                 .connection_retry_strategy
@@ -573,11 +551,10 @@ impl ReconnectingConnection {
                     );
                 }
 
-                let client = if let Some(ref c) = static_client {
-                    c.clone()
-                } else {
-                    // IAM / cert-reload path: re-read from backend to pick up the
-                    // token and/or TLS params update applied above.
+                // Re-read the client from backend on each iteration so any password update
+                // (`update_connection_password`), IAM token refresh, or mTLS certificate reload
+                // applied during the reconnect loop is adopted on the next connection attempt.
+                let client = {
                     let guard = connection_clone.inner.backend.get_backend_client();
                     guard.clone()
                 };
