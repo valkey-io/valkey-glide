@@ -12,6 +12,10 @@ UNAME := $(shell uname)
 ARCH := $(shell uname -m)
 IS_ALPINE := $(shell test -f /etc/alpine-release && echo true || echo false)
 
+ifeq ($(filter $(UNAME),Darwin Linux),)
+    $(error Unsupported platform: $(UNAME) $(ARCH))
+endif
+
 # Set default values for GLIDE_NAME and GLIDE_VERSION
 # GLIDE_VERSION is automatically set during the deployment workflow based on the value defined in go-cd.yml.
 # For local builds, you can manually specify the version using `GLIDE_VERSION=<version> make build`
@@ -27,27 +31,12 @@ else ifeq ($(UNAME), Linux)
     else
         TARGET_TRIPLET := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu)
     endif
-else
-    $(error Unsupported platform: $(UNAME) $(ARCH))
 endif
 endif
 
-ifeq ($(UNAME), Darwin)
-	# https://github.com/rust-lang/rust/issues/51009#issuecomment-2274649980
-	BUILD_CMD := rustc --crate-type staticlib
-	CARGO_FIX_CMD := : # no-op
-	CARGO_POSTFIX_CMD := : # no-op
-    STRIP_CMD := strip -x
-else ifeq ($(UNAME), Linux)
-	# zigbuild https://github.com/rust-cross/cargo-zigbuild
-	BUILD_CMD := zigbuild --target $(TARGET_TRIPLET)
-	# workaround for https://github.com/rust-cross/cargo-zigbuild/issues/337
-	CARGO_FIX_CMD := sed -i 's/crate-type.*/crate-type = ["staticlib"]/g' Cargo.toml && rustup target add $(TARGET_TRIPLET)
-	CARGO_POSTFIX_CMD := git restore Cargo.toml
-    STRIP_CMD := strip --strip-unneeded
+# cargo zigbuild --target <triple> writes to target/<triple>/, while the macOS build passes no --target
+ifeq ($(UNAME), Linux)
 	TARGET_DIR := $(TARGET_DIR)/$(TARGET_TRIPLET)
-else
-    $(error Unsupported platform: $(UNAME) $(ARCH))
 endif
 
 # Path where compiled binary is copied to and therefore used by go
@@ -65,6 +54,10 @@ endif
 install-build-tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
 	cargo install --locked cbindgen@0.29.4
+ifeq ($(UNAME), Darwin)
+# rust-objcopy (used by libglide_ffi to remove LLVM bitcode) is linked against libLLVM, which only llvm-tools provides
+	rustup component add llvm-tools
+endif
 
 install-dev-tools:
 	go install github.com/vakenbolt/go-test-report@v0.9.3
@@ -103,11 +96,26 @@ build-glide-client-debug: build-glide-ffi
 
 libglide_ffi:
 	mkdir -p $(DEST_PATH)
+# Besides symbols, strip the LLVM bitcode that the prebuilt compiler_builtins embeds in the archive:
+# Go >= 1.26.11 / 1.27.4 rejects it in the #cgo -L dir (https://github.com/valkey-io/valkey-glide/issues/7648).
+ifeq ($(UNAME), Darwin)
+# https://github.com/rust-lang/rust/issues/51009#issuecomment-2274649980
 	cd $(GLIDE_FFI_PATH) && \
-	$(CARGO_FIX_CMD) && \
-    GLIDE_NAME=$(GLIDE_NAME) GLIDE_VERSION=$(GLIDE_VERSION) cargo $(BUILD_CMD) --locked $(BUILD_FLAGS) && \
-	$(CARGO_POSTFIX_CMD) && \
-	$(STRIP_CMD) $(TARGET_DIR)/libglide_ffi.a && \
+	GLIDE_NAME=$(GLIDE_NAME) GLIDE_VERSION=$(GLIDE_VERSION) cargo rustc --crate-type staticlib --locked $(BUILD_FLAGS)
+# Apple strip cannot reliably drop sections (it depends on the Xcode version), so use rust-objcopy for the bitcode.
+	strip -x $(TARGET_DIR)/libglide_ffi.a
+	"$$(rustc --print sysroot)/lib/rustlib/$$(rustc -vV | sed -n 's/^host: //p')/bin/rust-objcopy" \
+		--remove-section=__LLVM,__bitcode --remove-section=__LLVM,__cmdline $(TARGET_DIR)/libglide_ffi.a
+else
+# zigbuild https://github.com/rust-cross/cargo-zigbuild
+# the sed is a workaround for https://github.com/rust-cross/cargo-zigbuild/issues/337
+	cd $(GLIDE_FFI_PATH) && \
+	sed -i 's/crate-type.*/crate-type = ["staticlib"]/g' Cargo.toml && rustup target add $(TARGET_TRIPLET) && \
+	GLIDE_NAME=$(GLIDE_NAME) GLIDE_VERSION=$(GLIDE_VERSION) cargo zigbuild --target $(TARGET_TRIPLET) --locked $(BUILD_FLAGS) && \
+	git restore Cargo.toml
+# -R removes the bitcode sections.
+	strip --strip-unneeded -R .llvmbc -R .llvmcmd $(TARGET_DIR)/libglide_ffi.a
+endif
 	cp $(TARGET_DIR)/libglide_ffi.a $(GO_DIR)/$(DEST_PATH)
 
 build-glide-ffi: libglide_ffi gen-c-bindings
