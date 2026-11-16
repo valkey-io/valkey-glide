@@ -94,7 +94,7 @@ timed_tokio_test!(
         let publisher = cluster.client().await;
         let subscriber = GlideClusterClient::connect(
             GlideClusterClientConfiguration::with_address("127.0.0.1", cluster.seed_port())
-                .enable_pubsub(),
+                .with_pubsub(),
         )
         .await
         .expect("connect pubsub cluster client");
@@ -125,7 +125,7 @@ timed_tokio_test!(
 
         let subscriber = GlideClusterClient::connect(
             GlideClusterClientConfiguration::with_address("127.0.0.1", cluster.seed_port())
-                .enable_pubsub(),
+                .with_pubsub(),
         )
         .await
         .expect("connect pubsub cluster client");

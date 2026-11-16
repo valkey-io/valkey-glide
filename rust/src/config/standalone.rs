@@ -103,7 +103,7 @@ impl GlideClientConfiguration {
         let info = to_redis_connection_info(url)?;
         let (address, tls) = split_connection_addr(info.addr)?;
 
-        let mut cfg = Self::new(vec![address]).tls(tls);
+        let mut cfg = Self::new(vec![address]).with_tls(tls);
         cfg.database_id = info.redis.db;
         cfg.protocol = from_redis_protocol(info.redis.protocol);
         cfg.client_name = info.redis.client_name;
@@ -113,15 +113,27 @@ impl GlideClientConfiguration {
     }
 
     /// Set database id.
-    pub fn database_id(mut self, db: i64) -> Self {
+    pub fn with_database_id(mut self, db: i64) -> Self {
         self.database_id = db;
         self
     }
 
+    /// Set database id.
+    #[deprecated(note = "use `with_database_id` instead")]
+    pub fn database_id(self, db: i64) -> Self {
+        self.with_database_id(db)
+    }
+
     /// Set how the client discovers node roles and topology.
-    pub fn node_discovery_mode(mut self, mode: NodeDiscoveryMode) -> Self {
+    pub fn with_node_discovery_mode(mut self, mode: NodeDiscoveryMode) -> Self {
         self.node_discovery_mode = mode;
         self
+    }
+
+    /// Set how the client discovers node roles and topology.
+    #[deprecated(note = "use `with_node_discovery_mode` instead")]
+    pub fn node_discovery_mode(self, mode: NodeDiscoveryMode) -> Self {
+        self.with_node_discovery_mode(mode)
     }
 
     pub(crate) fn to_request(&self) -> ConnectionRequest {

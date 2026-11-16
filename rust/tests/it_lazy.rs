@@ -15,8 +15,8 @@ use std::time::Duration;
 async fn standalone_lazy(protocol: ProtocolVersion) {
     let server = common::TestServer::start();
     let cfg = GlideClientConfiguration::with_address("127.0.0.1", server.port)
-        .lazy_connect(true)
-        .protocol(protocol);
+        .with_lazy_connect(true)
+        .with_protocol(protocol);
     let c = GlideClient::connect(cfg)
         .await
         .expect("lazy connect returns a client");
@@ -47,9 +47,9 @@ async fn standalone_lazy_defers_connection_error() {
         .expect("bind ephemeral port")
         .port();
     let cfg = GlideClientConfiguration::with_address("127.0.0.1", dead_port)
-        .lazy_connect(true)
-        .request_timeout(Duration::from_millis(500))
-        .connection_timeout(Duration::from_millis(500));
+        .with_lazy_connect(true)
+        .with_request_timeout(Duration::from_millis(500))
+        .with_connection_timeout(Duration::from_millis(500));
     match GlideClient::connect(cfg).await {
         Ok(c) => {
             // Deferred: construction succeeded; the command must fail.
@@ -71,8 +71,8 @@ async fn standalone_lazy_defers_connection_error() {
 async fn cluster_lazy_connect() {
     let h = common::ClusterHarness::start().await;
     let cfg = GlideClusterClientConfiguration::with_address("127.0.0.1", h.seed_port())
-        .lazy_connect(true)
-        .request_timeout(Duration::from_secs(5));
+        .with_lazy_connect(true)
+        .with_request_timeout(Duration::from_secs(5));
     let c = GlideClusterClient::connect(cfg)
         .await
         .expect("lazy cluster connect");

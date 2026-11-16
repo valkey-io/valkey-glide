@@ -181,7 +181,7 @@ impl GlideClusterClientConfiguration {
             ));
         }
 
-        let mut cfg = Self::new(addresses).tls(tls);
+        let mut cfg = Self::new(addresses).with_tls(tls);
         cfg.protocol = from_redis_protocol(redis_info.protocol);
         cfg.client_name = redis_info.client_name;
         cfg.credentials = credentials_from_info(redis_info.username, redis_info.password);
@@ -190,9 +190,15 @@ impl GlideClusterClientConfiguration {
     }
 
     /// Set periodic checks.
-    pub fn periodic_checks(mut self, checks: PeriodicChecks) -> Self {
+    pub fn with_periodic_checks(mut self, checks: PeriodicChecks) -> Self {
         self.periodic_checks = checks;
         self
+    }
+
+    /// Set periodic checks.
+    #[deprecated(note = "use `with_periodic_checks` instead")]
+    pub fn periodic_checks(self, checks: PeriodicChecks) -> Self {
+        self.with_periodic_checks(checks)
     }
 
     pub(crate) fn to_request(&self) -> ConnectionRequest {

@@ -223,7 +223,7 @@ impl ClusterHarness {
 
     /// Connect a cluster client to this cluster with the given protocol.
     pub async fn client_with_protocol(&self, protocol: ProtocolVersion) -> GlideClusterClient {
-        self.connect(self.config().protocol(protocol)).await
+        self.connect(self.config().with_protocol(protocol)).await
     }
 
     /// Connect a secure-TLS client.
@@ -238,27 +238,27 @@ impl ClusterHarness {
         // Switch to a dedicated CA-signed client certificate.
         let config = self
             .config_with_tls()
-            .client_identity(server_cert_pem(), server_key_pem());
+            .with_client_identity(server_cert_pem(), server_key_pem());
         self.connect(config).await
     }
 
     /// Connect an insecure-TLS client.
     pub async fn client_with_insecure_tls(&self) -> GlideClusterClient {
-        self.connect(self.config().tls(TlsConfig::InsecureTls))
+        self.connect(self.config().with_tls(TlsConfig::InsecureTls))
             .await
     }
 
     /// A base client configuration.
     pub fn config(&self) -> GlideClusterClientConfiguration {
         GlideClusterClientConfiguration::with_address("127.0.0.1", self.seed_port())
-            .request_timeout(Duration::from_secs(5))
+            .with_request_timeout(Duration::from_secs(5))
     }
 
     /// A base client configuration with secure TLS enabled and the shared CA trusted.
     pub fn config_with_tls(&self) -> GlideClusterClientConfiguration {
         self.config()
-            .tls(TlsConfig::SecureTls)
-            .tls_ca_cert(ca_pem())
+            .with_tls(TlsConfig::SecureTls)
+            .with_tls_ca_cert(ca_pem())
     }
 
     /// Connect with bounded retry, then warm up the topology. Under load a

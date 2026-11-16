@@ -591,25 +591,38 @@ macro_rules! impl_common_config_builders {
             }
 
             /// Set TLS mode.
-            pub fn tls(mut self, tls: TlsConfig) -> Self {
+            pub fn with_tls(mut self, tls: TlsConfig) -> Self {
                 self.tls = tls;
                 self
+            }
+
+            /// Set TLS mode.
+            #[deprecated(note = "use `with_tls` instead")]
+            pub fn tls(self, tls: TlsConfig) -> Self {
+                self.with_tls(tls)
             }
 
             /// Trust a custom CA certificate (PEM bytes) when verifying the server with
             /// [`TlsConfig::SecureTls`]. Enables secure TLS against a server presenting a
             /// certificate signed by a private/self-signed CA. May be called more than
             /// once to trust multiple CAs.
-            pub fn tls_ca_cert(mut self, pem: impl Into<Vec<u8>>) -> Self {
+            pub fn with_tls_ca_cert(mut self, pem: impl Into<Vec<u8>>) -> Self {
                 self.root_certs.push(pem.into());
                 self
+            }
+
+            /// Trust a custom CA certificate (PEM bytes) when verifying the server with
+            /// [`TlsConfig::SecureTls`].
+            #[deprecated(note = "use `with_tls_ca_cert` instead")]
+            pub fn tls_ca_cert(self, pem: impl Into<Vec<u8>>) -> Self {
+                self.with_tls_ca_cert(pem)
             }
 
             /// Set a client certificate + private key (both PEM) for **mutual TLS**.
             /// The server must be configured to require/verify client certificates.
             /// Only meaningful together with [`TlsConfig::SecureTls`].
             #[must_use]
-            pub fn client_identity(
+            pub fn with_client_identity(
                 mut self,
                 cert_pem: impl Into<Vec<u8>>,
                 key_pem: impl Into<Vec<u8>>,
@@ -618,64 +631,135 @@ macro_rules! impl_common_config_builders {
                 self
             }
 
+            /// Set a client certificate + private key for **mutual TLS**.
+            #[deprecated(note = "use `with_client_identity` instead")]
+            #[must_use]
+            pub fn client_identity(
+                self,
+                cert_pem: impl Into<Vec<u8>>,
+                key_pem: impl Into<Vec<u8>>,
+            ) -> Self {
+                self.with_client_identity(cert_pem, key_pem)
+            }
+
             /// Set credentials.
-            pub fn credentials(mut self, creds: ServerCredentials) -> Self {
+            pub fn with_credentials(mut self, creds: ServerCredentials) -> Self {
                 self.credentials = Some(creds);
                 self
             }
 
+            /// Set credentials.
+            #[deprecated(note = "use `with_credentials` instead")]
+            pub fn credentials(self, creds: ServerCredentials) -> Self {
+                self.with_credentials(creds)
+            }
+
             /// Set read strategy.
-            pub fn read_from(mut self, read_from: ReadFrom) -> Self {
+            pub fn with_read_from(mut self, read_from: ReadFrom) -> Self {
                 self.read_from = read_from;
                 self
             }
 
+            /// Set read strategy.
+            #[deprecated(note = "use `with_read_from` instead")]
+            pub fn read_from(self, read_from: ReadFrom) -> Self {
+                self.with_read_from(read_from)
+            }
+
             /// Set request timeout.
-            pub fn request_timeout(mut self, timeout: Duration) -> Self {
+            pub fn with_request_timeout(mut self, timeout: Duration) -> Self {
                 self.request_timeout = Some(timeout);
                 self
             }
 
+            /// Set request timeout.
+            #[deprecated(note = "use `with_request_timeout` instead")]
+            pub fn request_timeout(self, timeout: Duration) -> Self {
+                self.with_request_timeout(timeout)
+            }
+
             /// Set the connection-establishment timeout.
-            pub fn connection_timeout(mut self, timeout: Duration) -> Self {
+            pub fn with_connection_timeout(mut self, timeout: Duration) -> Self {
                 self.connection_timeout = Some(timeout);
                 self
             }
 
+            /// Set the connection-establishment timeout.
+            #[deprecated(note = "use `with_connection_timeout` instead")]
+            pub fn connection_timeout(self, timeout: Duration) -> Self {
+                self.with_connection_timeout(timeout)
+            }
+
             /// Set the maximum number of concurrent in-flight requests.
-            pub fn inflight_requests_limit(mut self, limit: u32) -> Self {
+            pub fn with_inflight_requests_limit(mut self, limit: u32) -> Self {
                 self.inflight_requests_limit = Some(limit);
                 self
             }
 
+            /// Set the maximum number of concurrent in-flight requests.
+            #[deprecated(note = "use `with_inflight_requests_limit` instead")]
+            pub fn inflight_requests_limit(self, limit: u32) -> Self {
+                self.with_inflight_requests_limit(limit)
+            }
+
             /// Set client name.
-            pub fn client_name(mut self, name: impl Into<String>) -> Self {
+            pub fn with_client_name(mut self, name: impl Into<String>) -> Self {
                 self.client_name = Some(name.into());
                 self
             }
 
+            /// Set client name.
+            #[deprecated(note = "use `with_client_name` instead")]
+            pub fn client_name(self, name: impl Into<String>) -> Self {
+                self.with_client_name(name)
+            }
+
             /// Set protocol version.
-            pub fn protocol(mut self, protocol: ProtocolVersion) -> Self {
+            pub fn with_protocol(mut self, protocol: ProtocolVersion) -> Self {
                 self.protocol = protocol;
                 self
             }
 
+            /// Set protocol version.
+            #[deprecated(note = "use `with_protocol` instead")]
+            pub fn protocol(self, protocol: ProtocolVersion) -> Self {
+                self.with_protocol(protocol)
+            }
+
             /// Enable lazy connection.
-            pub fn lazy_connect(mut self, lazy: bool) -> Self {
+            pub fn with_lazy_connect(mut self, lazy: bool) -> Self {
                 self.lazy_connect = lazy;
                 self
             }
 
+            /// Enable lazy connection.
+            #[deprecated(note = "use `with_lazy_connect` instead")]
+            pub fn lazy_connect(self, lazy: bool) -> Self {
+                self.with_lazy_connect(lazy)
+            }
+
             /// Set reconnection strategy.
-            pub fn reconnect_strategy(mut self, strategy: BackoffStrategy) -> Self {
+            pub fn with_reconnect_strategy(mut self, strategy: BackoffStrategy) -> Self {
                 self.reconnect_strategy = Some(strategy);
                 self
             }
 
+            /// Set reconnection strategy.
+            #[deprecated(note = "use `with_reconnect_strategy` instead")]
+            pub fn reconnect_strategy(self, strategy: BackoffStrategy) -> Self {
+                self.with_reconnect_strategy(strategy)
+            }
+
             /// Set Pub/Sub subscriptions to establish on connect.
-            pub fn subscriptions(mut self, subscriptions: PubSubSubscriptions) -> Self {
+            pub fn with_subscriptions(mut self, subscriptions: PubSubSubscriptions) -> Self {
                 self.pubsub_subscriptions = Some(subscriptions);
                 self
+            }
+
+            /// Set Pub/Sub subscriptions to establish on connect.
+            #[deprecated(note = "use `with_subscriptions` instead")]
+            pub fn subscriptions(self, subscriptions: PubSubSubscriptions) -> Self {
+                self.with_subscriptions(subscriptions)
             }
 
             /// Enable the Pub/Sub push channel without configuring any connect-time
@@ -686,9 +770,16 @@ macro_rules! impl_common_config_builders {
             /// Note: runtime subscriptions are session-scoped — unlike connect-time
             /// subscriptions they are not automatically restored after a reconnect.
             #[must_use]
-            pub fn enable_pubsub(mut self) -> Self {
+            pub fn with_pubsub(mut self) -> Self {
                 self.force_pubsub_channel = true;
                 self
+            }
+
+            /// Enable the Pub/Sub push channel without configuring any connect-time subscriptions.
+            #[deprecated(note = "use `with_pubsub` instead")]
+            #[must_use]
+            pub fn enable_pubsub(self) -> Self {
+                self.with_pubsub()
             }
 
             /// Lower the fields shared by both configurations into a

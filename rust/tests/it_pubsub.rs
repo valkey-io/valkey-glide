@@ -40,7 +40,7 @@ timed_tokio_test!(
     async fn runtime_subscribe_receives_then_unsubscribe() {
         let server = common::TestServer::start();
         let subscriber_config =
-            GlideClientConfiguration::with_address("127.0.0.1", server.port).enable_pubsub();
+            GlideClientConfiguration::with_address("127.0.0.1", server.port).with_pubsub();
         let subscriber = GlideClient::connect(subscriber_config)
             .await
             .expect("connect subscriber");
@@ -80,7 +80,7 @@ timed_tokio_test!(
     async fn runtime_psubscribe_pattern_receive() {
         let server = common::TestServer::start();
         let subscriber_config =
-            GlideClientConfiguration::with_address("127.0.0.1", server.port).enable_pubsub();
+            GlideClientConfiguration::with_address("127.0.0.1", server.port).with_pubsub();
         let subscriber = GlideClient::connect(subscriber_config)
             .await
             .expect("connect subscriber");
@@ -108,7 +108,7 @@ timed_tokio_test!(
     async fn runtime_unsubscribe_all_stops_delivery() {
         let server = common::TestServer::start();
         let subscriber_config =
-            GlideClientConfiguration::with_address("127.0.0.1", server.port).enable_pubsub();
+            GlideClientConfiguration::with_address("127.0.0.1", server.port).with_pubsub();
         let subscriber = GlideClient::connect(subscriber_config)
             .await
             .expect("connect subscriber");

@@ -172,7 +172,7 @@ fn sync_standalone_run_full_async_surface() {
 fn sync_cluster_commands() {
     let cluster = common::ClusterHarness::start_blocking();
     let config = GlideClusterClientConfiguration::with_address("127.0.0.1", cluster.seed_port())
-        .request_timeout(std::time::Duration::from_secs(5));
+        .with_request_timeout(std::time::Duration::from_secs(5));
     let client = SyncGlideClusterClient::connect(config).expect("connect sync cluster client");
 
     assert_eq!(client.ping().unwrap(), "PONG");

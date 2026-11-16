@@ -106,7 +106,7 @@ Notes:
   command traits.
 - Cluster: `GlideClusterClientConfiguration::from_urls([...])` accepts
   seed-node URLs; commands are routed automatically.
-- Mutual TLS: `config.client_identity(cert_pem, key_pem)`.
+- Mutual TLS: `config.with_client_identity(cert_pem, key_pem)`.
 - Raw commands: build a `glide::Cmd` with `glide::cmd("X")` and send it with
   one of:
   - `cmd.query_async(&client)`, as in redis-rs. This clones the command.
