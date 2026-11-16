@@ -4174,6 +4174,50 @@ mod scope_pool_tests {
         blpop.abort();
     }
 
+    /// A blocking command that the client timed out on (the server was paused) may
+    /// leave its waiter armed, so release must discard the client even though the
+    /// binding's blocking counter already dropped to zero. One that the server
+    /// answered (nil on its own timeout) leaves nothing behind. A-B: re-idled after
+    /// the client-side timeout.
+    #[tokio::test]
+    async fn release_discards_a_client_whose_blocking_command_timed_out() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+        let mut client = crate::client::Client::new(request_for(&[server.port]), None)
+            .await
+            .expect("client connects");
+        let mut other = crate::client::Client::new(request_for(&[server.port]), None)
+            .await
+            .expect("second client connects");
+        let (pool_arc, client_id) = pool_with_borrowed(&client);
+
+        let answered = client
+            .send_command(redis::cmd("BLPOP").arg("empty").arg(0.1), None)
+            .await
+            .expect("the server answers BLPOP's own timeout");
+        assert_eq!(answered, redis::Value::Nil);
+        assert!(!client.borrow_is_dirty_for_test(), "a nil BLPOP is clean");
+
+        other
+            .send_command(redis::cmd("CLIENT").arg("PAUSE").arg(3_000), None)
+            .await
+            .expect("CLIENT PAUSE");
+        let err = client
+            .send_command(redis::cmd("BLPOP").arg("empty").arg(0.1), None)
+            .await
+            .expect_err("the paused server never answers in time");
+        assert!(err.is_timeout(), "client-side timeout: {err}");
+
+        super::release_client_async(pool_arc.clone(), client_id).await;
+        let mut pool = pool_arc.lock();
+        assert_eq!(
+            pool.idle_count(),
+            0,
+            "a timed-out blocker must not be re-idled"
+        );
+        assert_eq!(pool.drain_discarded_ids(), vec![client_id]);
+    }
+
     /// A MULTI or WATCH the open circuit breaker refused never reached the server, so
     /// it must not mark the borrow dirty. A-B: marked dirty when tracking ran before
     /// the breaker check.

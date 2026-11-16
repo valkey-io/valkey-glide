@@ -528,7 +528,7 @@ pub struct ClientShared {
     // owner address at WATCH time), so the release UNWATCH skips nodes the borrow
     // never used. `None` when a WATCH could be on any primary (a batch,
     // `RandomPrimary`, an owner lookup that failed), which falls back to all of them.
-    watch_routes: Arc<std::sync::Mutex<WatchRoutes>>,
+    watch_routes: Arc<std::sync::Mutex<WatchedPrimaries>>,
     // IAM token generation the live connection last authenticated at. Compared by
     // `prepare_for_borrow` on the first command after a borrow to detect a rotation
     // that landed while the client sat idle in a pool, triggering a re-AUTH before
@@ -580,9 +580,74 @@ pub struct ClientShared {
     credentials: credentials::CredentialsHandle,
 }
 
-/// Recorded WATCH targets: watched slot → its primary's address at WATCH time
-/// (one entry per slot however many WATCHes), or `None` for every primary.
-type WatchRoutes = Option<std::collections::HashMap<u16, String>>;
+/// Where the borrow's WATCHes may be, for the release UNWATCH.
+#[derive(Debug, PartialEq)]
+enum WatchedPrimaries {
+    /// Each watched slot and its primary's address at WATCH time, one entry per
+    /// slot however many WATCHes. Only primaries get here: a WATCH that may have
+    /// reached a replica marks the client `unresettable` instead.
+    Known(std::collections::HashMap<u16, String>),
+    /// Any primary: a batch or random-primary WATCH, an unknown owner, or a slot
+    /// seen under two owners during the borrow.
+    Any,
+}
+
+impl Default for WatchedPrimaries {
+    fn default() -> Self {
+        Self::Known(Default::default())
+    }
+}
+
+impl WatchedPrimaries {
+    /// Record a watched slot and its owner now. A slot already recorded under
+    /// another owner moved between WATCHes, so the earlier WATCH may be on the old
+    /// owner: fall back to [`Any`](Self::Any), which sticks until release.
+    fn record(&mut self, slot: u16, owner: String) {
+        if let Self::Known(map) = self
+            && map.entry(slot).or_insert_with(|| owner.clone()) != &owner
+        {
+            *self = Self::Any;
+        }
+    }
+
+    fn mark_any(&mut self) {
+        *self = Self::Any;
+    }
+
+    /// One UNWATCH per primary if every recorded slot is still owned by the
+    /// primary it had at WATCH time; every primary when a slot moved, an owner is
+    /// unknown, or nothing was recorded. An ASK-redirected WATCH isn't seen here
+    /// (ASK doesn't update the slot map).
+    fn unwatch_targets(&self, owner_now: impl Fn(u16) -> Option<String>) -> UnwatchTargets {
+        use redis::cluster_routing::SlotAddr;
+        let Self::Known(recorded) = self else {
+            return UnwatchTargets::AllPrimaries;
+        };
+        let mut by_address = std::collections::HashMap::new();
+        for (&slot, address) in recorded {
+            if owner_now(slot).as_ref() != Some(address) {
+                return UnwatchTargets::AllPrimaries;
+            }
+            // `Master` holds by construction: only primaries are recorded.
+            by_address
+                .entry(address)
+                .or_insert(Route::new(slot, SlotAddr::Master));
+        }
+        if by_address.is_empty() {
+            return UnwatchTargets::AllPrimaries;
+        }
+        UnwatchTargets::Primaries(by_address.into_values().collect())
+    }
+}
+
+/// Where the release reset sends UNWATCH.
+#[derive(Debug, PartialEq)]
+enum UnwatchTargets {
+    /// These primaries, one route each.
+    Primaries(Vec<Route>),
+    /// Default routing: every primary on cluster, the server on standalone.
+    AllPrimaries,
+}
 
 /// Where a WATCH lands, for the pool release reset.
 #[derive(Debug, PartialEq)]
@@ -1671,6 +1736,7 @@ impl Client {
                 execute.await
             }
         };
+        self.track_blocking_failure(is_blocking_cmd, &result);
 
         // Report result to client-wide circuit breaker
         if let Some(cb) = &self.circuit_breaker {
@@ -2198,6 +2264,10 @@ impl Client {
                 },
             )
             .await;
+            self.track_blocking_failure(
+                pipeline.cmd_iter().any(|c| is_blocking_command(c)),
+                &result,
+            );
             // Record the drift only if the SELECT reply applied (see
             // `batch_reply_applied`).
             if let Some((idx, db)) = drifted_db
@@ -2244,7 +2314,10 @@ impl Client {
                     && self.is_pool_managed.load(Ordering::Acquire)
                     && Self::is_watch(cmd)
                 {
-                    *self.watch_routes.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                    self.watch_routes
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .mark_any();
                 }
             }
             let drifted_db = self.last_select_db(pipeline);
@@ -2307,6 +2380,10 @@ impl Client {
                 },
             )
             .await;
+            self.track_blocking_failure(
+                pipeline.cmd_iter().any(|c| is_blocking_command(c)),
+                &result,
+            );
             // Record the drift only if the SELECT reply applied (see
             // `batch_reply_applied`).
             if let Some((idx, db)) = drifted_db
@@ -3432,7 +3509,7 @@ impl Client {
                     unresettable: Arc::new(AtomicBool::new(false)),
                     multi_seen: Arc::new(AtomicBool::new(false)),
                     watch_seen: Arc::new(AtomicBool::new(false)),
-                    watch_routes: Arc::new(std::sync::Mutex::new(Some(Default::default()))),
+                    watch_routes: Arc::new(std::sync::Mutex::new(Default::default())),
                     last_iam_generation: Arc::new(AtomicU64::new(0)),
                     is_pool_managed: Arc::new(AtomicBool::new(false)),
                     iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -3678,8 +3755,9 @@ impl Client {
         if self.unresettable.load(Ordering::Acquire) {
             return Err(RedisError::from((
                 ErrorKind::ClientError,
-                "Pooled client subscribed, ran MONITOR or RESET, or changed CLIENT REPLY \
-                 during the borrow; its connection cannot be reset",
+                "Pooled client subscribed, ran MONITOR or RESET, changed CLIENT REPLY, \
+                 sent WATCH to a replica, or had a blocking command fail with a timeout \
+                 or IO error during the borrow; its connection cannot be reset",
             )));
         }
         let is_cluster = self.is_cluster_mode();
@@ -3736,27 +3814,24 @@ impl Client {
         if watch_seen {
             // Taken after `watch_seen`: a WATCH racing the reset re-sets the flag, so
             // its route is cleaned up on this release or the next.
-            let routes = self
-                .watch_routes
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .replace(Default::default());
-            let per_node = match routes {
-                Some(recorded) if is_cluster && !recorded.is_empty() => {
+            let watched =
+                std::mem::take(&mut *self.watch_routes.lock().unwrap_or_else(|e| e.into_inner()));
+            let targets = match &watched {
+                WatchedPrimaries::Known(recorded) if is_cluster => {
                     let mut owners = std::collections::HashMap::new();
                     for &slot in recorded.keys() {
                         if let Ok(address) = self.address_for_slot(slot).await {
                             owners.insert(slot, address);
                         }
                     }
-                    Self::unwatch_targets(recorded, |slot| owners.get(&slot).cloned())
+                    watched.unwatch_targets(|slot| owners.get(&slot).cloned())
                 }
-                _ => None,
+                _ => UnwatchTargets::AllPrimaries,
             };
-            match per_node {
+            match targets {
                 // Only the primaries the WATCHes reached, sent together, so a down
                 // node elsewhere can't fail the reset.
-                Some(routes) => {
+                UnwatchTargets::Primaries(routes) => {
                     futures::future::try_join_all(routes.into_iter().map(|route| {
                         let mut client = self.clone();
                         async move {
@@ -3769,9 +3844,7 @@ impl Client {
                     }))
                     .await?;
                 }
-                // Default routing: all primaries on cluster; the primary on
-                // standalone.
-                _ => {
+                UnwatchTargets::AllPrimaries => {
                     self.send_reset_command(&mut redis::cmd("UNWATCH"), None)
                         .await?;
                 }
@@ -3918,48 +3991,13 @@ impl Client {
                 .collect::<Option<Vec<_>>>(),
             WatchTarget::AnyPrimary => None,
         };
-        Self::merge_watch_routes(
-            &mut self.watch_routes.lock().unwrap_or_else(|e| e.into_inner()),
-            routes,
-        );
-    }
-
-    /// Fold one WATCH's `(slot, owner)` pairs into `known`, keeping one entry per
-    /// slot so a WATCH loop can't grow it. `None` (every primary) for an unknown
-    /// target, or for a slot already recorded under another owner: it moved
-    /// between WATCHes, so the earlier WATCH may be on the old owner.
-    fn merge_watch_routes(known: &mut WatchRoutes, routes: Option<Vec<(u16, String)>>) {
-        let (Some(map), Some(routes)) = (known.as_mut(), routes) else {
-            *known = None;
-            return;
-        };
-        for (slot, address) in routes {
-            if map.entry(slot).or_insert_with(|| address.clone()) != &address {
-                *known = None;
-                return;
-            }
+        let mut watched = self.watch_routes.lock().unwrap_or_else(|e| e.into_inner());
+        match routes {
+            Some(routes) => routes
+                .into_iter()
+                .for_each(|(slot, owner)| watched.record(slot, owner)),
+            None => watched.mark_any(),
         }
-    }
-
-    /// The UNWATCH targets, one route per primary, if every recorded slot is still
-    /// owned by the primary it had at WATCH time. `None` (UNWATCH every primary)
-    /// when a slot moved or an owner is unknown: the WATCH may be on the old owner.
-    /// An ASK-redirected WATCH isn't seen here (ASK doesn't update the slot map).
-    fn unwatch_targets(
-        recorded: std::collections::HashMap<u16, String>,
-        owner_now: impl Fn(u16) -> Option<String>,
-    ) -> Option<Vec<Route>> {
-        use redis::cluster_routing::SlotAddr;
-        let mut by_address = std::collections::HashMap::new();
-        for (slot, address) in recorded {
-            if owner_now(slot).as_ref() != Some(&address) {
-                return None;
-            }
-            by_address
-                .entry(address)
-                .or_insert(Route::new(slot, SlotAddr::Master));
-        }
-        (!by_address.is_empty()).then(|| by_address.into_values().collect())
     }
 
     /// Flag a (S|P)SUBSCRIBE, MONITOR, RESET or `CLIENT REPLY OFF|SKIP` before
@@ -3990,6 +4028,15 @@ impl Client {
                 })
         };
         if poisoning.iter().any(|p| name.eq_ignore_ascii_case(p)) || reply_off() {
+            self.unresettable.store(true, Ordering::Release);
+        }
+    }
+
+    /// Flag a blocking command (or a batch holding one) that failed with a timeout
+    /// or IO error: its server-side waiter may still be armed, so the next borrower
+    /// would queue behind it. Same rule as the scope pool's `blocking_in_flight`.
+    fn track_blocking_failure(&self, blocking: bool, result: &RedisResult<Value>) {
+        if blocking && matches!(result, Err(e) if crate::scope::is_poisoning_error(e)) {
             self.unresettable.store(true, Ordering::Release);
         }
     }
@@ -4244,7 +4291,7 @@ impl Client {
                 unresettable: Arc::new(AtomicBool::new(false)),
                 multi_seen: Arc::new(AtomicBool::new(false)),
                 watch_seen: Arc::new(AtomicBool::new(false)),
-                watch_routes: Arc::new(std::sync::Mutex::new(Some(Default::default()))),
+                watch_routes: Arc::new(std::sync::Mutex::new(Default::default())),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -4330,7 +4377,7 @@ pub fn create_test_glide_client() -> Client {
             unresettable: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             multi_seen: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             watch_seen: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            watch_routes: Arc::new(std::sync::Mutex::new(Some(Default::default()))),
+            watch_routes: Arc::new(std::sync::Mutex::new(Default::default())),
             last_iam_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             is_pool_managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -5334,7 +5381,7 @@ mod tests {
                 unresettable: Arc::new(AtomicBool::new(false)),
                 multi_seen: Arc::new(AtomicBool::new(false)),
                 watch_seen: Arc::new(AtomicBool::new(false)),
-                watch_routes: Arc::new(std::sync::Mutex::new(Some(Default::default()))),
+                watch_routes: Arc::new(std::sync::Mutex::new(Default::default())),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -5686,26 +5733,38 @@ mod tests {
     /// Repeated WATCHes on a slot keep one entry; a slot seen under a new owner, or
     /// an unknown target, falls back to every primary.
     #[test]
-    fn merge_watch_routes_keeps_one_entry_per_slot() {
-        let pair = |slot: u16, owner: &str| (slot, owner.to_string());
-        let mut known: super::WatchRoutes = Some(Default::default());
+    fn watched_primaries_keeps_one_entry_per_slot() {
+        use super::WatchedPrimaries;
+        let mut watched = WatchedPrimaries::default();
         for _ in 0..1000 {
-            Client::merge_watch_routes(&mut known, Some(vec![pair(4, "n1:1"), pair(9, "n2:1")]));
+            watched.record(4, "n1:1".to_string());
+            watched.record(9, "n2:1".to_string());
         }
-        assert_eq!(
-            known.as_ref().map(|m| m.len()),
-            Some(2),
-            "a WATCH loop must not grow it"
+        assert!(
+            matches!(&watched, WatchedPrimaries::Known(m) if m.len() == 2),
+            "a WATCH loop must not grow it: {watched:?}"
         );
 
-        Client::merge_watch_routes(&mut known, Some(vec![pair(4, "n3:1")]));
-        assert!(known.is_none(), "a slot seen under a new owner falls back");
-        Client::merge_watch_routes(&mut known, Some(vec![pair(5, "n1:1")]));
-        assert!(known.is_none(), "the fallback sticks until release");
+        watched.record(4, "n3:1".to_string());
+        assert_eq!(
+            watched,
+            WatchedPrimaries::Any,
+            "a slot seen under a new owner falls back"
+        );
+        watched.record(5, "n1:1".to_string());
+        assert_eq!(
+            watched,
+            WatchedPrimaries::Any,
+            "the fallback sticks until release"
+        );
 
-        let mut known: super::WatchRoutes = Some(Default::default());
-        Client::merge_watch_routes(&mut known, None);
-        assert!(known.is_none(), "an unknown target falls back");
+        let mut watched = WatchedPrimaries::default();
+        watched.mark_any();
+        assert_eq!(
+            watched,
+            WatchedPrimaries::Any,
+            "an unknown target falls back"
+        );
     }
 
     /// Release targets one UNWATCH per primary only while every watched slot still
@@ -5713,12 +5772,13 @@ mod tests {
     /// every primary, since the WATCH may be on the old owner.
     #[test]
     fn unwatch_targets_falls_back_when_a_slot_moved() {
-        let recorded = || {
+        use super::{UnwatchTargets, WatchedPrimaries};
+        let recorded = WatchedPrimaries::Known(
             [(1, "n1:1"), (2, "n1:1"), (3, "n2:1")]
                 .into_iter()
                 .map(|(slot, owner)| (slot, owner.to_string()))
-                .collect::<std::collections::HashMap<u16, String>>()
-        };
+                .collect(),
+        );
         let owner = |moved: Option<u16>| {
             move |slot: u16| match slot {
                 s if Some(s) == moved => Some("n3:1".to_string()),
@@ -5727,10 +5787,27 @@ mod tests {
             }
         };
 
-        let targets = Client::unwatch_targets(recorded(), owner(None)).expect("unchanged");
+        let UnwatchTargets::Primaries(targets) = recorded.unwatch_targets(owner(None)) else {
+            panic!("unchanged owners target the primaries");
+        };
         assert_eq!(targets.len(), 2, "one UNWATCH per primary: {targets:?}");
-        assert!(Client::unwatch_targets(recorded(), owner(Some(2))).is_none());
-        assert!(Client::unwatch_targets(recorded(), |_| None).is_none());
+        assert_eq!(
+            recorded.unwatch_targets(owner(Some(2))),
+            UnwatchTargets::AllPrimaries
+        );
+        assert_eq!(
+            recorded.unwatch_targets(|_| None),
+            UnwatchTargets::AllPrimaries
+        );
+        assert_eq!(
+            WatchedPrimaries::default().unwatch_targets(owner(None)),
+            UnwatchTargets::AllPrimaries,
+            "nothing recorded"
+        );
+        assert_eq!(
+            WatchedPrimaries::Any.unwatch_targets(owner(None)),
+            UnwatchTargets::AllPrimaries
+        );
     }
 
     #[test]
