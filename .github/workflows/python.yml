@@ -19,7 +19,9 @@ on:
             - ffi/**
             - glide-logger/**
             - glide-telemetry/**
+            - glide-rdma/**
             - utils/cluster_manager.py
+            - deny.toml
             - .github/workflows/python.yml
             - .github/actions/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
@@ -43,7 +45,9 @@ on:
             - ffi/**
             - glide-logger/**
             - glide-telemetry/**
+            - glide-rdma/**
             - utils/cluster_manager.py
+            - deny.toml
             - .github/workflows/python.yml
             - .github/actions/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
