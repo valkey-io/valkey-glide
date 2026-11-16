@@ -735,7 +735,7 @@ def create_servers(
                         pass
                 else:
                     logging.warning(
-                        f"Server {server} never logged its pid; it may still be running after {node_folder} is removed"
+                        f"Server {server} never logged its pid; keeping {node_folder} for cleanup"
                     )
                 failure = "it never reported Ready"
             else:
@@ -747,7 +747,11 @@ def create_servers(
             # A failure a new port cannot fix (a bad --load-module path, a config
             # the engine rejects) would otherwise be replaced forever, with the
             # log that explains it deleted on every round.
-            if ports is not None or replacements_left == 0:
+            if (
+                ports is not None
+                or replacements_left == 0
+                or (verdict is NodeCheck.NO_VERDICT and server.process_id() <= 0)
+            ):
                 if verdict is NodeCheck.PORT_TAKEN:
                     # The port belongs to another server now, and the failure
                     # cleanup sends SHUTDOWN to every port it finds a node folder for.
@@ -760,8 +764,7 @@ def create_servers(
                 )
             replacements_left -= 1
             socket_path = node_unix_socket(cluster_folder, server.port)
-            # A node whose pid is unknown may still be running, and its socket is its only handle.
-            if socket_path and (verdict is NodeCheck.PORT_TAKEN or server.process_id() > 0):
+            if socket_path:
                 Path(socket_path).unlink(missing_ok=True)
             remove_folder(node_folder)
             servers_to_check.add(

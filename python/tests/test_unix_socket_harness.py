@@ -5,6 +5,7 @@
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from glide_shared.config import GlideClientConfiguration
@@ -55,6 +56,62 @@ def test_start_rejects_unsupported_flags(args):
     )
     assert result.returncode == 2, result.stderr
     assert "--unix-socket is not supported with" in result.stderr
+
+
+@pytest.mark.parametrize("ports", [None, [51234]])
+def test_start_preserves_socket_record_when_pid_is_unknown(
+    tmp_path, monkeypatch, ports
+):
+    cluster_folder = tmp_path / "cluster"
+    node_folder = cluster_folder / "51234"
+    node_folder.mkdir(parents=True)
+    socket_file = tmp_path / "node.sock"
+    socket_file.touch()
+    (node_folder / "unix_socket").write_text(str(socket_file))
+
+    start_server = Mock(
+        return_value=(cluster_manager.Server("127.0.0.1", 51234), str(node_folder))
+    )
+    monkeypatch.setattr(cluster_manager, "start_server", start_server)
+    monkeypatch.setattr(
+        cluster_manager,
+        "check_node_startup",
+        lambda *args: cluster_manager.NodeCheck.NO_VERDICT,
+    )
+
+    with pytest.raises(Exception, match="it never reported Ready"):
+        cluster_manager.create_servers(
+            host="127.0.0.1",
+            shard_count=1,
+            replica_count=0,
+            ports=ports,
+            cluster_folder=str(cluster_folder),
+            tls=False,
+            cluster_mode=False,
+            unix_socket=True,
+        )
+
+    start_server.assert_called_once()
+    assert socket_file.exists()
+    assert cluster_manager.node_unix_socket(str(cluster_folder), 51234) == str(
+        socket_file
+    )
+
+    targets = []
+    monkeypatch.setattr(
+        cluster_manager,
+        "stop_server",
+        lambda server, folder, *args: targets.append(
+            cluster_manager.cli_target_args(server, folder)
+        ),
+    )
+    monkeypatch.setattr(cluster_manager, "init_logger", lambda logfile: None)
+    cluster_manager.stop_cluster(
+        "127.0.0.1", str(cluster_folder), False, "", None, keep_folder=False
+    )
+    assert targets == [["-s", str(socket_file)]]
+    assert not socket_file.exists()
+    assert not cluster_folder.exists()
 
 
 @pytest.mark.parametrize("stopped", [True, False])
