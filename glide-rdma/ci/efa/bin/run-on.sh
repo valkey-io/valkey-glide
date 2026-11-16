@@ -51,7 +51,12 @@ for extra in $(sed -nE 's/^# ships: *//p' "$script"); do
   ship_cmds+=("echo '$(gzip -c "$path" | base64 | tr -d '\n')' | base64 -d | gunzip > /var/log/rdma/$extra")
 done
 payload=$(gzip -c "$script" | base64 | tr -d '\n')
-env_pairs="SERVER_IP=$server_ip CLIENT_IP=$client_ip $*"
+# The KEY=value overrides and the two IPs are interpolated into a remote `env`
+# command, so each must be one shell token on the host: a presigned URL carries
+# `&` and `?`, which an unquoted value would let the host shell act on. printf %q
+# quotes the whole pair (the KEY= part is bare word-characters, so only the value
+# gains quoting), keeping each override a single argument to `env`.
+env_pairs=$(printf '%q ' "SERVER_IP=$server_ip" "CLIENT_IP=$client_ip" "$@")
 params=$(python3 -c '
 import json, sys
 print(json.dumps({"commands": sys.argv[2:], "executionTimeout": [sys.argv[1]]}))' \

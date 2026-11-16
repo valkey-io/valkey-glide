@@ -210,10 +210,14 @@ Resources:
                   - ssm:GetCommandInvocation
                   - ssm:ListCommandInvocations
                 Resource: "*"
-              # SSM parameter for the AL2023 AMI ID (public parameter, no tag condition)
+              # SSM parameter for the AL2023 AMI ID (public parameter, no tag
+              # condition). CloudFormation resolves an AWS::SSM::Parameter::Value<>
+              # template parameter with GetParameters (plural), so both are granted.
               - Sid: SSMGetParameter
                 Effect: Allow
-                Action: ssm:GetParameter
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
                 Resource:
                   - "arn:aws:ssm:us-east-1::parameter/aws/service/ami-amazon-linux-latest/*"
 
