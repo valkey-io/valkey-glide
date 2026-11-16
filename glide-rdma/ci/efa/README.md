@@ -18,7 +18,7 @@ same `bin/` scripts.
 
 ## Running it in CI (GitHub Actions)
 
-The `test-efa` job in `.github/workflows/glide-rdma.yml` runs this against the
+The `test-efa` job in `.github/workflows/glide-rdma-efa.yml` runs this against the
 PR's own code on a `workflow_dispatch`. A sibling `build-rdma-wheels` job builds
 both Python clients with RDMA and hands the wheels to the test host; the EFA
 pair is created, exercised, and torn down in one job behind the `AWS_ACTIONS`
@@ -43,7 +43,7 @@ through. Then set, in the repository:
 | Variable | `RDMA_VPC_ID` | the VPC to launch in |
 | Variable | `RDMA_SUBNETS` | candidate subnets, comma-separated (tried in order on capacity failure) |
 
-Dispatch it from the Actions tab or `gh workflow run glide-rdma.yml`
+Dispatch it from the Actions tab or `gh workflow run glide-rdma-efa.yml`
 (`-f keep_hosts=true` leaves a failed pair up for diagnosis). A scheduled
 `glide-rdma-sweep.yml` deletes any `rdma-ci-<run_id>` stack a hard-cancelled run
 left behind; each host also self-terminates after `MaxHostLifetimeMinutes` so a

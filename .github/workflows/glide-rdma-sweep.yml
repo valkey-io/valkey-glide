@@ -1,4 +1,4 @@
-# Backstop teardown for the EFA test pair driven by glide-rdma.yml. The in-job
+# Backstop teardown for the EFA test pair driven by glide-rdma-efa.yml. The in-job
 # always() teardown there handles the normal path, and each host self-terminates
 # after MaxHostLifetimeMinutes (see glide-rdma/ci/efa/infra/rdma-pair.yaml) so a
 # hard job cancellation cannot bill the instances. This sweep reclaims the STACK
