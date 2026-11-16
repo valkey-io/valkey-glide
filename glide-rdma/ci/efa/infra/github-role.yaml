@@ -1,0 +1,242 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  GitHub Actions OIDC role for the valkey-glide EFA test job.
+  Apply once with Admin credentials; updates to the policy use the same command.
+  The role ARN goes into the valkey-io/valkey-glide repo secret AWS_RDMA_ROLE_ARN.
+
+Parameters:
+  WheelBucketName:
+    Type: String
+    Default: valkey-glide-rdma-wheels
+    Description: >
+      S3 bucket the CI job uses to stage wheel tarballs between the build job
+      and the test job. Created by this stack with a 1-day lifecycle rule.
+
+Resources:
+  # Bucket for wheel tarballs built by the build-rdma-wheels job and fetched
+  # by the test host. Objects are keyed by run ID and expire after 1 day.
+  WheelBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref WheelBucketName
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-wheels
+            Status: Enabled
+            ExpirationInDays: 1
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # Reject any non-TLS request; presigned URLs the host fetches are HTTPS.
+  WheelBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WheelBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !Sub "arn:aws:s3:::${WheelBucketName}"
+              - !Sub "arn:aws:s3:::${WheelBucketName}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+
+  RdmaEfaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: GitHubActions-ValkeyGlide-RdmaEfa
+      # test-efa requests a 2 h session (role-duration-seconds: 7200) so the
+      # presigned wheel URL outlives a slow run; the default max is 1 h.
+      MaxSessionDuration: 7200
+      # Same OIDC trust as GitHubActions-ValkeyGlide: only the AWS_ACTIONS
+      # environment, which requires a maintainer approval click per run.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                "token.actions.githubusercontent.com:aud": sts.amazonaws.com
+              StringLike:
+                "token.actions.githubusercontent.com:sub": "repo:valkey-io/valkey-glide:environment:AWS_ACTIONS"
+      Policies:
+        - PolicyName: RdmaEfaCI
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # CloudFormation: create/update/delete stacks named rdma-ci-*
+              - Sid: CloudFormation
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:DeleteStack
+                Resource:
+                  - !Sub "arn:aws:cloudformation:us-east-1:${AWS::AccountId}:stack/rdma-ci-*/*"
+
+              # ListStacks has no resource-level scoping (it is account-wide), so
+              # it needs its own statement. Read-only: names and statuses only.
+              # The sweep uses it to enumerate rdma-ci-<run_id> stacks to delete.
+              - Sid: CloudFormationList
+                Effect: Allow
+                Action: cloudformation:ListStacks
+                Resource: "*"
+
+              # EC2: launch and manage the EFA pair. stop/start are intentionally
+              # not granted — CI only runs apply/down; use human creds for those.
+              - Sid: EC2
+                Effect: Allow
+                Action:
+                  - ec2:RunInstances
+                  - ec2:DescribeInstances
+                  - ec2:DescribeInstanceStatus
+                  - ec2:DescribeImages
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribePlacementGroups
+                  - ec2:DescribeLaunchTemplates
+                  - ec2:DescribeLaunchTemplateVersions
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DescribeVolumes
+                  - ec2:CreatePlacementGroup
+                  - ec2:DeletePlacementGroup
+                  - ec2:CreateSecurityGroup
+                  - ec2:DeleteSecurityGroup
+                  - ec2:AuthorizeSecurityGroupIngress
+                  - ec2:AuthorizeSecurityGroupEgress
+                  - ec2:RevokeSecurityGroupIngress
+                  - ec2:RevokeSecurityGroupEgress
+                  - ec2:CreateLaunchTemplate
+                  - ec2:DeleteLaunchTemplate
+                  - ec2:CreateTags
+                  - ec2:DescribeTags
+                  - ec2:GetConsoleOutput
+                # Describe* and RunInstances do not support useful resource-level
+                # scoping; CreateTags must be allowed at instance-launch time so
+                # RunInstances can stamp the Project tag. TerminateInstances, the
+                # highest-impact action, is tag-scoped in the statement below.
+                Resource: "*"
+
+              # Terminating an instance is scoped to this stack's own instances:
+              # rdma-pair.yaml tags every instance Project=rdma-ci at launch, so the
+              # condition holds from RunInstances onward, including a failed-create
+              # rollback, without depending on the reserved stack-name tag's timing.
+              - Sid: EC2Terminate
+                Effect: Allow
+                Action: ec2:TerminateInstances
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    "aws:ResourceTag/Project": "rdma-ci"
+
+              # IAM: create/delete the instance role and profile that the
+              # template scopes to /rdma-ci/ so this grant can be path-scoped.
+              - Sid: IAMInstanceRole
+                Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRole
+                  - iam:GetRolePolicy
+                  - iam:ListRolePolicies
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:TagRole
+                  - iam:UntagRole
+                Resource:
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:role/rdma-ci/*"
+              - Sid: IAMInstanceProfile
+                Effect: Allow
+                Action:
+                  - iam:CreateInstanceProfile
+                  - iam:DeleteInstanceProfile
+                  - iam:AddRoleToInstanceProfile
+                  - iam:RemoveRoleFromInstanceProfile
+                  - iam:GetInstanceProfile
+                  - iam:TagInstanceProfile
+                  - iam:UntagInstanceProfile
+                Resource:
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:instance-profile/rdma-ci/*"
+              - Sid: IAMPassRole
+                Effect: Allow
+                Action: iam:PassRole
+                Resource:
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:role/rdma-ci/*"
+
+              # SSM: SendCommand to the AWS-owned shell document is unconditioned
+              # (the document carries no stack tag); the instance target is what
+              # the stack-name tag actually scopes.
+              - Sid: SSMSendCommandDocument
+                Effect: Allow
+                Action: ssm:SendCommand
+                Resource:
+                  - !Sub "arn:aws:ssm:us-east-1::document/AWS-RunShellScript"
+              - Sid: SSMSendCommandInstances
+                Effect: Allow
+                Action: ssm:SendCommand
+                Resource:
+                  - !Sub "arn:aws:ec2:us-east-1:${AWS::AccountId}:instance/*"
+                Condition:
+                  StringLike:
+                    "ssm:resourceTag/aws:cloudformation:stack-name": "rdma-ci-*"
+              # Command-invocation reads are scoped by command id, not by instance
+              # tag, so a tag condition here would deny them.
+              - Sid: SSMCommandReads
+                Effect: Allow
+                Action:
+                  - ssm:GetCommandInvocation
+                  - ssm:ListCommandInvocations
+                Resource: "*"
+              # SSM parameter for the AL2023 AMI ID (public parameter, no tag condition)
+              - Sid: SSMGetParameter
+                Effect: Allow
+                Action: ssm:GetParameter
+                Resource:
+                  - "arn:aws:ssm:us-east-1::parameter/aws/service/ami-amazon-linux-latest/*"
+
+              # S3: upload wheel tarballs from the build job and generate
+              # presigned URLs for the test host to fetch them
+              - Sid: S3Wheels
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${WheelBucketName}"
+                  - !Sub "arn:aws:s3:::${WheelBucketName}/rdma-ci/*"
+
+Outputs:
+  RoleArn:
+    Description: >
+      ARN to set as the valkey-io/valkey-glide repo secret AWS_RDMA_ROLE_ARN
+    Value: !GetAtt RdmaEfaRole.Arn
+
+  WheelBucketName:
+    Description: >
+      S3 bucket name to set as the repo variable RDMA_WHEEL_BUCKET
+    Value: !Ref WheelBucket
