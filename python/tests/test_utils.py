@@ -2,12 +2,14 @@
 
 import glob
 import os
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from glide.logger import Level, Logger
 from glide_shared.config import NodeAddress
+from glide_shared.exceptions import LoggerError
 from glide_sync import LogLevel as SyncLogLevel
 from glide_sync.logger import Logger as SyncLogger
 
@@ -65,6 +67,22 @@ class TestLogger:
 
         # Reset logger config to default
         Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
+
+    def test_set_logger_config_fails_on_unwritable_path(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            blocked_file = os.path.join(tmpdir, "regular_file")
+            with open(blocked_file, "w") as f:
+                f.write("content")
+            invalid_path = os.path.join(blocked_file, "app.log")
+            with pytest.raises((LoggerError, ValueError)):
+                Logger.set_logger_config(Level.ERROR, invalid_path)
+            # Subsequent log calls must not panic or abort the process
+            Logger.log(
+                Level.ERROR,
+                "test",
+                "should survive unwritable path error",
+            )
+            Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
 
     def test_init_sync_logger(self):
         # The logger is already configured in the conftest file, so calling init again shouldn't modify the log level

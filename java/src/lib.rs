@@ -759,7 +759,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_initInternal<'loc
                 Some(lvl) => Some(Level(lvl).try_into()?),
                 None => None,
             };
-            let logger_level = glide_logger::init(level, file_name.as_deref());
+            let logger_level =
+                glide_logger::init(level, file_name.as_deref()).map_err(FFIError::Logger)?;
             Ok(Level::from(logger_level).0)
         }
         let result = init_internal(&mut env, level, file_name);

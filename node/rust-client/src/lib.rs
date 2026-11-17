@@ -2618,9 +2618,10 @@ pub fn log(log_level: Level, log_identifier: String, message: String) {
 }
 
 #[napi(js_name = "InitInternalLogger")]
-pub fn init(level: Option<Level>, file_name: Option<String>) -> Level {
-    let logger_level = glide_logger::init(level.map(|level| level.into()), file_name.as_deref());
-    logger_level.into()
+pub fn init(level: Option<Level>, file_name: Option<String>) -> napi::Result<Level> {
+    let logger_level = glide_logger::init(level.map(|level| level.into()), file_name.as_deref())
+        .map_err(napi::Error::from_reason)?;
+    Ok(logger_level.into())
 }
 
 fn resp_value_to_js<'a>(val: Value, js_env: &'a Env, string_decoder: bool) -> Result<Unknown<'a>> {
