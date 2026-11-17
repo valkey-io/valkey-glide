@@ -554,7 +554,8 @@ if not GlideClient.rdma_usable():
 
 client = GlideClient.create(GlideClientConfiguration(
     addresses=[NodeAddress("localhost", 6379)],
-    # EfaDirect() for EFA hardware. Tcp() emulates RDMA over TCP, for development only.
+    # EfaDirect() for EFA hardware. Tcp() emulates RDMA over TCP; only a development
+    # build honors it.
     rdma=RdmaConfiguration(provider=RdmaProvider.EfaDirect()),
 ))
 

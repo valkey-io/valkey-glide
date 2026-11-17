@@ -12,7 +12,15 @@ on:
         paths:
             - glide-core/src/**
             - glide-core/redis-rs/redis/src/**
+            - glide-core/Cargo.toml
+            - glide-core/build.rs
+            - glide-core/redis-rs/redis/Cargo.toml
+            - glide-logger/**
+            - glide-telemetry/**
             - ffi/src/**
+            - ffi/Cargo.toml
+            - ffi/Cargo.lock
+            - ffi/cbindgen.toml
             - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
@@ -28,7 +36,15 @@ on:
         paths:
             - glide-core/src/**
             - glide-core/redis-rs/redis/src/**
+            - glide-core/Cargo.toml
+            - glide-core/build.rs
+            - glide-core/redis-rs/redis/Cargo.toml
+            - glide-logger/**
+            - glide-telemetry/**
             - ffi/src/**
+            - ffi/Cargo.toml
+            - ffi/Cargo.lock
+            - ffi/cbindgen.toml
             - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml

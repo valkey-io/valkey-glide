@@ -585,6 +585,10 @@ jobs:
             - name: Async client - Build source distributions
               uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1
               with:
+                  # sdist only: maturin 0.14.17 (the pyproject.toml pin, still used for wheels)
+                  # cannot package glide-rdma's optional path dependency (glide-libfabric-sys).
+                  # Remove once the pyproject.toml pin moves to maturin 1.x.
+                  maturin-version: 1.16.0
                   working-directory: ./python/glide-async
                   # `maturin sdist` has no --locked flag (only build/develop do);
                   # the sdist embeds Cargo.lock, and the wheel builds are locked.

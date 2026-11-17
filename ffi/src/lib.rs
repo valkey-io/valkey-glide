@@ -480,6 +480,36 @@ impl redis::AddressResolver for FFIAddressResolver {
 pub struct ConnectionResponse {
     pub conn_ptr: *const c_void,
     pub connection_error_message: *const c_char,
+    /// The kind of error in `connection_error_message`; [`ConnectionErrorType::Unspecified`] on success.
+    /// Appended last so callers built against the two-field layout still read the first two fields.
+    pub connection_error_type: ConnectionErrorType,
+}
+
+/// The kind of error a [`ConnectionResponse`] carries, so the wrapper can raise a matching exception.
+///
+/// cbindgen:prefix-with-name
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionErrorType {
+    /// Any other failure, including failing to connect or authenticate.
+    Unspecified = 0,
+    /// The connection request was rejected by validation, before any connection was attempted.
+    Configuration = 1,
+}
+
+/// A client creation failure and its [`ConnectionErrorType`].
+struct CreateClientError {
+    error_type: ConnectionErrorType,
+    message: String,
+}
+
+impl From<String> for CreateClientError {
+    fn from(message: String) -> Self {
+        CreateClientError {
+            error_type: ConnectionErrorType::Unspecified,
+            message,
+        }
+    }
 }
 
 /// Represents an error returned from a command execution.
@@ -2708,7 +2738,7 @@ fn create_client_internal(
     address_resolver: AddressResolverCallback,
     credential_provider: Option<NonNullCredentialProviderCallback>,
     client_id: usize,
-) -> Result<*const ClientAdapter, String> {
+) -> Result<*const ClientAdapter, CreateClientError> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
     if request.credential_provider_key.is_some() {
@@ -2716,7 +2746,8 @@ fn create_client_internal(
             "Direct C FFI clients cannot mix the credential_provider callback with the unsupported credential_provider_key protobuf field".to_string()
         } else {
             "The credential_provider_key protobuf field is not supported by direct C FFI clients; pass a credential_provider callback instead".to_string()
-        });
+        }
+        .into());
     }
     let has_external_blocking_provider = credential_provider.is_some();
     let lazy_connect_pending =
@@ -2783,7 +2814,8 @@ fn create_client_internal(
         {
             return Err(
                 "A credential_provider callback was supplied but the connection request contains no IAM configuration"
-                    .to_string(),
+                    .to_string()
+                    .into(),
             );
         }
 
@@ -2813,7 +2845,17 @@ fn create_client_internal(
             create_rt,
             GlideClient::new(connection_request, Some(push_tx)),
         )
-        .and_then(|client| client.map_err(|err| err.to_string()))
+        .map_err(CreateClientError::from)
+        .and_then(|client| {
+            client.map_err(|err| CreateClientError {
+                error_type: if err.is_configuration() {
+                    ConnectionErrorType::Configuration
+                } else {
+                    ConnectionErrorType::Unspecified
+                },
+                message: err.to_string(),
+            })
+        })
     };
     let client = match client {
         Ok(client) => client,
@@ -2924,12 +2966,14 @@ unsafe fn create_client_response(
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
-                CString::new(err).expect("Couldn't convert error message to CString"),
+                CString::new(err.message).expect("Couldn't convert error message to CString"),
             ),
+            connection_error_type: err.error_type,
         },
         Ok(client) => ConnectionResponse {
             conn_ptr: client as *const c_void,
             connection_error_message: std::ptr::null(),
+            connection_error_type: ConnectionErrorType::Unspecified,
         },
     };
     Box::into_raw(Box::new(response))
@@ -3149,6 +3193,7 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
             connection_error_message: CString::into_raw(
                 CString::new(err).expect("Couldn't convert error message to CString"),
             ),
+            connection_error_type: ConnectionErrorType::Unspecified,
         },
         Ok(connection_request) => {
             // Convert ConnectionRequest to protobuf bytes to reuse existing logic
@@ -3162,6 +3207,7 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
                     connection_error_message: CString::into_raw(
                         CString::new(err).expect("Couldn't convert error message to CString"),
                     ),
+                    connection_error_type: ConnectionErrorType::Unspecified,
                 },
                 Ok(bytes) => {
                     match create_client_internal(
@@ -3175,13 +3221,15 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
                         Err(err) => ConnectionResponse {
                             conn_ptr: std::ptr::null(),
                             connection_error_message: CString::into_raw(
-                                CString::new(err)
+                                CString::new(err.message)
                                     .expect("Couldn't convert error message to CString"),
                             ),
+                            connection_error_type: err.error_type,
                         },
                         Ok(client) => ConnectionResponse {
                             conn_ptr: client as *const c_void,
                             connection_error_message: std::ptr::null(),
+                            connection_error_type: ConnectionErrorType::Unspecified,
                         },
                     }
                 }
@@ -6376,21 +6424,11 @@ pub unsafe extern "C" fn batch(
         let _ = batch_pool_ids;
         let _ = batch_blocking_arc;
 
-        // Process batch response for decompression if compression is enabled
-        match result {
-            Ok(value) => glide_core::compression::try_decompress_batch_response(
-                value,
-                compression_manager_for_decompression.as_deref(),
-            )
-            .map_err(|e| {
-                redis::RedisError::from((
-                    redis::ErrorKind::IoError,
-                    "Decompression error",
-                    e.to_string(),
-                ))
-            }),
-            Err(e) => Err(e),
-        }
+        let decompressed = glide_core::compression::try_decompress_batch_response(
+            result?,
+            compression_manager_for_decompression.as_deref(),
+        )?;
+        Ok(decompressed)
     })
 }
 
@@ -7769,6 +7807,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
                 return Box::into_raw(Box::new(ConnectionResponse {
                     conn_ptr: std::ptr::null(),
                     connection_error_message: err_msg.into_raw(),
+                    connection_error_type: ConnectionErrorType::Unspecified,
                 }));
             }
         };
@@ -7785,6 +7824,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         return Box::into_raw(Box::new(ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: err_msg.into_raw(),
+            connection_error_type: ConnectionErrorType::Unspecified,
         }));
     }
     // Extract address, tls, and auth from the protobuf ConnectionRequest BEFORE .into(),
@@ -7794,6 +7834,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         return Box::into_raw(Box::new(ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: err_msg.into_raw(),
+            connection_error_type: ConnectionErrorType::Unspecified,
         }));
     };
     let address = NodeAddress {
@@ -7851,6 +7892,19 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         cache: None,
     };
 
+    // Only the request validation is a configuration error. `MonitorClient::new` can also fail
+    // with `InvalidClientConfig` while setting up the connection (for example TLS), and those
+    // failures keep the unspecified type they had before 2.6.
+    if let Err(e) = MonitorClient::validate(&address, &redis_conn_info, tls_mode) {
+        let err_msg =
+            CString::new(format!("Failed to create monitor client: {e}")).unwrap_or_default();
+        return Box::into_raw(Box::new(ConnectionResponse {
+            conn_ptr: std::ptr::null(),
+            connection_error_message: err_msg.into_raw(),
+            connection_error_type: ConnectionErrorType::Configuration,
+        }));
+    }
+
     let runtime = match worker_runtime("Valkey-GLIDE monitor", None) {
         Ok(r) => r,
         Err(e) => {
@@ -7859,6 +7913,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
             return Box::into_raw(Box::new(ConnectionResponse {
                 conn_ptr: std::ptr::null(),
                 connection_error_message: err_msg.into_raw(),
+                connection_error_type: ConnectionErrorType::Unspecified,
             }));
         }
     };
@@ -7906,6 +7961,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
             return Box::into_raw(Box::new(ConnectionResponse {
                 conn_ptr: std::ptr::null(),
                 connection_error_message: err_msg.into_raw(),
+                connection_error_type: ConnectionErrorType::Unspecified,
             }));
         }
     };
@@ -7927,6 +7983,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
     Box::into_raw(Box::new(ConnectionResponse {
         conn_ptr,
         connection_error_message: std::ptr::null(),
+        connection_error_type: ConnectionErrorType::Unspecified,
     }))
 }
 

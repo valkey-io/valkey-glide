@@ -251,6 +251,7 @@ class _GlideFFI:
             typedef struct {
                 const void* conn_ptr;
                 const char* connection_error_message;
+                int connection_error_type;
             } ConnectionResponse;
 
             const ConnectionResponse* create_client(
