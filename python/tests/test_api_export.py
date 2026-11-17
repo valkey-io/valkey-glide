@@ -83,6 +83,7 @@ excluded_shared_symbols = [
     "T",
     "TRequest",
     # python/glide-shared/glide_shared/exceptions.py
+    "get_connection_error_class",  # FunctionDef
     "get_request_error_class",  # FunctionDef
     # python/glide-shared/glide_shared/routes.py
     "to_protobuf_slot_type",  # FunctionDef

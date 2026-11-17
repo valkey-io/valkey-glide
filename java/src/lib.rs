@@ -1502,9 +1502,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
 
         let handle_id = client_ptr as u64;
 
-        if let Some(entry) = crate::jni_pool::get_pool_client_map().get(&handle_id) {
-            glide_core::pool::refresh_client_activity(*entry.value(), handle_id);
-        }
+        glide_core::pool::refresh_activity_by_client(handle_id);
 
         // Extract request types
         let cmd_count = match env.get_array_length(&request_types) {
@@ -1589,9 +1587,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
         // is_blocking=0 in the window between spawn() and task execution.
         let batch_pre_blocking_arc: Option<Arc<AtomicU32>> = {
             let has_blocking = req_types.iter().enumerate().any(|(i, rt_int)| {
-                let proto_rt = protobuf::EnumOrUnknown::<
-                    glide_core::command_request::RequestType,
-                >::from_i32(*rt_int);
+                let proto_rt =
+                    protobuf::EnumOrUnknown::<glide_core::command_request::RequestType>::from_i32(
+                        *rt_int,
+                    );
                 let rt: glide_core::request_type::RequestType = proto_rt.into();
                 if matches!(rt, glide_core::request_type::RequestType::CustomCommand) {
                     // For CustomCommand the actual command name is all_args[i][0].
@@ -1602,7 +1601,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                 let cmd_args = args.as_slice();
                                 glide_core::client::is_blocking_command_name(
                                     name.as_slice(),
-                                    if cmd_args.len() > 1 { &cmd_args[1..] } else { &[] },
+                                    if cmd_args.len() > 1 {
+                                        &cmd_args[1..]
+                                    } else {
+                                        &[]
+                                    },
                                 )
                             })
                         })
@@ -1752,44 +1755,17 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                         // abandon monitor doesn't reclaim the client immediately after a
                         // long-running blocking batch. Flag clearing is handled by the
                         // RAII guard on drop.
-                        if batch_blocking_arc.is_some()
-                            && let Some(entry) =
-                                crate::jni_pool::get_pool_client_map().get(&handle_id)
-                        {
-                            glide_core::pool::refresh_client_activity(
-                                *entry.value(),
-                                handle_id,
-                            );
+                        if batch_blocking_arc.is_some() {
+                            glide_core::pool::refresh_activity_by_client(handle_id);
                         }
 
-                        // Decompress if needed
-                        match exec_res {
-                            Ok(value) => {
-                                if client.is_compression_enabled() {
-                                    if let Some(manager) = client.compression_manager() {
-                                        match glide_core::compression::decompress_batch_response(
-                                            value.clone(),
-                                            manager.as_ref(),
-                                        ) {
-                                            Ok(decompressed) => Ok(decompressed),
-                                            Err(e) => {
-                                                glide_logger::log_warn_rate_limited!(
-                                                    "compression",
-                                                    5,
-                                                    format!("Failed to decompress batch response: {}, returning original", e)
-                                                );
-                                                Ok(value)
-                                            }
-                                        }
-                                    } else {
-                                        Ok(value)
-                                    }
-                                } else {
-                                    Ok(value)
-                                }
-                            }
-                            Err(e) => Err(e),
-                        }
+                        exec_res.and_then(|value| {
+                            glide_core::compression::try_decompress_batch_response(
+                                value,
+                                client.compression_manager().as_deref(),
+                            )
+                            .map_err(redis::RedisError::from)
+                        })
                     }
                     .await;
 
@@ -2041,9 +2017,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                 // already raised synchronously on the JNI thread (pre_blocking_arc) before
                 // this task was spawned, eliminating the race window between spawn() and
                 // task execution where the abandon monitor could observe is_blocking=false.
-                if let Some(entry) = crate::jni_pool::get_pool_client_map().get(&handle_id) {
-                    glide_core::pool::refresh_client_activity(*entry.value(), handle_id);
-                }
+                glide_core::pool::refresh_activity_by_client(handle_id);
 
                 // Use the pre-armed Arc (set synchronously before spawn). No need to
                 // re-fetch or re-set here: the flag is already true if this is a blocking
@@ -2054,10 +2028,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                 // Refresh the activity timer after a blocking command so the abandon
                 // monitor does not reclaim the client immediately after completion.
                 // The _unmark_guard will clear the blocking flag on drop.
-                if pre_blocking_arc.is_some()
-                    && let Some(entry) = crate::jni_pool::get_pool_client_map().get(&handle_id)
-                {
-                    glide_core::pool::refresh_client_activity(*entry.value(), handle_id);
+                if pre_blocking_arc.is_some() {
+                    glide_core::pool::refresh_activity_by_client(handle_id);
                 }
 
                 result
@@ -2104,9 +2076,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
             return Some(());
         };
 
-        if let Some(entry) = crate::jni_pool::get_pool_client_map().get(&(handle_id as u64)) {
-            glide_core::pool::refresh_client_activity(*entry.value(), handle_id as u64);
-        }
+        glide_core::pool::refresh_activity_by_client(handle_id as u64);
 
         // Extract script hash
         let hash_str = match env.get_string(&hash) {
@@ -2328,11 +2298,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                     // Refresh activity after script completes so the abandon monitor
                     // does not reclaim the client immediately after a long blocking script.
                     // The RAII guard handles clearing the is_blocking flag on drop.
-                    if script_blocking_arc.is_some()
-                        && let Some(entry) =
-                            crate::jni_pool::get_pool_client_map().get(&client_handle_id)
-                    {
-                        glide_core::pool::refresh_client_activity(*entry.value(), client_handle_id);
+                    if script_blocking_arc.is_some() {
+                        glide_core::pool::refresh_activity_by_client(client_handle_id);
                     }
 
                     let binary_mode = expect_utf8 == 0;
