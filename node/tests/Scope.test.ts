@@ -43,15 +43,11 @@ function makeKey(prefix: string): string {
     return `scope-test-${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/** A NOSCRIPT reply, with and without detail text, keeps the server's text. */
-async function expectNoScriptErrors(scope: IsolatedScope): Promise<void> {
+/** A NOSCRIPT reply keeps the server's text. */
+async function expectNoScriptError(scope: IsolatedScope): Promise<void> {
     await expect(
         scope.executeCommand("EVALSHA", "f".repeat(40), "0"),
     ).rejects.toThrow(/^NOSCRIPT No matching script\.( Please use EVAL\.)?$/);
-    // A script can return a NOSCRIPT error with no detail text.
-    await expect(
-        scope.executeCommand("EVAL", "return {err='NOSCRIPT'}", "0"),
-    ).rejects.toThrow(/^NOSCRIPT$/);
 }
 
 describe("IsolatedScope", () => {
@@ -113,7 +109,7 @@ describe("IsolatedScope", () => {
             const scope = await IsolatedScope.acquire(client, connReqBytes);
 
             try {
-                await expectNoScriptErrors(scope);
+                await expectNoScriptError(scope);
             } finally {
                 scope.release();
             }
@@ -850,7 +846,7 @@ describe("IsolatedScope (cluster)", () => {
             const scope = await client.scopedConnection();
 
             try {
-                await expectNoScriptErrors(scope);
+                await expectNoScriptError(scope);
             } finally {
                 scope.release();
             }

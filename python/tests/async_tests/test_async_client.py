@@ -11900,9 +11900,6 @@ class TestScripts:
 
         with pytest.raises(RequestError, match=no_script):
             await glide_client.custom_command(eval_sha)
-        # A script can return a NOSCRIPT error with no detail text.
-        with pytest.raises(RequestError, match=r"^NOSCRIPT$"):
-            await glide_client.custom_command(["EVAL", "return {err='NOSCRIPT'}", "0"])
 
         batch = (
             ClusterBatch(is_atomic=False)

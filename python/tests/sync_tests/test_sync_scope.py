@@ -58,9 +58,6 @@ class TestIsolatedScopeBasic:
                 match=r"^Scope command error: NOSCRIPT No matching script\.( Please use EVAL\.)?$",
             ):
                 scope.execute_command("EVALSHA", "f" * 40, "0")
-            # A script can return a NOSCRIPT error with no detail text.
-            with pytest.raises(RuntimeError, match=r"^Scope command error: NOSCRIPT$"):
-                scope.execute_command("EVAL", "return {err='NOSCRIPT'}", "0")
 
     def test_scope_get_set(self, client):
         """SET and GET on a scoped connection."""

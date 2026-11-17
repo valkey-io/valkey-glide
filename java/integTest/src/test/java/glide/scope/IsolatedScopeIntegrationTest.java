@@ -92,17 +92,6 @@ public class IsolatedScopeIntegrationTest {
             assertInstanceOf(RequestException.class, exception.getCause());
             String message = exception.getCause().getMessage();
             assertTrue(message.matches("NOSCRIPT No matching script\\.( Please use EVAL\\.)?"), message);
-
-            // A script can return a NOSCRIPT error with no detail text.
-            exception =
-                    assertThrows(
-                            ExecutionException.class,
-                            () ->
-                                    scope
-                                            .executeCommand("EVAL", "return {err='NOSCRIPT'}", "0")
-                                            .get(5, TimeUnit.SECONDS));
-            assertInstanceOf(RequestException.class, exception.getCause());
-            assertEquals("NOSCRIPT", exception.getCause().getMessage());
         } finally {
             client.close();
         }

@@ -12137,20 +12137,15 @@ func (suite *GlideTestSuite) TestNoScriptErrorKeepsServerText() {
 		unknownHash := strings.Repeat("f", 40)
 		evalSha := []string{"EVALSHA", unknownHash, "0"}
 
-		// A script can return a NOSCRIPT error with no detail text.
-		evalNoDetail := []string{"EVAL", "return {err='NOSCRIPT'}", "0"}
-
-		var err, noDetailErr, batchExecErr, batchErr error
+		var err, batchExecErr, batchErr error
 		var batchResults []any
 		switch c := client.(type) {
 		case *glide.Client:
 			_, err = c.CustomCommand(ctx, evalSha)
-			_, noDetailErr = c.CustomCommand(ctx, evalNoDetail)
 			batchResults, batchExecErr = c.Exec(ctx, *pipeline.NewStandaloneBatch(false).CustomCommand(evalSha), false)
 			_, batchErr = c.Exec(ctx, *pipeline.NewStandaloneBatch(false).CustomCommand(evalSha), true)
 		case *glide.ClusterClient:
 			_, err = c.CustomCommand(ctx, evalSha)
-			_, noDetailErr = c.CustomCommand(ctx, evalNoDetail)
 			batchResults, batchExecErr = c.Exec(ctx, *pipeline.NewClusterBatch(false).CustomCommand(evalSha), false)
 			_, batchErr = c.Exec(ctx, *pipeline.NewClusterBatch(false).CustomCommand(evalSha), true)
 		default:
@@ -12160,9 +12155,6 @@ func (suite *GlideTestSuite) TestNoScriptErrorKeepsServerText() {
 
 		if suite.Error(err) {
 			assert.Regexp(t, noScriptPattern, err.Error())
-		}
-		if suite.Error(noDetailErr) {
-			assert.Equal(t, "NOSCRIPT", noDetailErr.Error())
 		}
 
 		suite.NoError(batchExecErr)

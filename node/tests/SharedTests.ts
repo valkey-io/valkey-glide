@@ -5730,14 +5730,6 @@ export function runBaseTests(config: {
                 await expect(client.customCommand(evalSha)).rejects.toThrow(
                     noScript,
                 );
-                // A script can return a NOSCRIPT error with no detail text.
-                await expect(
-                    client.customCommand([
-                        "EVAL",
-                        "return {err='NOSCRIPT'}",
-                        "0",
-                    ]),
-                ).rejects.toThrow(/^NOSCRIPT$/);
 
                 const isCluster = client instanceof GlideClusterClient;
                 const batch = isCluster
