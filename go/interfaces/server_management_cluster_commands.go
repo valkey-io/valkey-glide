@@ -21,6 +21,8 @@ type ServerManagementClusterCommands interface {
 
 	InfoWithOptions(ctx context.Context, options options.ClusterInfoOptions) (models.ClusterValue[string], error)
 
+	InfoWithPartialResults(ctx context.Context, options options.ClusterInfoOptions) (models.ClusterValue[any], error)
+
 	TimeWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[[]string], error)
 
 	DBSizeWithOptions(ctx context.Context, routeOption options.RouteOption) (int64, error)

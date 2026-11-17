@@ -54,6 +54,35 @@ func ExampleClusterClient_InfoWithOptions() {
 	// Output: OK
 }
 
+func ExampleClusterClient_InfoWithPartialResults() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+
+	opts := options.ClusterInfoOptions{
+		InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Cluster}},
+	}
+
+	response, err := client.InfoWithPartialResults(context.Background(), opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	for address, reply := range response.MultiValue() {
+		switch reply := reply.(type) {
+		case *TimeoutError:
+			fmt.Println(address, "timed out")
+		case error:
+			fmt.Println(address, "failed:", reply)
+		case string:
+			if strings.Contains(reply, "cluster_enabled:1") {
+				fmt.Println("OK")
+				return
+			}
+		}
+	}
+
+	// Output: OK
+}
+
 func ExampleClusterClient_TimeWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	route := config.Route(config.RandomRoute)

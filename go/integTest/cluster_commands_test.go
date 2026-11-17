@@ -6,7 +6,10 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"net"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -144,6 +147,135 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 		fallbacks_name := "cluster_io_main_thread_fallbacks"
 		fallbacks_value := AssertInt(t, cluster_info[fallbacks_name], fallbacks_name)
 		assert.GreaterOrEqual(t, fallbacks_value, int64(0))
+	}
+}
+
+func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsRepliesWhenAPrimaryIsSlow() {
+	t := suite.T()
+	ctx := context.Background()
+	client, err := suite.clusterClient(suite.defaultClusterClientConfig().WithRequestTimeout(time.Second))
+	require.NoError(t, err)
+	// A second client pauses the primary, so the pause is not queued behind the client under test.
+	pauser, err := suite.clusterClient(suite.defaultClusterClientConfig())
+	require.NoError(t, err)
+
+	infos, err := client.Info(ctx)
+	require.NoError(t, err)
+	primaries := make([]string, 0, len(infos))
+	for address := range infos {
+		primaries = append(primaries, address)
+	}
+	sort.Strings(primaries)
+	host, portText, err := net.SplitHostPort(primaries[0])
+	require.NoError(t, err)
+	port, err := strconv.Atoi(portText)
+	require.NoError(t, err)
+	route := config.NewByAddressRoute(host, int32(port))
+
+	// Long enough for both calls below to see the node as slow.
+	_, err = pauser.CustomCommandWithRoute(ctx, []string{"CLIENT", "PAUSE", "4500", "ALL"}, route)
+	require.NoError(t, err)
+	defer func() {
+		// CLIENT UNPAUSE would wait for the pause too; wait for it to end.
+		assert.Eventually(t, func() bool {
+			_, err := pauser.CustomCommandWithRoute(ctx, []string{"PING"}, route)
+			return err == nil
+		}, 10*time.Second, 100*time.Millisecond, "paused primary did not recover")
+
+		// A single-node route still returns the node's reply as a string.
+		single, err := client.InfoWithPartialResults(
+			ctx,
+			options.ClusterInfoOptions{RouteOption: &options.RouteOption{Route: route}},
+		)
+		assert.NoError(t, err)
+		assert.True(t, single.IsSingleValue())
+		assert.Contains(t, single.SingleValue(), "# Server")
+	}()
+
+	// Without partial results, one slow primary fails the whole call.
+	_, err = client.Info(ctx)
+	var timeoutErr *glide.TimeoutError
+	assert.ErrorAs(t, err, &timeoutErr)
+
+	result, err := client.InfoWithPartialResults(ctx, options.ClusterInfoOptions{})
+	require.NoError(t, err)
+	require.True(t, result.IsMultiValue())
+	replies := result.MultiValue()
+	assert.Len(t, replies, len(primaries))
+	assert.IsType(t, &glide.TimeoutError{}, replies[primaries[0]])
+	for _, address := range primaries[1:] {
+		assert.Contains(t, replies[address], "# Server")
+	}
+}
+
+func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsTheErrorReplyOfADeniedPrimary() {
+	t := suite.T()
+	ctx := context.Background()
+	admin := suite.defaultClusterClient()
+	username := "partial-" + uuid.NewString()
+	password := "password"
+	_, err := admin.CustomCommandWithRoute(
+		ctx,
+		[]string{"ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all"},
+		config.AllNodes,
+	)
+	require.NoError(t, err)
+	defer func() {
+		_, err := admin.CustomCommandWithRoute(ctx, []string{"ACL", "DELUSER", username}, config.AllNodes)
+		assert.NoError(t, err)
+	}()
+	denied, err := suite.clusterClient(
+		suite.defaultClusterClientConfig().WithCredentials(config.NewServerCredentials(username, password)),
+	)
+	require.NoError(t, err)
+	// Runs before the deferred ACL DELUSER, so the client never reconnects as a deleted user.
+	defer denied.Close()
+
+	infos, err := denied.Info(ctx)
+	require.NoError(t, err)
+	primaries := make([]string, 0, len(infos))
+	for address := range infos {
+		primaries = append(primaries, address)
+	}
+	sort.Strings(primaries)
+	host, portText, err := net.SplitHostPort(primaries[0])
+	require.NoError(t, err)
+	port, err := strconv.Atoi(portText)
+	require.NoError(t, err)
+	_, err = admin.CustomCommandWithRoute(
+		ctx,
+		[]string{"ACL", "SETUSER", username, "-info"},
+		config.NewByAddressRoute(host, int32(port)),
+	)
+	require.NoError(t, err)
+
+	// Without partial results, the denied primary fails the whole call.
+	_, plainErr := denied.Info(ctx)
+	require.Error(t, plainErr)
+
+	result, err := denied.InfoWithPartialResults(ctx, options.ClusterInfoOptions{})
+	require.NoError(t, err)
+	replies := result.MultiValue()
+	assert.Len(t, replies, len(primaries))
+	nodeErr, ok := replies[primaries[0]].(error)
+	require.True(t, ok, "%v", replies[primaries[0]])
+	_, isTimeout := nodeErr.(*glide.TimeoutError)
+	assert.False(t, isTimeout)
+	assert.Equal(t, plainErr.Error(), nodeErr.Error())
+	for _, address := range primaries[1:] {
+		assert.Contains(t, replies[address], "# Server")
+	}
+
+	// With every primary denied, the call returns an error for each.
+	_, err = admin.CustomCommandWithRoute(ctx, []string{"ACL", "SETUSER", username, "-info"}, config.AllPrimaries)
+	require.NoError(t, err)
+	failed, err := denied.InfoWithPartialResults(ctx, options.ClusterInfoOptions{})
+	require.NoError(t, err)
+	assert.Len(t, failed.MultiValue(), len(primaries))
+	for _, reply := range failed.MultiValue() {
+		require.Implements(t, (*error)(nil), reply)
+		_, isTimeout := reply.(*glide.TimeoutError)
+		assert.False(t, isTimeout)
 	}
 }
 
