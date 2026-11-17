@@ -2,6 +2,10 @@
 
 ## Pending 2.7
 
+### Features
+
+* Core: opt-in per-node results for multi-node commands ([#7751](https://github.com/valkey-io/valkey-glide/pull/7751))
+
 ### Fixes
 
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
