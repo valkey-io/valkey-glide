@@ -10,19 +10,19 @@ on:
             - release-*
             - v*
         paths:
-            - glide-core/src/**
-            - glide-core/redis-rs/redis/src/**
-            - glide-core/Cargo.toml
-            - glide-core/build.rs
-            - glide-core/redis-rs/redis/Cargo.toml
+            - glide-core/**
             - glide-logger/**
             - glide-telemetry/**
+            - glide-rdma/**
             - .cargo/config.toml
             - deny.toml
             - node/**
             - utils/cluster_manager.py
             - .github/workflows/node.yml
             - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-zig/action.yml
             - .github/actions/test-benchmark/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
@@ -32,19 +32,19 @@ on:
             - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
-            - glide-core/src/**
-            - glide-core/redis-rs/redis/src/**
-            - glide-core/Cargo.toml
-            - glide-core/build.rs
-            - glide-core/redis-rs/redis/Cargo.toml
+            - glide-core/**
             - glide-logger/**
             - glide-telemetry/**
+            - glide-rdma/**
             - .cargo/config.toml
             - deny.toml
             - node/**
             - utils/cluster_manager.py
             - .github/workflows/node.yml
             - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-zig/action.yml
             - .github/actions/test-benchmark/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml

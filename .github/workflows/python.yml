@@ -11,11 +11,7 @@ on:
             - v*
         paths:
             - python/**
-            - glide-core/src/**
-            - glide-core/redis-rs/redis/src/**/**
-            - glide-core/redis-rs/redis/Cargo.toml
-            - glide-core/Cargo.toml
-            - glide-core/build.rs
+            - glide-core/**
             - ffi/**
             - glide-logger/**
             - glide-telemetry/**
@@ -26,6 +22,9 @@ on:
             - .github/workflows/python.yml
             - .github/actions/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-zig/action.yml
             - .github/actions/test-benchmark/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
@@ -38,11 +37,7 @@ on:
     pull_request:
         paths:
             - python/**
-            - glide-core/src/**
-            - glide-core/redis-rs/redis/src/**
-            - glide-core/redis-rs/redis/Cargo.toml
-            - glide-core/Cargo.toml
-            - glide-core/build.rs
+            - glide-core/**
             - ffi/**
             - glide-logger/**
             - glide-telemetry/**
@@ -53,6 +48,9 @@ on:
             - .github/workflows/python.yml
             - .github/actions/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-zig/action.yml
             - .github/actions/test-benchmark/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml

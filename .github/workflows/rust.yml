@@ -15,6 +15,7 @@ on:
             # Rust dependencies
             - glide-logger/**
             - glide-telemetry/**
+            - glide-rdma/**
             - glide-core/**
             - deny.toml
             - .cargo/config.toml
@@ -43,6 +44,7 @@ on:
             # Rust dependencies
             - glide-logger/**
             - glide-telemetry/**
+            - glide-rdma/**
             - glide-core/**
             - deny.toml
             - .cargo/config.toml
