@@ -6,13 +6,19 @@ import static org.mockito.Mockito.*;
 
 import glide.api.OpenTelemetry.GlideSpanContext;
 import glide.api.OpenTelemetry.OpenTelemetryConfig;
+import glide.api.logging.Logger;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.MockedStatic;
 
 public class OpenTelemetryTest {
     private static final String TRACE_ID = "0af7651916cd43dd8448eb211c80319c";
@@ -55,6 +61,62 @@ public class OpenTelemetryTest {
                     throw new AssertionError("test");
                 });
         assertThrows(AssertionError.class, OpenTelemetry::getParentSpanContext);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"throwing", "invalid"})
+    void fallbackWarningsAreBoundedPerRegistration(String failure) {
+        Supplier<GlideSpanContext> provider =
+                () -> {
+                    if (failure.equals("throwing")) throw new IllegalStateException("test");
+                    return new GlideSpanContext("bad", SPAN_ID, 1, null);
+                };
+        try (MockedStatic<Logger> logger = mockStatic(Logger.class)) {
+            OpenTelemetry.setParentSpanContextProvider(provider);
+            for (int i = 0; i < 100; i++) assertNull(OpenTelemetry.getParentSpanContext());
+            logger.verify(
+                    () -> Logger.log(eq(Logger.Level.WARN), eq("GlideOpenTelemetry"), anyString()), times(1));
+            OpenTelemetry.setParentSpanContextProvider(provider);
+            assertNull(OpenTelemetry.getParentSpanContext());
+            logger.verify(
+                    () -> Logger.log(eq(Logger.Level.WARN), eq("GlideOpenTelemetry"), anyString()), times(2));
+            logger.verifyNoMoreInteractions();
+        }
+    }
+
+    @Test
+    @Timeout(10)
+    void concurrentFailuresLogOnlyOnce() throws Exception {
+        OpenTelemetry.setParentSpanContextProvider(() -> new GlideSpanContext("bad", SPAN_ID, 1, null));
+        AtomicInteger warnings = new AtomicInteger();
+        CompletableFuture<?>[] tasks =
+                IntStream.range(0, 8)
+                        .mapToObj(
+                                i ->
+                                        CompletableFuture.runAsync(
+                                                () -> {
+                                                    // Mockito static mocks are thread-local, so intercept the logger in each
+                                                    // worker.
+                                                    try (MockedStatic<Logger> logger = mockStatic(Logger.class)) {
+                                                        logger
+                                                                .when(
+                                                                        () ->
+                                                                                Logger.log(
+                                                                                        eq(Logger.Level.WARN),
+                                                                                        eq("GlideOpenTelemetry"),
+                                                                                        anyString()))
+                                                                .thenAnswer(
+                                                                        invocation -> {
+                                                                            warnings.incrementAndGet();
+                                                                            return null;
+                                                                        });
+                                                        for (int j = 0; j < 100; j++)
+                                                            assertNull(OpenTelemetry.getParentSpanContext());
+                                                    }
+                                                }))
+                        .toArray(CompletableFuture[]::new);
+        CompletableFuture.allOf(tasks).get(5, TimeUnit.SECONDS);
+        assertEquals(1, warnings.get());
     }
 
     @ParameterizedTest

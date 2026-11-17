@@ -9,7 +9,7 @@
 * Core, Python: Add support for Valkey 9.2 commands:
   * `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
 * Core: use atomics for telemetry instead of shared lock ([#7497](https://github.com/valkey-io/valkey-glide/pull/7497))
-* Java: Propagate application OpenTelemetry parent span context to command and batch spans ([#5061](https://github.com/valkey-io/valkey-glide/issues/5061))
+* Java: Add opt-in `parentSpanContextProvider` to propagate application OpenTelemetry parent span context to command and batch spans ([#5061](https://github.com/valkey-io/valkey-glide/issues/5061))
 
 ### Fixes
 

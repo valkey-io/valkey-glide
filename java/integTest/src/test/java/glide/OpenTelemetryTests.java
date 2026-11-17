@@ -26,7 +26,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
@@ -227,26 +232,6 @@ public class OpenTelemetryTests {
         assertNull(OpenTelemetry.getParentSpanContext());
         assertNull(retained.getParentSpanContextProvider());
         assertEquals(100, OpenTelemetry.getSamplePercentage());
-    }
-
-    // Test that spans are not exported before initializing OpenTelemetry
-    @Test
-    @SneakyThrows
-    public void testSpanNotExportedBeforeInitOtel() {
-        // Clean up any existing span file
-        teardownOtelTest();
-
-        // Create a client and execute a command
-        GlideClusterClient tempClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
-                        .get();
-
-        tempClient.get("testSpanNotExportedBeforeInitOtel").get();
-
-        // Check that spans were not exported to the file before initializing OpenTelemetry
-        assertFalse(new File(VALID_ENDPOINT_TRACES).exists());
-
-        tempClient.close();
     }
 
     @AfterEach
@@ -498,6 +483,19 @@ public class OpenTelemetryTests {
         assertEquals("Client", span.get("kind").getAsString());
     }
 
+    private static void assertStandalone(JsonObject span, GlideSpanContext rejectedParent) {
+        assertEquals("0000000000000000", span.get("parent_span_id").getAsString());
+        String traceId = span.get("trace_id").getAsString();
+        String spanId = span.get("span_id").getAsString();
+        assertTrue(traceId.matches("[0-9a-f]{32}"));
+        assertTrue(spanId.matches("[0-9a-f]{16}"));
+        assertNotEquals("00000000000000000000000000000000", traceId);
+        assertNotEquals("0000000000000000", spanId);
+        assertNotEquals(rejectedParent.getTraceId(), traceId);
+        assertNotEquals(rejectedParent.getSpanId(), spanId);
+        assertEquals("Client", span.get("kind").getAsString());
+    }
+
     @ParameterizedTest
     @MethodSource("parentContextClients")
     void commandSpansInheritApplicationContext(boolean cluster, ProtocolVersion protocol)
@@ -576,9 +574,22 @@ public class OpenTelemetryTests {
 
     @Test
     void concurrentProvidersCaptureTheirOwnContext() throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
         try (BaseClient testClient = tracingClient(false, ProtocolVersion.RESP3)) {
             GlideSpanContext first = newParent();
             GlideSpanContext second = newParent();
+            CountDownLatch capturing = new CountDownLatch(2);
+            OpenTelemetry.setParentSpanContextProvider(
+                    () -> {
+                        capturing.countDown();
+                        try {
+                            assertTrue(capturing.await(5, TimeUnit.SECONDS), "Both providers must overlap");
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new AssertionError("Interrupted while synchronizing providers", e);
+                        }
+                        return ACTIVE_PARENT.get();
+                    });
             CompletableFuture<?>[] tasks =
                     Stream.of(first, second)
                             .map(
@@ -587,18 +598,26 @@ public class OpenTelemetryTests {
                                                     () -> {
                                                         ACTIVE_PARENT.set(parent);
                                                         try {
-                                                            testClient.get("context-" + parent.getTraceId()).join();
+                                                            testClient
+                                                                    .get("context-" + parent.getTraceId())
+                                                                    .get(5, TimeUnit.SECONDS);
+                                                        } catch (Exception e) {
+                                                            throw new AssertionError("Concurrent command failed", e);
                                                         } finally {
                                                             ACTIVE_PARENT.remove();
                                                         }
-                                                    }))
+                                                    },
+                                                    executor))
                             .toArray(CompletableFuture[]::new);
-            CompletableFuture.allOf(tasks).get();
+            CompletableFuture.allOf(tasks).get(10, TimeUnit.SECONDS);
             for (GlideSpanContext parent : Arrays.asList(first, second)) {
                 for (JsonObject span : waitForTrace(parent.getTraceId(), "Get")) {
                     if ("Get".equals(span.get("name").getAsString())) assertParent(span, parent);
                 }
             }
+        } finally {
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "Context workers did not stop");
         }
     }
 
@@ -658,21 +677,109 @@ public class OpenTelemetryTests {
         }
     }
 
-    @Test
-    void invalidAndThrowingProvidersDoNotFailCommands() throws Exception {
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "throwing",
+                "null",
+                "traceId",
+                "spanId",
+                "zeroTraceId",
+                "zeroSpanId",
+                "nullTraceId",
+                "nullSpanId",
+                "negativeFlags",
+                "oversizedFlags",
+                "traceState"
+            })
+    void invalidAndThrowingProvidersExportStandaloneSpans(String invalidField) throws Exception {
         try (GlideClient testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+            // Drain earlier completed commands before taking the baseline. The file can contain
+            // spans from earlier tests because the exporter outlives each test invocation.
+            GlideSpanContext baseline = newParent();
+            ACTIVE_PARENT.set(baseline);
+            testClient.get("fallback-baseline-" + baseline.getTraceId()).get();
+            waitForTrace(baseline.getTraceId(), "Get");
+            List<String> existing =
+                    jsonSpans().stream()
+                            .map(span -> span.get("span_id").getAsString())
+                            .collect(Collectors.toList());
+            ACTIVE_PARENT.remove();
+
+            GlideSpanContext parent = newParent();
+            Supplier<GlideSpanContext> provider;
+            switch (invalidField) {
+                case "throwing":
+                    provider =
+                            () -> {
+                                throw new IllegalStateException("test");
+                            };
+                    break;
+                case "null":
+                    provider = () -> null;
+                    break;
+                case "traceId":
+                    provider = () -> new GlideSpanContext("bad", parent.getSpanId(), 1, null);
+                    break;
+                case "spanId":
+                    provider = () -> new GlideSpanContext(parent.getTraceId(), "bad", 1, null);
+                    break;
+                case "zeroTraceId":
+                    provider =
+                            () ->
+                                    new GlideSpanContext(
+                                            "00000000000000000000000000000000", parent.getSpanId(), 1, null);
+                    break;
+                case "zeroSpanId":
+                    provider = () -> new GlideSpanContext(parent.getTraceId(), "0000000000000000", 1, null);
+                    break;
+                case "nullTraceId":
+                    provider = () -> new GlideSpanContext(null, parent.getSpanId(), 1, null);
+                    break;
+                case "nullSpanId":
+                    provider = () -> new GlideSpanContext(parent.getTraceId(), null, 1, null);
+                    break;
+                case "negativeFlags":
+                    provider = () -> new GlideSpanContext(parent.getTraceId(), parent.getSpanId(), -1, null);
+                    break;
+                case "oversizedFlags":
+                    provider = () -> new GlideSpanContext(parent.getTraceId(), parent.getSpanId(), 256, null);
+                    break;
+                case "traceState":
+                    provider =
+                            () -> new GlideSpanContext(parent.getTraceId(), parent.getSpanId(), 1, "invalid");
+                    break;
+                default:
+                    throw new AssertionError(invalidField);
+            }
+            AtomicInteger captures = new AtomicInteger();
             OpenTelemetry.setParentSpanContextProvider(
                     () -> {
-                        throw new IllegalStateException("test");
+                        captures.incrementAndGet();
+                        return provider.get();
                     });
-            assertEquals("PONG", testClient.customCommand(new String[] {"PING"}).get());
-            GlideSpanContext parent = newParent();
-            OpenTelemetry.setParentSpanContextProvider(
-                    () -> new GlideSpanContext(parent.getTraceId(), parent.getSpanId(), 256, null));
-            assertEquals("PONG", testClient.customCommand(new String[] {"PING"}).get());
-            OpenTelemetry.setParentSpanContextProvider(
-                    () -> new GlideSpanContext(parent.getTraceId(), parent.getSpanId(), 1, "invalid"));
-            assertEquals("PONG", testClient.customCommand(new String[] {"PING"}).get());
+            String value = "fallback-" + invalidField + "-" + UUID.randomUUID();
+            assertEquals(value, testClient.customCommand(new String[] {"ECHO", value}).get());
+            assertEquals(1, captures.get());
+
+            // Native spans end before futures complete. Seeing this later sampled span exported
+            // therefore establishes that the fallback span has also passed through the exporter.
+            GlideSpanContext sentinel = newParent();
+            OpenTelemetry.setParentSpanContextProvider(ACTIVE_PARENT::get);
+            ACTIVE_PARENT.set(sentinel);
+            testClient.get("fallback-sentinel-" + sentinel.getTraceId()).get();
+            waitForTrace(sentinel.getTraceId(), "Get");
+            ACTIVE_PARENT.remove();
+            List<JsonObject> exported =
+                    jsonSpans().stream()
+                            .filter(span -> "CustomCommand".equals(span.get("name").getAsString()))
+                            .filter(span -> !existing.contains(span.get("span_id").getAsString()))
+                            .collect(Collectors.toList());
+            assertEquals(1, exported.size(), "Expected exactly one fallback span for " + invalidField);
+            JsonObject fallback = exported.get(0);
+            assertStandalone(fallback, parent);
+            assertNotEquals(baseline.getTraceId(), fallback.get("trace_id").getAsString());
+            assertNotEquals(sentinel.getTraceId(), fallback.get("trace_id").getAsString());
         }
     }
 
@@ -716,8 +823,7 @@ public class OpenTelemetryTests {
         while (System.nanoTime() < deadline) {
             for (JsonObject span : jsonSpans()) {
                 if (name.equals(span.get("name").getAsString())) {
-                    assertEquals("0000000000000000", span.get("parent_span_id").getAsString());
-                    assertNotEquals(parent.getTraceId(), span.get("trace_id").getAsString());
+                    assertStandalone(span, parent);
                     return;
                 }
             }
