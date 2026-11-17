@@ -1030,18 +1030,23 @@ impl StandaloneClient {
         Self::send_request(cmd, reconnecting_connection).await
     }
 
-    pub async fn send_command(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
-        let Some(cmd_bytes) = Routable::command(cmd) else {
-            return self.send_request_to_single_node(cmd, false).await;
-        };
-
-        // Block write commands in read-only mode
-        if self.inner.read_only && !is_readonly_cmd(cmd_bytes.as_slice()) {
+    /// Rejects `cmd` when this client is read-only and `cmd` can write.
+    fn reject_write_in_read_only(&self, cmd: &[u8]) -> RedisResult<()> {
+        if self.inner.read_only && !is_readonly_cmd(cmd) {
             return Err(RedisError::from((
                 redis::ErrorKind::ReadOnly,
                 "write commands are not allowed in read-only mode",
             )));
         }
+        Ok(())
+    }
+
+    pub async fn send_command(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
+        let Some(cmd_bytes) = Routable::command(cmd) else {
+            return self.send_request_to_single_node(cmd, false).await;
+        };
+
+        self.reject_write_in_read_only(cmd_bytes.as_slice())?;
 
         if RoutingInfo::is_all_nodes(cmd_bytes.as_slice()) {
             let response_policy = ResponsePolicy::for_command(cmd_bytes.as_slice());
@@ -1057,6 +1062,12 @@ impl StandaloneClient {
         offset: usize,
         count: usize,
     ) -> RedisResult<Vec<Value>> {
+        // Covers transactions too: their MULTI/EXEC are added when packing.
+        if self.inner.read_only {
+            for cmd in pipeline.cmd_iter() {
+                self.reject_write_in_read_only(&cmd.command().unwrap_or_default())?;
+            }
+        }
         let reconnecting_connection = self.get_primary_connection();
         let mut connection = reconnecting_connection.get_connection().await?;
         let result = connection
