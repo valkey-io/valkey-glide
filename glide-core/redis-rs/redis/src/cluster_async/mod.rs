@@ -3764,45 +3764,52 @@ where
                 log_warn_rate_limited!("moved_error", 10, format!(
                     "MOVED target address {} not found in current connection map, triggering refresh",
                     address));
-                // Trigger refresh task and get the single notifier
-                let mut notifiers = Self::trigger_refresh_connection_tasks(
+                // Start (or join) a refresh task for the address.
+                Self::trigger_refresh_connection_tasks(
                     core.clone(),
                     HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
                     RefreshConnectionType::AllConnections,
                     ExistingConnection::Ignore,
                 )
                 .await;
+                #[cfg(test)]
+                refresh_task_resolution_tests::park_before_only_address_wait_for_test(
+                    Arc::as_ptr(&core) as usize,
+                    &address,
+                )
+                .await;
 
-                // Extract the single notifier (if any)
-                if let Some(refresh_notifier) = notifiers.pop() {
-                    log_debug_lazy!(
-                        "cluster",
-                        format!(
-                            "get_connection: Waiting on the refresh notifier for address: {}",
-                            address
-                        )
-                    );
-                    // Wait for the refresh task to notify that it's done reconnecting (or transitioning).
-                    refresh_notifier.notified().await;
-                    log_debug_lazy!(
-                        "cluster",
-                        format!(
-                            "get_connection: After waiting on the refresh notifier for address: {}",
-                            address
-                        )
-                    );
-                } else {
-                    log_debug_lazy!(
-                        "cluster",
-                        format!(
-                            "get_connection: No notifier to wait on for address: {}",
-                            address
-                        )
-                    );
-                }
-
-                // Try fetching the connection after the notifier resolves
-                let conn_option = core.conn_lock.read().connection_for_address(&address);
+                // The refresh task wakes waiters with `Notify::notify_waiters`, which wakes only
+                // futures already registered and stores no permit. A notifier awaited after
+                // `trigger_refresh_connection_tasks` released the lock misses a refresh that
+                // ends in between, and the request waits until it times out. So, as for
+                // `ByAddress`, look the connection up and register for the notification under
+                // the same read guard, and keep waiting while a refresh (possibly a superseding
+                // one) is in progress.
+                let conn_option = loop {
+                    let refreshed = {
+                        let conn_lock = core.conn_lock.read();
+                        if let Some(found) = conn_lock.connection_for_address(&address) {
+                            break Some(found);
+                        }
+                        conn_lock
+                            .notifier_for_address(&address)
+                            .map(|notifier| notifier.notified_owned())
+                    };
+                    match refreshed {
+                        Some(refreshed) => {
+                            log_debug_lazy!(
+                                "cluster",
+                                format!(
+                                    "get_connection: Waiting on the refresh notifier for address: {}",
+                                    address
+                                )
+                            );
+                            refreshed.await;
+                        }
+                        None => break None,
+                    }
+                };
 
                 if let Some((address, conn)) = conn_option {
                     log_debug_lazy!(
@@ -5996,6 +6003,98 @@ pub(super) mod refresh_task_resolution_tests {
                 gate.old_tail_finished.notify_one();
             }
         }
+    }
+
+    static ONLY_ADDRESS_GATE: Mutex<Option<Arc<OnlyAddressGate>>> = Mutex::new(None);
+
+    struct OnlyAddressGate {
+        core_id: usize,
+        address: String,
+        entered: Notify,
+        release: Semaphore,
+    }
+
+    /// Arms the `OnlyAddress` gate for one core and address; dropping it disarms the gate
+    /// and releases a parked lookup.
+    struct OnlyAddressGateRegistration(Arc<OnlyAddressGate>);
+
+    impl OnlyAddressGateRegistration {
+        fn arm(core_id: usize, address: &str) -> Self {
+            let gate = Arc::new(OnlyAddressGate {
+                core_id,
+                address: address.to_owned(),
+                entered: Notify::new(),
+                release: Semaphore::new(0),
+            });
+            *ONLY_ADDRESS_GATE.lock().unwrap_or_else(|e| e.into_inner()) = Some(gate.clone());
+            Self(gate)
+        }
+    }
+
+    impl Drop for OnlyAddressGateRegistration {
+        fn drop(&mut self) {
+            let mut current = ONLY_ADDRESS_GATE.lock().unwrap_or_else(|e| e.into_inner());
+            if current
+                .as_ref()
+                .is_some_and(|gate| Arc::ptr_eq(gate, &self.0))
+            {
+                *current = None;
+            }
+            self.0.release.close();
+        }
+    }
+
+    /// Parks `get_connection`'s `OnlyAddress` branch after it triggered the refresh and
+    /// before it waits for it, when a test armed the gate for this core and address.
+    pub(super) async fn park_before_only_address_wait_for_test(core_id: usize, address: &str) {
+        let gate = ONLY_ADDRESS_GATE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let Some(gate) = gate else { return };
+        if gate.core_id != core_id || gate.address != address {
+            return;
+        }
+        gate.entered.notify_one();
+        // An error means the registration was dropped, which also releases the lookup.
+        let _ = gate.release.acquire().await;
+    }
+
+    /// A MOVED to an address missing from the map joins an in-progress refresh. If that
+    /// refresh completes (installs the connection and drops its state, which calls
+    /// `notify_waiters`) after the request triggered it but before it waits for it, the
+    /// request must still find the connection rather than wait forever.
+    #[tokio::test]
+    async fn moved_to_unknown_address_does_not_miss_a_refresh_that_completes_before_the_wait() {
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6382";
+        insert_in_progress_refresh(&core, address, false);
+        let gate = OnlyAddressGateRegistration::arm(Arc::as_ptr(&core) as usize, address);
+        let mut lookup = tokio::spawn(ClusterConnInner::get_connection(
+            InternalSingleNodeRouting::Redirect {
+                redirect: Redirect::Moved(address.to_owned()),
+                previous_routing: Box::new(InternalSingleNodeRouting::Random),
+            },
+            core.clone(),
+            None,
+        ));
+        tokio::time::timeout(Duration::from_secs(1), gate.0.entered.notified())
+            .await
+            .expect("the lookup reaches the OnlyAddress wait");
+        complete_refresh(&core, address, 6382);
+        gate.0.release.add_permits(1);
+        let result = tokio::time::timeout(Duration::from_secs(2), &mut lookup).await;
+        drop(gate);
+        if result.is_err() {
+            lookup.abort();
+        }
+        let (found_address, connection) = result
+            .expect("HANG: lookup missed the refresh's notification")
+            .expect("lookup task did not panic")
+            .expect("connection found after the refresh");
+        assert_eq!(found_address, address);
+        assert_eq!(connection.port, 6382);
     }
 
     async fn gated_test_guard() -> tokio::sync::MutexGuard<'static, ()> {

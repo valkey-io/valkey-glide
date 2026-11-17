@@ -9,6 +9,7 @@
 * Go: strip LLVM bitcode from the prebuilt `libglide_ffi.a` so Go 1.26.11+ / 1.27.4+ no longer reject it with `disallowed LTO section` ([#7739](https://github.com/valkey-io/valkey-glide/pull/7739))
 * Rust: `telemetry::init` rejects a configuration with no exporter ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Rust: `telemetry::init` runs the HTTP and gRPC exporters on GLIDE's runtime ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
+* Core: do not miss the refresh a redirect to an unknown node waits for ([#7779](https://github.com/valkey-io/valkey-glide/pull/7779))
 
 ### Breaking Changes
 
