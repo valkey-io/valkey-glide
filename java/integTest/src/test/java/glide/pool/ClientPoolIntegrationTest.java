@@ -428,7 +428,7 @@ public class ClientPoolIntegrationTest {
         // After acquire: idle decreases, active increases.
         pool.release(clientId);
 
-        // Poll until async release completes (DISCARD + SELECT reset)
+        // Poll until async release completes
         waitForPoolReady(pool, 1, 5000);
 
         assertTrue(pool.getIdleCount() >= 1, "After release, idle should be >= 1");
