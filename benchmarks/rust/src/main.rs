@@ -96,7 +96,7 @@ async fn perform_benchmark(args: Args) {
         println!(
             "
         Starting data size: {} concurrency: {concurrent_tasks_count} client count: {} is_cluster: {} {}",
-            args.data_size, args.client_count, args.cluster_mode_enabled, chrono::offset::Utc::now()
+            args.data_size, args.client_count, args.cluster_mode_enabled, time::OffsetDateTime::now_utc()
         );
         let counter = Arc::new(AtomicUsize::new(0));
         let number_of_operations = if args.minimal {
