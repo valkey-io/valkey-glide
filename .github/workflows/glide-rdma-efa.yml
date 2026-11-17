@@ -42,7 +42,11 @@ jobs:
 
             - name: Install Rust (stable)
               # rustup writes ~/.cargo; the Build step prepends /root/.cargo/bin to PATH.
-              run: curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+              # Download the installer, then run it (not curl | sh) so a hijacked
+              # URL cannot pipe arbitrary code straight into a shell.
+              run: |
+                  curl -fsSLo /tmp/rustup-init.sh https://sh.rustup.rs
+                  sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain stable
 
             - name: Install protoc 3.20.3
               run: |
@@ -184,11 +188,15 @@ jobs:
               working-directory: glide-rdma/ci/efa
               env:
                   RDMA_STACK: rdma-ci-${{ github.run_id }}
+                  # Passed through env, not interpolated into the script, so no
+                  # github-context value is ever parsed as shell.
+                  KEEP_HOSTS: ${{ inputs.keep_hosts }}
+                  JOB_STATUS: ${{ job.status }}
               run: |
                   # keep_hosts defaults to false; down runs unless the operator
                   # dispatched with keep_hosts=true and the job failed.
-                  if [ "${{ inputs.keep_hosts }}" = "true" ] && [ "${{ job.status }}" != "success" ]; then
-                    echo "keep_hosts=true and job failed; leaving stack rdma-ci-${{ github.run_id }} up for diagnosis"
+                  if [ "$KEEP_HOSTS" = "true" ] && [ "$JOB_STATUS" != "success" ]; then
+                    echo "keep_hosts=true and job failed; leaving stack $RDMA_STACK up for diagnosis"
                   else
                     bin/rdma-pair.sh down
                   fi
