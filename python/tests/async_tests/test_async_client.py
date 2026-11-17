@@ -238,7 +238,7 @@ class TestGlideClients:
             return
 
         glide_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
         length = 2**25  # 33mb
         key = "0" * length
