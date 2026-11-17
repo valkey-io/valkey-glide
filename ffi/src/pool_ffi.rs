@@ -90,12 +90,7 @@ static POOL_ADAPTER_MAP: std::sync::OnceLock<dashmap::DashMap<usize, (u64, u64)>
 
 fn get_pool_runtime() -> &'static tokio::runtime::Runtime {
     POOL_RUNTIME.get_or_init(|| {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .worker_threads(2)
-            .thread_name("glide-pool")
-            .build()
-            .expect("Failed to create pool runtime")
+        worker_runtime("glide-pool", Some(2)).expect("Failed to create pool runtime")
     })
 }
 
@@ -153,7 +148,8 @@ fn create_pool_client(
         None, // no address resolver (uses the one in ConnectionRequest if any)
         None, // custom credential providers are rejected by glide_pool_create
         client_id,
-    )?;
+    )
+    .map_err(|err| err.message)?;
 
     // Extract the Client from the adapter for pool bookkeeping
     let adapter = unsafe {

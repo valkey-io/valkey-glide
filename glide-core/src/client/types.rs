@@ -362,12 +362,17 @@ fn convert_rdma(config: Option<&protobuf::RdmaConfig>) -> RdmaSetting {
     };
     let fabric = match provider {
         protobuf::rdma_config::Provider::EfaDirect(_) => FabricConfig::new(Provider::EfaDirect),
+        #[cfg(feature = "rdma-tcp-dev")]
         protobuf::rdma_config::Provider::Tcp(tcp) => {
             let fabric = FabricConfig::new(Provider::Tcp);
             match tcp.bind.as_ref() {
                 Some(bind) => fabric.with_bind(bind.to_string()),
                 None => fabric,
             }
+        }
+        #[cfg(not(feature = "rdma-tcp-dev"))]
+        protobuf::rdma_config::Provider::Tcp(_) => {
+            return RdmaSetting::Rejected(RdmaUnavailable::TcpProviderNotBuilt);
         }
     };
     let fabric = match config.interface.as_ref() {
@@ -842,6 +847,49 @@ mod tests {
             let config = request.compression_config.unwrap();
             // Should fall back to Zstd for unknown backends
             assert_eq!(config.backend, CompressionBackendType::Zstd);
+        }
+
+        #[cfg(feature = "rdma")]
+        fn request_with_tcp_rdma() -> ConnectionRequest {
+            let mut proto_request = protobuf::ConnectionRequest::new();
+            proto_request.addresses.push(protobuf::NodeAddress {
+                host: "localhost".into(),
+                port: 6379,
+                ..Default::default()
+            });
+            let mut rdma = protobuf::RdmaConfig::new();
+            rdma.set_tcp(protobuf::TcpProvider {
+                bind: Some("127.0.0.1".into()),
+                ..Default::default()
+            });
+            proto_request.rdma_config = ::protobuf::MessageField::some(rdma);
+            proto_request.into()
+        }
+
+        /// A release build carries only `efa-direct`, so a `tcp` request must name
+        /// the development feature that honors it rather than open an endpoint.
+        #[cfg(all(feature = "rdma", not(feature = "rdma-tcp-dev")))]
+        #[test]
+        fn a_tcp_provider_is_rejected_without_the_development_feature() {
+            use crate::rdma::{RdmaSetting, RdmaUnavailable};
+
+            let RdmaSetting::Rejected(reason) = request_with_tcp_rdma().rdma else {
+                panic!("a tcp request should be rejected without the development feature");
+            };
+            assert_eq!(reason, RdmaUnavailable::TcpProviderNotBuilt);
+            assert!(reason.to_string().contains("rdma-tcp-dev"));
+        }
+
+        #[cfg(feature = "rdma-tcp-dev")]
+        #[test]
+        fn a_tcp_provider_is_configured_with_the_development_feature() {
+            use crate::rdma::{Provider, RdmaSetting};
+
+            let RdmaSetting::Configured(fabric) = request_with_tcp_rdma().rdma else {
+                panic!("a tcp request should configure a fabric in a tcp-dev build");
+            };
+            assert_eq!(fabric.provider(), Provider::Tcp);
+            assert_eq!(fabric.bind(), Some("127.0.0.1"));
         }
     }
 }

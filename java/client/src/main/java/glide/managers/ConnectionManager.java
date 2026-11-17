@@ -730,23 +730,24 @@ public class ConnectionManager {
     }
 
     /**
-     * Rejects an AZ-affinity read strategy that has no {@code clientAZ} to target.
+     * Rejects a strategy whose {@link glide.api.models.configuration.ReadFrom#requiresClientAz()} is
+     * true, today only {@code AZ_AFFINITY_ALL_NODES}, when it has no {@code clientAZ}.
      *
-     * <p>Without this check the core silently downgrades the strategy to {@code PreferReplica}, so
-     * reads would land on arbitrary nodes while the configuration suggested otherwise.
+     * <p>{@code AZ_AFFINITY_ALL_NODES} has thrown since it was added, so no client depends on it
+     * working without an AZ. {@code AZ_AFFINITY} and {@code AZ_AFFINITY_REPLICAS_AND_PRIMARY} are
+     * accepted without one: the core logs a warning and downgrades them to {@code PreferReplica}, as
+     * in 2.5.2 and earlier, and rejecting them would break existing clients.
      *
-     * <p>Called synchronously from {@code BaseClient.createClient}, alongside the PubSub/RESP2 check,
-     * and from {@code ClientPool.create} ahead of its connectivity probe, so callers on either path
-     * see a direct throw rather than an {@code ExecutionException} or a probe failure.
+     * <p>Called synchronously from {@code BaseClient.createClient} and from {@code ClientPool.create}
+     * ahead of its connectivity probe, so callers see a direct throw rather than an {@code
+     * ExecutionException} or a probe failure.
      *
-     * @throws ConfigurationError if an AZ-affinity strategy is selected without a {@code clientAZ}.
+     * @throws ConfigurationError if {@code AZ_AFFINITY_ALL_NODES} is selected without a {@code
+     *     clientAZ}.
      */
     public static void validateClientAz(BaseClientConfiguration configuration) {
         glide.api.models.configuration.ReadFrom readFrom = configuration.getReadFrom();
-        if (!readFrom.requiresClientAz()) {
-            return;
-        }
-        if (resolveClientAz(configuration) == null) {
+        if (readFrom.requiresClientAz() && resolveClientAz(configuration) == null) {
             throw new ConfigurationError("clientAZ must be set when readFrom is set to " + readFrom);
         }
     }
@@ -756,10 +757,9 @@ public class ConnectionManager {
      *
      * <p>The core compares availability zones with exact equality and never trims ({@code
      * standalone_client.rs}, {@code connections_container.rs}), so a padded value such as {@code "
-     * us-east-1a "} — easily produced by {@code getenv} or a file read — would satisfy validation,
-     * engage the strategy, match no node, and silently spread reads cluster-wide. No real
-     * availability-zone name carries surrounding whitespace, so trimming cannot break a value that
-     * works today.
+     * us-east-1a "} — easily produced by {@code getenv} or a file read — would engage the strategy,
+     * match no node, and silently spread reads cluster-wide. No real availability-zone name carries
+     * surrounding whitespace, so trimming cannot break a value that works today.
      *
      * <p>The shared request builder normalizes through here so no caller can forward a raw value.
      */

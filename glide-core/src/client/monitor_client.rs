@@ -99,12 +99,15 @@ pub struct MonitorClient {
 }
 
 impl MonitorClient {
-    pub async fn new(
+    /// Checks the request before any connection is attempted: library name and version, and the
+    /// Unix domain socket address. [`MonitorClient::new`] runs this first. Errors are
+    /// [`ErrorKind::InvalidClientConfig`]; callers that need to tell request validation apart from
+    /// connection setup (which can also fail with that kind, e.g. TLS) can call this on its own.
+    pub fn validate(
         address: &NodeAddress,
-        redis_connection_info: RedisConnectionInfo,
+        redis_connection_info: &RedisConnectionInfo,
         tls_mode: TlsMode,
-        on_line: MonitorLineCallback,
-    ) -> RedisResult<Self> {
+    ) -> RedisResult<()> {
         // Validate library name and version.
         if let Some(lib_name) = redis_connection_info.lib_name.as_deref() {
             validate_effective_lib_name(lib_name).map_err(|message| {
@@ -132,6 +135,16 @@ impl MonitorClient {
                 message,
             ))
         })?;
+        Ok(())
+    }
+
+    pub async fn new(
+        address: &NodeAddress,
+        redis_connection_info: RedisConnectionInfo,
+        tls_mode: TlsMode,
+        on_line: MonitorLineCallback,
+    ) -> RedisResult<Self> {
+        Self::validate(address, &redis_connection_info, tls_mode)?;
 
         // MonitorClient bypasses `get_connection_info`, so trim the IPv6 host here too.
         let host = crate::scope::strip_host_brackets(&address.host).to_string();
@@ -295,6 +308,30 @@ mod tests {
 
         assert_eq!(error.kind(), ErrorKind::InvalidClientConfig);
         assert!(error.to_string().contains("library version"));
+    }
+
+    #[test]
+    fn test_validate_accepts_valid_request_and_rejects_unix_socket_with_tls() {
+        let tcp = NodeAddress {
+            host: "127.0.0.1".to_string(),
+            port: 1,
+            unix_socket_path: None,
+        };
+        let redis_connection_info = RedisConnectionInfo {
+            lib_name: Some("GlideTest".to_string()),
+            ..Default::default()
+        };
+        MonitorClient::validate(&tcp, &redis_connection_info, TlsMode::SecureTls)
+            .expect("a valid TCP request over TLS should pass validation");
+
+        let unix = NodeAddress {
+            unix_socket_path: Some("/tmp/glide-monitor.sock".into()),
+            ..tcp
+        };
+        let error = MonitorClient::validate(&unix, &redis_connection_info, TlsMode::SecureTls)
+            .expect_err("TLS over a Unix domain socket should fail validation");
+        assert_eq!(error.kind(), ErrorKind::InvalidClientConfig);
+        assert!(error.to_string().contains("Unix domain socket"), "{error}");
     }
 
     #[test]
