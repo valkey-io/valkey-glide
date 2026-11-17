@@ -197,6 +197,24 @@ GLIDE returns `(member, score)` pairs for both RESP2 and RESP3.
 `Option<[String; 2]>`, matching `lmpop`. Its reply is a key and a list of
 elements, which `[String; 2]` cannot decode.
 
+### Deprecated sorted set commands send `ZRANGE`
+
+The methods `zrangebyscore`, `zrangebyscore_withscores`, `zrangebyscore_limit`,
+`zrangebyscore_limit_withscores`, `zrevrange`, `zrevrange_withscores`,
+`zrevrangebyscore`, `zrevrangebyscore_withscores`, `zrevrangebyscore_limit`,
+and `zrevrangebyscore_limit_withscores` send the equivalent `ZRANGE` command using
+`BYSCORE`, `REV`, and `LIMIT` under the hood (`zrevrangebylex*` continues to send
+`ZREVRANGEBYLEX`).
+
+This ensures replies with `WITHSCORES` are normalized to a map of member to score
+identically across both RESP2 and RESP3. Callers using the generic traits
+`AsyncCommands`/`Commands` who previously decoded a flat `Vec<String>` on RESP2
+will now fail to decode that flat shape; they must decode into `Vec<(String, f64)>`
+or `HashMap<String, f64>`.
+
+Note that servers with strict command-level ACL rules or monitoring/slowlog
+tooling will see `ZRANGE` rather than the deprecated command names.
+
 ### `hset_multiple` differs
 
 `hset_multiple` sends multi-field `HSET` and returns the number of fields added,
