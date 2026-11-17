@@ -399,6 +399,18 @@ func (client *baseClient) executeCommandWithRoute(
 	args []string,
 	route config.Route,
 ) (*C.struct_CommandResponse, error) {
+	return client.executeCommandWithOptions(ctx, requestType, args, route, false)
+}
+
+// executeCommandWithOptions is executeCommandWithRoute, plus allowPartialResults: when true, a command sent to several
+// nodes returns each node's reply or error instead of failing on the first node error.
+func (client *baseClient) executeCommandWithOptions(
+	ctx context.Context,
+	requestType C.RequestType,
+	args []string,
+	route config.Route,
+	allowPartialResults bool,
+) (*C.struct_CommandResponse, error) {
 	// Check if context is already done
 	select {
 	case <-ctx.Done():
@@ -446,17 +458,31 @@ func (client *baseClient) executeCommandWithRoute(
 		return nil, NewClosingError("executeCommand failed: the client is closed")
 	}
 	requestID := client.beginRequest(resultChannel)
-	C.command(
-		client.coreClient,
-		C.uintptr_t(requestID),
-		uint32(requestType),
-		C.size_t(len(args)),
-		cArgsPtr,
-		argLengthsPtr,
-		routeBytesPtr,
-		routeBytesCount,
-		C.uint64_t(spanPtr),
-	)
+	if allowPartialResults {
+		C.command_with_partial_results(
+			client.coreClient,
+			C.uintptr_t(requestID),
+			uint32(requestType),
+			C.size_t(len(args)),
+			cArgsPtr,
+			argLengthsPtr,
+			routeBytesPtr,
+			routeBytesCount,
+			C.uint64_t(spanPtr),
+		)
+	} else {
+		C.command(
+			client.coreClient,
+			C.uintptr_t(requestID),
+			uint32(requestType),
+			C.size_t(len(args)),
+			cArgsPtr,
+			argLengthsPtr,
+			routeBytesPtr,
+			routeBytesCount,
+			C.uint64_t(spanPtr),
+		)
+	}
 	client.mu.Unlock()
 	payload, err := client.waitForResponse(ctx, requestID, resultChannel)
 	if err != nil {
