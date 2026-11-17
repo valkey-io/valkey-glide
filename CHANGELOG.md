@@ -5,6 +5,7 @@
 ### Features
 
 * Core: opt-in per-node results for multi-node commands ([#7751](https://github.com/valkey-io/valkey-glide/pull/7751))
+* Node: allowPartialResults option for cluster info() ([#7753](https://github.com/valkey-io/valkey-glide/pull/7753))
 
 ### Fixes
 
