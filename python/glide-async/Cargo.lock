@@ -1062,7 +1062,7 @@ dependencies = [
 
 [[package]]
 name = "glide-logger"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "once_cell",
  "tracing",
@@ -1072,7 +1072,7 @@ dependencies = [
 
 [[package]]
 name = "glide-telemetry"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "glide-logger",
  "lazy_static",
