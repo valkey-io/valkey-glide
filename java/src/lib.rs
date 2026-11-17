@@ -1145,12 +1145,32 @@ fn new_span_with_trace_context(
         .filter(|id| valid_id(id, 16))
         .ok_or("Invalid parent span ID")?;
     let flags = u8::try_from(trace_flags).map_err(|_| "Invalid parent trace flags")?;
+    // W3C permits SP/HTAB around members (and empty members), but the SDK parser does not.
+    let normalized_trace_state = trace_state.map(|state| {
+        if state
+            .split(',')
+            .all(|member| !member.is_empty() && member.trim_matches([' ', '\t']) == member)
+        {
+            std::borrow::Cow::Borrowed(state)
+        } else {
+            std::borrow::Cow::Owned(
+                state
+                    .split(',')
+                    .map(|member| member.trim_matches([' ', '\t']))
+                    .filter(|member| !member.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(","),
+            )
+        }
+    });
     glide_core::GlideSpan::new_with_remote_context(
         name,
         trace_id,
         span_id,
         flags,
-        trace_state.filter(|state| !state.is_empty()),
+        normalized_trace_state
+            .as_deref()
+            .filter(|state| !state.is_empty()),
     )
     .map_err(|_| "Invalid parent tracestate".to_string())
 }
@@ -3152,27 +3172,41 @@ mod trace_context_tests {
         global::set_tracer_provider(provider.clone());
 
         const NAME: &str = "java-native-remote-parent-preservation";
-        const STATE: &str = "vendor=value,other=state";
-        let span = new_span_with_trace_context(NAME, Some(TRACE_ID), Some(SPAN_ID), 1, Some(STATE))
-            .unwrap();
-        span.end();
+        let cases = [
+            ("vendor=value,other=state", "vendor=value,other=state"),
+            ("vendor=value, other=ok", "vendor=value,other=ok"),
+            (" \tvendor=value \t,\t other=ok\t ", "vendor=value,other=ok"),
+            (
+                "vendor=two words, other= leading value",
+                "vendor=two words,other= leading value",
+            ),
+            (", \t,vendor=value,, other=ok,", "vendor=value,other=ok"),
+            (" \t", ""),
+        ];
+        for (input, _) in &cases {
+            let span =
+                new_span_with_trace_context(NAME, Some(TRACE_ID), Some(SPAN_ID), 1, Some(input))
+                    .unwrap();
+            span.end();
+        }
         provider.force_flush().unwrap();
 
         // Ignore unrelated spans if other native tests create spans in parallel.
         let spans = exporter.get_finished_spans().unwrap();
         let spans: Vec<_> = spans.iter().filter(|span| span.name == NAME).collect();
-        assert_eq!(spans.len(), 1);
-        let exported = spans[0];
-        assert_eq!(
-            exported.span_context.trace_id(),
-            TraceId::from_hex(TRACE_ID).unwrap()
-        );
-        assert_eq!(exported.parent_span_id, SpanId::from_hex(SPAN_ID).unwrap());
-        assert!(exported.parent_span_is_remote);
-        assert!(exported.span_context.is_valid());
-        assert_ne!(exported.span_context.span_id(), exported.parent_span_id);
-        assert_eq!(exported.span_context.trace_flags(), TraceFlags::SAMPLED);
-        assert_eq!(exported.span_context.trace_state().header(), STATE);
+        assert_eq!(spans.len(), cases.len());
+        for (exported, (_, expected_state)) in spans.iter().zip(cases) {
+            assert_eq!(
+                exported.span_context.trace_id(),
+                TraceId::from_hex(TRACE_ID).unwrap()
+            );
+            assert_eq!(exported.parent_span_id, SpanId::from_hex(SPAN_ID).unwrap());
+            assert!(exported.parent_span_is_remote);
+            assert!(exported.span_context.is_valid());
+            assert_ne!(exported.span_context.span_id(), exported.parent_span_id);
+            assert_eq!(exported.span_context.trace_flags(), TraceFlags::SAMPLED);
+            assert_eq!(exported.span_context.trace_state().header(), expected_state);
+        }
     }
 
     #[test]
@@ -3227,15 +3261,15 @@ mod trace_context_tests {
                     .is_err()
             );
         }
-        assert!(
-            new_span_with_trace_context(
-                "Get",
-                Some(TRACE_ID),
-                Some(SPAN_ID),
-                1,
-                Some("missing-equals"),
-            )
-            .is_err()
-        );
+        for state in [
+            "missing-equals",
+            "vendor=value, bad key=ok",
+            "vendor=value,\u{00a0}other=ok",
+        ] {
+            assert!(
+                new_span_with_trace_context("Get", Some(TRACE_ID), Some(SPAN_ID), 1, Some(state),)
+                    .is_err()
+            );
+        }
     }
 }

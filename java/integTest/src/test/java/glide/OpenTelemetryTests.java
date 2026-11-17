@@ -497,6 +497,26 @@ public class OpenTelemetryTests {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"vendor=value, other=ok", " \tvendor=value \t,\t other=ok\t "})
+    void tracestateWhitespacePreservesApplicationParent(String traceState) throws Exception {
+        GlideSpanContext ids = newParent();
+        GlideSpanContext parent =
+                new GlideSpanContext(ids.getTraceId(), ids.getSpanId(), 1, traceState);
+        try (BaseClient testClient = tracingClient(false, ProtocolVersion.RESP3)) {
+            ACTIVE_PARENT.set(parent);
+            testClient.get("tracestate-whitespace-" + parent.getTraceId()).get();
+            ACTIVE_PARENT.remove();
+            List<JsonObject> spans = waitForTrace(parent.getTraceId(), "Get");
+            JsonObject command =
+                    spans.stream()
+                            .filter(span -> "Get".equals(span.get("name").getAsString()))
+                            .findFirst()
+                            .get();
+            assertParent(command, parent);
+        }
+    }
+
+    @ParameterizedTest
     @MethodSource("parentContextClients")
     void commandSpansInheritApplicationContext(boolean cluster, ProtocolVersion protocol)
             throws Exception {
