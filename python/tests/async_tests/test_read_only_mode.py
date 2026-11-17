@@ -276,10 +276,12 @@ class TestReadOnlyMode:
             request_timeout=2000,
             read_only=True,
         )
-        checker = await create_client(request, cluster_mode, protocol=protocol)
+        assert type(client) is GlideClient
+        checker = None
         key = get_random_string(10)
 
         try:
+            checker = await create_client(request, cluster_mode, protocol=protocol)
             batch = Batch(is_atomic=is_atomic).get(key).set(key, "value")
             with pytest.raises(RequestError) as exc_info:
                 await client.exec(batch, raise_on_error=True)
@@ -295,4 +297,5 @@ class TestReadOnlyMode:
             ) == [None]
         finally:
             await client.close()
-            await checker.close()
+            if checker is not None:
+                await checker.close()

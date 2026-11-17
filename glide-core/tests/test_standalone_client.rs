@@ -1727,12 +1727,15 @@ mod standalone_client_tests {
         client: &mut GlideClient,
         pipe: &redis::Pipeline,
         atomic: bool,
+        raise_on_error: bool,
     ) -> redis::RedisResult<Value> {
         if atomic {
-            client.send_transaction(pipe, None, None, true).await
+            client
+                .send_transaction(pipe, None, None, raise_on_error)
+                .await
         } else {
             client
-                .send_pipeline(pipe, None, true, None, Default::default())
+                .send_pipeline(pipe, None, raise_on_error, None, Default::default())
                 .await
         }
     }
@@ -1751,6 +1754,7 @@ mod standalone_client_tests {
     fn test_read_only_mode_rejects_batch_with_write(
         #[values(false, true)] atomic: bool,
         #[values(0, 1, 2)] write_index: usize,
+        #[values(false, true)] raise_on_error: bool,
     ) {
         block_on_all(async move {
             let (mut client, mut checker) = batch_clients(true).await;
@@ -1761,13 +1765,13 @@ mod standalone_client_tests {
             }
             for i in 0..3 {
                 if i == write_index {
-                    pipe.cmd("SET").arg(&key).arg("value");
+                    pipe.cmd("set").arg(&key).arg("value");
                 } else {
                     pipe.cmd("GET").arg(&key);
                 }
             }
 
-            let err = send_batch(&mut client, &pipe, atomic)
+            let err = send_batch(&mut client, &pipe, atomic, raise_on_error)
                 .await
                 .expect_err("a batch with a write should be rejected in read-only mode");
             let single_err = client
@@ -1800,7 +1804,7 @@ mod standalone_client_tests {
             }
             pipe.cmd("GET").arg(&key).cmd("EXISTS").arg(&key);
 
-            let reply = send_batch(&mut client, &pipe, atomic).await.unwrap();
+            let reply = send_batch(&mut client, &pipe, atomic, true).await.unwrap();
             assert_eq!(
                 reply,
                 Value::Array(vec![
@@ -1824,7 +1828,7 @@ mod standalone_client_tests {
             }
             pipe.cmd("GET").arg(&key).cmd("SET").arg(&key).arg("value");
 
-            send_batch(&mut client, &pipe, atomic).await.unwrap();
+            send_batch(&mut client, &pipe, atomic, true).await.unwrap();
             assert!(key_exists(&mut checker, &key).await);
         });
     }
