@@ -21,9 +21,8 @@ use tokio::sync::oneshot;
 /// Returns the current number of pending (registered but not yet fired/cancelled)
 /// entries on the global watchdog.
 ///
-/// The count belongs to the instance, so a watchdog that is no longer the
-/// global (one that lost the race to become it, or one a forked child
-/// replaced) cannot overwrite it.
+/// Each instance keeps its own count, so only the current global's entries
+/// are reported.
 pub fn pending_count() -> usize {
     let watchdog = global_slot().load(Ordering::Acquire);
     if watchdog.is_null() {
@@ -962,7 +961,8 @@ mod tests {
         let old = TimeoutWatchdog::global();
         global_slot().swap(ptr::null_mut(), Ordering::AcqRel);
         let new = TimeoutWatchdog::global();
-        let timeout = Duration::from_secs(10);
+        // Must outlast every wait below.
+        let timeout = Duration::from_secs(60);
         let rx1 = new.register(timeout, Instant::now());
         let rx2 = new.register(timeout, Instant::now());
         wait_for_pending_count(2).await;
