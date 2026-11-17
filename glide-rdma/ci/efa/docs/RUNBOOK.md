@@ -34,7 +34,6 @@ Phase 0 is the stack. Everything after it is `bin/run-on.sh <role> host/<script>
 | 6 | server | `21-server-start.sh` | The module loads with `fabric-provider EfaDirect` and answers PING on the private IP |
 | 7 | client | `30-client-setup.sh` | The wheel reports `rdma_usable() == True`; a `BLOB.TCP_SET`/`TCP_GET` round trip works over TCP |
 | 8 | client | `31-client-rdma-tests.sh` | valkey-glide's `TestRdmaTransfers` pass over `efa-direct` |
-| 9 | client | `32-client-large-object.sh` | A 256 MiB object round-trips intact (SHA-256), with set/get timing for a throughput baseline |
 
 Stop between sessions with `bin/rdma-pair.sh stop`; the 300 GB volumes keep the
 builds. `down` deletes everything.
@@ -111,45 +110,6 @@ What the live hosts corrected in the scripts:
 - `send-command` reports `Success` for a failed script when its output goes
   through `tee`; the wrapper sets `pipefail`.
 
-## Large-object baseline (2026-11-06, us-east-1b)
-
-Step 9 added after the first pass showed every `TestRdmaTransfers` transfer
-is 4 KiB. Each run is a distinct random file in its own pair of registered
-regions, verified in memory after its get and by SHA-256 of the files after
-all runs. `valkey-glide-sync 2.6.0` against the module at e266648:
-
-| Object (MiB) | Runs | Leg | Median (s) | Throughput (MiB/s) | Spread (s) |
-|---|---|---|---|---|---|
-| 256 | 3 | set (client to server) | 0.022 | 11 760 | 0.021 to 0.024 |
-| 256 | 3 | get (server to client) | 0.018 | 14 220 | 0.018 to 0.018 |
-| 512 | 10 | set | 0.043 | 11 820 | 0.043 to 0.045 |
-| 512 | 10 | get | 0.036 | 14 110 | 0.036 to 0.036 |
-| 512 | 25 (batches of 10) | set | 0.044 | 11 760 | 0.043 to 0.045 |
-| 512 | 25 (batches of 10) | get | 0.036 | 14 050 | 0.036 to 0.037 |
-
-Throughput is flat across sizes and run counts and the spread is a few
-percent, so the numbers are a usable baseline. The batched layout (one region
-per batch, two windows per run) measures the same as two regions per run,
-which is expected: what the fabric sees is the pinned bytes, not the region
-count. The client's EFA hardware counters
-(`/sys/class/infiniband/*/ports/1/hw_counters`) moved exactly the object size
-out and in per run, so the data crossed the fabric. The c8gn.16xlarge's one
-EFA is rated 200 Gbit/s, about 23 800 MiB/s, so the get leg is at roughly
-60 % of line rate and the set leg at 50 %; the set includes the server's
-CRC-32c over the bytes it reads.
-
-Outside the timed legs, reported separately: registration (0.16 s for one
-10 GiB region, against 2.06 s for the same bytes as twenty regions), reading
-the files into the windows (0.26 s for 5 GiB), the in-memory compare (0.028 s
-per 512 MiB with `memcmp`; a `memoryview` equality walks the bytes in Python
-and takes 1.5 s) and writing the read-backs (0.42 s). Generating 5 GiB of
-random bytes takes about 11.5 s and hashing 10 GiB of files about 8.5 s, so a
-batch of ten 512 MiB runs is about 25 s wall clock for 0.8 s of RDMA. A file mapping cannot be registered directly, since
-Linux refuses to pin file-backed pages on ordinary filesystems and EFA
-reports it as `fi_mr_reg: Bad address`; the files go through anonymous
-memory. 512 MiB is the module's default `max-object-size`, and 1 GiB its
-`segment-size` ceiling, so larger single objects need the former raised and
-cannot pass the latter.
 
 ## Open questions
 

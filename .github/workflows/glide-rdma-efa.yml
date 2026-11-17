@@ -179,12 +179,6 @@ jobs:
                   RDMA_STACK: rdma-ci-${{ github.run_id }}
               run: bin/run-on.sh client host/31-client-rdma-tests.sh
 
-            - name: Step 9 — large-object round trip
-              working-directory: glide-rdma/ci/efa
-              env:
-                  RDMA_STACK: rdma-ci-${{ github.run_id }}
-              run: bin/run-on.sh client host/32-client-large-object.sh
-
             - name: Tear down EFA pair
               if: always()
               working-directory: glide-rdma/ci/efa

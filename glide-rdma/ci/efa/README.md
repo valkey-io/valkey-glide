@@ -44,10 +44,9 @@ through. Then set, in the repository:
 | Variable | `RDMA_SUBNETS` | candidate subnets, comma-separated (tried in order on capacity failure) |
 
 Dispatch it from the Actions tab or `gh workflow run glide-rdma-efa.yml`
-(`-f keep_hosts=true` leaves a failed pair up for diagnosis). A scheduled
-`glide-rdma-sweep.yml` deletes any `rdma-ci-<run_id>` stack a hard-cancelled run
-left behind; each host also self-terminates after `MaxHostLifetimeMinutes` so a
-stranded pair cannot bill indefinitely.
+(`-f keep_hosts=true` leaves a failed pair up for diagnosis). Each host
+self-terminates after `MaxHostLifetimeMinutes`, so a pair a hard-cancelled run
+leaves behind cannot bill indefinitely; its empty stack shell is deleted by hand.
 
 ## Running it by hand, on your own infra
 
@@ -167,45 +166,11 @@ Run in this order:
 | 6 | `./bin/run-on.sh server host/21-server-start.sh` | Starts valkey-server with the module (`fabric-provider EfaDirect`) as a systemd unit on the private IP, port 7380 |
 | 7 | `./bin/run-on.sh client host/30-client-setup.sh` | Installs the `valkey-glide-sync` and `valkey-glide` wheels in a venv, clones valkey-glide for its tests, checks `rdma_usable()` and a `BLOB.TCP_SET`/`TCP_GET` round trip over TCP |
 | 8 | `./bin/run-on.sh client host/31-client-rdma-tests.sh` | Runs `TestRdmaTransfers` from `tests/sync_tests/test_sync_rdma.py` over `efa-direct` |
-| 9 | `./bin/run-on.sh client host/32-client-large-object.sh` | `RUNS` distinct files of `SIZE_MB` random bytes, each sent over RDMA and read back into its own window of registered memory, verified in memory per run and by SHA-256 of the file pair. Processed `BATCH` at a time, so disk and pinned memory are bounded by `BATCH`. Prints set/get timing and throughput |
 
 Steps 5 and 7 are idempotent: an existing clone, binary or venv is kept.
 Step 6 replaces a running server.
 
-Step 8 is correctness coverage at 4 KiB per transfer; step 9 is the size and
-throughput check. Runs go `BATCH` at a time. Per batch: write the files,
-register one region of `2 x BATCH x SIZE_MB` and give each run a source
-window and a destination window in it, read each file into its source window,
-then per run set, get, and compare the two windows in memory; afterwards
-write the read-backs, compare the SHA-256 of each file pair, delete the files
-and close the region. The timed columns hold only the RDMA legs. A run with
-`SIZE_MB=512 RUNS=25 BATCH=10` looks like:
-
-```
--- batch 1-10 of 25
-wrote 10 files of 512 MiB in 11.642 s
-registered one region of 10240 MiB in 0.158 s
-read 10 files into their windows in 0.261 s
- run   set (s)  set MiB/s   get (s)  get MiB/s      crc32c  verify (s)
-   1     0.045    11289.6     0.037    14010.7  0x48e1918c       0.028
-   2     0.044    11748.6     0.036    14138.0  0xe976e4c5       0.028
-   ...
-wrote 10 read-back files in 0.416 s
-run    1: sha256 964140a0b5993d1d...  match
-   ...
-digests compared and files removed in 8.551 s
--- batch 11-20 of 25
-   ...
--- all 25 runs
-set: median 0.044 s (11762.6 MiB/s), min 0.043 s, max 0.045 s over 25 runs
-get: median 0.036 s (14053.5 MiB/s), min 0.036 s, max 0.037 s over 25 runs
-all 25 objects of 512 MiB round-tripped intact
-```
-
-A batch pins `2 x BATCH x SIZE_MB` of memory and writes the same amount to
-disk; the driver refuses to start if either exceeds 80 % of what is free.
-`RUNS` itself is unbounded. Each batch of ten 512 MiB runs takes about 25 s,
-most of it generating random bytes and hashing files, outside the timed legs.
+Step 8 is the correctness coverage, at 4 KiB per transfer.
 
 Overrides, as `KEY=value` after the script name:
 
@@ -221,9 +186,6 @@ Overrides, as `KEY=value` after the script name:
 | | `GLIDE_REF` | the git tag matching the wheel, `v2.6.0-rc2` for `2.6.0rc2` |
 | `31-client-rdma-tests.sh` | `TEST_FILTER` | `TestRdmaTransfers` (a pytest `-k` expression) |
 | | `GLIDE_RDMA_PROVIDER` | `efa-direct` |
-| `32-client-large-object.sh` | `SIZE_MB` | `256`. The module's `max-object-size` default is 512 MiB |
-| | `RUNS` | `3` |
-| | `BATCH` | `10` runs per batch; bounds disk and pinned memory |
 
 For example, to test a different wheel against the matching test suite:
 

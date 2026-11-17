@@ -94,14 +94,6 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:cloudformation:us-east-1:${AWS::AccountId}:stack/rdma-ci-*/*"
 
-              # ListStacks has no resource-level scoping (it is account-wide), so
-              # it needs its own statement. Read-only: names and statuses only.
-              # The sweep uses it to enumerate rdma-ci-<run_id> stacks to delete.
-              - Sid: CloudFormationList
-                Effect: Allow
-                Action: cloudformation:ListStacks
-                Resource: "*"
-
               # EC2: launch and manage the EFA pair. stop/start are intentionally
               # not granted — CI only runs apply/down; use human creds for those.
               - Sid: EC2

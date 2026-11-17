@@ -45,11 +45,11 @@ Parameters:
     Description: >
       Each host self-terminates this many minutes after boot, so a run whose
       teardown never fires (hard job cancellation, runner loss) cannot bill the
-      instances indefinitely. The stack shell is reclaimed separately by the
-      scheduled rdma-ci-* sweep. Must stay above the CreationPolicy ResourceSignal
-      window (PT20M) plus bootstrap, or the host terminates before it signals and
-      the stack create fails; set it well above a normal run (~20 min) plus a
-      keep_hosts diagnosis window.
+      instances indefinitely. The empty stack shell it leaves behind is deleted
+      by hand (or by a future scheduled sweep). Must stay above the CreationPolicy
+      ResourceSignal window (PT20M) plus bootstrap, or the host terminates before
+      it signals and the stack create fails; set it well above a normal run
+      (~20 min) plus a keep_hosts diagnosis window.
 
 Resources:
   PlacementGroup:
