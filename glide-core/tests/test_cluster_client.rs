@@ -15,7 +15,7 @@ mod cluster_client_tests {
     use crate::utilities::{
         cluster::{
             LONG_CLUSTER_TEST_TIMEOUT, RedisCluster, SHORT_CLUSTER_TEST_TIMEOUT,
-            setup_cluster_with_replicas, setup_test_basics_internal,
+            create_cluster_client, setup_cluster_with_replicas, setup_test_basics_internal,
         },
         *,
     };
@@ -943,6 +943,104 @@ mod cluster_client_tests {
                 WINDOW_MS,
                 CONNECTION_TIMEOUT_MS,
             );
+        });
+    }
+
+    #[rstest]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_partial_results_keep_replies_when_a_primary_is_slow() {
+        block_on_all(async {
+            const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(500);
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: false,
+                request_timeout: Some(REQUEST_TIMEOUT.as_millis() as u32),
+                ..Default::default()
+            })
+            .await;
+            // A second client pauses the primary, so the pause is not queued
+            // behind the client under test.
+            let mut pauser = create_cluster_client(
+                test_basics.cluster.as_ref(),
+                TestConfiguration {
+                    shared_server: false,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let partial_info = || {
+                let mut cmd = redis::cmd("INFO");
+                cmd.arg("SERVER").set_allow_partial_results(true);
+                cmd
+            };
+            let entries = |value: Value| match value {
+                Value::Map(entries) => entries
+                    .into_iter()
+                    .map(|(address, value)| {
+                        (redis::from_owned_redis_value(address).unwrap(), value)
+                    })
+                    .collect::<HashMap<String, Value>>(),
+                other => panic!("expected a map, got {other:?}"),
+            };
+
+            let healthy = test_basics
+                .client
+                .send_command(&mut partial_info(), None)
+                .await
+                .unwrap();
+            let healthy = entries(healthy);
+            assert_eq!(healthy.len(), 3);
+            assert!(
+                healthy
+                    .values()
+                    .all(|v| !matches!(v, Value::ServerError(_)))
+            );
+
+            let slow = healthy.keys().min().unwrap().clone();
+            let (host, port) = slow.rsplit_once(':').unwrap();
+            let route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                host: host.to_string(),
+                port: port.parse().unwrap(),
+            });
+            let mut pause = redis::cmd("CLIENT");
+            pause.arg("PAUSE").arg(3000).arg("ALL");
+            pauser
+                .send_command(&mut pause, Some(route.clone()))
+                .await
+                .unwrap();
+
+            let start = std::time::Instant::now();
+            let result = test_basics
+                .client
+                .send_command(&mut partial_info(), None)
+                .await
+                .unwrap();
+            assert!(start.elapsed() < REQUEST_TIMEOUT, "{:?}", start.elapsed());
+            let result = entries(result);
+            assert_eq!(result.len(), 3);
+            for (address, value) in result {
+                match value {
+                    Value::ServerError(error) if address == slow => {
+                        assert_eq!(error.err_code(), redis::TIMEOUT_ERROR_CODE);
+                        assert!(redis::RedisError::from(error).is_timeout());
+                    }
+                    Value::ServerError(error) => panic!("{address}: {error:?}"),
+                    _ => {}
+                }
+            }
+
+            // CLIENT UNPAUSE would wait for the pause too; wait for it to end.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+            while pauser
+                .send_command(&mut redis::cmd("PING"), Some(route.clone()))
+                .await
+                .is_err()
+            {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "{slow} did not recover"
+                );
+            }
         });
     }
 }
