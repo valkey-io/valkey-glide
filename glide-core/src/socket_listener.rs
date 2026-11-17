@@ -16,6 +16,7 @@ use crate::otel_db_semantics::{
 };
 use crate::response;
 use crate::response::Response;
+use crate::worker_pool::socket_listener_pool_size;
 use ClosingReason::*;
 use PipeListeningResult::*;
 use bytes::Bytes;
@@ -1229,6 +1230,41 @@ pub fn start_socket_listener_internal<InitCallback>(
         }
     };
 
+    // Build the worker pool on the caller's thread, before the listener task is spawned.
+    // `LocalPoolHandle::new` panics instead of returning an error when a worker thread
+    // cannot be created: a runtime `build()` failure (e.g. `EMFILE` under a low `nofile`
+    // limit) panics before any runtime exists, and a `std::thread::spawn` failure (e.g.
+    // `EAGAIN` under a `pids` limit) drops the already-built runtime during the unwind.
+    // Inside the async task below both panics would be lost: the error would land only
+    // on stderr from a task whose join handle is discarded, after the `Ok` readiness
+    // signal had already been sent — and the thread-spawn failure would additionally be
+    // masked by tokio's "Cannot drop a runtime in a context where blocking is not
+    // allowed". Here, on the caller's thread, the panic is caught and reported through
+    // the init callback before the `Ok` readiness signal is sent, so a failure is
+    // reported rather than appearing as a refused connection to a socket nobody listens
+    // on. Nothing is bound yet on this path, so there is no socket file to clean up.
+    let pool_size = socket_listener_pool_size();
+    let local_set_pool = match std::panic::catch_unwind(|| LocalPoolHandle::new(pool_size)) {
+        Ok(pool) => pool,
+        Err(panic) => {
+            let reason = panic
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| panic.downcast_ref::<&str>().copied())
+                .unwrap_or("unknown panic");
+            let message = format!(
+                "Failed to create the socket listener worker pool of {pool_size} workers: {reason}"
+            );
+            log_error("listen_on_socket", message.clone());
+            init_callback(Err(message));
+            return;
+        }
+    };
+    log_debug(
+        "listen_on_socket",
+        format!("Socket listener worker pool size: {pool_size}"),
+    );
+
     glide_rt.runtime.spawn(async move {
         let listener_socket = match UnixListener::bind(socket_path_cloned.clone()) {
             Err(err) => {
@@ -1259,6 +1295,11 @@ pub fn start_socket_listener_internal<InitCallback>(
                 "listen_on_socket",
                 format!("Failed to set socket path permissions: {err:?}"),
             );
+            // Drop the listener so the path is free, remove the socket file, and report
+            // the failure. The path has not been recorded in `INITIALIZED_SOCKETS` yet,
+            // so a retry starts a fresh listener.
+            drop(listener_socket);
+            let _ = std::fs::remove_file(&socket_path_cloned);
             let _ = tx.send(Err(err));
             return;
         }
@@ -1266,7 +1307,6 @@ pub fn start_socket_listener_internal<InitCallback>(
         // Signal initialization is successful.
         let _ = tx.send(Ok(socket_path_cloned.clone()));
 
-        let local_set_pool = LocalPoolHandle::new(num_cpus::get());
         loop {
             match listener_socket.accept().await {
                 Ok((stream, _addr)) => {
