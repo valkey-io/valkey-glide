@@ -6671,4 +6671,168 @@ pub(crate) mod shared_client_tests {
             }
         });
     }
+
+    /// A batch SELECT that the server applied must be recorded even when a later command
+    /// in the pipeline causes the batch to raise an error with raise_on_error=true (#7705).
+    #[rstest]
+    #[serial_test::serial]
+    fn test_batch_select_recorded_when_pipeline_raises_error() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(false, Default::default()).await;
+            // Set string key in db 3 so LPUSH on db 3 triggers WRONGTYPE
+            let mut select_3 = redis::cmd("SELECT");
+            select_3.arg(3);
+            test_basics
+                .client
+                .send_command(&mut select_3, None)
+                .await
+                .expect("SELECT 3 should succeed");
+
+            let mut set_cmd = redis::cmd("SET");
+            set_cmd.arg("str-key-7705").arg("hello");
+            test_basics
+                .client
+                .send_command(&mut set_cmd, None)
+                .await
+                .expect("SET string key should succeed in db 3");
+
+            // Return to db 0
+            let mut select_0 = redis::cmd("SELECT");
+            select_0.arg(0);
+            test_basics
+                .client
+                .send_command(&mut select_0, None)
+                .await
+                .expect("SELECT 0 should succeed");
+            assert_eq!(test_basics.client.current_database(), 0);
+
+            let mut pipeline = redis::Pipeline::new();
+            pipeline.cmd("SELECT").arg(3);
+            pipeline.cmd("LPUSH").arg("str-key-7705").arg("val");
+
+            let res = test_basics
+                .client
+                .send_pipeline(&pipeline, None, true, None, Default::default())
+                .await;
+            assert!(
+                res.is_err(),
+                "pipeline with WRONGTYPE must return Err when raise_on_error=true"
+            );
+
+            assert_eq!(
+                test_basics.client.current_database(),
+                3,
+                "current_database must be updated to 3 after applied batch SELECT despite error"
+            );
+        });
+    }
+
+    /// In an atomic transaction, an applied SELECT before a failing command must still
+    /// update current_database when raise_on_error=true (#7705).
+    #[rstest]
+    #[serial_test::serial]
+    fn test_batch_select_recorded_when_transaction_raises_error() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(false, Default::default()).await;
+            let mut select_3 = redis::cmd("SELECT");
+            select_3.arg(3);
+            test_basics
+                .client
+                .send_command(&mut select_3, None)
+                .await
+                .expect("SELECT 3 should succeed");
+
+            let mut set_cmd = redis::cmd("SET");
+            set_cmd.arg("tx-key-7705").arg("hello");
+            test_basics
+                .client
+                .send_command(&mut set_cmd, None)
+                .await
+                .expect("SET string key in db 3 should succeed");
+
+            let mut select_0 = redis::cmd("SELECT");
+            select_0.arg(0);
+            test_basics
+                .client
+                .send_command(&mut select_0, None)
+                .await
+                .expect("SELECT 0 should succeed");
+            assert_eq!(test_basics.client.current_database(), 0);
+
+            let mut pipeline = redis::Pipeline::new();
+            pipeline.atomic();
+            pipeline.cmd("SELECT").arg(3);
+            pipeline.cmd("LPUSH").arg("tx-key-7705").arg("val");
+
+            let res = test_basics
+                .client
+                .send_transaction(&pipeline, None, None, true)
+                .await;
+            assert!(
+                res.is_err(),
+                "transaction with WRONGTYPE must return Err when raise_on_error=true"
+            );
+
+            assert_eq!(
+                test_basics.client.current_database(),
+                3,
+                "current_database must be updated to 3 after applied transaction SELECT despite error"
+            );
+        });
+    }
+
+    /// A batch RESET in send_pipeline that the server applied must reset current_database to 0 (#7705).
+    #[rstest]
+    #[serial_test::serial]
+    fn test_batch_reset_recorded_in_send_pipeline() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(false, Default::default()).await;
+            let mut select_3 = redis::cmd("SELECT");
+            select_3.arg(3);
+            test_basics
+                .client
+                .send_command(&mut select_3, None)
+                .await
+                .expect("SELECT 3 should succeed");
+            assert_eq!(test_basics.client.current_database(), 3);
+
+            let mut pipeline = redis::Pipeline::new();
+            pipeline.cmd("RESET");
+
+            let _ = test_basics
+                .client
+                .send_pipeline(&pipeline, None, false, None, Default::default())
+                .await
+                .expect("pipeline with RESET should succeed");
+
+            assert_eq!(
+                test_basics.client.current_database(),
+                0,
+                "current_database must be reset to 0 after applied batch RESET"
+            );
+        });
+    }
+
+    /// RESET is not permitted inside an atomic transaction (#7705).
+    #[rstest]
+    #[serial_test::serial]
+    fn test_transaction_rejects_reset_upfront() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(false, Default::default()).await;
+            let mut pipeline = redis::Pipeline::new();
+            pipeline.atomic();
+            pipeline.cmd("RESET");
+
+            let res = test_basics
+                .client
+                .send_transaction(&pipeline, None, None, true)
+                .await;
+            assert!(res.is_err(), "send_transaction must reject RESET upfront");
+            let err_str = format!("{:?}", res.err().unwrap());
+            assert!(
+                err_str.contains("RESET is not permitted in a transaction"),
+                "expected ClientError for RESET in transaction, got: {err_str}"
+            );
+        });
+    }
 }
