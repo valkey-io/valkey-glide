@@ -662,12 +662,18 @@ fn parse_route_bytes(
             )))
         }
         RoutesValue::SlotIdRoute(slot_id_route) => {
+            let slot = match u16::try_from(slot_id_route.slot_id) {
+                Ok(slot) if slot < redis::cluster_topology::SLOT_SIZE => slot,
+                _ => {
+                    return Err(invalid_route_error(format!(
+                        "Invalid slot ID: {}. Slot ID must be between 0 and 16383",
+                        slot_id_route.slot_id
+                    )));
+                }
+            };
             let slot_addr = get_slot_addr(&slot_id_route.slot_type)?;
             Ok(Some(RoutingInfo::SingleNode(
-                SingleNodeRoutingInfo::SpecificNode(Route::new(
-                    slot_id_route.slot_id as u16,
-                    slot_addr,
-                )),
+                SingleNodeRoutingInfo::SpecificNode(Route::new(slot, slot_addr)),
             )))
         }
         RoutesValue::ByAddressRoute(by_address_route) => {

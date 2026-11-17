@@ -5080,7 +5080,21 @@ impl RouteInput {
                 route_bytes,
                 route_bytes_len,
             } => unsafe { Self::resolve_protobuf_bytes(route_bytes, route_bytes_len, cmd) },
-            RouteInput::RouteInfo(route_info) => unsafe { Ok(create_route(route_info, Some(cmd))) },
+            RouteInput::RouteInfo(route_info) => unsafe {
+                if !route_info.is_null() && matches!((*route_info).route_type, RouteType::SlotId) {
+                    let slot_id = (*route_info).slot_id;
+                    if slot_id < 0 || slot_id >= redis::cluster_topology::SLOT_SIZE as i32 {
+                        return Err(RedisError::from((
+                            ErrorKind::ClientError,
+                            "Invalid slot ID",
+                            format!(
+                                "Invalid slot ID: {slot_id}. Slot ID must be between 0 and 16383"
+                            ),
+                        )));
+                    }
+                }
+                Ok(create_route(route_info, Some(cmd)))
+            },
         }
     }
 
@@ -5640,12 +5654,27 @@ fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo
                 get_slot_addr(&slot_key_route.slot_type)?,
             )),
         ))),
-        Value::SlotIdRoute(slot_id_route) => Ok(Some(RoutingInfo::SingleNode(
-            SingleNodeRoutingInfo::SpecificNode(Route::new(
-                slot_id_route.slot_id as u16,
-                get_slot_addr(&slot_id_route.slot_type)?,
-            )),
-        ))),
+        Value::SlotIdRoute(slot_id_route) => {
+            let slot = match u16::try_from(slot_id_route.slot_id) {
+                Ok(slot) if slot < redis::cluster_topology::SLOT_SIZE => slot,
+                _ => {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "Invalid slot ID",
+                        format!(
+                            "Invalid slot ID: {}. Slot ID must be between 0 and 16383",
+                            slot_id_route.slot_id
+                        ),
+                    )));
+                }
+            };
+            Ok(Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    slot,
+                    get_slot_addr(&slot_id_route.slot_type)?,
+                )),
+            )))
+        }
         Value::ByAddressRoute(by_address_route) => match u16::try_from(by_address_route.port) {
             Ok(port) => Ok(Some(RoutingInfo::SingleNode(
                 SingleNodeRoutingInfo::ByAddress {
@@ -6194,7 +6223,7 @@ pub unsafe extern "C-unwind" fn invoke_script(
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RouteType {
     AllNodes = 0,
     AllPrimaries,
@@ -6430,12 +6459,15 @@ pub(crate) unsafe fn create_route(
             MultipleNodeRoutingInfo::AllMasters,
             cmd.and_then(|c| ResponsePolicy::for_command(&c.command().unwrap())),
         ))),
-        RouteType::SlotId => Some(RoutingInfo::SingleNode(
-            SingleNodeRoutingInfo::SpecificNode(Route::new(
-                route.slot_id as u16,
-                (&route.slot_type).into(),
-            )),
-        )),
+        RouteType::SlotId => {
+            let slot = match u16::try_from(route.slot_id) {
+                Ok(slot) if slot < redis::cluster_topology::SLOT_SIZE => slot,
+                _ => return None,
+            };
+            Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::SpecificNode(Route::new(slot, (&route.slot_type).into())),
+            ))
+        }
         RouteType::SlotKey => Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
                 redis::cluster_topology::get_slot(unsafe { ptr_to_str(route.slot_key) }.as_bytes()),

@@ -3,7 +3,7 @@
 use redis::cluster_routing::RoutingInfo;
 use redis::cluster_routing::{MultipleNodeRoutingInfo, Route, SingleNodeRoutingInfo, SlotAddr};
 use redis::cluster_routing::{ResponsePolicy, Routable};
-use redis::{Cmd, RedisError, RedisResult};
+use redis::{Cmd, ErrorKind, RedisError, RedisResult};
 
 pub use glide_core::command_request::Routes;
 use glide_core::command_request::{
@@ -159,12 +159,27 @@ pub(crate) fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<
                 get_slot_addr(&slot_key_route.slot_type)?,
             )),
         ))),
-        Value::SlotIdRoute(slot_id_route) => Ok(Some(RoutingInfo::SingleNode(
-            SingleNodeRoutingInfo::SpecificNode(Route::new(
-                slot_id_route.slot_id as u16,
-                get_slot_addr(&slot_id_route.slot_type)?,
-            )),
-        ))),
+        Value::SlotIdRoute(slot_id_route) => {
+            let slot = match u16::try_from(slot_id_route.slot_id) {
+                Ok(slot) if slot < redis::cluster_topology::SLOT_SIZE => slot,
+                _ => {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "Invalid slot ID",
+                        format!(
+                            "Invalid slot ID: {}. Slot ID must be between 0 and 16383",
+                            slot_id_route.slot_id
+                        ),
+                    )));
+                }
+            };
+            Ok(Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    slot,
+                    get_slot_addr(&slot_id_route.slot_type)?,
+                )),
+            )))
+        }
         Value::ByAddressRoute(by_address_route) => match u16::try_from(by_address_route.port) {
             Ok(port) => Ok(Some(RoutingInfo::SingleNode(
                 SingleNodeRoutingInfo::ByAddress {

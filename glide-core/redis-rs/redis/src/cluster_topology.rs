@@ -35,7 +35,8 @@ pub const DEFAULT_SLOTS_REFRESH_WAIT_DURATION: Duration = Duration::from_secs(15
 #[cfg(feature = "cluster-async")]
 pub const DEFAULT_SLOTS_REFRESH_MAX_JITTER_MILLI: u64 = 15 * 1000; // 15 seconds
 
-pub(crate) const SLOT_SIZE: u16 = 16384;
+/// The total number of hash slots in a Valkey/Redis cluster (16384).
+pub const SLOT_SIZE: u16 = 16384;
 pub(crate) type TopologyHash = u64;
 
 /// Represents the state of slot refresh operations.

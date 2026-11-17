@@ -641,12 +641,23 @@ fn get_route(
                 get_slot_addr(&slot_key_route.slot_type)?,
             )),
         ))),
-        Value::SlotIdRoute(slot_id_route) => Ok(Some(RoutingInfo::SingleNode(
-            SingleNodeRoutingInfo::SpecificNode(Route::new(
-                slot_id_route.slot_id as u16,
-                get_slot_addr(&slot_id_route.slot_type)?,
-            )),
-        ))),
+        Value::SlotIdRoute(slot_id_route) => {
+            let slot = match u16::try_from(slot_id_route.slot_id) {
+                Ok(slot) if slot < redis::cluster_topology::SLOT_SIZE => slot,
+                _ => {
+                    return Err(ClientUsageError::User(format!(
+                        "Invalid slot ID: {}. Slot ID must be between 0 and 16383",
+                        slot_id_route.slot_id
+                    )));
+                }
+            };
+            Ok(Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    slot,
+                    get_slot_addr(&slot_id_route.slot_type)?,
+                )),
+            )))
+        }
         Value::ByAddressRoute(by_address_route) => match u16::try_from(by_address_route.port) {
             Ok(port) => Ok(Some(RoutingInfo::SingleNode(
                 SingleNodeRoutingInfo::ByAddress {
@@ -1317,4 +1328,43 @@ where
     InitCallback: FnOnce(Result<String, String>) + Send + Clone + 'static,
 {
     start_socket_listener_internal(init_callback, None);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::command_request::routes::Value;
+    use crate::command_request::{Routes, SlotIdRoute, SlotTypes};
+    use protobuf::EnumOrUnknown;
+
+    #[test]
+    fn get_route_rejects_out_of_range_slot_ids() {
+        for invalid_slot in [-1, 16384, 70000] {
+            let mut routes = Routes::new();
+            routes.value = Some(Value::SlotIdRoute(SlotIdRoute {
+                slot_id: invalid_slot,
+                slot_type: EnumOrUnknown::new(SlotTypes::Primary),
+                ..Default::default()
+            }));
+            let res = get_route(Some(Box::new(routes)), None);
+            assert!(
+                matches!(res, Err(ClientUsageError::User(_))),
+                "slot {invalid_slot} should be rejected as user error, got {res:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn get_route_accepts_valid_slot_ids() {
+        for valid_slot in [0, 1000, 16383] {
+            let mut routes = Routes::new();
+            routes.value = Some(Value::SlotIdRoute(SlotIdRoute {
+                slot_id: valid_slot,
+                slot_type: EnumOrUnknown::new(SlotTypes::Primary),
+                ..Default::default()
+            }));
+            let res = get_route(Some(Box::new(routes)), None);
+            assert!(res.is_ok(), "slot {valid_slot} should be accepted");
+        }
+    }
 }
