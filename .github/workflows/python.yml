@@ -22,6 +22,7 @@ on:
             - glide-rdma/**
             - utils/cluster_manager.py
             - deny.toml
+            - .cargo/config.toml
             - .github/workflows/python.yml
             - .github/actions/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
@@ -48,6 +49,7 @@ on:
             - glide-rdma/**
             - utils/cluster_manager.py
             - deny.toml
+            - .cargo/config.toml
             - .github/workflows/python.yml
             - .github/actions/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml

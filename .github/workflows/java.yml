@@ -17,6 +17,8 @@ on:
             - glide-core/redis-rs/redis/Cargo.toml
             - glide-logger/**
             - glide-telemetry/**
+            - .cargo/config.toml
+            - deny.toml
             - java/**
             - utils/cluster_manager.py
             - .github/workflows/java.yml
@@ -38,6 +40,8 @@ on:
             - glide-core/redis-rs/redis/Cargo.toml
             - glide-logger/**
             - glide-telemetry/**
+            - .cargo/config.toml
+            - deny.toml
             - java/**
             - utils/cluster_manager.py
             - .github/workflows/java.yml

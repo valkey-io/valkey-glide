@@ -17,6 +17,7 @@ on:
             - glide-telemetry/**
             - glide-core/**
             - deny.toml
+            - .cargo/config.toml
 
             # GitHub workflows
             - .github/workflows/rust.yml
@@ -44,6 +45,7 @@ on:
             - glide-telemetry/**
             - glide-core/**
             - deny.toml
+            - .cargo/config.toml
 
             # GitHub workflows
             - .github/workflows/rust.yml
