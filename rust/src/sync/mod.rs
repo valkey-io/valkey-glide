@@ -108,7 +108,7 @@ impl SyncGlideClient {
         pipeline: &crate::pipeline::Pipeline,
         raise_on_error: bool,
         options: &PipelineOptions,
-    ) -> ValkeyResult<Vec<ValkeyValue>> {
+    ) -> ValkeyResult<Option<Vec<ValkeyValue>>> {
         runtime().block_on(self.inner.exec(pipeline, raise_on_error, options))
     }
 
@@ -181,7 +181,7 @@ impl SyncGlideClusterClient {
         raise_on_error: bool,
         route: Option<crate::Route>,
         options: &PipelineOptions,
-    ) -> ValkeyResult<Vec<ValkeyValue>> {
+    ) -> ValkeyResult<Option<Vec<ValkeyValue>>> {
         runtime().block_on(self.inner.exec(pipeline, raise_on_error, route, options))
     }
 
