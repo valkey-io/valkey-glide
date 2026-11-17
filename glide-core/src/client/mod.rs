@@ -1484,8 +1484,8 @@ impl Client {
     /// Record what an admitted command may change on the connection, for the
     /// re-AUTH defer and the release reset.
     fn track_command(&self, cmd: &Cmd, routing: Option<&RoutingInfo>) {
-        // Read-only standalone rejects MULTI/WATCH/EXEC/DISCARD locally, so they
-        // never reach the server (a pipeline can send them; `send_pipeline` tracks).
+        // Read-only standalone rejects MULTI/WATCH/EXEC/DISCARD locally, in
+        // pipelines too, so they never reach the server.
         if self.is_cluster || !self.read_only {
             self.track_transaction_state(cmd);
         }
@@ -3775,7 +3775,7 @@ impl Client {
     ///
     /// Fails without sending anything when the borrow left state no command undoes
     /// (`unresettable`), or when a read-only standalone client, which rejects
-    /// DISCARD/UNWATCH locally, sent MULTI or WATCH through a pipeline. Does not
+    /// DISCARD/UNWATCH locally, has MULTI or WATCH tracked as sent. Does not
     /// UNSUBSCRIBE: callers must not subscribe on a pooled client (use the parent
     /// client's pub/sub API, which keeps dedicated connections).
     pub async fn reset_connection_state(&mut self, configured_db: u32) -> RedisResult<()> {
