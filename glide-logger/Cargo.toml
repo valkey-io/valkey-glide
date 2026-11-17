@@ -18,7 +18,6 @@ edition = "2024"
 [lib]
 
 [dependencies]
-file-rotate = "0.8.0"
 once_cell = "1.16.0"
 tracing = "0.1"
 tracing-appender = { version = "0.2.3", default-features = false }
