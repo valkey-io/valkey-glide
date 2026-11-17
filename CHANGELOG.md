@@ -2,6 +2,10 @@
 
 ## Pending 2.7
 
+### Features
+
+* Java: Propagate application OpenTelemetry parent span context to command and batch spans ([#5061](https://github.com/valkey-io/valkey-glide/issues/5061))
+
 ### Fixes
 
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))

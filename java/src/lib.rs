@@ -1123,6 +1123,88 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createLeak
     .unwrap_or(0)
 }
 
+/// Validate the context at the JNI boundary before calling the shared telemetry implementation.
+fn new_span_with_trace_context(
+    name: &str,
+    trace_id: Option<&str>,
+    span_id: Option<&str>,
+    trace_flags: jint,
+    trace_state: Option<&str>,
+) -> Result<glide_core::GlideSpan, String> {
+    let valid_id = |id: &str, length| {
+        id.len() == length
+            && id
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            && id.bytes().any(|b| b != b'0')
+    };
+    let trace_id = trace_id
+        .filter(|id| valid_id(id, 32))
+        .ok_or("Invalid parent trace ID")?;
+    let span_id = span_id
+        .filter(|id| valid_id(id, 16))
+        .ok_or("Invalid parent span ID")?;
+    let flags = u8::try_from(trace_flags).map_err(|_| "Invalid parent trace flags")?;
+    glide_core::GlideSpan::new_with_remote_context(
+        name,
+        trace_id,
+        span_id,
+        flags,
+        trace_state.filter(|state| !state.is_empty()),
+    )
+    .map_err(|_| "Invalid parent tracestate".to_string())
+}
+
+/// Creates a GLIDE span from serialized application context, falling back on invalid input.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createLeakedOtelSpanWithTraceContextNative<
+    'local,
+>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    name: JString<'local>,
+    trace_id: JString<'local>,
+    span_id: JString<'local>,
+    trace_flags: jint,
+    trace_state: JString<'local>,
+) -> jlong {
+    run_ffi(|| {
+        fn optional_string(
+            env: &mut JNIEnv<'_>,
+            value: &JString<'_>,
+        ) -> Result<Option<String>, FFIError> {
+            if value.is_null() {
+                Ok(None)
+            } else {
+                Ok(Some(env.get_string(value)?.into()))
+            }
+        }
+        let result = (|| -> Result<jlong, FFIError> {
+            let name: String = env.get_string(&name)?.into();
+            let trace_id = optional_string(&mut env, &trace_id)?;
+            let span_id = optional_string(&mut env, &span_id)?;
+            let trace_state = optional_string(&mut env, &trace_state)?;
+            let span = new_span_with_trace_context(
+                &name,
+                trace_id.as_deref(),
+                span_id.as_deref(),
+                trace_flags,
+                trace_state.as_deref(),
+            )
+            .unwrap_or_else(|reason| {
+                glide_logger::log_warn(
+                    "OpenTelemetry",
+                    format!("{reason}; falling back to a standalone span"),
+                );
+                glide_core::GlideOpenTelemetry::new_span(&name)
+            });
+            Ok(Arc::into_raw(Arc::new(span)) as jlong)
+        })();
+        handle_errors(&mut env, result)
+    })
+    .unwrap_or(0)
+}
+
 /// Drops an OpenTelemetry span given its pointer
 /// # Safety
 /// * `span_ptr` must not be `null`.
@@ -3016,4 +3098,60 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_getCacheMetrics(
         Some(())
     })
     .unwrap_or(())
+}
+
+#[cfg(test)]
+mod trace_context_tests {
+    use super::new_span_with_trace_context;
+
+    const TRACE_ID: &str = "0af7651916cd43dd8448eb211c80319c";
+    const SPAN_ID: &str = "b7ad6b7169203331";
+
+    #[test]
+    fn accepts_valid_context_and_unsigned_flags() {
+        for flags in [0, 1, 255] {
+            for state in [None, Some(""), Some("vendor=value,other=state")] {
+                let span =
+                    new_span_with_trace_context("Get", Some(TRACE_ID), Some(SPAN_ID), flags, state)
+                        .unwrap();
+                span.end();
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_context_before_span_creation() {
+        for id in [
+            None,
+            Some("bad"),
+            Some("00000000000000000000000000000000"),
+            Some("0AF7651916CD43DD8448EB211C80319C"),
+        ] {
+            assert!(new_span_with_trace_context("Get", id, Some(SPAN_ID), 1, None).is_err());
+        }
+        for id in [
+            None,
+            Some("bad"),
+            Some("0000000000000000"),
+            Some("B7AD6B7169203331"),
+        ] {
+            assert!(new_span_with_trace_context("Get", Some(TRACE_ID), id, 1, None).is_err());
+        }
+        for flags in [-1, 256, i32::MAX] {
+            assert!(
+                new_span_with_trace_context("Get", Some(TRACE_ID), Some(SPAN_ID), flags, None)
+                    .is_err()
+            );
+        }
+        assert!(
+            new_span_with_trace_context(
+                "Get",
+                Some(TRACE_ID),
+                Some(SPAN_ID),
+                1,
+                Some("missing-equals"),
+            )
+            .is_err()
+        );
+    }
 }

@@ -1,38 +1,51 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import glide.api.BaseClient;
+import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.OpenTelemetry;
+import glide.api.OpenTelemetry.GlideSpanContext;
 import glide.api.OpenTelemetry.OpenTelemetryConfig;
+import glide.api.models.Batch;
 import glide.api.models.ClusterBatch;
+import glide.api.models.GlideString;
 import glide.api.models.configuration.ProtocolVersion;
+import glide.ffi.resolvers.OpenTelemetryResolver;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @Timeout(30) // seconds
 public class OpenTelemetryTests {
 
-    private static final String VALID_ENDPOINT_TRACES =
-            System.getProperty("java.io.tmpdir") + System.getProperty("file.separator") + "spans.json";
-    private static final String VALID_FILE_ENDPOINT_TRACES = "file://" + VALID_ENDPOINT_TRACES;
+    private static String VALID_ENDPOINT_TRACES;
+    private static final ThreadLocal<GlideSpanContext> ACTIVE_PARENT = new ThreadLocal<>();
     private static final String VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics";
     private static GlideClusterClient client;
     private static final int DELAY_500 = 500;
@@ -167,19 +180,53 @@ public class OpenTelemetryTests {
     @BeforeAll
     @SneakyThrows
     public static void setup() {
+        VALID_ENDPOINT_TRACES =
+                Files.createTempDirectory("glide-java-otel-").resolve("spans.json").toString();
         // Initialize OpenTelemetry with valid configuration
         OpenTelemetryConfig openTelemetryConfig =
                 OpenTelemetryConfig.builder()
                         .traces(
                                 OpenTelemetry.TracesConfig.builder()
-                                        .endpoint(VALID_FILE_ENDPOINT_TRACES)
+                                        .endpoint("file://" + VALID_ENDPOINT_TRACES)
                                         .samplePercentage(100)
                                         .build())
                         .metrics(OpenTelemetry.MetricsConfig.builder().endpoint(VALID_ENDPOINT_METRICS).build())
                         .flushIntervalMs(100L)
+                        .parentSpanContextProvider(ACTIVE_PARENT::get)
                         .build();
 
         OpenTelemetry.init(openTelemetryConfig);
+        GlideSpanContext parent = newParent();
+        ACTIVE_PARENT.set(parent);
+        assertSame(parent, OpenTelemetry.getParentSpanContext());
+        assertSame(parent, openTelemetryConfig.getParentSpanContextProvider().get());
+        ACTIVE_PARENT.remove();
+    }
+
+    @BeforeEach
+    void resetTelemetryOptions() {
+        OpenTelemetry.setSamplePercentage(100);
+        OpenTelemetry.setParentSpanContextProvider(ACTIVE_PARENT::get);
+        ACTIVE_PARENT.remove();
+    }
+
+    @Test
+    void replacingAndClearingProviderDoesNotRetainInitializationCallback() throws Exception {
+        java.lang.reflect.Field configField =
+                OpenTelemetry.class.getDeclaredField("openTelemetryConfig");
+        configField.setAccessible(true);
+        OpenTelemetryConfig retained = (OpenTelemetryConfig) configField.get(null);
+        assertNull(retained.getParentSpanContextProvider());
+        GlideSpanContext first = newParent();
+        OpenTelemetry.setParentSpanContextProvider(() -> first);
+        assertSame(first, OpenTelemetry.getParentSpanContext());
+        GlideSpanContext second = newParent();
+        OpenTelemetry.setParentSpanContextProvider(() -> second);
+        assertSame(second, OpenTelemetry.getParentSpanContext());
+        OpenTelemetry.setParentSpanContextProvider(null);
+        assertNull(OpenTelemetry.getParentSpanContext());
+        assertNull(retained.getParentSpanContextProvider());
+        assertEquals(100, OpenTelemetry.getSamplePercentage());
     }
 
     // Test that spans are not exported before initializing OpenTelemetry
@@ -205,6 +252,9 @@ public class OpenTelemetryTests {
     @AfterEach
     @SneakyThrows
     public void tearDown() {
+        ACTIVE_PARENT.remove();
+        OpenTelemetry.setParentSpanContextProvider(null);
+        OpenTelemetry.setSamplePercentage(100);
         teardownOtelTest();
         if (client != null) {
             client.close();
@@ -381,5 +431,298 @@ public class OpenTelemetryTests {
         // Check for expected span names
         assertTrue(spanData.spanNames.contains("Batch"));
         assertTrue(spanData.spanNames.contains("send_batch"));
+    }
+
+    private static GlideSpanContext newParent() {
+        return new GlideSpanContext(
+                UUID.randomUUID().toString().replace("-", ""),
+                UUID.randomUUID().toString().replace("-", "").substring(0, 16),
+                1,
+                "vendor=value");
+    }
+
+    private static BaseClient tracingClient(boolean cluster, ProtocolVersion protocol)
+            throws Exception {
+        return cluster
+                ? GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get()
+                : GlideClient.createClient(commonClientConfig().protocol(protocol).build()).get();
+    }
+
+    public static Stream<Arguments> parentContextClients() {
+        return Stream.of(
+                Arguments.of(false, ProtocolVersion.RESP2),
+                Arguments.of(false, ProtocolVersion.RESP3),
+                Arguments.of(true, ProtocolVersion.RESP2),
+                Arguments.of(true, ProtocolVersion.RESP3));
+    }
+
+    /** Read only complete JSON lines: the exporter can still be appending the last line. */
+    private static List<JsonObject> jsonSpans() throws Exception {
+        List<JsonObject> spans = new ArrayList<>();
+        if (!Files.exists(Paths.get(VALID_ENDPOINT_TRACES))) return spans;
+        String data =
+                new String(
+                        Files.readAllBytes(Paths.get(VALID_ENDPOINT_TRACES)),
+                        java.nio.charset.StandardCharsets.UTF_8);
+        int lastNewline = data.lastIndexOf('\n');
+        if (lastNewline < 0) return spans;
+        for (String line : data.substring(0, lastNewline).split("\n")) {
+            if (!line.trim().isEmpty()) spans.add(JsonParser.parseString(line).getAsJsonObject());
+        }
+        return spans;
+    }
+
+    private static List<JsonObject> waitForTrace(String traceId, String... names) throws Exception {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+        List<JsonObject> spans = new ArrayList<>();
+        while (System.nanoTime() < deadline) {
+            spans =
+                    jsonSpans().stream()
+                            .filter(span -> traceId.equals(span.get("trace_id").getAsString()))
+                            .collect(Collectors.toList());
+            List<String> found =
+                    spans.stream().map(span -> span.get("name").getAsString()).collect(Collectors.toList());
+            if (found.containsAll(Arrays.asList(names))) return spans;
+            Thread.sleep(50);
+        }
+        fail("Missing spans " + Arrays.toString(names) + " for trace " + traceId + "; found " + spans);
+        return spans;
+    }
+
+    private static void assertParent(JsonObject span, GlideSpanContext parent) {
+        assertEquals(parent.getTraceId(), span.get("trace_id").getAsString());
+        assertEquals(parent.getSpanId(), span.get("parent_span_id").getAsString());
+        assertNotEquals(parent.getSpanId(), span.get("span_id").getAsString());
+        assertNotEquals("0000000000000000", span.get("span_id").getAsString());
+        assertEquals("Client", span.get("kind").getAsString());
+    }
+
+    @ParameterizedTest
+    @MethodSource("parentContextClients")
+    void commandSpansInheritApplicationContext(boolean cluster, ProtocolVersion protocol)
+            throws Exception {
+        GlideSpanContext parent = newParent();
+        String key = "parent-context-" + parent.getTraceId();
+        try (BaseClient testClient = tracingClient(cluster, protocol)) {
+            ACTIVE_PARENT.set(parent);
+            CompletableFuture<String> pending = testClient.set(key, "value");
+            // Capture happens at submission, not when the response arrives.
+            ACTIVE_PARENT.remove();
+            assertEquals("OK", pending.get());
+            ACTIVE_PARENT.set(parent);
+            assertEquals(GlideString.of("value"), testClient.get(GlideString.of(key)).get());
+            assertNull(testClient.blpop(new String[] {key + "-missing"}, 0.01).get());
+            if (cluster) {
+                assertEquals(
+                        "PONG",
+                        ((GlideClusterClient) testClient)
+                                .customCommand(new String[] {"PING"})
+                                .get()
+                                .getSingleValue());
+            } else {
+                assertEquals("PONG", ((GlideClient) testClient).customCommand(new String[] {"PING"}).get());
+            }
+            ACTIVE_PARENT.remove();
+            List<JsonObject> spans =
+                    waitForTrace(parent.getTraceId(), "Set", "Get", "BLPop", "CustomCommand");
+            List<String> ids = new ArrayList<>();
+            for (JsonObject span : spans) {
+                if (Arrays.asList("Set", "Get", "BLPop", "CustomCommand")
+                        .contains(span.get("name").getAsString())) {
+                    assertParent(span, parent);
+                    assertFalse(ids.contains(span.get("span_id").getAsString()));
+                    ids.add(span.get("span_id").getAsString());
+                }
+            }
+            assertEquals(4, ids.size());
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("parentContextClients")
+    void batchAndTransactionSpansInheritExecutionContext(boolean cluster, ProtocolVersion protocol)
+            throws Exception {
+        try (BaseClient testClient = tracingClient(cluster, protocol)) {
+            for (boolean atomic : new boolean[] {false, true}) {
+                // Build outside the application context: only exec should capture it.
+                Batch batch = new Batch(atomic).ping();
+                ClusterBatch clusterBatch = new ClusterBatch(atomic).ping();
+                GlideSpanContext parent = newParent();
+                ACTIVE_PARENT.set(parent);
+                Object[] result =
+                        cluster
+                                ? ((GlideClusterClient) testClient).exec(clusterBatch, true).get()
+                                : ((GlideClient) testClient).exec(batch, true).get();
+                ACTIVE_PARENT.remove();
+                assertArrayEquals(new Object[] {"PONG"}, result);
+                List<JsonObject> spans = waitForTrace(parent.getTraceId(), "Batch", "send_batch");
+                JsonObject root =
+                        spans.stream()
+                                .filter(span -> "Batch".equals(span.get("name").getAsString()))
+                                .findFirst()
+                                .get();
+                assertParent(root, parent);
+                JsonObject send =
+                        spans.stream()
+                                .filter(span -> "send_batch".equals(span.get("name").getAsString()))
+                                .findFirst()
+                                .get();
+                assertEquals(root.get("span_id").getAsString(), send.get("parent_span_id").getAsString());
+                assertNotEquals(root.get("span_id"), send.get("span_id"));
+            }
+        }
+    }
+
+    @Test
+    void concurrentProvidersCaptureTheirOwnContext() throws Exception {
+        try (BaseClient testClient = tracingClient(false, ProtocolVersion.RESP3)) {
+            GlideSpanContext first = newParent();
+            GlideSpanContext second = newParent();
+            CompletableFuture<?>[] tasks =
+                    Stream.of(first, second)
+                            .map(
+                                    parent ->
+                                            CompletableFuture.runAsync(
+                                                    () -> {
+                                                        ACTIVE_PARENT.set(parent);
+                                                        try {
+                                                            testClient.get("context-" + parent.getTraceId()).join();
+                                                        } finally {
+                                                            ACTIVE_PARENT.remove();
+                                                        }
+                                                    }))
+                            .toArray(CompletableFuture[]::new);
+            CompletableFuture.allOf(tasks).get();
+            for (GlideSpanContext parent : Arrays.asList(first, second)) {
+                for (JsonObject span : waitForTrace(parent.getTraceId(), "Get")) {
+                    if ("Get".equals(span.get("name").getAsString())) assertParent(span, parent);
+                }
+            }
+        }
+    }
+
+    @Test
+    void zeroSamplingDoesNotInvokeProvider() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        OpenTelemetry.setParentSpanContextProvider(
+                () -> {
+                    calls.incrementAndGet();
+                    return newParent();
+                });
+        OpenTelemetry.setSamplePercentage(0);
+        try (BaseClient testClient = tracingClient(false, ProtocolVersion.RESP3)) {
+            testClient.get("not-sampled").get();
+            testClient.blpop(new String[] {"not-sampled-missing"}, 0.01).get();
+            ((GlideClient) testClient).exec(new Batch(false).ping(), true).get();
+            assertEquals(0, calls.get());
+        }
+    }
+
+    @Test
+    void unsampledParentIsNotReplacedWithStandaloneSpan() throws Exception {
+        GlideSpanContext parent = newParent();
+        GlideSpanContext unsampled =
+                new GlideSpanContext(parent.getTraceId(), parent.getSpanId(), 0, null);
+        AtomicInteger captures = new AtomicInteger();
+        OpenTelemetry.setParentSpanContextProvider(
+                () -> {
+                    captures.incrementAndGet();
+                    return ACTIVE_PARENT.get();
+                });
+        try (BaseClient testClient = tracingClient(false, ProtocolVersion.RESP3)) {
+            GlideSpanContext baseline = newParent();
+            ACTIVE_PARENT.set(baseline);
+            testClient.get("sampling-baseline").get();
+            waitForTrace(baseline.getTraceId(), "Get");
+            List<String> existing =
+                    jsonSpans().stream()
+                            .map(span -> span.get("span_id").getAsString())
+                            .collect(Collectors.toList());
+            captures.set(0);
+            ACTIVE_PARENT.set(unsampled);
+            testClient.get("unsampled-parent").get();
+            assertEquals(1, captures.get());
+            // A later sampled operation serves as an exporter barrier for the completed request.
+            GlideSpanContext sampled = newParent();
+            ACTIVE_PARENT.set(sampled);
+            testClient.get("sampled-parent").get();
+            waitForTrace(sampled.getTraceId(), "Get");
+            List<JsonObject> exported =
+                    jsonSpans().stream()
+                            .filter(span -> "Get".equals(span.get("name").getAsString()))
+                            .filter(span -> !existing.contains(span.get("span_id").getAsString()))
+                            .collect(Collectors.toList());
+            assertEquals(1, exported.size(), "An unsampled parent must not produce a standalone span");
+            assertParent(exported.get(0), sampled);
+        }
+    }
+
+    @Test
+    void invalidAndThrowingProvidersDoNotFailCommands() throws Exception {
+        try (GlideClient testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+            OpenTelemetry.setParentSpanContextProvider(
+                    () -> {
+                        throw new IllegalStateException("test");
+                    });
+            assertEquals("PONG", testClient.customCommand(new String[] {"PING"}).get());
+            GlideSpanContext parent = newParent();
+            OpenTelemetry.setParentSpanContextProvider(
+                    () -> new GlideSpanContext(parent.getTraceId(), parent.getSpanId(), 256, null));
+            assertEquals("PONG", testClient.customCommand(new String[] {"PING"}).get());
+            OpenTelemetry.setParentSpanContextProvider(
+                    () -> new GlideSpanContext(parent.getTraceId(), parent.getSpanId(), 1, "invalid"));
+            assertEquals("PONG", testClient.customCommand(new String[] {"PING"}).get());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"traceId", "spanId", "flags", "traceState", "zeroTraceId", "nullSpanId"})
+    void nativeInvalidContextExportsStandaloneSpan(String invalidField) throws Exception {
+        GlideSpanContext parent = newParent();
+        String name = "Fallback-" + UUID.randomUUID();
+        String traceId = parent.getTraceId();
+        String spanId = parent.getSpanId();
+        int flags = 1;
+        String state = null;
+        switch (invalidField) {
+            case "traceId":
+                traceId = "bad";
+                break;
+            case "zeroTraceId":
+                traceId = "00000000000000000000000000000000";
+                break;
+            case "spanId":
+                spanId = "bad";
+                break;
+            case "nullSpanId":
+                spanId = null;
+                break;
+            case "flags":
+                flags = 256;
+                break;
+            case "traceState":
+                state = "missing-equals";
+                break;
+            default:
+                throw new AssertionError(invalidField);
+        }
+        long pointer =
+                OpenTelemetryResolver.createLeakedOtelSpanWithTraceContext(
+                        name, traceId, spanId, flags, state);
+        assertNotEquals(0, pointer);
+        OpenTelemetryResolver.dropOtelSpan(pointer);
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            for (JsonObject span : jsonSpans()) {
+                if (name.equals(span.get("name").getAsString())) {
+                    assertEquals("0000000000000000", span.get("parent_span_id").getAsString());
+                    assertNotEquals(parent.getTraceId(), span.get("trace_id").getAsString());
+                    return;
+                }
+            }
+            Thread.sleep(50);
+        }
+        fail("No standalone span exported for " + invalidField);
     }
 }
