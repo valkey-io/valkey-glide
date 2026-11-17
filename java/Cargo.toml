@@ -32,6 +32,10 @@ tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"]
 tracing = "0.1"
 tracing-subscriber = "0.3.16"
 
+[dev-dependencies]
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["testing"] }
+
 [profile.release]
 opt-level = 3
 lto = "fat"

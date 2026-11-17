@@ -5,6 +5,7 @@ import glide.api.logging.Logger;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.ffi.resolvers.OpenTelemetryResolver;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
@@ -83,9 +84,24 @@ public class OpenTelemetry {
     private static OpenTelemetry openTelemetry = null;
     private static OpenTelemetryConfig openTelemetryConfig = null;
     private static final Random random = new Random();
-    private static volatile Supplier<GlideSpanContext> parentSpanContextProvider;
+    private static volatile ParentSpanContextProvider parentSpanContextProvider;
     private static final Pattern TRACE_ID_PATTERN = Pattern.compile("[0-9a-f]{32}");
     private static final Pattern SPAN_ID_PATTERN = Pattern.compile("[0-9a-f]{16}");
+
+    private static final class ParentSpanContextProvider {
+        private final Supplier<GlideSpanContext> supplier;
+        private final AtomicBoolean warningLogged = new AtomicBoolean();
+
+        private ParentSpanContextProvider(Supplier<GlideSpanContext> supplier) {
+            this.supplier = supplier;
+        }
+
+        private void warnOnce(String message) {
+            if (warningLogged.compareAndSet(false, true)) {
+                Logger.log(Logger.Level.WARN, "GlideOpenTelemetry", message);
+            }
+        }
+    }
 
     /**
      * Immutable parent span context, independent of the OpenTelemetry Java API. Invalid values are
@@ -168,10 +184,18 @@ public class OpenTelemetry {
              * Sets the callback used to parent sampled GLIDE command and batch spans. The callback stays
              * in Java; only its returned context fields cross JNI.
              *
-             * <p>For example, applications using the OpenTelemetry Java API can adapt their active span:
+             * <p>Propagation is opt-in. Applications supply their own OpenTelemetry Java API/SDK and
+             * configure it separately from GLIDE's native exporter. With that SDK configured and an
+             * existing GLIDE {@code client}, initialize GLIDE and submit commands inside an application
+             * span's scope:
              *
              * <pre>{@code
-             * .parentSpanContextProvider(() -> {
+             * OpenTelemetry.init(OpenTelemetry.OpenTelemetryConfig.builder()
+             *     .traces(OpenTelemetry.TracesConfig.builder()
+             *         .endpoint("http://localhost:4318/v1/traces")
+             *         .samplePercentage(100)
+             *         .build())
+             *     .parentSpanContextProvider(() -> {
              *     io.opentelemetry.api.trace.SpanContext ctx =
              *         io.opentelemetry.api.trace.Span.current().getSpanContext();
              *     if (!ctx.isValid()) return null;
@@ -181,7 +205,16 @@ public class OpenTelemetry {
              *     return new OpenTelemetry.GlideSpanContext(
              *         ctx.getTraceId(), ctx.getSpanId(),
              *         Byte.toUnsignedInt(ctx.getTraceFlags().asByte()), state);
-             * })
+             *     })
+             *     .build());
+             * io.opentelemetry.api.trace.Tracer tracer =
+             *     io.opentelemetry.api.GlobalOpenTelemetry.getTracer("my-application");
+             * io.opentelemetry.api.trace.Span parent = tracer.spanBuilder("request").startSpan();
+             * try (io.opentelemetry.context.Scope scope = parent.makeCurrent()) {
+             *     client.get("key").join();
+             * } finally {
+             *     parent.end();
+             * }
              * }</pre>
              *
              * @param provider Callback returning the active parent, or null to disable propagation
@@ -534,10 +567,18 @@ public class OpenTelemetry {
     /**
      * Registers, replaces, or clears the parent context provider without reinitializing telemetry.
      *
+     * <p>The provider is process-global and applies to all GLIDE clients until replaced or cleared.
+     * Register it through the initialization config or after {@link #init(OpenTelemetryConfig)}:
+     * successful initialization replaces any previously registered provider with the configured one,
+     * including null. Replacement or clearing affects subsequent captures; an already-captured
+     * callback may still finish executing.
+     *
      * <p>The provider runs synchronously on the submitting thread, once per sampled command or batch
      * (at batch execution, not construction). Keep it lightweight and thread-safe: avoid I/O or
      * expensive computation. Applications must propagate their own context across executor threads.
-     * Returning null or throwing a RuntimeException falls back to a standalone span.
+     * Returning null or throwing a RuntimeException falls back to a standalone span. Java provider
+     * failures and invalid IDs/flags produce at most one warning per registration; repeated native
+     * context-validation warnings are rate-limited.
      *
      * <p>The provider is not called when GLIDE's percentage sampling rejects an operation. A sampled
      * parent does not override that decision. A valid unsampled parent is preserved, allowing the
@@ -546,28 +587,26 @@ public class OpenTelemetry {
      * @param provider Callback returning the active parent context, or null to clear
      */
     public static void setParentSpanContextProvider(Supplier<GlideSpanContext> provider) {
-        parentSpanContextProvider = provider;
+        parentSpanContextProvider = provider == null ? null : new ParentSpanContextProvider(provider);
     }
 
     /**
      * Captures the current parent context for internal command submission. Call only after sampling.
      * Tracestate is parsed by the native OpenTelemetry implementation when creating the span.
      *
-     * @return A valid parent context, or null if absent, invalid, or the provider failed
+     * @return Context with validated IDs and flags, or null if absent, invalid, or the provider
+     *     failed. Tracestate validation occurs during native span creation.
      */
     public static GlideSpanContext getParentSpanContext() {
-        Supplier<GlideSpanContext> provider = parentSpanContextProvider;
+        ParentSpanContextProvider provider = parentSpanContextProvider;
         if (provider == null) {
             return null;
         }
         GlideSpanContext context;
         try {
-            context = provider.get();
+            context = provider.supplier.get();
         } catch (RuntimeException e) {
-            Logger.log(
-                    Logger.Level.WARN,
-                    "GlideOpenTelemetry",
-                    "Parent span context provider failed; falling back to a standalone span");
+            provider.warnOnce("Parent span context provider failed; falling back to a standalone span");
             return null;
         }
         if (context == null) {
@@ -581,10 +620,7 @@ public class OpenTelemetry {
                 || context.spanId.equals("0000000000000000")
                 || context.traceFlags < 0
                 || context.traceFlags > 255) {
-            Logger.log(
-                    Logger.Level.WARN,
-                    "GlideOpenTelemetry",
-                    "Invalid parent span context; falling back to a standalone span");
+            provider.warnOnce("Invalid parent span context; falling back to a standalone span");
             return null;
         }
         return context;

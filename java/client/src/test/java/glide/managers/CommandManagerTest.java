@@ -16,6 +16,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -102,6 +103,28 @@ public class CommandManagerTest {
                 return "CustomCommand";
             default:
                 return "Batch";
+        }
+    }
+
+    @Test
+    void uninitializedTelemetryDoesNotCaptureProviderOrAllocateSpan() {
+        assertFalse(OpenTelemetry.isInitialized());
+        AtomicInteger captures = new AtomicInteger();
+        AtomicLong pointer = new AtomicLong();
+        OpenTelemetry.setParentSpanContextProvider(
+                () -> {
+                    captures.incrementAndGet();
+                    return PARENT;
+                });
+        try {
+            CommandManager manager = new CommandManager(coreClient(pointer));
+            for (String path : new String[] {"normal", "blocking", "custom", "batch", "transaction"}) {
+                submit(manager, path);
+                assertEquals(0, pointer.get());
+            }
+            assertEquals(0, captures.get());
+        } finally {
+            OpenTelemetry.setParentSpanContextProvider(null);
         }
     }
 
