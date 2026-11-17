@@ -39,6 +39,26 @@ public class OpenTelemetryResolver {
     public static native long createLeakedOtelSpan(String spanName);
 
     /**
+     * Creates a span parented to an application's serialized context. Invalid context falls back to a
+     * standalone span with a warning. Ownership is the same as {@link #createLeakedOtelSpan(String)}.
+     *
+     * @param spanName The command or batch span name
+     * @param traceId Nonzero 32-character lowercase hexadecimal trace ID
+     * @param spanId Nonzero 16-character lowercase hexadecimal parent span ID
+     * @param traceFlags Unsigned trace flags (0–255)
+     * @param traceState Optional serialized W3C tracestate; null or empty means absent
+     * @return A pointer to the created span, or 0 if creation failed
+     */
+    public static long createLeakedOtelSpanWithTraceContext(
+            String spanName, String traceId, String spanId, int traceFlags, String traceState) {
+        return createLeakedOtelSpanWithTraceContextNative(
+                spanName, traceId, spanId, traceFlags, traceState);
+    }
+
+    private static native long createLeakedOtelSpanWithTraceContextNative(
+            String spanName, String traceId, String spanId, int traceFlags, String traceState);
+
+    /**
      * Drops an OpenTelemetry span that was created with {@link #createLeakedOtelSpan(String)},
      * releasing its resources.
      *
