@@ -2219,7 +2219,7 @@ mod client_pool_marking_tests {
 }
 
 #[cfg(test)]
-mod scope_pool_tests {
+pub(crate) mod scope_pool_tests {
     use super::{
         Arc, AtomicU32, DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig,
         ScopeReservation, ScopeTarget, saturating_dec,
@@ -2287,13 +2287,13 @@ mod scope_pool_tests {
     }
 
     /// A real Valkey server child process bound to an ephemeral port, killed on drop.
-    struct TestServer {
+    pub(crate) struct TestServer {
         child: Child,
-        port: u16,
+        pub(crate) port: u16,
     }
 
     impl TestServer {
-        fn start() -> Self {
+        pub(crate) fn start() -> Self {
             let port = get_available_port();
             // Use `redis-server` to match the integration harness
             // (tests/utilities/mod.rs): it's present on every CI engine version,
@@ -2415,7 +2415,7 @@ mod scope_pool_tests {
         }
     }
 
-    async fn wait_for_server_ready(port: u16) {
+    pub(crate) async fn wait_for_server_ready(port: u16) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
             if let Ok(client) = redis::Client::open(format!("redis://127.0.0.1:{port}")) {

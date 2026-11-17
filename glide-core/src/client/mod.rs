@@ -1862,7 +1862,8 @@ impl Client {
     }
 
     /// Errors when this is a read-only standalone client and `cmd` can write.
-    /// Covers paths that bypass `StandaloneClient`, such as isolated scopes.
+    /// Runs before `Client::send_pipeline`'s tracking, and on paths that bypass
+    /// `StandaloneClient`, such as isolated scopes.
     pub(crate) fn reject_write_in_read_only(&self, cmd: &Cmd) -> RedisResult<()> {
         if self.shared.read_only && !self.shared.is_cluster {
             standalone_client::reject_write_command(&cmd.command().unwrap_or_default())?;
@@ -2182,6 +2183,10 @@ impl Client {
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             crate::rdma::refuse_direct_in_batch(pipeline)?;
+            // Before the tracking below, so a rejected batch leaves no state.
+            for cmd in pipeline.cmd_iter() {
+                self.reject_write_in_read_only(cmd)?;
+            }
             self.reconcile_iam_before_dispatch().await?;
             // A raw MULTI stays open after a non-atomic pipeline returns, so track
             // it pre-dispatch for `prepare_for_borrow`'s defer. The SELECT drift is
@@ -5492,6 +5497,75 @@ mod tests {
         bracketed.cmd("MULTI").cmd("INCR").arg("a").cmd("EXEC");
         let _ = rt.block_on(client.send_pipeline(&bracketed, None, false, None, strategy));
         assert!(!client.shared.multi_active.load(Ordering::Acquire));
+    }
+
+    /// A read-only standalone client on its own server (the server stops on drop).
+    fn start_read_only_client() -> (
+        crate::pool::scope_pool_tests::TestServer,
+        tokio::runtime::Runtime,
+        Client,
+    ) {
+        use crate::pool::scope_pool_tests::{TestServer, wait_for_server_ready};
+        let server = TestServer::start();
+        let rt = borrow_test_runtime();
+        rt.block_on(wait_for_server_ready(server.port));
+        let request = ConnectionRequest {
+            read_only: true,
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: server.port,
+                unix_socket_path: None,
+            }],
+            ..Default::default()
+        };
+        let client = rt.block_on(Client::new(request, None)).unwrap();
+        (server, rt, client)
+    }
+
+    /// Pool-manage `client` after an IAM token rotation and run the borrow-time
+    /// re-AUTH. `Ok` means it was deferred; the test server has no password, so an
+    /// attempted AUTH errors.
+    fn borrow_after_iam_rotation(
+        rt: &tokio::runtime::Runtime,
+        client: Client,
+    ) -> redis::RedisResult<()> {
+        let mut client = rt.block_on(async move {
+            let manager = test_iam_manager().await;
+            let client = attach_iam(client, manager.clone(), manager.token_generation());
+            manager.refresh_token().await.unwrap();
+            client
+        });
+        client.mark_pool_managed();
+        rt.block_on(client.prepare_for_borrow())
+    }
+
+    /// A rejected read-only `[MULTI, SET]` pipeline never opened a transaction, so
+    /// it must not defer the pooled client's re-AUTH.
+    #[test]
+    fn rejected_read_only_multi_pipeline_does_not_defer_reauth() {
+        let (_server, rt, mut client) = start_read_only_client();
+        let mut pipeline = redis::pipe();
+        pipeline.cmd("MULTI").cmd("SET").arg("k").arg("v");
+        rt.block_on(client.send_pipeline(&pipeline, None, true, None, Default::default()))
+            .expect_err("read-only mode rejects the batch");
+        assert!(borrow_after_iam_rotation(&rt, client).is_err());
+    }
+
+    /// A rejected read-only `[SUBSCRIBE, SET]` pipeline never subscribed, so the
+    /// pool's release reset must succeed instead of discarding the connection.
+    #[test]
+    fn rejected_read_only_subscribe_pipeline_keeps_connection_resettable() {
+        let (_server, rt, mut client) = start_read_only_client();
+        let mut pipeline = redis::pipe();
+        pipeline
+            .cmd("SUBSCRIBE")
+            .arg("ch")
+            .cmd("SET")
+            .arg("k")
+            .arg("v");
+        rt.block_on(client.send_pipeline(&pipeline, None, true, None, Default::default()))
+            .expect_err("read-only mode rejects the batch");
+        rt.block_on(client.reset_connection_state(0)).unwrap();
     }
 
     #[test]
