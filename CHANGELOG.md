@@ -6,6 +6,7 @@
 
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
 * Core/FFI: create clients on a runtime worker so the connect does not use the caller's stack ([#7644](https://github.com/valkey-io/valkey-glide/pull/7644))
+* Core: flush server-assisted cache when its connection closes ([#7493](https://github.com/valkey-io/valkey-glide/pull/7493))
 * Go: strip LLVM bitcode from the prebuilt `libglide_ffi.a` so Go 1.26.11+ / 1.27.4+ no longer reject it with `disallowed LTO section` ([#7739](https://github.com/valkey-io/valkey-glide/pull/7739))
 
 ## 2.6
@@ -42,7 +43,6 @@
 * Python: `zadd` (async, sync and `Batch`/`ClusterBatch`) no longer stringifies `bytes`, `bytearray` and `memoryview` members into their Python repr; members are now passed through verbatim and only the scores are converted to strings ([#7521](https://github.com/valkey-io/valkey-glide/issues/7521))
 * Java: Don't throw when `AZ_AFFINITY` or `AZ_AFFINITY_REPLICAS_AND_PRIMARY` has no `clientAZ` ([#7536](https://github.com/valkey-io/valkey-glide/pull/7536))
 * Core: Scoped connections authenticate with the client's current password after `update_connection_password` (or a user-issued `AUTH`/`HELLO`), instead of the password the client was created with: a scope connection built after the rotation sends the new password, and an idle one re-authenticates before its next command once the server has accepted the new password (`immediate_auth`, `AUTH`, `HELLO`); a store-only update leaves open scope connections as they are, like the client's own connection ([#7334](https://github.com/valkey-io/valkey-glide/issues/7334))
-* Core: A server-assisted client-side cache is flushed when a connection that turned on tracking closes. Invalidations the server sends while the client is disconnected never arrive, so entries cached before a reconnect were served stale until their TTL ran out. The flush also runs when glide replaces a tracking connection on purpose or a client closes, and a cache shared by several clients is flushed for all of them ([#7446](https://github.com/valkey-io/valkey-glide/issues/7446))
 * Core: `GETSET` compresses value when enabled ([#7411](https://github.com/valkey-io/valkey-glide/issues/7411))
 * Core: Reject `SET` with `IFEQ` or `IFNE` when compression is enabled ([#7365](https://github.com/valkey-io/valkey-glide/issues/7365))
 * Core: decompress MGET and batch replies per element ([#7524](https://github.com/valkey-io/valkey-glide/pull/7524))
