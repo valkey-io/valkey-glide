@@ -1861,7 +1861,8 @@ impl Client {
         self.shared.is_cluster
     }
 
-    /// True until a lazy client connects, or while its lock is held. The sync FFI runs those commands on a worker.
+    /// True until a lazy client connects, and also whenever its lock cannot be read right away.
+    /// The sync FFI runs a command on a worker while this is true.
     pub fn is_lazy(&self) -> bool {
         self.internal_client
             .try_read()
@@ -4934,6 +4935,14 @@ mod tests {
             let result = get_request_timeout(&cmd, Duration::from_millis(250)).unwrap();
             assert_eq!(result, Some(Duration::from_millis(250)), "{name}");
         }
+    }
+
+    #[test]
+    fn test_is_lazy_until_connected_and_while_the_lock_is_held() {
+        let client = create_test_client();
+        assert!(client.is_lazy());
+        let _write = client.internal_client.try_write().unwrap();
+        assert!(client.is_lazy());
     }
 
     #[test]

@@ -192,7 +192,7 @@ fn child_sends_the_first_standalone_command_from_a_musl_sized_thread() {
     assert_first_ping_connects_on_a_worker(create(request, None));
 }
 
-/// Refreshing the IAM token does not connect, so it must not end the lazy client's worker routing.
+/// Refreshing the IAM token does not connect, so the first command after it still connects on a worker.
 #[test]
 #[ignore = "child process of lazy_sync_client_connects_on_a_runtime_worker"]
 fn child_refreshes_the_iam_token_before_the_first_command() {

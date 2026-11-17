@@ -2170,7 +2170,7 @@ impl ClientAdapter {
                     block_on_worker(bg, request_future).unwrap_or_else(|err| {
                         Err(RedisError::from((
                             ErrorKind::ClientError,
-                            "Lazy connect task failed",
+                            "Command task on the runtime worker failed",
                             err,
                         )))
                     })
