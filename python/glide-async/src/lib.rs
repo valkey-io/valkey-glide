@@ -762,7 +762,8 @@ pub fn log(log_level: Level, log_identifier: String, message: String) {
 
 #[pyfunction]
 #[pyo3(signature = (level=None, file_name=None))]
-pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
-    let logger_level = glide_logger::init(level.map(|level| level.into()), file_name);
-    logger_level.into()
+pub fn init(level: Option<Level>, file_name: Option<&str>) -> pyo3::PyResult<Level> {
+    let logger_level = glide_logger::init(level.map(|level| level.into()), file_name)
+        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err))?;
+    Ok(logger_level.into())
 }

@@ -74,7 +74,7 @@ enum ChosenAction {
 
 fn main() {
     let args = Args::parse();
-    glide_logger::init(
+    let _ = glide_logger::init(
         Some(glide_logger::Level::Warn),
         Path::new(&args.results_file)
             .file_stem()

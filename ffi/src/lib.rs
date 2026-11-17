@@ -7536,10 +7536,16 @@ pub unsafe extern "C" fn init(level: *const Level, file_name: *const c_char) -> 
         }
     };
 
-    let logger_level = glide_logger::init(level_option, file_name_option);
+    let (logger_level, log_error) = match glide_logger::init(level_option, file_name_option) {
+        Ok(lvl) => (lvl, std::ptr::null_mut()),
+        Err(err) => {
+            let c_err = CString::new(err).unwrap_or_default().into_raw();
+            (glide_logger::Level::Off, c_err)
+        }
+    };
 
     Box::into_raw(Box::new(LogResult {
-        log_error: std::ptr::null_mut(),
+        log_error,
         level: logger_level.into(),
     }))
 }
