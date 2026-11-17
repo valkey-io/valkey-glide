@@ -10,6 +10,7 @@
 
 use std::collections::BTreeMap;
 use std::ptr;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicPtr, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -17,14 +18,19 @@ use tokio::sync::oneshot;
 
 // ─── Public Types ────────────────────────────────────────────────────────────
 
-/// Published pending count: updated by the watchdog thread once per loop iteration.
-/// Readers use relaxed load; only the watchdog thread writes (no contention).
-static PUBLISHED_PENDING: AtomicUsize = AtomicUsize::new(0);
-
 /// Returns the current number of pending (registered but not yet fired/cancelled)
-/// watchdog entries.
+/// entries on the global watchdog.
+///
+/// The count belongs to the instance, so a watchdog that is no longer the
+/// global (one that lost the race to become it, or one a forked child
+/// replaced) cannot overwrite it.
 pub fn pending_count() -> usize {
-    PUBLISHED_PENDING.load(Ordering::Relaxed)
+    let watchdog = global_slot().load(Ordering::Acquire);
+    if watchdog.is_null() {
+        return 0;
+    }
+    // Safety: a published watchdog is never freed.
+    unsafe { &*watchdog }.pending.load(Ordering::Relaxed)
 }
 
 /// Resolve a command name from raw bytes to a &'static str without allocation.
@@ -606,6 +612,9 @@ struct DeadlineEntry {
 #[derive(Clone)]
 pub struct TimeoutWatchdog {
     tx: mpsc::Sender<DeadlineEntry>,
+    /// Entries the thread holds, published once per loop iteration. Only the
+    /// thread writes it.
+    pending: Arc<AtomicUsize>,
 }
 
 /// Points to the slot that holds the global watchdog pointer. Read it
@@ -683,7 +692,6 @@ fn reinit_global() {
     if !slot.is_null() {
         unsafe { &*slot }.store(ptr::null_mut(), Ordering::Release);
     }
-    PUBLISHED_PENDING.store(0, Ordering::Relaxed);
 }
 
 /// Make sure forked children reinitialize the global watchdog.
@@ -732,7 +740,7 @@ impl TimeoutWatchdog {
     fn init_global() -> &'static Self {
         #[cfg(unix)]
         ensure_reinit_in_forked_child();
-        let ptr = Box::into_raw(Box::new(Self::start_global()));
+        let ptr = Box::into_raw(Box::new(Self::start()));
         match global_slot().compare_exchange(
             ptr::null_mut(),
             ptr,
@@ -751,25 +759,17 @@ impl TimeoutWatchdog {
         }
     }
 
-    /// Start the global watchdog instance (publishes pending count).
-    fn start_global() -> Self {
-        let (tx, rx) = mpsc::channel();
-        std::thread::Builder::new()
-            .name("glide-timeout-watchdog".into())
-            .spawn(move || Self::run(rx, true))
-            .expect("Failed to spawn timeout watchdog thread");
-        Self { tx }
-    }
-
     /// Start a watchdog instance. Spawns a dedicated OS thread.
-    /// Does NOT publish to the global pending count (only the global instance does).
+    /// [`pending_count`] reports only the global instance's entries.
     pub fn start() -> Self {
         let (tx, rx) = mpsc::channel();
+        let pending = Arc::new(AtomicUsize::new(0));
+        let published = Arc::clone(&pending);
         std::thread::Builder::new()
             .name("glide-timeout-watchdog".into())
-            .spawn(move || Self::run(rx, false))
+            .spawn(move || Self::run(rx, &published))
             .expect("Failed to spawn timeout watchdog thread");
-        Self { tx }
+        Self { tx, pending }
     }
 
     /// Register a timeout. Returns a `oneshot::Receiver<()>` that resolves
@@ -786,7 +786,7 @@ impl TimeoutWatchdog {
     }
 
     /// Watchdog thread main loop.
-    fn run(rx: mpsc::Receiver<DeadlineEntry>, publish_count: bool) {
+    fn run(rx: mpsc::Receiver<DeadlineEntry>, pending: &AtomicUsize) {
         let mut deadlines: BTreeMap<Instant, Vec<DeadlineEntry>> = BTreeMap::new();
         let mut last_cleanup = Instant::now();
         let mut local_count: usize = 0;
@@ -842,9 +842,7 @@ impl TimeoutWatchdog {
             }
 
             // Publish the local count once per iteration (no contention on write side)
-            if publish_count {
-                PUBLISHED_PENDING.store(local_count, Ordering::Relaxed);
-            }
+            pending.store(local_count, Ordering::Relaxed);
 
             // Wait for next event
             let wait_result = if let Some(next_deadline) = deadlines.keys().next() {
@@ -920,36 +918,72 @@ mod tests {
 
     // ── Pending Count ────────────────────────────────────────────────────
 
-    #[tokio::test]
-    #[serial]
-    async fn pending_count_reflects_registered_entries() {
-        // Use the global watchdog since PUBLISHED_PENDING is a single global.
-        // #[serial] prevents concurrent tests from perturbing the global counter
-        // while we poll for our 2 registered entries.
-        let watchdog = TimeoutWatchdog::global();
-
-        // The watchdog publishes 0 as soon as these entries fire, so the deadline
-        // must outlast the whole poll bound below or a slow scheduler reads 0.
-        let timeout = Duration::from_secs(10);
-        let rx1 = watchdog.register(timeout, Instant::now());
-        let rx2 = watchdog.register(timeout, Instant::now());
-
-        // Poll until the watchdog thread drains the channel and publishes our
-        // two entries, or until a deadline expires. A fixed sleep is not
-        // reliable under concurrent test load.
+    /// Poll until `pending_count()` reaches `n`. The watchdog thread publishes
+    /// asynchronously, and a fixed sleep is not reliable under test load.
+    async fn wait_for_pending_count(n: usize) {
         let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
         loop {
             let count = pending_count();
-            if count >= 2 {
-                break;
+            if count >= n {
+                return;
             }
             if tokio::time::Instant::now() >= deadline {
-                panic!("pending count must reflect registered entries within 2s: got {count}");
+                panic!("pending count must reach {n} within 2s: got {count}");
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn pending_count_reflects_registered_entries() {
+        // pending_count() reads the global watchdog. #[serial] keeps the tests
+        // that replace the global from doing so while we poll.
+        let watchdog = TimeoutWatchdog::global();
+
+        // The watchdog publishes 0 as soon as these entries fire, so the deadline
+        // must outlast the whole poll bound or a slow scheduler reads 0.
+        let timeout = Duration::from_secs(10);
+        let rx1 = watchdog.register(timeout, Instant::now());
+        let rx2 = watchdog.register(timeout, Instant::now());
+        wait_for_pending_count(2).await;
 
         // Cancel rather than wait for them to fire.
+        drop(rx1);
+        drop(rx2);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn replaced_global_does_not_overwrite_pending_count() {
+        // A replaced global keeps its thread, and other tests may still have
+        // entries on it. Clear the slot and leak the old instance, as
+        // concurrent_global_calls_converge_on_one_instance does.
+        let old = TimeoutWatchdog::global();
+        global_slot().swap(ptr::null_mut(), Ordering::AcqRel);
+        let new = TimeoutWatchdog::global();
+        let timeout = Duration::from_secs(10);
+        let rx1 = new.register(timeout, Instant::now());
+        let rx2 = new.register(timeout, Instant::now());
+        wait_for_pending_count(2).await;
+
+        // The old thread publishes its own count after it fires the first
+        // entry, and that happens before it fires the second.
+        for _ in 0..2 {
+            let fired = old.register(Duration::from_millis(10), Instant::now());
+            assert!(
+                tokio::time::timeout(Duration::from_secs(5), fired)
+                    .await
+                    .is_ok_and(|r| r.is_ok()),
+                "the replaced watchdog must still fire"
+            );
+        }
+
+        let count = pending_count();
+        assert!(
+            count >= 2,
+            "pending count must follow the current global, not a replaced one: got {count}"
+        );
         drop(rx1);
         drop(rx2);
     }
