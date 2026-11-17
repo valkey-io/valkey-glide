@@ -1861,6 +1861,15 @@ impl Client {
         self.shared.is_cluster
     }
 
+    /// Errors when this is a read-only standalone client and `cmd` can write.
+    /// Covers paths that bypass `StandaloneClient`, such as isolated scopes.
+    pub(crate) fn reject_write_in_read_only(&self, cmd: &Cmd) -> RedisResult<()> {
+        if self.shared.read_only && !self.shared.is_cluster {
+            standalone_client::reject_write_command(&cmd.command().unwrap_or_default())?;
+        }
+        Ok(())
+    }
+
     /// Returns the cache hit rate (hits / total requests).
     /// Returns an error if caching is not enabled or metrics are disabled.
     pub fn cache_hit_rate(&self) -> RedisResult<Value> {

@@ -249,6 +249,17 @@ pub async fn execute_scope_command(
         }
     };
 
+    // Build redis command
+    let mut cmd = Cmd::new();
+    cmd.arg(cmd_name.as_bytes());
+    for arg in args {
+        cmd.arg(arg.as_slice());
+    }
+    // Before any state tracking, so a rejected command leaves the scope untouched.
+    if let Some(c) = client {
+        c.reject_write_in_read_only(&cmd)?;
+    }
+
     let mut conn = entry.lock().await;
 
     // State tracking (for conditional cleanup on release)
@@ -302,13 +313,6 @@ pub async fn execute_scope_command(
                 }
             }
         }
-    }
-
-    // Build redis command
-    let mut cmd = Cmd::new();
-    cmd.arg(cmd_name.as_bytes());
-    for arg in args {
-        cmd.arg(arg.as_slice());
     }
 
     // Presume a blocking command's connection unsafe until we know the outcome;

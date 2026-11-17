@@ -1727,6 +1727,77 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// A scope borrowed from a read-only standalone client gets the same
+    /// `ReadOnly` error as the client for a write, sends nothing, and still runs
+    /// reads. A rejected MULTI must not open a transaction on the connection.
+    /// With read_only off, scope writes go through.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_scope_follows_parent_read_only_mode(#[values(false, true)] read_only: bool) {
+        block_on_all(async move {
+            let config = TestConfiguration {
+                shared_server: true,
+                ..Default::default()
+            };
+            let mut checker = setup_test_basics(false, config.clone()).await;
+            let bytes = scope_request_bytes(&checker.server, &config);
+            let mut request =
+                create_connection_request(&[get_shared_server_address(false)], &config);
+            request.read_only = Some(read_only);
+            let mut parent = Client::new(request.into(), None).await.unwrap();
+            let key = generate_random_string(10);
+            let single = parent
+                .send_command(cmd("SET").arg(&key).arg("v"), None)
+                .await;
+            let scope = ScopeHandle::setup(parent, bytes, 0).await;
+            let mut exists = cmd("EXISTS");
+            exists.arg(&key);
+
+            if read_only {
+                let single_err = single.expect_err("a read-only client rejects SET");
+                let err = scope
+                    .send("set", &mut [key.clone().into_bytes(), b"v".to_vec()])
+                    .await
+                    .expect_err("a read-only scope rejects SET");
+                assert_eq!(err.kind(), redis::ErrorKind::ReadOnly, "got: {err}");
+                assert_eq!(err.to_string(), single_err.to_string());
+                assert_eq!(
+                    checker.client.send_command(&mut exists, None).await,
+                    Ok(Value::Int(0)),
+                    "the rejected scope write must not reach the server"
+                );
+                scope
+                    .send("MULTI", &mut [])
+                    .await
+                    .expect_err("a read-only scope rejects MULTI");
+                assert_eq!(
+                    scope.send("GET", &mut [key.into_bytes()]).await,
+                    Ok(Value::Nil),
+                    "reads run, and are not queued by the rejected MULTI"
+                );
+            } else {
+                single.expect("a normal client runs SET");
+                checker
+                    .client
+                    .send_command(cmd("DEL").arg(&key), None)
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    scope
+                        .send("SET", &mut [key.into_bytes(), b"v".to_vec()])
+                        .await,
+                    Ok(Value::Okay)
+                );
+                assert_eq!(
+                    checker.client.send_command(&mut exists, None).await,
+                    Ok(Value::Int(1))
+                );
+            }
+            scope.release();
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]

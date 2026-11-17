@@ -299,3 +299,40 @@ class TestReadOnlyMode:
             await client.close()
             if checker is not None:
                 await checker.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_read_only_mode_blocks_write_in_scope(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+        """Test that a scoped connection of a read-only client rejects writes."""
+        client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            request_timeout=2000,
+            read_only=True,
+        )
+        assert type(client) is GlideClient
+        checker = None
+        key = get_random_string(10)
+
+        try:
+            checker = await create_client(request, cluster_mode, protocol=protocol)
+            async with await client.scoped_connection() as scope:
+                with pytest.raises(RuntimeError) as exc_info:
+                    await scope.set(key, "value")
+                assert (
+                    "write commands are not allowed in read-only mode"
+                    in str(exc_info.value).lower()
+                )
+                # Reads still run.
+                assert await scope.get(key) is None
+            assert await checker.exists([key]) == 0
+        finally:
+            await client.close()
+            if checker is not None:
+                await checker.close()
