@@ -4372,6 +4372,296 @@ mod cluster_async {
         assert_eq!(value, Ok(Some(123)));
     }
 
+    /// The importing node honours `ASKING` only for the next command it reads from the
+    /// connection, and other requests share the connection. So the mock honours `ASKING` only
+    /// when it comes in the same write as the command, and otherwise answers MOVED back to
+    /// the source, as a node does when another request came in between.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_ask_sends_asking_in_the_same_write_as_the_command() {
+        let name = "test_async_cluster_ask_sends_asking_in_the_same_write_as_the_command";
+        let MockEnv {
+            async_connection: mut connection,
+            handler: _handler,
+            runtime,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            move |cmd: &[u8], port| {
+                respond_startup_two_nodes(name, cmd)?;
+                match port {
+                    6379 => Err(parse_redis_value(
+                        format!("-ASK 6918 {name}:6380\r\n").as_bytes(),
+                    )),
+                    6380 if contains_slice(cmd, b"ASKING") => Err(Ok(Value::Okay)),
+                    6380 if asked_in_same_write() => {
+                        assert!(contains_slice(cmd, b"GET"));
+                        Err(Ok(Value::BulkString(b"123".to_vec().into())))
+                    }
+                    6380 => Err(parse_redis_value(
+                        format!("-MOVED 6918 {name}:6379\r\n").as_bytes(),
+                    )),
+                    _ => panic!("Wrong node"),
+                }
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+
+        assert_eq!(value, Ok(Some(123)));
+    }
+
+    /// A connection type that has not opted in to `Connect::sends_asking_with_command`
+    /// (here, the mock connection behind a wrapper with the default) never gets a command
+    /// with `ASKING` packed in front of it; it gets `ASKING` as a request of its own, then
+    /// the command, as before.
+    #[derive(Clone)]
+    struct NoAskingOptInConnection(MockConnection);
+
+    impl Connect for NoAskingOptInConnection {
+        fn connect<'a, T>(
+            info: T,
+            response_timeout: Duration,
+            connection_timeout: Duration,
+            socket_addr: Option<SocketAddr>,
+            glide_connection_options: GlideConnectionOptions,
+        ) -> RedisFuture<'a, (Self, Option<IpAddr>)>
+        where
+            T: IntoConnectionInfo + Send + 'a,
+        {
+            Box::pin(async move {
+                let (inner, ip) = MockConnection::connect(
+                    info,
+                    response_timeout,
+                    connection_timeout,
+                    socket_addr,
+                    glide_connection_options,
+                )
+                .await?;
+                Ok((Self(inner), ip))
+            })
+        }
+    }
+
+    impl ConnectionLike for NoAskingOptInConnection {
+        fn req_packed_command<'a>(&'a mut self, command: &'a Cmd) -> RedisFuture<'a, Value> {
+            let packed = command.get_packed_command();
+            assert!(
+                packed == cmd("ASKING").get_packed_command()
+                    || !packed.starts_with(b"*1\r\n$6\r\nASKING\r\n"),
+                "a connection that has not opted in got ASKING packed before a command"
+            );
+            self.0.req_packed_command(command)
+        }
+
+        fn req_packed_commands<'a>(
+            &'a mut self,
+            pipeline: &'a redis::Pipeline,
+            offset: usize,
+            count: usize,
+            pipeline_retry_strategy: Option<PipelineRetryStrategy>,
+        ) -> RedisFuture<'a, Vec<Value>> {
+            self.0
+                .req_packed_commands(pipeline, offset, count, pipeline_retry_strategy)
+        }
+
+        fn get_db(&self) -> i64 {
+            self.0.get_db()
+        }
+
+        fn is_closed(&self) -> bool {
+            self.0.is_closed()
+        }
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_ask_without_opt_in_sends_asking_as_its_own_request() {
+        let name = "test_async_cluster_ask_without_opt_in_sends_asking_as_its_own_request";
+        let requests_to_importing = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let recorded = requests_to_importing.clone();
+        let MockEnv {
+            client,
+            handler: _handler,
+            runtime,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]),
+            name,
+            move |cmd: &[u8], port| {
+                respond_startup_two_nodes(name, cmd)?;
+                match port {
+                    6379 => Err(parse_redis_value(
+                        format!("-ASK 6918 {name}:6380\r\n").as_bytes(),
+                    )),
+                    6380 => {
+                        let is_asking = contains_slice(cmd, b"ASKING");
+                        recorded
+                            .lock()
+                            .unwrap()
+                            .push((is_asking, asked_in_same_write()));
+                        if is_asking {
+                            Err(Ok(Value::Okay))
+                        } else {
+                            Err(Ok(Value::BulkString(b"123".to_vec().into())))
+                        }
+                    }
+                    _ => panic!("Wrong node"),
+                }
+            },
+        );
+
+        let value = runtime.block_on(async {
+            let mut connection = client
+                .get_async_generic_connection::<NoAskingOptInConnection>()
+                .await?;
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Option<i32>>(&mut connection)
+                .await
+        });
+
+        assert_eq!(value, Ok(Some(123)));
+        // `ASKING` alone, then the command in a write of its own.
+        assert_eq!(
+            *requests_to_importing.lock().unwrap(),
+            vec![(true, false), (false, false)]
+        );
+    }
+
+    /// A key in a slot that is MIGRATING on its owner and IMPORTING on another node, and
+    /// that is only on the importing node, is answered with ASK. Under concurrent load on
+    /// the same connections, the retry after ASK must still reach the key: other requests
+    /// written between `ASKING` and the command would consume `ASKING`, and the importing
+    /// node would answer MOVED back to the owner.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_ask_redirect_under_concurrent_load() {
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(3),
+            false,
+        );
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+            let cluster_nodes = cluster.get_cluster_nodes().await;
+            let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+
+            let key = format!("{{{}}}:ask", generate_random_string(10));
+            let slot = get_slot(key.as_bytes());
+            let importing_id = cluster.migrate_slot(slot, slot_distribution.clone()).await;
+            let (_, _, port, _) = slot_distribution
+                .iter()
+                .find(|(id, ..)| *id == importing_id)
+                .expect("importing node is in the slot distribution");
+
+            // Write the key on the importing node only, connecting as the fixture does (plain TCP
+            // or TLS).
+            let importing_info = cluster
+                .nodes
+                .iter()
+                .find(|info| match &info.addr {
+                    ConnectionAddr::Tcp(_, node_port)
+                    | ConnectionAddr::TcpTls {
+                        port: node_port, ..
+                    } => node_port.to_string() == *port,
+                    _ => false,
+                })
+                .expect("importing node is a cluster node")
+                .clone();
+            let client = redis::Client::open(importing_info)?;
+            let mut importing = client
+                .get_multiplexed_async_connection(GlideConnectionOptions::default())
+                .await?;
+            redis::pipe()
+                .cmd("ASKING")
+                .ignore()
+                .cmd("SET")
+                .arg(&key)
+                .arg("value")
+                .ignore()
+                .query_async::<_, ()>(&mut importing)
+                .await?;
+
+            let stop = Arc::new(AtomicBool::new(false));
+            let mut tasks = Vec::new();
+            for _ in 0..4 {
+                let (mut connection, stop, key) = (connection.clone(), stop.clone(), key.clone());
+                tasks.push(tokio::spawn(async move {
+                    let mut requests = 0u64;
+                    while !stop.load(Ordering::Relaxed) {
+                        let value: Option<String> =
+                            cmd("GET").arg(&key).query_async(&mut connection).await?;
+                        assert_eq!(value.as_deref(), Some("value"));
+                        requests += 1;
+                    }
+                    Ok::<_, RedisError>(requests)
+                }));
+            }
+            {
+                // The retry of a transaction after ASK sends `ASKING` before `MULTI`.
+                let (mut connection, stop, key) = (connection.clone(), stop.clone(), key.clone());
+                tasks.push(tokio::spawn(async move {
+                    let mut pipeline = redis::pipe();
+                    pipeline.atomic().get(&key);
+                    let route =
+                        SingleNodeRoutingInfo::SpecificNode(Route::new(slot, SlotAddr::Master));
+                    let mut requests = 0u64;
+                    while !stop.load(Ordering::Relaxed) {
+                        let result = connection
+                            .route_pipeline(&pipeline, 2, 1, Some(route.clone()), None)
+                            .await?;
+                        assert_eq!(
+                            result,
+                            vec![Value::Array(vec![Value::BulkString(
+                                b"value".to_vec().into()
+                            )])]
+                        );
+                        requests += 1;
+                    }
+                    Ok::<_, RedisError>(requests)
+                }));
+            }
+            // Background requests to every node share the connections with the requests above.
+            for task in 0..16u64 {
+                let (mut connection, stop) = (connection.clone(), stop.clone());
+                tasks.push(tokio::spawn(async move {
+                    let mut i = task;
+                    while !stop.load(Ordering::Relaxed) {
+                        i = i.wrapping_mul(6364136223846793005).wrapping_add(1);
+                        let _: Option<String> = cmd("GET")
+                            .arg(format!("background:{}", i % 10_000))
+                            .query_async(&mut connection)
+                            .await?;
+                    }
+                    Ok::<_, RedisError>(0)
+                }));
+            }
+
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            stop.store(true, Ordering::Relaxed);
+            let mut asked = 0;
+            for (index, task) in tasks.into_iter().enumerate() {
+                let requests = task.await.expect("task did not panic")?;
+                if index < 5 {
+                    asked += requests;
+                }
+            }
+            assert!(asked > 0, "no request for the key completed");
+
+            let value: Option<String> = cmd("GET").arg(&key).query_async(&mut connection).await?;
+            assert_eq!(value.as_deref(), Some("value"));
+            Ok::<_, RedisError>(())
+        })
+        .unwrap();
+    }
+
     #[test]
     #[serial_test::parallel(otel)]
     fn test_async_cluster_ask_save_new_connection() {

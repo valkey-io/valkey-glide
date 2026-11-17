@@ -18,6 +18,7 @@
 * Rust: `telemetry::init` rejects a configuration with no exporter ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Rust: `telemetry::init` runs the HTTP and gRPC exporters on GLIDE's runtime ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core: reject writes in read-only standalone pipelines, transactions and scopes ([#7761](https://github.com/valkey-io/valkey-glide/pull/7761))
+* Core: send ASKING in the same write as the redirected command ([#7778](https://github.com/valkey-io/valkey-glide/pull/7778))
 
 ### Breaking Changes
 
