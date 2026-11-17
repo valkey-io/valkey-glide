@@ -317,6 +317,573 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    async fn send_response_option_command(client: &mut Client, args: &[&str]) -> Value {
+        let mut command = redis::cmd(args[0]);
+        command.arg(&args[1..]);
+        client
+            .send_command(&mut command, None)
+            .await
+            .unwrap_or_else(|error| panic!("{args:?}: {error}"))
+    }
+
+    fn response_option_string(value: &str) -> Value {
+        Value::BulkString(value.as_bytes().to_vec().into())
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_response_option_keywords_as_data(
+        #[values(false, true)] use_cluster: bool,
+        #[values(ProtocolVersion::RESP2, ProtocolVersion::RESP3)] protocol: ProtocolVersion,
+    ) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: false,
+                    protocol,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let client = &mut test_basics.client;
+            for args in [
+                vec!["SET", "IDX", "abc"],
+                vec!["SET", "{IDX}:other", "abc"],
+                vec!["HSET", "WITHVALUES", "field", "value"],
+                vec!["HSET", "plain-hash", "field", "value"],
+                vec!["ZADD", "plain-zset", "1", "member"],
+                vec!["ZADD", "WITHSCORES", "1", "member"],
+                vec!["ZADD", "{WITHSCORES}:other", "3", "other"],
+                vec!["ZADD", "ranks", "2", "WITHSCORE"],
+            ] {
+                send_response_option_command(client, &args).await;
+            }
+            let member = response_option_string("member");
+            let scored_members = Value::Map(vec![(member.clone(), Value::Double(1.0))]);
+            let mut cases: Vec<(&[&str], Value)> = vec![
+                (
+                    &["HRANDFIELD", "WITHVALUES", "1"],
+                    Value::Array(vec![response_option_string("field")]),
+                ),
+                (
+                    &["HRANDFIELD", "WITHVALUES", "1", "wItHvAlUeS"],
+                    Value::Array(vec![Value::Array(vec![
+                        response_option_string("field"),
+                        response_option_string("value"),
+                    ])]),
+                ),
+                (
+                    &["ZRANDMEMBER", "WITHSCORES", "1"],
+                    Value::Array(vec![member.clone()]),
+                ),
+                (
+                    &["ZRANDMEMBER", "WITHSCORES", "1", "wItHsCoReS"],
+                    Value::Array(vec![Value::Array(vec![member.clone(), Value::Double(1.0)])]),
+                ),
+                (
+                    &["ZRANGE", "WITHSCORES", "0", "-1"],
+                    Value::Array(vec![member.clone()]),
+                ),
+                (
+                    &["ZRANGE", "WITHSCORES", "0", "-1", "wItHsCoReS"],
+                    scored_members.clone(),
+                ),
+                (&["ZADD", "INCR", "1", "member"], Value::Int(1)),
+                (
+                    &["ZADD", "members", "1", "INCR", "2", "other"],
+                    Value::Int(2),
+                ),
+                (&["ZADD", "INCR", "iNcR", "2", "member"], Value::Double(3.0)),
+                (&["ZRANK", "ranks", "WITHSCORE"], Value::Int(0)),
+                (&["ZREVRANK", "ranks", "WITHSCORE"], Value::Int(0)),
+                (
+                    &["ZDIFF", "2", "WITHSCORES", "{WITHSCORES}:other"],
+                    Value::Array(vec![member.clone()]),
+                ),
+                (
+                    &[
+                        "ZDIFF",
+                        "2",
+                        "WITHSCORES",
+                        "{WITHSCORES}:other",
+                        "wItHsCoReS",
+                    ],
+                    scored_members.clone(),
+                ),
+                (
+                    &["ZUNION", "2", "WITHSCORES", "{WITHSCORES}:other"],
+                    Value::Array(vec![member.clone(), response_option_string("other")]),
+                ),
+                (
+                    &[
+                        "ZUNION",
+                        "2",
+                        "WITHSCORES",
+                        "{WITHSCORES}:other",
+                        "WEIGHTS",
+                        "2",
+                        "1",
+                        "AGGREGATE",
+                        "MAX",
+                        "wItHsCoReS",
+                    ],
+                    Value::Map(vec![
+                        (member.clone(), Value::Double(2.0)),
+                        (response_option_string("other"), Value::Double(3.0)),
+                    ]),
+                ),
+                (
+                    &["ZINTER", "1", "WITHSCORES"],
+                    Value::Array(vec![member.clone()]),
+                ),
+                (
+                    &[
+                        "ZINTER",
+                        "1",
+                        "WITHSCORES",
+                        "WEIGHTS",
+                        "2",
+                        "AGGREGATE",
+                        "MIN",
+                        "wItHsCoReS",
+                    ],
+                    Value::Map(vec![(member.clone(), Value::Double(2.0))]),
+                ),
+                // The server compares option tokens as C strings, including NUL suffixes.
+                (
+                    &["ZRANGE", "members", "0", "-1", "REV\0tail", "WITHSCORES"],
+                    Value::Map(vec![
+                        (response_option_string("other"), Value::Double(2.0)),
+                        (response_option_string("INCR"), Value::Double(1.0)),
+                    ]),
+                ),
+                (
+                    &["ZADD", "nul-incr", "NX\0tail", "INCR", "2", "member"],
+                    Value::Double(2.0),
+                ),
+                (
+                    &[
+                        "ZUNION",
+                        "1",
+                        "WITHSCORES",
+                        "WEIGHTS\0tail",
+                        "2",
+                        "WITHSCORES",
+                    ],
+                    Value::Map(vec![(member.clone(), Value::Double(2.0))]),
+                ),
+                // Plain keys ensure the reply flag itself, rather than a key collision, selects conversion.
+                (
+                    &["ZRANGE", "plain-zset", "0", "-1", "WITHSCORES\0tail"],
+                    scored_members,
+                ),
+                (
+                    &["ZADD", "nul-flag", "INCR\0tail", "2", "member"],
+                    Value::Double(2.0),
+                ),
+                (
+                    &["HRANDFIELD", "plain-hash", "1", "WITHVALUES\0tail"],
+                    Value::Array(vec![Value::Array(vec![
+                        response_option_string("field"),
+                        response_option_string("value"),
+                    ])]),
+                ),
+                (
+                    &["ZRANDMEMBER", "plain-zset", "1", "WITHSCORES\0tail"],
+                    Value::Array(vec![Value::Array(vec![member.clone(), Value::Double(1.0)])]),
+                ),
+            ];
+            if version_greater_or_equal(client, "7.0.0").await {
+                cases.push((
+                    &["LCS", "IDX", "{IDX}:other"],
+                    response_option_string("abc"),
+                ));
+            }
+            if version_greater_or_equal(client, "7.2.0").await {
+                cases.push((
+                    &["ZRANK", "ranks", "WITHSCORE", "wItHsCoRe"],
+                    Value::Array(vec![Value::Int(0), Value::Double(2.0)]),
+                ));
+                cases.push((
+                    &["ZREVRANK", "ranks", "WITHSCORE", "wItHsCoRe"],
+                    Value::Array(vec![Value::Int(0), Value::Double(2.0)]),
+                ));
+            }
+            if version_greater_or_equal(client, "9.2.0").await {
+                println!("Exercising Valkey >=9.2 ZRANGE XX controls");
+                for args in [
+                    &["ZRANGE", "plain-zset", "0", "-1", "XX", "WITHSCORES"][..],
+                    &["ZRANGE", "plain-zset", "0", "-1", "WITHSCORES", "xX"][..],
+                ] {
+                    cases.push((args, Value::Map(vec![(member.clone(), Value::Double(1.0))])));
+                }
+            }
+            for (args, expected) in cases {
+                assert_eq!(
+                    send_response_option_command(client, args).await,
+                    expected,
+                    "{args:?}"
+                );
+            }
+            if version_greater_or_equal(client, "7.0.0").await {
+                for min_match_len in ["MINMATCHLEN", "MINMATCHLEN\0tail"] {
+                    let value = send_response_option_command(
+                        client,
+                        &[
+                            "LCS",
+                            "IDX",
+                            "{IDX}:other",
+                            min_match_len,
+                            "1",
+                            "iDx",
+                            "WITHMATCHLEN",
+                        ],
+                    )
+                    .await;
+                    let Value::Map(entries) = value else {
+                        panic!("Expected LCS IDX map, got {value:?}")
+                    };
+                    assert!(entries.contains(&(Value::SimpleString("len".into()), Value::Int(3))));
+                    assert!(entries.contains(&(
+                        Value::SimpleString("matches".into()),
+                        Value::Array(vec![Value::Array(vec![
+                            Value::Array(vec![Value::Int(0), Value::Int(2)]),
+                            Value::Array(vec![Value::Int(0), Value::Int(2)]),
+                            Value::Int(3)
+                        ])])
+                    )));
+                }
+            }
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_response_option_keywords_in_stream_data(
+        #[values(false, true)] use_cluster: bool,
+        #[values(ProtocolVersion::RESP2, ProtocolVersion::RESP3)] protocol: ProtocolVersion,
+    ) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: false,
+                    protocol,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let client = &mut test_basics.client;
+            let fields = Value::Array(vec![Value::Array(vec![
+                response_option_string("field"),
+                response_option_string("value"),
+            ])]);
+            // Exercise every arbitrary string in the fixed prefix independently.
+            for (key, group, consumer) in [
+                ("JUSTID", "group", "consumer"),
+                ("group-stream", "JUSTID", "consumer"),
+                ("consumer-stream", "group", "JUSTID"),
+            ] {
+                send_response_option_command(client, &["XADD", key, "1-0", "field", "value"]).await;
+                send_response_option_command(client, &["XGROUP", "CREATE", key, group, "0"]).await;
+                send_response_option_command(
+                    client,
+                    &[
+                        "XREADGROUP",
+                        "GROUP",
+                        group,
+                        "source",
+                        "COUNT",
+                        "1",
+                        "STREAMS",
+                        key,
+                        ">",
+                    ],
+                )
+                .await;
+                for options in [
+                    &["JUSTID"][..],
+                    &["JUSTID", "FORCE"][..],
+                    &["FORCE", "JUSTID"][..],
+                ] {
+                    let mut args = vec!["XCLAIM", key, group, consumer, "0"];
+                    args.extend_from_slice(options);
+                    assert_eq!(
+                        send_response_option_command(client, &args).await,
+                        Value::Array(vec![]),
+                        "{args:?}"
+                    );
+                }
+                assert_eq!(
+                    send_response_option_command(
+                        client,
+                        &["XCLAIM", key, group, consumer, "0", "1-0"]
+                    )
+                    .await,
+                    Value::Map(vec![(Value::SimpleString("1-0".into()), fields.clone())])
+                );
+                assert_eq!(
+                    send_response_option_command(
+                        client,
+                        &[
+                            "XCLAIM", key, group, consumer, "0", "1-0", "IDLE", "0", "jUsTiD"
+                        ]
+                    )
+                    .await,
+                    Value::Array(vec![response_option_string("1-0")])
+                );
+                for (count, just_id) in [("COUNT", false), ("COUNT", true), ("COUNT\0tail", true)] {
+                    let mut args = vec!["XAUTOCLAIM", key, group, consumer, "0", "0-0", count, "1"];
+                    if just_id {
+                        args.push("jUsTiD");
+                    }
+                    let value = send_response_option_command(client, &args).await;
+                    let Value::Array(result) = value else {
+                        panic!("Expected XAUTOCLAIM array, got {value:?}")
+                    };
+                    assert!(result.len() == 2 || result.len() == 3);
+                    assert_eq!(result[0], response_option_string("0-0"));
+                    assert_eq!(
+                        result[1],
+                        if just_id {
+                            Value::Array(vec![response_option_string("1-0")])
+                        } else {
+                            Value::Map(vec![(response_option_string("1-0"), fields.clone())])
+                        }
+                    );
+                    if result.len() == 3 {
+                        assert_eq!(result[2], Value::Array(vec![]));
+                    }
+                }
+            }
+            send_response_option_command(
+                client,
+                &["XADD", "plain-stream", "1-0", "field", "value"],
+            )
+            .await;
+            send_response_option_command(
+                client,
+                &["XGROUP", "CREATE", "plain-stream", "group", "0"],
+            )
+            .await;
+            for options in [&["JUSTID\0tail"][..], &["FORCE\0tail", "JUSTID"][..]] {
+                let mut args = vec!["XCLAIM", "plain-stream", "group", "consumer", "0"];
+                args.extend_from_slice(options);
+                assert_eq!(
+                    send_response_option_command(client, &args).await,
+                    Value::Array(vec![]),
+                    "{args:?}"
+                );
+            }
+            let value = send_response_option_command(
+                client,
+                &[
+                    "XINFO",
+                    "STREAM",
+                    "plain-stream",
+                    "FULL\0tail",
+                    "COUNT",
+                    "1",
+                ],
+            )
+            .await;
+            let Value::Map(entries) = value else {
+                panic!("Expected full stream map, got {value:?}")
+            };
+            let (_, Value::Array(groups)) = entries
+                .iter()
+                .find(|(key, _)| key == &response_option_string("groups"))
+                .unwrap()
+            else {
+                panic!("Expected stream groups array: {entries:?}")
+            };
+            assert_eq!(groups.len(), 1);
+            let Value::Map(group) = &groups[0] else {
+                panic!("Expected normalized group map, got {groups:?}")
+            };
+            assert!(group.contains(&(
+                response_option_string("name"),
+                response_option_string("group")
+            )));
+            send_response_option_command(client, &["XADD", "FULL", "1-0", "field", "value"]).await;
+            for full in [false, true] {
+                let mut args = vec!["XINFO", "STREAM", "FULL"];
+                if full {
+                    args.extend(["fUlL", "COUNT", "1"]);
+                }
+                let value = send_response_option_command(client, &args).await;
+                let Value::Map(entries) = value else {
+                    panic!("Expected XINFO STREAM map, got {value:?}")
+                };
+                assert!(entries.contains(&(response_option_string("length"), Value::Int(1))));
+                if full {
+                    assert!(entries.contains(&(
+                        response_option_string("entries"),
+                        Value::Array(vec![Value::Array(vec![
+                            response_option_string("1-0"),
+                            Value::Array(vec![
+                                response_option_string("field"),
+                                response_option_string("value")
+                            ])
+                        ])])
+                    )));
+                    assert!(
+                        entries.contains(&(response_option_string("groups"), Value::Array(vec![])))
+                    );
+                } else {
+                    assert!(entries.contains(&(
+                        response_option_string("first-entry"),
+                        Value::Array(vec![
+                            response_option_string("1-0"),
+                            Value::Array(vec![
+                                response_option_string("field"),
+                                response_option_string("value")
+                            ])
+                        ])
+                    )));
+                    assert!(entries.contains(&(response_option_string("groups"), Value::Int(0))));
+                }
+            }
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_response_option_keywords_in_geo_data(
+        #[values(false, true)] use_cluster: bool,
+        #[values(ProtocolVersion::RESP2, ProtocolVersion::RESP3)] protocol: ProtocolVersion,
+    ) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: false,
+                    protocol,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let client = &mut test_basics.client;
+            send_response_option_command(client, &["GEOADD", "plain-geo", "0", "0", "member"])
+                .await;
+            assert_eq!(
+                send_response_option_command(
+                    client,
+                    &[
+                        "GEOSEARCH",
+                        "plain-geo",
+                        "FROMMEMBER",
+                        "member",
+                        "BYRADIUS",
+                        "1",
+                        "km",
+                        "WITHDIST\0tail"
+                    ]
+                )
+                .await,
+                Value::Array(vec![Value::Array(vec![
+                    response_option_string("member"),
+                    Value::Array(vec![Value::Double(0.0)])
+                ])])
+            );
+            if version_greater_or_equal(client, "9.2.0").await {
+                println!("Exercising Valkey >=9.2 GEOSEARCH BYPOLYGON control");
+                assert_eq!(
+                    send_response_option_command(
+                        client,
+                        &[
+                            "GEOSEARCH",
+                            "plain-geo",
+                            "BYPOLYGON",
+                            "4",
+                            "-1",
+                            "-1",
+                            "1",
+                            "-1",
+                            "1",
+                            "1",
+                            "-1",
+                            "1",
+                            "WITHHASH"
+                        ]
+                    )
+                    .await,
+                    Value::Array(vec![Value::Array(vec![
+                        response_option_string("member"),
+                        Value::Array(vec![Value::Int(3377699720527872)])
+                    ])])
+                );
+            }
+            for keyword in ["WITHDIST", "WITHHASH", "WITHCOORD"] {
+                send_response_option_command(client, &["GEOADD", keyword, "0", "0", keyword]).await;
+                assert_eq!(
+                    send_response_option_command(
+                        client,
+                        &[
+                            "GEOSEARCH",
+                            keyword,
+                            "FROMMEMBER",
+                            keyword,
+                            "BYRADIUS",
+                            "1",
+                            "km"
+                        ]
+                    )
+                    .await,
+                    Value::Array(vec![response_option_string(keyword)])
+                );
+                // A genuine option still changes the normalized result when the key/member is a keyword.
+                for args in [
+                    vec![
+                        "GEOSEARCH",
+                        keyword,
+                        "FROMMEMBER",
+                        keyword,
+                        "BYRADIUS",
+                        "1",
+                        "km",
+                        "COUNT",
+                        "1",
+                        "ANY",
+                        "wItHdIsT",
+                    ],
+                    vec![
+                        "GEOSEARCH",
+                        keyword,
+                        "wItHdIsT",
+                        "FROMMEMBER",
+                        keyword,
+                        "BYRADIUS",
+                        "1",
+                        "km",
+                    ],
+                    vec![
+                        "GEOSEARCH",
+                        keyword,
+                        "FROMMEMBER\0tail",
+                        keyword,
+                        "BYRADIUS",
+                        "1",
+                        "km",
+                        "WITHDIST",
+                    ],
+                ] {
+                    assert_eq!(
+                        send_response_option_command(client, &args).await,
+                        Value::Array(vec![Value::Array(vec![
+                            response_option_string(keyword),
+                            Value::Array(vec![Value::Double(0.0)])
+                        ])])
+                    );
+                }
+            }
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
