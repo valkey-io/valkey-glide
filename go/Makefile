@@ -177,8 +177,15 @@ example-test:
 	| go-test-report -o reports/example-tests.html -t example-test > /dev/null)
 
 # integration tests - run subtask with skipping modules tests
+# go test exits 0 when the pool and scope tests skip or never run, so an unfiltered run checks they ran against servers
 integ-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" $(if $(test-filter), -testify.m $(test-filter))
 integ-test: reports/integ-tests.log
+ifeq ($(test-filter),)
+	@grep -q -- '--- PASS: TestGlideTestSuite/TestPool' $< \
+		&& grep -q -- '--- PASS: TestGlideTestSuite/TestScope' $< \
+		&& ! grep -q 'servers in this run' $< \
+		|| { echo "integ-test: the pool and scope tests did not all run against servers"; exit 1; }
+endif
 
 # modules tests - run substask with default filter
 modules-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter), -testify.m TestModule)
@@ -196,8 +203,8 @@ tls-test: reports/tls-integ-tests.log
 	@grep -q -- '--- PASS: TestGlideTestSuite/[A-Za-z0-9_]*Tls' $< \
 		|| { echo "tls-test: the TLS pass ran no TLS tests"; exit 1; }
 
-# long timeout tests - run subtask with the long timeout flag enabled
-long-timeout-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -long-timeout-tests $(if $(test-filter), -testify.m $(test-filter))
+# long timeout tests - run subtask with the long timeout flag enabled and default filter
+long-timeout-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -long-timeout-tests $(if $(test-filter), -testify.m $(test-filter), -testify.m TestLongTimeout)
 long-timeout-test: reports/long-timeout-integ-tests.log
 
 # opentelemetry tests - run subtask with the opentelemetry flag enabled
@@ -217,13 +224,14 @@ endif
 
 # each pass writes its own reports/<name>.log and .html, so several passes can run in one make call
 # keep the log when make is interrupted (for example a CI timeout), it is the artifact that shows how far the run got
+# -count=1 disables the test cache, which would replay a passing run without starting any servers
 .PRECIOUS: reports/%.log
 .PHONY: FORCE
 FORCE:
 reports/%.log: FORCE
 	mkdir -p reports
 	set -o pipefail; \
-	$(TEST_CMD) \
+	$(TEST_CMD) -count=1 \
 	$(TEST_FILTER) \
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
