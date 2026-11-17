@@ -516,18 +516,20 @@ pub struct ClientShared {
     // a SELECT may have been issued, not only on observed drift.
     db_maybe_dirty: Arc<AtomicBool>,
     // Set on dispatch of a command that leaves state no reset command undoes: any
-    // (S|P)SUBSCRIBE, MONITOR, RESET, or `CLIENT REPLY OFF|SKIP`. Never cleared. Fails
-    // `reset_connection_state`, which then discards the client.
+    // (S|P)SUBSCRIBE, MONITOR, RESET, or `CLIENT REPLY OFF|SKIP`, a WATCH that may
+    // be on a replica, or a blocking command (or batch holding one) that failed with
+    // a timeout or IO error. Never cleared. Fails `reset_connection_state`, which
+    // then discards the client.
     unresettable: Arc<AtomicBool>,
     // Set on dispatch of MULTI / WATCH; taken by the release reset to decide on
     // DISCARD / UNWATCH. Unlike `multi_active`, EXEC/DISCARD never clear them, so a
     // rejected DISCARD or a concurrent task can't hide an open transaction.
     multi_seen: Arc<AtomicBool>,
     watch_seen: Arc<AtomicBool>,
-    // Pooled cluster clients only: the primaries WATCHes were sent to (route and
-    // owner address at WATCH time), so the release UNWATCH skips nodes the borrow
-    // never used. `Any` when a WATCH could be on any primary (a batch,
-    // `RandomPrimary`, an owner lookup that failed), which falls back to all of them.
+    // Pooled cluster clients only: each watched slot and its primary's address at
+    // WATCH time, so the release UNWATCH skips nodes the borrow never used. `Any`
+    // when a WATCH could be on any primary (a batch, `RandomPrimary`, an owner
+    // lookup that failed), which falls back to all of them.
     watch_routes: Arc<std::sync::Mutex<WatchedPrimaries>>,
     // IAM token generation the live connection last authenticated at. Compared by
     // `prepare_for_borrow` on the first command after a borrow to detect a rotation
@@ -1736,7 +1738,7 @@ impl Client {
                 execute.await
             }
         };
-        self.track_blocking_failure(is_blocking_cmd, &result);
+        self.track_blocking_failure(|| is_blocking_cmd, &result);
 
         // Report result to client-wide circuit breaker
         if let Some(cb) = &self.circuit_breaker {
@@ -2265,7 +2267,7 @@ impl Client {
             )
             .await;
             self.track_blocking_failure(
-                pipeline.cmd_iter().any(|c| is_blocking_command(c)),
+                || pipeline.cmd_iter().any(|c| is_blocking_command(c)),
                 &result,
             );
             // Record the drift only if the SELECT reply applied (see
@@ -2310,12 +2312,18 @@ impl Client {
                 self.track_transaction_state(cmd);
                 self.track_unresettable(cmd);
                 // A batch may split across nodes, so its WATCH target is unknown,
-                // unless the batch routing may send it to a replica.
+                // unless the batch routing may send it to a replica. Unlike a single
+                // command, a `Random`-routed batch is not narrowed to a primary.
                 if self.is_cluster
                     && self.is_pool_managed.load(Ordering::Acquire)
                     && Self::is_watch(cmd)
                 {
-                    if Self::classify_watch(cmd, routing.as_ref()) == WatchTarget::MaybeReplica {
+                    let maybe_replica = matches!(
+                        routing,
+                        Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
+                    ) || Self::classify_watch(cmd, routing.as_ref())
+                        == WatchTarget::MaybeReplica;
+                    if maybe_replica {
                         self.unresettable.store(true, Ordering::Release);
                     } else {
                         self.watch_routes
@@ -2386,7 +2394,7 @@ impl Client {
             )
             .await;
             self.track_blocking_failure(
-                pipeline.cmd_iter().any(|c| is_blocking_command(c)),
+                || pipeline.cmd_iter().any(|c| is_blocking_command(c)),
                 &result,
             );
             // Record the drift only if the SELECT reply applied (see
@@ -4040,8 +4048,10 @@ impl Client {
     /// Flag a blocking command (or a batch holding one) that failed with a timeout
     /// or IO error: its server-side waiter may still be armed, so the next borrower
     /// would queue behind it. Same rule as the scope pool's `blocking_in_flight`.
-    fn track_blocking_failure(&self, blocking: bool, result: &RedisResult<Value>) {
-        if blocking && matches!(result, Err(e) if crate::scope::is_poisoning_error(e)) {
+    /// `blocking` is only evaluated on such a failure, so a batch's command scan
+    /// stays off the success path.
+    fn track_blocking_failure(&self, blocking: impl FnOnce() -> bool, result: &RedisResult<Value>) {
+        if matches!(result, Err(e) if crate::scope::is_poisoning_error(e)) && blocking() {
             self.unresettable.store(true, Ordering::Release);
         }
     }

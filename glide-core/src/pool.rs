@@ -4177,45 +4177,80 @@ mod scope_pool_tests {
     /// A blocking command that the client timed out on (the server was paused) may
     /// leave its waiter armed, so release must discard the client even though the
     /// binding's blocking counter already dropped to zero. One that the server
-    /// answered (nil on its own timeout) leaves nothing behind. A-B: re-idled after
-    /// the client-side timeout.
+    /// answered (nil on its own timeout) leaves nothing behind. Covers a single
+    /// command, a pipeline and a transaction. A-B: each re-idled after the
+    /// client-side timeout when its call site didn't flag it.
     #[tokio::test]
     async fn release_discards_a_client_whose_blocking_command_timed_out() {
-        let server = TestServer::start();
-        wait_for_server_ready(server.port).await;
-        let mut client = crate::client::Client::new(request_for(&[server.port]), None)
-            .await
-            .expect("client connects");
-        let mut other = crate::client::Client::new(request_for(&[server.port]), None)
-            .await
-            .expect("second client connects");
-        let (pool_arc, client_id) = pool_with_borrowed(&client);
+        for sent in ["command", "pipeline", "transaction"] {
+            let server = TestServer::start();
+            wait_for_server_ready(server.port).await;
+            let mut client = crate::client::Client::new(request_for(&[server.port]), None)
+                .await
+                .expect("client connects");
+            let mut other = crate::client::Client::new(request_for(&[server.port]), None)
+                .await
+                .expect("second client connects");
+            let (pool_arc, client_id) = pool_with_borrowed(&client);
+            let mut blpop = redis::cmd("BLPOP");
+            blpop.arg("empty").arg(0.1);
+            let mut batch = redis::pipe();
+            batch.add_command(blpop.clone());
+            if sent == "transaction" {
+                batch.atomic();
+            }
+            let send = |client: &mut crate::client::Client| {
+                let (blpop, batch) = (blpop.clone(), batch.clone());
+                let mut client = client.clone();
+                async move {
+                    match sent {
+                        "command" => client.send_command(&mut blpop.clone(), None).await,
+                        "pipeline" => {
+                            client
+                                .send_pipeline(
+                                    &batch,
+                                    None,
+                                    true,
+                                    Some(1_000),
+                                    redis::PipelineRetryStrategy::default(),
+                                )
+                                .await
+                        }
+                        _ => {
+                            client
+                                .send_transaction(&batch, None, Some(1_000), true)
+                                .await
+                        }
+                    }
+                }
+            };
 
-        let answered = client
-            .send_command(redis::cmd("BLPOP").arg("empty").arg(0.1), None)
-            .await
-            .expect("the server answers BLPOP's own timeout");
-        assert_eq!(answered, redis::Value::Nil);
-        assert!(!client.borrow_is_dirty_for_test(), "a nil BLPOP is clean");
+            send(&mut client)
+                .await
+                .unwrap_or_else(|e| panic!("{sent}: the server answers BLPOP's own timeout: {e}"));
+            assert!(
+                !client.borrow_is_dirty_for_test(),
+                "{sent}: a nil BLPOP is clean"
+            );
 
-        other
-            .send_command(redis::cmd("CLIENT").arg("PAUSE").arg(3_000), None)
-            .await
-            .expect("CLIENT PAUSE");
-        let err = client
-            .send_command(redis::cmd("BLPOP").arg("empty").arg(0.1), None)
-            .await
-            .expect_err("the paused server never answers in time");
-        assert!(err.is_timeout(), "client-side timeout: {err}");
+            other
+                .send_command(redis::cmd("CLIENT").arg("PAUSE").arg(3_000), None)
+                .await
+                .expect("CLIENT PAUSE");
+            let err = send(&mut client)
+                .await
+                .expect_err("the paused server never answers in time");
+            assert!(err.is_timeout(), "{sent}: client-side timeout: {err}");
 
-        super::release_client_async(pool_arc.clone(), client_id).await;
-        let mut pool = pool_arc.lock();
-        assert_eq!(
-            pool.idle_count(),
-            0,
-            "a timed-out blocker must not be re-idled"
-        );
-        assert_eq!(pool.drain_discarded_ids(), vec![client_id]);
+            super::release_client_async(pool_arc.clone(), client_id).await;
+            let mut pool = pool_arc.lock();
+            assert_eq!(
+                pool.idle_count(),
+                0,
+                "{sent}: a timed-out blocker must not be re-idled"
+            );
+            assert_eq!(pool.drain_discarded_ids(), vec![client_id], "{sent}");
+        }
     }
 
     /// A MULTI or WATCH the open circuit breaker refused never reached the server, so

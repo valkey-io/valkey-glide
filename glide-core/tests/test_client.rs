@@ -6923,6 +6923,29 @@ pub(crate) mod shared_client_tests {
                 "a batch WATCH that may be on a replica must be discarded"
             );
 
+            // A `Random`-routed batch goes to any node, replicas included (only a
+            // single command is narrowed to a random primary). A-B: re-idled when
+            // `Random` was classified as any primary for a batch too.
+            let client = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(&pool_arc, client);
+            let _ = borrowed(&pool_arc, client_id)
+                .send_pipeline(
+                    &watch_batch,
+                    Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
+                    false,
+                    None,
+                    redis::PipelineRetryStrategy::default(),
+                )
+                .await;
+            release_client_async(pool_arc.clone(), client_id).await;
+            assert_eq!(
+                pool_arc.lock().drain_discarded_ids(),
+                vec![client_id],
+                "a Random-routed batch WATCH must be discarded"
+            );
+
             // ── 3. db drift must be restored (Valkey 9.0+ multi-db cluster) ──
             let mut version_probe = Client::new(connection_request.clone().into(), None)
                 .await
