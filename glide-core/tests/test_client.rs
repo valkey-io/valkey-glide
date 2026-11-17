@@ -1544,7 +1544,7 @@ pub(crate) mod shared_client_tests {
         client: Client,
         client_id: u64,
         scope_id: u64,
-        pool: std::sync::Arc<tokio::sync::Mutex<glide_core::pool::ScopePool>>,
+        pool: std::sync::Arc<glide_core::pool::ScopeMutex>,
         released: std::cell::Cell<bool>,
     }
 
@@ -1574,14 +1574,14 @@ pub(crate) mod shared_client_tests {
                 glide_core::pool::ScopeTarget::ClusterPrimary(_) => Some(routing_slot),
             };
             let reservation = {
-                let mut guard = pool.lock().await;
+                let mut guard = pool.lock();
                 match guard.try_acquire(
                     glide_core::pool::get_scope_registry(),
                     target.clone(),
                     client.current_database(),
                     acquisition_slot,
                 ) {
-                    glide_core::pool::ScopeAcquire::Reserved(reservation) => reservation,
+                    glide_core::pool::ScopeAcquire::Reserved { reservation, .. } => reservation,
                     other => panic!("expected a fresh reservation from an empty pool: {other:?}"),
                 }
             };
@@ -1595,7 +1595,7 @@ pub(crate) mod shared_client_tests {
             .await;
 
             let scope_id = {
-                let mut guard = pool.lock().await;
+                let mut guard = pool.lock();
                 match guard.try_acquire(
                     glide_core::pool::get_scope_registry(),
                     target,
@@ -1875,7 +1875,7 @@ pub(crate) mod shared_client_tests {
 
             // A clean protocol error leaves the connection reusable: it is returned
             // to idle and still counted, rather than discarded.
-            let pool = scope.pool.lock().await;
+            let pool = scope.pool.lock();
             assert!(
                 !pool.idle.is_empty(),
                 "connection with a clean protocol error was discarded instead of reused"
@@ -1937,7 +1937,7 @@ pub(crate) mod shared_client_tests {
 
             // The discarded connection must not be reusable: not parked as idle,
             // not tracked as in-use, and not counted toward the pool total.
-            let pool = scope.pool.lock().await;
+            let pool = scope.pool.lock();
             assert!(
                 pool.idle.is_empty(),
                 "cancelled blocking connection was returned to the idle pool"
@@ -1983,7 +1983,7 @@ pub(crate) mod shared_client_tests {
 
             // A seated + acquired scope means the slot is counted.
             {
-                let pool = scope.pool.lock().await;
+                let pool = scope.pool.lock();
                 assert_eq!(
                     pool.total_count.load(std::sync::atomic::Ordering::Acquire),
                     1,
@@ -2008,7 +2008,7 @@ pub(crate) mod shared_client_tests {
             // pool lock ourselves (as release_scope's Ok arm does) and stay inside
             // the runtime so the best-effort cleanup task has a reactor.
             {
-                let mut pool = scope.pool.lock().await;
+                let mut pool = scope.pool.lock();
                 let reclaimed = pool.release(scope.scope_id, registry);
                 assert!(reclaimed, "release should report the scope was reclaimed");
 
@@ -2240,7 +2240,7 @@ pub(crate) mod shared_client_tests {
             assert!(blpop.await.expect("join").is_err());
 
             let registry = glide_core::pool::get_scope_registry();
-            let mut pool = scope.pool.lock().await;
+            let mut pool = scope.pool.lock();
             assert!(pool.release(scope.scope_id, registry));
             assert!(
                 pool.idle.is_empty(),
@@ -5640,7 +5640,7 @@ pub(crate) mod shared_client_tests {
                 .expect("scope works before the password changes");
             scope::release_scope(scope_a, client_id, &runtime);
             let pool = glide_core::pool::get_or_create_scope_pool(client_id, bytes.clone()).pool;
-            retry(|| async { (pool.lock().await.idle.len() == 1).then_some(()) }).await;
+            retry(|| async { (pool.lock().idle.len() == 1).then_some(()) }).await;
 
             // `<OLD_PASSWORD` removes the old password, so any later AUTH with it
             // is rejected.
@@ -5795,7 +5795,7 @@ pub(crate) mod shared_client_tests {
 
             scope.release();
 
-            let pool = scope.pool.lock().await;
+            let pool = scope.pool.lock();
             assert!(
                 pool.idle.is_empty(),
                 "a connection whose re-auth failed must not be returned to idle"

@@ -98,14 +98,14 @@ pub struct PoolMetrics {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Outcome of the probe warmup dial, as reported to the `create_pool` deferred.
-type WarmupResult = std::result::Result<(), String>;
+type WarmupResult = std::result::Result<(), Error>;
 
 /// Outcome of one warmup dial.
 enum WarmupOutcome {
     /// Client was dialed and seated, consuming the caller's reservation.
     Seated,
     /// Dial failed; the caller's reservation has been handed back.
-    Failed(String),
+    Failed(Error),
     /// Pool was destroyed or unregistered mid-dial, so nothing was seated.
     Aborted,
 }
@@ -138,8 +138,9 @@ async fn warmup_dial(pool_id: u64, conn_bytes: &[u8], seat_then_discard: bool) -
         Ok(req) => req,
         Err(e) => {
             release_warmup_slots(pool_id, 1);
-            return WarmupOutcome::Failed(format!(
-                "Failed to parse connection request during warmup: {e}"
+            return WarmupOutcome::Failed(Error::new(
+                Status::InvalidArg,
+                format!("Failed to parse connection request during warmup: {e}"),
             ));
         }
     };
@@ -169,7 +170,10 @@ async fn warmup_dial(pool_id: u64, conn_bytes: &[u8], seat_then_discard: bool) -
         Ok(c) => c,
         Err(e) => {
             release_warmup_slots(pool_id, 1);
-            return WarmupOutcome::Failed(format!("Pool warmup: failed to create client: {e}"));
+            return WarmupOutcome::Failed(Error::new(
+                crate::client_creation_status(&e),
+                format!("Pool warmup: failed to create client: {e}"),
+            ));
         }
     };
 
@@ -302,7 +306,10 @@ pub fn create_pool<'a>(
             match pool::get_pool(pool_id as u64) {
                 Some(pool_arc) => pool_arc.lock().reserve_warmup_slots(probe_count),
                 None => {
-                    let _ = first_tx.send(Err("Pool unregistered before warmup".to_string()));
+                    let _ = first_tx.send(Err(Error::new(
+                        Status::Unknown,
+                        "Pool unregistered before warmup",
+                    )));
                     return;
                 }
             }
@@ -321,11 +328,11 @@ pub fn create_pool<'a>(
         // those would hold their connections open for the process lifetime.
         match warmup_dial(pool_id as u64, &conn_bytes, min_idle == 0).await {
             WarmupOutcome::Seated => {}
-            WarmupOutcome::Failed(msg) => {
-                glide_logger::log_warn("pool", msg.clone());
+            WarmupOutcome::Failed(error) => {
+                glide_logger::log_warn("pool", error.reason.clone());
                 // Nothing was spawned for the other slots, so hand them back here.
                 release_warmup_slots(pool_id as u64, reserved - 1);
-                let _ = first_tx.send(Err(msg));
+                let _ = first_tx.send(Err(error));
                 return;
             }
             WarmupOutcome::Aborted => {
@@ -346,10 +353,10 @@ pub fn create_pool<'a>(
         for _ in 1..reserved {
             let conn_bytes = conn_bytes.clone();
             get_pool_runtime().spawn(async move {
-                if let WarmupOutcome::Failed(msg) =
+                if let WarmupOutcome::Failed(error) =
                     warmup_dial(pool_id as u64, &conn_bytes, false).await
                 {
-                    glide_logger::log_warn("pool", msg);
+                    glide_logger::log_warn("pool", error.reason);
                 }
             });
         }
@@ -361,11 +368,11 @@ pub fn create_pool<'a>(
     get_pool_runtime().spawn(async move {
         match first_rx.await {
             Ok(Ok(())) => deferred.resolve(move |_| Ok(pool_id)),
-            Ok(Err(msg)) => {
+            Ok(Err(error)) => {
                 // Warmup failed — unregister the pool before rejecting so the
                 // registry doesn't accumulate dead entries.
                 pool::unregister_pool(pool_id as u64);
-                deferred.reject(Error::new(Status::Unknown, msg));
+                deferred.reject(error);
             }
             Err(_) => {
                 pool::unregister_pool(pool_id as u64);

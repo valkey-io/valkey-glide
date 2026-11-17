@@ -37,6 +37,22 @@ fn bench_register_only(c: &mut Criterion) {
     });
 }
 
+fn bench_global_lookup(c: &mut Criterion) {
+    TimeoutWatchdog::global();
+    c.bench_function("global_lookup", |b| {
+        b.iter(|| black_box(TimeoutWatchdog::global()));
+    });
+}
+
+fn bench_global_register(c: &mut Criterion) {
+    c.bench_function("global_register", |b| {
+        b.iter(|| {
+            let rx = TimeoutWatchdog::global().register(Duration::from_millis(250), Instant::now());
+            black_box(rx);
+        });
+    });
+}
+
 fn bench_register_plus_phase_update(c: &mut Criterion) {
     let watchdog = TimeoutWatchdog::start();
 
@@ -67,6 +83,8 @@ criterion_group!(
     bench_baseline_oneshot,
     bench_baseline_watchdog,
     bench_register_only,
+    bench_global_lookup,
+    bench_global_register,
     bench_register_plus_phase_update,
     bench_latency_record,
 );

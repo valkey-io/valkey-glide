@@ -1,4 +1,3 @@
-#![allow(unknown_lints, dependency_on_unit_never_type_fallback)]
 use futures_util::StreamExt as _;
 use redis::{AsyncCommands, GlideConnectionOptions};
 

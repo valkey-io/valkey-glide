@@ -88,7 +88,9 @@ impl GlideError {
         use glide_core::client::ConnectionError as CE;
         match err {
             CE::Timeout => GlideError::Timeout("connection attempt timed out".to_string()),
-            CE::Configuration(msg) => GlideError::Configuration(msg),
+            CE::Configuration(msg) | CE::CompressionConfiguration(msg) => {
+                GlideError::Configuration(msg)
+            }
             other => GlideError::Connection(other.to_string()),
         }
     }
@@ -192,6 +194,13 @@ mod tests {
     #[test]
     fn connection_configuration_maps_to_configuration() {
         let g = GlideError::from_connection_error(CE::Configuration("nope".to_string()));
+        assert!(matches!(g, GlideError::Configuration(_)));
+        assert_eq!(g.message(), "nope");
+    }
+
+    #[test]
+    fn connection_compression_configuration_maps_to_configuration() {
+        let g = GlideError::from_connection_error(CE::CompressionConfiguration("nope".to_string()));
         assert!(matches!(g, GlideError::Configuration(_)));
         assert_eq!(g.message(), "nope");
     }

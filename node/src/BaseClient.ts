@@ -291,6 +291,7 @@ import {
     dropOtelSpan,
     getStatistics,
     compressionConfigToProtobuf,
+    toClientCreationError,
     validateCompressionConfiguration,
     valueFromPointer,
     valueFromSplitPointer,
@@ -10293,7 +10294,7 @@ export class BaseClient {
             // Keep the exact bytes used to connect for scopedConnection().
             setScopeConnectionRequest(this, connectionRequestBytes);
 
-            this.clientHandle = await BaseClient.nativeCreateDirectClient(
+            this.clientHandle = await BaseClient.createNativeClient(
                 connectionRequestBytes,
                 this.handleResponsesAvailable,
             );
@@ -10308,6 +10309,21 @@ export class BaseClient {
         } catch (err) {
             this.cleanupConnectionRegistrations();
             throw err;
+        }
+    }
+
+    /** Creates the native client handle; a failure rejects with a `ValkeyError`. */
+    private static async createNativeClient(
+        connectionRequestBytes: Uint8Array,
+        wakeCallback: () => void,
+    ): Promise<GlideClientHandle> {
+        try {
+            return await BaseClient.nativeCreateDirectClient(
+                connectionRequestBytes,
+                wakeCallback,
+            );
+        } catch (error) {
+            throw toClientCreationError(error);
         }
     }
 

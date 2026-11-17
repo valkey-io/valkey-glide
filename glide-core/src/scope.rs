@@ -33,7 +33,7 @@
 use crate::client::{AuthGeneration, Client};
 use crate::errors::RequestErrorType;
 use crate::pool::{
-    ScopedConnection, get_client_scope_pools, get_scope_registry, slot_for_key,
+    ScopeMutex, ScopedConnection, get_client_scope_pools, get_scope_registry, slot_for_key,
     update_state_for_command,
 };
 use redis::{Cmd, RedisError, RedisResult, Value};
@@ -42,7 +42,7 @@ use redis::{Cmd, RedisError, RedisResult, Value};
 use crate::client::SlotAddressError;
 #[cfg(feature = "proto")]
 use crate::pool::{
-    ConnectionState, POOL_RUNNING, ScopeAcquire, ScopePool, ScopePoolHandle, ScopeTarget,
+    ConnectionState, PoolState, ScopeAcquire, ScopePool, ScopePoolHandle, ScopeTarget,
     ScopeTargetUnresolved,
 };
 #[cfg(feature = "proto")]
@@ -50,11 +50,7 @@ use std::str::FromStr;
 #[cfg(feature = "proto")]
 use std::sync::Arc;
 #[cfg(feature = "proto")]
-use std::sync::atomic::Ordering;
-#[cfg(feature = "proto")]
 use std::time::{Duration, Instant};
-#[cfg(feature = "proto")]
-use tokio::sync::Mutex as TokioMutex;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMMAND DESERIALIZATION
@@ -979,7 +975,7 @@ async fn build_scope_connection(
 /// - `reservation`: the reservation guard for the slot being filled
 #[cfg(feature = "proto")]
 pub async fn create_scope_connection(
-    pool: Arc<TokioMutex<ScopePool>>,
+    pool: Arc<ScopeMutex>,
     client: Option<&Client>,
     connection_request_bytes: &[u8],
     target: ScopeTarget,
@@ -987,23 +983,22 @@ pub async fn create_scope_connection(
 ) -> Result<(), ScopeCreateErrorKind> {
     let connection = build_scope_connection(client, connection_request_bytes, &target).await;
 
-    let mut pool_guard = pool.lock().await;
+    let mut pool_guard = pool.lock();
     let connection = connection.and_then(|prepared| {
-        if pool_guard.state.load(Ordering::Acquire) == POOL_RUNNING {
+        if pool_guard.state == PoolState::Running {
             Ok(prepared)
         } else {
             Err(ScopeCreateError::PoolClosed)
         }
     });
 
-    match connection {
+    let (created, log) = match connection {
         Ok(prepared) => {
-            if pool_guard.last_create_warn.take().is_some() {
-                glide_logger::log_debug(
-                    "create_scope_connection",
-                    format!("scoped connection to {target:?} created again"),
-                );
-            }
+            let log = pool_guard.last_create_warn.take().map(|_| DeferredLog {
+                identifier: "create_scope_connection",
+                level: glide_logger::Level::Debug,
+                message: format!("scoped connection to {target:?} created again"),
+            });
             let scope_id = pool_guard.next_id();
             pool_guard.idle.push_back(ScopedConnection {
                 scope_id,
@@ -1020,7 +1015,7 @@ pub async fn create_scope_connection(
                 last_auth_generation: prepared.initial_auth_generation,
             });
             reservation.commit();
-            Ok(())
+            (Ok(()), log)
         }
         Err(err) => {
             // The uncommitted `reservation` gives the slot back on drop. A pool
@@ -1028,35 +1023,43 @@ pub async fn create_scope_connection(
             // per kind and logs the repeats at debug, since an acquire that keeps
             // retrying a persistent cause (a lazy mTLS parent, an unreachable
             // shard) would otherwise warn on every attempt. Same shape as
-            // `log_unresolved_target`.
-            let message = format!("scoped connection to {target:?} not created: {err}");
+            // `unresolved_target_log`.
             let kind = err.kind();
-            if matches!(err, ScopeCreateError::PoolClosed) {
-                glide_logger::log_debug("create_scope_connection", message);
+            let warn = if matches!(err, ScopeCreateError::PoolClosed) {
+                false
             } else {
-                let repeated = pool_guard.last_create_warn == Some(kind);
+                let first = pool_guard.last_create_warn != Some(kind);
                 pool_guard.last_create_warn = Some(kind);
-                if repeated {
-                    glide_logger::log_debug("create_scope_connection", message);
+                first
+            };
+            let log = DeferredLog {
+                identifier: "create_scope_connection",
+                level: if warn {
+                    glide_logger::Level::Warn
                 } else {
-                    glide_logger::log_warn("create_scope_connection", message);
-                }
-            }
-            Err(kind)
+                    glide_logger::Level::Debug
+                },
+                message: format!("scoped connection to {target:?} not created: {err}"),
+            };
+            (Err(kind), Some(log))
         }
+    };
+    drop(pool_guard);
+    if let Some(log) = log {
+        log.write();
     }
+    created
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SCOPE ACQUIRE / RELEASE (NON-BLOCKING WRAPPERS)
+// SCOPE ACQUIRE / RELEASE
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Why one acquire poll did not hand out a scope but a later poll may.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScopeRetryCause {
     /// Work this acquire is waiting on is in progress: its connection is being
-    /// created, an idle connection is being re-`SELECT`ed, or another acquire
-    /// briefly holds the pool lock.
+    /// created, or an idle connection is being re-`SELECT`ed.
     Pending,
     Exhausted,
     /// The routing slot has no mapped primary yet, or the topology is being
@@ -1122,7 +1125,7 @@ fn acquisition_slot_for(target: &ScopeTarget, routing_slot: Option<u16>) -> Opti
     }
 }
 
-/// Test-only single attempt: one pass of the classifier under `try_lock`, so a
+/// Test-only single attempt: one pass of the classifier, so a
 /// cause that needs time to clear is reported as [`ScopeAcquireOutcome::Retry`]
 /// instead of waited on. Lets a test observe what one attempt sees (for example
 /// the first attempt reporting `NeedsResync`) without the wait that
@@ -1148,10 +1151,7 @@ pub(crate) fn acquire_scope_outcome(
     routing_slot: Option<u16>,
 ) -> ScopeAcquireOutcome {
     let handle = scope_pool_for(client_id, connection_request_bytes);
-    let Ok(pool) = handle.pool.try_lock() else {
-        return ScopeAcquireOutcome::Retry(ScopeRetryCause::Pending);
-    };
-    match classify_acquire(&handle.pool, pool, client_id, runtime, routing_slot) {
+    match attempt_acquire(&handle.pool, client_id, runtime, routing_slot) {
         Classified::Outcome(outcome) => outcome,
         Classified::Creating(_) => ScopeAcquireOutcome::Retry(ScopeRetryCause::Pending),
     }
@@ -1287,7 +1287,7 @@ const SCOPE_REDIAL_BACKOFF_CAP: Duration = Duration::from_millis(200);
 ///
 /// One call, one result: the wait lives here, not in the caller, so the
 /// retry/terminal decision and the backoff exist once. Each attempt runs
-/// `classify_acquire` under the awaited pool lock, so lock contention is a
+/// `classify_acquire` under the pool lock, so lock contention is a
 /// wait rather than a retry. Between attempts the call sleeps on
 /// [`ScopePoolHandle::wakeup`], armed before the attempt so a release that lands
 /// between classifying and sleeping is not missed, capped by
@@ -1440,9 +1440,9 @@ async fn acquire_scope_with_wait_cap(
         tokio::pin!(notified);
         notified.as_mut().enable();
 
-        let pool = scope_pool.lock().await;
+        let classified = attempt_acquire(&scope_pool, client_id, runtime, routing_slot);
         let remaining = deadline.saturating_sub(started.elapsed());
-        match classify_acquire(&scope_pool, pool, client_id, runtime, routing_slot) {
+        match classified {
             Classified::Outcome(ScopeAcquireOutcome::Acquired(scope_id)) => return Ok(scope_id),
             Classified::Outcome(ScopeAcquireOutcome::Fail(cause)) => {
                 return Err(ScopeAcquireError::Terminal(cause));
@@ -1509,24 +1509,73 @@ fn scope_pool_for(client_id: u64, connection_request_bytes: Vec<u8>) -> ScopePoo
     }
 }
 
-/// The classification step behind [`acquire_scope`] (and the test-only single
-/// attempt `acquire_scope_outcome`). Takes the guard by value because the
-/// `NeedsResync` arm releases it before spawning.
+/// A log line decided under the scope pool's lock and written after the guard
+/// is released: `glide_logger` writes the rolling log file synchronously, and
+/// every other acquire and release would wait behind that write.
 #[cfg(feature = "proto")]
-fn classify_acquire(
-    scope_pool: &Arc<TokioMutex<ScopePool>>,
-    mut pool: tokio::sync::MutexGuard<'_, ScopePool>,
+#[must_use = "a deferred log line is lost unless written"]
+struct DeferredLog {
+    identifier: &'static str,
+    level: glide_logger::Level,
+    message: String,
+}
+
+#[cfg(feature = "proto")]
+impl DeferredLog {
+    fn write(self) {
+        glide_logger::log(self.level, self.identifier, self.message);
+    }
+}
+
+/// What [`classify_acquire`] decided, plus the log lines it owes once the guard
+/// it consumed is gone.
+#[cfg(feature = "proto")]
+struct Classification {
+    next: Classified,
+    logs: Vec<DeferredLog>,
+}
+
+#[cfg(feature = "proto")]
+fn attempt_acquire(
+    scope_pool: &Arc<ScopeMutex>,
     client_id: u64,
     runtime: &tokio::runtime::Handle,
     routing_slot: Option<u16>,
 ) -> Classified {
+    let Classification { next, logs } = classify_acquire(
+        scope_pool,
+        scope_pool.lock(),
+        client_id,
+        runtime,
+        routing_slot,
+    );
+    for log in logs {
+        log.write();
+    }
+    next
+}
+
+/// The classification step behind [`attempt_acquire`]. Takes the guard by
+/// value so it is released when this returns, before the caller writes the
+/// log line, and so the `NeedsResync` arm can release it before spawning.
+#[cfg(feature = "proto")]
+fn classify_acquire(
+    scope_pool: &Arc<ScopeMutex>,
+    mut pool: crate::pool::ScopeGuard<'_>,
+    client_id: u64,
+    runtime: &tokio::runtime::Handle,
+    routing_slot: Option<u16>,
+) -> Classification {
     use Classified::{Creating, Outcome};
     use ScopeAcquireOutcome::{Acquired, Fail, Retry};
 
     let registry = get_scope_registry();
 
-    if pool.state.load(Ordering::Acquire) != crate::pool::POOL_RUNNING {
-        return Outcome(Fail(ScopeFailCause::PoolClosed));
+    if pool.state != PoolState::Running {
+        return Classification {
+            next: Outcome(Fail(ScopeFailCause::PoolClosed)),
+            logs: Vec::new(),
+        };
     }
 
     // A no-routing-key acquire arrives as None; it still needs a concrete
@@ -1538,22 +1587,28 @@ fn classify_acquire(
     // wrong node. Unresolved never means "use the seed"; whether it means
     // "retry" depends on the cause (see `ScopeTargetUnresolved`).
     let client = get_parent_client(pool.parent_client_id);
+    let mut logs = Vec::new();
     let target = match try_resolve_scope_target(client.as_ref(), connection_slot) {
         Ok(target) => {
             if let Some(cleared) = pool.last_unresolved_target.take() {
-                glide_logger::log_debug(
-                    "acquire_scope_outcome",
-                    format!(
-                        "client {client_id}: scope target resolves again \
-                         (was: {cleared})"
+                logs.push(DeferredLog {
+                    identifier: "acquire_scope_outcome",
+                    level: glide_logger::Level::Debug,
+                    message: format!(
+                        "client {client_id}: scope target resolves again (was: {cleared})"
                     ),
-                );
+                });
             }
             target
         }
         Err(cause) => {
-            log_unresolved_target(&mut pool, client_id, connection_slot, cause);
-            return Outcome(match cause {
+            logs.push(unresolved_target_log(
+                &mut pool,
+                client_id,
+                connection_slot,
+                cause,
+            ));
+            let next = Outcome(match cause {
                 ScopeTargetUnresolved::ParentUnregistered => {
                     Fail(ScopeFailCause::ParentUnregistered)
                 }
@@ -1561,6 +1616,7 @@ fn classify_acquire(
                     Retry(ScopeRetryCause::TargetUnresolved)
                 }
             });
+            return Classification { next, logs };
         }
     };
 
@@ -1571,10 +1627,13 @@ fn classify_acquire(
     // already guarantees the parent is registered; `client` is the same local,
     // so this arm is a fail-closed guard, not a reachable path.
     let Some(runtime_db) = client.as_ref().map(|c| c.current_database()) else {
-        return Outcome(Fail(ScopeFailCause::ParentUnregistered));
+        return Classification {
+            next: Outcome(Fail(ScopeFailCause::ParentUnregistered)),
+            logs,
+        };
     };
     let acquisition_slot = acquisition_slot_for(&target, routing_slot);
-    match pool.try_acquire(registry, target.clone(), runtime_db, acquisition_slot) {
+    let next = match pool.try_acquire(registry, target.clone(), runtime_db, acquisition_slot) {
         ScopeAcquire::Reused(scope_id) => {
             // Parent teardown unregisters the pool before sweeping the registry,
             // so if the pool is gone here the sweep may have missed this entry.
@@ -1586,12 +1645,28 @@ fn classify_acquire(
                 if let Some((_, entry)) = registry.remove(&scope_id) {
                     entry.discard();
                 }
-                return Outcome(Fail(ScopeFailCause::PoolClosed));
+                return Classification {
+                    next: Outcome(Fail(ScopeFailCause::PoolClosed)),
+                    logs,
+                };
             }
             let _ = glide_telemetry::GlideOpenTelemetry::record_scope_acquire();
             Outcome(Acquired(scope_id))
         }
-        ScopeAcquire::Reserved(reservation) => {
+        ScopeAcquire::Reserved {
+            reservation,
+            evicted,
+        } => {
+            if let Some(evicted) = evicted {
+                logs.push(DeferredLog {
+                    identifier: "pool",
+                    level: glide_logger::Level::Debug,
+                    message: format!(
+                        "Evicted idle scope {} targeting {:?} to make room for {:?}",
+                        evicted.scope_id, evicted.target, target
+                    ),
+                });
+            }
             // The guard moves into the creation task, so an early return,
             // cancel, or panic there gives the slot back.
             let pool_clone = scope_pool.clone();
@@ -1619,7 +1694,8 @@ fn classify_acquire(
             Outcome(Retry(ScopeRetryCause::Pending))
         }
         ScopeAcquire::Exhausted => Outcome(Retry(ScopeRetryCause::Exhausted)),
-    }
+    };
+    Classification { next, logs }
 }
 
 /// Re-`SELECT` one slot-matching idle connection that is on the wrong database onto
@@ -1628,7 +1704,7 @@ fn classify_acquire(
 /// SELECT fails, the connection is discarded (its slot reclaimed).
 #[cfg(feature = "proto")]
 pub(crate) async fn resync_idle_connection_database(
-    pool: Arc<TokioMutex<ScopePool>>,
+    pool: Arc<ScopeMutex>,
     target: ScopeTarget,
     runtime_db: u32,
 ) {
@@ -1640,7 +1716,7 @@ pub(crate) async fn resync_idle_connection_database(
     // keeps the count (connection returns to idle); `Drop` reclaims the slot when
     // the connection is discarded or the task unwinds.
     let (mut conn, request_timeout, reservation) = {
-        let mut guard = pool.lock().await;
+        let mut guard = pool.lock();
         match guard.take_idle_for_resync(target, runtime_db) {
             Some(c) => {
                 let reservation = crate::pool::ScopeReservation::for_slot(
@@ -1663,7 +1739,7 @@ pub(crate) async fn resync_idle_connection_database(
     )
     .await;
 
-    let mut guard = pool.lock().await;
+    let mut guard = pool.lock();
     // A rejected SELECT surfaces inside the reply, not as an outer Err — see pipeline_replies_ok.
     let resync_ok = crate::pool::pipeline_replies_ok(&result);
     if resync_ok {
@@ -1680,7 +1756,9 @@ pub(crate) async fn resync_idle_connection_database(
     // via `saturating_dec`.
 }
 
-/// Release a scope back to the pool. Fire-and-forget, non-blocking.
+/// Release a scope back to the pool. Waits for the pool lock; the release has
+/// landed when this returns. A dirty connection's cleanup round-trip is still
+/// spawned, not awaited.
 ///
 /// Returns 0 on success, -1 if client not found.
 pub fn release_scope(scope_id: u64, client_id: u64, runtime: &tokio::runtime::Handle) -> i32 {
@@ -1691,24 +1769,13 @@ pub fn release_scope(scope_id: u64, client_id: u64, runtime: &tokio::runtime::Ha
     };
     let registry = get_scope_registry();
 
-    let pool_clone = scope_pool.clone();
-    match scope_pool.try_lock() {
-        Ok(mut pool) => {
-            // Enter the runtime context so tokio::spawn inside pool.release()
-            // (for dirty-state cleanup) has a reactor available.
-            let _guard = runtime.enter();
-            pool.release(scope_id, registry);
-            let _ = glide_telemetry::GlideOpenTelemetry::record_scope_release();
-            0
-        }
-        Err(_) => {
-            runtime.spawn(async move {
-                let mut pool = pool_clone.lock().await;
-                pool.release(scope_id, get_scope_registry());
-            });
-            0
-        }
-    }
+    let mut pool = scope_pool.lock();
+    // Enter the runtime context so tokio::spawn inside pool.release()
+    // (for dirty-state cleanup) has a reactor available.
+    let _guard = runtime.enter();
+    pool.release(scope_id, registry);
+    let _ = glide_telemetry::GlideOpenTelemetry::record_scope_release();
+    0
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1728,7 +1795,7 @@ pub fn get_parent_client(client_id: u64) -> Option<Client> {
     registry.get(&client_id).map(|e| e.value().clone())
 }
 
-/// Report an unresolved scope target without flooding the log.
+/// The log line for an unresolved scope target, chosen so the log is not flooded.
 ///
 /// A waiting acquire re-attempts every few milliseconds until its deadline, so an
 /// outage of a few seconds would otherwise produce hundreds of identical warnings
@@ -1741,24 +1808,24 @@ pub fn get_parent_client(client_id: u64) -> Option<Client> {
 /// Without any of this the borrower only ever sees "pool exhausted" while the
 /// slot stays uncovered.
 #[cfg(feature = "proto")]
-fn log_unresolved_target(
+fn unresolved_target_log(
     pool: &mut ScopePool,
     client_id: u64,
     routing_slot: u16,
     cause: ScopeTargetUnresolved,
-) {
+) -> DeferredLog {
     let repeated = pool
         .last_unresolved_target
         .is_some_and(|last| last.same_kind(cause));
     pool.last_unresolved_target = Some(cause);
     if repeated {
-        glide_logger::log_debug(
-            "acquire_scope_outcome",
-            format!(
+        return DeferredLog {
+            identifier: "acquire_scope_outcome",
+            level: glide_logger::Level::Debug,
+            message: format!(
                 "client {client_id}: scope target for slot {routing_slot} still unresolved: {cause}"
             ),
-        );
-        return;
+        };
     }
     let outlook = match cause {
         ScopeTargetUnresolved::ParentUnregistered => {
@@ -1768,13 +1835,14 @@ fn log_unresolved_target(
             "scope acquire will be retried"
         }
     };
-    glide_logger::log_warn(
-        "acquire_scope_outcome",
-        format!(
+    DeferredLog {
+        identifier: "acquire_scope_outcome",
+        level: glide_logger::Level::Warn,
+        message: format!(
             "client {client_id}: cannot resolve scope target for slot {routing_slot}: \
              {cause}; {outlook}"
         ),
-    );
+    }
 }
 
 /// Turn a routing slot into the target its scoped connection must reach.
@@ -1785,9 +1853,9 @@ fn log_unresolved_target(
 /// caller can tell a transient gap from a parent that is gone, and never falls
 /// back to a seed node.
 ///
-/// Non-blocking: a held client wrapper lock is reported as
-/// [`ScopeTargetUnresolved::TopologyLocked`] rather than waited on, because the
-/// acquire path runs on the binding's thread outside a runtime context.
+/// Non-blocking: a held client wrapper lock or cluster slot-map lock is reported
+/// as [`ScopeTargetUnresolved::TopologyLocked`] rather than waited on, because
+/// `classify_acquire` runs this with the scope pool's lock held.
 #[cfg(feature = "proto")]
 pub fn try_resolve_scope_target(
     client: Option<&Client>,
@@ -1895,7 +1963,6 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use protobuf::Message as _;
-    use tokio::sync::Mutex as TokioMutex;
 
     use super::{
         Classified, build_scope_connection_addr, is_poisoning_error, parse_cluster_target,
@@ -1903,9 +1970,9 @@ mod tests {
     };
     use super::{
         ScopeAcquireOutcome, ScopeCreateError, ScopeFailCause, ScopeRetryCause,
-        acquire_scope_outcome, acquisition_slot_for, build_scope_connection, classify_acquire,
+        acquire_scope_outcome, acquisition_slot_for, attempt_acquire, build_scope_connection,
         create_scope_connection, execute_scope_command, get_parent_client, inherited_tls_params,
-        resolve_scope_parent, try_resolve_scope_target,
+        release_scope, resolve_scope_parent, try_resolve_scope_target,
     };
     use redis::{RedisResult, Value};
 
@@ -1914,8 +1981,8 @@ mod tests {
 
     use crate::connection_request::{ConnectionRequest, NodeAddress};
     use crate::pool::{
-        ScopeAcquire, ScopePool, ScopePoolConfig, ScopePoolHandle, ScopeReservation, ScopeTarget,
-        ScopeTargetUnresolved, get_client_scope_pools, get_scope_registry,
+        ScopeAcquire, ScopeMutex, ScopePool, ScopePoolConfig, ScopePoolHandle, ScopeReservation,
+        ScopeTarget, ScopeTargetUnresolved, get_client_scope_pools, get_scope_registry,
     };
     use crate::scope::{register_client, unregister_client};
 
@@ -2038,10 +2105,10 @@ mod tests {
         request.write_to_bytes().expect("serialize scope request")
     }
 
-    fn reserved_pool(request_bytes: Vec<u8>) -> Arc<TokioMutex<ScopePool>> {
+    fn reserved_pool(request_bytes: Vec<u8>) -> Arc<ScopeMutex> {
         let pool = ScopePool::new(ScopePoolConfig::default(), request_bytes, 1);
         pool.total_count.store(1, Ordering::Release);
-        Arc::new(TokioMutex::new(pool))
+        Arc::new(ScopeMutex::new(pool))
     }
 
     async fn lazy_parent(cluster: bool) -> Client {
@@ -2090,8 +2157,8 @@ mod tests {
 
     /// The reservation guard `try_acquire` would hand the creation task, bound to
     /// `pool`'s pre-incremented counter (see `reserved_pool`).
-    async fn reservation_for(pool: &Arc<TokioMutex<ScopePool>>) -> ScopeReservation {
-        ScopeReservation::for_test(pool.lock().await.total_count.clone())
+    async fn reservation_for(pool: &Arc<ScopeMutex>) -> ScopeReservation {
+        ScopeReservation::for_test(pool.lock().total_count.clone())
     }
 
     fn listening_endpoint() -> TcpListener {
@@ -2118,7 +2185,7 @@ mod tests {
         )
         .await;
 
-        let pool = pool.lock().await;
+        let pool = pool.lock();
         assert_eq!(pool.total_count.load(Ordering::Acquire), 0, "{lib_name}");
         assert!(pool.idle.is_empty(), "{lib_name}");
         assert!(pool.in_use.is_empty(), "{lib_name}");
@@ -2147,7 +2214,7 @@ mod tests {
         let port = listener.local_addr().expect("addr").port();
         let request_bytes = request_bytes("", port);
 
-        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             request_bytes.clone(),
             1,
@@ -2155,13 +2222,13 @@ mod tests {
         let registry = crate::pool::get_scope_registry();
 
         let reservation = {
-            let mut guard = pool.lock().await;
+            let mut guard = pool.lock();
             match guard.try_acquire(registry, ScopeTarget::Standalone, 0, None) {
-                ScopeAcquire::Reserved(r) => r,
+                ScopeAcquire::Reserved { reservation, .. } => reservation,
                 other => panic!("expected a reservation, got {other:?}"),
             }
         };
-        assert_eq!(pool.lock().await.total_count.load(Ordering::Acquire), 1);
+        assert_eq!(pool.lock().total_count.load(Ordering::Acquire), 1);
 
         let pool_clone = pool.clone();
         let handle = tokio::spawn(async move {
@@ -2178,7 +2245,7 @@ mod tests {
         handle.abort();
         let _ = handle.await;
 
-        let pool = pool.lock().await;
+        let pool = pool.lock();
         assert_eq!(
             pool.total_count.load(Ordering::Acquire),
             0,
@@ -2273,7 +2340,7 @@ mod tests {
             .await;
 
             {
-                let pool = pool.lock().await;
+                let pool = pool.lock();
                 assert_eq!(pool.total_count.load(Ordering::Acquire), 1, "{lib_name}");
                 assert_eq!(pool.idle.len(), 1, "{lib_name}");
                 assert_eq!(pool.idle[0].target, ScopeTarget::Standalone, "{lib_name}");
@@ -2303,7 +2370,7 @@ mod tests {
         let request_bytes = request_bytes_with_mode("", port, true);
 
         let client_id = 67_950_001_u64;
-        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             request_bytes.clone(),
             client_id,
@@ -2333,7 +2400,7 @@ mod tests {
             ScopeAcquireOutcome::Retry(ScopeRetryCause::TargetUnresolved)
         );
         {
-            let pool = pool.lock().await;
+            let pool = pool.lock();
             assert_eq!(pool.total_count.load(Ordering::Acquire), 0);
             assert!(pool.idle.is_empty());
             assert!(pool.in_use.is_empty());
@@ -2462,7 +2529,7 @@ mod tests {
         let request_bytes = request_bytes_with_mode("", port, true);
 
         let client_id = 67_950_002_u64;
-        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             request_bytes.clone(),
             client_id,
@@ -2478,11 +2545,7 @@ mod tests {
                 Some(slot),
             )
         };
-        let recorded = || {
-            pool.try_lock()
-                .expect("pool lock is free between acquires")
-                .last_unresolved_target
-        };
+        let recorded = || pool.lock().last_unresolved_target;
 
         assert_eq!(
             recorded(),
@@ -2553,14 +2616,14 @@ mod tests {
     /// Creation failures repeat as fast as the binding retries, because each retry
     /// poll spawns another creation. `create_scope_connection` must therefore warn
     /// once per episode and log the repeats at debug, clearing the record once a
-    /// creation succeeds — the same shape `log_unresolved_target` applies to an
+    /// creation succeeds — the same shape `unresolved_target_log` applies to an
     /// unresolved target. As there, the log lines are not observable here; the
     /// field they key on is.
     #[tokio::test]
     async fn create_failure_is_recorded_once_per_kind_and_cleared_on_success() {
         let (port, shutdown_sender, server) = responsive_endpoint();
         let good_bytes = request_bytes("", port);
-        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             good_bytes.clone(),
             1,
@@ -2578,7 +2641,7 @@ mod tests {
             let pool = pool.clone();
             async move {
                 // Each failure gives its slot back, so re-reserve before the next.
-                pool.lock().await.total_count.store(1, Ordering::Release);
+                pool.lock().total_count.store(1, Ordering::Release);
                 let reservation = reservation_for(&pool).await;
                 let _ = create_scope_connection(
                     pool.clone(),
@@ -2590,8 +2653,7 @@ mod tests {
                 .await;
             }
         };
-        let recorded =
-            |pool: Arc<TokioMutex<ScopePool>>| async move { pool.lock().await.last_create_warn };
+        let recorded = |pool: Arc<ScopeMutex>| async move { pool.lock().last_create_warn };
 
         assert_eq!(
             recorded(pool.clone()).await,
@@ -2627,7 +2689,7 @@ mod tests {
 
         // A creation succeeding ends the episode, so the next failure warns again.
         create(None, good_bytes).await;
-        assert_eq!(pool.lock().await.idle.len(), 1, "connection seated");
+        assert_eq!(pool.lock().idle.len(), 1, "connection seated");
         assert_eq!(recorded(pool.clone()).await, None);
 
         shutdown_sender.send(()).expect("signal server shutdown");
@@ -2639,15 +2701,12 @@ mod tests {
     async fn acquire_on_a_closed_pool_fails_instead_of_retrying() {
         let client_id = 67_950_004_u64;
         let request_bytes = request_bytes("", 1);
-        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             request_bytes.clone(),
             client_id,
         )));
-        pool.lock()
-            .await
-            .state
-            .store(crate::pool::POOL_CLOSED, Ordering::Release);
+        pool.lock().state = crate::pool::PoolState::Closed;
         get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
         register_client(client_id, lazy_parent(false).await);
 
@@ -2666,6 +2725,19 @@ mod tests {
         );
     }
 
+    /// The bindings spawn the acquire future on a multi-threaded runtime, so a
+    /// `ScopeGuard` held across one of its `.await`s must fail to compile here,
+    /// not only in a binding crate.
+    #[test]
+    fn acquire_scope_future_is_send() {
+        fn assert_send<T: Send>(_: &T) {}
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("build runtime");
+        let acquire = super::acquire_scope(0, Vec::new(), runtime.handle(), None, Duration::ZERO);
+        assert_send(&acquire);
+    }
+
     /// An acquire holding a pool handle from before parent teardown must not leave
     /// an entry behind once teardown's sweep has run.
     #[tokio::test]
@@ -2673,12 +2745,12 @@ mod tests {
         let client_id = 67_950_011_u64;
         let (port, shutdown_sender, server) = responsive_endpoint();
         let request_bytes = request_bytes("", port);
-        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             request_bytes.clone(),
             client_id,
         )));
-        pool.lock().await.total_count.store(1, Ordering::Release);
+        pool.lock().total_count.store(1, Ordering::Release);
         let reservation = reservation_for(&pool).await;
         let _ = create_scope_connection(
             pool.clone(),
@@ -2688,18 +2760,13 @@ mod tests {
             reservation,
         )
         .await;
-        assert_eq!(pool.lock().await.idle.len(), 1, "connection seated");
+        assert_eq!(pool.lock().idle.len(), 1, "connection seated");
         get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
         register_client(client_id, lazy_parent(false).await);
 
         crate::pool::destroy_client_scope_pool(client_id);
-        let classified = classify_acquire(
-            &pool,
-            pool.lock().await,
-            client_id,
-            &tokio::runtime::Handle::current(),
-            None,
-        );
+        let classified =
+            attempt_acquire(&pool, client_id, &tokio::runtime::Handle::current(), None);
 
         unregister_client(client_id);
         assert!(
@@ -2723,24 +2790,19 @@ mod tests {
     /// back `(pool, scope_id of the held connection, request bytes, server)`.
     async fn held_single_slot_pool(
         client_id: u64,
-    ) -> (
-        Arc<TokioMutex<ScopePool>>,
-        u64,
-        Vec<u8>,
-        (Sender<()>, JoinHandle<()>),
-    ) {
+    ) -> (Arc<ScopeMutex>, u64, Vec<u8>, (Sender<()>, JoinHandle<()>)) {
         let (port, shutdown_sender, server) = responsive_endpoint();
         let request_bytes = request_bytes("", port);
         let config = ScopePoolConfig {
             max_total: 1,
             ..ScopePoolConfig::default()
         };
-        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool = Arc::new(ScopeMutex::new(ScopePool::new(
             config,
             request_bytes.clone(),
             client_id,
         )));
-        pool.lock().await.total_count.store(1, Ordering::Release);
+        pool.lock().total_count.store(1, Ordering::Release);
         let reservation = reservation_for(&pool).await;
         let _ = create_scope_connection(
             pool.clone(),
@@ -2754,7 +2816,7 @@ mod tests {
         register_client(client_id, lazy_parent(false).await);
 
         let held = {
-            let mut guard = pool.lock().await;
+            let mut guard = pool.lock();
             reused_scope_id(guard.try_acquire(
                 crate::pool::get_scope_registry(),
                 ScopeTarget::Standalone,
@@ -2786,11 +2848,7 @@ mod tests {
             let pool = pool.clone();
             tokio::spawn(async move {
                 tokio::time::sleep(Duration::from_millis(150)).await;
-                assert!(
-                    pool.lock()
-                        .await
-                        .release(held, crate::pool::get_scope_registry())
-                );
+                assert!(pool.lock().release(held, crate::pool::get_scope_registry()));
             })
         };
 
@@ -2837,11 +2895,7 @@ mod tests {
         .await;
         let elapsed = started.elapsed();
 
-        assert!(
-            pool.lock()
-                .await
-                .release(held, crate::pool::get_scope_registry())
-        );
+        assert!(pool.lock().release(held, crate::pool::get_scope_registry()));
         unregister_client(client_id);
         get_client_scope_pools().remove(&client_id);
         stop_endpoint(endpoint);
@@ -2891,7 +2945,7 @@ mod tests {
             })
         };
         let request_bytes = request_bytes("", port);
-        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             request_bytes.clone(),
             client_id,
@@ -2971,7 +3025,7 @@ mod tests {
         closer.await.expect("closer task");
 
         // Reclaim what the test seated; the registry entry went with the client.
-        pool.lock().await.in_use.remove(&held);
+        pool.lock().in_use.remove(&held);
         get_client_scope_pools().remove(&client_id);
         stop_endpoint(endpoint);
 
@@ -2993,7 +3047,7 @@ mod tests {
     async fn acquire_scope_returns_terminal_create_failure_promptly() {
         let client_id = 67_950_008_u64;
         let request_bytes = mtls_request_bytes();
-        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             request_bytes.clone(),
             client_id,
@@ -3037,7 +3091,7 @@ mod tests {
         };
         let pool = ScopePool::new(config, request_bytes.clone(), 1);
         pool.total_count.store(1, Ordering::Release);
-        let pool = Arc::new(TokioMutex::new(pool));
+        let pool = Arc::new(ScopeMutex::new(pool));
 
         let parent = lazy_parent(false).await;
         let initial_target = try_resolve_scope_target(Some(&parent), DEFAULT_ROUTING_SLOT)
@@ -3055,7 +3109,7 @@ mod tests {
 
         let registry = crate::pool::get_scope_registry();
         let first_scope_id = {
-            let mut pool = pool.lock().await;
+            let mut pool = pool.lock();
             assert_eq!(pool.idle.len(), 1);
             let target = try_resolve_scope_target(Some(&parent), DEFAULT_ROUTING_SLOT)
                 .expect("standalone always resolves");
@@ -3063,14 +3117,14 @@ mod tests {
         };
 
         {
-            let mut pool = pool.lock().await;
+            let mut pool = pool.lock();
             assert!(pool.release(first_scope_id, registry));
             assert_eq!(pool.idle.len(), 1);
             assert_eq!(pool.total_count.load(Ordering::Acquire), 1);
         }
 
         let second_scope_id = {
-            let mut pool = pool.lock().await;
+            let mut pool = pool.lock();
             let alternate_target = try_resolve_scope_target(Some(&parent), MAX_CLUSTER_SLOT)
                 .expect("standalone always resolves");
             assert_eq!(alternate_target, ScopeTarget::Standalone);
@@ -3082,7 +3136,7 @@ mod tests {
         );
 
         {
-            let mut pool = pool.lock().await;
+            let mut pool = pool.lock();
             assert!(pool.release(second_scope_id, registry));
             assert_eq!(pool.idle.len(), 1);
             assert_eq!(pool.idle[0].target, ScopeTarget::Standalone);
@@ -3122,13 +3176,13 @@ mod tests {
         let registry = crate::pool::get_scope_registry();
         let target = ScopeTarget::cluster_primary(PRIMARY_A);
         let first_scope_id = {
-            let mut pool = pool.lock().await;
+            let mut pool = pool.lock();
             pool.idle[0].target = target.clone();
             reused_scope_id(pool.try_acquire(registry, target.clone(), 0, None))
         };
 
         {
-            let mut pool = pool.lock().await;
+            let mut pool = pool.lock();
             assert!(pool.release(first_scope_id, registry));
             assert_eq!(pool.idle.len(), 1);
             assert_eq!(pool.idle[0].target, target);
@@ -3138,7 +3192,7 @@ mod tests {
         // A separately constructed target for the same primary (as a different slot
         // would produce) is equal by address, not by Arc identity.
         let second_scope_id = {
-            let mut pool = pool.lock().await;
+            let mut pool = pool.lock();
             reused_scope_id(pool.try_acquire(
                 registry,
                 ScopeTarget::cluster_primary(PRIMARY_A),
@@ -3152,7 +3206,7 @@ mod tests {
         );
 
         {
-            let mut pool = pool.lock().await;
+            let mut pool = pool.lock();
             assert!(pool.release(second_scope_id, registry));
             assert_eq!(pool.idle.len(), 1);
             assert_eq!(pool.idle[0].target, target);
@@ -3180,7 +3234,7 @@ mod tests {
 
         let registry = crate::pool::get_scope_registry();
         let scope_id = {
-            let mut pool = pool.lock().await;
+            let mut pool = pool.lock();
             // Below max_total, a mismatched idle connection is kept and a new
             // slot is reserved for the other primary. Each reservation is counted
             // against max_total, so the running total is asserted alongside it.
@@ -3194,7 +3248,7 @@ mod tests {
                 0,
                 None,
             ) {
-                ScopeAcquire::Reserved(reservation) => reservation,
+                ScopeAcquire::Reserved { reservation, .. } => reservation,
                 other => panic!("expected a reservation, got {other:?}"),
             };
             assert_eq!(pool.idle.len(), 1);
@@ -3207,7 +3261,7 @@ mod tests {
                 0,
                 None,
             ) {
-                ScopeAcquire::Reserved(reservation) => reservation,
+                ScopeAcquire::Reserved { reservation, .. } => reservation,
                 other => panic!("expected a reservation, got {other:?}"),
             };
             assert_eq!(pool.idle.len(), 1);
@@ -3230,7 +3284,7 @@ mod tests {
             entry.connection.lock().await.pinned_slot = Some(0);
         }
         {
-            let mut pool = pool.lock().await;
+            let mut pool = pool.lock();
             assert!(pool.release(scope_id, registry));
             assert_eq!(pool.idle.len(), 1);
             assert_eq!(pool.idle[0].target, ScopeTarget::Standalone);
@@ -3254,7 +3308,7 @@ mod tests {
         };
         let pool = ScopePool::new(config, request_bytes("", port_a), 1);
         pool.total_count.store(2, Ordering::Release);
-        let pool = Arc::new(TokioMutex::new(pool));
+        let pool = Arc::new(ScopeMutex::new(pool));
 
         // Seat two idle connections; the first seated is the oldest (front).
         let reservation_a = reservation_for(&pool).await;
@@ -3278,7 +3332,7 @@ mod tests {
 
         let registry = crate::pool::get_scope_registry();
         {
-            let mut pool = pool.lock().await;
+            let mut pool = pool.lock();
             assert_eq!(pool.idle.len(), 2);
             assert_eq!(pool.total_count.load(Ordering::Acquire), 2);
             pool.idle[0].target = ScopeTarget::cluster_primary(PRIMARY_A);
@@ -3295,7 +3349,7 @@ mod tests {
                 0,
                 None,
             ) {
-                ScopeAcquire::Reserved(reservation) => reservation,
+                ScopeAcquire::Reserved { reservation, .. } => reservation,
                 other => panic!("expected a reservation, got {other:?}"),
             };
             assert_eq!(pool.idle.len(), 1, "exactly one idle connection evicted");
@@ -3342,8 +3396,7 @@ mod tests {
 
     /// Seat one standalone connection on a server that answers no commands after
     /// the handshake, and borrow it.
-    async fn borrowed_silent_scope() -> (Arc<TokioMutex<ScopePool>>, u64, Sender<()>, JoinHandle<()>)
-    {
+    async fn borrowed_silent_scope() -> (Arc<ScopeMutex>, u64, Sender<()>, JoinHandle<()>) {
         let (port, shutdown_sender, server) = endpoint_answering_n_more_commands(0);
         let request_bytes = request_bytes("", port);
         // A unique parent: `reserved_pool`'s fixed id 1 is a live client id other
@@ -3354,7 +3407,7 @@ mod tests {
             crate::pool::allocate_client_id(),
         );
         pool.total_count.store(1, Ordering::Release);
-        let pool = Arc::new(TokioMutex::new(pool));
+        let pool = Arc::new(ScopeMutex::new(pool));
         let reservation = reservation_for(&pool).await;
         create_scope_connection(
             pool.clone(),
@@ -3366,12 +3419,11 @@ mod tests {
         .await
         .expect("seat connection");
         let registry = crate::pool::get_scope_registry();
-        let scope_id = reused_scope_id(pool.lock().await.try_acquire(
-            registry,
-            ScopeTarget::Standalone,
-            0,
-            None,
-        ));
+        let scope_id =
+            reused_scope_id(
+                pool.lock()
+                    .try_acquire(registry, ScopeTarget::Standalone, 0, None),
+            );
         (pool, scope_id, shutdown_sender, server)
     }
 
@@ -3395,9 +3447,9 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let registry = crate::pool::get_scope_registry();
-        assert!(pool.lock().await.release(scope_id, registry));
+        assert!(pool.lock().release(scope_id, registry));
         assert_released_promptly(command).await;
-        assert_eq!(pool.lock().await.total_count.load(Ordering::Acquire), 0);
+        assert_eq!(pool.lock().total_count.load(Ordering::Acquire), 0);
 
         shutdown_sender.send(()).expect("stop mock server");
         server.join().expect("mock server exits cleanly");
@@ -3420,11 +3472,69 @@ mod tests {
         });
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        assert!(pool.lock().await.release(scope_id, registry));
+        assert!(pool.lock().release(scope_id, registry));
         drop(held);
         assert_released_promptly(command).await;
-        assert!(pool.lock().await.idle.is_empty(), "not re-idled");
+        assert!(pool.lock().idle.is_empty(), "not re-idled");
 
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
+    }
+
+    /// A scope released while another thread holds the pool lock is back in
+    /// idle when `release_scope` returns, not after a deferred task gets the
+    /// lock.
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn release_scope_has_landed_when_it_returns_under_contention() {
+        let (port, shutdown_sender, server) = responsive_endpoint();
+        let request_bytes = request_bytes("", port);
+        let pool = reserved_pool(request_bytes.clone());
+        let client_id = 6_898_514_u64;
+        get_client_scope_pools().insert(client_id, ScopePoolHandle::for_test(&pool));
+
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await
+        .expect("seat one connection");
+        let scope_id = reused_scope_id(pool.lock().try_acquire(
+            get_scope_registry(),
+            ScopeTarget::Standalone,
+            0,
+            None,
+        ));
+        assert!(pool.lock().in_use.contains(&scope_id), "borrowed");
+
+        let (locked_tx, locked_rx) = mpsc::channel();
+        let holder = {
+            let pool = pool.clone();
+            std::thread::spawn(move || {
+                let guard = pool.lock();
+                locked_tx.send(()).expect("test thread is waiting");
+                std::thread::sleep(Duration::from_millis(200));
+                drop(guard);
+            })
+        };
+        locked_rx.recv().expect("holder took the lock");
+
+        assert_eq!(
+            release_scope(scope_id, client_id, &tokio::runtime::Handle::current()),
+            0
+        );
+        {
+            let pool = pool.lock();
+            assert!(!pool.in_use.contains(&scope_id), "released on return");
+            assert_eq!(pool.idle.len(), 1, "re-idled on return");
+        }
+        holder.join().expect("holder exits cleanly");
+
+        get_client_scope_pools().remove(&client_id);
         shutdown_sender.send(()).expect("stop mock server");
         server.join().expect("mock server exits cleanly");
     }
@@ -3462,12 +3572,12 @@ mod tests {
         )
         .await;
         let acquired = {
-            let mut pool = pool.lock().await;
+            let mut pool = pool.lock();
             pool.try_acquire(get_scope_registry(), ScopeTarget::Standalone, 0, None)
         };
 
         let resolved = if let ScopeAcquire::Reused(scope_id) = acquired {
-            let held = pool.lock().await;
+            let held = pool.lock();
             let resolved = resolve_scope_parent(scope_id).is_some();
             drop(held);
             get_scope_registry().remove(&scope_id);
@@ -3523,7 +3633,7 @@ mod tests {
         )
         .await;
         let acquired = {
-            let mut pool = pool.lock().await;
+            let mut pool = pool.lock();
             pool.try_acquire(get_scope_registry(), ScopeTarget::Standalone, 0, None)
         };
 
@@ -3976,7 +4086,7 @@ mod tests {
             "the seed address must be handed to the parent's resolver"
         );
         {
-            let pool = pool.lock().await;
+            let pool = pool.lock();
             assert_eq!(
                 pool.idle.len(),
                 1,
@@ -4021,7 +4131,7 @@ mod tests {
             resolver.calls()
         );
         {
-            let pool = pool.lock().await;
+            let pool = pool.lock();
             assert_eq!(
                 pool.idle.len(),
                 1,
@@ -4140,17 +4250,14 @@ mod tests {
     /// `get_client_scope_pools()` / client registry, so two borrows sharing an id
     /// (e.g. both seeded from the same key) stomp each other's pool/parent entries
     /// under concurrent test execution.
-    async fn borrow_cluster_scope(
-        port: u16,
-        acquisition_slot: u16,
-    ) -> (u64, Arc<TokioMutex<ScopePool>>, u64) {
+    async fn borrow_cluster_scope(port: u16, acquisition_slot: u16) -> (u64, Arc<ScopeMutex>, u64) {
         // Arbitrary base; the counter guarantees uniqueness, the value has no meaning.
         const FIRST_TEST_CLIENT_ID: u64 = 70_570_000;
         static NEXT_TEST_CLIENT_ID: std::sync::atomic::AtomicU64 =
             std::sync::atomic::AtomicU64::new(FIRST_TEST_CLIENT_ID);
         let request_bytes = request_bytes_with_mode("", port, true);
         let client_id = NEXT_TEST_CLIENT_ID.fetch_add(1, Ordering::Relaxed);
-        let pool = Arc::new(TokioMutex::new(ScopePool::new(
+        let pool = Arc::new(ScopeMutex::new(ScopePool::new(
             ScopePoolConfig::default(),
             request_bytes.clone(),
             client_id,
@@ -4161,7 +4268,7 @@ mod tests {
         // Pre-count the slot the seated connection will occupy, matching the
         // reserve-before-create accounting (`reservation_for` binds a for_test guard
         // to the counter without incrementing it).
-        pool.lock().await.total_count.store(1, Ordering::Release);
+        pool.lock().total_count.store(1, Ordering::Release);
 
         let target = ScopeTarget::cluster_primary(format!("127.0.0.1:{port}"));
         let reservation = reservation_for(&pool).await;
@@ -4177,7 +4284,7 @@ mod tests {
 
         let registry = get_scope_registry();
         let scope_id = {
-            let mut guard = pool.lock().await;
+            let mut guard = pool.lock();
             assert_eq!(guard.idle.len(), 1, "the connection must be seated idle");
             match guard.try_acquire(registry, target, 0, Some(acquisition_slot)) {
                 ScopeAcquire::Reused(id) => id,
@@ -4223,12 +4330,12 @@ mod tests {
         // command neither poisons the connection nor leaves a pin behind, so it
         // returns to idle (synchronously on the clean path; poll to be robust).
         {
-            let mut guard = pool.lock().await;
+            let mut guard = pool.lock();
             assert!(guard.release(scope_id, registry));
         }
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
-            if pool.lock().await.idle.len() == 1 {
+            if pool.lock().idle.len() == 1 {
                 break;
             }
             assert!(
@@ -4238,7 +4345,7 @@ mod tests {
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
         {
-            let guard = pool.lock().await;
+            let guard = pool.lock();
             assert_eq!(
                 guard.idle[0].pinned_slot, None,
                 "a rejected first command must not leave a pin"
@@ -4340,8 +4447,8 @@ mod tests {
         .expect_err("a cross-slot command outside MULTI must still be rejected locally");
         assert_eq!(err.kind(), redis::ErrorKind::CrossSlot);
 
-        let _ = pool.lock().await;
-        let _ = pool2.lock().await;
+        drop(pool.lock());
+        drop(pool2.lock());
         shutdown_sender2.send(()).expect("stop mock server");
         server2.join().expect("mock server exits cleanly");
         get_client_scope_pools().remove(&client_id2);

@@ -62,7 +62,7 @@ valkey-server --version
 ```bash
 # Install Go build tools (run once)
 cd go
-make install-build-tools  # Installs protoc-gen-go and cbindgen (~1 minute)
+make install-build-tools  # Installs protoc-gen-go and cbindgen, plus rustup llvm-tools on macOS (~1 minute)
 
 # Install additional tools for cross-compilation
 pip3 install ziglang
