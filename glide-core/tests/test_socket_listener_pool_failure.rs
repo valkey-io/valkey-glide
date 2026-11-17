@@ -69,7 +69,11 @@ fn pool_creation_failure_is_reported_through_the_init_callback() {
     let threads = || std::fs::read_dir("/proc/self/task").unwrap().count();
     let before = threads();
     start_listener(&sized_path).expect("The sized listener should start");
-    assert_eq!(threads() - before, 3, "3 configured workers should be spawned");
+    assert_eq!(
+        threads() - before,
+        3,
+        "3 configured workers should be spawned"
+    );
     close_socket(&sized_path);
     unsafe { std::env::remove_var("GLIDE_SOCKET_LISTENER_WORKERS") };
 
@@ -82,7 +86,21 @@ fn pool_creation_failure_is_reported_through_the_init_callback() {
     // worker runtime costs, so a tokio upgrade cannot silently change which pool sizes
     // pass, and a single-CPU host (pool of 1) behaves the same as a many-core one.
     set_nofile_soft_limit(highest as libc::rlim_t);
+    // The kernel hands out the lowest free descriptor number, and inherited descriptors
+    // (a CI runner passing a high fd to the test process, for example) can leave free
+    // numbers below `highest`. Fill them until the open fails with EMFILE.
+    let mut fillers = Vec::new();
+    loop {
+        match std::fs::File::open("/dev/null") {
+            Ok(file) => fillers.push(file),
+            Err(error) => {
+                assert_eq!(error.raw_os_error(), Some(libc::EMFILE), "{error}");
+                break;
+            }
+        }
+    }
     let result = start_listener(&socket_path);
+    drop(fillers);
     set_nofile_soft_limit(original_limit.rlim_cur);
 
     let error = result.expect_err("The listener should report the pool failure");
