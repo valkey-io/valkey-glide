@@ -19,8 +19,14 @@ pub struct TlsCluster {
 }
 
 impl TlsCluster {
-    pub fn start() -> Self {
-        let stdout = cluster_manager(&["start", "--cluster-mode", "-n", "3", "-r", "0"]);
+    /// Three primaries in cluster mode, or a single standalone server.
+    pub fn start(cluster_mode: bool) -> Self {
+        let topology: &[&str] = if cluster_mode {
+            &["--cluster-mode", "-n", "3"]
+        } else {
+            &["-n", "1"]
+        };
+        let stdout = cluster_manager(&[&["start", "-r", "0"], topology].concat());
         let value = |key: &str| {
             stdout
                 .lines()

@@ -1861,6 +1861,14 @@ impl Client {
         self.shared.is_cluster
     }
 
+    /// True until a lazy client connects, or while its lock is held. The sync FFI runs those commands on a worker.
+    pub fn is_lazy(&self) -> bool {
+        self.internal_client
+            .try_read()
+            .map(|client| matches!(&*client, ClientWrapper::Lazy(_)))
+            .unwrap_or(true)
+    }
+
     /// Returns the cache hit rate (hits / total requests).
     /// Returns an error if caching is not enabled or metrics are disabled.
     pub fn cache_hit_rate(&self) -> RedisResult<Value> {

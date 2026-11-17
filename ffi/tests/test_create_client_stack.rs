@@ -148,7 +148,7 @@ fn acquire_and_release_scope(client: *const c_void, request: &[u8]) -> Result<()
 // RUST_MIN_STACK sets the default stack of every thread the process spawns, tokio's included.
 #[test]
 fn tls_connects_do_not_depend_on_the_callers_or_the_default_thread_stack() {
-    let cluster = TlsCluster::start();
+    let cluster = TlsCluster::start(true);
     let clients = "child_creates_tls_clients_on_a_musl_sized_thread";
     run_child(clients, &cluster.node, None);
     run_child(clients, &cluster.node, Some(MUSL_THREAD_STACK));

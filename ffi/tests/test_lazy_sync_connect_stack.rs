@@ -139,7 +139,7 @@ fn assert_first_ping_connects_on_a_worker(client: Client) {
         (client, result)
     });
     unsafe { close_client(client.0) };
-    assert_eq!(result, Ok(()), "first PING on a lazy TLS cluster client");
+    assert_eq!(result, Ok(()), "first PING on a lazy TLS client");
 
     let threads = RESOLVER_THREADS.lock().unwrap();
     assert!(!threads.is_empty(), "the first command did not connect");
@@ -156,7 +156,7 @@ fn node() -> String {
 
 #[test]
 fn lazy_sync_client_connects_on_a_runtime_worker() {
-    let cluster = TlsCluster::start();
+    let cluster = TlsCluster::start(true);
     run_child(
         "child_sends_the_first_command_from_a_musl_sized_thread",
         &cluster.node,
@@ -167,12 +167,27 @@ fn lazy_sync_client_connects_on_a_runtime_worker() {
         &cluster.node,
         None,
     );
+    let standalone = TlsCluster::start(false);
+    run_child(
+        "child_sends_the_first_standalone_command_from_a_musl_sized_thread",
+        &standalone.node,
+        None,
+    );
 }
 
 #[test]
 #[ignore = "child process of lazy_sync_client_connects_on_a_runtime_worker"]
 fn child_sends_the_first_command_from_a_musl_sized_thread() {
     let mut request = request(&node(), TlsMode::SecureTls);
+    request.lazy_connect = true;
+    assert_first_ping_connects_on_a_worker(create(request, None));
+}
+
+#[test]
+#[ignore = "child process of lazy_sync_client_connects_on_a_runtime_worker"]
+fn child_sends_the_first_standalone_command_from_a_musl_sized_thread() {
+    let mut request = request(&node(), TlsMode::SecureTls);
+    request.cluster_mode_enabled = false;
     request.lazy_connect = true;
     assert_first_ping_connects_on_a_worker(create(request, None));
 }
