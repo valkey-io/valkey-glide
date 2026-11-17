@@ -13,12 +13,16 @@ on:
             - ".github/**/*.yaml"
             - "node/pm-and-types-tests/*/.yarnrc.yml"
             - .github/actions/ensure-clean-tree/action.yml
+            - .github/scripts/validate-go-rc-changes.sh
+            - .github/scripts/test_validate_go_rc_changes.py
     pull_request:
         paths:
             - ".github/**/*.yml"
             - ".github/**/*.yaml"
             - "node/pm-and-types-tests/*/.yarnrc.yml"
             - .github/actions/ensure-clean-tree/action.yml
+            - .github/scripts/validate-go-rc-changes.sh
+            - .github/scripts/test_validate_go_rc_changes.py
     workflow_dispatch:
 
 jobs:
@@ -56,6 +60,9 @@ jobs:
                       sys.exit(1)
                   print(f"OK: all {len(config.get('updates', []))} entries have cooldown.default-days == 7")
                   EOF
+
+            - name: Test Go RC change validation
+              run: python3 .github/scripts/test_validate_go_rc_changes.py
 
             - name: Validate engine runner classes
               run: python3 .github/scripts/validate_engine_runners.py
