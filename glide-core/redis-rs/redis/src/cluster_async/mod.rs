@@ -188,6 +188,11 @@ where
 /// Default maximum number of requests to buffer during a cluster reconnect window.
 pub const DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE: u32 = 1000;
 
+/// A topology refresh holds, or is waiting for, the slot map's lock, so a
+/// lookup that must not wait could not look. Distinct from "slot not mapped".
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SlotMapLocked;
+
 /// This represents an async Cluster connection. It stores the
 /// underlying connections maintained for each node in the cluster, as well
 /// as common parameters for connecting to nodes and executing commands.
@@ -478,10 +483,19 @@ where
     /// Get the primary node address for a given hash slot.
     /// Used by isolated execution to open scoped connections to the correct node.
     /// Returns None if the slot is not mapped to any known node.
+    ///
+    /// Waits for the slot map's lock, so it can block behind a topology refresh.
     pub fn address_for_slot(&self, slot: u16) -> Option<String> {
         use crate::cluster_routing::{Route, SlotAddr};
         let route = Route::new(slot, SlotAddr::Master);
         self.inner_core.conn_lock.read().address_for_route(&route)
+    }
+
+    /// [`ClusterConnection::address_for_slot`] for a caller that must not wait:
+    /// `Err(SlotMapLocked)` when a topology refresh holds, or is waiting for, the
+    /// slot map's lock; `Ok(None)` when the slot is not mapped.
+    pub fn try_address_for_slot(&self, slot: u16) -> Result<Option<String>, SlotMapLocked> {
+        self.inner_core.try_address_for_slot(slot)
     }
 
     /// Routes an operation request to the appropriate handler.
@@ -595,6 +609,16 @@ where
                 cluster::resolve_address(address, params.address_resolver.as_deref())
             })
         })
+    }
+
+    /// Non-blocking slot lookup; see [`ClusterConnection::try_address_for_slot`].
+    fn try_address_for_slot(&self, slot: u16) -> Result<Option<String>, SlotMapLocked> {
+        use crate::cluster_routing::{Route, SlotAddr};
+        let route = Route::new(slot, SlotAddr::Master);
+        // parking_lot's try_read also fails while a writer is queued, which is
+        // exactly when read() would block.
+        let conn_lock = self.conn_lock.try_read().ok_or(SlotMapLocked)?;
+        Ok(conn_lock.address_for_route(&route))
     }
 
     fn reverse_lookup_address(&self, address: &str) -> Option<String> {
@@ -5757,6 +5781,29 @@ mod circular_moved_address_normalization_tests {
         assert_eq!(
             core.reverse_lookup_address("10.0.0.1:6380").unwrap(),
             "node-b:6380"
+        );
+    }
+
+    #[test]
+    fn try_address_for_slot_declines_while_the_slot_map_is_write_locked() {
+        let core = core_with_ip_mapping();
+        let write_guard = core.conn_lock.write();
+        let (started_tx, started_rx) = std_mpsc::channel();
+        let (result_tx, result_rx) = std_mpsc::channel();
+        let lookup_core = core.clone();
+        let lookup_thread = std::thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            result_tx.send(lookup_core.try_address_for_slot(0)).unwrap();
+        });
+
+        started_rx.recv().unwrap();
+        let locked_result = result_rx.recv_timeout(Duration::from_secs(2));
+        drop(write_guard);
+        lookup_thread.join().unwrap();
+        assert_eq!(locked_result.unwrap(), Err(SlotMapLocked));
+        assert_eq!(
+            core.try_address_for_slot(0),
+            Ok(Some("node1:6379".to_owned()))
         );
     }
 

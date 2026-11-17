@@ -2499,7 +2499,16 @@ def assert_memory_stats_fields(stats: MemoryStats, server_version: str) -> None:
 
     assert stats.allocator_active > 0
     assert stats.allocator_allocated > 0
-    assert stats.allocator_fragmentation_bytes >= 0
+    # Before 8.0 this is allocator.active - allocator.allocated. Without jemalloc (macOS),
+    # active is the RAM in use, which can be less than what was allocated, so it can go negative.
+    assert isinstance(stats.allocator_fragmentation_bytes, int)
+    if check_version_lt(server_version, "8.0.0"):
+        assert (
+            stats.allocator_fragmentation_bytes
+            == stats.allocator_active - stats.allocator_allocated
+        )
+    else:
+        assert stats.allocator_fragmentation_bytes >= 0
     assert stats.allocator_resident > 0
     assert isinstance(stats.allocator_rss_bytes, int)
     assert stats.aof_buffer >= 0

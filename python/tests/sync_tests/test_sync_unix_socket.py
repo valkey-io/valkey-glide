@@ -11,10 +11,13 @@ from typing import Iterator, List
 import pytest
 from glide_shared.commands.core_options import MonitorMsg
 from glide_shared.config import (
+    AdvancedGlideClientConfiguration,
     GlideClientConfiguration,
     NodeAddress,
+    NodeDiscoveryMode,
 )
 from glide_shared.constants import OK
+from glide_shared.exceptions import ClosingError, ConfigurationError
 from glide_sync import MonitorClient
 from glide_sync.glide_client import GlideClient
 
@@ -97,3 +100,57 @@ class TestSyncUnixSocket:
                 client.close()
         finally:
             monitor.stop()
+
+
+SOCKET = "/tmp/glide-uds-config-error.sock"
+
+
+class TestSyncUnixSocketErrors:
+    """
+    Requests the core rejects before connecting raise ConfigurationError, the same type the
+    client's own Unix socket checks raise. No server is needed.
+    """
+
+    @pytest.mark.parametrize(
+        "addresses, kwargs, match",
+        [
+            pytest.param(
+                [NodeAddress(unix_socket_path="relative.sock")],
+                {},
+                "must be absolute",
+                id="relative_path",
+            ),
+            pytest.param(
+                [NodeAddress(unix_socket_path=SOCKET), NodeAddress("localhost", 6379)],
+                {},
+                "cannot be combined with TCP addresses",
+                id="mixed_addresses",
+            ),
+            pytest.param(
+                [NodeAddress(unix_socket_path=SOCKET)],
+                {"node_discovery_mode": NodeDiscoveryMode.DISCOVER_ALL},
+                "DiscoverAll",
+                id="discover_all",
+            ),
+        ],
+    )
+    def test_core_rejection_raises_configuration_error(self, addresses, kwargs, match):
+        config = GlideClientConfiguration(addresses, **kwargs)
+        with pytest.raises(ConfigurationError, match=match):
+            GlideClient.create(config)
+
+    def test_monitor_core_rejection_raises_configuration_error(self):
+        config = GlideClientConfiguration(
+            [NodeAddress(unix_socket_path="relative.sock")]
+        )
+        with pytest.raises(ConfigurationError, match="must be absolute"):
+            MonitorClient.create(config, callback=lambda _: None)
+
+    def test_unreachable_socket_still_raises_closing_error(self):
+        # Failing to connect is not a configuration error, so its type is unchanged.
+        config = GlideClientConfiguration(
+            [NodeAddress(unix_socket_path="/nonexistent-dir/glide.sock")],
+            advanced_config=AdvancedGlideClientConfiguration(connection_timeout=500),
+        )
+        with pytest.raises(ClosingError):
+            GlideClient.create(config)

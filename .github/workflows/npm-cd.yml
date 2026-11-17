@@ -52,8 +52,8 @@ jobs:
                   GH_REF: ${{ github.ref }}
               run: |
                   echo "Event: $GH_EVENT_NAME  Ref: $GH_REF"
-                  echo "event_name=$GH_EVENT_NAME" >> $GITHUB_OUTPUT
-                  echo "ref=$GH_REF" >> $GITHUB_OUTPUT
+                  echo "event_name=$GH_EVENT_NAME" >> "$GITHUB_OUTPUT"
+                  echo "ref=$GH_REF" >> "$GITHUB_OUTPUT"
 
             - name: Handle pull request event
               id: pull-request-params
@@ -62,8 +62,8 @@ jobs:
               run: |
                   RELEASE="255.255.255"
                   SHOULD_PUB="false"
-                  echo "release_version=$RELEASE" >> $GITHUB_OUTPUT
-                  echo "should_publish=$SHOULD_PUB" >> $GITHUB_OUTPUT
+                  echo "release_version=$RELEASE" >> "$GITHUB_OUTPUT"
+                  echo "should_publish=$SHOULD_PUB" >> "$GITHUB_OUTPUT"
                   echo "Pull request detected - using development version $RELEASE"
 
             - name: Handle workflow dispatch event
@@ -87,8 +87,8 @@ jobs:
                   # All good - set variables
                   RELEASE="$INPUT_VER"
                   SHOULD_PUB="$INPUT_PUB"
-                  echo "release_version=$RELEASE" >> $GITHUB_OUTPUT
-                  echo "should_publish=$SHOULD_PUB" >> $GITHUB_OUTPUT
+                  echo "release_version=$RELEASE" >> "$GITHUB_OUTPUT"
+                  echo "should_publish=$SHOULD_PUB" >> "$GITHUB_OUTPUT"
                   echo "Manual workflow run - using version $RELEASE (publish=$SHOULD_PUB)"
 
             - name: Handle tag push event
@@ -99,8 +99,8 @@ jobs:
                   if [[ "${{ steps.event-check.outputs.ref }}" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?)$ ]]; then
                     RELEASE="${BASH_REMATCH[1]}"
                     SHOULD_PUB="true"
-                    echo "release_version=$RELEASE" >> $GITHUB_OUTPUT
-                    echo "should_publish=$SHOULD_PUB" >> $GITHUB_OUTPUT
+                    echo "release_version=$RELEASE" >> "$GITHUB_OUTPUT"
+                    echo "should_publish=$SHOULD_PUB" >> "$GITHUB_OUTPUT"
                     echo "Tag push detected - using version $RELEASE from tag"
                   else
                     echo "::error::Invalid tag format. Expected vX.Y.Z or vX.Y.Z-rcN"; exit 1
@@ -122,7 +122,7 @@ jobs:
                   fi
 
                   echo "Using npm tag: $TAG"
-                  echo "npm_tag=$TAG" >> $GITHUB_OUTPUT
+                  echo "npm_tag=$TAG" >> "$GITHUB_OUTPUT"
 
             - name: Consolidate build parameters
               id: get-params
@@ -132,9 +132,11 @@ jobs:
                   NPM_TAG: ${{ steps.determine-npm-tag.outputs.npm_tag }}
                   SHOULD_PUBLISH: ${{ steps.pull-request-params.outputs.should_publish || steps.workflow-dispatch-params.outputs.should_publish || steps.tag-push-params.outputs.should_publish }}
               run: |
-                  echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
-                  echo "npm_tag=$NPM_TAG" >> $GITHUB_OUTPUT
-                  echo "should_publish=$SHOULD_PUBLISH" >> $GITHUB_OUTPUT
+                  {
+                      echo "release_version=$RELEASE_VERSION"
+                      echo "npm_tag=$NPM_TAG"
+                      echo "should_publish=$SHOULD_PUBLISH"
+                  } >> "$GITHUB_OUTPUT"
 
                   echo "Final build parameters:"
                   echo "- Version: $RELEASE_VERSION"
@@ -147,7 +149,7 @@ jobs:
               run: |
                   # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available, replace "ephemeral" with "persistent" in RUNNER.
                   # x86_64-apple-darwin builds on CD_RUNNER (macos-15, arm64) but tests on macos-15-intel: npm resolves the native package by the runner arch, so testing on arm64 would validate the wrong build.
-                  export PLATFORM_MATRIX=$(jq 'map(
+                  PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
                       | .RUNNER = (
                           if (.CD_RUNNER != null)
@@ -168,7 +170,7 @@ jobs:
                       )
                       | if .TARGET == "x86_64-apple-darwin" then .["test-runner"] = "macos-15-intel" else . end
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
-                  echo "platform_matrix=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+                  echo "platform_matrix=${PLATFORM_MATRIX}" >> "$GITHUB_OUTPUT"
                   echo "Platform matrix loaded: ${PLATFORM_MATRIX}"
 
     build-native-modules:
@@ -217,10 +219,12 @@ jobs:
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install platform dependencies
-              if: ${{ matrix.OS != 'windows' }}
+              if: ${{ contains(matrix.TARGET, 'linux') }}
               shell: bash
+              env:
+                  TARGET: ${{ matrix.TARGET }}
               run: |
-                  if [[ "${{ matrix.TARGET }}" == *"linux"* ]]; then
+                  if [[ "$TARGET" == *"linux"* ]]; then
                     sudo apt update
                     sudo apt install -y gcc pkg-config openssl libssl-dev
                     # Install zig via direct binary download (works on all runners without snap/pip)
@@ -228,25 +232,30 @@ jobs:
                     ZIG_ARCH="$(uname -m)"
                     curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" | sudo tar -xJ -C /usr/local
                     sudo ln -sf "/usr/local/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}/zig" /usr/local/bin/zig
-                  else
-                    brew update
-                    brew install tree
                   fi
 
             - name: Build Native Module
               shell: bash
               working-directory: ./node/rust-client
+              env:
+                  TARGET: ${{ matrix.TARGET }}
+                  RELEASE_VERSION: ${{ needs.get-build-parameters.outputs.release_version }}
+                  # Reported as lib-ver in CLIENT SETINFO; overrides the non-forced "unknown" in .cargo/config.toml.
+                  GLIDE_VERSION: ${{ needs.get-build-parameters.outputs.release_version }}
               run: |
                   mkdir -p ../build-ts
                   npm ci
+
+                  # napi build bakes this version into native.js; it must match the published platform packages.
+                  npm pkg set version="${RELEASE_VERSION}"
 
                   if [[ "${{ matrix.OS }}" == "windows" ]]; then
                     # Windows: native build, no cross-compilation needed
                     npx napi build --release --strip --platform --target "${{ matrix.TARGET }}" \
                       --js ../build-ts/native.js --dts ../build-ts/native.d.ts \
-                      --js-package-name @valkey/valkey-glide
+                      --js-package-name @valkey/valkey-glide -- --locked
 
-                  elif [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
+                  elif [[ "$TARGET" == *"gnu"* ]]; then
                     # Linux GNU: use cargo-zigbuild for cross-compilation
                     npm run build:release:gnu
 
@@ -254,7 +263,7 @@ jobs:
                     # macOS ARM: native build on arm64 runner, no --target needed
                     npx napi build --release --strip --platform \
                       --js ../build-ts/native.js --dts ../build-ts/native.d.ts \
-                      --js-package-name @valkey/valkey-glide $npm_config_build_flags
+                      --js-package-name @valkey/valkey-glide -- --locked
 
                   else
                     # macOS x86 or musl: may need zig for cross-compilation
@@ -265,11 +274,11 @@ jobs:
                     npx napi build --platform --release $additional_param --strip \
                       --target "${{ matrix.TARGET }}" \
                       --js ../build-ts/native.js --dts ../build-ts/native.d.ts \
-                      --js-package-name @valkey/valkey-glide $npm_config_build_flags
+                      --js-package-name @valkey/valkey-glide -- --locked
                   fi
 
-                  mkdir -p ../${{ matrix.TARGET }}
-                  cp -r *.node ../${{ matrix.TARGET }}/
+                  mkdir -p "../$TARGET"
+                  cp -r ./*.node "../$TARGET/"
 
                   echo "Built native module for ${{ matrix.TARGET }}:"
                   ls -la ../${{ matrix.TARGET }}/
@@ -455,27 +464,14 @@ jobs:
                   NPM_TAG: ${{ needs.get-build-parameters.outputs.npm_tag }}
                   NPM_CONFIG_PROVENANCE: true
               run: |
-                  package_name=$(cat package.json | jq -r .name)
-                  version=$(cat package.json | jq -r .version)
+                  package_name=$(jq -r .name package.json)
+                  version=$(jq -r .version package.json)
                   echo "Publishing base package ${package_name}@${version} with tag ${NPM_TAG}"
-                  npm publish --tag ${NPM_TAG} --access public --provenance --scope=@valkey
-
-                  # Check if the publish was successful
-                  if [ $? -ne 0 ]; then
+                  if ! npm publish --tag "${NPM_TAG}" --access public --provenance --scope=@valkey; then
                       echo "::error::Base package publish failed"; exit 1
                   fi
 
                   echo "Packages published successfully"
-
-              # Delete artifacts if not published
-            - name: Delete artifacts
-              if: always() && ${{ needs.get-build-parameters.outputs.should_publish == 'false' }}
-              uses: geekyeggo/delete-artifact@54ab544f12cdb7b71613a16a2b5a37a9ade990af # v2
-              with:
-                  name: |
-                      artifacts-*
-                      js-files-${{ github.run_id }}
-                  failOnError: false
 
     test-published-release:
         needs: [get-build-parameters, prepare-and-publish]
@@ -484,7 +480,8 @@ jobs:
         strategy:
             matrix:
                 include: ${{ fromJson(needs.get-build-parameters.outputs.platform_matrix) }}
-            fail-fast: true
+            # One platform's failure (e.g. a registry propagation miss) must not cancel the others' validation.
+            fail-fast: false
         runs-on: ${{ matrix.test-runner || matrix.RUNNER }}
         container:
             image: ${{ matrix.IMAGE || ''}}
@@ -509,10 +506,10 @@ jobs:
               shell: bash
               run: |
                   # First, clone the repository
-                  git clone https://github.com/${{ github.repository }} $GITHUB_WORKSPACE
-                  cd $GITHUB_WORKSPACE
+                  git clone https://github.com/${{ github.repository }} "$GITHUB_WORKSPACE"
+                  cd "$GITHUB_WORKSPACE"
                   # Now we can run further git commands
-                  git config --global --add safe.directory $GITHUB_WORKSPACE
+                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
                   git fetch origin ${{ github.sha }}
                   git checkout ${{ github.sha }}
                   git clean -xdf
@@ -546,8 +543,11 @@ jobs:
                       apk add --no-cache valkey-cli || apk add --no-cache redis-cli
                   elif [[ "${{ matrix.build_type }}" == "mac" ]]; then
                       echo "Installing Valkey on macOS..."
-                      brew update
-                      brew install valkey || brew install redis
+                      # Homebrew 6 exits non-zero on Intel macOS even when the install succeeds (#6976), and a
+                      # `|| brew install redis` fallback then fails on the conflicting redis-* binaries. Ignore the
+                      # exit code and rely on the server check below. Skipping auto-update and dependency upgrades
+                      # keeps Homebrew from rebuilding outdated formulae from source on Intel.
+                      HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_UPGRADE=1 brew install valkey || echo "::warning::brew install valkey exited non-zero; checking for valkey-server"
                   elif [[ "${{ matrix.build_type }}" == "windows" ]]; then
                       echo "Windows target tested via CodeBuild - skipping local Valkey install"
                       exit 0
@@ -579,7 +579,8 @@ jobs:
                   # test fails with "Cannot find module". Retry the install until the native module
                   # resolves, and assert the installed version matches the published version.
                   RELEASE_VERSION="${{ needs.get-build-parameters.outputs.release_version }}"
-                  MAX_ATTEMPTS=5
+                  # 20 x 15s = ~5 min: npm propagation has taken longer than the old ~60s window (2.6.0-rc2, rc3).
+                  MAX_ATTEMPTS=20
                   DELAY=15
                   for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
                       rm -rf node_modules package-lock.json
@@ -587,7 +588,9 @@ jobs:
                       # version is not visible on an npm edge yet, `npm install` exits non-zero
                       # (ETARGET/404). Guard it with `if` so that (under the default `set -e` shell)
                       # a transient miss is retried instead of aborting the step on the first attempt.
-                      if npm install "@valkey/valkey-glide@${RELEASE_VERSION}" --save; then
+                      # --prefer-online: otherwise npm answers retries from its local cache (packument
+                      # max-age=300) and keeps missing a version published after the first attempt (2.6.0-rc4).
+                      if npm install "@valkey/valkey-glide@${RELEASE_VERSION}" --save --prefer-online; then
                           # Read the version from the installed package.json on disk. The package's
                           # "exports" map only exposes ".", so require("@valkey/valkey-glide/package.json")
                           # would throw ERR_PACKAGE_PATH_NOT_EXPORTED; read the file directly instead.
@@ -606,6 +609,8 @@ jobs:
                       echo "Attempt ${attempt}/${MAX_ATTEMPTS}: version '${INSTALLED_VERSION:-none}' / native module not resolvable yet (likely npm registry propagation). Retrying in ${DELAY}s..."
                       sleep "${DELAY}"
                   done
+                  # Smoke test NAPI version check
+                  NAPI_RS_ENFORCE_VERSION_CHECK=1 node -e "require('@valkey/valkey-glide')"
                   npm run build:utils
                   npm test
 

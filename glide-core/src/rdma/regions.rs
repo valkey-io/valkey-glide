@@ -109,7 +109,7 @@ impl Regions {
         let _ = state.wait_for(|state| *state == CloseState::Closed).await;
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "rdma-tcp-dev"))]
     fn tracked(&self) -> usize {
         self.lock().len()
     }
@@ -163,7 +163,7 @@ pub(crate) fn cancelled_if(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "rdma-tcp-dev"))]
 mod tests {
     use super::*;
     use glide_rdma::{FabricConfig, Provider};

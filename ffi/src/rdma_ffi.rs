@@ -1536,14 +1536,14 @@ mod tests {
 
     /// A region over `memory` on `fabric`, as `register_rdma_region` builds one.
     /// For a test that never touches `memory` again while the region lives.
-    #[cfg(feature = "rdma")]
+    #[cfg(feature = "rdma-tcp-dev")]
     fn foreign_region(fabric: &glide_rdma::RdmaFabric, memory: &mut [u8]) -> Box<RdmaRegion> {
         unsafe { foreign_region_at(fabric, std::ptr::NonNull::from(memory)) }
     }
 
     /// [`foreign_region`] by address, for a test that goes on writing through its
     /// own pointer as a C caller would.
-    #[cfg(feature = "rdma")]
+    #[cfg(feature = "rdma-tcp-dev")]
     unsafe fn foreign_region_at(
         fabric: &glide_rdma::RdmaFabric,
         memory: std::ptr::NonNull<[u8]>,
@@ -1577,7 +1577,7 @@ mod tests {
     /// The region is the caller's own allocation, not a copy, and the caller's
     /// writes through its own pointer between transfers are what the next
     /// transfer sees.
-    #[cfg(feature = "rdma")]
+    #[cfg(feature = "rdma-tcp-dev")]
     #[test]
     fn a_region_shares_the_callers_memory() {
         let fabric = tcp_fabric();
@@ -1594,14 +1594,14 @@ mod tests {
         drop(unsafe { Box::from_raw(memory) });
     }
 
-    #[cfg(feature = "rdma")]
+    #[cfg(feature = "rdma-tcp-dev")]
     fn tcp_fabric() -> glide_rdma::RdmaFabric {
         glide_rdma::RdmaFabric::open(&glide_rdma::FabricConfig::new(glide_rdma::Provider::Tcp))
             .expect("tcp opens")
     }
 
     /// An idle region closes cleanly, so the caller may free its memory at once.
-    #[cfg(feature = "rdma")]
+    #[cfg(feature = "rdma-tcp-dev")]
     #[test]
     fn freeing_an_idle_region_releases_the_memory_at_once() {
         let fabric = tcp_fabric();
@@ -1616,7 +1616,7 @@ mod tests {
     /// On tcp a transfer whose buffer did not come back leaves the memory parked in
     /// the fabric, because a write could still land. The caller has to keep it
     /// until the fabric closes.
-    #[cfg(feature = "rdma")]
+    #[cfg(feature = "rdma-tcp-dev")]
     #[test]
     fn a_parked_region_holds_the_memory_until_the_fabric_closes() {
         let fabric = tcp_fabric();
@@ -1647,7 +1647,7 @@ mod tests {
         unsafe { free_rdma_memory_hold(hold) };
     }
 
-    #[cfg(feature = "rdma")]
+    #[cfg(feature = "rdma-tcp-dev")]
     #[test]
     fn a_transfer_that_hands_the_buffer_back_leaves_the_region_open() {
         let fabric = tcp_fabric();
@@ -1669,7 +1669,7 @@ mod tests {
     /// No buffer comes back when a transfer ends before the server is known to be
     /// done with the memory, so both that transfer and every later one report the
     /// region closed.
-    #[cfg(feature = "rdma")]
+    #[cfg(feature = "rdma-tcp-dev")]
     #[test]
     fn a_transfer_without_the_buffer_back_reports_the_region_closed() {
         let fabric = tcp_fabric();
@@ -1701,7 +1701,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "rdma")]
+    #[cfg(feature = "rdma-tcp-dev")]
     #[test]
     fn a_buffer_handed_back_revoked_reports_the_region_closed() {
         let fabric = tcp_fabric();
@@ -1720,7 +1720,7 @@ mod tests {
     /// A transfer blocks on the client's runtime, and tokio panics when asked to
     /// block inside another one. A transfer from inside a runtime is rejected
     /// before it takes the region's buffer, so the region stays usable.
-    #[cfg(feature = "rdma")]
+    #[cfg(feature = "rdma-tcp-dev")]
     #[test]
     fn a_transfer_inside_a_tokio_runtime_is_rejected() {
         let fabric = tcp_fabric();
@@ -1765,7 +1765,7 @@ mod tests {
     /// A panic caught after a transfer took the region's buffer dropped it while
     /// unwinding, which closes the region. One caught before then leaves the
     /// region open.
-    #[cfg(feature = "rdma")]
+    #[cfg(feature = "rdma-tcp-dev")]
     #[test]
     fn a_panicked_transfer_reports_whether_the_region_closed() {
         let fabric = tcp_fabric();
@@ -1816,7 +1816,7 @@ mod tests {
     /// A region that is still open once every close has been tried failed to
     /// close, so its memory is leaked. A real failed close needs a device error,
     /// so this stands one in: the region reports on a buffer that is never closed.
-    #[cfg(feature = "rdma")]
+    #[cfg(feature = "rdma-tcp-dev")]
     #[test]
     fn a_hold_whose_region_did_not_close_is_leaked() {
         let fabric = tcp_fabric();

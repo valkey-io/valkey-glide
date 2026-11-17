@@ -10,7 +10,7 @@ from glide_shared._glide_ffi import GlideFFI
 from glide_shared.commands.core_options import MonitorMsg
 from glide_shared.config import GlideClientConfiguration
 from glide_shared.connection_request import _create_async_connection_request
-from glide_shared.exceptions import ConfigurationError
+from glide_shared.exceptions import ConfigurationError, get_connection_error_class
 
 
 class MonitorClient:
@@ -174,8 +174,11 @@ class MonitorClient:
             error = instance._ffi.string(
                 client_response.connection_error_message
             ).decode()
+            error_class = get_connection_error_class(
+                client_response.connection_error_type, default=RuntimeError
+            )
             instance._lib.free_connection_response(client_response)
-            raise RuntimeError(f"Failed to create monitor client: {error}")
+            raise error_class(f"Failed to create monitor client: {error}")
         instance._core_client = client_response.conn_ptr
         instance._lib.free_connection_response(client_response)
         return instance

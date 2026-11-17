@@ -787,6 +787,40 @@ class TestCommands:
         assert await glide_client.get(key_mv_key) == b"value2"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize(
+        "view_fn",
+        [
+            lambda b: memoryview(b).cast("H"),
+            lambda b: memoryview(b).cast("I"),
+            lambda b: memoryview(b).cast("Q"),
+            lambda b: memoryview(b).cast("B", (2, len(b) // 2)),
+        ],
+        ids=["cast-H", "cast-I", "cast-Q", "2-D"],
+    )
+    async def test_memoryview_args_sent_by_byte_length(
+        self, glide_client: TGlideClient, view_fn
+    ):
+        """Test that set() and custom_command() accept memoryview values and keys
+        whose len() is smaller than nbytes (wider item formats and 2-D views)."""
+        data = os.urandom(64)
+        view = view_fn(data)
+        assert len(view) < view.nbytes == len(data)
+
+        key = get_random_string(10)
+        assert await glide_client.set(key, view) == OK
+        assert await glide_client.get(key) == data
+
+        custom_key = get_random_string(10)
+        await glide_client.custom_command(["SET", custom_key, view])
+        assert await glide_client.get(custom_key) == data
+
+        key_bytes = b"mv_key_" + os.urandom(8)
+        key_bytes += b"\x00" * (-len(key_bytes) % 8)  # whole uint64 elements
+        assert await glide_client.set(view_fn(key_bytes), b"value") == OK
+        assert await glide_client.get(key_bytes) == b"value"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
     async def test_use_resp3_protocol(self, glide_client: TGlideClient):
         result = cast(Dict[bytes, bytes], await glide_client.custom_command(["HELLO"]))
@@ -3776,6 +3810,30 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zadd_bytes_like_members(self, glide_client: TGlideClient):
+        """zadd must store bytes and memoryview members verbatim, not as their Python repr."""
+        key = get_random_string(10)
+        member_bytes = b"\x00\xffab"
+        member_other = b"\x01\xfecd"
+        member_mv = memoryview(b"\x02\xfdef")
+        members_scores: Mapping[TEncodable, float] = {
+            member_bytes: 1.0,
+            member_other: 2.0,
+            member_mv: 3.0,
+        }
+        assert await glide_client.zadd(key, members_scores) == 3
+
+        assert await glide_client.zrange(key, RangeByIndex(0, -1)) == [
+            b"\x00\xffab",
+            b"\x01\xfecd",
+            b"\x02\xfdef",
+        ]
+        assert await glide_client.zscore(key, b"\x00\xffab") == 1.0
+        assert await glide_client.zscore(key, b"\x01\xfecd") == 2.0
+        assert await glide_client.zscore(key, b"\x02\xfdef") == 3.0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zadd_nx_xx(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
@@ -4442,6 +4500,10 @@ class TestCommands:
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await glide_client.zadd(key, members_scores=members_scores) == 3
+        # count=0 must be sent as `ZPOPMIN key 0` and pop nothing. If it were dropped (truthiness check),
+        # the server would run `ZPOPMIN key` and silently remove "a".
+        assert await glide_client.zpopmin(key, 0) == {}
+        assert await glide_client.zcard(key) == 3
         assert await glide_client.zpopmin(key) == {b"a": 1.0}
 
         zpopmin_map = await glide_client.zpopmin(key, 3)
@@ -4502,6 +4564,10 @@ class TestCommands:
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await glide_client.zadd(key, members_scores) == 3
+        # count=0 must be sent as `ZPOPMAX key 0` and pop nothing. If it were dropped (truthiness check),
+        # the server would run `ZPOPMAX key` and silently remove "c".
+        assert await glide_client.zpopmax(key, 0) == {}
+        assert await glide_client.zcard(key) == 3
         assert await glide_client.zpopmax(key) == {b"c": 3.0}
 
         zpopmax_map = await glide_client.zpopmax(key, 3)
@@ -5897,7 +5963,7 @@ class TestCommands:
             await glide_client.xadd(
                 key,
                 [(field, "foo4"), (field2, "bar4")],
-                StreamAddOptions(trim=TrimByMinId(exact=True, threshold=id.decode())),
+                StreamAddOptions(trim=TrimByMinId(exact=True, threshold=id)),
             )
             is not None
         )
@@ -5962,6 +6028,50 @@ class TestCommands:
         assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
             await glide_client.xdel(string_key, [stream_id3])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xtrim_minid_bytes_like_threshold(self, glide_client: TGlideClient):
+        """TrimByMinId must accept the bytes stream ID returned by xadd."""
+        key = get_random_string(10)
+        ids = [await glide_client.xadd(key, [("f", str(i))]) for i in range(3)]
+        last_id = ids[-1]
+        assert isinstance(last_id, bytes)
+
+        assert await glide_client.xtrim(key, TrimByMinId(True, last_id)) == 2
+        assert await glide_client.xlen(key) == 1
+
+        for i in range(2):
+            await glide_client.xadd(key, [("f", str(i))])
+        newest = await glide_client.xrevrange(key, MaxId(), MinId(), count=1)
+        assert newest is not None
+        newest_id = next(iter(newest))
+        assert (
+            await glide_client.xtrim(key, TrimByMinId(True, memoryview(newest_id))) == 2
+        )
+        assert await glide_client.xlen(key) == 1
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xrange_exclusive_bound_bytes_like(self, glide_client: TGlideClient):
+        """ExclusiveIdBound must accept bytes, bytearray and memoryview IDs."""
+        key = get_random_string(10)
+        for stream_id in ["0-1", "0-2", "0-3"]:
+            assert (
+                await glide_client.xadd(
+                    key, [("f", "v")], StreamAddOptions(id=stream_id)
+                )
+                == stream_id.encode()
+            )
+
+        for start in [b"0-1", bytearray(b"0-1"), memoryview(b"0-1")]:
+            result = await glide_client.xrange(key, ExclusiveIdBound(start), MaxId())
+            assert result is not None
+            assert list(result) == [b"0-2", b"0-3"]
+
+            result = await glide_client.xrevrange(key, MaxId(), ExclusiveIdBound(start))
+            assert result is not None
+            assert list(result) == [b"0-3", b"0-2"]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

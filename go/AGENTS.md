@@ -48,7 +48,7 @@ make build-debug                        # Build debug version with symbols
 make clean                              # Clean build artifacts
 
 # Development setup
-make install-build-tools                # Install protoc-gen-go, cbindgen
+make install-build-tools                # Install protoc-gen-go, cbindgen (+ rustup llvm-tools on macOS)
 make install-dev-tools                  # Install linters and test tools
 make install-tools                      # Install all tools
 
