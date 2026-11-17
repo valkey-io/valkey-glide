@@ -27,6 +27,7 @@
 * Rust: `telemetry::init` rejects a configuration with no exporter ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Rust: `telemetry::init` runs the HTTP and gRPC exporters on GLIDE's runtime ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core: reject writes in read-only standalone pipelines, transactions and scopes ([#7761](https://github.com/valkey-io/valkey-glide/pull/7761))
+* Core, Python, Node, Java: return an error from logger init for an unwritable log file path instead of aborting on the first log line ([#7742](https://github.com/valkey-io/valkey-glide/pull/7742))
 
 ### Breaking Changes
 
