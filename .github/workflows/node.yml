@@ -18,11 +18,16 @@ on:
             - deny.toml
             - node/**
             - utils/cluster_manager.py
+            - utils/*.ts
+            - utils/tsconfig.json
+            - utils/package.json
+            - utils/package-lock.json
             - .github/workflows/node.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-zig/action.yml
+            - .github/actions/setup-dns-tests/**
             - .github/actions/test-benchmark/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
@@ -40,11 +45,16 @@ on:
             - deny.toml
             - node/**
             - utils/cluster_manager.py
+            - utils/*.ts
+            - utils/tsconfig.json
+            - utils/package.json
+            - utils/package-lock.json
             - .github/workflows/node.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-zig/action.yml
+            - .github/actions/setup-dns-tests/**
             - .github/actions/test-benchmark/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
