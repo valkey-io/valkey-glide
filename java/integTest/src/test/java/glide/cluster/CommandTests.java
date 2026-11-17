@@ -105,14 +105,17 @@ import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
+import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.GlideException;
 import glide.api.models.exceptions.RequestException;
+import glide.api.models.exceptions.TimeoutException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -134,6 +137,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 @Timeout(30) // seconds
@@ -528,6 +532,127 @@ public class CommandTests {
                 assertTrue(
                         info.toLowerCase().contains("# " + section.toString().toLowerCase()),
                         "Section " + section + " is missing");
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProtocolVersion.class)
+    @SneakyThrows
+    public void infoWithPartialResults_keeps_replies_when_a_primary_is_slow(
+            ProtocolVersion protocol) {
+        try (GlideClusterClient client =
+                        GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(1000).protocol(protocol).build())
+                                .get();
+                // A second client pauses the primary, so the pause is not queued behind the
+                // client under test.
+                GlideClusterClient pauser =
+                        GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                                .get()) {
+            List<String> primaries = new ArrayList<>(client.info().get().getMultiValue().keySet());
+            Collections.sort(primaries);
+            String paused = primaries.get(0);
+            int portIndex = paused.lastIndexOf(':');
+            ByAddressRoute route =
+                    new ByAddressRoute(
+                            paused.substring(0, portIndex), Integer.parseInt(paused.substring(portIndex + 1)));
+
+            // Long enough for both calls below to see the node as slow.
+            pauser.customCommand(new String[] {"CLIENT", "PAUSE", "4500", "ALL"}, route).get();
+            try {
+                // Without partial results, one slow primary fails the whole call.
+                ExecutionException error =
+                        assertThrows(ExecutionException.class, () -> client.info().get());
+                assertInstanceOf(TimeoutException.class, error.getCause());
+
+                Map<String, Object> replies =
+                        client.infoWithPartialResults(new Section[0]).get().getMultiValue();
+                assertEquals(new HashSet<>(primaries), replies.keySet());
+                assertInstanceOf(TimeoutException.class, replies.get(paused));
+                for (String address : primaries.subList(1, primaries.size())) {
+                    assertTrue(((String) replies.get(address)).contains("# Server"));
+                }
+            } finally {
+                // CLIENT UNPAUSE would wait for the pause too; wait for it to end.
+                waitFor(
+                        () -> {
+                            try {
+                                pauser.customCommand(new String[] {"PING"}, route).get();
+                                return true;
+                            } catch (ExecutionException e) {
+                                return false;
+                            }
+                        },
+                        "paused primary did not recover");
+            }
+
+            // A single-node route still returns the node's reply as a string.
+            Object single = client.infoWithPartialResults(new Section[0], route).get().getSingleValue();
+            assertTrue(((String) single).contains("# Server"));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProtocolVersion.class)
+    @SneakyThrows
+    public void infoWithPartialResults_keeps_the_error_reply_of_a_denied_primary(
+            ProtocolVersion protocol) {
+        String username = "partial-" + UUID.randomUUID();
+        String password = "password";
+        try (GlideClusterClient admin =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get()) {
+            admin
+                    .customCommand(
+                            new String[] {"ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all"},
+                            ALL_NODES)
+                    .get();
+            try (GlideClusterClient denied =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig()
+                                            .protocol(protocol)
+                                            .credentials(
+                                                    ServerCredentials.builder().username(username).password(password).build())
+                                            .build())
+                            .get()) {
+                List<String> primaries = new ArrayList<>(denied.info().get().getMultiValue().keySet());
+                Collections.sort(primaries);
+                String deniedPrimary = primaries.get(0);
+                int portIndex = deniedPrimary.lastIndexOf(':');
+                admin
+                        .customCommand(
+                                new String[] {"ACL", "SETUSER", username, "-info"},
+                                new ByAddressRoute(
+                                        deniedPrimary.substring(0, portIndex),
+                                        Integer.parseInt(deniedPrimary.substring(portIndex + 1))))
+                        .get();
+
+                // Without partial results, the denied primary fails the whole call.
+                ExecutionException plain =
+                        assertThrows(ExecutionException.class, () -> denied.info().get());
+                assertInstanceOf(RequestException.class, plain.getCause());
+
+                Map<String, Object> replies = denied.infoWithPartialResults().get().getMultiValue();
+                assertEquals(new HashSet<>(primaries), replies.keySet());
+                Object error = replies.get(deniedPrimary);
+                assertInstanceOf(RequestException.class, error);
+                assertEquals(plain.getCause().getMessage(), ((RequestException) error).getMessage());
+                for (String address : primaries.subList(1, primaries.size())) {
+                    assertTrue(((String) replies.get(address)).contains("# Server"));
+                }
+
+                // With every primary denied, the call returns an error for each.
+                admin
+                        .customCommand(new String[] {"ACL", "SETUSER", username, "-info"}, ALL_PRIMARIES)
+                        .get();
+                Map<String, Object> failed = denied.infoWithPartialResults().get().getMultiValue();
+                assertEquals(new HashSet<>(primaries), failed.keySet());
+                for (Object reply : failed.values()) {
+                    assertInstanceOf(RequestException.class, reply);
+                }
+            } finally {
+                admin.customCommand(new String[] {"ACL", "DELUSER", username}, ALL_NODES).get();
             }
         }
     }
