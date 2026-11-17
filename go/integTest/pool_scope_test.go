@@ -547,6 +547,26 @@ func (suite *GlideTestSuite) TestScopeAcquirePingRelease() {
 	}
 }
 
+func (suite *GlideTestSuite) TestScopeNoScriptErrorKeepsServerText() {
+	t := suite.T()
+	for _, tc := range scopeModes() {
+		t.Run(tc.name, func(t *testing.T) {
+			suite.skipMode(t, tc.cluster)
+			client := suite.newScopeClient(t, tc.cluster)
+			defer client.Close()
+
+			ctx := context.Background()
+			scope, err := client.ScopedConnection(ctx, 10*time.Second, "")
+			require.NoError(t, err)
+			defer scope.Close()
+
+			_, err = scope.ExecuteCommand(ctx, "EVALSHA", strings.Repeat("f", 40), "0")
+			require.Error(t, err)
+			assert.Regexp(t, "^scope command error: "+strings.TrimPrefix(noScriptPattern, "^"), err.Error())
+		})
+	}
+}
+
 func (suite *GlideTestSuite) TestScopeGetSet() {
 	t := suite.T()
 	for _, tc := range scopeModes() {
