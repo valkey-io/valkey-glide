@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import pytest
+from glide_shared.commands.batch import Batch
 from glide_shared.config import (
     GlideClientConfiguration,
     NodeAddress,
@@ -11,6 +12,7 @@ from glide_shared.exceptions import RequestError
 from glide_sync import GlideClient
 
 from tests.sync_tests.conftest import create_sync_client
+from tests.utils.utils import get_random_string
 
 
 class TestSyncReadOnlyMode:
@@ -254,3 +256,45 @@ class TestSyncReadOnlyMode:
         finally:
             client_node_0.close()
             client_node_1.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("is_atomic", [True, False])
+    def test_sync_read_only_mode_blocks_write_in_batch(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+        is_atomic: bool,
+    ):
+        """Test that a batch containing a write is rejected and writes nothing."""
+        client = create_sync_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            request_timeout=2000,
+            read_only=True,
+        )
+        assert type(client) is GlideClient
+        checker = None
+        key = get_random_string(10)
+
+        try:
+            checker = create_sync_client(request, cluster_mode, protocol=protocol)
+            batch = Batch(is_atomic=is_atomic).get(key).set(key, "value")
+            with pytest.raises(RequestError) as exc_info:
+                client.exec(batch, raise_on_error=True)
+            assert (
+                "write commands are not allowed in read-only mode"
+                in str(exc_info.value).lower()
+            )
+            assert checker.exists([key]) == 0
+
+            # A batch of reads still runs.
+            assert client.exec(
+                Batch(is_atomic=is_atomic).get(key), raise_on_error=True
+            ) == [None]
+        finally:
+            client.close()
+            if checker is not None:
+                checker.close()
