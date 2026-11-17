@@ -195,7 +195,9 @@ class AsyncClientPool:
         """
         if self._closed:
             raise RuntimeError("Pool is closed")
-        timeout = timeout or self._pool_config.acquire_timeout_s
+        timeout = (
+            timeout if timeout is not None else self._pool_config.acquire_timeout_s
+        )
 
         import time
 
