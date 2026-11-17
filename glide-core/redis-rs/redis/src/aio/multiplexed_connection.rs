@@ -290,6 +290,26 @@ where
     }
 }
 
+/// Flushes the server-assisted cache when a connection that turned on tracking closes.
+/// Invalidations for it stop when it closes, and the ones the server sends before the client
+/// reconnects are lost, so anything cached until now may already be stale. This runs for any
+/// closed tracking connection, including one glide replaces on purpose, and the cache may be
+/// shared with other clients. Skipping it while another tracking connection to the node is
+/// open isn't safe: that one only has the invalidations sent since it turned tracking on, and
+/// glide can connect a replacement before the old connection is dropped.
+///
+/// It clears the flag, so it flushes once per connection. The read loop calls it on EOF,
+/// before glide is told the connection is gone and reconnects, and the drop then leaves alone
+/// what the new connection has cached since. The drop covers a connection that closes without
+/// an EOF: killed, or its last handle dropped.
+fn flush_if_tracking(tracking_on: &AtomicBool, cache: Option<&dyn GlideCache>) {
+    if tracking_on.swap(false, Ordering::AcqRel) {
+        if let Some(cache) = cache {
+            cache.flush_all_server_assisted();
+        }
+    }
+}
+
 pin_project! {
     struct PipelineSink<T> {
         #[pin]
@@ -309,18 +329,9 @@ pin_project! {
         fn drop(this: Pin<&mut Self>) {
             let this = this.project();
 
-            // Invalidations for this connection stop when it closes, and the ones the server
-            // sends before the client reconnects are lost, so anything cached until now may
-            // already be stale. This runs for any closed tracking connection, including one
-            // glide replaces on purpose, and the cache may be shared with other clients.
-            // Skipping this while another tracking connection to the node is open isn't safe:
-            // that one only has the invalidations sent since it turned tracking on, and glide
-            // can connect a replacement before the old connection is dropped.
-            if this.tracking_on.load(Ordering::Acquire) {
-                if let Some(cache) = this.cache {
-                    cache.flush_all_server_assisted();
-                }
-            }
+            // The read loop flushes on EOF. This covers a connection that closes without one:
+            // killed, or its last handle dropped.
+            flush_if_tracking(this.tracking_on, this.cache.as_deref());
 
             let push_manager = this.push_manager.load();
             let address = push_manager.get_address();
@@ -373,6 +384,9 @@ where
                 // The redis response stream is not going to produce any more items so we `Err`
                 // to break out of the `forward` combinator and stop handling requests
                 None => {
+                    // Flush before glide hears about the disconnect and reconnects.
+                    let this = self.as_mut().project();
+                    flush_if_tracking(this.tracking_on, this.cache.as_deref());
                     // this is the right place to notify about the passive TCP disconnect
                     // In other places we cannot distinguish between the active destruction of MultiplexedConnection and passive disconnect
                     if let Some(disconnect_notifier) = self.as_mut().project().disconnect_notifier {
@@ -1721,9 +1735,19 @@ mod tests {
         .await;
     }
 
+    /// How a test connection closes.
+    enum Close {
+        /// The server closes it, so the read loop gets an EOF.
+        Server,
+        /// `Pipeline::kill` aborts the driver, with no EOF.
+        Kill,
+        /// Its last handle is dropped, so the driver closes the sink and ends, with no EOF.
+        LastHandle,
+    }
+
     /// Closes a connection under a cache holding one entry, and returns how many entries
     /// are left once the driver has stopped.
-    async fn entries_left_after_connection_closes(tracking_on: bool) -> u64 {
+    async fn entries_left_after_connection_closes(tracking_on: bool, close: Close) -> u64 {
         let cache = new_lru_cache(CacheConfig {
             max_memory_bytes: 10_000,
             ttl: None,
@@ -1746,22 +1770,108 @@ mod tests {
         }
         let driver = tokio::spawn(driver);
 
-        // The server closes the connection.
-        drop(response_tx);
+        match close {
+            Close::Server => drop(response_tx),
+            Close::Kill => pipeline.kill(),
+            Close::LastHandle => drop(pipeline),
+        }
         driver.await.unwrap();
-        drop(pipeline);
         cache.entry_count()
     }
 
     #[tokio::test]
     async fn test_cache_flushed_when_tracking_connection_closes() {
-        assert_eq!(entries_left_after_connection_closes(true).await, 0);
+        assert_eq!(
+            entries_left_after_connection_closes(true, Close::Server).await,
+            0
+        );
     }
 
     #[tokio::test]
     async fn test_cache_kept_when_connection_without_tracking_closes() {
         // A TTL-only cache, or a connection whose setup failed before tracking was on.
-        assert_eq!(entries_left_after_connection_closes(false).await, 1);
+        assert_eq!(
+            entries_left_after_connection_closes(false, Close::Server).await,
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cache_flushed_when_tracking_connection_is_killed() {
+        assert_eq!(
+            entries_left_after_connection_closes(true, Close::Kill).await,
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cache_flushed_when_last_handle_of_tracking_connection_is_dropped() {
+        assert_eq!(
+            entries_left_after_connection_closes(true, Close::LastHandle).await,
+            0
+        );
+    }
+
+    /// Records how many entries the cache holds when the disconnect is notified, then caches a
+    /// new entry, as the reconnected connection would.
+    #[derive(Clone)]
+    struct RefillOnDisconnect {
+        cache: Arc<dyn GlideCache>,
+        entries_at_notify: Arc<std::sync::Mutex<Option<u64>>>,
+    }
+
+    #[async_trait::async_trait]
+    impl DisconnectNotifier for RefillOnDisconnect {
+        fn notify_disconnect(&mut self) {
+            *self.entries_at_notify.lock().unwrap() = Some(self.cache.entry_count());
+            let mut cmd = crate::cmd("GET");
+            cmd.arg("new-key");
+            self.cache
+                .set_cached_cmd(&cmd, Value::BulkString(b"new".to_vec().into()));
+        }
+
+        async fn wait_for_disconnect_with_timeout(&self, _max_wait: &Duration) {}
+
+        fn clone_box(&self) -> Box<dyn DisconnectNotifier> {
+            Box::new(self.clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_cache_flushed_before_disconnect_is_notified() {
+        let cache = new_lru_cache(CacheConfig {
+            max_memory_bytes: 10_000,
+            ttl: None,
+            enable_metrics: false,
+        });
+        let mut cached = crate::cmd("GET");
+        cached.arg("key");
+        cache.set_cached_cmd(&cached, Value::BulkString(b"old".to_vec().into()));
+
+        let entries_at_notify = Arc::new(std::sync::Mutex::new(None));
+        let notifier: Box<dyn DisconnectNotifier> = Box::new(RefillOnDisconnect {
+            cache: cache.clone(),
+            entries_at_notify: entries_at_notify.clone(),
+        });
+        let (command_tx, _command_rx) = mpsc::unbounded_channel();
+        let (response_tx, response_rx) = futures_mpsc::channel(1);
+        let sink = ResponseSink {
+            command_tx,
+            response_rx,
+        };
+        let (pipeline, driver) = Pipeline::new(sink, Some(notifier), Some(cache.clone()));
+        pipeline.set_tracking_on();
+        let driver = tokio::spawn(driver);
+
+        // The server closes the connection.
+        drop(response_tx);
+        driver.await.unwrap();
+
+        // The notification starts glide's reconnect, so the entry the closed connection can
+        // no longer invalidate must be gone by then.
+        assert_eq!(*entries_at_notify.lock().unwrap(), Some(0));
+        // The drop doesn't flush again, so what the reconnected connection cached stays.
+        assert_eq!(cache.entry_count(), 1);
     }
 
     #[tokio::test]
