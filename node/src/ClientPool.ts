@@ -31,6 +31,7 @@
 import type { BaseClient, BaseClientConfiguration } from "./BaseClient";
 import { GlideClient } from "./GlideClient";
 import type { GlideClientConfiguration } from "./GlideClient";
+import { toClientCreationError } from "./Errors";
 import { GlideClusterClient } from "./GlideClusterClient";
 import type { GlideClusterClientConfiguration } from "./GlideClusterClient";
 import { clearScopeConnectionRequest } from "./ScopeInternal";
@@ -194,7 +195,7 @@ export class ClientPool {
                 removeAddressResolver(resolverKey);
             }
 
-            throw e;
+            throw toClientCreationError(e);
         }
 
         return new ClientPool(

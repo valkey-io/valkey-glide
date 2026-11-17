@@ -153,7 +153,8 @@ jobs:
 
             - name: Test FFI ABI
               if: matrix.build.PYTHON_VERSION == '3.14'
-              run: cargo test --manifest-path ffi\Cargo.toml --test test_command_response_layout --test test_statistics
+              shell: pwsh
+              run: cargo test --locked --manifest-path ffi\Cargo.toml --test test_command_response_layout --test test_statistics
               env:
                   GLIDE_NAME: GlidePySync
                   GLIDE_VERSION: ${{ env.BUILD_VERSION }}
@@ -161,7 +162,7 @@ jobs:
             - name: Build native dependencies for the async client
               shell: pwsh
               run: |
-                  cargo build --manifest-path ffi\Cargo.toml --release
+                  cargo build --locked --manifest-path ffi\Cargo.toml --release
                   if ($LASTEXITCODE -ne 0) {
                       throw "Failed to build glide-ffi"
                   }
@@ -180,6 +181,7 @@ jobs:
               env:
                   GLIDE_NAME: GlidePy
                   GLIDE_VERSION: ${{ env.BUILD_VERSION }}
+                  MATURIN_PEP517_ARGS: --locked
                   TARGET_PYTHON: ${{ steps.target_python.outputs.python-path }}
 
             - name: Build Python Async client wheel
@@ -188,6 +190,7 @@ jobs:
               env:
                   GLIDE_NAME: GlidePy
                   GLIDE_VERSION: ${{ env.BUILD_VERSION }}
+                  MATURIN_PEP517_ARGS: --locked
                   TARGET_PYTHON: ${{ steps.target_python.outputs.python-path }}
 
             - name: Build Python Sync client wheel
