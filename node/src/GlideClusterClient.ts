@@ -1129,6 +1129,21 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
+     * Gets information and statistics about the server, keeping the replies of the nodes that
+     * answered when other nodes fail. See {@link PartialResultsOption} and the overload without
+     * `allowPartialResults`.
+     *
+     * @param options - The options of the overload without `allowPartialResults`, plus
+     *     `allowPartialResults`.
+     * @returns A string when the command goes to a single node. Otherwise a dictionary from each
+     *     node address to its reply, or to its error: a {@link TimeoutError} if the node did not
+     *     answer in time, or a {@link RequestError} for any other failure.
+     */
+    public async info(
+        options: { sections?: InfoOptions[] } & RouteOption &
+            Required<PartialResultsOption>,
+    ): Promise<string | Record<string, string | RequestError>>;
+    /**
      * Gets information and statistics about the server.
      *
      * The command will be routed to all primary nodes, unless `route` is provided.
@@ -1164,24 +1179,8 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async info(
-        options?: {
-            sections?: InfoOptions[];
-            allowPartialResults?: false;
-        } & RouteOption,
+        options?: { sections?: InfoOptions[] } & RouteOption,
     ): Promise<ClusterResponse<string>>;
-    /**
-     * Gets information and statistics about the server, keeping the replies of the nodes that
-     * answered when other nodes fail. See {@link PartialResultsOption}.
-     *
-     * @param options - Same as above, with `allowPartialResults`.
-     * @returns A string when the command goes to a single node. Otherwise a dictionary from each
-     *     node address to its reply, or to its error: a {@link TimeoutError} if the node did not
-     *     answer in time, or a {@link RequestError} for any other failure.
-     */
-    public async info(
-        options: { sections?: InfoOptions[] } & RouteOption &
-            PartialResultsOption,
-    ): Promise<string | Record<string, string | RequestError>>;
     public async info(
         options?: { sections?: InfoOptions[] } & RouteOption &
             PartialResultsOption,
