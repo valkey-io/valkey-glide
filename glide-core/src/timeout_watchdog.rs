@@ -19,34 +19,7 @@ use tokio::sync::oneshot;
 
 /// Instance-local snapshot capabilities. Only the worker owns the writer;
 /// handles may clone readers without gaining publication authority.
-mod pending_snapshot {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    };
-
-    #[derive(Clone)]
-    pub(super) struct Reader(Arc<AtomicUsize>);
-
-    pub(super) struct Writer(Arc<AtomicUsize>);
-
-    pub(super) fn new() -> (Reader, Writer) {
-        let count = Arc::new(AtomicUsize::new(0));
-        (Reader(Arc::clone(&count)), Writer(count))
-    }
-
-    impl Reader {
-        pub(super) fn load(&self) -> usize {
-            self.0.load(Ordering::Relaxed)
-        }
-    }
-
-    impl Writer {
-        pub(super) fn publish(&mut self, count: usize) {
-            self.0.store(count, Ordering::Relaxed);
-        }
-    }
-}
+mod pending_snapshot;
 
 /// Returns the elected watchdog's latest pending-entry snapshot, or zero
 /// before initialization. Reading diagnostics does not start a worker.
