@@ -6,7 +6,7 @@
 
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
 * Core/FFI: create clients on a runtime worker so the connect does not use the caller's stack ([#7644](https://github.com/valkey-io/valkey-glide/pull/7644))
-* Core: deliver reconnect errors to cluster fan-out callers instead of dropping them ([#7737](https://github.com/valkey-io/valkey-glide/pull/7737))
+* Core: deliver reconnect errors to cluster callers instead of dropping them ([#7737](https://github.com/valkey-io/valkey-glide/pull/7737))
 
 ## 2.6
 
