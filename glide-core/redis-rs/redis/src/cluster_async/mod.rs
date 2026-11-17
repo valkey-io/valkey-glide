@@ -1657,10 +1657,15 @@ where
                             5,
                             format!("disconnected from {:?}", address)
                         );
-                        let should_retry =
-                            matches!(err.retry_method(), RetryMethod::ReconnectAndRetry);
+                        let request =
+                            if matches!(err.retry_method(), RetryMethod::ReconnectAndRetry) {
+                                Some(request)
+                            } else {
+                                let _ = request.sender.send(Err(err));
+                                None
+                            };
                         Next::Reconnect {
-                            request: should_retry.then_some(request),
+                            request,
                             target: address,
                             mode: ReconnectMode::CheckExisting,
                         }

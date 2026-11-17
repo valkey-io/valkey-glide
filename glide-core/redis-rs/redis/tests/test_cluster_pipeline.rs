@@ -874,7 +874,16 @@ mod test_cluster_pipeline {
                                 // As it is not blocked by the BLPOP, the connection will be killed after the SET command succeeded
                                 matches!(r, Value::Okay)
                             } else {
-                                matches!(r, Value::ServerError(ref err) if err.details().unwrap().contains("RecvError"))
+                                matches!(
+                                    r,
+                                    Value::ServerError(ref err)
+                                        if err.err_code() == "FatalReceiveError"
+                                            || err.err_code() == "BrokenPipe"
+                                            || err.details().is_some_and(|d| {
+                                                d.contains("RecvError")
+                                                    || d.contains("FatalReceiveError")
+                                            })
+                                )
                             }
                         }),
                         "Pipeline result did not match expected output.\n\
