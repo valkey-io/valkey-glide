@@ -33,10 +33,27 @@ unsafe impl Sync for PyClassPtr {}
 unsafe impl Send for PyClassPtr {}
 
 static REQUEST_ERROR_CLASS: std::sync::OnceLock<PyClassPtr> = std::sync::OnceLock::new();
+static TIMEOUT_ERROR_CLASS: std::sync::OnceLock<PyClassPtr> = std::sync::OnceLock::new();
+
+/// `RequestErrorType::Timeout` from glide-core, as carried in an error node's `int_value`.
+const TIMEOUT_ERROR_TYPE: i64 = 2;
 
 /// Get (and cache) the RequestError class from glide_shared.exceptions.
 unsafe fn get_request_error_class() -> *mut ffi::PyObject {
-    REQUEST_ERROR_CLASS
+    unsafe { get_exception_class(&REQUEST_ERROR_CLASS, c"RequestError") }
+}
+
+/// Get (and cache) the TimeoutError class from glide_shared.exceptions.
+unsafe fn get_timeout_error_class() -> *mut ffi::PyObject {
+    unsafe { get_exception_class(&TIMEOUT_ERROR_CLASS, c"TimeoutError") }
+}
+
+/// Get (and cache in `cache`) the class `name` from glide_shared.exceptions.
+unsafe fn get_exception_class(
+    cache: &std::sync::OnceLock<PyClassPtr>,
+    name: &std::ffi::CStr,
+) -> *mut ffi::PyObject {
+    cache
         .get_or_init(|| unsafe {
             let mod_name =
                 ffi::PyUnicode_FromStringAndSize(c"glide_shared.exceptions".as_ptr(), 23);
@@ -50,14 +67,7 @@ unsafe fn get_request_error_class() -> *mut ffi::PyObject {
                 ffi::PyErr_Clear();
                 return PyClassPtr(std::ptr::null_mut());
             }
-            let attr = ffi::PyUnicode_FromStringAndSize(c"RequestError".as_ptr(), 12);
-            if attr.is_null() {
-                ffi::Py_DECREF(module);
-                ffi::PyErr_Clear();
-                return PyClassPtr(std::ptr::null_mut());
-            }
-            let cls = ffi::PyObject_GetAttr(module, attr);
-            ffi::Py_DECREF(attr);
+            let cls = ffi::PyObject_GetAttrString(module, name.as_ptr());
             ffi::Py_DECREF(module);
             if cls.is_null() {
                 ffi::PyErr_Clear();
@@ -165,8 +175,12 @@ unsafe fn convert(resp: *const CommandResponse) -> *mut ffi::PyObject {
             }
         },
         9 => unsafe {
-            // Error response: create a RequestError(message) instance
-            let cls = get_request_error_class();
+            // Error response: a TimeoutError(message) for a timeout, else RequestError(message)
+            let cls = if r.int_value == TIMEOUT_ERROR_TYPE {
+                get_timeout_error_class()
+            } else {
+                get_request_error_class()
+            };
             if cls.is_null() {
                 // Fallback: return raw bytes if class not found
                 return ffi::PyBytes_FromStringAndSize(r.string_value, r.string_value_len as isize);
