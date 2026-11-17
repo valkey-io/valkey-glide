@@ -1,0 +1,83 @@
+name: Draft Release
+
+# Keeps a draft of each release-X.Y branch's next version. Shared with the
+# other valkey-glide-* repos.
+on:
+    push:
+        branches: ["release-[0-9]+.[0-9]+"]
+    workflow_dispatch:
+    workflow_call:
+
+permissions:
+    contents: read
+
+jobs:
+    draft:
+        name: Update release draft
+        if: github.repository_owner == 'valkey-io'
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        permissions:
+            contents: write
+            pull-requests: read
+        concurrency:
+            group: draft-release-${{ github.repository }}-${{ github.ref_name }}
+            cancel-in-progress: false
+        steps:
+            # Treeless: history only, for the first-release fallback below.
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  fetch-depth: 0
+                  filter: tree:0
+                  persist-credentials: false
+
+            - name: Resolve baseline and version
+              id: resolve
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+              run: |
+                  set -euo pipefail
+                  if [[ ! "$GITHUB_REF_NAME" =~ ^release-([0-9]+)\.([0-9]+)$ ]]; then
+                      echo "::notice::$GITHUB_REF_NAME is not a release-X.Y branch; no draft."
+                      echo "skip=true" >> "$GITHUB_OUTPUT"
+                      exit 0
+                  fi
+                  major=${BASH_REMATCH[1]} minor=${BASH_REMATCH[2]}
+
+                  # Highest published vX.Y.Z at or below this line, by version, so a new
+                  # line starts from the previous one. RCs are dropped by tag shape; the
+                  # prerelease flag is sometimes mis-set.
+                  base=$(gh release list --exclude-drafts --limit 1000 \
+                           --json tagName --jq '.[].tagName' \
+                    | awk -F'[v.]' -v M="$major" -v N="$minor" \
+                        '/^v[0-9]+\.[0-9]+\.[0-9]+$/ && ($2 < M || ($2 == M && $3 <= N))' \
+                    | sort -V | tail -n1)
+
+                  if [[ -z "$base" ]]; then
+                      from=$(git rev-list --max-parents=0 HEAD | tail -n1)
+                      version="$major.$minor.0"
+                  elif [[ "$base" == "v$major.$minor."* ]]; then
+                      from="refs/tags/$base"
+                      version="$major.$minor.$(( ${base##*.} + 1 ))"
+                  else
+                      from="refs/tags/$base"
+                      version="$major.$minor.0"
+                  fi
+                  # Built here: $PREVIOUS_TAG is empty on a new branch (filter-by-commitish).
+                  url="https://github.com/$GITHUB_REPOSITORY"
+                  if [[ -n "$base" ]]; then link="$url/compare/$base...v$version"; else link="$url/commits/v$version"; fi
+                  echo "Draft v$version with changes since ${base:-$from}"
+                  {
+                      echo "from=$from"
+                      echo "version=$version"
+                      printf 'footer<<EOF\n**Full Changelog**: %s\nEOF\n' "$link"
+                  } >> "$GITHUB_OUTPUT"
+
+            - if: steps.resolve.outputs.skip != 'true'
+              uses: release-drafter/release-drafter@d1a19e60e81a7e650d00a7de9277f87e439117ea # v7.11.0
+              with:
+                  config-name: release-drafter.yml@${{ github.event.repository.default_branch }}
+                  from: ${{ steps.resolve.outputs.from }}
+                  version: ${{ steps.resolve.outputs.version }}
+                  footer: ${{ steps.resolve.outputs.footer }}

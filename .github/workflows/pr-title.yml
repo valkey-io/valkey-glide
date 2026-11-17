@@ -1,0 +1,44 @@
+name: PR Title
+
+# Checks the PR title; release-drafter.yml builds the release notes from it.
+# Shared with the other valkey-glide-* repos.
+#
+# synchronize: a required check must report on every new head commit.
+# labeled/unlabeled: re-check once Dependabot adds its `dependencies` label.
+on:
+    pull_request:
+        types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+    workflow_call:
+
+permissions:
+    contents: read
+
+jobs:
+    title:
+        name: Validate PR title
+        # ORT attribution PRs keep a fixed title that ort-sweeper.yml matches.
+        if: github.repository_owner == 'valkey-io' && github.event.pull_request.user.login != 'github-actions[bot]'
+        runs-on: ubuntu-24.04
+        timeout-minutes: 5
+        permissions:
+            pull-requests: read
+        steps:
+            - uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6.1.2
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  types: |
+                      feat
+                      fix
+                      perf
+                      revert
+                      docs
+                      ci
+                      build
+                      test
+                      chore
+                      refactor
+                      style
+                  # Dependabot titles vary by repo; its label already excludes it.
+                  ignoreLabels: |
+                      dependencies

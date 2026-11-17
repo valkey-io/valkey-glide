@@ -261,9 +261,11 @@ Use conventional commit format for all commit messages:
 [optional footer(s)]
 ```
 
-**Common types:** `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+**Common types:** `feat`, `fix`, `perf`, `docs`, `style`, `refactor`, `test`, `chore`
 
 **Example:** `feat(java): add cluster scan support for Java client`
+
+The PR title uses the same format with a lowercase type; it is checked and becomes the release notes entry.
 
 ## Guardrails & Policies
 
