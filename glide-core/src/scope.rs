@@ -365,7 +365,7 @@ pub async fn execute_scope_command(
 
 /// Whether a failed blocking command may have left a server-side waiter armed or the
 /// connection in an unknown state.
-fn is_poisoning_error(e: &RedisError) -> bool {
+pub(crate) fn is_poisoning_error(e: &RedisError) -> bool {
     e.is_io_error() || e.is_connection_dropped() || e.kind() == redis::ErrorKind::ProtocolDesync
 }
 
