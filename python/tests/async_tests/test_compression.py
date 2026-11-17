@@ -1862,6 +1862,79 @@ class TestCompressionMaxDecompressedSize:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("is_atomic", [True, False])
+    async def test_max_decompressed_size_batch_without_raise_on_error_returns_error_in_place(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion, is_atomic: bool
+    ):
+        """With raise_on_error=False, an oversized reply is a RequestError in its
+        position and the other replies of the batch are kept."""
+        unlimited_client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            enable_compression=True,
+        )
+        try:
+            tag = f"{{batch_no_raise_{get_random_string(8)}}}"
+            big_key = f"{tag}big"
+            marker_key = f"{tag}marker"
+            await unlimited_client.set(big_key, generate_compressible_text(10000))
+
+            limited_config = create_client_config(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                enable_compression=False,
+            )
+            limited_config.compression = CompressionConfiguration(
+                enabled=True,
+                backend=CompressionBackend.ZSTD,
+                compression_level=3,
+                min_compression_size=64,
+                max_decompressed_size=100,
+            )
+            limited_client: GlideClient | GlideClusterClient
+            if cluster_mode:
+                limited_client = await GlideClusterClient.create(limited_config)
+            else:
+                limited_client = await GlideClient.create(limited_config)
+
+            try:
+                if cluster_mode:
+                    cluster_batch = ClusterBatch(is_atomic)
+                    cluster_batch.set(marker_key, "written").get(big_key).get(
+                        marker_key
+                    ).mget([marker_key, big_key])
+                    results = await cast(GlideClusterClient, limited_client).exec(
+                        cluster_batch, raise_on_error=False
+                    )
+                else:
+                    batch = Batch(is_atomic)
+                    batch.set(marker_key, "written").get(big_key).get(marker_key).mget(
+                        [marker_key, big_key]
+                    )
+                    results = await cast(GlideClient, limited_client).exec(
+                        batch, raise_on_error=False
+                    )
+
+                assert results is not None
+                assert len(results) == 4
+                assert results[0] == OK
+                assert isinstance(results[1], RequestError)
+                assert "size limit exceeded" in str(results[1])
+                assert results[2] == b"written"
+                # An MGET reply fails as a whole, as the same MGET does outside a batch.
+                assert isinstance(results[3], RequestError)
+                assert "size limit exceeded" in str(results[3])
+            finally:
+                await limited_client.close()
+
+            await unlimited_client.delete([big_key, marker_key])
+        finally:
+            await unlimited_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_max_decompressed_size_allows_values_within_limit(
         self, request, cluster_mode: bool, protocol: ProtocolVersion
     ):
