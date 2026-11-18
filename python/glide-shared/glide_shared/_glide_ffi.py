@@ -127,6 +127,18 @@ class _GlideFFI:
                 uint64_t span_ptr
             );
 
+            CommandResult* command_with_partial_results(
+                const void* client_adapter_ptr,
+                uintptr_t request_id,
+                int command_type,
+                unsigned long arg_count,
+                const size_t *args,
+                const unsigned long* args_len,
+                const unsigned char* route_bytes,
+                size_t route_bytes_len,
+                uint64_t span_ptr
+            );
+
             CommandResult* command_with_buffer(
                 const void* client_adapter_ptr,
                 uintptr_t request_id,
