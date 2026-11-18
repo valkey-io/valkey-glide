@@ -13,6 +13,7 @@ on:
     workflow_run:
         workflows: ["The OSS Review Toolkit (ORT)"]
         types: [completed]
+    # Callers must grant contents: read, pull-requests: read and statuses: write.
     workflow_call:
         inputs:
             check-name:
@@ -69,7 +70,7 @@ jobs:
               run: |
                   set -euo pipefail
                   # ORT attribution PRs keep a fixed title, so it isn't checked.
-                  gh pr list --author app/github-actions --state open \
+                  gh pr list --author app/github-actions --state open --limit 1000 \
                       --json headRefOid --jq '.[].headRefOid' |
                       while read -r sha; do
                           gh api "repos/$GH_REPO/statuses/$sha" -f state=success \
