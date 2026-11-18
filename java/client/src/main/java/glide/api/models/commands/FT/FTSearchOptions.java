@@ -186,10 +186,6 @@ public class FTSearchOptions {
             args.add(gs(Integer.toString(limit.getRight())));
         }
         if (count) {
-            // COUNT is not a real FT.SEARCH keyword -- valkey-search's parser
-            // rejects a bare COUNT token outright. The count-only form the
-            // server actually recognises is LIMIT 0 0; the guard at the top
-            // of this method already confirmed limit is unset.
             args.add(gs("LIMIT"));
             args.add(gs("0"));
             args.add(gs("0"));
@@ -210,7 +206,6 @@ public class FTSearchOptions {
 
     public static class FTSearchOptionsBuilder {
 
-        // private - hiding this API from user
         void limit(Pair<Integer, Integer> limit) {}
 
         void count(boolean count) {}

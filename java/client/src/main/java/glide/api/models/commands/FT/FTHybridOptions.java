@@ -140,8 +140,6 @@ public class FTHybridOptions {
     public GlideString[] toArgs(Map<String, GlideString> generatedVsimParam) {
         ArrayList<GlideString> args = new ArrayList<>();
         if (localOnly) {
-            // Must come before PARAMS -- the server rejects LOCALONLY once PARAMS has been
-            // parsed. toArgs always emits it this early regardless of field-construction order.
             args.add(gs("LOCALONLY"));
         }
         if (loadAll) {
@@ -158,9 +156,6 @@ public class FTHybridOptions {
         args.addAll(
                 Arrays.asList(FTAggregateOptions.paramsToArgs(mergeParams(generatedVsimParam), "PARAMS")));
         if (clauses != null) {
-            // Must come after PARAMS -- a leading FILTER clause emitted right after the VSIM
-            // arm would otherwise be claimed by the server's VSIM parser as a VSIM pre-filter
-            // instead.
             for (FTAggregateOptions.FTAggregateClause clause : clauses) {
                 args.addAll(Arrays.asList(clause.toArgs()));
             }
@@ -176,7 +171,6 @@ public class FTHybridOptions {
     }
 
     public static class FTHybridOptionsBuilder {
-        // private - hiding this API from user
         void loadAll(boolean loadAll) {}
 
         void localOnly(boolean localOnly) {}

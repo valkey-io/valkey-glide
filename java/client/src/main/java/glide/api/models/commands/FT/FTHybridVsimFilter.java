@@ -116,7 +116,6 @@ public class FTHybridVsimFilter {
             subArgs.add(gs(batchSize.toString()));
         }
         if (subArgs.isEmpty()) {
-            // Uncounted extension: a bare expression, no POLICY/BATCH_SIZE possible in this form.
             return new GlideString[] {gs("FILTER"), expression};
         }
         int tokenCount = 1 + subArgs.size();
