@@ -18,7 +18,11 @@ from glide import (
     PoolConfig,
 )
 
-from tests.utils.utils import get_standalone_address, require_cluster_addresses
+from tests.utils.utils import (
+    get_standalone_address,
+    require_cluster_addresses,
+    wait_for,
+)
 
 
 def _config(cluster_mode: bool):
@@ -51,17 +55,37 @@ class TestPoolBorrowBackends:
         )
         try:
             replies = []
+            failed_attempts = []
+
+            class _CountingLib:
+                # cffi lib attributes can't be patched, so wrap the pool's lib.
+                def __init__(self, lib):
+                    self._lib = lib
+
+                def __getattr__(self, name):
+                    return getattr(self._lib, name)
+
+                def glide_pool_try_acquire(self, pool_id):
+                    client_id = self._lib.glide_pool_try_acquire(pool_id)
+                    if client_id < 0:
+                        failed_attempts.append(client_id)
+                    return client_id
+
+            pool._lib = _CountingLib(pool._lib)
 
             async def _second_borrower():
                 async with pool.borrow(timeout=5.0) as client:
                     replies.append(await client.ping())
 
+            async def _backed_off() -> bool:
+                return len(failed_attempts) >= 2
+
             with anyio.fail_after(10):
                 held = await pool.acquire()
                 async with anyio.create_task_group() as tg:
                     tg.start_soon(_second_borrower)
-                    # Let the second borrower reach the backoff loop.
-                    await anyio.sleep(0.2)
+                    # Two failed attempts mean the backoff sleep ran between them.
+                    await wait_for(_backed_off, "second borrower never backed off")
                     assert replies == []
                     pool.release(held)
             assert replies == [b"PONG"]
