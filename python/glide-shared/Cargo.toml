@@ -9,3 +9,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "^0.29", features = ["extension-module"] }
+glide-core-engine = { path = "../../glide-core/redis-rs/redis" }

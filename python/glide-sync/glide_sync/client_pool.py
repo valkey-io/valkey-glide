@@ -282,6 +282,9 @@ class ClientPool:
             client._client_lock = threading.Lock()
             client._core_client = cast_ptr
             client._conn_req_bytes = self._conn_req_bytes
+            # The pool builds its adapters natively, so they start on the arena
+            # path; opt this one in the way a client created from Python is.
+            client._enable_value_results()
 
             self._client_cache[client_id] = client
             return client
