@@ -3398,9 +3398,12 @@ fn create_compression_manager(
 
 impl Client {
     pub async fn new(
-        request: ConnectionRequest,
+        mut request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
+        // Trim the client AZ here as well: callers that build `ConnectionRequest` directly,
+        // such as the Rust client, skip the protobuf conversion.
+        request.read_from = request.read_from.map(ReadFrom::with_trimmed_client_az);
         // Validate library name and version.
         if let Some(lib_name) = request.lib_name.as_deref() {
             validate_effective_lib_name(lib_name).map_err(ConnectionError::Configuration)?;

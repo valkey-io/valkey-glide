@@ -624,6 +624,44 @@ mod standalone_client_tests {
         });
     }
 
+    // Callers that build the core `ConnectionRequest` directly, such as the Rust client, skip
+    // the protobuf conversion, so `Client::new` has to trim the client AZ as well.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_client_new_routes_padded_client_az_to_matching_replica() {
+        let servers = create_primary_mock_with_replicas_az(
+            3,
+            Some("us-east-1b"),
+            &["us-east-1a", "us-east-1b", "us-east-1b"],
+        );
+        let mut cmd = redis::cmd("GET");
+        cmd.arg("foo");
+        for server in servers.iter() {
+            for _ in 0..3 {
+                server.add_response(&cmd, "$-1\r\n".to_string());
+            }
+        }
+        let mut request: glide_core::client::ConnectionRequest =
+            create_connection_request(&get_mock_addresses(&servers), &Default::default()).into();
+        request.read_from = Some(glide_core::client::ReadFrom::AZAffinity(
+            " us-east-1a ".to_string(),
+        ));
+
+        block_on_all(async {
+            let mut client = GlideClient::new(request, None).await.unwrap();
+            for _ in 0..3 {
+                client.send_command(&mut cmd, None).await.unwrap();
+            }
+        });
+
+        let reads: Vec<_> = servers
+            .iter()
+            .map(|server| server.get_number_of_received_commands())
+            .collect();
+        assert_eq!(reads, vec![0, 3, 0, 0], "reads per [primary, replicas...]");
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
