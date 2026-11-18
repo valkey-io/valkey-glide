@@ -47,6 +47,7 @@ Before submitting the PR make sure the following are checked:
 
 - [ ] This Pull Request is related to one issue.
 - [ ] Commit message has a detailed description of what changed and why.
+- [ ] PR title follows `type(scope): description` with a lowercase type; it becomes the release notes entry.
 - [ ] Tests are added or updated.
 - [ ] CHANGELOG.md and documentation files are updated.
 - [ ] Destination branch is correct - main or release

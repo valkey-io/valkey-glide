@@ -69,13 +69,20 @@ The repository uses the [Conventional Commits](https://www.conventionalcommits.o
 |------|-------------|
 | `feat` | A new feature |
 | `fix` | A bug fix |
+| `perf` | A performance improvement |
 | `docs` | Documentation changes only |
 | `style` | Formatting, missing semicolons, etc. (no code change) |
 | `refactor` | Code change that neither fixes a bug nor adds a feature |
 | `test` | Adding or updating tests |
 | `chore` | Maintenance tasks, CI changes, etc. |
 
+Add `!` after the type or scope for a breaking change, e.g. `feat(java)!: remove deprecated API`.
+
 **Scope** is typically the language binding or component: `java`, `python`, `node`, `go`, `core`, `ffi`.
+
+The PR title must use the same format with a lowercase type. It is checked and becomes the release notes entry: `feat`, `fix` and `perf` are listed, `!` goes under Breaking Changes, `revert` goes under Other Changes, and the other types are left out.
+
+A backport keeps the original PR's type, e.g. `fix(core): ... (backport #123)`; porting already-released fixes to `main` is `chore:`.
 
 **Examples:**
 
