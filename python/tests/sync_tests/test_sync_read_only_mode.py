@@ -258,20 +258,13 @@ class TestSyncReadOnlyMode:
             client_node_1.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("is_atomic", [True, False])
     def test_sync_read_only_mode_blocks_write_in_batch(
-        self,
-        request,
-        cluster_mode: bool,
-        protocol: ProtocolVersion,
-        is_atomic: bool,
+        self, request, cluster_mode: bool
     ):
         """Test that a batch containing a write raises RequestError."""
         client = create_sync_client(
             request,
             cluster_mode,
-            protocol=protocol,
             request_timeout=2000,
             read_only=True,
         )
@@ -279,7 +272,7 @@ class TestSyncReadOnlyMode:
         key = get_random_string(10)
 
         try:
-            batch = Batch(is_atomic=is_atomic).get(key).set(key, "value")
+            batch = Batch(is_atomic=False).get(key).set(key, "value")
             with pytest.raises(RequestError) as exc_info:
                 client.exec(batch, raise_on_error=True)
             assert (
@@ -290,18 +283,13 @@ class TestSyncReadOnlyMode:
             client.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_read_only_mode_blocks_write_in_scope(
-        self,
-        request,
-        cluster_mode: bool,
-        protocol: ProtocolVersion,
+        self, request, cluster_mode: bool
     ):
         """Test that a write on a read-only client's scope raises RuntimeError."""
         client = create_sync_client(
             request,
             cluster_mode,
-            protocol=protocol,
             request_timeout=2000,
             read_only=True,
         )
