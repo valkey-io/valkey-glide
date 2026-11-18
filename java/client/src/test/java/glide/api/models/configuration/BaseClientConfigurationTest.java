@@ -283,29 +283,25 @@ public class BaseClientConfigurationTest {
     /** Without a trackingPrefix call the prefix stays null. */
     @Test
     void testTrackingPrefixDefaultsToNull() {
-        ClientSideCache cache = ClientSideCache.builder().maxCacheKb(1024).serverAssisted(true).build();
-        assertNull(cache.getTrackingPrefix());
-
+        assertNull(ClientSideCache.builder().maxCacheKb(1024).build().getTrackingPrefix());
         assertNull(ClientSideCache.create(1024, 0).getTrackingPrefix());
     }
 
-    /** A String prefix is accepted in server-assisted mode. */
+    /** A String prefix is stored as its UTF-8 bytes. */
     @Test
-    void testTrackingPrefixAcceptedWithServerAssisted() {
+    void testTrackingPrefixStringIsEncodedAsUtf8() {
         ClientSideCache cache =
                 ClientSideCache.builder()
                         .maxCacheKb(1024)
                         .serverAssisted(true)
-                        .trackingPrefix("xxx:")
+                        .trackingPrefix("ñ:")
                         .build();
-        assertEquals(GlideString.gs("xxx:"), cache.getTrackingPrefix());
-        assertArrayEquals(
-                "xxx:".getBytes(StandardCharsets.UTF_8), cache.getTrackingPrefix().getBytes());
+        assertArrayEquals("ñ:".getBytes(StandardCharsets.UTF_8), cache.getTrackingPrefix().getBytes());
     }
 
-    /** A GlideString prefix is accepted in server-assisted mode. */
+    /** A GlideString prefix keeps its raw bytes, valid UTF-8 or not. */
     @Test
-    void testTrackingPrefixAcceptsGlideString() {
+    void testTrackingPrefixGlideStringKeepsRawBytes() {
         byte[] rawPrefix = {(byte) 0xff, 'k', ':'};
         ClientSideCache cache =
                 ClientSideCache.builder()
@@ -316,59 +312,20 @@ public class BaseClientConfigurationTest {
         assertArrayEquals(rawPrefix, cache.getTrackingPrefix().getBytes());
     }
 
-    /** A null prefix is allowed without server-assisted mode. */
+    /**
+     * The prefix rules belong to the GLIDE core, which rejects them at client creation. The builder
+     * keeps whatever it is given.
+     */
     @Test
-    void testTrackingPrefixNullIsAllowedWithoutServerAssisted() {
-        ClientSideCache fromString =
-                ClientSideCache.builder().maxCacheKb(1024).trackingPrefix((String) null).build();
-        assertNull(fromString.getTrackingPrefix());
+    void testTrackingPrefixRulesAreNotValidatedByTheBuilder() {
+        ClientSideCache emptyPrefix =
+                ClientSideCache.builder().maxCacheKb(1024).serverAssisted(true).trackingPrefix("").build();
+        assertEquals(0, emptyPrefix.getTrackingPrefix().getBytes().length);
 
-        ClientSideCache fromGlideString =
-                ClientSideCache.builder().maxCacheKb(1024).trackingPrefix((GlideString) null).build();
-        assertNull(fromGlideString.getTrackingPrefix());
-    }
-
-    /** An empty prefix is rejected. */
-    @Test
-    void testTrackingPrefixRejectsEmptyPrefix() {
-        IllegalArgumentException error =
-                assertThrows(
-                        IllegalArgumentException.class,
-                        () ->
-                                ClientSideCache.builder()
-                                        .maxCacheKb(1024)
-                                        .serverAssisted(true)
-                                        .trackingPrefix("")
-                                        .build());
-        assertTrue(error.getMessage().contains("must not be empty"), error.getMessage());
-
-        assertThrows(
-                IllegalArgumentException.class,
-                () ->
-                        ClientSideCache.builder()
-                                .maxCacheKb(1024)
-                                .serverAssisted(true)
-                                .trackingPrefix(GlideString.gs(new byte[0]))
-                                .build());
-    }
-
-    /** A prefix is rejected without server-assisted mode. */
-    @Test
-    void testTrackingPrefixRequiresServerAssisted() {
-        IllegalArgumentException error =
-                assertThrows(
-                        IllegalArgumentException.class,
-                        () -> ClientSideCache.builder().maxCacheKb(1024).trackingPrefix("xxx:").build());
-        assertTrue(error.getMessage().contains("serverAssisted"), error.getMessage());
-
-        assertThrows(
-                IllegalArgumentException.class,
-                () ->
-                        ClientSideCache.builder()
-                                .maxCacheKb(1024)
-                                .serverAssisted(false)
-                                .trackingPrefix("xxx:")
-                                .build());
+        ClientSideCache notServerAssisted =
+                ClientSideCache.builder().maxCacheKb(1024).trackingPrefix("xxx:").build();
+        assertFalse(notServerAssisted.isServerAssisted());
+        assertEquals(GlideString.gs("xxx:"), notServerAssisted.getTrackingPrefix());
     }
 
     @Test

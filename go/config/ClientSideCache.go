@@ -215,15 +215,10 @@ func (c *ClientSideCache) WithTrackingPrefix(prefix string) *ClientSideCache {
 // This method is used internally to serialize the cache configuration for
 // communication with the Rust core.
 //
-// It returns an error when TrackingPrefix is set without ServerAssisted.
-func (c *ClientSideCache) toProtobuf() (*protobuf.ClientSideCache, error) {
-	if c.TrackingPrefix != "" && !c.ServerAssisted {
-		return nil, fmt.Errorf(
-			"TrackingPrefix %q requires ServerAssisted to be enabled; call WithServerAssisted(true)",
-			c.TrackingPrefix,
-		)
-	}
-
+// It only translates Go types: the prefix string is sent as its raw bytes and an empty
+// string leaves the optional field unset. The configuration rules (for example that a
+// prefix requires ServerAssisted) are enforced by the Rust core when the client is created.
+func (c *ClientSideCache) toProtobuf() *protobuf.ClientSideCache {
 	protoCache := &protobuf.ClientSideCache{
 		CacheId:        c.cacheId,
 		MaxCacheKb:     c.MaxCacheKb,
@@ -247,5 +242,5 @@ func (c *ClientSideCache) toProtobuf() (*protobuf.ClientSideCache, error) {
 		}
 	}
 
-	return protoCache, nil
+	return protoCache
 }

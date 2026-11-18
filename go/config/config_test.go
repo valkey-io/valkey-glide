@@ -2189,121 +2189,56 @@ func TestNewClientSideCache_ServerAssistedExplicitlyDisabled(t *testing.T) {
 	assert.False(t, cache.ServerAssisted)
 }
 
-// TestNewClientSideCache_TrackingPrefixDefaultEmpty verifies that a new cache has no tracking prefix and leaves the
-// protobuf field unset.
-func TestNewClientSideCache_TrackingPrefixDefaultEmpty(t *testing.T) {
-	cache, err := NewClientSideCache(1024, 60000)
-	assert.NoError(t, err)
-	assert.Equal(t, "", cache.TrackingPrefix)
+// TestClientSideCache_TrackingPrefix_Serialization verifies the Go-specific part of the tracking prefix:
+// the string is serialized as its exact bytes and an empty string leaves the optional protobuf field unset.
+func TestClientSideCache_TrackingPrefix_Serialization(t *testing.T) {
+	tests := []struct {
+		name     string
+		prefixes []string // applied in order with WithTrackingPrefix
+		expected []byte   // nil means the optional field must be unset
+	}{
+		{name: "not set by default", prefixes: nil, expected: nil},
+		{name: "text prefix", prefixes: []string{"xxx:"}, expected: []byte("xxx:")},
+		{name: "non-ASCII prefix is sent as UTF-8 bytes", prefixes: []string{"ñ:"}, expected: []byte{0xc3, 0xb1, ':'}},
+		{name: "non-UTF-8 prefix is kept byte for byte", prefixes: []string{"\xff\x00:"}, expected: []byte{0xff, 0x00, ':'}},
+		{name: "empty string clears a previous prefix", prefixes: []string{"xxx:", ""}, expected: nil},
+	}
 
-	pb, err := cache.toProtobuf()
-	assert.NoError(t, err)
-	assert.Nil(t, pb.TrackingPrefix, "no prefix must leave the optional protobuf field unset")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cache, err := NewClientSideCache(1024, 60000)
+			require.NoError(t, err)
+			cache.WithServerAssisted(true)
+			for _, prefix := range tt.prefixes {
+				assert.Same(t, cache, cache.WithTrackingPrefix(prefix), "WithTrackingPrefix must return the same instance")
+			}
+
+			pb := cache.toProtobuf()
+			if tt.expected == nil {
+				assert.Nil(t, pb.TrackingPrefix, "the optional protobuf field must be unset")
+			} else {
+				assert.Equal(t, tt.expected, pb.TrackingPrefix)
+			}
+		})
+	}
 }
 
-// TestClientSideCache_WithTrackingPrefix_SetsFieldAndProtobuf verifies that WithTrackingPrefix sets the
-// field and the protobuf value.
-func TestClientSideCache_WithTrackingPrefix_SetsFieldAndProtobuf(t *testing.T) {
+// TestClientSideCache_TrackingPrefix_SemanticValidationLeftToCore verifies that Go does not validate the
+// prefix rules itself: a prefix without ServerAssisted is serialized unchanged into the connection request,
+// so the Rust core is the one that rejects it when the client is created.
+func TestClientSideCache_TrackingPrefix_SemanticValidationLeftToCore(t *testing.T) {
 	cache, err := NewClientSideCache(1024, 60000)
-	assert.NoError(t, err)
-
-	returned := cache.WithServerAssisted(true).WithTrackingPrefix("xxx:")
-	assert.Same(t, cache, returned, "WithTrackingPrefix must return the same instance for chaining")
-	assert.Equal(t, "xxx:", cache.TrackingPrefix)
-
-	pb, err := cache.toProtobuf()
-	assert.NoError(t, err)
-	assert.True(t, pb.ServerAssisted)
-	assert.Equal(t, []byte("xxx:"), pb.TrackingPrefix)
-}
-
-// TestClientSideCache_WithTrackingPrefix_BinaryPrefix verifies that a non-UTF-8 prefix is kept byte for byte.
-func TestClientSideCache_WithTrackingPrefix_BinaryPrefix(t *testing.T) {
-	cache, err := NewClientSideCache(1024, 60000)
-	assert.NoError(t, err)
-	cache.WithServerAssisted(true).WithTrackingPrefix("\xff\x00:")
-
-	pb, err := cache.toProtobuf()
-	assert.NoError(t, err)
-	assert.Equal(t, []byte{0xff, 0x00, ':'}, pb.TrackingPrefix, "binary prefixes must be passed byte for byte")
-}
-
-// TestClientSideCache_WithTrackingPrefix_EmptyClearsPrefix verifies that an empty prefix clears a previously set one.
-func TestClientSideCache_WithTrackingPrefix_EmptyClearsPrefix(t *testing.T) {
-	cache, err := NewClientSideCache(1024, 60000)
-	assert.NoError(t, err)
-	cache.WithServerAssisted(true).WithTrackingPrefix("xxx:").WithTrackingPrefix("")
-	assert.Equal(t, "", cache.TrackingPrefix)
-
-	pb, err := cache.toProtobuf()
-	assert.NoError(t, err)
-	assert.Nil(t, pb.TrackingPrefix)
-}
-
-// TestClientSideCache_TrackingPrefixWithoutServerAssisted_Errors verifies that a prefix without
-// server-assisted mode is rejected.
-func TestClientSideCache_TrackingPrefixWithoutServerAssisted_Errors(t *testing.T) {
-	cache, err := NewClientSideCache(1024, 60000)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	cache.WithTrackingPrefix("xxx:")
 
-	_, err = cache.toProtobuf()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "ServerAssisted")
-}
-
-// TestClientConfiguration_ClientSideCacheTrackingPrefix verifies that the client configuration carries the
-// tracking prefix into the connection request.
-func TestClientConfiguration_ClientSideCacheTrackingPrefix(t *testing.T) {
-	cache, err := NewClientSideCache(1024, 60000)
-	assert.NoError(t, err)
-	cache.WithServerAssisted(true).WithTrackingPrefix("xxx:")
-
-	config := NewClientConfiguration().
+	request, err := NewClientConfiguration().
 		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
-		WithClientSideCache(cache)
-	result, err := config.ToProtobuf()
-	assert.NoError(t, err)
-	assert.NotNil(t, result.ClientSideCache)
-	assert.True(t, result.ClientSideCache.ServerAssisted)
-	assert.Equal(t, []byte("xxx:"), result.ClientSideCache.TrackingPrefix)
-
-	clusterCache, err := NewClientSideCache(1024, 60000)
-	assert.NoError(t, err)
-	clusterCache.WithServerAssisted(true).WithTrackingPrefix("yyy:")
-
-	clusterConfig := NewClusterClientConfiguration().
-		WithAddress(&NodeAddress{Host: "localhost", Port: 7000}).
-		WithClientSideCache(clusterCache)
-	clusterResult, err := clusterConfig.ToProtobuf()
-	assert.NoError(t, err)
-	assert.NotNil(t, clusterResult.ClientSideCache)
-	assert.Equal(t, []byte("yyy:"), clusterResult.ClientSideCache.TrackingPrefix)
-}
-
-// TestClientConfiguration_ClientSideCacheTrackingPrefixWithoutServerAssisted_Errors verifies that the client
-// configuration rejects a prefix without server-assisted mode.
-func TestClientConfiguration_ClientSideCacheTrackingPrefixWithoutServerAssisted_Errors(t *testing.T) {
-	cache, err := NewClientSideCache(1024, 60000)
-	assert.NoError(t, err)
-	cache.WithTrackingPrefix("xxx:")
-
-	config := NewClientConfiguration().
-		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
-		WithClientSideCache(cache)
-	result, err := config.ToProtobuf()
-	assert.Nil(t, result)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid client-side cache configuration")
-	assert.Contains(t, err.Error(), "ServerAssisted")
-
-	clusterConfig := NewClusterClientConfiguration().
-		WithAddress(&NodeAddress{Host: "localhost", Port: 7000}).
-		WithClientSideCache(cache)
-	clusterResult, err := clusterConfig.ToProtobuf()
-	assert.Nil(t, clusterResult)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "ServerAssisted")
+		WithClientSideCache(cache).
+		ToProtobuf()
+	require.NoError(t, err)
+	require.NotNil(t, request.ClientSideCache)
+	assert.False(t, request.ClientSideCache.ServerAssisted)
+	assert.Equal(t, []byte("xxx:"), request.ClientSideCache.TrackingPrefix)
 }
 
 func TestClientConfiguration_WithInflightRequestsLimit(t *testing.T) {

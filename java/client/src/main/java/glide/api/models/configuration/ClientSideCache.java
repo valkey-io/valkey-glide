@@ -111,9 +111,10 @@ public class ClientSideCache {
      *   <li>Must not be empty. Omit it to track all keys.
      *   <li>Fixed for the lifetime of the client; it cannot be changed after connecting.
      *   <li>All clients sharing the same {@code ClientSideCache} instance use the same prefix.
-     *   <li>An empty prefix, or a prefix without {@code serverAssisted}, makes {@code build()} throw
-     *       {@code IllegalArgumentException}.
      * </ul>
+     *
+     * <p>The first two constraints are validated by the GLIDE core when the client is created, not by
+     * {@code build()}: a configuration that breaks them makes {@code createClient} fail.
      */
     private final GlideString trackingPrefix;
 
@@ -189,16 +190,6 @@ public class ClientSideCache {
         }
         if (entryTtlMs < 0) {
             throw new IllegalArgumentException("entryTtlMs must be non-negative (0 = no expiration)");
-        }
-        if (trackingPrefix != null) {
-            if (trackingPrefix.getBytes().length == 0) {
-                throw new IllegalArgumentException(
-                        "trackingPrefix must not be empty; omit it to track all keys");
-            }
-            if (!serverAssisted) {
-                throw new IllegalArgumentException(
-                        "trackingPrefix requires serverAssisted to be enabled (and RESP3)");
-            }
         }
         this.cacheId = cacheId;
         this.maxCacheKb = maxCacheKb;
