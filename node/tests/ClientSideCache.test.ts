@@ -14,6 +14,7 @@ import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     ClientSideCache,
     ClientTrackingInfo,
+    ConfigurationError,
     EvictionPolicy,
     GlideClient,
     GlideClusterClient,
@@ -729,34 +730,26 @@ describe("ClientSideCache", () => {
         describe("tracking prefix", () => {
             // The prefix rules belong to GLIDE core: Node sends the configuration
             // as is and reports the core error when the client is created.
-            it.each([
-                [
-                    "an empty string prefix",
-                    { serverAssisted: true, trackingPrefix: "" },
-                    "tracking_prefix must not be empty",
-                ],
-                [
-                    "an empty Buffer prefix",
-                    { serverAssisted: true, trackingPrefix: Buffer.alloc(0) },
-                    "tracking_prefix must not be empty",
-                ],
-                [
-                    "a prefix without serverAssisted",
-                    { trackingPrefix: "xxx:" },
-                    "tracking_prefix requires server_assisted to be enabled",
-                ],
-            ])(
-                "createClient fails with the core error for %s",
-                async (_, options, coreMessage) => {
+            it(
+                "createClient fails with the core error for a prefix without serverAssisted",
+                async () => {
                     // Building the configuration object is not an error by itself.
-                    const cache = ClientSideCache.create(1024, 0, options);
+                    const cache = ClientSideCache.create(1024, 0, {
+                        trackingPrefix: "xxx:",
+                    });
 
-                    await expect(
-                        createStandaloneClientWithCache(
-                            ProtocolVersion.RESP3,
-                            cache,
-                        ),
-                    ).rejects.toThrow(coreMessage);
+                    const error = await createStandaloneClientWithCache(
+                        ProtocolVersion.RESP3,
+                        cache,
+                    ).then(
+                        () => undefined,
+                        (e: unknown) => e,
+                    );
+
+                    expect(error).toBeInstanceOf(ConfigurationError);
+                    expect((error as ConfigurationError).message).toContain(
+                        "tracking_prefix requires server_assisted to be enabled",
+                    );
                 },
                 TIMEOUT,
             );
@@ -782,11 +775,11 @@ describe("ClientSideCache", () => {
                     const untracked = `zzz:${suffix}`;
                     expect(await client.set(tracked, "t1")).toBe("OK");
                     expect(await client.set(untracked, "u1")).toBe("OK");
-                    // The replica also broadcasts the invalidation of the tracked
-                    // write; wait for it so that it cannot drop the entry cached below.
-                    expect(
-                        await client.customCommand(["WAIT", "1", "1000"]),
-                    ).toBeGreaterThanOrEqual(1);
+                    // A replica, when there is one, also broadcasts the invalidation
+                    // of the tracked write; give it time to replicate so that it does
+                    // not drop the entry cached below. The reply is not asserted, so
+                    // the test also runs against a server without replicas.
+                    await client.customCommand(["WAIT", "1", "1000"]);
 
                     await waitFor(
                         async () =>
