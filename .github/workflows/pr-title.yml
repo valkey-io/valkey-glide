@@ -5,10 +5,20 @@ name: PR Title
 #
 # synchronize: a required check must report on every new head commit.
 # labeled/unlabeled: re-check once Dependabot adds its `dependencies` label.
+# workflow_run: PRs opened with GITHUB_TOKEN (ORT attribution PRs) only get
+# approval-gated pull_request runs, so the bot-prs job reports the check for them.
 on:
     pull_request:
         types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+    workflow_run:
+        workflows: ["The OSS Review Toolkit (ORT)"]
+        types: [completed]
     workflow_call:
+        inputs:
+            check-name:
+                description: Required check name to report on bot PRs.
+                type: string
+                default: Validate PR title
 
 permissions:
     contents: read
@@ -16,8 +26,8 @@ permissions:
 jobs:
     title:
         name: Validate PR title
-        # ORT attribution PRs keep a fixed title that ort-sweeper.yml matches.
-        if: github.repository_owner == 'valkey-io' && github.event.pull_request.user.login != 'github-actions[bot]'
+        # Bot PRs are reported by bot-prs; skipped also keeps an approved run green.
+        if: github.repository_owner == 'valkey-io' && github.event_name == 'pull_request' && github.event.pull_request.user.login != 'github-actions[bot]'
         runs-on: ubuntu-24.04
         timeout-minutes: 5
         permissions:
@@ -42,3 +52,27 @@ jobs:
                   # Dependabot titles vary by repo; its label already excludes it.
                   ignoreLabels: |
                       dependencies
+
+    bot-prs:
+        name: Report title check for bot PRs
+        if: github.repository_owner == 'valkey-io' && github.event_name == 'workflow_run'
+        runs-on: ubuntu-24.04
+        timeout-minutes: 5
+        permissions:
+            pull-requests: read
+            statuses: write
+        steps:
+            - env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  CHECK_NAME: ${{ inputs.check-name || 'Validate PR title' }}
+              run: |
+                  set -euo pipefail
+                  # ORT attribution PRs keep a fixed title, so it isn't checked.
+                  gh pr list --author app/github-actions --state open \
+                      --json headRefOid --jq '.[].headRefOid' |
+                      while read -r sha; do
+                          gh api "repos/$GH_REPO/statuses/$sha" -f state=success \
+                              -f context="$CHECK_NAME" -f description="Bot PR, title not checked" >/dev/null
+                          echo "Reported $CHECK_NAME on $sha"
+                      done
