@@ -21,6 +21,7 @@ from glide_shared.config import (
     GlideClusterClientConfiguration,
 )
 from glide_shared.connection_request import _create_async_connection_request
+from glide_shared.exceptions import ClosingError
 
 from .glide_client import (
     _ASYNC_FFI,
@@ -63,6 +64,7 @@ class AsyncClientPool:
         "_pool_id",
         "_cache_lock",
         "_is_cluster",
+        "_create_pid",
     )
 
     @classmethod
@@ -186,6 +188,14 @@ class AsyncClientPool:
         if pool_id < 0:
             raise RuntimeError(f"Failed to create pool: error code {pool_id}")
         self._pool_id = pool_id
+        self._create_pid = os.getpid()
+
+    def _check_same_process(self) -> None:
+        if self._create_pid != os.getpid():
+            raise ClosingError(
+                "Cannot use a pool created before fork(). "
+                "Create a new pool in the child process."
+            )
 
     async def acquire(self, timeout: Optional[float] = None) -> int:
         """Acquire a client_id using non-blocking try_acquire with async backoff.
@@ -195,6 +205,7 @@ class AsyncClientPool:
         Blocking threads prevents the event loop from draining the async pipe,
         which deadlocks the pool's release state reset.
         """
+        self._check_same_process()
         if self._closed:
             raise RuntimeError("Pool is closed")
         timeout = (
@@ -225,6 +236,7 @@ class AsyncClientPool:
 
     def release(self, client_id: int) -> None:
         """Release a borrowed client back to the pool."""
+        self._check_same_process()
         self._lib.glide_pool_release(self._pool_id, client_id)
 
     def borrow(self, timeout: Optional[float] = None):
@@ -314,7 +326,9 @@ class AsyncClientPool:
             self._closed = True
             for cid in list(self._client_cache.keys()):
                 _client_registry.pop(cid, None)
-            self._lib.glide_pool_destroy(self._pool_id)
+            # The parent owns the native pool; a child's copy has nothing to destroy.
+            if self._create_pid == os.getpid():
+                self._lib.glide_pool_destroy(self._pool_id)
             self._client_cache.clear()
 
     async def aclose(self):
@@ -374,6 +388,8 @@ class _AsyncBorrowContext:
         return self._pool._get_or_create_client(self._client_id)
 
     async def __aexit__(self, *_):
+        if self._pool._create_pid != os.getpid():
+            return False
         self._pool.release(self._client_id)
         # Yield to event loop so the async release (state reset) can
         # complete via the pipe reader before the next acquire attempt.

@@ -34,10 +34,11 @@
 
 use crate::client::AuthGeneration;
 use crate::client::Client as GlideClient;
+use crate::fork_slot::ForkSlot;
 use dashmap::DashMap;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock, PoisonError};
+use std::sync::{Arc, PoisonError};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::Notify;
@@ -546,11 +547,11 @@ pub async fn release_client_async(pool_arc: Arc<PoolMutex>, client_id: u64) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Global pool registry: pool_id → Pool instance.
-static POOL_REGISTRY: OnceLock<DashMap<u64, Arc<PoolMutex>>> = OnceLock::new();
+static POOL_REGISTRY: ForkSlot<DashMap<u64, Arc<PoolMutex>>> = ForkSlot::new();
 static NEXT_POOL_ID: AtomicU64 = AtomicU64::new(1);
 /// Abandon monitor task handles, keyed by pool_id. Stored outside the pool
 /// mutex to allow abort on destroy without locking.
-static MONITOR_HANDLES: OnceLock<DashMap<u64, tokio::task::JoinHandle<()>>> = OnceLock::new();
+static MONITOR_HANDLES: ForkSlot<DashMap<u64, tokio::task::JoinHandle<()>>> = ForkSlot::new();
 
 fn get_monitor_handles() -> &'static DashMap<u64, tokio::task::JoinHandle<()>> {
     MONITOR_HANDLES.get_or_init(DashMap::new)
@@ -570,7 +571,7 @@ fn get_monitor_handles() -> &'static DashMap<u64, tokio::task::JoinHandle<()>> {
 /// caller holds a given pooled client at a time via `try_acquire`/
 /// `release_client_async`, so in practice the counter is ≤ 1 for pool clients.
 /// The `AtomicU32` is future-proof and handles direct-client concurrent usage.
-static BLOCKING_FLAG_REGISTRY: OnceLock<DashMap<u64, Arc<AtomicU32>>> = OnceLock::new();
+static BLOCKING_FLAG_REGISTRY: ForkSlot<DashMap<u64, Arc<AtomicU32>>> = ForkSlot::new();
 
 fn get_blocking_flag_registry() -> &'static DashMap<u64, Arc<AtomicU32>> {
     BLOCKING_FLAG_REGISTRY.get_or_init(DashMap::new)
@@ -608,7 +609,7 @@ pub fn get_blocking_flag(client_id: u64) -> Option<Arc<AtomicU32>> {
 // only has the client_id readily available.
 // ─────────────────────────────────────────────────────────────────────────────
 
-static CLIENT_TO_POOL: OnceLock<DashMap<u64, u64>> = OnceLock::new();
+static CLIENT_TO_POOL: ForkSlot<DashMap<u64, u64>> = ForkSlot::new();
 
 fn get_client_to_pool() -> &'static DashMap<u64, u64> {
     CLIENT_TO_POOL.get_or_init(DashMap::new)
@@ -1808,10 +1809,10 @@ pub fn allocate_scope_id() -> u64 {
 }
 
 /// Global scope registry: scope_id → ScopeEntry (for command dispatch).
-static SCOPE_REGISTRY: OnceLock<DashMap<u64, ScopeEntry>> = OnceLock::new();
+static SCOPE_REGISTRY: ForkSlot<DashMap<u64, ScopeEntry>> = ForkSlot::new();
 
 /// Per-client scope pools: client_id → ScopePool.
-static CLIENT_SCOPE_POOLS: OnceLock<DashMap<u64, ScopePoolHandle>> = OnceLock::new();
+static CLIENT_SCOPE_POOLS: ForkSlot<DashMap<u64, ScopePoolHandle>> = ForkSlot::new();
 
 pub fn get_scope_registry() -> &'static DashMap<u64, ScopeEntry> {
     SCOPE_REGISTRY.get_or_init(DashMap::new)
@@ -5393,5 +5394,66 @@ mod client_pool_tests {
             assert!(get_blocking_flag(client_id).is_none());
         });
         drop(blackhole);
+    }
+}
+
+/// A forked child inherits the registries as the parent left them. A shard
+/// lock held by one of the parent's other threads at fork time is never
+/// released in the child, so the child must start with fresh registries.
+#[cfg(all(test, unix))]
+mod fork_tests {
+    use super::*;
+    use crate::fork_slot::assert_in_forked_child;
+    use serial_test::serial;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    fn test_pool() -> ClientPool {
+        ClientPool::new(PoolConfig {
+            max_size: 2,
+            min_idle: 0,
+            idle_timeout: Duration::from_secs(300),
+            request_timeout: Duration::from_secs(5),
+            test_on_borrow: false,
+            connection_request: vec![],
+            is_async: false,
+            configured_database_id: 0,
+            abandon_timeout: Duration::ZERO,
+        })
+        .unwrap()
+    }
+
+    /// Hold the registry shard the next pool id lands in, across the fork.
+    fn hold_next_pool_shard() -> (mpsc::Sender<()>, std::thread::JoinHandle<()>) {
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let (held_tx, held_rx) = mpsc::channel::<()>();
+        let next_id = NEXT_POOL_ID.load(Ordering::Relaxed);
+        let holder = std::thread::spawn(move || {
+            let _shard = get_pool_registry().entry(next_id);
+            held_tx.send(()).unwrap();
+            let _ = release_rx.recv();
+        });
+        held_rx.recv().unwrap();
+        (release_tx, holder)
+    }
+
+    #[test]
+    #[serial]
+    fn child_registers_a_pool_while_the_parent_holds_a_registry_lock() {
+        let (release, holder) = hold_next_pool_shard();
+        assert_in_forked_child(|| {
+            let id = register_pool(test_pool());
+            get_pool(id).is_some()
+        });
+        release.send(()).unwrap();
+        holder.join().unwrap();
+    }
+
+    #[test]
+    #[serial]
+    fn child_does_not_see_the_parents_pools() {
+        let parent_id = register_pool(test_pool());
+        assert_in_forked_child(move || get_pool(parent_id).is_none());
+        unregister_pool(parent_id);
     }
 }

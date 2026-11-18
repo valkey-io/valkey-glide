@@ -23,6 +23,7 @@ Usage:
     pool.close()
 """
 
+import os
 import threading
 from dataclasses import dataclass
 from typing import Optional
@@ -30,6 +31,7 @@ from typing import Optional
 from glide_shared._glide_ffi import _GlideFFI
 from glide_shared.config import BaseClientConfiguration
 from glide_shared.connection_request import _create_sync_connection_request
+from glide_shared.exceptions import ClosingError
 
 from .glide_client import BaseClient, GlideClient
 
@@ -81,6 +83,7 @@ class ClientPool:
         "_conn_req_bytes",
         "_pool_id",
         "_cache_lock",
+        "_create_pid",
     )
 
     @classmethod
@@ -182,6 +185,14 @@ class ClientPool:
             raise RuntimeError(f"Failed to create pool (error code: {pool_id})")
 
         self._pool_id = pool_id
+        self._create_pid = os.getpid()
+
+    def _check_same_process(self) -> None:
+        if self._create_pid != os.getpid():
+            raise ClosingError(
+                "Cannot use a pool created before fork(). "
+                "Create a new pool in the child process."
+            )
 
     @property
     def pool_id(self) -> int:
@@ -205,6 +216,7 @@ class ClientPool:
             TimeoutError: If no client available within timeout.
             RuntimeError: If pool is closed or invalid.
         """
+        self._check_same_process()
         if self._closed:
             raise RuntimeError("Pool is closed")
 
@@ -226,6 +238,7 @@ class ClientPool:
 
     def release(self, client_id: int) -> None:
         """Release a borrowed client back to the pool."""
+        self._check_same_process()
         self._lib.glide_pool_release(self._pool_id, client_id)
 
     def borrow(self, timeout: Optional[float] = None):
@@ -310,7 +323,9 @@ class ClientPool:
         """Destroy the pool. All idle clients are closed."""
         if not self._closed:
             self._closed = True
-            self._lib.glide_pool_destroy(self._pool_id)
+            # The parent owns the native pool; a child's copy has nothing to destroy.
+            if self._create_pid == os.getpid():
+                self._lib.glide_pool_destroy(self._pool_id)
             self._client_cache.clear()
 
     def __enter__(self):
@@ -341,5 +356,7 @@ class _BorrowContext:
         return self._pool._get_or_create_client(self._client_id)
 
     def __exit__(self, *_):
-        self._pool.release(self._client_id)
+        # In a forked child the parent owns the borrow; don't mask the user's error.
+        if self._pool._create_pid == os.getpid():
+            self._pool.release(self._client_id)
         return False
