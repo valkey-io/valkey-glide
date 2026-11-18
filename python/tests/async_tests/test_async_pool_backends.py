@@ -82,6 +82,7 @@ class TestPoolBorrowBackends:
 
             with anyio.fail_after(10):
                 held = await pool.acquire()
+                failed_attempts.clear()
                 async with anyio.create_task_group() as tg:
                     tg.start_soon(_second_borrower)
                     # Two failed attempts mean the backoff sleep ran between them.
