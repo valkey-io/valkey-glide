@@ -7,6 +7,7 @@
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
 * Core/FFI: create clients on a runtime worker so the connect does not use the caller's stack ([#7644](https://github.com/valkey-io/valkey-glide/pull/7644))
 * Go: strip LLVM bitcode from the prebuilt `libglide_ffi.a` so Go 1.26.11+ / 1.27.4+ no longer reject it with `disallowed LTO section` ([#7739](https://github.com/valkey-io/valkey-glide/pull/7739))
+* Java: guard `GLIDE_TOKIO_WORKER_THREADS` parsing — `0` is raised to `1` instead of panicking the runtime build, and a huge value no longer overflows `max_blocking_threads` ([#7774](https://github.com/valkey-io/valkey-glide/pull/7774))
 
 ### Breaking Changes
 
