@@ -1665,6 +1665,8 @@ fn convert_lolwut_string(data: &str) -> String {
     }
 }
 
+// TODO #7631: Propagate conversion errors instead of calling `unwrap()`, which panics on a
+// mismatched reply.
 /// Converts elements in an array to the specified type.
 ///
 /// `array` is an array of values.
@@ -2383,6 +2385,8 @@ fn ft_hybrid_option_tail_contains_flag(cmd: &Cmd, flag: &[u8]) -> bool {
     ft_aggregate_option_tail_contains_flag(cmd, tail_start, flag)
 }
 
+// TODO #7631: Match option keywords (`JUSTID`, `IDX`, `WITHSCORES`, ...) only among each command's
+// option arguments, not every argument (as `ft_search_option_tail_contains_flag` does).
 pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>> {
     let command = cmd.command()?;
 
@@ -3158,6 +3162,7 @@ mod tests {
         assert!(converted_4.is_err());
     }
 
+    // TODO #7631: Add cases where a key, member, group or consumer equals an option keyword.
     #[test]
     fn convert_xclaim() {
         assert!(matches!(
