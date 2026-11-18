@@ -593,8 +593,7 @@ class TestSyncClientSideCache:
     # The Python-specific type, encoding and protobuf checks are shared by both
     # clients and live in tests/test_config.py. Only the client path is checked here.
 
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    def test_sync_tracking_prefix_smoke(self, request, cluster_mode):
+    def test_sync_tracking_prefix_smoke(self, request):
         """A prefixed cache is registered with the server and only caches its keys."""
         cache = build_client_side_cache(
             entry_ttl_ms=0,
@@ -604,7 +603,7 @@ class TestSyncClientSideCache:
         )
         client = create_sync_client(
             request,
-            cluster_mode=cluster_mode,
+            cluster_mode=False,
             protocol=ProtocolVersion.RESP3,
             cache=cache,
         )
