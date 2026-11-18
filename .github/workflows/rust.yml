@@ -110,7 +110,7 @@ jobs:
                 engine:
                     # TODO #7312: Bump to 9.2.0 once released
                     - type: valkey
-                      version: "9.2.0-rc1"
+                      version: "9.2.0-rc2"
                     - type: redis
                       version: "6.2"
         steps:

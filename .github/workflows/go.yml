@@ -229,7 +229,7 @@ jobs:
               # version-gated integration tests.
               working-directory: go
               # TODO #7312: Bump to 9.2.0 once released
-              if: ${{ matrix.engine.type == 'valkey' && matrix.engine.version == '9.2.0-rc1' && !inputs.rc-version }}
+              if: ${{ matrix.engine.type == 'valkey' && matrix.engine.version == '9.2.0-rc2' && !inputs.rc-version }}
               run: |
                   make -k example-test
 
