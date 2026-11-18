@@ -86,41 +86,29 @@ class ClientSideCache:
     tracking_prefix: Optional[Union[str, bytes]] = None
 
     def __post_init__(self) -> None:
-        """Validates the configuration on construction, including direct dataclass use."""
-        self._validate_tracking_prefix()
-
-    def _validate_tracking_prefix(self) -> None:
-        """Validates ``tracking_prefix`` against ``server_assisted``.
-
-        Mirrors the checks performed by the core at client creation so that an
-        invalid configuration fails as early as possible, with a Python error.
-        """
-        if self.tracking_prefix is None:
-            return
-        if not isinstance(self.tracking_prefix, (str, bytes)):
-            raise TypeError(
-                "tracking_prefix must be a str or bytes, got "
-                f"{type(self.tracking_prefix).__name__}"
-            )
-        if len(self.tracking_prefix) == 0:
-            raise ValueError(
-                "tracking_prefix must not be empty (omit it to track all keys)"
-            )
-        if not self.server_assisted:
-            raise ValueError("tracking_prefix requires server_assisted=True")
+        """Rejects a ``tracking_prefix`` of the wrong type on construction."""
+        self._tracking_prefix_bytes()
 
     def _tracking_prefix_bytes(self) -> Optional[bytes]:
         """Returns ``tracking_prefix`` encoded as bytes (str is UTF-8 encoded), or None.
 
-        Validates the prefix first: the dataclass is mutable, so the prefix may have
-        changed since construction.
+        Only the Python-specific part is handled here: the accepted types and the
+        encoding. The prefix rules themselves (non-empty, ``server_assisted``
+        required) are validated by the core when the client is created.
+
+        Raises:
+            TypeError: If ``tracking_prefix`` is neither ``str`` nor ``bytes``.
         """
-        self._validate_tracking_prefix()
         if self.tracking_prefix is None:
             return None
         if isinstance(self.tracking_prefix, str):
             return self.tracking_prefix.encode("utf-8")
-        return self.tracking_prefix
+        if isinstance(self.tracking_prefix, bytes):
+            return self.tracking_prefix
+        raise TypeError(
+            "tracking_prefix must be a str or bytes, got "
+            f"{type(self.tracking_prefix).__name__}"
+        )
 
     @classmethod
     def create(
@@ -178,15 +166,14 @@ class ClientSideCache:
                 ``str`` is encoded as UTF-8.
                 The prefix is fixed for the lifetime of the client. Requires
                 ``server_assisted=True`` and must not be empty; leave it as None to track
-                all keys.
+                all keys. These two rules are checked when the client is created, which
+                fails with a ``ConfigurationError`` if they are not met.
 
         Returns:
             ClientSideCache: A new ClientSideCache instance.
 
         Raises:
-            ValueError: If ``max_cache_kb`` is not positive, ``entry_ttl_ms`` is negative,
-                ``tracking_prefix`` is empty, or ``tracking_prefix`` is set without
-                ``server_assisted=True``.
+            ValueError: If ``max_cache_kb`` is not positive or ``entry_ttl_ms`` is negative.
             TypeError: If ``tracking_prefix`` is neither ``str`` nor ``bytes``.
 
         Example:

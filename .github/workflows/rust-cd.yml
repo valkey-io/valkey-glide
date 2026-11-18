@@ -5,7 +5,8 @@ on:
         inputs:
             # A crate's dry run fails if it depends on a version of another crate that hasn't
             # been published yet, including the internal GLIDE crates (glide-logger,
-            # glide-telemetry, glide-core-engine, and glide-core).
+            # glide-telemetry, glide-libfabric-sys, glide-rdma, glide-core-engine, and
+            # glide-core).
             publish:
                 description: "Publish to crates.io; otherwise, perform a dry run"
                 required: true
@@ -45,6 +46,11 @@ jobs:
             - validate-branch
         uses: ./.github/workflows/glide-telemetry.yml
 
+    test-glide-rdma:
+        needs:
+            - validate-branch
+        uses: ./.github/workflows/glide-rdma.yml
+
     test-glide-core-engine:
         needs:
             - validate-branch
@@ -64,6 +70,7 @@ jobs:
         needs:
             - test-glide-logger
             - test-glide-telemetry
+            - test-glide-rdma
             - test-glide-core-engine
             - test-glide-core
             - test-valkey-glide
@@ -97,6 +104,18 @@ jobs:
               uses: ./.github/actions/publish-rust-crate
               with:
                   crate: glide-telemetry
+                  publish: ${{ inputs.publish }}
+
+            - name: Publish glide-libfabric-sys
+              uses: ./.github/actions/publish-rust-crate
+              with:
+                  crate: glide-rdma/glide-libfabric-sys
+                  publish: ${{ inputs.publish }}
+
+            - name: Publish glide-rdma
+              uses: ./.github/actions/publish-rust-crate
+              with:
+                  crate: glide-rdma
                   publish: ${{ inputs.publish }}
 
             - name: Publish glide-core-engine

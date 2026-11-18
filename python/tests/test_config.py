@@ -27,6 +27,7 @@ from glide_shared.connection_request import (
     _create_async_connection_request,
     _create_sync_connection_request,
 )
+from glide_shared.exceptions import ClosingError, get_connection_error_class
 from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
 from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
 from glide_shared.protobuf.connection_request_pb2 import TlsMode
@@ -1482,27 +1483,18 @@ def test_client_side_cache_in_protobuf_request_without_tracking_prefix():
     assert request.client_side_cache.HasField("tracking_prefix") is False
 
 
-@pytest.mark.parametrize("prefix", ["xxx:", b"xxx:"], ids=["str", "bytes"])
-def test_client_side_cache_tracking_prefix_in_protobuf_request(prefix):
-    """A str or bytes prefix is sent as bytes for standalone and cluster configs."""
-    cache = ClientSideCache.create(
-        max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True, tracking_prefix=prefix
-    )
-    for cluster_mode, config_cls in (
-        (False, GlideClientConfiguration),
-        (True, GlideClusterClientConfiguration),
-    ):
-        config = config_cls([NodeAddress("127.0.0.1")], client_side_cache=cache)
-        request = config._create_a_protobuf_conn_request(cluster_mode=cluster_mode)
-
-        assert request.client_side_cache.HasField("tracking_prefix")
-        assert request.client_side_cache.tracking_prefix == b"xxx:"
-        assert request.client_side_cache.server_assisted is True
-
-
-def test_client_side_cache_tracking_prefix_non_utf8_bytes_in_protobuf_request():
-    """A bytes prefix that is not valid UTF-8 reaches the protobuf request unchanged."""
-    prefix = b"\xff\xfe:"
+@pytest.mark.parametrize(
+    "prefix, encoded",
+    [
+        ("xxx:", b"xxx:"),
+        (b"xxx:", b"xxx:"),
+        ("é:", b"\xc3\xa9:"),
+        (b"\xff\xfe:", b"\xff\xfe:"),
+    ],
+    ids=["str", "bytes", "non_ascii_str", "non_utf8_bytes"],
+)
+def test_client_side_cache_tracking_prefix_in_protobuf_request(prefix, encoded):
+    """A str prefix is sent UTF-8 encoded and a bytes prefix is sent unchanged."""
     cache = ClientSideCache.create(
         max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True, tracking_prefix=prefix
     )
@@ -1511,27 +1503,51 @@ def test_client_side_cache_tracking_prefix_non_utf8_bytes_in_protobuf_request():
     )
     request = config._create_a_protobuf_conn_request()
 
-    assert request.client_side_cache.tracking_prefix == prefix
+    assert request.client_side_cache.HasField("tracking_prefix")
+    assert request.client_side_cache.tracking_prefix == encoded
 
 
-def test_client_side_cache_tracking_prefix_mutated_after_create_is_revalidated():
-    """The dataclass is mutable: an invalid prefix set after ``create`` must still fail."""
-    cache = ClientSideCache.create(max_cache_kb=1024, entry_ttl_ms=0)
-    cache.tracking_prefix = "xxx:"  # server_assisted is False
-    config = GlideClientConfiguration(
-        [NodeAddress("127.0.0.1")], client_side_cache=cache
+def test_client_side_cache_tracking_prefix_rules_are_left_to_the_core():
+    """Python forwards an empty prefix, or one without ``server_assisted``, untouched:
+    the core owns those rules and rejects them when the client is created."""
+    empty = ClientSideCache.create(
+        max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True, tracking_prefix=""
     )
-    with pytest.raises(ValueError, match="tracking_prefix requires server_assisted"):
-        config._create_a_protobuf_conn_request()
+    request = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")], client_side_cache=empty
+    )._create_a_protobuf_conn_request()
+    assert request.client_side_cache.HasField("tracking_prefix")
+    assert request.client_side_cache.tracking_prefix == b""
 
+    unassisted = ClientSideCache.create(
+        max_cache_kb=1024, entry_ttl_ms=0, tracking_prefix="xxx:"
+    )
+    request = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")], client_side_cache=unassisted
+    )._create_a_protobuf_conn_request()
+    assert request.client_side_cache.server_assisted is False
+    assert request.client_side_cache.tracking_prefix == b"xxx:"
+
+
+def test_client_side_cache_tracking_prefix_rejects_other_types():
+    """Only str and bytes are accepted, on construction and when set afterwards."""
+    with pytest.raises(TypeError, match="tracking_prefix must be a str or bytes"):
+        ClientSideCache.create(
+            max_cache_kb=1024,
+            entry_ttl_ms=0,
+            server_assisted=True,
+            tracking_prefix=123,  # type: ignore[arg-type]
+        )
+
+    # The dataclass is mutable, so the type is checked again when the request is built.
     cache = ClientSideCache.create(
-        max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True, tracking_prefix="xxx:"
+        max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True
     )
-    cache.tracking_prefix = ""
+    cache.tracking_prefix = bytearray(b"xxx:")  # type: ignore[assignment]
     config = GlideClientConfiguration(
         [NodeAddress("127.0.0.1")], client_side_cache=cache
     )
-    with pytest.raises(ValueError, match="tracking_prefix must not be empty"):
+    with pytest.raises(TypeError, match="tracking_prefix must be a str or bytes"):
         config._create_a_protobuf_conn_request()
 
 
@@ -1546,3 +1562,11 @@ def test_client_tracking_info_parser_keeps_non_utf8_prefix():
     assert "xxx:" in info.prefixes
     (raw,) = info.prefixes - {"xxx:"}
     assert raw.encode("utf-8", "surrogateescape") == prefix
+
+
+def test_connection_error_class_maps_only_configuration_type():
+    # 1 is ConnectionErrorType::Configuration in ffi/src/lib.rs.
+    assert get_connection_error_class(1) is ConfigurationError
+    assert get_connection_error_class(0) is ClosingError
+    assert get_connection_error_class(0, default=RuntimeError) is RuntimeError
+    assert get_connection_error_class(1, default=RuntimeError) is ConfigurationError

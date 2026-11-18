@@ -443,6 +443,8 @@ where
                         // If we receive a `ServerError` here, it means the error occurred between `MULTI` and `EXEC`.
                         // After `EXEC`, the response is always a single array of results, so any error at this stage must have happened before `EXEC` was sent.
                         // As a result, the entire transaction will be discarded (and can be retried).
+
+                        // TODO #7654: Return an `ExecAbortError` with this error in its message.
                         if first_err.is_none() {
                             *first_err = Some(err.into());
                         }
@@ -661,6 +663,9 @@ where
                     fenced_result: None,
                 };
 
+                // TODO #7666: Stop a request that never gets a reply (e.g. an empty command)
+                // from shifting every later reply, e.g. by closing the connection when a request
+                // times out.
                 self_.in_flight.push_back(entry);
                 Ok(())
             }

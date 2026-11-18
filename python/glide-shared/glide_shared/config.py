@@ -351,6 +351,8 @@ class RdmaProvider:
 
         Needs no hardware and offers no performance benefit over a normal ``GET`` or
         ``SET``: it exists so the RDMA path can be exercised on an ordinary machine.
+        Only a client built with the ``rdma-tcp-dev`` feature (``dev.py build --rdma``
+        in debug mode) honors it; release wheels refuse it when the client is created.
 
         Attributes:
             bind (Optional[str]): Source address to bind to. TCP binds an IP address
@@ -852,6 +854,7 @@ class TlsAdvancedConfiguration:
         client_key_path: Optional[StrPath] = None,
         cert_reload_interval_seconds: Optional[int] = None,
     ):
+        # TODO #7707: Document that root certificates or IAM authentication with use_insecure_tls is rejected.
         self.use_insecure_tls = use_insecure_tls
         self.root_pem_cacerts = root_pem_cacerts
         self.client_cert_pem = client_cert_pem
@@ -1389,8 +1392,8 @@ class BaseClientConfiguration:
         if cache_config.eviction_policy:
             cache_request.eviction_policy = cache_config.eviction_policy.value
 
-        # Validates the (mutable) prefix as well: the core rejects the same cases,
-        # but failing before the request is built gives a clearer Python error.
+        # Only type checking and encoding happen here; an empty prefix is forwarded
+        # as-is so that the core, which owns the prefix rules, rejects it.
         tracking_prefix = cache_config._tracking_prefix_bytes()
         if tracking_prefix is not None:
             cache_request.tracking_prefix = tracking_prefix
@@ -1675,6 +1678,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         request.node_discovery_mode = self.node_discovery_mode.value
 
         if self.pubsub_subscriptions:
+            # TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
             if self.protocol == ProtocolVersion.RESP2:
                 raise ConfigurationError(
                     "PubSub subscriptions require RESP3 protocol, but RESP2 was configured."
@@ -1949,6 +1953,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             request.periodic_checks_disabled.SetInParent()
 
         if self.pubsub_subscriptions:
+            # TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
             if self.protocol == ProtocolVersion.RESP2:
                 raise ConfigurationError(
                     "PubSub subscriptions require RESP3 protocol, but RESP2 was configured."
