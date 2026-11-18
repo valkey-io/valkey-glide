@@ -17,6 +17,7 @@ import {
     HashFieldConditionalChange,
     HSetExOptions,
     Logger,
+    ClientSideCache,
     MAX_REQUEST_ARGS_LEN,
     ReadFrom,
     applyTlsAdvancedConfiguration,
@@ -234,6 +235,90 @@ describe("Client library identification requests", () => {
             );
         },
     );
+});
+
+describe("Client-side cache tracking prefix requests", () => {
+    const addresses = [{ host: "localhost", port: 6379 }];
+
+    /**
+     * Builds the connection request for a cache created with `options` and returns
+     * its `ClientSideCache` message after an encode/decode round trip, i.e. what
+     * GLIDE core receives.
+     */
+    function cacheSentToCore(
+        options: Parameters<typeof ClientSideCache.create>[2],
+    ): connection_request.IClientSideCache {
+        const request = new RequestClient().buildRequest({
+            addresses,
+            clientSideCache: ClientSideCache.create(1024, 0, options),
+        });
+        const decoded = connection_request.ConnectionRequest.decode(
+            connection_request.ConnectionRequest.encode(request).finish(),
+        );
+
+        expect(decoded.clientSideCache).toBeDefined();
+        return decoded.clientSideCache!;
+    }
+
+    it.each([
+        ["an ASCII string", "users:", Buffer.from("users:", "ascii")],
+        [
+            "a non-ASCII string, UTF-8 encoded",
+            "caf\u00e9:\u65e5",
+            Buffer.from([0x63, 0x61, 0x66, 0xc3, 0xa9, 0x3a, 0xe6, 0x97, 0xa5]),
+        ],
+        [
+            "a non UTF-8 Buffer, byte for byte",
+            Buffer.from([0xff, 0x00, 0xfe, 0x3a]),
+            Buffer.from([0xff, 0x00, 0xfe, 0x3a]),
+        ],
+    ])("sends %s prefix with its exact bytes", (_, prefix, expectedBytes) => {
+        const cache = cacheSentToCore({
+            serverAssisted: true,
+            trackingPrefix: prefix,
+        });
+
+        expect(Buffer.from(cache.trackingPrefix!)).toEqual(expectedBytes);
+        expect(cache.serverAssisted).toBe(true);
+    });
+
+    it("omits the prefix when it is not configured", () => {
+        const cache = cacheSentToCore({ serverAssisted: true });
+
+        expect(
+            Object.prototype.hasOwnProperty.call(cache, "trackingPrefix"),
+        ).toBe(false);
+        expect(cache.trackingPrefix ?? undefined).toBeUndefined();
+    });
+
+    // Node does not apply the prefix rules: these configurations reach GLIDE core
+    // unchanged, and core rejects them when the client is created.
+    it.each([
+        ["string", ""],
+        ["Buffer", Buffer.alloc(0)],
+    ])(
+        "sends an empty %s prefix as present and empty, not as omitted",
+        (_, prefix) => {
+            const cache = cacheSentToCore({
+                serverAssisted: true,
+                trackingPrefix: prefix,
+            });
+
+            expect(
+                Object.prototype.hasOwnProperty.call(cache, "trackingPrefix"),
+            ).toBe(true);
+            expect(cache.trackingPrefix).toHaveLength(0);
+        },
+    );
+
+    it("sends a prefix without serverAssisted unchanged", () => {
+        const cache = cacheSentToCore({ trackingPrefix: "users:" });
+
+        expect(Buffer.from(cache.trackingPrefix!)).toEqual(
+            Buffer.from("users:"),
+        );
+        expect(cache.serverAssisted).toBe(false);
+    });
 });
 
 describe("ReadFrom strategy configuration", () => {
