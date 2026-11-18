@@ -55,3 +55,8 @@ runs:
           run: cargo doc --locked --no-deps --document-private-items
           env:
               RUSTDOCFLAGS: -Dwarnings
+
+        - name: Ensure Rust lint leaves the worktree clean
+          uses: ./.github/actions/ensure-clean-tree
+          with:
+              context: Rust lint for ${{ inputs.cargo-toml-folder }}

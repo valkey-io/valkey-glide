@@ -1,0 +1,37 @@
+name: Ensure clean worktree
+description: "Fail when the git worktree is dirty (modified, deleted, staged, or untracked files) after a preceding operation"
+
+inputs:
+    context:
+        description: "Optional human-readable description of the preceding operation"
+        required: false
+        default: ""
+
+runs:
+    using: "composite"
+    steps:
+        - name: Assert worktree is clean
+          shell: bash
+          env:
+              INPUT_CONTEXT: ${{ inputs.context }}
+          run: |
+              set -euo pipefail
+
+              worktree_status="$(git status --porcelain=v1 --untracked-files=all)"
+              if [[ -z "${worktree_status}" ]]; then
+                  exit 0
+              fi
+
+              echo "::error::Dirty worktree detected after a mutation-prone operation."
+              if [[ -n "${INPUT_CONTEXT}" ]]; then
+                  printf 'Context: %s\n' "${INPUT_CONTEXT}"
+              fi
+
+              echo "::group::Worktree status, including untracked files (first 200 entries)"
+              git -P status --short --untracked-files=all | sed -n '1,200p'
+              echo "::endgroup::"
+
+              echo "Modified or deleted tracked files: reproduce the operation locally and commit the regenerated files or lockfiles intentionally."
+              echo "Untracked files (?? entries): add them to .gitignore if they are build byproducts, or write them outside the repository (e.g. \$RUNNER_TEMP)."
+              echo "If the changes are unintended, fix the operation so it leaves the worktree clean."
+              exit 1
