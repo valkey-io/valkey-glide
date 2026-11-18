@@ -1265,11 +1265,20 @@ impl Client {
                 )
                 .await
                 .map_err(|e| {
-                    RedisError::from((
-                        ErrorKind::IoError,
-                        "Standalone connect failed",
-                        format!("{e:?}"),
-                    ))
+                    let kind = match &e {
+                        StandaloneClientConnectionError::NoAddressesProvided => {
+                            ErrorKind::InvalidClientConfig
+                        }
+                        StandaloneClientConnectionError::FailedConnection(errs)
+                            if errs
+                                .iter()
+                                .any(|(_, err)| err.kind() == ErrorKind::InvalidClientConfig) =>
+                        {
+                            ErrorKind::InvalidClientConfig
+                        }
+                        _ => ErrorKind::IoError,
+                    };
+                    RedisError::from((kind, "Standalone connect failed", format!("{e:?}")))
                 })?;
                 let _ = self.cert_material.set(client.cert_material().clone());
                 ClientWrapper::Standalone(client)

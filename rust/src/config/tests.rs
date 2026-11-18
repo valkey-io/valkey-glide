@@ -563,6 +563,77 @@ async fn inflight_requests_limit_zero_rejected_at_connect() {
     assert!(matches!(c_res, Err(GlideError::Configuration(_))));
 }
 
+#[tokio::test]
+async fn tls_ca_cert_empty_rejected_at_connect() {
+    use crate::{GlideClient, GlideClusterClient, GlideError};
+
+    let cfg = GlideClientConfiguration::with_address("127.0.0.1", 6379).tls_ca_cert(vec![]);
+    let res = GlideClient::connect(cfg).await;
+    assert!(matches!(res, Err(GlideError::Configuration(_))));
+
+    let c_cfg =
+        GlideClusterClientConfiguration::with_address("127.0.0.1", 7000).tls_ca_cert(vec![]);
+    let c_res = GlideClusterClient::connect(c_cfg).await;
+    assert!(matches!(c_res, Err(GlideError::Configuration(_))));
+}
+
+#[tokio::test]
+async fn tls_ca_cert_with_no_tls_rejected_at_connect() {
+    use crate::{GlideClient, GlideClusterClient, GlideError, TlsConfig};
+
+    let cfg = GlideClientConfiguration::with_address("127.0.0.1", 6379)
+        .tls(TlsConfig::NoTls)
+        .tls_ca_cert(b"cert");
+    let res = GlideClient::connect(cfg).await;
+    assert!(matches!(res, Err(GlideError::Configuration(_))));
+
+    let c_cfg = GlideClusterClientConfiguration::with_address("127.0.0.1", 7000)
+        .tls(TlsConfig::NoTls)
+        .tls_ca_cert(b"cert");
+    let c_res = GlideClusterClient::connect(c_cfg).await;
+    assert!(matches!(c_res, Err(GlideError::Configuration(_))));
+}
+
+#[tokio::test]
+async fn unparseable_identity_rejected_at_connect() {
+    use crate::{GlideClient, GlideClusterClient, GlideError, TlsConfig};
+
+    let cfg = GlideClientConfiguration::with_address("127.0.0.1", 6379)
+        .tls(TlsConfig::SecureTls)
+        .client_identity(b"invalid-cert", b"invalid-key");
+    let res = GlideClient::connect(cfg).await;
+    assert!(matches!(res, Err(GlideError::Configuration(_))));
+
+    let c_cfg = GlideClusterClientConfiguration::with_address("127.0.0.1", 7000)
+        .tls(TlsConfig::SecureTls)
+        .client_identity(b"invalid-cert", b"invalid-key");
+    let c_res = GlideClusterClient::connect(c_cfg).await;
+    assert!(matches!(c_res, Err(GlideError::Configuration(_))));
+}
+
+#[tokio::test]
+async fn lazy_empty_tls_ca_cert_rejected_on_first_command() {
+    use crate::{AsyncTypedCommands, GlideClient, GlideClusterClient, GlideError};
+
+    let cfg = GlideClientConfiguration::with_address("127.0.0.1", 6379)
+        .lazy_connect(true)
+        .tls_ca_cert(vec![]);
+    let client = GlideClient::connect(cfg)
+        .await
+        .expect("lazy connect succeeds");
+    let res: crate::ValkeyResult<Option<String>> = client.get("k").await;
+    assert!(matches!(res, Err(GlideError::Configuration(_))));
+
+    let c_cfg = GlideClusterClientConfiguration::with_address("127.0.0.1", 7000)
+        .lazy_connect(true)
+        .tls_ca_cert(vec![]);
+    let c_client = GlideClusterClient::connect(c_cfg)
+        .await
+        .expect("lazy connect succeeds");
+    let c_res: crate::ValkeyResult<Option<String>> = c_client.get("k").await;
+    assert!(matches!(c_res, Err(GlideError::Configuration(_))));
+}
+
 // ---- cluster_mode_enabled -------------------------------------------
 
 #[test]

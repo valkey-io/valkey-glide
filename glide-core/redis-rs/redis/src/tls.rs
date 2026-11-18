@@ -1,4 +1,3 @@
-use std::io::{Error, ErrorKind as IOErrorKind};
 
 use rustls::RootCertStore;
 use rustls_pki_types::pem::PemObject;
@@ -75,18 +74,26 @@ pub fn retrieve_tls_certificates(certificates: TlsCertificates) -> RedisResult<T
         // Parse certificates using rustls-pki-types v1.9.0+ API
         let certs = CertificateDer::pem_slice_iter(&client_cert);
         let client_cert_chain = certs.collect::<Result<Vec<_>, _>>().map_err(|e| {
-            Error::new(
-                IOErrorKind::Other,
-                format!("Failed to parse certificate: {}", e),
-            )
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Failed to parse certificate",
+                e.to_string(),
+            ))
         })?;
+        if client_cert_chain.is_empty() {
+            return Err(RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Failed to parse certificate: no certificates found",
+            )));
+        }
 
         // Parse private key using rustls-pki-types v1.9.0+ API
         let client_key = PrivateKeyDer::from_pem_slice(&client_key).map_err(|e| {
-            Error::new(
-                IOErrorKind::Other,
-                format!("Failed to parse private key: {}", e),
-            )
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Failed to parse private key",
+                e.to_string(),
+            ))
         })?;
 
         Some(ClientTlsParams {
@@ -103,15 +110,17 @@ pub fn retrieve_tls_certificates(certificates: TlsCertificates) -> RedisResult<T
         let mut root_cert_store = RootCertStore::empty();
         for result in certs {
             let cert = result.map_err(|e| {
-                Error::new(
-                    IOErrorKind::Other,
-                    format!("Failed to parse root certificate: {}", e),
-                )
+                RedisError::from((
+                    ErrorKind::InvalidClientConfig,
+                    "Failed to parse root certificate",
+                    e.to_string(),
+                ))
             })?;
             if root_cert_store.add(cert.to_owned()).is_err() {
-                return Err(
-                    Error::new(IOErrorKind::Other, "Unable to parse TLS trust anchors").into(),
-                );
+                return Err(RedisError::from((
+                    ErrorKind::InvalidClientConfig,
+                    "Unable to parse TLS trust anchors",
+                )));
             }
         }
 
