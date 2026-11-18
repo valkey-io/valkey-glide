@@ -1657,14 +1657,14 @@ export class BaseClient {
             });
         } else if (route.type === "primarySlotId") {
             return command_request.Routes.create({
-                slotKeyRoute: command_request.SlotIdRoute.create({
+                slotIdRoute: command_request.SlotIdRoute.create({
                     slotType: command_request.SlotTypes.Primary,
                     slotId: route.id,
                 }),
             });
         } else if (route.type === "replicaSlotId") {
             return command_request.Routes.create({
-                slotKeyRoute: command_request.SlotIdRoute.create({
+                slotIdRoute: command_request.SlotIdRoute.create({
                     slotType: command_request.SlotTypes.Replica,
                     slotId: route.id,
                 }),

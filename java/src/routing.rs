@@ -164,7 +164,7 @@ pub(crate) fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<
                 Ok(slot) if slot < redis::cluster_topology::SLOT_SIZE => slot,
                 _ => {
                     return Err(RedisError::from((
-                        ErrorKind::ClientError,
+                        redis::ErrorKind::ClientError,
                         "Invalid slot ID",
                         format!(
                             "Invalid slot ID: {}. Slot ID must be between 0 and 16383",

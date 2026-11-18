@@ -3667,17 +3667,6 @@ where
                     )
             }
             InternalSingleNodeRouting::SpecificNode(route) => {
-                if route.slot() >= crate::cluster_topology::SLOT_SIZE {
-                    return Err((
-                        ErrorKind::ClientError,
-                        "Invalid slot ID",
-                        format!(
-                            "Invalid slot ID: {}. Slot ID must be between 0 and 16383",
-                            route.slot()
-                        ),
-                    )
-                        .into());
-                }
                 // Step 1: Attempt to get the connection directly using the route.
                 let conn_check = {
                     let conn_lock = core.conn_lock.read();
@@ -7032,18 +7021,47 @@ pub(super) mod refresh_task_resolution_tests {
     }
 
     #[tokio::test]
-    async fn specific_node_routing_rejects_out_of_range_slot() {
-        use crate::cluster_routing::{Route, SlotAddr};
+    async fn route_command_and_pipeline_reject_out_of_range_slot() {
+        use crate::cluster_routing::{Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr};
 
         let _guard = gated_test_guard().await;
         let core = core_with_non_idempotent_resolver();
+        let (tx, _rx) = mpsc::channel(1);
+        let mut conn = ClusterConnection {
+            sender: tx,
+            inner_core: core,
+        };
+        let cmd = crate::cmd("PING");
+        let pipeline = crate::Pipeline::new();
+
         for invalid_slot in [16384, 20000, 65535] {
             let route = Route::new(invalid_slot, SlotAddr::Master);
-            let res = get_connection_by_specific_route(&core, route).await;
-            assert!(res.is_err(), "slot {invalid_slot} should be rejected");
+            let routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route));
+            let res = conn.route_command(&cmd, routing).await;
+            assert!(
+                res.is_err(),
+                "slot {invalid_slot} should be rejected by route_command"
+            );
             let err = res.err().unwrap();
             assert_eq!(err.kind(), ErrorKind::ClientError);
             assert!(err.to_string().contains("Invalid slot ID"));
+
+            let res_pipeline = conn
+                .route_pipeline(
+                    &pipeline,
+                    0,
+                    0,
+                    Some(SingleNodeRoutingInfo::SpecificNode(route)),
+                    None,
+                )
+                .await;
+            assert!(
+                res_pipeline.is_err(),
+                "slot {invalid_slot} should be rejected by route_pipeline"
+            );
+            let err_pipeline = res_pipeline.err().unwrap();
+            assert_eq!(err_pipeline.kind(), ErrorKind::ClientError);
+            assert!(err_pipeline.to_string().contains("Invalid slot ID"));
         }
     }
 
