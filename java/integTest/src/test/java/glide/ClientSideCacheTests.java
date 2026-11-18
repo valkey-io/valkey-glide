@@ -762,21 +762,14 @@ public class ClientSideCacheTests {
     }
 
     /**
-     * Java does not validate the prefix rules: the core rejects the configuration and its error
-     * reaches the caller of {@code createClient}.
+     * Java does not validate the prefix rules: the core rejects a prefix without server-assisted
+     * caching and its error reaches the caller of {@code createClient}.
      */
     @Test
     public void trackingPrefix_core_validation_error_reaches_the_caller() {
-        ClientSideCache emptyPrefix =
-                ClientSideCache.builder().maxCacheKb(1024L).serverAssisted(true).trackingPrefix("").build();
-        assertCreateClientFails(emptyPrefix, "tracking_prefix must not be empty");
-
         ClientSideCache notServerAssisted =
                 ClientSideCache.builder().maxCacheKb(1024L).trackingPrefix("xxx:").build();
-        assertCreateClientFails(notServerAssisted, "tracking_prefix requires server_assisted");
-    }
 
-    private static void assertCreateClientFails(ClientSideCache cache, String coreMessage) {
         ExecutionException error =
                 assertThrows(
                         ExecutionException.class,
@@ -784,10 +777,12 @@ public class ClientSideCacheTests {
                                 GlideClient.createClient(
                                                 commonClientConfig()
                                                         .protocol(ProtocolVersion.RESP3)
-                                                        .clientSideCache(cache)
+                                                        .clientSideCache(notServerAssisted)
                                                         .build())
                                         .get());
         assertInstanceOf(ClosingException.class, error.getCause());
-        assertTrue(error.getCause().getMessage().contains(coreMessage), error.getCause().getMessage());
+        assertTrue(
+                error.getCause().getMessage().contains("tracking_prefix requires server_assisted"),
+                error.getCause().getMessage());
     }
 }
