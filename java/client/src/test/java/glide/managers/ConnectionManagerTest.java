@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -573,26 +572,22 @@ public class ConnectionManagerTest {
         assertFalse(request.getClientSideCache().hasTrackingPrefix(), "tracking_prefix unset");
     }
 
-    /** The pooled serialization path goes through the same builder and must carry the prefix too. */
+    /**
+     * An empty prefix is sent as a present, empty field (not dropped), so the core sees exactly what
+     * the user configured and is the one that rejects it.
+     */
     @Test
-    void clientPoolSerialization_carriesClientSideCacheTrackingPrefix() throws Exception {
+    void buildConnectionRequest_forwardsEmptyTrackingPrefixForTheCoreToReject() {
         ClientSideCache cache =
-                ClientSideCache.builder()
-                        .maxCacheKb(512)
-                        .serverAssisted(true)
-                        .trackingPrefix("pool:")
-                        .build();
+                ClientSideCache.builder().maxCacheKb(512).serverAssisted(true).trackingPrefix("").build();
         GlideClientConfiguration clientConfig =
                 GlideClientConfiguration.builder().clientSideCache(cache).build();
 
         ConnectionRequestOuterClass.ConnectionRequest request =
-                ConnectionRequestOuterClass.ConnectionRequest.parseFrom(poolBytes(clientConfig));
+                ConnectionManager.buildConnectionRequest(clientConfig);
 
-        assertTrue(request.hasClientSideCache(), "pooled client_side_cache present");
-        assertTrue(request.getClientSideCache().getServerAssisted());
-        assertArrayEquals(
-                "pool:".getBytes(StandardCharsets.UTF_8),
-                request.getClientSideCache().getTrackingPrefix().toByteArray());
+        assertTrue(request.getClientSideCache().hasTrackingPrefix(), "tracking_prefix present");
+        assertTrue(request.getClientSideCache().getTrackingPrefix().isEmpty(), "tracking_prefix empty");
     }
 
     private static BackoffStrategy.BackoffStrategyBuilder validBackoff() {
