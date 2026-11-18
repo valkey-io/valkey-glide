@@ -1064,6 +1064,8 @@ dependencies = [
  "glide-telemetry",
  "jni 0.21.1",
  "log",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "parking_lot",
  "protobuf",
  "scopeguard",
