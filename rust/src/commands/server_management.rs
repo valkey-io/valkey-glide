@@ -170,12 +170,14 @@ pub trait ServerManagementCommands: CommandExecutor {
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
+    // TODO #7362: Return per-node replies for cluster clients.
     /// Get latency time series for an event (`LATENCY HISTORY`).
     async fn latency_history<E: ToValkeyArgs + Send>(&self, event: E) -> ValkeyResult<ValkeyValue> {
         let cmd = cmd("LATENCY").with_arg("HISTORY").with_arg(event);
         self.execute_command(cmd, None).await
     }
 
+    // TODO #7362: Return per-node replies for cluster clients.
     /// Get the latest latency samples for all events (`LATENCY LATEST`).
     async fn latency_latest(&self) -> ValkeyResult<ValkeyValue> {
         let cmd = cmd("LATENCY").with_arg("LATEST");

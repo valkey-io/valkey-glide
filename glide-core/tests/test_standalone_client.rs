@@ -1047,6 +1047,8 @@ mod standalone_client_tests {
         });
     }
 
+    // TODO #7707: Add tests that root certificates with `TlsMode::InsecureTls` are rejected,
+    // in standalone and cluster mode.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
