@@ -100,6 +100,8 @@ impl SyncGlideClient {
         runtime().block_on(self.inner.custom_command(args))
     }
 
+    // TODO #7672: Return `ValkeyResult<Option<Vec<ValkeyValue>>>`
+    // with `None` for a transaction aborted by `WATCH`.
     /// Execute a [`crate::Pipeline`] with GLIDE execution options
     /// (blocking). See [`crate::GlideClient::exec`]; for plain
     /// typed execution prefer [`PipelineExt::query`].
@@ -172,6 +174,8 @@ impl SyncGlideClusterClient {
         )
     }
 
+    // TODO #7672: Return `ValkeyResult<Option<Vec<ValkeyValue>>>`
+    // with `None` for a transaction aborted by `WATCH`.
     /// Execute a [`crate::pipeline::Pipeline`] with GLIDE execution options,
     /// optionally routed (blocking). See
     /// [`crate::GlideClusterClient::exec`].
@@ -179,6 +183,7 @@ impl SyncGlideClusterClient {
         &self,
         pipeline: &crate::pipeline::Pipeline,
         raise_on_error: bool,
+        // TODO #7673: Accept only single-node routes.
         route: Option<crate::Route>,
         options: &PipelineOptions,
     ) -> ValkeyResult<Vec<ValkeyValue>> {
