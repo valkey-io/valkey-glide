@@ -117,6 +117,7 @@ Before submitting, work through the checklist in the PR template:
 
 - [ ] This Pull Request is related to one issue.
 - [ ] Commit message has a detailed description of what changed and why.
+- [ ] PR title follows `type(scope): description` with a lowercase type; it becomes the release notes entry.
 - [ ] Tests are added or updated.
 - [ ] CHANGELOG.md and documentation files are updated.
 - [ ] Linters have been run (`make *-lint` targets) and Prettier has been run (`make prettier-fix`).

@@ -324,7 +324,7 @@ valkey-glide/
 - [ ] Tests pass: `make *-test` succeeds (bindings), the crate's documented test invocation succeeds (touched Rust crates — see glide-core/AGENTS.md and rust/AGENTS.md for feature flags and thread-count requirements)
 - [ ] No generated outputs committed (check `.gitignore`)
 - [ ] DCO signoff present: `git log --format="%B" -n 1 | grep "Signed-off-by"`
-- [ ] Conventional commit format used
+- [ ] Conventional commit format used for commits and the PR title
 - [ ] Cross-language API consistency maintained
 - [ ] Security scan passes (no secrets committed)
 
