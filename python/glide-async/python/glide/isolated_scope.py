@@ -151,26 +151,27 @@ class AsyncIsolatedScope:
 
         # Execute in a worker thread to avoid blocking the event loop. Abandon on
         # cancel so a cancelled blocking command returns at once; close() ends it.
-        result_ptr = await anyio.to_thread.run_sync(
+        return await anyio.to_thread.run_sync(
             self._execute_sync, payload, abandon_on_cancel=True
         )
 
-        if result_ptr == self._ffi.NULL:
-            raise RuntimeError(f"Scope execute failed: invalid scope {self._scope_id}")
+    def _execute_sync(self, payload: bytes) -> Optional[str]:
+        """Synchronous FFI call (runs in a worker thread).
 
-        try:
-            return self._parse_result(result_ptr)
-        finally:
-            self._lib.free_command_result(result_ptr)
-
-    def _execute_sync(self, payload: bytes):
-        """Synchronous FFI call (runs in a worker thread)."""
+        Parses and frees the result here so an abandoned call still frees it.
+        """
         buf = self._ffi.from_buffer(payload)
-        return self._lib.glide_scope_execute(
+        result_ptr = self._lib.glide_scope_execute(
             self._scope_id,
             self._ffi.cast("const uint8_t*", buf),
             len(payload),
         )
+        if result_ptr == self._ffi.NULL:
+            raise RuntimeError(f"Scope execute failed: invalid scope {self._scope_id}")
+        try:
+            return self._parse_result(result_ptr)
+        finally:
+            self._lib.free_command_result(result_ptr)
 
     def _parse_result(self, result_ptr) -> Optional[str]:
         """Parse a CommandResult pointer into a Python value."""

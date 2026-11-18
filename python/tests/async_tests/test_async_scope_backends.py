@@ -124,3 +124,31 @@ class TestScopeCommandBackends:
             assert await anyio.to_thread.run_sync(returned.wait, 2)
         finally:
             await client.close()
+
+    async def test_cancelled_command_frees_its_result(self, request):
+        freed = threading.Event()
+
+        class _CountingLib:
+            # cffi lib attributes can't be patched, so wrap the scope's lib.
+            def __init__(self, lib):
+                self._lib = lib
+
+            def __getattr__(self, name):
+                return getattr(self._lib, name)
+
+            def free_command_result(self, ptr):
+                self._lib.free_command_result(ptr)
+                freed.set()
+
+        client = await create_client(request, cluster_mode=False)
+        try:
+            key = f"scope-backends-free-{uuid.uuid4().hex[:8]}"
+            async with await client.scoped_connection() as scope:
+                scope._lib = _CountingLib(scope._lib)
+                # BLPOP times out server-side after 1s, so the abandoned call
+                # still gets a result back that something has to free.
+                with anyio.move_on_after(0.2):
+                    await scope.execute_command("BLPOP", key, "1")
+                assert await anyio.to_thread.run_sync(freed.wait, 5)
+        finally:
+            await client.close()
