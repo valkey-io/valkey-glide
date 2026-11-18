@@ -1665,6 +1665,8 @@ fn convert_lolwut_string(data: &str) -> String {
     }
 }
 
+// TODO #7631: Propagate conversion errors instead of calling `unwrap()`, which panics on a
+// mismatched reply.
 /// Converts elements in an array to the specified type.
 ///
 /// `array` is an array of values.
@@ -3834,6 +3836,7 @@ mod tests {
         assert!(converted_4.is_err());
     }
 
+    // TODO #7631: Add cases where a key, member, group or consumer equals an option keyword.
     #[test]
     fn convert_xclaim() {
         assert!(matches!(
