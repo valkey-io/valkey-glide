@@ -328,6 +328,7 @@ impl StandaloneClient {
             }
             Some(manager.get_params().await)
         } else if has_root_certs || has_client_cert || has_client_key {
+            // TODO #7707: Reject root certificates with `TlsMode::InsecureTls`, which ignores them.
             if tls_mode.unwrap_or(TlsMode::NoTls) == TlsMode::NoTls {
                 return Err(StandaloneClientConnectionError::FailedConnection(vec![(
                     None,
