@@ -80,7 +80,9 @@ Add `!` after the type or scope for a breaking change, e.g. `feat(java)!: remove
 
 **Scope** is typically the language binding or component: `java`, `python`, `node`, `go`, `core`, `ffi`.
 
-The PR title must use the same format with a lowercase type. It is checked, becomes the squash commit, and becomes the release notes entry: `feat`, `fix` and `perf` are listed, `!` goes under Breaking Changes, `revert` goes under Other Changes, and the other types are left out.
+The PR title must use the same format with a lowercase type. It is checked and becomes the release notes entry: `feat`, `fix` and `perf` are listed, `!` goes under Breaking Changes, `revert` goes under Other Changes, and the other types are left out.
+
+A backport keeps the original PR's type, e.g. `fix(core): ... (backport #123)`; porting already-released fixes to `main` is `chore:`.
 
 **Examples:**
 

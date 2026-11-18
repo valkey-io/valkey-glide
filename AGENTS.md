@@ -265,7 +265,7 @@ Use conventional commit format for all commit messages:
 
 **Example:** `feat(java): add cluster scan support for Java client`
 
-The PR title uses the same format with a lowercase type; it is checked and becomes the release notes entry.
+The PR title uses the same format with a lowercase type; it is checked and becomes the release notes entry. A backport keeps the original PR's type, e.g. `fix(core): ... (backport #123)`; porting already-released fixes to `main` is `chore:`.
 
 ## Guardrails & Policies
 
