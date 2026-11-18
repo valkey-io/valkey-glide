@@ -14204,6 +14204,8 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
+    // TODO #7654: Add a queue-time error case that expects ExecAbortError for atomic batches.
+
     it.each([
         [ProtocolVersion.RESP2, true],
         [ProtocolVersion.RESP2, false],
