@@ -132,14 +132,13 @@ runs:
               cd valkey
               MAKE_ARGS=(BUILD_TLS=yes)
 
-              # On macOS, install openssl@3 because OpenSSL 4 deprecates APIs that Valkey 9.x calls
-              # and Valkey builds with -Werror=deprecated-declarations.
+              # On macOS, install openssl@3 because OpenSSL 4 deprecates APIs that
+              # Valkey 9.x calls and Valkey builds with -Werror=deprecated-declarations.
               if [[ "$(uname -s)" == "Darwin" ]]; then
                   brew list openssl@3 &> /dev/null || brew install openssl@3
 
-                  # MAKE_ARGS is reused for `make install`. Redis 6.2 and 7.0 predate
-                  # valkey-io/valkey#4738 and don't save OPENSSL_PREFIX in .make-settings, so
-                  # without it `make install` would rebuild against the default `openssl`.
+                  # Add OPENSSL_PREFIX to MAKE_ARGS so that `make` and `make install`
+                  # use openssl@3 instead of the GitHub runner's default OpenSSL 4.
                   MAKE_ARGS+=("OPENSSL_PREFIX=$(brew --prefix openssl@3)")
               fi
 
