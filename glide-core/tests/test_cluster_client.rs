@@ -1044,4 +1044,103 @@ mod cluster_client_tests {
             }
         });
     }
+
+    #[rstest]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_partial_results_with_no_node_answering_open_the_circuit_breaker() {
+        block_on_all(async {
+            let cluster = RedisCluster::new(false, &None, None, None);
+            let mut request: glide_core::client::ConnectionRequest = create_connection_request(
+                &cluster.get_server_addresses(),
+                &TestConfiguration {
+                    cluster_mode: ClusterMode::Enabled,
+                    request_timeout: Some(500),
+                    ..Default::default()
+                },
+            )
+            .into();
+            // One counted error in two requests opens it.
+            request.client_circuit_breaker = Some(glide_core::client::ClientCircuitBreakerConfig {
+                window_size_ms: 60_000,
+                failure_rate_threshold: 0.5,
+                min_errors: 1,
+                open_timeout_ms: 60_000,
+                count_timeouts: true,
+                consecutive_successes: 1,
+            });
+            let mut client = Client::new(request, None).await.unwrap();
+            // A second client pauses the primaries, so the pauses are not
+            // queued behind the client under test.
+            let mut pauser = create_cluster_client(
+                Some(&cluster),
+                TestConfiguration {
+                    shared_server: false,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let partial_info = || {
+                let mut cmd = redis::cmd("INFO");
+                cmd.arg("SERVER").set_allow_partial_results(true);
+                cmd
+            };
+            let Value::Map(healthy) = client
+                .send_command(&mut partial_info(), None)
+                .await
+                .unwrap()
+            else {
+                panic!("expected a map");
+            };
+            let routes: Vec<RoutingInfo> = healthy
+                .into_iter()
+                .map(|(address, _)| {
+                    let address: String = redis::from_owned_redis_value(address).unwrap();
+                    let (host, port) = address.rsplit_once(':').unwrap();
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                        host: host.to_string(),
+                        port: port.parse().unwrap(),
+                    })
+                })
+                .collect();
+            for route in &routes {
+                let mut pause = redis::cmd("CLIENT");
+                pause.arg("PAUSE").arg(3000).arg("ALL");
+                pauser
+                    .send_command(&mut pause, Some(route.clone()))
+                    .await
+                    .unwrap();
+            }
+
+            let Value::Map(entries) = client
+                .send_command(&mut partial_info(), None)
+                .await
+                .unwrap()
+            else {
+                panic!("expected a map");
+            };
+            assert_eq!(entries.len(), routes.len());
+            for (_, value) in entries {
+                let Value::ServerError(error) = value else {
+                    panic!("expected a timeout, got {value:?}");
+                };
+                assert_eq!(error.err_code(), redis::TIMEOUT_ERROR_CODE);
+            }
+            assert!(
+                !client.is_circuit_breaker_healthy(),
+                "a result in which no node answered must count as the plain timeout"
+            );
+
+            // CLIENT UNPAUSE would wait for the pause too; wait for it to end.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+            for route in &routes {
+                while pauser
+                    .send_command(&mut redis::cmd("PING"), Some(route.clone()))
+                    .await
+                    .is_err()
+                {
+                    assert!(std::time::Instant::now() < deadline);
+                }
+            }
+        });
+    }
 }
