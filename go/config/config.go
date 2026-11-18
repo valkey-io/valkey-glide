@@ -405,11 +405,7 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 	}
 
 	if config.clientSideCache != nil {
-		cachePb, err := config.clientSideCache.toProtobuf()
-		if err != nil {
-			return nil, fmt.Errorf("invalid client-side cache configuration: %w", err)
-		}
-		request.ClientSideCache = cachePb
+		request.ClientSideCache = config.clientSideCache.toProtobuf()
 	}
 
 	if config.clientCircuitBreaker != nil {
