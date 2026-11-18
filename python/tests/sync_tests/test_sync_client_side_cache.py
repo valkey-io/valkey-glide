@@ -2,7 +2,7 @@
 import time
 
 import pytest
-from glide_shared import ClosingError, RequestError
+from glide_shared import ConfigurationError, RequestError
 from glide_shared.cache import ClientSideCache, EvictionPolicy
 from glide_shared.config import ProtocolVersion
 
@@ -627,7 +627,9 @@ class TestSyncClientSideCache:
         """Python does not validate the prefix rules itself: an invalid prefix is sent
         to the core, whose error is raised when the client is created."""
         cache = build_client_side_cache(server_assisted=True, tracking_prefix="")
-        with pytest.raises(ClosingError, match="tracking_prefix must not be empty"):
+        with pytest.raises(
+            ConfigurationError, match="tracking_prefix must not be empty"
+        ):
             create_sync_client(
                 request,
                 cluster_mode=False,

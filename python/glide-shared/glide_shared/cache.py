@@ -167,7 +167,7 @@ class ClientSideCache:
                 The prefix is fixed for the lifetime of the client. Requires
                 ``server_assisted=True`` and must not be empty; leave it as None to track
                 all keys. These two rules are checked when the client is created, which
-                fails with a ``ClosingError`` if they are not met.
+                fails with a ``ConfigurationError`` if they are not met.
 
         Returns:
             ClientSideCache: A new ClientSideCache instance.

@@ -98,7 +98,10 @@ jobs:
 
             - name: Run glide-ffi RDMA tests
               working-directory: ./ffi
-              run: cargo test --locked --features rdma
+              run: |
+                  cargo test --locked --features rdma-tcp-dev
+                  # The release shape: `rdma` alone carries no tcp provider.
+                  cargo test --locked --features rdma
 
             - name: Run glide-ffi MIRI tests
               working-directory: ./ffi/miri-tests

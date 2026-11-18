@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use opentelemetry_sdk::error::{OTelSdkError, OTelSdkResult};
 use opentelemetry_sdk::metrics::Temporality;
 use opentelemetry_sdk::metrics::data::{
@@ -11,7 +10,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::result::Result;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 /// An OpenTelemetry exporter that writes Metrics to a file on export.
 pub struct FileMetricExporter {
@@ -203,16 +202,25 @@ where
         let mut dp = Map::new();
         dp.insert("value".to_owned(), value_serializer(point.value()));
 
-        let start_time: DateTime<Utc> = start_time.into();
         dp.insert(
             "start_time".to_owned(),
-            Value::String(start_time.timestamp_micros().to_string()),
+            Value::String(
+                start_time
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_micros()
+                    .to_string(),
+            ),
         );
 
-        let time: DateTime<Utc> = time.into();
         dp.insert(
             "time".to_owned(),
-            Value::String(time.timestamp_micros().to_string()),
+            Value::String(
+                time.duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_micros()
+                    .to_string(),
+            ),
         );
 
         dp.insert(
@@ -238,10 +246,14 @@ where
         let mut dp = Map::new();
         dp.insert("value".to_owned(), value_serializer(point.value()));
 
-        let time: DateTime<Utc> = time.into();
         dp.insert(
             "time".to_owned(),
-            Value::String(time.timestamp_micros().to_string()),
+            Value::String(
+                time.duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_micros()
+                    .to_string(),
+            ),
         );
 
         dp.insert(
@@ -283,15 +295,24 @@ where
             .collect();
         dp.insert("bounds".to_owned(), Value::Array(bounds));
 
-        let start_time: DateTime<Utc> = start_time.into();
         dp.insert(
             "start_time".to_owned(),
-            Value::String(start_time.timestamp_micros().to_string()),
+            Value::String(
+                start_time
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_micros()
+                    .to_string(),
+            ),
         );
-        let time: DateTime<Utc> = time.into();
         dp.insert(
             "time".to_owned(),
-            Value::String(time.timestamp_micros().to_string()),
+            Value::String(
+                time.duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_micros()
+                    .to_string(),
+            ),
         );
 
         dp.insert(

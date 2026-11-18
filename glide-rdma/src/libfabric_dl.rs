@@ -512,8 +512,23 @@ mod tests {
 
     #[test]
     fn the_wrappers_and_bindings_call_the_renamed_stand_ins() {
-        let wrapper = include_str!("../glide-libfabric-sys/wrapper.c");
-        let bindings = include_str!("../glide-libfabric-sys/src/bindings.rs");
+        // glide-libfabric-sys is a separate crate, so the glide-rdma package
+        // published to crates.io doesn't include it. Read its files at run
+        // time, and skip the check when they aren't there.
+        let sys = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("glide-libfabric-sys");
+        if !sys.is_dir() {
+            eprintln!("skipped: {} not found", sys.display());
+            return;
+        }
+        let read = |file: &str| {
+            std::fs::read_to_string(sys.join(file)).unwrap_or_else(|err| {
+                panic!("glide-libfabric-sys/{file} should be readable: {err}")
+            })
+        };
+
+        let wrapper = read("wrapper.c");
+        let bindings = read("src/bindings.rs");
+
         for name in SYMBOLS {
             let name = name.to_str().unwrap();
             let rename = format!("#define {name}(...) glide_{name}(__VA_ARGS__)");
