@@ -131,15 +131,18 @@ runs:
           run: |
               cd valkey
               MAKE_ARGS=(BUILD_TLS=yes)
+
+              # On macOS, install openssl@3 because OpenSSL 4 deprecates APIs that Valkey 9.x calls
+              # and Valkey builds with -Werror=deprecated-declarations.
               if [[ "$(uname -s)" == "Darwin" ]]; then
-                  # Homebrew's `openssl` is OpenSSL 4, and valkey 9.x fails to build against it
-                  # (-Werror=deprecated-declarations), so build against openssl@3. Pass the prefix to
-                  # `make install` too: the 6.2, 7.0 and 9.2.0-rc1 Makefiles do not save it in
-                  # .make-settings, so a bare `make install` falls back to Homebrew's `openssl` and rebuilds.
-                  # pypi-cd's test-release job calls this action without install-shared-dependencies.
                   brew list openssl@3 &> /dev/null || brew install openssl@3
+
+                  # MAKE_ARGS is reused for `make install`. Redis 6.2 and 7.0 predate
+                  # valkey-io/valkey#4738 and don't save OPENSSL_PREFIX in .make-settings, so
+                  # without it `make install` would rebuild against the default `openssl`.
                   MAKE_ARGS+=("OPENSSL_PREFIX=$(brew --prefix openssl@3)")
               fi
+
               make "${MAKE_ARGS[@]}" -j4
               if command -v sudo &> /dev/null
               then
