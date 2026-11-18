@@ -1356,6 +1356,7 @@ impl Client {
                     Some(self.pubsub_synchronizer.clone()),
                 )
                 .await
+                // TODO #7653: Return a connection error, not a request error.
                 .map_err(|e| {
                     RedisError::from((
                         ErrorKind::IoError,
@@ -1473,6 +1474,8 @@ impl Client {
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            // TODO #7666: Reject empty commands here, replacing the check in `get_redis_command`
+            // (`socket_listener.rs`).
             // `BLOB.*` transfers lend a buffer, so only the rdma methods send them.
             crate::rdma::refuse_direct_command(cmd)?;
             // Refresh IAM auth before the command (see `reconcile_iam_before_dispatch`).
@@ -2245,6 +2248,8 @@ impl Client {
                                         .route_pipeline(pipeline, offset, 1, Some(route), None)
                                         .await?
                                 }
+                                // TODO #7673: Return a client error for `RoutingInfo::MultiNode`;
+                                // keep this path for `None`.
                                 _ => {
                                     client
                                         .req_packed_commands(pipeline, offset, 1, None)
@@ -2367,6 +2372,8 @@ impl Client {
                                     )
                                     .await
                             }
+                            // TODO #7673: Return a client error for `RoutingInfo::MultiNode`;
+                            // keep this path for `None`.
                             _ => {
                                 client
                                     .route_pipeline(
@@ -2611,6 +2618,7 @@ impl Client {
         tls_mode: TlsMode,
     ) -> Result<Option<std::sync::Arc<crate::iam::IAMTokenManager>>, ConnectionError> {
         if let Some(iam_config) = &auth_info.iam_config {
+            // TODO #7707: Also reject IAM authentication with `TlsMode::InsecureTls`.
             if tls_mode == TlsMode::NoTls {
                 return Err(ConnectionError::IAMError(
                     "IAM authentication requires TLS; refusing to send an IAM token over a plaintext connection".to_string(),
@@ -2687,6 +2695,7 @@ impl Client {
         })
     }
 }
+// TODO #7683: Reject runtime subscribe commands on a RESP2 client.
 /// Trait for executing PubSub commands on the internal client wrapper
 pub trait PubSubCommandApplier: Send + Sync {
     /// Send a subscription command (SUBSCRIBE, UNSUBSCRIBE, etc.)
@@ -2915,6 +2924,7 @@ async fn create_cluster_client(
         // of truth for the initial cluster connection.
         (Some(manager.get_params().await), None)
     } else if has_root_certs || has_client_cert || has_client_key {
+        // TODO #7707: Reject root certificates with `TlsMode::InsecureTls`, which ignores them.
         if tls_mode == TlsMode::NoTls {
             return Err(RedisError::from((
                 ErrorKind::InvalidClientConfig,
@@ -3383,6 +3393,9 @@ impl Client {
             })?;
         }
         validate_unix_socket_addresses(&request).map_err(ConnectionError::Configuration)?;
+        // TODO #7683: Reject Pub/Sub subscriptions combined with RESP2 with a configuration error.
+        // TODO #7690: Reject sharded subscriptions on a standalone client with a configuration
+        // error.
 
         if let Some(conflict) = request.rdma_conflict() {
             return Err(crate::rdma::RdmaUnavailable::IncompatibleSetting(conflict).into());
@@ -3551,6 +3564,7 @@ impl Client {
 
             let client_arc = Arc::new(RwLock::new(client));
 
+            // TODO #7707: Warn once when a password is configured with `TlsMode::NoTls`.
             // Create IAM token manager if needed
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
                 Self::create_iam_token_manager(auth_info, request.tls_mode.unwrap_or_default())
@@ -6731,6 +6745,7 @@ mod tests {
     ///
     /// A-B: the same request over TLS succeeds, so the failure is the `NoTls` guard
     /// firing, not IAM config being rejected unconditionally.
+    // TODO #7707: Add a test that IAM authentication with `TlsMode::InsecureTls` is rejected.
     #[tokio::test]
     #[cfg(feature = "proto")]
     async fn test_iam_without_tls_is_rejected() {
