@@ -13,9 +13,9 @@ on:
             - rust/**
 
             # Rust dependencies
-            - glide-core/**
-            - glide-telemetry/**
             - glide-logger/**
+            - glide-telemetry/**
+            - glide-core/**
             - deny.toml
 
             # GitHub workflows
@@ -28,6 +28,8 @@ on:
             - .github/actions/lint-rust/action.yml
 
             - utils/cluster_manager.py
+
+            # Exclusions
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
             # Re-include: compiled as doctests by rust/src/lib.rs
@@ -38,9 +40,9 @@ on:
             - rust/**
 
             # Rust dependencies
-            - glide-core/**
-            - glide-telemetry/**
             - glide-logger/**
+            - glide-telemetry/**
+            - glide-core/**
             - deny.toml
 
             # GitHub workflows
@@ -53,6 +55,8 @@ on:
             - .github/actions/lint-rust/action.yml
 
             - utils/cluster_manager.py
+
+            # Exclusions
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
             # Re-include: compiled as doctests by rust/src/lib.rs
@@ -62,7 +66,7 @@ on:
     workflow_call:
 
 concurrency:
-    group: rust-${{ github.head_ref || github.ref }}
+    group: rust-${{ github.head_ref || github.ref }}-${{ github.workflow }}
     cancel-in-progress: true
 
 env:

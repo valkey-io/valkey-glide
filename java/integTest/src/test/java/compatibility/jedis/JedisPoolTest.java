@@ -4,6 +4,9 @@ package compatibility.jedis;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static org.junit.jupiter.api.Assertions.*;
 
+import glide.api.GlideClient;
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.NodeAddress;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -266,6 +269,45 @@ public class JedisPoolTest {
     }
 
     @Test
+    void pool_next_borrower_starts_on_configured_database() throws Exception {
+        int configuredDatabase = 9;
+        int otherDatabase = 15;
+        String key = UUID.randomUUID().toString();
+        GenericObjectPoolConfig<Jedis> poolConfig = new GenericObjectPoolConfig<>();
+        poolConfig.setMaxTotal(1); // both borrowers get the same pooled connection
+        try (GlideClient configuredDatabaseClient = glideClientOnDatabase(configuredDatabase);
+                GlideClient otherDatabaseClient = glideClientOnDatabase(otherDatabase);
+                JedisPool pool =
+                        new JedisPool(poolConfig, valkeyHost, valkeyPort, 5000, null, configuredDatabase)) {
+            Jedis first;
+            try (Jedis jedis = pool.getResource()) {
+                first = jedis;
+                jedis.select(otherDatabase);
+            }
+            try (Jedis jedis = pool.getResource()) {
+                assertSame(first, jedis, "verify: maxTotal=1 reuses the pooled connection");
+                assertEquals(
+                        configuredDatabase,
+                        jedis.getDB(),
+                        "verify: next borrower starts on the pool's configured database");
+                jedis.set(key, "value");
+            }
+            assertEquals(
+                    "value",
+                    configuredDatabaseClient.get(key).get(),
+                    "verify: write from next borrower lands in the configured database");
+            assertEquals(
+                    0L,
+                    otherDatabaseClient.exists(new String[] {key}).get(),
+                    "verify: write from next borrower does not land in the previous borrower's database");
+
+            // Cleanup
+            configuredDatabaseClient.del(new String[] {key}).get();
+            otherDatabaseClient.del(new String[] {key}).get();
+        }
+    }
+
+    @Test
     void pool_returnBrokenResource_directly_invalidates_borrowed_connection() {
         try (JedisPool pool = new JedisPool(valkeyHost, valkeyPort)) {
             Jedis jedis = pool.getResource();
@@ -276,5 +318,14 @@ public class JedisPoolTest {
                         "PONG", jedis2.ping(), "verify: pool usable after explicit returnBrokenResource");
             }
         }
+    }
+
+    private static GlideClient glideClientOnDatabase(int database) throws Exception {
+        return GlideClient.createClient(
+                        GlideClientConfiguration.builder()
+                                .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
+                                .databaseId(database)
+                                .build())
+                .get();
     }
 }

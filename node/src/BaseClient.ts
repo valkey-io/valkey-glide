@@ -291,6 +291,7 @@ import {
     dropOtelSpan,
     getStatistics,
     compressionConfigToProtobuf,
+    toClientCreationError,
     validateCompressionConfiguration,
     valueFromPointer,
     valueFromSplitPointer,
@@ -1401,6 +1402,8 @@ export interface AdvancedBaseClientConfiguration {
      * such as enabling an insecure mode that bypasses certificate validation.
      */
     tlsAdvancedConfiguration?: {
+        // TODO #7707: Document that root certificates or IAM authentication with `insecure`
+        // is rejected.
         /**
          * Whether to bypass TLS certificate verification.
          *
@@ -1582,6 +1585,7 @@ export class BaseClient {
         configuration: connection_request.IConnectionRequest,
     ) {
         if (options.pubsubSubscriptions) {
+            // TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
             if (options.protocol == ProtocolVersion.RESP2) {
                 throw new ConfigurationError(
                     "PubSub subscriptions require RESP3 protocol, but RESP2 was configured.",
@@ -10298,7 +10302,7 @@ export class BaseClient {
             // Keep the exact bytes used to connect for scopedConnection().
             setScopeConnectionRequest(this, connectionRequestBytes);
 
-            this.clientHandle = await BaseClient.nativeCreateDirectClient(
+            this.clientHandle = await BaseClient.createNativeClient(
                 connectionRequestBytes,
                 this.handleResponsesAvailable,
             );
@@ -10313,6 +10317,21 @@ export class BaseClient {
         } catch (err) {
             this.cleanupConnectionRegistrations();
             throw err;
+        }
+    }
+
+    /** Creates the native client handle; a failure rejects with a `ValkeyError`. */
+    private static async createNativeClient(
+        connectionRequestBytes: Uint8Array,
+        wakeCallback: () => void,
+    ): Promise<GlideClientHandle> {
+        try {
+            return await BaseClient.nativeCreateDirectClient(
+                connectionRequestBytes,
+                wakeCallback,
+            );
+        } catch (error) {
+            throw toClientCreationError(error);
         }
     }
 

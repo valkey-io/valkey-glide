@@ -563,6 +563,8 @@ async def cursor_read(
         ...     FtAggregateOptions(loadFields=["__key"], with_cursor=FtWithCursor(count=10)))
         >>> while cursor_id != 0:
         ...     rows, cursor_id = await ft.cursor_read(glide_client, "myIndex", cursor_id)
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
     args: List[TEncodable] = [
         CommandNames.FT_CURSOR,
@@ -599,6 +601,8 @@ async def cursor_del(
         ...     FtAggregateOptions(loadFields=["__key"], with_cursor=FtWithCursor(count=1)))
         >>> await ft.cursor_del(glide_client, "myIndex", cursor_id)
             'OK'
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
     args: List[TEncodable] = [
         CommandNames.FT_CURSOR,
@@ -759,6 +763,8 @@ async def hybrid(
         ...     ),
         ... )
             [[{b'title': b'hello world'}], 14058138254]
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
     args: List[TEncodable] = [CommandNames.FT_HYBRID, index_name]
     args.extend(search_arm.to_args())

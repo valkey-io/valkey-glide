@@ -191,11 +191,13 @@ class AsyncClientPool:
         Uses glide_pool_try_acquire (non-blocking) instead of
         glide_pool_acquire_blocking to avoid blocking thread pool threads.
         Blocking threads prevents the event loop from draining the async pipe,
-        which deadlocks the pool's release state-reset (DISCARD + SELECT).
+        which deadlocks the pool's release state reset.
         """
         if self._closed:
             raise RuntimeError("Pool is closed")
-        timeout = timeout or self._pool_config.acquire_timeout_s
+        timeout = (
+            timeout if timeout is not None else self._pool_config.acquire_timeout_s
+        )
 
         import time
 
@@ -344,7 +346,7 @@ class _AsyncBorrowContext:
 
     async def __aexit__(self, *_):
         self._pool.release(self._client_id)
-        # Yield to event loop so the async release (DISCARD + SELECT) can
+        # Yield to event loop so the async release (state reset) can
         # complete via the pipe reader before the next acquire attempt.
         await asyncio.sleep(0)
         return False

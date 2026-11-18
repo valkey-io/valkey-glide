@@ -27,6 +27,7 @@ from glide_shared.connection_request import (
     _create_async_connection_request,
     _create_sync_connection_request,
 )
+from glide_shared.exceptions import ClosingError, get_connection_error_class
 from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
 from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
 from glide_shared.protobuf.connection_request_pb2 import TlsMode
@@ -1546,3 +1547,11 @@ def test_client_tracking_info_parser_keeps_non_utf8_prefix():
     assert "xxx:" in info.prefixes
     (raw,) = info.prefixes - {"xxx:"}
     assert raw.encode("utf-8", "surrogateescape") == prefix
+
+
+def test_connection_error_class_maps_only_configuration_type():
+    # 1 is ConnectionErrorType::Configuration in ffi/src/lib.rs.
+    assert get_connection_error_class(1) is ConfigurationError
+    assert get_connection_error_class(0) is ClosingError
+    assert get_connection_error_class(0, default=RuntimeError) is RuntimeError
+    assert get_connection_error_class(1, default=RuntimeError) is ConfigurationError

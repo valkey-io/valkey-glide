@@ -9,24 +9,25 @@
 //! turbofish annotations) compile unchanged.
 //!
 //! Each entry carries the command body (mirroring redis-rs's
-//! `implement_commands!`), so the wire encoding matches redis-rs's
-//! (except for the deliberate differences pinned in `differences.json` (e.g.
-//! `hset_multiple` sends `HSET`, not `HMSET`); signature parity is enforced by
-//! the `parity_tests` module (`src/parity_tests/`).
+//! `implement_commands!`). Signature parity is enforced by the
+//! `parity_tests` module (`src/parity_tests/`), and signature
+//! differences are recorded in `src/parity_tests/differences.json`.
 //!
 //! The built command is handed to glide-core **by value** — the same
 //! zero-extra-copy path as the rest of the client. Methods take `&self` (the clients are cheaply
 //! cloneable handles); migrated `&mut` call sites still compile via
 //! auto-borrow.
 //!
-//! Two deliberate deviations trade redis-rs parity for performance and
-//! clarity (parity here is a command-surface contract, not a
-//! connection-plumbing one):
+//! Three deliberate deviations trade redis-rs parity for performance,
+//! clarity, and consistency (parity here is a command-surface contract, not
+//! a connection-plumbing or wire-encoding one):
 //! * the traits are **not** coupled to the `redis` crate's connection-object
 //!   (`ConnectionLike`) machinery — dispatch is GLIDE's owned-send path only;
 //! * the `scan*` methods take `&self` and return GLIDE's own iterators
 //!   ([`crate::commands::scan`]) with the familiar `next_item()` /
-//!   `Iterator` shape, each page dispatched by value (no per-page copies).
+//!   `Iterator` shape, each page dispatched by value (no per-page copies);
+//! * a method may send a different command from its redis-rs counterpart,
+//!   e.g. `hset_multiple` sends `HSET`, not the deprecated `HMSET`.
 //!
 //! Commands beyond this table (the remaining stream commands, geo search,
 //! `JSON.*`, …) live in the per-family extension traits in [`crate::commands`].
@@ -778,6 +779,7 @@ implement_commands! {
         build_cmd!("LLEN", key)
     }
 
+    // TODO #7641: Return `Option<String>` instead of `String`.
     /// `LMOVE`.
     fn lmove<S: ToSingleValkeyArg, D: ToSingleValkeyArg>(srckey: S, dstkey: D, src_dir: Direction, dst_dir: Direction) -> (String) {
         build_cmd!("LMOVE", srckey, dstkey, src_dir, dst_dir)
@@ -855,6 +857,7 @@ implement_commands! {
         build_cmd!("HGET", key, field)
     }
 
+    // TODO #7641: Return `Vec<Option<String>>` instead of `Vec<String>`.
     /// `HMGET`.
     fn hmget<K: ToSingleValkeyArg, F: ToValkeyArgs>(key: K, fields: F) -> (Vec<String>) {
         build_cmd!("HMGET", key, fields)
@@ -904,6 +907,7 @@ implement_commands! {
         build_cmd!("HVALS", key)
     }
 
+    // TODO #7632: Note that glide-core returns a map on RESP2 too, and link to `migration.md`.
     /// `HGETALL`.
     fn hgetall<K: ToSingleValkeyArg>(key: K) -> (std::collections::HashMap<String, String>) {
         build_cmd!("HGETALL", key)
@@ -914,6 +918,7 @@ implement_commands! {
         build_cmd!("HLEN", key)
     }
 
+    // TODO #7641: Return `Vec<Option<String>>` instead of `Vec<String>`.
     /// `HGETEX`.
     fn hget_ex<K: ToSingleValkeyArg, F: ToValkeyArgs>(key: K, fields: F, expire_at: Expiry) -> (Vec<String>) {
         build_cmd!("HGETEX", key, expire_at, "FIELDS", fields.num_of_args(), fields)
@@ -1171,6 +1176,8 @@ implement_commands! {
         build_cmd!("ZRANGE", key, start, stop)
     }
 
+    // TODO #7632: Note that glide-core returns `(member, score)` pairs on RESP2 too, and link to
+    // `migration.md`.
     /// `ZRANGE WITHSCORES`.
     fn zrange_withscores<K: ToSingleValkeyArg>(key: K, start: isize, stop: isize) -> (Vec<(String, f64)>) {
         build_cmd!("ZRANGE", key, start, stop, "WITHSCORES")
@@ -1196,11 +1203,14 @@ implement_commands! {
         build_cmd!("ZREVRANGEBYLEX", key, max, min, "LIMIT", offset, count)
     }
 
+    // TODO #7633: Send `ZRANGE ... BYSCORE` instead of the deprecated `ZRANGEBYSCORE`, for this and
+    // the other `zrangebyscore*` methods below.
     /// `ZRANGEBYSCORE`.
     fn zrangebyscore<K: ToSingleValkeyArg, M: ToSingleValkeyArg, MM: ToSingleValkeyArg>(key: K, min: M, max: MM) -> (Vec<String>) {
         build_cmd!("ZRANGEBYSCORE", key, min, max)
     }
 
+    // TODO #7641: Return `Vec<(String, f64)>` instead of `Vec<(String, usize)>`.
     /// `ZRANGEBYSCORE WITHSCORES`.
     fn zrangebyscore_withscores<K: ToSingleValkeyArg, M: ToSingleValkeyArg, MM: ToSingleValkeyArg>(key: K, min: M, max: MM) -> (Vec<(String, usize)>) {
         build_cmd!("ZRANGEBYSCORE", key, min, max, "WITHSCORES")
@@ -1211,6 +1221,7 @@ implement_commands! {
         build_cmd!("ZRANGEBYSCORE", key, min, max, "LIMIT", offset, count)
     }
 
+    // TODO #7641: Return `Vec<(String, f64)>` instead of `Vec<(String, usize)>`.
     /// `ZRANGEBYSCORE WITHSCORES LIMIT`.
     fn zrangebyscore_limit_withscores<K: ToSingleValkeyArg, M: ToSingleValkeyArg, MM: ToSingleValkeyArg>(key: K, min: M, max: MM, offset: isize, count: isize) -> (Vec<(String, usize)>) {
         build_cmd!("ZRANGEBYSCORE", key, min, max, "WITHSCORES", "LIMIT", offset, count)
@@ -1241,6 +1252,8 @@ implement_commands! {
         build_cmd!("ZREMRANGEBYSCORE", key, min, max)
     }
 
+    // TODO #7633: Send `ZRANGE ... REV` (`... BYSCORE REV`) instead of the deprecated `ZREVRANGE` /
+    // `ZREVRANGEBYSCORE`, for this and the other `zrevrange*` methods below.
     /// `ZREVRANGE`.
     fn zrevrange<K: ToSingleValkeyArg>(key: K, start: isize, stop: isize) -> (Vec<String>) {
         build_cmd!("ZREVRANGE", key, start, stop)
@@ -1281,6 +1294,7 @@ implement_commands! {
         build_cmd!("ZSCORE", key, member)
     }
 
+    // TODO #7641: Return `Vec<Option<f64>>` instead of `Option<Vec<f64>>`.
     /// `ZMSCORE`.
     fn zscore_multiple<K: ToSingleValkeyArg, M: ToValkeyArgs>(key: K, members: &'a [M]) -> (Option<Vec<f64>>) {
         build_cmd!("ZMSCORE", key, members)
@@ -1390,6 +1404,7 @@ implement_commands! {
         build_cmd!("GEODIST", key, member1, member2, unit)
     }
 
+    // TODO #7641: Return `Vec<Option<String>>` instead of `Vec<String>`.
     /// `GEOHASH`.
     fn geo_hash<K: ToSingleValkeyArg, M: ToValkeyArgs>(key: K, members: M) -> (Vec<String>) {
         build_cmd!("GEOHASH", key, members)

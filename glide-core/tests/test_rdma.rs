@@ -4,10 +4,10 @@
 //!
 //! Most run against a mock server, which can answer the `BLOB.*` commands with
 //! anything, including nothing. A few run against real servers without the
-//! module. Requires the `rdma` feature. Needs libfabric since these tests open a
-//! fabric, but over the `tcp` provider rather than a real card.
+//! module. Requires the `rdma-tcp-dev` feature. Needs libfabric since these tests
+//! open a fabric, but over the `tcp` provider rather than a real card.
 
-#![cfg(feature = "rdma")]
+#![cfg(feature = "rdma-tcp-dev")]
 
 mod constants;
 mod utilities;
