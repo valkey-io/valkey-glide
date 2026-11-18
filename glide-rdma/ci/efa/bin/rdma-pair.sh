@@ -12,6 +12,8 @@
 # e.g. `plan InstanceType=c8gn.48xlarge`.
 #
 # Environment:
+#   RDMA_TEMPLATE_URL  S3 HTTPS URL of the infrastructure-owned pair template;
+#                      required for plan/apply, not for status/down
 #   AWS_REGION    default us-east-1
 #   RDMA_STACK    stack name, default rdma-pair
 #   RDMA_OWNER    Owner tag and parameter, default the local user name
@@ -25,10 +27,17 @@ export AWS_PAGER=""   # tables would otherwise open in less and block the script
 STACK=${RDMA_STACK:-rdma-pair}
 CHANGE_SET=$STACK-plan
 RDMA_OWNER=${RDMA_OWNER:-$(id -un)}
-TEMPLATE="$(cd "$(dirname "$0")/.." && pwd)/infra/rdma-pair.yaml"
 
 stack_status() {
-  aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo NONE
+  local output
+  if output=$(aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].StackStatus' --output text 2>&1); then
+    echo "$output"
+  elif [[ "$output" == *"(ValidationError)"* && "$output" == *"does not exist"* ]]; then
+    echo NONE
+  else
+    echo "$output" >&2
+    return 1
+  fi
 }
 
 instances() {
@@ -43,7 +52,7 @@ instances() {
 stream_events() {
   local since=$1 status
   while :; do
-    status=$(stack_status)
+    status=$(stack_status) || return 1
     # A deleted stack has no events to describe; that is the exit, not an error.
     aws cloudformation describe-stack-events --stack-name "$STACK" \
       --query "reverse(StackEvents[?Timestamp>='$since'])[].[EventId,Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]" \
@@ -122,10 +131,14 @@ complete_params() {
 }
 
 plan() {
+  if [ -z "${RDMA_TEMPLATE_URL:-}" ]; then
+    echo "Set RDMA_TEMPLATE_URL to the infrastructure-owned pair template URL" >&2
+    exit 2
+  fi
   # A stack that was planned but never applied is REVIEW_IN_PROGRESS and still takes a CREATE change set.
   # A failed create ends in ROLLBACK_COMPLETE, holds no resources, and must be deleted before a new create.
   local state type
-  state=$(stack_status)
+  state=$(stack_status) || exit 1
   case "$state" in
     NONE|REVIEW_IN_PROGRESS|ROLLBACK_COMPLETE) type=CREATE ;;
     CREATE_FAILED)
@@ -156,7 +169,7 @@ plan() {
   local on_failure=()
   [ "$type" = CREATE ] && on_failure=(--on-stack-failure DO_NOTHING)
   aws cloudformation create-change-set --stack-name "$STACK" --change-set-name "$CHANGE_SET" \
-    --change-set-type "$type" --template-body "file://$TEMPLATE" \
+    --change-set-type "$type" --template-url "$RDMA_TEMPLATE_URL" \
     --capabilities CAPABILITY_IAM --tags "Key=Owner,Value=$RDMA_OWNER" Key=Purpose,Value=rdma-test \
     ${on_failure[@]+"${on_failure[@]}"} \
     --parameters "${params[@]}" >/dev/null || exit 1

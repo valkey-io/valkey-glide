@@ -2,13 +2,13 @@
 # Client. Puts the GLIDE clients into a venv and checks the TCP path to the
 # server before any RDMA is attempted. The clients come from one of:
 #   GLIDE_WHEELS=<url>   presigned S3 URL for a tar of the two prebuilt wheels.
-#        The wheel tar is built in CI on an amazonlinux:2023 arm64 container so
+#        Build the wheel tar in an amazonlinux:2023 arm64 container so
 #        the glibc version matches this host. GLIDE_SOURCE must also be set so
 #        the test suite is checked out at the matching commit; no build happens
-#        on this host. This is the fastest mode and is what the CI job uses.
+#        on this host. This optional mode is for manually supplied wheels.
 #   GLIDE_SOURCE=<full commit sha|tag|branch>  both clients built from a
 #        valkey-glide checkout at that ref, release mode, with RDMA. This is
-#        what a check of a change needs: the code under test is the checkout.
+#        the CodeBuild path: the code under test is the checkout.
 #        refs/pull/N/head works too. GitHub refuses abbreviated SHAs.
 #   GLIDE_VERSION=<pypi version>      the published wheels, with the test
 #        suite checked out at the matching git tag (or GLIDE_REF).
