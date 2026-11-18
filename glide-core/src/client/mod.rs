@@ -1992,7 +1992,7 @@ impl Client {
     }
 
     /// Errors when this is a read-only standalone client and `cmd` can write.
-    /// Runs before `Client::send_pipeline`'s tracking, and on paths that bypass
+    /// Runs before `Client`'s pre-dispatch tracking, and on paths that bypass
     /// `StandaloneClient`, such as isolated scopes.
     pub(crate) fn reject_write_in_read_only(&self, cmd: &Cmd) -> RedisResult<()> {
         if self.shared.read_only && !self.shared.is_cluster {
@@ -2216,6 +2216,10 @@ impl Client {
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             crate::rdma::refuse_direct_in_batch(pipeline)?;
+            // Before the tracking below, so a rejected batch leaves no state.
+            for cmd in pipeline.cmd_iter() {
+                self.reject_write_in_read_only(cmd)?;
+            }
             self.reconcile_iam_before_dispatch().await?;
             // Capture the batch's last SELECT now; apply it after dispatch if the
             // reply shows the server took it, and flag a possible db change (see
@@ -6061,20 +6065,26 @@ mod tests {
         assert!(borrow_after_iam_rotation(&rt, client).is_err());
     }
 
-    /// A rejected read-only `[SUBSCRIBE, SET]` pipeline never subscribed, so the
+    /// A rejected read-only `[SUBSCRIBE, SET]` batch never subscribed, so the
     /// pool's release reset must succeed instead of discarding the connection.
-    #[test]
-    fn rejected_read_only_subscribe_pipeline_keeps_connection_resettable() {
+    #[rstest::rstest]
+    fn rejected_read_only_subscribe_batch_keeps_connection_resettable(
+        #[values(false, true)] atomic: bool,
+    ) {
         let (_server, rt, mut client) = start_read_only_client();
-        let mut pipeline = redis::pipe();
-        pipeline
+        let mut batch = redis::pipe();
+        batch
             .cmd("SUBSCRIBE")
             .arg("ch")
             .cmd("SET")
             .arg("k")
             .arg("v");
-        rt.block_on(client.send_pipeline(&pipeline, None, true, None, Default::default()))
-            .expect_err("read-only mode rejects the batch");
+        let result = if atomic {
+            rt.block_on(client.send_transaction(&batch, None, None, true))
+        } else {
+            rt.block_on(client.send_pipeline(&batch, None, true, None, Default::default()))
+        };
+        result.expect_err("read-only mode rejects the batch");
         rt.block_on(client.reset_connection_state(0)).unwrap();
     }
 
