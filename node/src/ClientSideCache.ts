@@ -69,9 +69,9 @@ export interface ClientSideCacheConfig {
      * after connecting. All clients that share the same `ClientSideCache`
      * instance use the same prefix.
      * Requires `serverAssisted: true` (and therefore RESP3) and must not be empty;
-     * otherwise creating the client fails with the configuration error reported
-     * by GLIDE core. A `string` prefix is sent UTF-8 encoded and a `Buffer`
-     * prefix is sent byte for byte.
+     * otherwise creating the client fails with a `ConfigurationError` carrying
+     * the message reported by GLIDE core. A `string` prefix is sent UTF-8 encoded
+     * and a `Buffer` prefix is sent byte for byte.
      * Defaults to undefined, meaning every key is tracked and cached.
      */
     trackingPrefix?: GlideString;
