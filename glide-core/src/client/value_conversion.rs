@@ -1665,8 +1665,6 @@ fn convert_lolwut_string(data: &str) -> String {
     }
 }
 
-// TODO #7631: Propagate conversion errors instead of calling `unwrap()`, which panics on a
-// mismatched reply.
 /// Converts elements in an array to the specified type.
 ///
 /// `array` is an array of values.
@@ -2939,65 +2937,114 @@ mod tests {
 
     #[test]
     fn regression_real_reply_options_remain_case_insensitive() {
-        let commands: &[&[&str]] = &[
-            &[
-                "LCS",
-                "IDX",
-                "IDX",
-                "MINMATCHLEN",
-                "1",
-                "iDx",
-                "WITHMATCHLEN",
-            ],
-            &["HRANDFIELD", "WITHVALUES", "1", "wItHvAlUeS"],
-            &["ZRANDMEMBER", "WITHSCORES", "1", "wItHsCoReS"],
-            &["ZADD", "INCR", "XX", "CH", "iNcR", "1", "INCR"],
-            &["ZRANGE", "WITHSCORES", "0", "-1", "REV", "wItHsCoReS"],
-            &["ZRANK", "WITHSCORE", "WITHSCORE", "wItHsCoRe"],
-            &["ZREVRANK", "WITHSCORE", "WITHSCORE", "wItHsCoRe"],
-            &["ZDIFF", "1", "WITHSCORES", "wItHsCoReS"],
-            &[
-                "ZUNION",
-                "2",
-                "WITHSCORES",
-                "other",
-                "WEIGHTS",
-                "1",
-                "2",
-                "AGGREGATE",
-                "MAX",
-                "wItHsCoReS",
-            ],
-            &[
-                "ZINTER",
-                "1",
-                "WITHSCORES",
-                "AGGREGATE",
-                "MIN",
-                "wItHsCoReS",
-            ],
-            &[
-                "GEOSEARCH",
-                "WITHDIST",
-                "FROMMEMBER",
-                "WITHCOORD",
-                "BYRADIUS",
-                "1",
-                "km",
-                "COUNT",
-                "1",
-                "ANY",
-                "wItHhAsH",
-            ],
-            &["XINFO", "STREAM", "FULL", "fUlL", "COUNT", "1"],
-            &["XINFO STREAM", "FULL", "fUlL"],
-            &[
-                "XCLAIM", "JUSTID", "JUSTID", "JUSTID", "0", "1-0", "IDLE", "0", "jUsTiD",
-            ],
+        let commands: &[(&[&str], ExpectedReturnType)] = &[
+            (
+                &[
+                    "LCS",
+                    "IDX",
+                    "IDX",
+                    "MINMATCHLEN",
+                    "1",
+                    "iDx",
+                    "WITHMATCHLEN",
+                ],
+                ExpectedReturnType::Map {
+                    key_type: &Some(ExpectedReturnType::SimpleString),
+                    value_type: &None,
+                },
+            ),
+            (
+                &["HRANDFIELD", "WITHVALUES", "1", "wItHvAlUeS"],
+                ExpectedReturnType::ArrayOfPairs,
+            ),
+            (
+                &["ZRANDMEMBER", "WITHSCORES", "1", "wItHsCoReS"],
+                ExpectedReturnType::ArrayOfMemberScorePairs,
+            ),
+            (
+                &["ZADD", "INCR", "XX", "CH", "iNcR", "1", "INCR"],
+                ExpectedReturnType::DoubleOrNull,
+            ),
+            (
+                &["ZRANGE", "WITHSCORES", "0", "-1", "REV", "wItHsCoReS"],
+                ExpectedReturnType::MapOfStringToDouble,
+            ),
+            (
+                &["ZRANK", "WITHSCORE", "WITHSCORE", "wItHsCoRe"],
+                ExpectedReturnType::ZRankReturnType,
+            ),
+            (
+                &["ZREVRANK", "WITHSCORE", "WITHSCORE", "wItHsCoRe"],
+                ExpectedReturnType::ZRankReturnType,
+            ),
+            (
+                &["ZDIFF", "1", "WITHSCORES", "wItHsCoReS"],
+                ExpectedReturnType::MapOfStringToDouble,
+            ),
+            (
+                &[
+                    "ZUNION",
+                    "2",
+                    "WITHSCORES",
+                    "other",
+                    "WEIGHTS",
+                    "1",
+                    "2",
+                    "AGGREGATE",
+                    "MAX",
+                    "wItHsCoReS",
+                ],
+                ExpectedReturnType::MapOfStringToDouble,
+            ),
+            (
+                &[
+                    "ZINTER",
+                    "1",
+                    "WITHSCORES",
+                    "AGGREGATE",
+                    "MIN",
+                    "wItHsCoReS",
+                ],
+                ExpectedReturnType::MapOfStringToDouble,
+            ),
+            (
+                &[
+                    "GEOSEARCH",
+                    "WITHDIST",
+                    "FROMMEMBER",
+                    "WITHCOORD",
+                    "BYRADIUS",
+                    "1",
+                    "km",
+                    "COUNT",
+                    "1",
+                    "ANY",
+                    "wItHhAsH",
+                ],
+                ExpectedReturnType::GeoSearchReturnType,
+            ),
+            (
+                &["XINFO", "STREAM", "FULL", "fUlL", "COUNT", "1"],
+                ExpectedReturnType::XInfoStreamFullReturnType,
+            ),
+            (
+                &["XINFO STREAM", "FULL", "fUlL"],
+                ExpectedReturnType::XInfoStreamFullReturnType,
+            ),
+            (
+                &[
+                    "XCLAIM", "JUSTID", "JUSTID", "JUSTID", "0", "1-0", "IDLE", "0", "jUsTiD",
+                ],
+                ExpectedReturnType::ArrayOfStrings,
+            ),
         ];
-        for args in commands {
+        for (args, expected) in commands {
+            let cmd = keyword_command(args);
+            let actual = expected_type_for_cmd(&cmd);
             assert!(
-                expected_type_for_cmd(&keyword_command(args)).is_some(),
+                actual
+                    .is_some_and(|actual| std::mem::discriminant(&actual)
+                        == std::mem::discriminant(expected)),
                 "{args:?}"
             );
         }
@@ -3836,7 +3883,6 @@ mod tests {
         assert!(converted_4.is_err());
     }
 
-    // TODO #7631: Add cases where a key, member, group or consumer equals an option keyword.
     #[test]
     fn convert_xclaim() {
         assert!(matches!(
