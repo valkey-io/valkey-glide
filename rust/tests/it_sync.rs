@@ -133,6 +133,8 @@ fn sync_standalone_custom_command_and_pipeline() {
     assert_eq!(String::from_valkey_value(&results[3]).unwrap(), "12");
 }
 
+// TODO #7672: Add a test case for a transaction aborted by `WATCH`
+// and expect `exec` to return `None`.
 #[test]
 fn sync_standalone_run_full_async_surface() {
     let server = common::TestServer::start();

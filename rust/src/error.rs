@@ -91,6 +91,8 @@ impl GlideError {
             CE::Configuration(msg) | CE::CompressionConfiguration(msg) => {
                 GlideError::Configuration(msg)
             }
+            // TODO #7665: Map connection errors caused by `InvalidClientConfig` to
+            // `GlideError::Configuration`.
             other => GlideError::Connection(other.to_string()),
         }
     }
@@ -209,6 +211,8 @@ mod tests {
         assert_eq!(g.class_name(), "TimeoutError");
     }
 
+    // TODO #7665: Test that `ConnectionError::Standalone` and `ConnectionError::Cluster` errors
+    // caused by `ErrorKind::InvalidClientConfig` map to `GlideError::Configuration`.
     #[test]
     fn connection_configuration_maps_to_configuration() {
         let g = GlideError::from_connection_error(CE::Configuration("nope".to_string()));
