@@ -86,20 +86,31 @@ struct LazyRollingFileAppender {
     file_appender: OnceCell<RollingFileAppender>,
     rotation: Rotation,
     directory: PathBuf,
-    filename_prefix: PathBuf,
+    filename_prefix: String,
 }
 
 impl LazyRollingFileAppender {
     fn new(
         rotation: Rotation,
         directory: impl AsRef<Path>,
-        filename_prefix: impl AsRef<Path>,
+        filename_prefix: impl AsRef<str>,
     ) -> LazyRollingFileAppender {
         LazyRollingFileAppender {
             file_appender: OnceCell::new(),
             rotation,
             directory: directory.as_ref().to_path_buf(),
-            filename_prefix: filename_prefix.as_ref().to_path_buf(),
+            filename_prefix: filename_prefix.as_ref().to_string(),
+        }
+    }
+
+    fn from_appender(appender: RollingFileAppender) -> LazyRollingFileAppender {
+        let cell = OnceCell::new();
+        let _ = cell.set(appender);
+        LazyRollingFileAppender {
+            file_appender: cell,
+            rotation: Rotation::HOURLY,
+            directory: PathBuf::new(),
+            filename_prefix: String::new(),
         }
     }
 }
@@ -108,11 +119,11 @@ impl<'a> tracing_subscriber::fmt::writer::MakeWriter<'a> for LazyRollingFileAppe
     type Writer = RollingWriter<'a>;
     fn make_writer(&'a self) -> Self::Writer {
         let file_appender = self.file_appender.get_or_init(|| {
-            RollingFileAppender::new(
-                self.rotation.clone(),
-                self.directory.clone(),
-                self.filename_prefix.clone(),
-            )
+            RollingFileAppender::builder()
+                .rotation(self.rotation.clone())
+                .filename_prefix(&self.filename_prefix)
+                .build(&self.directory)
+                .expect("Failed to create log appender")
         });
         file_appender.make_writer()
     }
@@ -155,11 +166,36 @@ pub fn create_directory_from_env(envname: &str) -> Option<String> {
     Some(dirpath)
 }
 
+fn resolve_log_path(logs_dir: &str, file: &str) -> (PathBuf, String) {
+    if file.ends_with('/') || file.ends_with('\\') {
+        let dir = if Path::new(file).is_absolute() {
+            PathBuf::from(file)
+        } else {
+            Path::new(logs_dir).join(file)
+        };
+        return (dir, String::new());
+    }
+    let path = Path::new(file);
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        let dir = if path.is_absolute() {
+            parent.to_path_buf()
+        } else {
+            Path::new(logs_dir).join(parent)
+        };
+        let prefix = path
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        return (dir, prefix);
+    }
+    (PathBuf::from(logs_dir), file.to_string())
+}
+
 // Initialize the global logger to error level on the first call only
 // In any of the calls to the function, including the first - resetting the existence loggers to the new setting
 // provided by using the global reloadable handle
 // The logger will save only logs of the given level or above.
-pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
+pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Result<Level, String> {
     let level = minimal_level.unwrap_or(Level::Warn);
     let level_filter = level.to_filter();
     let reloads = INITIATE_ONCE.init_once.get_or_init(|| {
@@ -234,7 +270,21 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
             // Check if the environment variable GLIDE_LOG is set
             let logs_dir =
                 create_directory_from_env(ENV_GLIDE_LOG_DIR).unwrap_or(FILE_DIRECTORY.to_string());
-            let file_appender = LazyRollingFileAppender::new(Rotation::HOURLY, logs_dir, file);
+            let (dir, prefix) = resolve_log_path(&logs_dir, file);
+            if prefix.is_empty() {
+                return Err(format!(
+                    "Invalid log file path '{file}': missing filename prefix"
+                ));
+            }
+            let appender = RollingFileAppender::builder()
+                .rotation(Rotation::HOURLY)
+                .filename_prefix(prefix)
+                .build(&dir)
+                .map_err(|err| {
+                    format!("Failed to initialize rolling file appender for '{file}': {err}")
+                })?;
+            let file_appender = LazyRollingFileAppender::from_appender(appender);
+
             let _ = reloads
                 .file_reload
                 .write()
@@ -262,7 +312,7 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
         },
         Ordering::Relaxed,
     );
-    level
+    Ok(level)
 }
 
 macro_rules! create_log {
@@ -272,7 +322,7 @@ macro_rules! create_log {
             message: Message,
         ) {
             if INITIATE_ONCE.init_once.get().is_none() {
-                init(Some(Level::Warn), None);
+                let _ = init(Some(Level::Warn), None);
             };
             let message_ref = message.as_ref();
             let identifier_ref = log_identifier.as_ref();
