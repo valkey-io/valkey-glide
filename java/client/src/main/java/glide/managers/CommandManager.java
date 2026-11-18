@@ -179,6 +179,19 @@ public class CommandManager {
         return submitCommandAsync(requestType, stringsToBytes(arguments), route, true, responseHandler);
     }
 
+    /**
+     * Submit a command with route that returns each node's reply or error, instead of failing on the
+     * first node error, when it is sent to several nodes. String args expect UTF-8 response.
+     */
+    public <T> CompletableFuture<T> submitNewCommandWithPartialResults(
+            RequestType requestType,
+            String[] arguments,
+            Route route,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+        return submitCommandAsync(
+                requestType, stringsToBytes(arguments), route, true, true, responseHandler);
+    }
+
     /** Submit a command with route. GlideString args expect binary response. */
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
@@ -691,6 +704,16 @@ public class CommandManager {
             Route route,
             boolean expectUtf8Response,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
+        return submitCommandAsync(requestType, args, route, expectUtf8Response, false, responseHandler);
+    }
+
+    private <T> CompletableFuture<T> submitCommandAsync(
+            RequestType requestType,
+            byte[][] args,
+            Route route,
+            boolean expectUtf8Response,
+            boolean allowPartialResults,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         if (!coreClient.isConnected()) {
             CompletableFuture<T> errorFuture = new CompletableFuture<T>();
@@ -715,6 +738,7 @@ public class CommandManager {
                             routeArgs.routeType,
                             routeArgs.routeParam,
                             expectUtf8Response,
+                            allowPartialResults,
                             coreClient.getRequestTimeoutMillis(),
                             spanPtr);
 
@@ -760,6 +784,7 @@ public class CommandManager {
                             routeArgs.routeType,
                             routeArgs.routeParam,
                             expectUtf8Response,
+                            false,
                             0,
                             spanPtr);
 
