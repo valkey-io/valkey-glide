@@ -68,7 +68,7 @@ impl GlideError {
     }
 
     pub(crate) fn from_redis_error(err: RedisError) -> Self {
-        let msg = err.to_string();
+        let msg = glide_core::errors::error_text(&err);
         // Mirror glide-core's `error_type` classifier (glide-core/src/errors.rs).
         if err.is_timeout() {
             GlideError::Timeout(msg)
@@ -91,6 +91,8 @@ impl GlideError {
             CE::Configuration(msg) | CE::CompressionConfiguration(msg) => {
                 GlideError::Configuration(msg)
             }
+            // TODO #7665: Map connection errors caused by `InvalidClientConfig` to
+            // `GlideError::Configuration`.
             other => GlideError::Connection(other.to_string()),
         }
     }
@@ -120,6 +122,24 @@ mod tests {
         let g = GlideError::from_redis_error(err);
         assert!(matches!(g, GlideError::CircuitBreaker(_)));
         assert_eq!(g.class_name(), "CircuitBreakerError");
+    }
+
+    #[test]
+    fn redis_noscript_reply_keeps_the_server_text() {
+        for (wire, expected) in [
+            (
+                &b"-NOSCRIPT No matching script.\r\n"[..],
+                "NOSCRIPT No matching script.",
+            ),
+            (b"-NOSCRIPT\r\n", "NOSCRIPT"),
+        ] {
+            let err = redis::parse_redis_value(wire)
+                .and_then(|reply| reply.extract_error())
+                .expect_err("an error reply is an error");
+            let g = GlideError::from_redis_error(err);
+            assert!(matches!(g, GlideError::Request(_)));
+            assert_eq!(g.message(), expected);
+        }
     }
 
     #[test]
@@ -191,6 +211,8 @@ mod tests {
         assert_eq!(g.class_name(), "TimeoutError");
     }
 
+    // TODO #7665: Test that `ConnectionError::Standalone` and `ConnectionError::Cluster` errors
+    // caused by `ErrorKind::InvalidClientConfig` map to `GlideError::Configuration`.
     #[test]
     fn connection_configuration_maps_to_configuration() {
         let g = GlideError::from_connection_error(CE::Configuration("nope".to_string()));
