@@ -1577,6 +1577,7 @@ class BaseClient(CoreCommands):
         """
         from .isolated_scope import AsyncIsolatedScope
 
+        self._check_same_process()
         if self._is_closed:
             raise ClosingError("Client is closed.")
 
