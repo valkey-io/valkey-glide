@@ -68,7 +68,10 @@ export interface ClientSideCacheConfig {
      * The prefix is fixed for the lifetime of the client and cannot be changed
      * after connecting. All clients that share the same `ClientSideCache`
      * instance use the same prefix.
-     * Requires `serverAssisted: true` (and therefore RESP3) and must not be empty.
+     * Requires `serverAssisted: true` (and therefore RESP3) and must not be empty;
+     * otherwise creating the client fails with the configuration error reported
+     * by GLIDE core. A `string` prefix is sent UTF-8 encoded and a `Buffer`
+     * prefix is sent byte for byte.
      * Defaults to undefined, meaning every key is tracked and cached.
      */
     trackingPrefix?: GlideString;
@@ -198,8 +201,6 @@ export class ClientSideCache {
      * @param config - Configuration options for the cache
      * @throws {Error} If maxCacheKb is not a positive number
      * @throws {Error} If entryTtlMs is negative
-     * @throws {Error} If trackingPrefix is empty
-     * @throws {Error} If trackingPrefix is set without serverAssisted
      */
     constructor(config: ClientSideCacheConfig) {
         if (config.maxCacheKb <= 0) {
@@ -212,28 +213,12 @@ export class ClientSideCache {
             );
         }
 
-        const serverAssisted = config.serverAssisted ?? false;
-
-        if (config.trackingPrefix !== undefined) {
-            if (config.trackingPrefix.length === 0) {
-                throw new Error(
-                    "trackingPrefix must not be empty; omit it to track all keys",
-                );
-            }
-
-            if (!serverAssisted) {
-                throw new Error(
-                    "trackingPrefix requires serverAssisted to be true",
-                );
-            }
-        }
-
         this.cacheId = randomUUID();
         this.maxCacheKb = config.maxCacheKb;
         this.entryTtlMs = config.entryTtlMs;
         this.evictionPolicy = config.evictionPolicy;
         this.enableMetrics = config.enableMetrics ?? false;
-        this.serverAssisted = serverAssisted;
+        this.serverAssisted = config.serverAssisted ?? false;
         this.trackingPrefix = config.trackingPrefix;
     }
 
@@ -246,7 +231,6 @@ export class ClientSideCache {
      * @returns A new ClientSideCache instance with auto-generated cache ID
      * @throws {Error} If maxCacheKb is not a positive number
      * @throws {Error} If entryTtlMs is negative
-     * @throws {Error} If trackingPrefix is empty or set without serverAssisted
      *
      * @example
      * ```typescript

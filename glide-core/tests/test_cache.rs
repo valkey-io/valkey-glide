@@ -1941,19 +1941,28 @@ pub(crate) mod test_cache {
         cmd.arg(key).arg(value);
         client.send_command(&mut cmd, None).await.unwrap();
         if use_cluster {
-            use redis::cluster_routing::{Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr};
-            let mut wait = redis::cmd("WAIT");
-            wait.arg(1).arg(5000);
-            let route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
-                get_slot(key.as_bytes()),
-                SlotAddr::Master,
-            )));
-            let acked = client.send_command(&mut wait, Some(route)).await.unwrap();
-            assert!(
-                matches!(acked, Value::Int(replicas) if replicas >= 1),
-                "no replica acknowledged the write: {acked:?}"
-            );
+            wait_for_replica(client, key).await;
         }
+    }
+
+    /// Waits until a replica acknowledged the last write `client` sent for `key`.
+    ///
+    /// `WAIT` is routed to the primary that owns the slot of `key`, so `key` must be the key
+    /// that was written: any other key can hash to a different shard, where `WAIT` returns
+    /// without waiting for that write.
+    async fn wait_for_replica(client: &mut glide_core::client::Client, key: &str) {
+        use redis::cluster_routing::{Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr};
+        let mut wait = redis::cmd("WAIT");
+        wait.arg(1).arg(5000);
+        let route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+            get_slot(key.as_bytes()),
+            SlotAddr::Master,
+        )));
+        let acked = client.send_command(&mut wait, Some(route)).await.unwrap();
+        assert!(
+            matches!(acked, Value::Int(replicas) if replicas >= 1),
+            "no replica acknowledged the write to {key}: {acked:?}"
+        );
     }
 
     /// Sends `GET <key>` and returns the reply.
@@ -1981,6 +1990,14 @@ pub(crate) mod test_cache {
         match client.cache_total_lookups().unwrap() {
             Value::Int(count) => count,
             other => panic!("unexpected total lookups value: {other:?}"),
+        }
+    }
+
+    /// Fraction of the client's cache lookups that were hits.
+    fn hit_rate(client: &glide_core::client::Client) -> f64 {
+        match client.cache_hit_rate().unwrap() {
+            Value::Double(rate) => rate,
+            other => panic!("unexpected hit rate value: {other:?}"),
         }
     }
 
@@ -2341,6 +2358,7 @@ pub(crate) mod test_cache {
                 1,
                 "one miss for the tracked key"
             );
+            assert_eq!(hit_rate(&cached.client), 0.0, "no hit so far");
 
             // Second MGET: the tracked key hits, the untracked key is fetched again and reflects
             // a fresh write.
@@ -2355,7 +2373,13 @@ pub(crate) mod test_cache {
             assert_eq!(
                 total_lookups(&cached.client),
                 2,
-                "one hit for the tracked key"
+                "one more lookup for the tracked key"
+            );
+            // One hit out of two lookups: a second miss would leave the rate at 0.
+            assert_eq!(
+                hit_rate(&cached.client),
+                0.5,
+                "the tracked key must be served from the cache"
             );
 
             // HGETALL and SMEMBERS follow the same rule: tracked hash/set cached, untracked
@@ -2390,8 +2414,9 @@ pub(crate) mod test_cache {
                 }
                 if use_cluster {
                     // Let the replicas emit their invalidations before reading (see `set`).
+                    // Each wait runs on the shard that owns the key that was just written.
                     for key in [&tracked_key, &untracked_key] {
-                        set(&mut writer.client, &format!("{key}:barrier"), "x", true).await;
+                        wait_for_replica(&mut writer.client, key).await;
                     }
                 }
                 for _ in 0..2 {
