@@ -4,7 +4,7 @@
 //!
 //! Covers atomic transactions, non-atomic pipeline depth, `raise_on_error`
 //! true/false behaviour, errors inside a transaction, [`glide::PipelineOptions`]
-//! (timeout, retry policy), and WATCH/MULTI framing via `custom_command`.
+//! (timeout, retry policy), and WATCH/MULTI framing.
 //!
 //! Note: `exec` returns the **raw** per-command replies —
 //! `.ignore()` markers only affect typed decoding via `query_async`.
@@ -12,13 +12,13 @@
 mod common;
 
 use glide::{
-    AsyncCommands, Bytes, CustomCommand, FromValkeyValue, PipelineExt, PipelineOptions, pipe,
+    AsyncTypedCommands, Bytes, FromValkeyValue, GenericCommands, PipelineExt, PipelineOptions, pipe,
 };
 
 #[tokio::test]
 async fn atomic_transaction_ordered_results() {
-    let srv = server_or_skip!();
-    let c = srv.client().await;
+    let server = common::TestServer::start();
+    let c = server.client().await;
     let k = common::key("tx");
 
     let mut p = pipe();
@@ -33,8 +33,8 @@ async fn atomic_transaction_ordered_results() {
 
 #[tokio::test]
 async fn empty_pipeline_returns_empty() {
-    let srv = server_or_skip!();
-    let c = srv.client().await;
+    let server = common::TestServer::start();
+    let c = server.client().await;
     let mut p = pipe();
     p.atomic();
 
@@ -44,8 +44,8 @@ async fn empty_pipeline_returns_empty() {
 
 #[tokio::test]
 async fn non_atomic_pipeline_depth() {
-    let srv = server_or_skip!();
-    let c = srv.client().await;
+    let server = common::TestServer::start();
+    let c = server.client().await;
     let k = common::key("pipe");
 
     let mut p = pipe();
@@ -63,8 +63,8 @@ async fn non_atomic_pipeline_depth() {
 
 #[tokio::test]
 async fn raise_on_error_true_surfaces_error() {
-    let srv = server_or_skip!();
-    let c = srv.client().await;
+    let server = common::TestServer::start();
+    let c = server.client().await;
     let k = common::key("re");
     let _: () = c.set(&k, "notanumber").await.unwrap();
 
@@ -77,8 +77,8 @@ async fn raise_on_error_true_surfaces_error() {
 
 #[tokio::test]
 async fn raise_on_error_false_returns_inline() {
-    let srv = server_or_skip!();
-    let c = srv.client().await;
+    let server = common::TestServer::start();
+    let c = server.client().await;
     let good = common::key("good");
     let bad = common::key("bad");
     let _: () = c.set(&bad, "notanumber").await.unwrap();
@@ -97,10 +97,11 @@ async fn raise_on_error_false_returns_inline() {
     assert!(matches!(results[2], glide::ValkeyValue::ServerError(_)));
 }
 
+// TODO #7654: Add a queue-time error case that expects `GlideError::ExecAbort`.
 #[tokio::test]
 async fn error_inside_transaction_runtime() {
-    let srv = server_or_skip!();
-    let c = srv.client().await;
+    let server = common::TestServer::start();
+    let c = server.client().await;
     let k = common::key("tx");
     let _: () = c.set(&k, "notanumber").await.unwrap();
 
@@ -122,8 +123,8 @@ async fn error_inside_transaction_runtime() {
 
 #[tokio::test]
 async fn raw_commands_in_pipeline() {
-    let srv = server_or_skip!();
-    let c = srv.client().await;
+    let server = common::TestServer::start();
+    let c = server.client().await;
     let k = common::key("cc");
     let mut p = pipe();
     p.cmd("SET")
@@ -140,17 +141,18 @@ async fn raw_commands_in_pipeline() {
     assert_eq!(String::from_valkey_value(&results[2]).unwrap(), "10");
 }
 
+// TODO #7672: Add a test case for a transaction aborted
+// by `WATCH` and expect `exec` to return `None`.
 #[tokio::test]
 async fn watch_multi_semantics() {
-    let srv = server_or_skip!();
-    let c = srv.client().await;
+    let server = common::TestServer::start();
+    let c = server.client().await;
     let k = common::key("w");
     let _: () = c.set(&k, "1").await.unwrap();
 
     // WATCH/UNWATCH are accepted (framing check). GLIDE multiplexes connections,
     // so we assert the commands succeed rather than optimistic-lock abort.
-    let watch = c.custom_command(&["WATCH", &k]).await.unwrap();
-    assert_eq!(String::from_owned_valkey_value(watch).unwrap(), "OK");
+    c.watch(&[&k]).await.unwrap();
 
     let mut p = pipe();
     p.atomic().incr(&k, 1);
@@ -159,14 +161,13 @@ async fn watch_multi_semantics() {
     assert_eq!(results.len(), 1);
     assert_eq!(i64::from_valkey_value(&results[0]).unwrap(), 2);
 
-    let unwatch = c.custom_command(&["UNWATCH"]).await.unwrap();
-    assert_eq!(String::from_owned_valkey_value(unwatch).unwrap(), "OK");
+    c.unwatch().await.unwrap();
 }
 
 #[tokio::test]
 async fn pipeline_spans_multiple_data_types() {
-    let srv = server_or_skip!();
-    let c = srv.client().await;
+    let server = common::TestServer::start();
+    let c = server.client().await;
     let s = common::key("b_str");
     let l = common::key("b_list");
     let h = common::key("b_hash");
@@ -206,8 +207,8 @@ async fn pipeline_spans_multiple_data_types() {
 
 #[tokio::test]
 async fn pipeline_preserves_binary_values() {
-    let srv = server_or_skip!();
-    let c = srv.client().await;
+    let server = common::TestServer::start();
+    let c = server.client().await;
     let k = common::key("b_bin");
     let payload = vec![0u8, 1, 2, 255, 0, 42];
     let mut p = pipe();
@@ -222,8 +223,8 @@ async fn pipeline_preserves_binary_values() {
 
 #[tokio::test]
 async fn non_atomic_mixed_reads_writes_ordered() {
-    let srv = server_or_skip!();
-    let c = srv.client().await;
+    let server = common::TestServer::start();
+    let c = server.client().await;
     let k = common::key("b_mix");
     let mut p = pipe();
     p.set(&k, "1").get(&k).incr(&k, 1).get(&k).del(&k).get(&k);
@@ -241,8 +242,8 @@ async fn non_atomic_mixed_reads_writes_ordered() {
 async fn typed_pipeline_query_async_still_works() {
     // The typed decode path (`.ignore()` filtering, tuple decode) remains
     // available alongside `exec`, via `query_async`.
-    let srv = server_or_skip!();
-    let c = srv.client().await;
+    let server = common::TestServer::start();
+    let c = server.client().await;
     let k = common::key("b_typed");
     let (v, n): (String, i64) = pipe()
         .set(&k, "x")
@@ -255,6 +256,8 @@ async fn typed_pipeline_query_async_still_works() {
     assert_eq!((v.as_str(), n), ("x", 5));
 }
 
+// TODO #7672: Add a test case for a cluster transaction aborted
+// by `WATCH` and expect `exec` to return `None`.
 timed_tokio_test!(
     async fn cluster_atomic_transaction_same_slot() {
         let cluster = common::ClusterHarness::start().await;
@@ -307,8 +310,8 @@ timed_tokio_test!(
 
 #[tokio::test]
 async fn pipeline_with_options_timeout_and_retry() {
-    let srv = server_or_skip!();
-    let c = srv.client().await;
+    let server = common::TestServer::start();
+    let c = server.client().await;
     let k = common::key("bopt");
 
     let mut p = pipe();
@@ -327,8 +330,8 @@ async fn pipeline_with_options_timeout_and_retry() {
 
 #[tokio::test]
 async fn transaction_with_options_timeout() {
-    let srv = server_or_skip!();
-    let c = srv.client().await;
+    let server = common::TestServer::start();
+    let c = server.client().await;
     let k = common::key("btx");
 
     let mut p = pipe();

@@ -11,12 +11,72 @@ mod cluster {
     use crate::support::*;
     use redis::{
         cluster::{cluster_pipe, ClusterClient},
-        cmd, parse_redis_value, Commands, ConnectionLike, ErrorKind, ProtocolVersion, RedisError,
-        Value,
+        cmd, parse_redis_value, AddressResolver, Commands, ConnectionLike, ErrorKind,
+        ProtocolVersion, RedisError, Value,
     };
 
+    #[derive(Debug)]
+    struct InternalNodeResolver {
+        resolved_name: &'static str,
+    }
+
+    impl AddressResolver for InternalNodeResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            if host == "internal-node" {
+                (self.resolved_name.to_string(), port)
+            } else {
+                (host.to_string(), port)
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    struct NonIdempotentRedirectResolver {
+        resolved_name: &'static str,
+        redirect_resolutions: Arc<atomic::AtomicUsize>,
+    }
+
+    impl AddressResolver for NonIdempotentRedirectResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            if port != 6380 || (host != "internal-node" && host != self.resolved_name) {
+                return (host.to_owned(), port);
+            }
+
+            let call = self
+                .redirect_resolutions
+                .fetch_add(1, atomic::Ordering::SeqCst);
+            if call == 0 {
+                (self.resolved_name.to_owned(), port)
+            } else {
+                (format!("unexpected-second-resolution-{call}"), port)
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    struct TopologyResolver {
+        raw_resolutions: Arc<atomic::AtomicUsize>,
+        canonical_resolutions: Arc<atomic::AtomicUsize>,
+    }
+
+    impl AddressResolver for TopologyResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            match (host, port) {
+                ("internal-node", 6380) => {
+                    self.raw_resolutions.fetch_add(1, atomic::Ordering::SeqCst);
+                    ("name".to_owned(), port)
+                }
+                ("name", 6380) => {
+                    self.canonical_resolutions
+                        .fetch_add(1, atomic::Ordering::SeqCst);
+                    ("unregistered-poison".to_owned(), port)
+                }
+                _ => (host.to_owned(), port),
+            }
+        }
+    }
+
     #[test]
-    #[serial_test::serial]
     fn test_cluster_basics() {
         let cluster = TestClusterContext::new(3, 0);
         let mut con = cluster.connection();
@@ -36,7 +96,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_with_username_and_password() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -67,7 +126,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_with_bad_password() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -83,7 +141,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_read_from_replicas() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             6,
@@ -110,7 +167,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_eval() {
         let cluster = TestClusterContext::new(3, 0);
         let mut con = cluster.connection();
@@ -132,7 +188,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_resp3() {
         if use_protocol() == ProtocolVersion::RESP2 {
             return;
@@ -165,7 +220,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_multi_shard_commands() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -180,7 +234,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_pipeline() {
         let cluster = TestClusterContext::new(3, 0);
         cluster.wait_for_cluster_up();
@@ -197,7 +250,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_pipeline_multiple_keys() {
         use redis::FromRedisValue;
         let cluster = TestClusterContext::new(3, 0);
@@ -235,7 +287,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_pipeline_invalid_command() {
         let cluster = TestClusterContext::new(3, 0);
         cluster.wait_for_cluster_up();
@@ -264,7 +315,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_can_connect_to_server_that_sends_cluster_slots_without_host_name() {
         let name = "test_cluster_can_connect_to_server_that_sends_cluster_slots_without_host_name";
 
@@ -291,7 +341,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_can_connect_to_server_that_sends_cluster_slots_with_null_host_name() {
         let name =
             "test_cluster_can_connect_to_server_that_sends_cluster_slots_with_null_host_name";
@@ -316,7 +365,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_can_connect_to_server_that_sends_cluster_slots_with_partial_nodes_with_unknown_host_name(
     ) {
         let name = "test_cluster_can_connect_to_server_that_sends_cluster_slots_with_partial_nodes_with_unknown_host_name";
@@ -354,6 +402,53 @@ mod cluster {
 
     #[test]
     #[serial_test::serial]
+    fn test_cluster_slots_resolver_preserves_canonical_sync_address() {
+        let raw_resolutions = Arc::new(atomic::AtomicUsize::new(0));
+        let canonical_resolutions = Arc::new(atomic::AtomicUsize::new(0));
+        let raw_clone = raw_resolutions.clone();
+        let canonical_clone = canonical_resolutions.clone();
+        let MockEnv { mut connection, .. } = MockEnv::with_client_builder(
+            // The initial map has name:6379, while CLUSTER SLOTS returns canonical name:6380;
+            // refresh_slots must create the latter without resolving it a second time.
+            ClusterClient::builder(vec!["redis://name:6379"]).address_resolver(Arc::new(
+                TopologyResolver {
+                    raw_resolutions: raw_resolutions.clone(),
+                    canonical_resolutions: canonical_resolutions.clone(),
+                },
+            )),
+            "name",
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    return Err(Ok(Value::Array(vec![Value::Array(vec![
+                        Value::Int(0),
+                        Value::Int(16383),
+                        Value::Array(vec![
+                            Value::BulkString(b"internal-node".to_vec().into()),
+                            Value::Int(6380),
+                        ]),
+                    ])])));
+                }
+                respond_startup("name", cmd)?;
+                if contains_slice(cmd, b"GET") {
+                    assert_eq!(port, 6380);
+                    assert!(raw_clone.load(atomic::Ordering::SeqCst) >= 1);
+                    assert_eq!(canonical_clone.load(atomic::Ordering::SeqCst), 0);
+                    Err(Ok(Value::BulkString(b"123".to_vec().into())))
+                } else {
+                    Err(Ok(Value::Nil))
+                }
+            },
+        );
+
+        assert_eq!(
+            cmd("GET").arg("test").query::<i32>(&mut connection),
+            Ok(123)
+        );
+        assert!(raw_resolutions.load(atomic::Ordering::SeqCst) >= 1);
+        assert_eq!(canonical_resolutions.load(atomic::Ordering::SeqCst), 0);
+    }
+
+    #[test]
     fn test_cluster_pipeline_command_ordering() {
         let cluster = TestClusterContext::new(3, 0);
         cluster.wait_for_cluster_up();
@@ -379,7 +474,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     #[ignore] // Flaky
     fn test_cluster_pipeline_ordering_with_improper_command() {
         let cluster = TestClusterContext::new(3, 0);
@@ -414,7 +508,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_retries() {
         let name = "tryagain";
 
@@ -442,7 +535,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_exhaust_retries() {
         let name = "tryagain_exhaust_retries";
 
@@ -478,7 +570,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_move_error_when_new_node_is_added() {
         let name = "rebuild_with_extra_nodes";
 
@@ -537,8 +628,98 @@ mod cluster {
 
     #[test]
     #[serial_test::serial]
+    fn test_cluster_moved_redirect_with_address_resolver() {
+        let name = "test_cluster_moved_redirect_with_address_resolver";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let requests_clone = requests.clone();
+        let redirect_resolutions = Arc::new(atomic::AtomicUsize::new(0));
+
+        let MockEnv {
+            mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
+                NonIdempotentRedirectResolver {
+                    resolved_name: name,
+                    redirect_resolutions: redirect_resolutions.clone(),
+                },
+            )),
+            name,
+            move |cmd: &[u8], port| {
+                respond_startup(name, cmd)?;
+
+                let count = requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                match (port, count) {
+                    (6379, 0) => Err(parse_redis_value(b"-MOVED 14000 internal-node:6380\r\n")),
+                    (6380, 1) => Err(Err((ErrorKind::IoError, "force reconnect").into())),
+                    (6380, 2) => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
+                    _ => panic!("Unexpected command on port {port}: {cmd:?}"),
+                }
+            },
+        );
+
+        let value = cmd("GET").arg("test").query::<Option<i32>>(&mut connection);
+
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 3);
+        assert_eq!(redirect_resolutions.load(atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_cluster_ask_redirect_with_address_resolver() {
+        let name = "test_cluster_ask_redirect_with_address_resolver";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let requests_clone = requests.clone();
+        let asking_requests = Arc::new(atomic::AtomicUsize::new(0));
+        let asking_requests_clone = asking_requests.clone();
+
+        let MockEnv {
+            mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
+                InternalNodeResolver {
+                    resolved_name: name,
+                },
+            )),
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"ASKING") {
+                    assert_eq!(port, 6380);
+                    asking_requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+
+                respond_startup(name, cmd)?;
+                let count = requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                match (port, count) {
+                    (6379, 0) => Err(parse_redis_value(b"-ASK 14000 internal-node:6380\r\n")),
+                    (6380, 1) => {
+                        assert!(contains_slice(cmd, b"GET"));
+                        Err(parse_redis_value(b"-TRYAGAIN transient\r\n"))
+                    }
+                    (6380, 2) => {
+                        assert!(contains_slice(cmd, b"GET"));
+                        Err(Ok(Value::BulkString(b"123".to_vec().into())))
+                    }
+                    _ => panic!("Unexpected command on port {port}: {cmd:?}"),
+                }
+            },
+        );
+
+        let value = cmd("GET").arg("test").query::<Option<i32>>(&mut connection);
+
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 3);
+        assert_eq!(asking_requests.load(atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test]
     fn test_cluster_ask_redirect() {
-        let name = "node";
+        let name = "test_cluster_ask_redirect";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv {
             mut connection,
@@ -555,7 +736,9 @@ mod cluster {
                     let count = completed.fetch_add(1, Ordering::SeqCst);
                     match port {
                         6379 => match count {
-                            0 => Err(parse_redis_value(b"-ASK 14000 node:6380\r\n")),
+                            0 => Err(parse_redis_value(
+                                format!("-ASK 14000 {name}:6380\r\n").as_bytes(),
+                            )),
                             _ => panic!("Node should not be called now"),
                         },
                         6380 => match count {
@@ -581,7 +764,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_ask_error_when_new_node_is_added() {
         let name = "ask_with_extra_nodes";
 
@@ -631,9 +813,8 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_replica_read() {
-        let name = "node";
+        let name = "test_cluster_replica_read";
 
         // requests should route to replica
         let MockEnv {
@@ -658,7 +839,9 @@ mod cluster {
         let value = cmd("GET").arg("test").query::<Option<i32>>(&mut connection);
         assert_eq!(value, Ok(Some(123)));
 
-        // requests should route to primary
+        // requests should route to primary.
+        // The first MockEnv's handler is still alive, so this one needs its own name.
+        let name = "test_cluster_replica_read_primary";
         let MockEnv {
             mut connection,
             handler: _handler,
@@ -685,7 +868,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_moved_redirect_with_raw_ip_resolved_via_reverse_lookup() {
         // Verify that when a MOVED error returns a raw IP address (as Valkey nodes do
         // when cluster-announce-hostname is set), the client resolves it to the correct
@@ -697,7 +879,7 @@ mod cluster {
         //
         // The MOVED response uses "node:6380" directly here (mock can't simulate raw IPs),
         // but this test validates the redirect routing and slot map update behavior.
-        let name = "node";
+        let name = "test_cluster_moved_redirect_with_raw_ip_resolved_via_reverse_lookup";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv {
             mut connection,
@@ -740,9 +922,8 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_io_error() {
-        let name = "node";
+        let name = "test_cluster_io_error";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv {
             mut connection,
@@ -774,9 +955,8 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_non_retryable_error_should_not_retry() {
-        let name = "node";
+        let name = "test_cluster_non_retryable_error_should_not_retry";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv { mut connection, .. } = MockEnv::new(name, {
             let completed = completed.clone();
@@ -801,9 +981,8 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_readonly_error_should_refresh_slots_and_retry() {
-        let name = "node";
+        let name = "test_cluster_readonly_error_should_refresh_slots_and_retry";
         let requests = Arc::new(AtomicI32::new(0));
         let MockEnv { mut connection, .. } = MockEnv::with_client_builder(
             ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
@@ -838,8 +1017,83 @@ mod cluster {
 
     #[test]
     #[serial_test::serial]
-    fn test_cluster_readonly_error_exhausts_retries() {
+    fn test_cluster_readonly_after_moved_uses_refreshed_slots() {
         let name = "node";
+        let ports = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let slots_requests = Arc::new(AtomicI32::new(0));
+        let user_requests = Arc::new(AtomicI32::new(0));
+        let MockEnv {
+            mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            {
+                let ports = ports.clone();
+                let slots_requests = slots_requests.clone();
+                let user_requests = user_requests.clone();
+                move |cmd: &[u8], port| {
+                    let is_get = contains_slice(cmd, b"GET");
+                    if is_get {
+                        ports.lock().unwrap().push(port);
+                    }
+                    if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                        let request = slots_requests.fetch_add(1, Ordering::SeqCst);
+                        let slots = if request == 0 {
+                            vec![
+                                Value::Array(vec![
+                                    Value::Int(0),
+                                    Value::Int(8191),
+                                    Value::Array(vec![
+                                        Value::BulkString(name.as_bytes().to_vec().into()),
+                                        Value::Int(6379),
+                                    ]),
+                                ]),
+                                Value::Array(vec![
+                                    Value::Int(8192),
+                                    Value::Int(16383),
+                                    Value::Array(vec![
+                                        Value::BulkString(name.as_bytes().to_vec().into()),
+                                        Value::Int(6381),
+                                    ]),
+                                ]),
+                            ]
+                        } else {
+                            vec![Value::Array(vec![
+                                Value::Int(0),
+                                Value::Int(16383),
+                                Value::Array(vec![
+                                    Value::BulkString(name.as_bytes().to_vec().into()),
+                                    Value::Int(6379),
+                                ]),
+                            ])]
+                        };
+                        return Err(Ok(Value::Array(slots)));
+                    }
+                    respond_startup_two_nodes(name, cmd)?;
+                    if port == 6379 && is_get && user_requests.fetch_add(1, Ordering::SeqCst) == 0 {
+                        Err(parse_redis_value(b"-MOVED 123 node:6381\r\n"))
+                    } else if port == 6381 && contains_slice(cmd, b"GET") {
+                        Err(Err((ErrorKind::ReadOnly, "READONLY").into()))
+                    } else {
+                        Err(Ok(Value::BulkString(b"value".to_vec().into())))
+                    }
+                }
+            },
+        );
+
+        let value = cmd("GET")
+            .arg("test")
+            .query::<Option<String>>(&mut connection);
+
+        assert_eq!(value, Ok(Some("value".to_string())));
+        assert_eq!(&*ports.lock().unwrap(), &[6379, 6381, 6379]);
+    }
+
+    #[test]
+    fn test_cluster_readonly_error_exhausts_retries() {
+        let name = "test_cluster_readonly_error_exhausts_retries";
         let requests = Arc::new(AtomicI32::new(0));
         let MockEnv { mut connection, .. } = MockEnv::with_client_builder(
             ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(2),
@@ -866,11 +1120,11 @@ mod cluster {
     }
 
     fn test_cluster_fan_out(
+        name: &'static str,
         command: &'static str,
         expected_ports: Vec<u16>,
         slots_config: Option<Vec<MockSlotRange>>,
     ) {
-        let name = "node";
         let found_ports = Arc::new(std::sync::Mutex::new(Vec::new()));
         let ports_clone = found_ports.clone();
         let mut cmd = redis::Cmd::new();
@@ -909,21 +1163,29 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_fan_out_to_all_primaries() {
-        test_cluster_fan_out("FLUSHALL", vec![6379, 6381], None);
+        test_cluster_fan_out(
+            "test_cluster_fan_out_to_all_primaries",
+            "FLUSHALL",
+            vec![6379, 6381],
+            None,
+        );
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_fan_out_to_all_nodes() {
-        test_cluster_fan_out("CONFIG SET", vec![6379, 6380, 6381, 6382], None);
+        test_cluster_fan_out(
+            "test_cluster_fan_out_to_all_nodes",
+            "CONFIG SET",
+            vec![6379, 6380, 6381, 6382],
+            None,
+        );
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_fan_out_out_once_to_each_primary_when_no_replicas_are_available() {
         test_cluster_fan_out(
+            "test_cluster_fan_out_out_once_to_each_primary_when_no_replicas_are_available",
             "CONFIG SET",
             vec![6379, 6381],
             Some(vec![
@@ -942,9 +1204,9 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_fan_out_out_once_even_if_primary_has_multiple_slot_ranges() {
         test_cluster_fan_out(
+            "test_cluster_fan_out_out_once_even_if_primary_has_multiple_slot_ranges",
             "CONFIG SET",
             vec![6379, 6380, 6381, 6382],
             Some(vec![
@@ -973,7 +1235,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_split_multi_shard_command_and_combine_arrays_of_values() {
         let name = "test_cluster_split_multi_shard_command_and_combine_arrays_of_values";
         let mut cmd = cmd("MGET");
@@ -1011,7 +1272,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_route_correctly_on_packed_transaction_with_single_node_requests() {
         let name = "test_cluster_route_correctly_on_packed_transaction_with_single_node_requests";
         let mut pipeline = redis::pipe();
@@ -1061,7 +1321,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_route_correctly_on_packed_transaction_with_single_node_requests2() {
         let name = "test_cluster_route_correctly_on_packed_transaction_with_single_node_requests2";
         let mut pipeline = redis::pipe();
@@ -1105,7 +1364,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_with_client_name() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -1133,7 +1391,6 @@ mod cluster {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_cluster_can_be_created_with_partial_slot_coverage() {
         let name = "test_cluster_can_be_created_with_partial_slot_coverage";
         let slots_config = Some(vec![
@@ -1178,7 +1435,6 @@ mod cluster {
         use redis::ConnectionInfo;
 
         #[test]
-        #[serial_test::serial]
         fn test_cluster_basics_with_mtls() {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
 
@@ -1200,7 +1456,6 @@ mod cluster {
         }
 
         #[test]
-        #[serial_test::serial]
         fn test_cluster_should_not_connect_without_mtls() {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
 

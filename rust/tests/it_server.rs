@@ -3,42 +3,87 @@
 
 mod common;
 
-use glide::commands::options::FlushMode;
-use glide::{AsyncCommands, ServerManagementCommands};
+use glide::FlushAllOptions;
+use glide::FlushDbOptions;
+use glide::{AsyncTypedCommands, ServerManagementCommands};
 
-resp_test!(info_non_empty, c, {
-    let info = c.info().await.unwrap();
+// TODO #7362: Add `matrix_test!` tests for:
+// - `bgrewriteaof`
+// - `bgsave`
+// - `info_sections`
+// - `latency_doctor`
+// - `latency_graph`
+// - `latency_history`
+// - `latency_latest`
 
-    // INFO always contains the server section header.
-    assert!(!info.is_empty());
-    assert!(
-        info.contains("redis_version")
-            || info.contains("valkey_version")
-            || info.contains("# Server")
-    );
-});
+resp_test!(info_returns_expected_fields, c, {
+    // Default fields
+    for info in common::get_info(&c, &[]).await {
+        for field in common::INFO_DEFAULT_FIELDS {
+            assert!(info.contains_key(field));
+        }
+    }
 
-resp_test!(info_sections, c, {
-    let info = c.info_sections(&["server"]).await.unwrap();
-    assert!(!info.is_empty());
+    // Valkey 9.2+ fields
+    // ------------------
+
+    if common::version_below(&c, (9, 2, 0)).await {
+        return;
+    }
+
+    // Persistence fields
+    for persistence in common::get_info(&c, &[glide::InfoSection::Persistence]).await {
+        assert!(common::BGSAVE_TYPES.contains(&persistence["rdb_current_bgsave_type"].as_str()));
+        assert!(common::BGSAVE_TYPES.contains(&persistence["rdb_last_bgsave_type"].as_str()));
+
+        let remaining_name = "forkless_estimated_seconds_remaining";
+        let remaining_value = common::parse_int(&persistence[remaining_name], remaining_name);
+        assert!(remaining_value >= -1);
+    }
+
+    // Cluster info fields
+    // TODO #7362: Uncomment once the typed `INFO` methods return per-node replies.
+    // let is_cluster = (&c as &dyn std::any::Any).is::<glide::GlideClusterClient>();
+    // if is_cluster {
+    //     for cluster_info in common::get_info(&c, &[glide::InfoSection::ClusterInfo]).await {
+    //         let fallbacks_name = "cluster_io_main_thread_fallbacks";
+    //         let fallbacks_value = common::parse_int(&cluster_info[fallbacks_name], fallbacks_name);
+    //         assert!(fallbacks_value >= 0);
+    //     }
+    // }
 });
 
 resp_test!(dbsize, c, {
     // Fresh server: start empty, add keys, count grows.
     let before = c.dbsize().await.unwrap();
-    c.set::<_, _, ()>(common::key("k"), "v").await.unwrap();
+    c.set(common::key("k"), "v").await.unwrap();
     assert!(c.dbsize().await.unwrap() > before);
 });
 
 resp_test!(flushdb, c, {
-    c.set::<_, _, ()>(common::key("k"), "v").await.unwrap();
-    c.flushdb(Some(FlushMode::Sync)).await.unwrap();
+    c.set(common::key("k"), "v").await.unwrap();
+    c.flushdb().await.unwrap();
+    assert_eq!(c.dbsize().await.unwrap(), 0);
+});
+
+resp_test!(flushdb_options, c, {
+    c.set(common::key("k"), "v").await.unwrap();
+    let options = FlushDbOptions::default().blocking(true);
+    c.flushdb_options(&options).await.unwrap();
     assert_eq!(c.dbsize().await.unwrap(), 0);
 });
 
 resp_test!(flushall, c, {
-    c.set::<_, _, ()>(common::key("k"), "v").await.unwrap();
-    c.flushall(None).await.unwrap();
+    c.set(common::key("k"), "v").await.unwrap();
+    c.flushall().await.unwrap();
+    assert_eq!(c.dbsize().await.unwrap(), 0);
+});
+
+resp_test!(flushall_options, c, {
+    c.set(common::key("k"), "v").await.unwrap();
+    c.flushall_options(&FlushAllOptions::default())
+        .await
+        .unwrap();
     assert_eq!(c.dbsize().await.unwrap(), 0);
 });
 

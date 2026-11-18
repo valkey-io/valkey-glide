@@ -39,7 +39,7 @@ To send us a pull request, please:
 2. Modify the source; please focus on the specific change you are contributing. If you also reformat all the code, it will be hard for us to focus on your change.
 3. Ensure local tests pass.
 4. Commit to your fork using clear commit messages, merge or squash commits as necessary.
-   - All commits require a DCO signoff (`git commit -s -m "message"`) and should follow the [Conventional Commits](https://www.conventionalcommits.org/) format: `<type>(<scope>): <description>`. To add a signoff to an existing commit: `git commit --amend --signoff --no-edit`.
+   - All commits require a DCO signoff (`git commit -s -m "message"`) and should follow the [Conventional Commits](https://www.conventionalcommits.org/) format: `<type>(<scope>): <description>`. PR titles use the same format with a lowercase type. To add a signoff to an existing commit: `git commit --amend --signoff --no-edit`.
    - All commits must be cryptographically signed so they show as "Verified" on GitHub. Use GPG or SSH signing by configuring `git config commit.gpgsign true`. To sign a commit: `git commit -S -s -m "message"`. See [GitHub's guide on signing commits](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits) for setup instructions.
 5. Send us a pull request, answering any default questions in the pull request interface.
 6. Make sure to update the documentation in the [valkey-glide-docs](https://github.com/valkey-io/valkey-glide-docs) repository if necessary.

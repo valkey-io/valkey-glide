@@ -6,6 +6,7 @@ use redis::AddressResolver;
 use redis::cache::EvictionPolicy;
 #[allow(unused_imports)]
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,6 +17,7 @@ use crate::compression::CompressionConfig;
 use crate::connection_request as protobuf;
 use crate::iam::CredentialsProvider;
 use crate::iam::ServiceType;
+use crate::rdma::{IncompatibleSetting, RdmaSetting};
 #[cfg(feature = "proto")]
 #[allow(unused_imports)]
 use ::protobuf::EnumOrUnknown;
@@ -54,6 +56,8 @@ pub struct ConnectionRequest {
     /// Optional automatic reload configuration for the path-based client cert/key.
     pub cert_reload: Option<CertReloadConfig>,
     pub compression_config: Option<CompressionConfig>,
+    /// What the request asked of RDMA. `Absent` means the feature is off.
+    pub rdma: RdmaSetting,
     pub tcp_nodelay: bool,
     pub pubsub_reconciliation_interval_ms: Option<u32>,
     pub read_only: bool,
@@ -74,6 +78,34 @@ impl ConnectionRequest {
         self.connection_timeout
             .map(|val| Duration::from_millis(val as u64))
             .unwrap_or(DEFAULT_CONNECTION_TIMEOUT)
+    }
+
+    /// The setting of this request that cannot be combined with RDMA, if any.
+    ///
+    /// - `None` when RDMA was not requested.
+    /// - `None` when RDMA was requested and no other setting conflicts with it.
+    pub(crate) fn rdma_conflict(&self) -> Option<IncompatibleSetting> {
+        if !self.rdma.is_requested() {
+            return None;
+        }
+        if self
+            .compression_config
+            .as_ref()
+            .is_some_and(|compression| compression.enabled)
+        {
+            return Some(IncompatibleSetting::Compression);
+        }
+        if self.lazy_connect {
+            return Some(IncompatibleSetting::LazyConnect);
+        }
+        if self.read_only {
+            return Some(IncompatibleSetting::ReadOnly);
+        }
+        // `Static` discovery exists mainly for clients that connect through a proxy.
+        if self.node_discovery_mode == NodeDiscoveryMode::Static {
+            return Some(IncompatibleSetting::StaticDiscovery);
+        }
+        None
     }
 }
 
@@ -127,7 +159,7 @@ pub struct AuthenticationInfo {
 /// AWS IAM authentication configuration for ElastiCache and MemoryDB
 ///
 /// Handles AWS credential resolution, SigV4 token signing, and automatic token refresh.
-/// Tokens are valid for 15 minutes and refreshed every 14 minutes by default.
+/// Tokens are valid for 15 minutes and refreshed every 5 minutes by default.
 #[derive(Clone)]
 pub struct IamAuthenticationConfig {
     /// AWS ElastiCache or MemoryDB cluster name
@@ -139,13 +171,13 @@ pub struct IamAuthenticationConfig {
     /// AWS service type (ElastiCache or MemoryDB)
     pub service_type: ServiceType,
 
-    /// Token refresh interval in seconds (1 second to 12 hours, default 14 minutes)
+    /// Token refresh interval in seconds (1 second to 12 hours exclusive, default 5 minutes)
     pub refresh_interval_seconds: Option<u32>,
 
     /// Optional custom credentials callback.
     ///
     /// When `Some`, this closure is invoked to retrieve AWS credentials
-    /// `(access_key_id, secret_access_key, session_token)` for SigV4 token signing
+    /// `(access_key_id, secret_access_key, session_token, expires_at)` for SigV4 token signing
     /// instead of the default AWS credential chain.
     pub credentials_provider: Option<CredentialsProvider>,
 }
@@ -198,18 +230,51 @@ pub enum PeriodicCheck {
 pub struct NodeAddress {
     pub host: String,
     pub port: u16,
+    /// Unix domain socket to connect through instead of `host` and `port`, which must be unset.
+    pub unix_socket_path: Option<PathBuf>,
+}
+
+impl NodeAddress {
+    /// Returns `host:port`, or `unix:<path>` for a Unix domain socket address.
+    pub(crate) fn endpoint(&self) -> String {
+        match &self.unix_socket_path {
+            Some(path) => format!("unix:{}", path.display()),
+            None => format!("{}:{}", self.host, self.port),
+        }
+    }
 }
 
 impl ::std::fmt::Display for NodeAddress {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-        write!(f, "Host: `{}`, Port: {}", self.host, self.port)
+        match &self.unix_socket_path {
+            Some(path) => write!(f, "Unix socket: `{}`", path.display()),
+            None => write!(f, "Host: `{}`, Port: {}", self.host, self.port),
+        }
+    }
+}
+
+/// Keeps an empty `unix_socket_path` so client creation rejects it.
+#[cfg(feature = "proto")]
+impl From<&protobuf::NodeAddress> for NodeAddress {
+    fn from(value: &protobuf::NodeAddress) -> Self {
+        NodeAddress {
+            host: value.host.to_string(),
+            port: value.port as u16,
+            unix_socket_path: value
+                .unix_socket_path
+                .as_ref()
+                .map(|path| PathBuf::from(&**path)),
+        }
     }
 }
 
 /// Initial connection metadata used as default OTel span attributes.
 #[derive(Clone, Debug)]
 pub struct OTelMetadata {
-    pub address: NodeAddress,
+    /// Host of the first configured address, or its Unix domain socket path.
+    pub server_address: String,
+    /// Port of the first configured address; `None` for a Unix domain socket.
+    pub server_port: Option<u16>,
     pub db_namespace: String,
 }
 
@@ -271,6 +336,50 @@ fn chars_to_string_option(chars: &::protobuf::Chars) -> Option<String> {
 #[cfg(feature = "proto")]
 pub(crate) fn none_if_zero(value: u32) -> Option<u32> {
     if value == 0 { None } else { Some(value) }
+}
+
+/// Convert the protobuf RDMA configuration into what this build can honor.
+#[cfg(all(feature = "proto", not(feature = "rdma")))]
+fn convert_rdma(config: Option<&protobuf::RdmaConfig>) -> RdmaSetting {
+    use crate::rdma::RdmaUnavailable;
+
+    match config {
+        None => RdmaSetting::Absent,
+        Some(_) => RdmaSetting::Rejected(RdmaUnavailable::NotCompiledIn),
+    }
+}
+
+/// Convert the protobuf RDMA configuration into glide-rdma's own `FabricConfig`.
+#[cfg(all(feature = "proto", feature = "rdma"))]
+fn convert_rdma(config: Option<&protobuf::RdmaConfig>) -> RdmaSetting {
+    use crate::rdma::{FabricConfig, Provider, RdmaUnavailable};
+
+    let Some(config) = config else {
+        return RdmaSetting::Absent;
+    };
+    let Some(provider) = config.provider.as_ref() else {
+        return RdmaSetting::Rejected(RdmaUnavailable::NoProviderConfigured);
+    };
+    let fabric = match provider {
+        protobuf::rdma_config::Provider::EfaDirect(_) => FabricConfig::new(Provider::EfaDirect),
+        #[cfg(feature = "rdma-tcp-dev")]
+        protobuf::rdma_config::Provider::Tcp(tcp) => {
+            let fabric = FabricConfig::new(Provider::Tcp);
+            match tcp.bind.as_ref() {
+                Some(bind) => fabric.with_bind(bind.to_string()),
+                None => fabric,
+            }
+        }
+        #[cfg(not(feature = "rdma-tcp-dev"))]
+        protobuf::rdma_config::Provider::Tcp(_) => {
+            return RdmaSetting::Rejected(RdmaUnavailable::TcpProviderNotBuilt);
+        }
+    };
+    let fabric = match config.interface.as_ref() {
+        Some(interface) => fabric.with_interface(interface.to_string()),
+        None => fabric,
+    };
+    RdmaSetting::Configured(fabric)
 }
 
 #[cfg(feature = "proto")]
@@ -368,14 +477,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             protobuf::TlsMode::InsecureTls => TlsMode::InsecureTls,
         });
 
-        let addresses = value
-            .addresses
-            .into_iter()
-            .map(|addr| NodeAddress {
-                host: addr.host.to_string(),
-                port: addr.port as u16,
-            })
-            .collect();
+        let addresses = value.addresses.iter().map(NodeAddress::from).collect();
         let cluster_mode_enabled = value.cluster_mode_enabled;
         let request_timeout = none_if_zero(value.request_timeout);
         let connection_timeout = none_if_zero(value.connection_timeout);
@@ -516,6 +618,8 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             }
         });
 
+        let rdma = convert_rdma(value.rdma_config.as_ref());
+
         let tcp_nodelay = value.tcp_nodelay.unwrap_or(true);
         let pubsub_reconciliation_interval_ms =
             value.pubsub_reconciliation_interval_ms.filter(|&v| v != 0);
@@ -560,6 +664,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             client_key_path,
             cert_reload,
             compression_config,
+            rdma,
             tcp_nodelay,
             pubsub_reconciliation_interval_ms,
             read_only,
@@ -581,6 +686,27 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
 }
 #[cfg(test)]
 mod tests {
+    use super::NodeAddress;
+
+    #[test]
+    fn test_node_address_display_and_endpoint() {
+        let tcp = NodeAddress {
+            host: "10.0.0.1".to_string(),
+            port: 6380,
+            unix_socket_path: None,
+        };
+        assert_eq!(tcp.to_string(), "Host: `10.0.0.1`, Port: 6380");
+        assert_eq!(tcp.endpoint(), "10.0.0.1:6380");
+
+        let unix = NodeAddress {
+            host: String::new(),
+            port: 0,
+            unix_socket_path: Some("/run/valkey/valkey.sock".into()),
+        };
+        assert_eq!(unix.to_string(), "Unix socket: `/run/valkey/valkey.sock`");
+        assert_eq!(unix.endpoint(), "unix:/run/valkey/valkey.sock");
+    }
+
     mod protobuf_conversion_tests {
         use crate::ConnectionRequest;
         use crate::compression::CompressionBackendType;
@@ -602,6 +728,32 @@ mod tests {
             let request: ConnectionRequest = proto_request.into();
             assert_eq!(request.lib_name.as_deref(), Some(name));
             assert_eq!(request.lib_ver, None);
+        }
+
+        #[test]
+        fn test_node_address_conversion() {
+            let tcp = protobuf::NodeAddress {
+                host: "10.0.0.1".into(),
+                port: 6380,
+                ..Default::default()
+            };
+            let address = crate::client::NodeAddress::from(&tcp);
+            assert_eq!((address.host.as_str(), address.port), ("10.0.0.1", 6380));
+            assert!(address.unix_socket_path.is_none());
+
+            // An explicitly empty path is kept (not turned into a TCP address) so that
+            // client creation rejects it.
+            for path in ["/tmp/valkey.sock", ""] {
+                let unix = protobuf::NodeAddress {
+                    unix_socket_path: Some(path.into()),
+                    ..Default::default()
+                };
+                let address = crate::client::NodeAddress::from(&unix);
+                assert_eq!(
+                    address.unix_socket_path.as_deref(),
+                    Some(std::path::Path::new(path))
+                );
+            }
         }
 
         #[test]
@@ -695,6 +847,49 @@ mod tests {
             let config = request.compression_config.unwrap();
             // Should fall back to Zstd for unknown backends
             assert_eq!(config.backend, CompressionBackendType::Zstd);
+        }
+
+        #[cfg(feature = "rdma")]
+        fn request_with_tcp_rdma() -> ConnectionRequest {
+            let mut proto_request = protobuf::ConnectionRequest::new();
+            proto_request.addresses.push(protobuf::NodeAddress {
+                host: "localhost".into(),
+                port: 6379,
+                ..Default::default()
+            });
+            let mut rdma = protobuf::RdmaConfig::new();
+            rdma.set_tcp(protobuf::TcpProvider {
+                bind: Some("127.0.0.1".into()),
+                ..Default::default()
+            });
+            proto_request.rdma_config = ::protobuf::MessageField::some(rdma);
+            proto_request.into()
+        }
+
+        /// A release build carries only `efa-direct`, so a `tcp` request must name
+        /// the development feature that honors it rather than open an endpoint.
+        #[cfg(all(feature = "rdma", not(feature = "rdma-tcp-dev")))]
+        #[test]
+        fn a_tcp_provider_is_rejected_without_the_development_feature() {
+            use crate::rdma::{RdmaSetting, RdmaUnavailable};
+
+            let RdmaSetting::Rejected(reason) = request_with_tcp_rdma().rdma else {
+                panic!("a tcp request should be rejected without the development feature");
+            };
+            assert_eq!(reason, RdmaUnavailable::TcpProviderNotBuilt);
+            assert!(reason.to_string().contains("rdma-tcp-dev"));
+        }
+
+        #[cfg(feature = "rdma-tcp-dev")]
+        #[test]
+        fn a_tcp_provider_is_configured_with_the_development_feature() {
+            use crate::rdma::{Provider, RdmaSetting};
+
+            let RdmaSetting::Configured(fabric) = request_with_tcp_rdma().rdma else {
+                panic!("a tcp request should configure a fabric in a tcp-dev build");
+            };
+            assert_eq!(fabric.provider(), Provider::Tcp);
+            assert_eq!(fabric.bind(), Some("127.0.0.1"));
         }
     }
 }

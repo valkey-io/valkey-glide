@@ -72,6 +72,7 @@ import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
+import glide.api.models.exceptions.RequestException;
 import java.nio.charset.StandardCharsets;
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -480,7 +481,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param value the value to set (must not be null)
      * @return "OK" if successful
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public String set(String key, String value) {
         return executeCommandWithGlide("SET", () -> glideClient.set(key, value).get());
@@ -732,7 +732,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key to retrieve the value from (must not be null)
      * @return the value stored at the key, or null if the key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public String get(final String key) {
         return executeCommandWithGlide("GET", () -> glideClient.get(key).get());
@@ -759,7 +758,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return "PONG" if the server is responding
      * @throws JedisException if the operation fails or connection is lost
-     * @since Valkey 1.0.0
      */
     public String ping() {
         return executeCommandWithGlide("PING", () -> glideClient.ping().get());
@@ -773,7 +771,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param message the message to echo back (must not be null)
      * @return the echoed message exactly as sent
      * @throws JedisException if the operation fails or connection is lost
-     * @since Valkey 2.8.0
      */
     public String ping(String message) {
         return executeCommandWithGlide("PING", () -> glideClient.ping(message).get());
@@ -801,7 +798,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return the echoed message
      * @throws JedisException if the operation fails or connection is lost
      * @see <a href="https://valkey.io/commands/echo/">valkey.io</a>
-     * @since Valkey 1.0.0
      */
     public String echo(String message) {
         return executeCommandWithGlide("ECHO", () -> glideClient.echo(message).get());
@@ -814,7 +810,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return the echoed message
      * @throws JedisException if the operation fails or connection is lost
      * @see <a href="https://valkey.io/commands/echo/">valkey.io</a>
-     * @since Valkey 1.0.0
      */
     public byte[] echo(final byte[] message) {
         return executeCommandWithGlide(
@@ -831,7 +826,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return the connection ID
      * @throws JedisException if the operation fails or connection is lost
      * @see <a href="https://valkey.io/commands/client-id/">valkey.io</a>
-     * @since Valkey 5.0.0
      */
     public long clientId() {
         return executeCommandWithGlide("CLIENT ID", () -> glideClient.clientId().get());
@@ -843,7 +837,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return the connection name, or null if no name is set
      * @throws JedisException if the operation fails or connection is lost
      * @see <a href="https://valkey.io/commands/client-getname/">valkey.io</a>
-     * @since Valkey 2.6.9
      */
     public String clientGetName() {
         return executeCommandWithGlide("CLIENT GETNAME", () -> glideClient.clientGetName().get());
@@ -864,6 +857,10 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Select a database.
      *
+     * <p>If the SELECT fails without a server error reply (for example a timeout, a lost connection
+     * or an interrupt), it may still have been applied, so a pooled connection is marked {@link
+     * #isBroken() broken} and is destroyed instead of being lent again.
+     *
      * @param index the database index
      * @return "OK" if successful
      */
@@ -874,8 +871,24 @@ public abstract class AbstractGlideJedis extends JedisCommon {
             glideClient.select((long) index).get();
             selectedDb = index;
             return "OK";
-        } catch (InterruptedException | ExecutionException e) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            markBrokenIfSelectOutcomeUnknown(e);
             throw new JedisException("SELECT failed", e);
+        } catch (ExecutionException e) {
+            markBrokenIfSelectOutcomeUnknown(e.getCause());
+            throw new JedisException("SELECT failed", e);
+        }
+    }
+
+    /**
+     * Marks a pooled connection broken unless the SELECT failed with a server error reply ({@link
+     * RequestException}), which means it was not applied. In every other case the connection may be
+     * on another database than {@link #getDB()} reports.
+     */
+    private void markBrokenIfSelectOutcomeUnknown(Throwable failure) {
+        if (isPooled && !(failure instanceof RequestException)) {
+            broken = true;
         }
     }
 
@@ -887,7 +900,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return the result of the command execution
      * @throws JedisException if the operation fails or connection is lost
      * @see <a href="https://valkey.io/commands/">valkey.io</a>
-     * @since Valkey 1.0.0
      */
     public Object customCommand(String... args) {
         return executeCommandWithGlide("CUSTOM", () -> glideClient.customCommand(args).get());
@@ -1343,6 +1355,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Whether this connection is considered broken (must not be returned to the pool as healthy).
      * Matches core Jedis {@code Jedis#isBroken()} semantics for pooled usage.
+     *
+     * @return {@code true} if this connection has been marked broken, {@code false} otherwise
      */
     public boolean isBroken() {
         return broken;
@@ -1351,6 +1365,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Marks this connection as broken so the next {@link #close()} returns it to the pool via {@link
      * Pool#returnBrokenResource} instead of {@link Pool#returnResource}.
+     *
+     * @param broken {@code true} to mark this connection broken, {@code false} to clear the mark
      */
     public void setBroken(boolean broken) {
         this.broken = broken;
@@ -1362,6 +1378,19 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      */
     void detachFromPoolForDestroy() {
         this.dataSource = null;
+    }
+
+    /**
+     * Closes the GLIDE client of a connection the pool destroys after {@link #close()} already ran.
+     * {@link #close()} hands a pooled connection back to the pool (for example as broken) without
+     * closing its GLIDE client, so the pool must close it here.
+     *
+     * @throws ExecutionException if closing the GLIDE client fails
+     */
+    void closeGlideClientForDestroy() throws ExecutionException {
+        if (glideClient != null) {
+            glideClient.close();
+        }
     }
 
     /**
@@ -1451,7 +1480,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return "OK" if successful
      * @throws JedisException if the operation fails or connection is lost
      * @see <a href="https://valkey.io/commands/watch/">valkey.io</a>
-     * @since Valkey 2.2.0
      */
     public String watch(String... keys) {
         return executeCommandWithGlide("WATCH", () -> glideClient.watch(keys).get());
@@ -1464,7 +1492,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return "OK" if successful
      * @throws JedisException if the operation fails or connection is lost
      * @see <a href="https://valkey.io/commands/watch/">valkey.io</a>
-     * @since Valkey 2.2.0
      */
     public String watch(byte[]... keys) {
         return executeCommandWithGlide(
@@ -1484,7 +1511,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return "OK" if successful
      * @throws JedisException if the operation fails or connection is lost
      * @see <a href="https://valkey.io/commands/unwatch/">valkey.io</a>
-     * @since Valkey 2.2.0
      */
     public String unwatch() {
         return executeCommandWithGlide("UNWATCH", () -> glideClient.unwatch().get());
@@ -1510,7 +1536,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return a Transaction object for queuing commands
      * @throws JedisException if already in a transaction or operation fails
      * @see <a href="https://valkey.io/commands/multi/">valkey.io</a>
-     * @since Valkey 1.2.0
      */
     public synchronized Transaction multi() {
         checkNotClosed();
@@ -1716,7 +1741,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param keysvalues alternating keys and values
      * @return true if all keys were set, false if no key was set (at least one key already existed)
      * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
-     * @since Valkey 1.0.1
      */
     public long msetnx(String... keysvalues) {
         return executeCommandWithGlide(
@@ -1741,7 +1765,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param keysvalues alternating keys and values
      * @return true if all keys were set, false if no key was set (at least one key already existed)
      * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
-     * @since Valkey 1.0.1
      */
     public long msetnx(final byte[]... keysvalues) {
         return executeCommandWithGlide(
@@ -1988,7 +2011,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param value the new value to set
      * @return the old value stored at the key, or null if the key did not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 6.2.0
      */
     public String setGet(String key, String value) {
         checkNotClosed();
@@ -2010,7 +2032,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param value the new binary value to set
      * @return the old binary value stored at the key, or null if the key did not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 6.2.0
      */
     public byte[] setGet(final byte[] key, final byte[] value) {
         checkNotClosed();
@@ -2125,8 +2146,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param params expiration parameters specifying how to set the key's expiration
      * @return the value of the key, or null if the key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 6.2.0
-     * @see AbstractGetExParams<?>
+     * @see AbstractGetExParams
      */
     public String getEx(final String key, final AbstractGetExParams<?> params) {
         return executeCommandWithGlide(
@@ -2155,8 +2175,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param params expiration parameters specifying how to set the key's expiration
      * @return the binary value of the key, or null if the key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 6.2.0
-     * @see AbstractGetExParams<?>
+     * @see AbstractGetExParams
      */
     public byte[] getEx(final byte[] key, final AbstractGetExParams<?> params) {
         return executeCommandWithGlide(
@@ -2180,7 +2199,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param value the value to set
      * @return the length of the string after it was modified
      * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
-     * @since Valkey 2.2.0
      */
     public long setrange(String key, long offset, String value) {
         return executeCommandWithGlide(
@@ -2195,7 +2213,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param value the value to set
      * @return the length of the string after it was modified
      * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
-     * @since Valkey 2.2.0
      */
     public long setrange(final byte[] key, long offset, final byte[] value) {
         return executeCommandWithGlide(
@@ -2213,7 +2230,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param endOffset the end offset (inclusive)
      * @return the substring
      * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
-     * @since Valkey 2.4.0
      */
     public String getrange(String key, long startOffset, long endOffset) {
         return executeCommandWithGlide(
@@ -2228,7 +2244,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param endOffset the end offset (inclusive)
      * @return the substring
      * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
-     * @since Valkey 2.4.0
      */
     public byte[] getrange(final byte[] key, long startOffset, long endOffset) {
         return executeCommandWithGlide(
@@ -2259,7 +2274,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *     appended content)
      * @throws JedisException if the operation fails or if the key contains a non-string value
      * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
-     * @since Valkey 2.0.0
      */
     public long append(final String key, final String value) {
         return executeCommandWithGlide("APPEND", () -> glideClient.append(key, value).get());
@@ -2284,7 +2298,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *     appended content)
      * @throws JedisException if the operation fails or if the key contains a non-string value
      * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
-     * @since Valkey 2.0.0
      */
     public long append(final byte[] key, final byte[] value) {
         return executeCommandWithGlide(
@@ -2297,7 +2310,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key
      * @return the length of the string, or 0 if key does not exist
      * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
-     * @since Valkey 2.2.0
      */
     public long strlen(String key) {
         return executeCommandWithGlide("STRLEN", () -> glideClient.strlen(key).get());
@@ -2309,7 +2321,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key
      * @return the length of the string, or 0 if key does not exist
      * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
-     * @since Valkey 2.2.0
      */
     public long strlen(final byte[] key) {
         return executeCommandWithGlide("STRLEN", () -> glideClient.strlen(GlideString.of(key)).get());
@@ -2720,7 +2731,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return a random key from the database, or null if the database is empty
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public String randomKey() {
         return executeCommandWithGlide("RANDOMKEY", () -> glideClient.randomKey().get());
@@ -2858,7 +2868,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unixTime expiration timestamp in seconds since Unix epoch
      * @return 1 if the expiration was set successfully, 0 if the key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 1.2.0
      */
     public long expireAt(String key, long unixTime) {
         return executeCommandWithGlide(
@@ -3197,7 +3206,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key
      * @return the sorted elements
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
-     * @since Valkey 1.0.0
      */
     public List<String> sort(String key) {
         return executeCommandWithGlide(
@@ -3214,7 +3222,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key
      * @return the sorted elements
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
-     * @since Valkey 1.0.0
      */
     public List<byte[]> sort(final byte[] key) {
         return executeCommandWithGlide(
@@ -3236,7 +3243,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param sortingParameters sorting parameters (BY, LIMIT, GET, ASC/DESC, ALPHA)
      * @return the sorted elements
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
-     * @since Valkey 1.0.0
      */
     public List<String> sort(String key, String... sortingParameters) {
         checkNotClosed();
@@ -3448,9 +3454,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Helper method to convert Set of GlideString to Set of byte arrays.
      *
-     * <p>Returns a wrapper that avoids the HashSet<byte[]> performance issue where byte[] identity
-     * hashCode causes all entries to hash to the same bucket. The wrapper keeps data as GlideString
-     * internally (which has proper hashCode/equals) and converts to byte[] lazily.
+     * <p>Returns a {@code GlideStringSetWrapper}, which compares elements by content rather than by
+     * array identity as a {@code HashSet<byte[]>} would.
      */
     private static Set<byte[]> convertGlideStringsToByteArraySet(Set<GlideString> glideStrings) {
         return new GlideStringSetWrapper(glideStrings);
@@ -3897,7 +3902,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key containing the string value to analyze
      * @return the number of bits set to 1 (0 if key doesn't exist)
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long bitcount(final String key) {
         return executeCommandWithGlide("BITCOUNT", () -> glideClient.bitcount(key).get());
@@ -3912,7 +3916,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param end the end offset (byte index, can be negative for end-relative indexing)
      * @return the number of bits set to 1 within the specified range
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long bitcount(final String key, final long start, final long end) {
         return executeCommandWithGlide("BITCOUNT", () -> glideClient.bitcount(key, start, end).get());
@@ -3992,11 +3995,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Return the position of the first bit set to 1 or 0 in a string within a range.
+     * Return the position of the first bit set to 1 or 0 in a string - binary version.
      *
-     * @param key the key
-     * @param value the bit value to search for (true for 1, false for 0) /** Return the position of
-     *     the first bit set to 1 or 0 in a string.
      * @param key the key
      * @param value the bit value to search for (true for 1, false for 0)
      * @return the position of the first bit set to the specified value, or -1 if not found
@@ -4007,7 +4007,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * /** Return the position of the first bit set to 1 or 0 in a string with parameters.
+     * Return the position of the first bit set to 1 or 0 in a string with parameters.
      *
      * @param key the key
      * @param value the bit value to search for (true for 1, false for 0)
@@ -4079,7 +4079,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param srcKeys the source keys for the bitwise operation
      * @return the size of the string stored in the destination key
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long bitop(final BitOP op, final String destKey, final String... srcKeys) {
         checkNotClosed();
@@ -4122,7 +4121,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param srcKeys the source keys for the bitwise operation
      * @return the size of the string stored in the destination key
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long bitop(final BitOP op, final byte[] destKey, final byte[]... srcKeys) {
         checkNotClosed();
@@ -4528,7 +4526,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param elements the elements to add to the HyperLogLog (must not be null)
      * @return 1 if the HyperLogLog is newly created or modified, 0 otherwise
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.9
      */
     public long pfadd(String key, String... elements) {
         return executeCommandWithGlide(
@@ -4548,7 +4545,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param elements the elements to add to the HyperLogLog (must not be null)
      * @return 1 if the HyperLogLog is newly created or modified, 0 otherwise
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.9
      */
     public long pfadd(final byte[] key, final byte[]... elements) {
         return executeCommandWithGlide(
@@ -4571,7 +4567,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key of the HyperLogLog data structure
      * @return the approximated cardinality of the HyperLogLog data structure (0 if key doesn't exist)
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.9
      */
     public long pfcount(String key) {
         return executeCommandWithGlide("PFCOUNT", () -> glideClient.pfcount(new String[] {key}).get());
@@ -4585,7 +4580,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param keys the keys of the HyperLogLog data structures to be analyzed (must not be empty)
      * @return the approximated cardinality of the combined HyperLogLog data structures
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.9
      */
     public long pfcount(String... keys) {
         return executeCommandWithGlide("PFCOUNT", () -> glideClient.pfcount(keys).get());
@@ -4599,7 +4593,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param sourceKeys the keys of the HyperLogLog structures to be merged
      * @return "OK" if successful
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.9
      */
     public String pfmerge(String destKey, String... sourceKeys) {
         return executeCommandWithGlide("PFMERGE", () -> glideClient.pfmerge(destKey, sourceKeys).get());
@@ -4644,7 +4637,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param sourceKeys the keys of the HyperLogLog structures to be merged
      * @return "OK" if successful
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.9
      */
     public String pfmerge(final byte[] destKey, final byte[]... sourceKeys) {
         checkNotClosed();
@@ -6926,7 +6918,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Adds an entry to the stream at key with AbstractXAddParams<?>. Uses GLIDE type-safe xadd.
+     * Adds an entry to the stream at key with {@code AbstractXAddParams<?>}. Uses GLIDE type-safe
+     * xadd.
      *
      * @param key stream key
      * @param params add parameters
@@ -6943,8 +6936,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Adds an entry to the stream at key with AbstractXAddParams<?> - binary version. Uses GLIDE
-     * type-safe xadd.
+     * Adds an entry to the stream at key with {@code AbstractXAddParams<?>} - binary version. Uses
+     * GLIDE type-safe xadd.
      *
      * @param key stream key
      * @param params add parameters
@@ -6967,7 +6960,12 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Returns the number of entries in the stream. Uses GLIDE xlen. */
+    /**
+     * Returns the number of entries in the stream. Uses GLIDE xlen.
+     *
+     * @param key stream key
+     * @return number of entries in the stream
+     */
     public long xlen(String key) {
         return executeCommandWithGlide("XLEN", () -> glideClient.xlen(key).get());
     }
@@ -6982,12 +6980,24 @@ public abstract class AbstractGlideJedis extends JedisCommon {
         return executeCommandWithGlide("XLEN", () -> glideClient.xlen(new String(key)).get());
     }
 
-    /** Removes entries by id from the stream. Uses GLIDE xdel. */
+    /**
+     * Removes entries by id from the stream. Uses GLIDE xdel.
+     *
+     * @param key stream key
+     * @param ids entry IDs to delete
+     * @return number of entries deleted
+     */
     public long xdel(String key, String... ids) {
         return executeCommandWithGlide("XDEL", () -> glideClient.xdel(key, ids).get());
     }
 
-    /** Removes entries by id from the stream. Uses GLIDE xdel. */
+    /**
+     * Removes entries by id from the stream. Uses GLIDE xdel.
+     *
+     * @param key stream key
+     * @param ids entry IDs to delete
+     * @return number of entries deleted
+     */
     public long xdel(String key, StreamEntryID... ids) {
         String[] idStrs = new String[ids.length];
         for (int i = 0; i < ids.length; i++) {
@@ -7017,6 +7027,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key stream key
      * @param start start id ("-" for minimum)
      * @param end end id ("+" for maximum)
+     * @return entries in the requested range, oldest first; empty if the stream has none
      */
     public List<StreamEntry> xrange(String key, String start, String end) {
         return executeCommandWithGlide(
@@ -7031,7 +7042,15 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Returns up to count entries in the stream in range [start, end]. Uses GLIDE xrange. */
+    /**
+     * Returns up to count entries in the stream in range [start, end]. Uses GLIDE xrange.
+     *
+     * @param key stream key
+     * @param start start id ("-" for minimum)
+     * @param end end id ("+" for maximum)
+     * @param count maximum number of entries to return
+     * @return at most {@code count} entries in the requested range, oldest first
+     */
     public List<StreamEntry> xrange(String key, String start, String end, long count) {
         return executeCommandWithGlide(
                 "XRANGE",
@@ -7045,7 +7064,14 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Returns entries in the stream in reverse order [end, start]. Uses GLIDE xrevrange. */
+    /**
+     * Returns entries in the stream in reverse order [end, start]. Uses GLIDE xrevrange.
+     *
+     * @param key stream key
+     * @param end end id ("+" for maximum)
+     * @param start start id ("-" for minimum)
+     * @return entries in the requested range, newest first; empty if the stream has none
+     */
     public List<StreamEntry> xrevrange(String key, String end, String start) {
         return executeCommandWithGlide(
                 "XREVRANGE",
@@ -7059,7 +7085,15 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Returns up to count entries in reverse order. Uses GLIDE xrevrange. */
+    /**
+     * Returns up to count entries in reverse order. Uses GLIDE xrevrange.
+     *
+     * @param key stream key
+     * @param end end id ("+" for maximum)
+     * @param start start id ("-" for minimum)
+     * @param count maximum number of entries to return
+     * @return at most {@code count} entries in the requested range, newest first
+     */
     public List<StreamEntry> xrevrange(String key, String end, String start, long count) {
         return executeCommandWithGlide(
                 "XREVRANGE",
@@ -7147,6 +7181,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param count max entries per stream (null to omit)
      * @param block block milliseconds (null to omit)
      * @param keysAndIds map of stream key to start id
+     * @return entries read per stream key; empty if nothing was available
      */
     public Map<String, List<StreamEntry>> xread(
             Long count, Long block, Map<String, String> keysAndIds) {
@@ -7161,26 +7196,45 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Trims the stream by max length. Uses GLIDE xtrim. */
+    /**
+     * Trims the stream by max length. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param maxLen maximum length
+     * @return number of entries deleted
+     */
     public long xtrim(String key, long maxLen) {
         return executeCommandWithGlide(
                 "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MaxLen(maxLen)).get());
     }
 
-    /** Trims the stream by max length (exact or approximate). Uses GLIDE xtrim. */
+    /**
+     * Trims the stream by max length (exact or approximate). Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param maxLen maximum length
+     * @param exact if true, trim exactly; if false, trim approximately
+     * @return number of entries deleted
+     */
     public long xtrim(String key, long maxLen, boolean exact) {
         return executeCommandWithGlide(
                 "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MaxLen(exact, maxLen)).get());
     }
 
-    /** Trims the stream by minimum id. Uses GLIDE xtrim. */
+    /**
+     * Trims the stream by minimum id. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param minId smallest entry ID to keep; older entries are removed
+     * @return number of entries deleted
+     */
     public long xtrim(String key, String minId) {
         return executeCommandWithGlide(
                 "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MinId(minId)).get());
     }
 
     /**
-     * Trims the stream using AbstractXTrimParams<?>. Uses GLIDE xtrim.
+     * Trims the stream using {@code AbstractXTrimParams<?>}. Uses GLIDE xtrim.
      *
      * @param key stream key
      * @param params trim parameters
@@ -7220,7 +7274,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Trims the stream using AbstractXTrimParams<?> - binary version. Uses GLIDE xtrim.
+     * Trims the stream using {@code AbstractXTrimParams<?>} - binary version. Uses GLIDE xtrim.
      *
      * @param key stream key
      * @param params trim parameters
@@ -7230,13 +7284,28 @@ public abstract class AbstractGlideJedis extends JedisCommon {
         return xtrim(new String(key), params);
     }
 
-    /** Creates a consumer group. Uses GLIDE xgroupCreate. */
+    /**
+     * Creates a consumer group. Uses GLIDE xgroupCreate.
+     *
+     * @param key stream key
+     * @param groupName name of the consumer group to create
+     * @param id id to start delivering from ("$" for entries added after creation)
+     * @return {@code "OK"} when the group was created
+     */
     public String xgroupCreate(String key, String groupName, String id) {
         return executeCommandWithGlide(
                 "XGROUP CREATE", () -> glideClient.xgroupCreate(key, groupName, id).get());
     }
 
-    /** Creates a consumer group, optionally creating the stream. Uses GLIDE xgroupCreate. */
+    /**
+     * Creates a consumer group, optionally creating the stream. Uses GLIDE xgroupCreate.
+     *
+     * @param key stream key
+     * @param groupName name of the consumer group to create
+     * @param id id to start delivering from ("$" for entries added after creation)
+     * @param makeStream if true, create the stream when it does not exist
+     * @return {@code "OK"} when the group was created
+     */
     public String xgroupCreate(String key, String groupName, String id, boolean makeStream) {
         return executeCommandWithGlide(
                 "XGROUP CREATE",
@@ -7247,26 +7316,53 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                                 .get());
     }
 
-    /** Destroys a consumer group. Uses GLIDE xgroupDestroy. */
+    /**
+     * Destroys a consumer group. Uses GLIDE xgroupDestroy.
+     *
+     * @param key stream key
+     * @param groupName name of the consumer group to destroy
+     * @return {@code true} if the group existed and was destroyed
+     */
     public boolean xgroupDestroy(String key, String groupName) {
         return executeCommandWithGlide(
                 "XGROUP DESTROY", () -> glideClient.xgroupDestroy(key, groupName).get());
     }
 
-    /** Sets the last delivered id of a group. Uses GLIDE xgroupSetId. */
+    /**
+     * Sets the last delivered id of a group. Uses GLIDE xgroupSetId.
+     *
+     * @param key stream key
+     * @param groupName name of the consumer group
+     * @param id new last-delivered id for the group
+     * @return {@code "OK"} when the id was set
+     */
     public String xgroupSetId(String key, String groupName, String id) {
         return executeCommandWithGlide(
                 "XGROUP SETID", () -> glideClient.xgroupSetId(key, groupName, id).get());
     }
 
-    /** Creates a consumer in the group. Uses GLIDE xgroupCreateConsumer. */
+    /**
+     * Creates a consumer in the group. Uses GLIDE xgroupCreateConsumer.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param consumer name of the consumer to create
+     * @return {@code true} if the consumer was created, {@code false} if it already existed
+     */
     public boolean xgroupCreateConsumer(String key, String group, String consumer) {
         return executeCommandWithGlide(
                 "XGROUP CREATECONSUMER",
                 () -> glideClient.xgroupCreateConsumer(key, group, consumer).get());
     }
 
-    /** Deletes a consumer from the group. Uses GLIDE xgroupDelConsumer. */
+    /**
+     * Deletes a consumer from the group. Uses GLIDE xgroupDelConsumer.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param consumer name of the consumer to delete
+     * @return number of pending messages the deleted consumer still owned
+     */
     public long xgroupDelConsumer(String key, String group, String consumer) {
         return executeCommandWithGlide(
                 "XGROUP DELCONSUMER", () -> glideClient.xgroupDelConsumer(key, group, consumer).get());
@@ -7275,7 +7371,10 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Reads from streams as a consumer in a group. Uses GLIDE xreadgroup.
      *
+     * @param group name of the consumer group
+     * @param consumer name of the consumer reading on behalf of the group
      * @param keysAndIds map of stream key to id (typically "&gt;" for new entries)
+     * @return entries read per stream key; empty if nothing was available
      */
     public Map<String, List<StreamEntry>> xreadgroup(
             String group, String consumer, Map<String, String> keysAndIds) {
@@ -7290,7 +7389,17 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Reads from streams as a consumer with options. Uses GLIDE xreadgroup. */
+    /**
+     * Reads from streams as a consumer with options. Uses GLIDE xreadgroup.
+     *
+     * @param group name of the consumer group
+     * @param consumer name of the consumer reading on behalf of the group
+     * @param keysAndIds map of stream key to id (typically "&gt;" for new entries)
+     * @param count max entries per stream (null to omit)
+     * @param block block milliseconds (null to omit)
+     * @param noack if true, deliver entries without adding them to the pending entries list
+     * @return entries read per stream key; empty if nothing was available
+     */
     public Map<String, List<StreamEntry>> xreadgroup(
             String group,
             String consumer,
@@ -7311,12 +7420,26 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Acknowledges messages. Uses GLIDE xack. */
+    /**
+     * Acknowledges messages. Uses GLIDE xack.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param ids entry IDs to acknowledge
+     * @return number of entries acknowledged
+     */
     public long xack(String key, String group, String... ids) {
         return executeCommandWithGlide("XACK", () -> glideClient.xack(key, group, ids).get());
     }
 
-    /** Acknowledges messages. Uses GLIDE xack. */
+    /**
+     * Acknowledges messages. Uses GLIDE xack.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param ids entry IDs to acknowledge
+     * @return number of entries acknowledged
+     */
     public long xack(String key, String group, StreamEntryID... ids) {
         String[] idStrs = new String[ids.length];
         for (int i = 0; i < ids.length; i++) {
@@ -7328,6 +7451,10 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Returns pending summary for the group. Uses GLIDE xpending. Converts response to
      * StreamPendingSummary (total, minId, maxId, consumerMessageCount).
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @return summary of the group's pending entries; a zero-total summary if there are none
      */
     public StreamPendingSummary xpending(String key, String group) {
         return executeCommandWithGlide(
@@ -7367,7 +7494,16 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Returns pending entries in range. Uses GLIDE xpending. */
+    /**
+     * Returns pending entries in range. Uses GLIDE xpending.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param start start of the id range
+     * @param end end of the id range
+     * @param count maximum number of entries to return
+     * @return at most {@code count} pending entries in the range; empty if there are none
+     */
     public List<StreamPendingEntry> xpending(
             String key, String group, StreamRange start, StreamRange end, long count) {
         return executeCommandWithGlide(
@@ -7394,7 +7530,16 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Returns pending entries in id range. Uses GLIDE xpending. */
+    /**
+     * Returns pending entries in id range. Uses GLIDE xpending.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param start start id ("-" for minimum)
+     * @param end end id ("+" for maximum)
+     * @param count maximum number of entries to return
+     * @return at most {@code count} pending entries in the range; empty if there are none
+     */
     public List<StreamPendingEntry> xpending(
             String key, String group, String start, String end, long count) {
         StreamRange s =
@@ -7403,7 +7548,16 @@ public abstract class AbstractGlideJedis extends JedisCommon {
         return xpending(key, group, s, e, count);
     }
 
-    /** Claims pending messages. Uses GLIDE xclaim. */
+    /**
+     * Claims pending messages. Uses GLIDE xclaim.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param consumer name of the consumer taking ownership of the entries
+     * @param minIdleTime only claim entries idle for at least this many milliseconds
+     * @param ids entry IDs to claim
+     * @return the claimed entries; empty if none matched
+     */
     public List<StreamEntry> xclaim(
             String key, String group, String consumer, long minIdleTime, String... ids) {
         return executeCommandWithGlide(
@@ -7415,7 +7569,17 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Claims pending messages with options. Uses GLIDE xclaim. */
+    /**
+     * Claims pending messages with options. Uses GLIDE xclaim.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param consumer name of the consumer taking ownership of the entries
+     * @param minIdleTime only claim entries idle for at least this many milliseconds
+     * @param options additional XCLAIM options (IDLE, TIME, RETRYCOUNT, FORCE)
+     * @param ids entry IDs to claim
+     * @return the claimed entries; empty if none matched
+     */
     public List<StreamEntry> xclaim(
             String key,
             String group,
@@ -7433,8 +7597,17 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Auto-claims pending messages. Uses GLIDE xautoclaim. Returns Object[]: [String nextStartId,
-     * List of StreamEntry claimed].
+     * Auto-claims pending messages. Uses GLIDE xautoclaim. Returns the raw GLIDE response with no
+     * conversion.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param consumer name of the consumer taking ownership of the entries
+     * @param minIdleTime only claim entries idle for at least this many milliseconds
+     * @param start id to start scanning the pending entries list from
+     * @return the raw GLIDE response: element [0] is the next start id, element [1] is a map of
+     *     claimed entry id to a 2D field-value array, and on Valkey 7.0.0 or above element [2] is a
+     *     list of pending entry ids that no longer exist in the stream
      */
     public Object[] xautoclaim(
             String key, String group, String consumer, long minIdleTime, String start) {
@@ -7442,7 +7615,20 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 "XAUTOCLAIM", () -> glideClient.xautoclaim(key, group, consumer, minIdleTime, start).get());
     }
 
-    /** Auto-claims pending messages with count. Uses GLIDE xautoclaim. */
+    /**
+     * Auto-claims pending messages with count. Uses GLIDE xautoclaim. Returns the raw GLIDE response
+     * with no conversion.
+     *
+     * @param key stream key
+     * @param group name of the consumer group
+     * @param consumer name of the consumer taking ownership of the entries
+     * @param minIdleTime only claim entries idle for at least this many milliseconds
+     * @param start id to start scanning the pending entries list from
+     * @param count upper limit on the number of entries claimed
+     * @return the raw GLIDE response: element [0] is the next start id, element [1] is a map of
+     *     claimed entry id to a 2D field-value array, and on Valkey 7.0.0 or above element [2] is a
+     *     list of pending entry ids that no longer exist in the stream
+     */
     public Object[] xautoclaim(
             String key, String group, String consumer, long minIdleTime, String start, long count) {
         return executeCommandWithGlide(
@@ -7453,12 +7639,20 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Returns stream info. Uses GLIDE xinfoStream. Returns raw Map; for StreamInfo use {@link
      * #xinfoStreamAsInfo(String)}.
+     *
+     * @param key stream key
+     * @return the raw XINFO STREAM response as a field-to-value map
      */
     public Map<String, Object> xinfoStream(String key) {
         return executeCommandWithGlide("XINFO STREAM", () -> glideClient.xinfoStream(key).get());
     }
 
-    /** Returns stream info as StreamInfo. Uses GLIDE xinfoStream and converts response. */
+    /**
+     * Returns stream info as StreamInfo. Uses GLIDE xinfoStream and converts response.
+     *
+     * @param key stream key
+     * @return the stream info, or {@code null} if the server returned no response
+     */
     public StreamInfo xinfoStreamAsInfo(String key) {
         return executeCommandWithGlide(
                 "XINFO STREAM",
@@ -7508,7 +7702,12 @@ public abstract class AbstractGlideJedis extends JedisCommon {
         return null;
     }
 
-    /** Returns consumer groups info. Uses GLIDE xinfoGroups. */
+    /**
+     * Returns consumer groups info. Uses GLIDE xinfoGroups.
+     *
+     * @param key stream key
+     * @return one entry per consumer group on the stream; empty if it has none
+     */
     public List<StreamGroupInfo> xinfoGroups(String key) {
         return executeCommandWithGlide(
                 "XINFO GROUPS",
@@ -7529,7 +7728,13 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                 });
     }
 
-    /** Returns consumers info for a group. Uses GLIDE xinfoConsumers. */
+    /**
+     * Returns consumers info for a group. Uses GLIDE xinfoConsumers.
+     *
+     * @param key stream key
+     * @param groupName name of the consumer group
+     * @return one entry per consumer in the group; empty if it has none
+     */
     public List<StreamConsumerInfo> xinfoConsumers(String key, String groupName) {
         return executeCommandWithGlide(
                 "XINFO CONSUMERS",
@@ -7580,6 +7785,9 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Constructor with Connection (compatibility stub). NOTE: Connection is not used in GLIDE
      * compatibility layer.
+     *
+     * @param connection source of the host and port used to create the GLIDE client; the connection
+     *     object itself is otherwise unused
      */
     protected AbstractGlideJedis(Connection connection) {
         // Extract host/port from connection for GLIDE client creation
@@ -7589,6 +7797,10 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Send a blocking command to Valkey server. Uses the same implementation as sendCommand since
      * GLIDE handles blocking internally.
+     *
+     * @param cmd the command to send
+     * @param args the command arguments
+     * @return the server's reply
      */
     public Object sendBlockingCommand(ProtocolCommand cmd, String... args) {
         return sendCommand(cmd, args);
@@ -7597,6 +7809,10 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Send a blocking command to Valkey server with byte arrays. Uses the same implementation as
      * sendCommand since GLIDE handles blocking internally.
+     *
+     * @param cmd the command to send
+     * @param args the command arguments
+     * @return the server's reply
      */
     public Object sendBlockingCommand(ProtocolCommand cmd, byte[]... args) {
         return sendCommand(cmd, args);
@@ -7605,6 +7821,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /**
      * Returns the logical database index for this client: {@link JedisClientConfig#getDatabase()} on
      * connect, or the last index passed to {@link #select(int)} after a successful SELECT.
+     *
+     * @return the logical database index this client is currently using
      */
     public int getDB() {
         checkNotClosed();
@@ -9294,7 +9512,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param args the arguments for the script
      * @return the result of the script execution
      * @see <a href="https://valkey.io/commands/eval-ro/">EVAL_RO</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public Object evalReadonly(String script, List<String> keys, List<String> args) {
         return executeCommandWithGlide(
@@ -9314,7 +9532,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param args the arguments for the script
      * @return the result of the script execution
      * @see <a href="https://valkey.io/commands/evalsha-ro/">EVALSHA_RO</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public Object evalshaReadonly(String sha1, List<String> keys, List<String> args) {
         return executeCommandWithGlide(
@@ -9435,7 +9653,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return "OK" if successful
      * @throws JedisException if the operation fails or connection is lost
      * @see <a href="https://valkey.io/commands/script-debug/">valkey.io</a>
-     * @since Valkey 3.2.0
      */
     public String scriptDebug(ScriptDebugMode mode) {
         return executeCommandWithGlide("SCRIPT DEBUG", () -> glideClient.scriptDebug(mode).get());
@@ -9447,7 +9664,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param functionCode the source code that implements the library
      * @return the library name that was loaded
      * @see <a href="https://valkey.io/commands/function-load/">FUNCTION LOAD</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionLoad(String functionCode) {
         return executeCommandWithGlide(
@@ -9460,7 +9677,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param functionCode the source code that implements the library
      * @return the library name that was loaded
      * @see <a href="https://valkey.io/commands/function-load/">FUNCTION LOAD</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionLoadReplace(String functionCode) {
         return executeCommandWithGlide(
@@ -9473,7 +9690,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param libraryName the library name to delete
      * @return "OK"
      * @see <a href="https://valkey.io/commands/function-delete/">FUNCTION DELETE</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionDelete(String libraryName) {
         return executeCommandWithGlide(
@@ -9485,7 +9702,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return the serialized payload of all loaded libraries
      * @see <a href="https://valkey.io/commands/function-dump/">FUNCTION DUMP</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public byte[] functionDump() {
         return executeCommandWithGlide("FUNCTION DUMP", () -> glideClient.functionDump().get());
@@ -9497,7 +9714,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param serializedValue the serialized data from functionDump
      * @return "OK"
      * @see <a href="https://valkey.io/commands/function-restore/">FUNCTION RESTORE</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionRestore(byte[] serializedValue) {
         return executeCommandWithGlide(
@@ -9511,7 +9728,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param policy the policy for handling existing libraries
      * @return "OK"
      * @see <a href="https://valkey.io/commands/function-restore/">FUNCTION RESTORE</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionRestore(byte[] serializedValue, FunctionRestorePolicy policy) {
         return executeCommandWithGlide(
@@ -9527,7 +9744,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return "OK"
      * @see <a href="https://valkey.io/commands/function-flush/">FUNCTION FLUSH</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionFlush() {
         return executeCommandWithGlide("FUNCTION FLUSH", () -> glideClient.functionFlush().get());
@@ -9539,7 +9756,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param mode the flushing mode (SYNC or ASYNC)
      * @return "OK"
      * @see <a href="https://valkey.io/commands/function-flush/">FUNCTION FLUSH</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionFlush(FlushMode mode) {
         return executeCommandWithGlide(
@@ -9551,7 +9768,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return "OK" if function is terminated
      * @see <a href="https://valkey.io/commands/function-kill/">FUNCTION KILL</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public String functionKill() {
         return executeCommandWithGlide("FUNCTION KILL", () -> glideClient.functionKill().get());
@@ -9565,7 +9782,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param args the function arguments
      * @return the invoked function's return value
      * @see <a href="https://valkey.io/commands/fcall/">FCALL</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public Object fcall(String name, List<String> keys, List<String> args) {
         return executeCommandWithGlide(
@@ -9585,7 +9802,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param args the function arguments
      * @return the invoked function's return value
      * @see <a href="https://valkey.io/commands/fcall_ro/">FCALL_RO</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public Object fcallReadonly(String name, List<String> keys, List<String> args) {
         return executeCommandWithGlide(
@@ -9602,7 +9819,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return info about all libraries and their functions
      * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public List<LibraryInfo> functionList() {
         return executeCommandWithGlide(
@@ -9623,7 +9840,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param libraryNamePattern a wildcard pattern for matching library names
      * @return info about queried libraries and their functions
      * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public List<LibraryInfo> functionList(String libraryNamePattern) {
         return executeCommandWithGlide(
@@ -9643,7 +9860,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return info about all libraries and their functions including code
      * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public List<LibraryInfo> functionListWithCode() {
         return executeCommandWithGlide(
@@ -9664,7 +9881,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param libraryNamePattern a wildcard pattern for matching library names
      * @return info about queried libraries and their functions including code
      * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     public List<LibraryInfo> functionListWithCode(String libraryNamePattern) {
         return executeCommandWithGlide(
@@ -9685,7 +9902,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return a map with information about running scripts and available engines
      * @see <a href="https://valkey.io/commands/function-stats/">FUNCTION STATS</a>
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      */
     @SuppressWarnings("unchecked")
     public FunctionStats functionStats() {
@@ -9725,7 +9942,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param member the member to add
      * @return the number of elements added to the sorted set
      * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
-     * @since Valkey 1.2.0
      */
     public long zadd(String key, double score, String member) {
         return executeCommandWithGlide(
@@ -9740,7 +9956,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param member the member to add
      * @param params additional options for the ZADD command
      * @return the number of elements added or updated, depending on the CH option
-     * @since Valkey 3.0.2
      */
     public long zadd(String key, double score, String member, AbstractZAddParams<?> params) {
         return zadd(key, createMap(member, score), params);
@@ -9782,7 +9997,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param scoreMembers a map of members to their scores
      * @return the number of elements added to the sorted set
      * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
-     * @since Valkey 1.2.0
      */
     public long zadd(String key, Map<String, Double> scoreMembers) {
         return executeCommandWithGlide("ZADD", () -> glideClient.zadd(key, scoreMembers).get());
@@ -9817,7 +10031,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param params additional options for the ZADD command
      * @return the number of elements added or updated, depending on the CH option
      * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
-     * @since Valkey 3.0.2
      */
     public long zadd(String key, Map<String, Double> scoreMembers, AbstractZAddParams<?> params) {
         return executeCommandWithGlide(
@@ -9862,7 +10075,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param member the member whose score to increment
      * @return the new score of the member
      * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
-     * @since Valkey 1.2.0
      */
     public double zaddIncr(String key, double increment, String member) {
         return executeCommandWithGlide(
@@ -9891,7 +10103,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param members the members to remove
      * @return the number of members removed from the sorted set
      * @see <a href="https://valkey.io/commands/zrem/">valkey.io</a>
-     * @since Valkey 1.2.0
      */
     public long zrem(String key, String... members) {
         return executeCommandWithGlide("ZREM", () -> glideClient.zrem(key, members).get());
@@ -9946,7 +10157,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key of the sorted set
      * @return the cardinality (number of elements) of the sorted set, or 0 if key does not exist
      * @see <a href="https://valkey.io/commands/zcard/">valkey.io</a>
-     * @since Valkey 1.2.0
      */
     public long zcard(String key) {
         return executeCommandWithGlide("ZCARD", () -> glideClient.zcard(key).get());
@@ -10065,7 +10275,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param member the member whose score to return
      * @return the score of the member, or null if the member does not exist
      * @see <a href="https://valkey.io/commands/zscore/">valkey.io</a>
-     * @since Valkey 1.2.0
      */
     public Double zscore(String key, String member) {
         return executeCommandWithGlide("ZSCORE", () -> glideClient.zscore(key, member).get());
@@ -10090,7 +10299,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param members the members whose scores to return
      * @return an array of scores corresponding to the members, with null for non-existing members
      * @see <a href="https://valkey.io/commands/zmscore/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public List<Double> zmscore(String key, String... members) {
         return executeCommandWithGlide(
@@ -10148,7 +10356,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param stop the ending index (0-based, can be negative to indicate offset from end)
      * @return an array of elements in the specified range
      * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a>
-     * @since Valkey 1.2.0
      */
     public List<String> zrange(String key, long start, long stop) {
         return executeCommandWithGlide(
@@ -10203,7 +10410,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Returns elements from a sorted set using AbstractZRangeParams<?> for advanced range queries.
+     * Returns elements from a sorted set using {@code AbstractZRangeParams<?>} for advanced range
+     * queries.
      *
      * @param key the key of the sorted set
      * @param zRangeParams the range parameters (by index, score, or lex)
@@ -10220,8 +10428,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Returns elements from a sorted set using AbstractZRangeParams<?> for advanced range queries
-     * (binary version).
+     * Returns elements from a sorted set using {@code AbstractZRangeParams<?>} for advanced range
+     * queries (binary version).
      *
      * @param key the key of the sorted set
      * @param zRangeParams the range parameters (by index, score, or lex)
@@ -10306,7 +10514,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param stop the ending index (0-based, can be negative to indicate offset from end)
      * @return a list of Tuples (element-score pairs) in the specified range
      * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a>
-     * @since Valkey 1.2.0
      */
     public List<Tuple> zrangeWithScores(String key, long start, long stop) {
         return executeCommandWithGlide(
@@ -10406,7 +10613,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param member the member whose rank to return
      * @return the rank of the member (0-based), or null if the member does not exist
      * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a>
-     * @since Valkey 2.0.0
      */
     public Long zrank(String key, String member) {
         return executeCommandWithGlide("ZRANK", () -> glideClient.zrank(key, member).get());
@@ -10432,7 +10638,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param member the member whose rank to return
      * @return the rank of the member (0-based), or null if the member does not exist
      * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a>
-     * @since Valkey 2.0.0
      */
     public Long zrevrank(String key, String member) {
         return executeCommandWithGlide("ZREVRANK", () -> glideClient.zrevrank(key, member).get());
@@ -10459,7 +10664,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param max the maximum score (inclusive by default, use "(" prefix for exclusive)
      * @return the number of elements in the specified score range
      * @see <a href="https://valkey.io/commands/zcount/">valkey.io</a>
-     * @since Valkey 2.0.0
      */
     public long zcount(String key, double min, double max) {
         return executeCommandWithGlide(
@@ -10499,7 +10703,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param max the maximum score as a string (use "(" prefix for exclusive, e.g., "(10.0")
      * @return the number of elements in the specified score range
      * @see <a href="https://valkey.io/commands/zcount/">valkey.io</a>
-     * @since Valkey 2.0.0
      */
     public long zcount(String key, String min, String max) {
         return executeCommandWithGlide(
@@ -10540,7 +10743,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param member the member whose score to increment
      * @return the new score of the member
      * @see <a href="https://valkey.io/commands/zincrby/">valkey.io</a>
-     * @since Valkey 1.2.0
      */
     public double zincrby(String key, double increment, String member) {
         return executeCommandWithGlide(
@@ -10571,7 +10773,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return the new score of the member, or null if the operation was not performed due to
      *     conditions
      * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
-     * @since Valkey 3.0.2
      */
     public Double zincrby(
             String key, double increment, String member, AbstractZIncrByParams<?> params) {
@@ -10611,7 +10812,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key of the sorted set
      * @return the removed member with its score, or null if the key does not exist
      * @see <a href="https://valkey.io/commands/zpopmin/">valkey.io</a>
-     * @since Valkey 5.0.0
      */
     public Tuple zpopmin(String key) {
         return executeCommandWithGlide(
@@ -10652,7 +10852,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param count the maximum number of members to remove
      * @return a list of removed members with their scores, ordered from lowest to highest score
      * @see <a href="https://valkey.io/commands/zpopmin/">valkey.io</a>
-     * @since Valkey 5.0.0
      */
     public List<Tuple> zpopmin(String key, int count) {
         return executeCommandWithGlide(
@@ -10695,7 +10894,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key of the sorted set
      * @return the removed member with its score, or null if the key does not exist
      * @see <a href="https://valkey.io/commands/zpopmax/">valkey.io</a>
-     * @since Valkey 5.0.0
      */
     public Tuple zpopmax(String key) {
         return executeCommandWithGlide(
@@ -10736,7 +10934,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param count the maximum number of members to remove
      * @return a list of removed members with their scores, ordered from highest to lowest score
      * @see <a href="https://valkey.io/commands/zpopmax/">valkey.io</a>
-     * @since Valkey 5.0.0
      */
     public List<Tuple> zpopmax(String key, int count) {
         return executeCommandWithGlide(
@@ -10780,7 +10977,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param sets the keys of the sorted sets to union
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a>
-     * @since Valkey 2.0.0
      */
     public long zunionstore(String dstkey, String... sets) {
         return executeCommandWithGlide(
@@ -10814,11 +11010,10 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * destination key.
      *
      * @param dstkey the destination key
-     * @param params the AbstractZParams<?> containing weights and aggregation options
+     * @param params the {@code AbstractZParams<?>} containing weights and aggregation options
      * @param sets the keys of the sorted sets to union
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a>
-     * @since Valkey 2.0.0
      */
     public long zunionstore(String dstkey, AbstractZParams<?> params, String... sets) {
         return executeCommandWithGlide(
@@ -10839,7 +11034,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * destination key (binary version).
      *
      * @param dstkey the destination key
-     * @param params the AbstractZParams<?> containing weights and aggregation options
+     * @param params the {@code AbstractZParams<?>} containing weights and aggregation options
      * @param sets the keys of the sorted sets to union
      * @return the number of elements in the resulting sorted set
      */
@@ -10865,7 +11060,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param sets the keys of the sorted sets to intersect
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a>
-     * @since Valkey 2.0.0
      */
     public long zinterstore(String dstkey, String... sets) {
         return executeCommandWithGlide(
@@ -10900,11 +11094,10 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * destination key.
      *
      * @param dstkey the destination key
-     * @param params the AbstractZParams<?> containing weights and aggregation options
+     * @param params the {@code AbstractZParams<?>} containing weights and aggregation options
      * @param sets the keys of the sorted sets to intersect
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a>
-     * @since Valkey 2.0.0
      */
     public long zinterstore(String dstkey, AbstractZParams<?> params, String... sets) {
         return executeCommandWithGlide(
@@ -10925,7 +11118,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * destination key (binary version).
      *
      * @param dstkey the destination key
-     * @param params the AbstractZParams<?> containing weights and aggregation options
+     * @param params the {@code AbstractZParams<?>} containing weights and aggregation options
      * @param sets the keys of the sorted sets to intersect
      * @return the number of elements in the resulting sorted set
      */
@@ -10952,7 +11145,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param stop the ending rank (0-based, can be negative to indicate offset from end)
      * @return the number of members removed
      * @see <a href="https://valkey.io/commands/zremrangebyrank/">valkey.io</a>
-     * @since Valkey 2.0.0
      */
     public long zremrangebyrank(String key, long start, long stop) {
         return executeCommandWithGlide(
@@ -10981,7 +11173,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param max the maximum score (inclusive by default, use "(" prefix for exclusive)
      * @return the number of members removed
      * @see <a href="https://valkey.io/commands/zremrangebyscore/">valkey.io</a>
-     * @since Valkey 1.2.0
      */
     public long zremrangebyscore(String key, double min, double max) {
         return executeCommandWithGlide(
@@ -11019,7 +11210,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param max the maximum score as a string (use "(" prefix for exclusive, e.g., "(10.0")
      * @return the number of members removed
      * @see <a href="https://valkey.io/commands/zremrangebyscore/">valkey.io</a>
-     * @since Valkey 1.2.0
      */
     public long zremrangebyscore(String key, String min, String max) {
         return executeCommandWithGlide(
@@ -11059,7 +11249,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param cursor the cursor position to start from (use "0" to start a new iteration)
      * @return a ScanResult containing the next cursor position and a list of Tuples
      * @see <a href="https://valkey.io/commands/zscan/">valkey.io</a>
-     * @since Valkey 2.8.0
      */
     public ScanResult<Tuple> zscan(String key, String cursor) {
         return executeCommandWithGlide(
@@ -11199,7 +11388,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param stop the stop index (inclusive)
      * @return the number of elements stored in the destination sorted set
      * @see <a href="https://valkey.io/commands/zrangestore/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public long zrangestore(String destination, String source, long start, long stop) {
         return executeCommandWithGlide(
@@ -11232,14 +11420,13 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Stores elements from a sorted set using AbstractZRangeParams<?> into a destination key.
+     * Stores elements from a sorted set using {@code AbstractZRangeParams<?>} into a destination key.
      *
      * @param dest the destination key
      * @param src the source key
      * @param zRangeParams the range parameters (by index, score, or lex)
      * @return the number of elements stored in the destination sorted set
      * @see <a href="https://valkey.io/commands/zrangestore/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public long zrangestore(String dest, String src, AbstractZRangeParams<?> zRangeParams) {
         return executeCommandWithGlide(
@@ -11251,8 +11438,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Stores elements from a sorted set using AbstractZRangeParams<?> into a destination key (binary
-     * version).
+     * Stores elements from a sorted set using {@code AbstractZRangeParams<?>} into a destination key
+     * (binary version).
      *
      * @param dest the destination key
      * @param src the source key
@@ -11657,7 +11844,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param max the maximum lexicographical value (inclusive with "[", exclusive with "(")
      * @return the number of members in the specified range
      * @see <a href="https://valkey.io/commands/zlexcount/">valkey.io</a>
-     * @since Valkey 2.8.9
      */
     public long zlexcount(String key, String min, String max) {
         return executeCommandWithGlide(
@@ -11697,7 +11883,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return a KeyValue containing the key and a Tuple (member-score pair), or null if timeout is
      *     reached
      * @see <a href="https://valkey.io/commands/bzpopmin/">valkey.io</a>
-     * @since Valkey 5.0.0
      */
     public redis.clients.jedis.resps.KeyValue<String, Tuple> bzpopmin(
             double timeout, String... keys) {
@@ -11754,7 +11939,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @return a KeyValue containing the key and a Tuple (member-score pair), or null if timeout is
      *     reached
      * @see <a href="https://valkey.io/commands/bzpopmax/">valkey.io</a>
-     * @since Valkey 5.0.0
      */
     public redis.clients.jedis.resps.KeyValue<String, Tuple> bzpopmax(
             double timeout, String... keys) {
@@ -11808,7 +11992,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param keys the keys of the sorted sets
      * @return an array of members in the resulting set
      * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public List<String> zdiff(String... keys) {
         return executeCommandWithGlide("ZDIFF", () -> Arrays.asList(glideClient.zdiff(keys).get()));
@@ -11839,7 +12022,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param keys the keys of the sorted sets
      * @return a list of Tuples (element-score pairs) in the resulting set
      * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public List<Tuple> zdiffWithScores(String... keys) {
         return executeCommandWithGlide(
@@ -11884,7 +12066,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param keys the keys of the sorted sets
      * @return the number of members in the resulting sorted set
      * @see <a href="https://valkey.io/commands/zdiffstore/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public long zdiffstore(String destination, String... keys) {
         return executeCommandWithGlide(
@@ -11915,7 +12096,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param keys the keys of the sorted sets
      * @return an array of members in the resulting set
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public List<String> zunion(String... keys) {
         return executeCommandWithGlide(
@@ -11945,7 +12125,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param keys the keys of the sorted sets
      * @return a list of Tuples (element-score pairs) in the resulting set
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public List<Tuple> zunionWithScores(String... keys) {
         return executeCommandWithGlide(
@@ -11988,7 +12167,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param keys the keys of the sorted sets
      * @return an array of members in the resulting set
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public List<String> zinter(String... keys) {
         return executeCommandWithGlide(
@@ -12018,7 +12196,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param keys the keys of the sorted sets
      * @return a list of Tuples (element-score pairs) in the resulting set
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public List<Tuple> zinterWithScores(String... keys) {
         return executeCommandWithGlide(
@@ -12269,7 +12446,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param max the maximum lexicographical value (inclusive with "[", exclusive with "(")
      * @return the number of members removed
      * @see <a href="https://valkey.io/commands/zremrangebylex/">valkey.io</a>
-     * @since Valkey 2.8.9
      */
     public long zremrangebylex(String key, String min, String max) {
         return executeCommandWithGlide(
@@ -12306,7 +12482,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key of the sorted set
      * @return a random member, or null if the set is empty
      * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public String zrandmember(String key) {
         return executeCommandWithGlide("ZRANDMEMBER", () -> glideClient.zrandmember(key).get());
@@ -12334,7 +12509,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param count the number of members to return
      * @return a list of random members
      * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public List<String> zrandmember(String key, long count) {
         return executeCommandWithGlide(
@@ -12365,7 +12539,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param count the number of members to return
      * @return a list of members with their scores
      * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public List<Tuple> zrandmemberWithScores(String key, long count) {
         return executeCommandWithGlide(
@@ -12437,7 +12610,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param count the number of members to return (negative values allow duplicates)
      * @return an array of random members
      * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public List<String> zrandmemberWithCount(String key, long count) {
         return executeCommandWithGlide(
@@ -12494,7 +12666,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param count the number of members to return (negative values allow duplicates)
      * @return a list of Tuples (element-score pairs)
      * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a>
-     * @since Valkey 6.2.0
      */
     public List<Tuple> zrandmemberWithCountWithScores(String key, long count) {
         return executeCommandWithGlide(
@@ -13071,7 +13242,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param dstkey the destination key to store the sorted result
      * @return the number of elements in the sorted result
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
-     * @since Valkey 1.0.0
      */
     public long sort(String key, String dstkey) {
         return executeCommandWithGlide("SORT", () -> glideClient.sortStore(key, dstkey).get());
@@ -13085,7 +13255,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param dstkey the destination key to store the sorted result
      * @return the number of elements in the sorted result
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
-     * @since Valkey 1.0.0
      */
     public long sort(final byte[] key, final byte[] dstkey) {
         return executeCommandWithGlide(
@@ -13101,7 +13270,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param dstkey the destination key to store the sorted result
      * @return the number of elements in the sorted result
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
-     * @since Valkey 1.0.0
      */
     public long sort(String key, AbstractSortingParams<?> sortingParameters, String dstkey) {
         return executeCommandWithGlide(
@@ -13121,7 +13289,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param dstkey the destination key to store the sorted result
      * @return the number of elements in the sorted result
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
-     * @since Valkey 1.0.0
      */
     public long sort(
             final byte[] key, AbstractSortingParams<?> sortingParameters, final byte[] dstkey) {
@@ -13260,7 +13427,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param timeout the timeout in milliseconds
      * @return the number of replicas that acknowledged the write commands
      * @see <a href="https://valkey.io/commands/wait/">valkey.io</a> for details.
-     * @since Valkey 3.0.0
      */
     public long wait(long replicas, long timeout) {
         return executeCommandWithGlide("WAIT", () -> glideClient.wait(replicas, timeout).get());
@@ -13274,7 +13440,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param timeout the timeout in milliseconds
      * @return the number of replicas that acknowledged the write commands
      * @see <a href="https://valkey.io/commands/wait/">valkey.io</a> for details.
-     * @since Valkey 3.0.0
      */
     public long waitReplicas(int replicas, long timeout) {
         return executeCommandWithGlide("WAIT", () -> glideClient.wait((long) replicas, timeout).get());
@@ -13311,7 +13476,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key of the object
      * @return the encoding of the object, or null if the key does not exist
      * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
-     * @since Valkey 2.2.3
      */
     public String objectEncoding(String key) {
         return executeCommandWithGlide("OBJECT", () -> glideClient.objectEncoding(key).get());
@@ -13323,7 +13487,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key of the object
      * @return the encoding of the object, or null if the key does not exist
      * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
-     * @since Valkey 2.2.3
      */
     public byte[] objectEncoding(final byte[] key) {
         return executeCommandWithGlide(
@@ -13340,7 +13503,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key of the object
      * @return the frequency counter, or null if the key does not exist or LFU is not enabled
      * @see <a href="https://valkey.io/commands/object-freq/">valkey.io</a> for details.
-     * @since Valkey 4.0.0
      */
     public Long objectFreq(String key) {
         try {
@@ -13363,7 +13525,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key of the object
      * @return the frequency counter, or null if the key does not exist or LFU is not enabled
      * @see <a href="https://valkey.io/commands/object-freq/">valkey.io</a> for details.
-     * @since Valkey 4.0.0
      */
     public Long objectFreq(final byte[] key) {
         try {
@@ -13386,7 +13547,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key of the object
      * @return the idle time in seconds, or null if the key does not exist
      * @see <a href="https://valkey.io/commands/object-idletime/">valkey.io</a> for details.
-     * @since Valkey 2.2.3
      */
     public Long objectIdletime(String key) {
         return executeCommandWithGlide("OBJECT", () -> glideClient.objectIdletime(key).get());
@@ -13398,7 +13558,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key of the object
      * @return the idle time in seconds, or null if the key does not exist
      * @see <a href="https://valkey.io/commands/object-idletime/">valkey.io</a> for details.
-     * @since Valkey 2.2.3
      */
     public Long objectIdletime(final byte[] key) {
         return executeCommandWithGlide(
@@ -13411,7 +13570,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key of the object
      * @return the reference count, or null if the key does not exist
      * @see <a href="https://valkey.io/commands/object-refcount/">valkey.io</a> for details.
-     * @since Valkey 2.2.3
      */
     public Long objectRefcount(String key) {
         return executeCommandWithGlide("OBJECT", () -> glideClient.objectRefcount(key).get());
@@ -13423,7 +13581,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param key the key of the object
      * @return the reference count, or null if the key does not exist
      * @see <a href="https://valkey.io/commands/object-refcount/">valkey.io</a> for details.
-     * @since Valkey 2.2.3
      */
     public Long objectRefcount(final byte[] key) {
         return executeCommandWithGlide(
@@ -13435,7 +13592,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return a list of help messages describing OBJECT subcommands
      * @see <a href="https://valkey.io/commands/object-help/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public List<String> objectHelp() {
         return executeCommandWithGlide(
@@ -13459,7 +13615,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      *
      * @return a list of help messages describing OBJECT subcommands
      * @see <a href="https://valkey.io/commands/object-help/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public List<byte[]> objectHelpBinary() {
         return executeCommandWithGlide(
@@ -13501,7 +13656,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param member the member name
      * @return the number of elements added to the sorted set
      * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
-     * @since Valkey 3.2.0
      */
     public long geoadd(String key, double longitude, double latitude, String member) {
         return executeCommandWithGlide(
@@ -13523,7 +13677,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param member the member name
      * @return the number of elements added to the sorted set
      * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
-     * @since Valkey 3.2.0
      */
     public long geoadd(final byte[] key, double longitude, double latitude, final byte[] member) {
         return executeCommandWithGlide(
@@ -13543,7 +13696,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param memberCoordinateMap a map of member names to their coordinates
      * @return the number of elements added to the sorted set
      * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
-     * @since Valkey 3.2.0
      */
     public long geoadd(String key, Map<String, GeoCoordinate> memberCoordinateMap) {
         return executeCommandWithGlide(
@@ -13568,7 +13720,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param memberCoordinateMap a map of member names to their coordinates
      * @return the number of elements added to the sorted set
      * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
-     * @since Valkey 3.2.0
      */
     public long geoadd(final byte[] key, Map<byte[], GeoCoordinate> memberCoordinateMap) {
         return executeCommandWithGlide(
@@ -13593,7 +13744,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param members the members for which to get the positions
      * @return a list of coordinates corresponding to the given members
      * @see <a href="https://valkey.io/commands/geopos/">valkey.io</a> for details.
-     * @since Valkey 3.2.0
      */
     public List<GeoCoordinate> geopos(String key, String... members) {
         return executeCommandWithGlide(
@@ -13623,7 +13773,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param members the members for which to get the positions
      * @return a list of coordinates corresponding to the given members
      * @see <a href="https://valkey.io/commands/geopos/">valkey.io</a> for details.
-     * @since Valkey 3.2.0
      */
     public List<GeoCoordinate> geopos(final byte[] key, final byte[]... members) {
         return executeCommandWithGlide(
@@ -13658,7 +13807,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param member2 the second member
      * @return the distance in meters, or null if one or both members do not exist
      * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
-     * @since Valkey 3.2.0
      */
     public Double geodist(String key, String member1, String member2) {
         return executeCommandWithGlide(
@@ -13674,7 +13822,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param member2 the second member
      * @return the distance in meters, or null if one or both members do not exist
      * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
-     * @since Valkey 3.2.0
      */
     public Double geodist(final byte[] key, final byte[] member1, final byte[] member2) {
         return executeCommandWithGlide(
@@ -13694,7 +13841,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of distance (m, km, mi, ft)
      * @return the distance in the specified unit, or null if one or both members do not exist
      * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
-     * @since Valkey 3.2.0
      */
     public Double geodist(
             String key, String member1, String member2, redis.clients.jedis.args.GeoUnit unit) {
@@ -13716,7 +13862,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of distance (m, km, mi, ft)
      * @return the distance in the specified unit, or null if one or both members do not exist
      * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
-     * @since Valkey 3.2.0
      */
     public Double geodist(
             final byte[] key,
@@ -13742,7 +13887,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param members the members for which to get the geohash
      * @return a list of geohash strings corresponding to the given members
      * @see <a href="https://valkey.io/commands/geohash/">valkey.io</a> for details.
-     * @since Valkey 3.2.0
      */
     public List<String> geohash(String key, String... members) {
         return executeCommandWithGlide(
@@ -13761,7 +13905,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param members the members for which to get the geohash
      * @return a list of geohash strings corresponding to the given members
      * @see <a href="https://valkey.io/commands/geohash/">valkey.io</a> for details.
-     * @since Valkey 3.2.0
      */
     public List<byte[]> geohash(final byte[] key, final byte[]... members) {
         return executeCommandWithGlide(
@@ -13793,7 +13936,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of the radius
      * @return a list of members within the specified area
      * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             String key, String member, double radius, redis.clients.jedis.args.GeoUnit unit) {
@@ -13825,7 +13967,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of the radius
      * @return a list of members within the specified area
      * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             final byte[] key, final byte[] member, double radius, redis.clients.jedis.args.GeoUnit unit) {
@@ -13858,7 +13999,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of the radius
      * @return a list of members within the specified area
      * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             String key, GeoCoordinate coord, double radius, redis.clients.jedis.args.GeoUnit unit) {
@@ -13892,7 +14032,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of the radius
      * @return a list of members within the specified area
      * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             final byte[] key, GeoCoordinate coord, double radius, redis.clients.jedis.args.GeoUnit unit) {
@@ -13927,7 +14066,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of width and height
      * @return a list of members within the specified area
      * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             String key,
@@ -13965,7 +14103,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of width and height
      * @return a list of members within the specified area
      * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             final byte[] key,
@@ -14003,7 +14140,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of width and height
      * @return a list of members within the specified area
      * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             String key,
@@ -14043,7 +14179,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of width and height
      * @return a list of members within the specified area
      * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(
             final byte[] key,
@@ -14073,13 +14208,12 @@ public abstract class AbstractGlideJedis extends JedisCommon {
 
     /**
      * Returns the members of a sorted set populated with geospatial information using GEOADD, which
-     * are within the borders of the area specified by the AbstractGeoSearchParam<?>.
+     * are within the borders of the area specified by the {@code AbstractGeoSearchParam<?>}.
      *
      * @param key the key of the sorted set
      * @param params the search parameters
      * @return a list of members within the specified area
      * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(String key, AbstractGeoSearchParam<?> params) {
         return executeCommandWithGlide(
@@ -14130,13 +14264,13 @@ public abstract class AbstractGlideJedis extends JedisCommon {
 
     /**
      * Returns the members of a sorted set populated with geospatial information using GEOADD, which
-     * are within the borders of the area specified by the AbstractGeoSearchParam<?> (binary version).
+     * are within the borders of the area specified by the {@code AbstractGeoSearchParam<?>} (binary
+     * version).
      *
      * @param key the key of the sorted set
      * @param params the search parameters
      * @return a list of members within the specified area
      * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public List<GeoRadiusResponse> geosearch(final byte[] key, AbstractGeoSearchParam<?> params) {
         return executeCommandWithGlide(
@@ -14194,7 +14328,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of the radius
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public long geosearchstore(
             String dest,
@@ -14223,7 +14356,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of the radius
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public long geosearchstore(
             final byte[] dest,
@@ -14255,7 +14387,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of the radius
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public long geosearchStore(
             String dest,
@@ -14286,7 +14417,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of the radius
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public long geosearchStore(
             final byte[] dest,
@@ -14320,7 +14450,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of width and height
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public long geosearchStore(
             String dest,
@@ -14351,7 +14480,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of width and height
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public long geosearchStore(
             final byte[] dest,
@@ -14385,7 +14513,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of width and height
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public long geosearchStore(
             String dest,
@@ -14418,7 +14545,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param unit the unit of width and height
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public long geosearchStore(
             final byte[] dest,
@@ -14442,15 +14568,14 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Searches for members in a sorted set representing geospatial data using a
-     * AbstractGeoSearchParam<?> and stores the result in a destination key.
+     * Searches for members in a sorted set representing geospatial data using a {@code
+     * AbstractGeoSearchParam<?>} and stores the result in a destination key.
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public long geosearchStore(String dest, String src, AbstractGeoSearchParam<?> params) {
         return executeCommandWithGlide(
@@ -14488,15 +14613,14 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Searches for members in a sorted set representing geospatial data using a
-     * AbstractGeoSearchParam<?> and stores the result in a destination key (binary version).
+     * Searches for members in a sorted set representing geospatial data using a {@code
+     * AbstractGeoSearchParam<?>} and stores the result in a destination key (binary version).
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public long geosearchStore(
             final byte[] dest, final byte[] src, AbstractGeoSearchParam<?> params) {
@@ -14539,15 +14663,14 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Searches for members in a sorted set representing geospatial data using a
-     * AbstractGeoSearchParam<?> and stores the result with distances in a destination key.
+     * Searches for members in a sorted set representing geospatial data using a {@code
+     * AbstractGeoSearchParam<?>} and stores the result with distances in a destination key.
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public long geosearchStoreStoreDist(String dest, String src, AbstractGeoSearchParam<?> params) {
         return executeCommandWithGlide(
@@ -14587,8 +14710,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /**
-     * Searches for members in a sorted set representing geospatial data using a
-     * AbstractGeoSearchParam<?> and stores the result with distances in a destination key (binary
+     * Searches for members in a sorted set representing geospatial data using a {@code
+     * AbstractGeoSearchParam<?>} and stores the result with distances in a destination key (binary
      * version).
      *
      * @param dest the destination key to store the result
@@ -14596,7 +14719,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param params the search parameters
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
-     * @since Valkey 6.2.0
      */
     public long geosearchStoreStoreDist(
             final byte[] dest, final byte[] src, AbstractGeoSearchParam<?> params) {

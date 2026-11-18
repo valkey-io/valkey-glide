@@ -88,3 +88,4 @@ copilot-instructions.md
 __pycache__/
 test-report*.html
 node/test-report*.html
+.module-ci-local-scratch/

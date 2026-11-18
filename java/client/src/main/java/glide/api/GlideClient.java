@@ -51,6 +51,8 @@ import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
+import static glide.internal.ValkeyKeywords.CANCEL;
+import static glide.internal.ValkeyKeywords.SCHEDULE;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
@@ -80,6 +82,7 @@ import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.api.models.scope.IsolatedScope;
 import glide.utils.ArgsBuilder;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
@@ -238,9 +241,8 @@ public class GlideClient extends BaseClient
      * is returned to the pool.
      *
      * @param timeout maximum time to wait for a scope to become available
-     * @param routingKey in cluster mode, the key whose hash slot determines which node the scope
-     *     connects to. All keys used in the scope must hash to the same slot. May be null (defaults
-     *     to slot 0).
+     * @param routingKey ignored in standalone mode (no slots); may be null. Accepted for signature
+     *     parity with the cluster client, where it determines the scope's node and slot.
      * @return a Future resolving to an {@link IsolatedScope}
      */
     public CompletableFuture<IsolatedScope> scopedConnection(
@@ -253,41 +255,38 @@ public class GlideClient extends BaseClient
             return f;
         }
 
-        int routingSlot = routingKey != null ? slotForKey(routingKey.getBytes()) : 0;
-        long timeoutMs = timeout.toMillis();
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        // One logical acquire: mint a single attempt token and pass it on every
-        // retry poll, so the core dedupes this acquire's retries to one in-flight
-        // creation while distinct concurrent acquires each dial their own.
-        long attemptToken = glide.ffi.resolvers.GlideScopeResolver.glideScopeNextAttemptToken();
+        // Standalone ignores routing, but the FFI signature carries presence
+        // uniformly; a standalone scope is always unconstrained.
+        boolean hasRoutingSlot = routingKey != null;
+        int routingSlot = hasRoutingSlot ? slotForKey(routingKey.getBytes(StandardCharsets.UTF_8)) : 0;
 
-        return CompletableFuture.supplyAsync(
-                () -> {
-                    while (true) {
-                        long scopeId =
-                                glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(
-                                        clientId, connBytes, routingSlot, attemptToken);
-                        if (scopeId >= 0) {
-                            return new IsolatedScope(scopeId, clientId);
-                        }
-                        // Pool exhausted — retry with backoff until deadline
-                        long remaining = deadline - System.currentTimeMillis();
-                        if (remaining <= 0) {
-                            throw new java.util.concurrent.CompletionException(
-                                    new java.util.concurrent.TimeoutException(
-                                            "Timed out waiting for isolated scope (pool exhausted)"));
-                        }
-                        try {
-                            Thread.sleep(Math.min(10, remaining));
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new java.util.concurrent.CompletionException(e);
-                        }
+        CompletableFuture<Object> future = new CompletableFuture<>();
+        long callbackId = glide.internal.AsyncRegistry.register(future, 0, clientId, 0);
+        int rc =
+                glide.ffi.resolvers.GlideScopeResolver.glideScopeAcquire(
+                        clientId, connBytes, hasRoutingSlot, routingSlot, timeout.toMillis(), callbackId);
+        if (rc != 0) {
+            future.completeExceptionally(
+                    new IllegalArgumentException("Invalid connection request bytes"));
+        }
+        // The core keeps waiting after the caller cancels. Give back a scope it is
+        // later granted, or its slot stays in use until the client closes.
+        CompletableFuture<IsolatedScope> result = new CompletableFuture<>();
+        future.whenComplete(
+                (scopeId, err) -> {
+                    if (err != null) {
+                        result.completeExceptionally(err);
+                        return;
+                    }
+                    IsolatedScope scope = new IsolatedScope((Long) scopeId, clientId);
+                    if (!result.complete(scope)) {
+                        scope.close();
                     }
                 });
+        return result;
     }
 
-    /** Convenience overload — defaults to slot 0 (standalone mode). */
+    /** Convenience overload — no routing key (standalone mode ignores it). */
     public CompletableFuture<IsolatedScope> scopedConnection(@NonNull java.time.Duration timeout) {
         return scopedConnection(timeout, null);
     }
@@ -476,13 +475,13 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<String> bgsaveSchedule() {
         return commandManager.submitNewCommand(
-                BgSave, new String[] {SCHEDULE_VALKEY_API}, this::handleStringResponse);
+                BgSave, new String[] {SCHEDULE}, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> bgsaveCancel() {
         return commandManager.submitNewCommand(
-                BgSave, new String[] {CANCEL_VALKEY_API}, this::handleStringResponse);
+                BgSave, new String[] {CANCEL}, this::handleStringResponse);
     }
 
     @Override
@@ -530,6 +529,7 @@ public class GlideClient extends BaseClient
     public CompletableFuture<String> lolwut(int version) {
         return commandManager.submitNewCommand(
                 Lolwut,
+                // TODO #7401: Use glide.internal.ValkeyKeywords.
                 new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                 this::handleStringResponse);
     }
@@ -821,6 +821,8 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<Object[]> scan(
             @NonNull GlideString cursor, @NonNull ScanOptions options) {
+        // TODO #7447: Use `options.toGlideStringArgs()`, so a binary match pattern is not converted
+        // lossily.
         GlideString[] arguments = new ArgsBuilder().add(cursor).add(options.toArgs()).toArray();
         return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponseBinary);
     }
@@ -1051,10 +1053,14 @@ public class GlideClient extends BaseClient
         }
         if (start != -1) {
             for (int i = start + 1; i < key.length; i++) {
-                if (key[i] == '}' && i != start + 1) {
-                    byte[] tag = new byte[i - start - 1];
-                    System.arraycopy(key, start + 1, tag, 0, tag.length);
-                    key = tag;
+                if (key[i] == '}') {
+                    // First '}' closes the tag. Hash the tag only when it is non-empty;
+                    // an empty tag ("{}") hashes the whole key.
+                    if (i != start + 1) {
+                        byte[] tag = new byte[i - start - 1];
+                        System.arraycopy(key, start + 1, tag, 0, tag.length);
+                        key = tag;
+                    }
                     break;
                 }
             }

@@ -6,15 +6,15 @@
 mod common;
 
 use glide::{
-    AsyncCommands, GlideClient, GlideClientConfiguration, GlideClusterClient,
+    AsyncTypedCommands, GlideClient, GlideClientConfiguration, GlideClusterClient,
     GlideClusterClientConfiguration, ProtocolVersion,
 };
 use std::time::Duration;
 
 /// A lazy standalone client connects on first use and works normally.
 async fn standalone_lazy(protocol: ProtocolVersion) {
-    let srv = server_or_skip!();
-    let cfg = GlideClientConfiguration::with_address("127.0.0.1", srv.port)
+    let server = common::TestServer::start();
+    let cfg = GlideClientConfiguration::with_address("127.0.0.1", server.port)
         .lazy_connect(true)
         .protocol(protocol);
     let c = GlideClient::connect(cfg)
@@ -23,8 +23,8 @@ async fn standalone_lazy(protocol: ProtocolVersion) {
     // First command triggers the actual connection.
     let k = common::key("lazy");
     let _: () = c.set(&k, "v").await.unwrap();
-    let got: Option<glide::Bytes> = c.get(&k).await.unwrap();
-    assert_eq!(got.as_deref(), Some(&b"v"[..]));
+    let got: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(got.as_deref(), Some("v"));
 }
 
 #[tokio::test]
@@ -41,8 +41,11 @@ async fn standalone_lazy_resp3() {
 /// the first command. (If construction fails instead, lazy is not deferring.)
 #[tokio::test]
 async fn standalone_lazy_defers_connection_error() {
-    // A port nothing is listening on.
-    let dead_port = common::free_port();
+    // A port nothing is listening on: bind an ephemeral port, then release it.
+    let dead_port = std::net::TcpListener::bind("127.0.0.1:0")
+        .and_then(|l| l.local_addr())
+        .expect("bind ephemeral port")
+        .port();
     let cfg = GlideClientConfiguration::with_address("127.0.0.1", dead_port)
         .lazy_connect(true)
         .request_timeout(Duration::from_millis(500))
@@ -51,6 +54,7 @@ async fn standalone_lazy_defers_connection_error() {
         Ok(c) => {
             // Deferred: construction succeeded; the command must fail.
             let res: glide::ValkeyResult<Option<String>> = c.get(common::key("k")).await;
+            // TODO #7653: Assert `GlideError::Connection`.
             assert!(
                 res.is_err(),
                 "expected first command to fail against a dead server"
@@ -75,6 +79,6 @@ async fn cluster_lazy_connect() {
         .expect("lazy cluster connect");
     let k = common::key("lazy_cluster");
     let _: () = c.set(&k, "v").await.unwrap();
-    let got: Option<glide::Bytes> = c.get(&k).await.unwrap();
-    assert_eq!(got.as_deref(), Some(&b"v"[..]));
+    let got: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(got.as_deref(), Some("v"));
 }

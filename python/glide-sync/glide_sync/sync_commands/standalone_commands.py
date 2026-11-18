@@ -553,7 +553,7 @@ class StandaloneCommands(CoreCommands):
                     }
                 }}
 
-        Since: Valkey version 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return cast(
             TFunctionStatsFullResponse,
@@ -711,7 +711,7 @@ class StandaloneCommands(CoreCommands):
         See [valkey.io](https://valkey.io/commands/bgsave) for more details.
 
         Note:
-            Since: Valkey 8.1.
+            Since: Valkey 8.1.0.
 
         Returns:
             str: A non-empty status string.
@@ -849,8 +849,6 @@ class StandaloneCommands(CoreCommands):
             >>> client.select(1)
             >>> client.get("destination")
                 b"sheep"
-
-        Since: Valkey version 6.2.0.
         """
         args: List[TEncodable] = [source, destination]
         if destinationDB is not None:

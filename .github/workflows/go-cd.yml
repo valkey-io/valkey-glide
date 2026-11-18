@@ -34,7 +34,7 @@ env:
 jobs:
     load-platform-matrix:
         if: github.repository_owner == 'valkey-io'
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         outputs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
@@ -47,7 +47,7 @@ jobs:
               shell: bash
               run: |
                   # Filter entries with pkg_go_dev in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
-                  export PLATFORM_MATRIX=$(jq 'map(
+                  PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pkg_go_dev"])))
                       | .RUNNER = (
                           if (.RUNNER | type == "array")
@@ -56,10 +56,10 @@ jobs:
                           end
                       )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
-                  echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+                  echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> "$GITHUB_OUTPUT"
 
     validate-release-version:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         outputs:
             RELEASE_VERSION: ${{ steps.release-tag.outputs.RELEASE_VERSION }}
         env:
@@ -96,7 +96,7 @@ jobs:
                         exit 1
                     fi
                   fi
-                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_OUTPUT
+                  echo "RELEASE_VERSION=${R_VERSION}" >> "$GITHUB_OUTPUT"
 
     create-binaries:
         needs: [load-platform-matrix, validate-release-version]
@@ -110,10 +110,10 @@ jobs:
             - name: Setup self-hosted runner access
               run: |
                   GHA_HOME=/home/ubuntu/actions-runner/_work/valkey-glide
-                  if [ -d $GHA_HOME ]; then
-                    sudo chown -R $USER:$USER $GHA_HOME
-                    sudo rm -rf $GHA_HOME
-                    mkdir -p $GHA_HOME/valkey-glide
+                  if [ -d "$GHA_HOME" ]; then
+                    sudo chown -R "$USER:$USER" "$GHA_HOME"
+                    sudo rm -rf "$GHA_HOME"
+                    mkdir -p "$GHA_HOME"/valkey-glide
                   else
                     echo "No cleaning needed"
                   fi
@@ -137,8 +137,8 @@ jobs:
             - name: Move FFI artifacts on linux
               if: ${{ contains(matrix.host.TARGET, 'linux') }}
               run: |
-                  mkdir -p $GITHUB_WORKSPACE/ffi/target/release
-                  cp ffi/target/*/release/libglide_ffi.a $GITHUB_WORKSPACE/ffi/target/release/
+                  mkdir -p "$GITHUB_WORKSPACE/ffi/target/release"
+                  cp ffi/target/*/release/libglide_ffi.a "$GITHUB_WORKSPACE/ffi/target/release/"
             - name: Smoke test binary
               run: |
                   file ffi/target/release/libglide_ffi.a | grep -q "archive"
@@ -155,7 +155,7 @@ jobs:
     commit-auto-gen-files-with-tag:
         if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish == true }}
         needs: [validate-release-version, create-binaries]
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
         permissions:
             contents: write
@@ -175,8 +175,8 @@ jobs:
                     target_name=${dir%/}
                     PLATFORMS+=("$target_name")
 
-                    mkdir -p $GITHUB_WORKSPACE/go/rustbin/${target_name}
-                    cp ${target_name}/ffi/target/release/libglide_ffi.a $GITHUB_WORKSPACE/go/rustbin/${target_name}/
+                    mkdir -p "$GITHUB_WORKSPACE/go/rustbin/${target_name}"
+                    cp "${target_name}/ffi/target/release/libglide_ffi.a" "$GITHUB_WORKSPACE/go/rustbin/${target_name}/"
 
                     # Create doc.go marker file for vendoring support
                     # Convert platform name to valid Go package name (hyphens to underscores)
@@ -224,9 +224,9 @@ jobs:
 
                   # TODO: move generation of protobuf and header file to a non-matrix step
                   cd x86_64-unknown-linux-gnu
-                  cp go/lib.h $GITHUB_WORKSPACE/go/
-                  mkdir -p $GITHUB_WORKSPACE/go/internal/protobuf
-                  cp go/internal/protobuf/* $GITHUB_WORKSPACE/go/internal/protobuf/
+                  cp go/lib.h "$GITHUB_WORKSPACE/go/"
+                  mkdir -p "$GITHUB_WORKSPACE/go/internal/protobuf"
+                  cp go/internal/protobuf/* "$GITHUB_WORKSPACE/go/internal/protobuf/"
             - name: Commit and push tag
               run: |
                   RELEASE_VERSION=${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
@@ -238,13 +238,27 @@ jobs:
                   # generated artifacts we force-add below when the consumer commits
                   # vendor/. This tag commit is never merged back to main, so main
                   # keeps its .gitignore for development. See issue #6437.
-                  rm -f $GITHUB_WORKSPACE/go/.gitignore
+                  rm -f "$GITHUB_WORKSPACE/go/.gitignore"
                   git add -f go
                   git status
                   git commit -m "Automated commit from GitHub Actions"
                   git tag go/$RELEASE_VERSION
                   git push origin go/$RELEASE_VERSION
-                  GOPROXY=proxy.golang.org go list -m github.com/valkey-io/valkey-glide/go/v2@$RELEASE_VERSION
+                  # The proxy fetches the new tag on first request and can answer 404 while that
+                  # fetch is still running (2.6.0-rc3: 404 after ~80s). Retry for up to ~10 min.
+                  MAX_ATTEMPTS=20
+                  DELAY=30
+                  for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+                      if GOPROXY=proxy.golang.org go list -m "github.com/valkey-io/valkey-glide/go/v2@$RELEASE_VERSION"; then
+                          break
+                      fi
+                      if [ "$attempt" -eq "$MAX_ATTEMPTS" ]; then
+                          echo "::error::go/v2@$RELEASE_VERSION not on proxy.golang.org after $MAX_ATTEMPTS attempts."
+                          exit 1
+                      fi
+                      echo "Attempt $attempt/$MAX_ATTEMPTS: not on proxy.golang.org yet. Retrying in ${DELAY}s..."
+                      sleep "$DELAY"
+                  done
 
     extra-post-commit-test:
         needs:
@@ -268,10 +282,10 @@ jobs:
             - name: Setup self-hosted runner access
               run: |
                   GHA_HOME=/home/ubuntu/actions-runner/_work/valkey-glide
-                  if [ -d $GHA_HOME ]; then
-                    sudo chown -R $USER:$USER $GHA_HOME
-                    sudo rm -rf $GHA_HOME
-                    mkdir -p $GHA_HOME/valkey-glide
+                  if [ -d "$GHA_HOME" ]; then
+                    sudo chown -R "$USER:$USER" "$GHA_HOME"
+                    sudo rm -rf "$GHA_HOME"
+                    mkdir -p "$GHA_HOME"/valkey-glide
                   else
                     echo "No cleaning needed"
                   fi
@@ -293,7 +307,7 @@ jobs:
               id: start-server
               run: |
                   PORT=$(python3 ./cluster_manager.py start -r 0 2>&1 | grep CLUSTER_NODES | cut -d = -f 2 | cut -d , -f 1 | cut -d : -f 2)
-                  echo "PORT=$PORT" >> $GITHUB_OUTPUT
+                  echo "PORT=$PORT" >> "$GITHUB_OUTPUT"
             - name: test newly released go client
               env:
                   PORT: ${{ steps.start-server.outputs.PORT }}

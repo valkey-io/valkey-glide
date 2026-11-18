@@ -11,25 +11,49 @@ on:
             - v*
         paths:
             - ffi/**
-            - glide-logger/**
-            - glide-telemetry/**
+
+            # Rust dependencies
             - glide-core/**
+            - glide-rdma/**
+            - glide-telemetry/**
+            - glide-logger/**
             - deny.toml
+            - .cargo/config.toml
+
+            # GitHub workflows
             - .github/workflows/ffi.yml
-            - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/install-libfabric/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-zig/action.yml
+            - .github/actions/lint-rust/action.yml
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
             - ffi/**
-            - glide-logger/**
-            - glide-telemetry/**
+
+            # Rust dependencies
             - glide-core/**
+            - glide-rdma/**
+            - glide-telemetry/**
+            - glide-logger/**
             - deny.toml
+            - .cargo/config.toml
+
+            # GitHub workflows
             - .github/workflows/ffi.yml
-            - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/install-libfabric/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-zig/action.yml
+            - .github/actions/lint-rust/action.yml
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
     workflow_dispatch:
     workflow_call:
 
@@ -42,7 +66,7 @@ env:
 
 jobs:
     test:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 35
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,26 +84,40 @@ jobs:
             - name: Cache dependencies
               uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
               with:
+                  cache-bin: true
                   cache-on-failure: true
                   workspaces: ./ffi
 
+            - name: Install cbindgen
+              run: cargo install --locked cbindgen@0.29.4
+
             - name: Run glide-ffi tests
               working-directory: ./ffi
-              run: cargo test
+              run: cargo test --locked
+
+            - name: Install libfabric
+              uses: ./.github/actions/install-libfabric
+
+            - name: Run glide-ffi RDMA tests
+              working-directory: ./ffi
+              run: |
+                  cargo test --locked --features rdma-tcp-dev
+                  # The release shape: `rdma` alone carries no tcp provider.
+                  cargo test --locked --features rdma
 
             - name: Run glide-ffi MIRI tests
               working-directory: ./ffi/miri-tests
-              run: cargo miri test
+              run: cargo miri test --locked
 
     lint:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
 
-            - uses: ./.github/workflows/lint-rust
+            - uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: ffi
                   github-token: ${{ secrets.GITHUB_TOKEN }}

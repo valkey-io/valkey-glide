@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import os
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -24,6 +25,7 @@ from glide_shared.connection_request import (
     _create_async_connection_request,
     _create_sync_connection_request,
 )
+from glide_shared.exceptions import ClosingError, get_connection_error_class
 from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
 from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
 from glide_shared.protobuf.connection_request_pb2 import TlsMode
@@ -262,6 +264,69 @@ def test_convert_to_protobuf():
     assert request.tls_mode is TlsMode.SecureTls
     assert request.read_from == ProtobufReadFrom.PreferReplica
     assert request.client_name == "TEST_CLIENT_NAME"
+
+
+@pytest.mark.parametrize(
+    "socket_path", ["/run/valkey/valkey.sock", Path("/run/valkey/valkey.sock")]
+)
+def test_node_address_unix_socket_path(socket_path):
+    address = NodeAddress(unix_socket_path=socket_path)
+    assert address.unix_socket_path == os.fspath(socket_path)
+
+
+@pytest.mark.parametrize(
+    "request_factory",
+    [_create_async_connection_request, _create_sync_connection_request],
+)
+def test_unix_socket_address_to_protobuf(request_factory):
+    config = GlideClientConfiguration(
+        [NodeAddress(unix_socket_path="/run/valkey/valkey.sock")]
+    )
+    request = request_factory(config)
+    address = request.addresses[0]
+    assert address.HasField("unix_socket_path")
+    assert address.unix_socket_path == "/run/valkey/valkey.sock"
+    # host and port are left unset so the core does not see a TCP address.
+    assert address.host == ""
+    assert address.port == 0
+
+
+def test_tcp_address_to_protobuf_has_no_unix_socket_path():
+    config = GlideClientConfiguration([NodeAddress("10.0.0.1", 6380)])
+    address = config._create_a_protobuf_conn_request().addresses[0]
+    assert not address.HasField("unix_socket_path")
+    assert address.host == "10.0.0.1"
+    assert address.port == 6380
+
+
+def test_node_address_unix_socket_path_is_keyword_only():
+    with pytest.raises(TypeError):
+        NodeAddress("localhost", 6379, "/run/valkey/valkey.sock")  # type: ignore[misc]
+
+
+def test_unix_socket_address_rejected_in_cluster_mode():
+    config = GlideClusterClientConfiguration(
+        [NodeAddress(unix_socket_path="/run/valkey/valkey.sock")]
+    )
+    with pytest.raises(ConfigurationError, match="cluster mode"):
+        config._create_a_protobuf_conn_request(cluster_mode=True)
+
+
+def test_unix_socket_address_rejected_with_tls():
+    config = GlideClientConfiguration(
+        [NodeAddress(unix_socket_path="/run/valkey/valkey.sock")], use_tls=True
+    )
+    with pytest.raises(ConfigurationError, match="TLS"):
+        config._create_a_protobuf_conn_request()
+
+
+def test_empty_unix_socket_path_is_sent_for_core_validation():
+    # An explicitly empty path must reach the core (which rejects it) rather
+    # than silently falling back to a TCP connection to localhost:6379.
+    config = GlideClientConfiguration([NodeAddress(unix_socket_path="")])
+    address = config._create_a_protobuf_conn_request().addresses[0]
+    assert address.HasField("unix_socket_path")
+    assert address.unix_socket_path == ""
 
 
 def test_periodic_checks_interval_to_protobuf():
@@ -1398,3 +1463,11 @@ def test_recovery_requests_queue_size_in_proto():
     )
     request_custom = config_custom._create_a_protobuf_conn_request(cluster_mode=True)
     assert request_custom.recovery_requests_queue_size == 500
+
+
+def test_connection_error_class_maps_only_configuration_type():
+    # 1 is ConnectionErrorType::Configuration in ffi/src/lib.rs.
+    assert get_connection_error_class(1) is ConfigurationError
+    assert get_connection_error_class(0) is ClosingError
+    assert get_connection_error_class(0, default=RuntimeError) is RuntimeError
+    assert get_connection_error_class(1, default=RuntimeError) is ConfigurationError

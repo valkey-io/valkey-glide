@@ -51,6 +51,38 @@ const (
 	MemoryDB
 )
 
+// AwsCredentials holds AWS credentials returned by a GlideCredentialProvider.
+// All fields match the Java AwsCredentials class for cross-language consistency.
+type AwsCredentials struct {
+	// AccessKeyID is the AWS Access Key ID. Required; must not be blank.
+	AccessKeyID string
+	// SecretAccessKey is the AWS Secret Access Key. Required; must not be blank.
+	SecretAccessKey string
+	// SessionToken is the AWS Session Token. Empty string for long-term credentials.
+	SessionToken string
+	// ExpiresAtEpochMillis is the optional credential expiry as Unix epoch milliseconds.
+	// Use 0 to indicate no expiry.
+	ExpiresAtEpochMillis int64
+}
+
+// GlideCredentialProvider is a callback that supplies AWS credentials for IAM token signing.
+//
+// Assign a function of this type when credentials come from a custom source (e.g. HashiCorp Vault,
+// a custom STS assume-role flow) instead of the default AWS credential chain.
+//
+// Concurrency: the core admits at most one logical credential fetch per direct client/provider.
+// A large credential may still invoke this callback twice sequentially within that one fetch for
+// FFI buffer negotiation, so implementations must tolerate repeated invocation and must not rely
+// on exactly-once behavior. Separate clients/providers have independent admission.
+//
+// Promptness: return quickly and cooperate with any application cancellation mechanism. The core
+// stops waiting after 10 seconds, but Go cannot forcibly stop arbitrary synchronous callback code.
+// A timed-out invocation may continue on a detached background worker after the request fails or
+// the client closes; Close does not wait for or retain ownership of that worker. Until that actual
+// callback invocation returns, later fetches for the same direct provider fail immediately rather
+// than queueing or starting more callback workers.
+type GlideCredentialProvider func() (AwsCredentials, error)
+
 // IamAuthConfig represents configuration settings for IAM authentication.
 type IamAuthConfig struct {
 	// The name of the ElastiCache/MemoryDB cluster.
@@ -62,6 +94,9 @@ type IamAuthConfig struct {
 	// Optional refresh interval in seconds for renewing IAM authentication tokens.
 	// If not provided, the core will use its default value.
 	refreshIntervalSeconds *uint32
+	// credentialProvider is an optional custom credential provider for IAM authentication.
+	// When nil, the default AWS credential chain is used.
+	credentialProvider GlideCredentialProvider
 }
 
 // NewIamAuthConfig returns an [IamAuthConfig] struct with the given configuration.
@@ -77,6 +112,19 @@ func NewIamAuthConfig(clusterName string, service ServiceType, region string) *I
 func (config *IamAuthConfig) WithRefreshIntervalSeconds(seconds uint32) *IamAuthConfig {
 	config.refreshIntervalSeconds = &seconds
 	return config
+}
+
+// WithCredentialProvider sets a custom credential provider for IAM authentication.
+// When set, this provider is invoked to retrieve AWS credentials for IAM token signing
+// instead of the default AWS credential chain.
+func (config *IamAuthConfig) WithCredentialProvider(provider GlideCredentialProvider) *IamAuthConfig {
+	config.credentialProvider = provider
+	return config
+}
+
+// GetCredentialProvider returns the configured credential provider, or nil if none is set.
+func (config *IamAuthConfig) GetCredentialProvider() GlideCredentialProvider {
+	return config.credentialProvider
 }
 
 func (config *IamAuthConfig) toProtobuf() *protobuf.IamCredentials {
@@ -333,7 +381,11 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 	}
 
 	if config.reconnectStrategy != nil {
-		request.ConnectionRetryStrategy = config.reconnectStrategy.toProtobuf()
+		retryStrategyPb, err := config.reconnectStrategy.toProtobuf()
+		if err != nil {
+			return nil, fmt.Errorf("invalid reconnect strategy: %w", err)
+		}
+		request.ConnectionRetryStrategy = retryStrategyPb
 	}
 
 	if config.lazyConnect {
@@ -383,47 +435,100 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 // a successful connection is established. The client retries indefinitely.
 //
 // If no strategy is explicitly provided, a default backoff strategy will be used.
+//
+// A factor or exponent base of 0 is not used verbatim: the core substitutes its own default
+// (factor 100, exponent base 2). A retry count of 0 is honored as-is.
 type BackoffStrategy struct {
 	// Number of retry attempts that the client should perform when disconnected from the server, where the time
 	// between retries increases. Once the retries have reached the maximum value, the time between retries will remain
 	// constant until a reconnect attempt is successful.
-	numOfRetries int
+	numOfRetries uint32
 	// The multiplier that will be applied to the waiting time between each retry.
-	// This value is specified in milliseconds.
-	factor int
-	// The exponent base configured for the strategy.
-	exponentBase int
-	// The Jitter percent on the calculated duration. If not set, a default value will be used.
-	jitterPercent *int
+	// This value is specified in milliseconds. A value of 0 means the core default (100) is used.
+	factor uint32
+	// The exponent base configured for the strategy. A value of 0 means the core default (2) is used.
+	exponentBase uint32
+	// The Jitter percent on the calculated duration, between 0 and 100. If not set, a default value will be used.
+	jitterPercent *uint32
+	// Out-of-range values seen by the setters, indexed like backoffFields. An array keeps the struct
+	// comparable and makes a value copy independent of its source.
+	invalid [len(backoffFields)]error
 }
+
+const (
+	// maxBackoffValue is the largest retry count, factor and exponent base the core accepts, which
+	// it represents as a uint32.
+	maxBackoffValue = int64(math.MaxUint32)
+	// maxJitterPercent is the largest jitter the core accepts: it derives the jitter bounds as
+	// 1 ± jitterPercent/100, so anything above 100 makes the lower bound negative.
+	maxJitterPercent = int64(100)
+)
+
+// backoffFields lists the settable fields in report order, so a configuration error names them
+// deterministically.
+var backoffFields = [...]string{"numOfRetries", "factor", "exponentBase", "jitterPercent"}
+
+// Indexes into backoffFields.
+const (
+	numOfRetriesField = iota
+	factorField
+	exponentBaseField
+	jitterPercentField
+)
 
 // NewBackoffStrategy returns a [BackoffStrategy] with the given configuration parameters.
+//
+// Each parameter must be between 0 and 2^32 - 1. Using a value outside that range leads to an
+// invalid configuration, reported as an error when the client is created.
 func NewBackoffStrategy(numOfRetries int, factor int, exponentBase int) *BackoffStrategy {
-	return &BackoffStrategy{
-		numOfRetries: numOfRetries,
-		factor:       factor,
-		exponentBase: exponentBase,
-	}
-}
-
-// WithJitterPercent sets the jitter percent.
-func (strategy *BackoffStrategy) WithJitterPercent(jitter int) *BackoffStrategy {
-	strategy.jitterPercent = &jitter
+	strategy := &BackoffStrategy{}
+	strategy.numOfRetries = strategy.toUint32(numOfRetriesField, numOfRetries, maxBackoffValue)
+	strategy.factor = strategy.toUint32(factorField, factor, maxBackoffValue)
+	strategy.exponentBase = strategy.toUint32(exponentBaseField, exponentBase, maxBackoffValue)
 	return strategy
 }
 
-func (strategy *BackoffStrategy) toProtobuf() *protobuf.ConnectionRetryStrategy {
+// WithJitterPercent sets the jitter percent.
+//
+// The jitter must be between 0 and 100. Using a value outside that range leads to an invalid
+// configuration, reported as an error when the client is created.
+func (strategy *BackoffStrategy) WithJitterPercent(jitter int) *BackoffStrategy {
+	jitterPercent := strategy.toUint32(jitterPercentField, jitter, maxJitterPercent)
+	strategy.jitterPercent = &jitterPercent
+	return strategy
+}
+
+// toUint32 narrows a parameter to the uint32 the core expects. An out-of-range value is recorded
+// instead of being wrapped around silently, because the setters cannot report it themselves. A valid
+// value clears the field's earlier error, so the reported error always describes the current state.
+func (strategy *BackoffStrategy) toUint32(field int, value int, maxValue int64) uint32 {
+	strategy.invalid[field] = nil
+	if value < 0 || int64(value) > maxValue {
+		strategy.invalid[field] = fmt.Errorf(
+			"%s must be between 0 and %d, got %d", backoffFields[field], maxValue, value,
+		)
+		return 0
+	}
+	return uint32(value)
+}
+
+func (strategy *BackoffStrategy) toProtobuf() (*protobuf.ConnectionRetryStrategy, error) {
+	// Report every invalid field at once, in backoffFields order.
+	if err := errors.Join(strategy.invalid[:]...); err != nil {
+		return nil, err
+	}
+
 	protoStrategy := &protobuf.ConnectionRetryStrategy{
-		NumberOfRetries: uint32(strategy.numOfRetries),
-		Factor:          uint32(strategy.factor),
-		ExponentBase:    uint32(strategy.exponentBase),
+		NumberOfRetries: strategy.numOfRetries,
+		Factor:          strategy.factor,
+		ExponentBase:    strategy.exponentBase,
 	}
 
 	if strategy.jitterPercent != nil {
-		protoStrategy.JitterPercent = proto.Uint32(uint32(*strategy.jitterPercent))
+		protoStrategy.JitterPercent = proto.Uint32(*strategy.jitterPercent)
 	}
 
-	return protoStrategy
+	return protoStrategy, nil
 }
 
 // ClientConfiguration represents the configuration settings for a Standalone client.
@@ -520,6 +625,7 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 		request.NodeDiscoveryMode = protobuf.NodeDiscoveryMode(config.nodeDiscoveryMode)
 	}
 
+	// TODO #7683: Confirm glide-core's error for Pub/Sub with RESP2 surfaces as a configuration error.
 	if config.subscriptionConfig != nil {
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
 	}
@@ -744,6 +850,18 @@ func (config *ClientConfiguration) GetAddressResolver() AddressResolver {
 	return config.addressResolver
 }
 
+func (config *ClientConfiguration) GetCredentialProvider() GlideCredentialProvider {
+	if config.credentials != nil && config.credentials.iamConfig != nil {
+		return config.credentials.iamConfig.credentialProvider
+	}
+	return nil
+}
+
+// HasIamAuthentication reports whether IAM authentication is configured.
+func (config *ClientConfiguration) HasIamAuthentication() bool {
+	return config.credentials != nil && config.credentials.iamConfig != nil
+}
+
 func (config *ClientConfiguration) HasSubscription() bool {
 	return config.subscriptionConfig != nil
 }
@@ -788,6 +906,7 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 		}
 		request.ConnectionTimeout = connectionTimeout
 	}
+	// TODO #7683: Confirm glide-core's error for Pub/Sub with RESP2 surfaces as a configuration error.
 	if config.subscriptionConfig != nil {
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
 	}
@@ -1026,6 +1145,13 @@ func (config *ClusterClientConfiguration) GetAddressResolver() AddressResolver {
 	return config.addressResolver
 }
 
+func (config *ClusterClientConfiguration) GetCredentialProvider() GlideCredentialProvider {
+	if config.credentials != nil && config.credentials.iamConfig != nil {
+		return config.credentials.iamConfig.credentialProvider
+	}
+	return nil
+}
+
 func (config *ClusterClientConfiguration) GetSubscription() *ClusterSubscriptionConfig {
 	if config.HasSubscription() {
 		return config.subscriptionConfig
@@ -1107,6 +1233,9 @@ type TlsConfiguration struct {
 	//
 	// The certificate data should be in PEM format as a byte array.
 	RootCertificates []byte
+
+	// TODO #7707: Document that RootCertificates or IAM authentication with UseInsecureTLS
+	// is rejected.
 
 	// UseInsecureTLS bypasses TLS certificate verification when set to true.
 	//

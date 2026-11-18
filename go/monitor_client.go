@@ -11,12 +11,17 @@ import "C"
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"google.golang.org/protobuf/proto"
 )
+
+const monitorIamUnsupportedError = "monitor clients do not support IAM authentication"
+
+var errMonitorIamUnsupported = errors.New(monitorIamUnsupportedError)
 
 // MonitorLine represents a single line received from the MONITOR command.
 type MonitorLine struct {
@@ -134,7 +139,12 @@ func (c *MonitorClient) startDispatcher() {
 // are queued and can be retrieved with GetMonitorMessage or TryGetMonitorMessage.
 // Library identification configured with [config.ClientConfiguration.WithLibName] and
 // [config.ClientConfiguration.WithClientInfoTag] is propagated to the monitor connection.
+// IAM authentication is not supported and is rejected before connecting.
 func NewMonitorClient(cfg *config.ClientConfiguration, callback func(MonitorLine)) (*MonitorClient, error) {
+	if cfg.HasIamAuthentication() {
+		return nil, errMonitorIamUnsupported
+	}
+
 	request, err := cfg.ToProtobuf()
 	if err != nil {
 		return nil, err

@@ -6,25 +6,27 @@ This file provides AI agents and developers with the minimum but sufficient cont
 
 This is the Jedis Compatibility Layer for Valkey GLIDE, providing a drop-in replacement API that is compatible with the Jedis library. This allows existing Jedis applications to migrate to GLIDE with minimal or no code changes.
 
-**Primary Language:** Java (JDK 11+)
-**Build System:** Gradle (sub-module)
+**Primary Language:** Java (JDK 11 to build; Java 8 bytecode, inherited from the root `build.gradle`)
+**Build System:** Gradle (sub-module `:jedis-compatibility` of `java/`)
 **Architecture:** Jedis-compatible API wrapper around GLIDE core client
 
 **Key Components:**
-- `src/main/java/redis/clients/jedis/` - Jedis-compatible API classes
-- `src/test/java/` - Unit tests for compatibility layer
-- `build.gradle` - Gradle build configuration with shadow JAR
+
+- `src/main/java/redis/clients/jedis/` - Jedis 5.x–shaped entry points: `Jedis`, `JedisCluster`, `UnifiedJedis`, `JedisPool`, `JedisPooled`, plus `params/`, `bloom/`, `timeseries/`
+- `../jedis-compat-shared/` - Everything shared with `jedis-4-compatibility`: configuration (`JedisClientConfig`, `DefaultJedisClientConfig`, `ConfigurationMapper`, `ClusterConfigurationMapper`), `exceptions/`, `commands/`, `args/`, `resps/`, `Protocol`. Most `redis.clients.jedis.*` types live here, not in this module
+- `src/test/java/` - Unit tests (108 tests, no server needed)
+- `../integTest/src/test/java/compatibility/jedis/` - Integration tests against real servers, run by `:integTest:test`
+- `build.gradle` - Gradle build configuration (plain JAR with platform classifier; no shadow JAR)
 - `compatibility-layer-migration-guide.md` - Migration documentation
 
 ## Architecture Quick Facts
 
 **Core Implementation:** Java wrapper providing Jedis-compatible API over GLIDE core
-**Client Types:** Jedis (standalone), JedisCluster (cluster), UnifiedJedis (unified interface)
+**Client Types:** Jedis (standalone), JedisCluster (cluster), UnifiedJedis (unified interface), JedisPool / JedisPooled (pooled)
 **API Style:** Synchronous, Jedis-compatible method signatures
-**Dependencies:** GLIDE client module, Apache Commons Pool 2
+**Dependencies:** `:jedis-compat-shared` (api), `:client` (implementation), Apache Commons Pool 2 (api), Apache Commons Lang 3
 
-**Supported Platforms:** Same as GLIDE Java client
-**Classifiers Available:** `osx-aarch_64`, `osx-x86_64`, `linux-aarch_64`, `linux-x86_64`, `linux_musl-aarch_64`, `linux_musl-x86_64`
+**Supported Platforms and Classifiers:** same as the GLIDE Java client, see [../README.md › Classifiers](../README.md#classifiers)
 
 **Package:** `io.valkey:valkey-glide-jedis-compatibility` on Maven Central
 **Import Path:** `redis.clients.jedis.*` (Jedis-compatible)
@@ -32,22 +34,25 @@ This is the Jedis Compatibility Layer for Valkey GLIDE, providing a drop-in repl
 ## Build and Test Rules (Agents)
 
 ### Preferred (Gradle Tasks)
+
+Run from `java/`. Prerequisites and the `pkill valkey-server` build-finish hook are described in [../AGENTS.md › Environment](../AGENTS.md#environment); `compileJava` depends on `:client:jar`, so the client (and its Rust library) is built on demand.
+
 ```bash
 # Build commands
 ./gradlew :jedis-compatibility:compileJava        # Compile compatibility layer
-./gradlew :jedis-compatibility:jar                # Build standard JAR
-./gradlew :jedis-compatibility:shadowJar          # Build fat JAR with dependencies
-./gradlew :jedis-compatibility:build              # Full build including tests
+./gradlew :jedis-compatibility:jar                # JAR with platform classifier -> build/libs/jedis-compatibility-<classifier>.jar
+./gradlew :jedis-compatibility:build              # Full build: jar, checkstyle (main + test), unit tests
 
 # Testing
-./gradlew :jedis-compatibility:test               # Run unit tests
+./gradlew :jedis-compatibility:test               # Unit tests (no server needed)
 ./gradlew :jedis-compatibility:check              # Run tests and quality checks
+./gradlew :jedis-compatibility:checkstyleMain     # Checkstyle only
 
 # Publishing
-./gradlew :jedis-compatibility:publishToMavenLocal    # Publish to local Maven repository
+./gradlew :jedis-compatibility:publishToMavenLocal    # Publish to local Maven repository (version 255.255.255 unless GLIDE_RELEASE_VERSION is set)
 
 # Documentation
-./gradlew :jedis-compatibility:javadoc            # Generate Javadocs
+./gradlew :jedis-compatibility:javadoc            # Generate Javadocs (from delombok output; failOnError = false)
 ./gradlew :jedis-compatibility:sourcesJar         # Build sources JAR
 ./gradlew :jedis-compatibility:javadocJar         # Build Javadoc JAR
 
@@ -56,27 +61,21 @@ This is the Jedis Compatibility Layer for Valkey GLIDE, providing a drop-in repl
 ```
 
 ### Raw Equivalents
-```bash
-# Manual compilation (not recommended)
-javac -cp "client.jar:commons-pool2.jar:..." src/main/java/redis/clients/jedis/*.java
 
-# Manual test execution
-java -cp "..." org.junit.runner.JUnitCore TestClass
-
-# Manual JAR creation
-jar cf valkey-glide-jedis-compatibility.jar -C build/classes .
-```
+None: this is a plain Java module with no code generation. The native library is not copied into this module; it ships inside the `:client` jar under `natives/<os>/<arch>/` (`copyNativeLib` in `client/build.gradle`) and `NativeUtils.loadGlideLib()` extracts it from there at runtime, so `./gradlew :client:buildAll` must have run once before these tests. The `-Djava.library.path` jvmArgs in this module's `build.gradle` are not used by the loader.
 
 ### Test Execution Options
+
 ```bash
-# Run specific test
-./gradlew :jedis-compatibility:test --tests 'JedisTest.testSetAndGet'
+# Run specific test method / class (unit tests)
+./gradlew :jedis-compatibility:test --tests '*.ConfigurationTest.testBasicConfiguration'
+./gradlew :jedis-compatibility:test --tests 'ConfigurationTest'
 
 # Run with verbose output
 ./gradlew :jedis-compatibility:test --info
 
-# Run tests with native library path
-./gradlew :jedis-compatibility:test -Djava.library.path=../target/release
+# Integration tests for this layer live in :integTest (starts servers; see ../AGENTS.md)
+./gradlew :integTest:test --tests 'compatibility.jedis.*'
 ```
 
 ## Contribution Requirements
@@ -114,12 +113,14 @@ Use conventional commit format:
 ### Code Quality Requirements
 
 **Spotless (Code Formatting):**
+
 ```bash
 ./gradlew :spotlessCheck    # Must pass before commit (inherited from root)
 ./gradlew :spotlessApply    # Fix formatting issues (inherited from root)
 ```
 
 **Lombok Support:**
+
 - Uses Lombok for boilerplate reduction
 - Delombok task generates source for Javadocs
 - Annotation processing configured for compile and test
@@ -127,43 +128,50 @@ Use conventional commit format:
 ## Guardrails & Policies
 
 ### Generated Outputs (Never Commit)
-- `build/` - Gradle build artifacts
-- `build/classes/` - Compiled Java classes
-- `build/libs/` - Generated JAR files
-- `build/docs/` - Generated Javadocs
-- `build/tmp/` - Temporary build files
-- Native libraries copied from client module
+
+- `build/` - Gradle build artifacts (`build/classes/`, `build/libs/`, `build/docs/`, `build/tmp/`, `build/reports/`)
 
 ### Jedis Compatibility-Specific Rules
-- **API Compatibility:** Maintain strict compatibility with Jedis method signatures
+
+- **API Compatibility:** Maintain strict compatibility with Jedis 5.x method signatures (4.x shapes go in `../jedis-4-compatibility`)
 - **Package Structure:** Use `redis.clients.jedis.*` package names for compatibility
 - **Drop-in Replacement:** Existing Jedis code should work without modification
-- **Configuration Mapping:** Map Jedis configurations to GLIDE configurations transparently
-- **Connection Pooling:** Implement Jedis-compatible pooling using Apache Commons Pool 2
-- **Error Handling:** Translate GLIDE exceptions to Jedis-compatible exceptions
+- **Shared First:** A type needed by both the 4.x and 5.x layers belongs in `../jedis-compat-shared`, not here
+- **Configuration Mapping:** `ConfigurationMapper` / `ClusterConfigurationMapper` (in `jedis-compat-shared`) map Jedis configurations to GLIDE configurations
+- **Connection Pooling:** `JedisPool`, `JedisPooled`, `JedisCluster` pool through Apache Commons Pool 2 (`AbstractGlideJedisFactory` in `jedis-compat-shared`)
+- **Error Handling:** Translate GLIDE exceptions to the `redis.clients.jedis.exceptions.*` hierarchy in `jedis-compat-shared`
 - **Module System:** Disabled for maximum compatibility (`modularity.inferModulePath = false`)
 
 ### Dependency Management
-- **Client Dependency:** Must depend on GLIDE client module
-- **Shadow JAR:** Relocates protobuf to avoid conflicts (`glide.com.google.protobuf`)
-- **Native Libraries:** Automatically copies from client module build
-- **Commons Pool 2:** Part of public API for connection pooling
+
+- **Client Dependency:** `implementation project(':client')`; `api project(':jedis-compat-shared')` and `api commons-pool2` are part of the public API
+- **No Shadow JAR:** This module publishes a plain JAR. Protobuf relocation (`glide.com.google.protobuf`) happens in the client's shadow JAR, which is what `:client` resolves to
+- **Native Libraries:** Not bundled here; loaded at runtime from the `:client` jar's `natives/<os>/<arch>/` resources by `NativeUtils.loadGlideLib()`. Run `./gradlew :client:buildAll` once so the library exists
+- **Classifier:** `osdetector.classifier` (e.g. `osx-aarch_64`); set `JEDIS_NO_CLASSIFIER_BUILD=true` for a classifier-less JAR
 
 ## Project Structure (Essential)
 
 ```
 jedis-compatibility/
 ├── src/
-│   ├── main/java/redis/clients/jedis/    # Jedis-compatible API classes
+│   ├── main/java/redis/clients/jedis/    # Jedis 5.x–shaped API classes
 │   │   ├── Jedis.java                    # Main client class
 │   │   ├── JedisCluster.java             # Cluster client class
 │   │   ├── UnifiedJedis.java             # Unified interface
 │   │   ├── JedisPool.java                # Connection pool
-│   │   └── config/                       # Configuration classes
-│   └── test/java/                        # Unit tests
+│   │   ├── JedisPooled.java              # Pooled single-connection facade
+│   │   ├── GlideJedisFactory.java        # Commons Pool 2 factory
+│   │   ├── CommandObjects.java, ClusterConnectionProvider.java
+│   │   ├── params/                       # Command parameter classes
+│   │   ├── bloom/, timeseries/           # Module protocol constants
+│   └── test/java/redis/clients/jedis/    # Unit tests
 ├── build.gradle                          # Gradle build configuration
 ├── README.md                             # Usage documentation
 └── compatibility-layer-migration-guide.md    # Migration guide
+
+Related, outside this directory:
+../jedis-compat-shared/src/main/java/redis/clients/jedis/   # config, exceptions/, commands/, args/, resps/, Protocol, ...
+../integTest/src/test/java/compatibility/jedis/            # Integration tests (JedisTest, JedisClusterTest, JedisPoolTest, ...)
 ```
 
 ## Quality Gates (Agent Checklist)
@@ -172,31 +180,33 @@ jedis-compatibility/
 - [ ] Tests pass: `./gradlew :jedis-compatibility:test` succeeds
 - [ ] Spotless formatting: `./gradlew :spotlessCheck` passes (inherited)
 - [ ] Javadocs generate: `./gradlew :jedis-compatibility:javadoc` succeeds
-- [ ] Shadow JAR builds: `./gradlew :jedis-compatibility:shadowJar` succeeds
 - [ ] No build artifacts committed (check `.gitignore`)
 - [ ] DCO signoff present: `git log --format="%B" -n 1 | grep "Signed-off-by"`
 - [ ] Conventional commit format used
 - [ ] Jedis API compatibility maintained
 - [ ] Migration guide updated for new features
-- [ ] Native library dependencies resolved
+- [ ] Shared types added to `../jedis-compat-shared` (and `../jedis-4-compatibility` updated) when both layers need them
 
 ## Quick Facts for Reasoners
 
 **Package:** `io.valkey:valkey-glide-jedis-compatibility` on Maven Central
 **API Style:** Synchronous, Jedis-compatible method signatures
-**Client Types:** Jedis (standalone), JedisCluster (cluster), UnifiedJedis (unified)
+**Client Types:** Jedis (standalone), JedisCluster (cluster), UnifiedJedis (unified), JedisPool / JedisPooled
 **Key Features:** Drop-in Jedis replacement, connection pooling, configuration mapping
-**Dependencies:** GLIDE client module, Apache Commons Pool 2, protobuf (relocated)
+**Dependencies:** `:jedis-compat-shared`, `:client` (shadow JAR with relocated protobuf and bundled native library), Apache Commons Pool 2
 **Migration:** Zero or minimal code changes from existing Jedis applications
-**Platforms:** Same as GLIDE Java client (Linux, macOS with platform classifiers)
+**Platforms:** Same as GLIDE Java client, see [../README.md › Classifiers](../README.md#classifiers)
 
 ## If You Need More
 
 - **Getting Started:** [README.md](./README.md)
 - **Migration Guide:** [compatibility-layer-migration-guide.md](./compatibility-layer-migration-guide.md)
+- **Shared Types:** [../jedis-compat-shared/](../jedis-compat-shared/)
+- **Jedis 4.x Layer:** [../jedis-4-compatibility/](../jedis-4-compatibility/)
+- **Integration Tests:** [../integTest/src/test/java/compatibility/jedis/](../integTest/src/test/java/compatibility/jedis/)
 - **Main Java Client:** [../README.md](../README.md)
 - **Development Setup:** [../DEVELOPER.md](../DEVELOPER.md)
-- **Examples:** [../examples/java/](../../examples/java/)
+- **Examples:** [../../examples/java/](../../examples/java/)
 - **API Documentation:** Generated Javadocs in build output
 - **GLIDE Client AGENTS:** [../AGENTS.md](../AGENTS.md)
 - **Root Project:** [../../README.md](../../README.md)

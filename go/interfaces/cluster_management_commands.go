@@ -72,7 +72,7 @@ type ClusterManagementCommands interface {
 	// ClusterShards returns the mapping of cluster slots to shards.
 	// Each shard contains information about the primary and replicas.
 	//
-	// Since: Valkey 7.0 and above.
+	// Since: Valkey 7.0.0.
 	//
 	// See [valkey.io] for details.
 	//
@@ -87,7 +87,7 @@ type ClusterManagementCommands interface {
 
 	// ClusterShardsWithRoute returns the mapping of cluster slots to shards with routing options.
 	//
-	// Since: Valkey 7.0 and above.
+	// Since: Valkey 7.0.0.
 	//
 	// See [valkey.io] for details.
 	//
@@ -144,7 +144,7 @@ type ClusterManagementCommands interface {
 
 	// ClusterMyShardId returns the shard ID of the current node.
 	//
-	// Since: Valkey 7.2 and above.
+	// Since: Valkey 7.2.0.
 	//
 	// See [valkey.io] for details.
 	//
@@ -159,7 +159,7 @@ type ClusterManagementCommands interface {
 
 	// ClusterMyShardIdWithRoute returns the shard ID with routing options.
 	//
-	// Since: Valkey 7.2 and above.
+	// Since: Valkey 7.2.0.
 	//
 	// See [valkey.io] for details.
 	//
@@ -204,7 +204,7 @@ type ClusterManagementCommands interface {
 
 	// ClusterLinks returns information about all TCP links between cluster nodes.
 	//
-	// Since: Valkey 7.0 and above.
+	// Since: Valkey 7.0.0.
 	//
 	// See [valkey.io] for details.
 	//
@@ -219,7 +219,7 @@ type ClusterManagementCommands interface {
 
 	// ClusterLinksWithRoute returns link information with routing options.
 	//
-	// Since: Valkey 7.0 and above.
+	// Since: Valkey 7.0.0.
 	//
 	// See [valkey.io] for details.
 	//

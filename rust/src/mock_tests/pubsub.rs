@@ -5,15 +5,8 @@ use crate::ValkeyValue;
 use crate::commands::pubsub::PubSubCommands;
 use bytes::Bytes;
 
-// `PUBLISH` is declared in (`crate::AsyncCommands`).
-// and covered by the parity guard (`it_parity_guard.rs`).
-
-#[tokio::test]
-async fn spublish_encoding() {
-    let m = Mock::int(1);
-    assert_eq!(m.spublish("sch", "hi").await.unwrap(), 1);
-    m.assert_args(&["SPUBLISH", "sch", "hi"]);
-}
+// `PUBLISH` and `SPUBLISH` are declared in (`crate::AsyncCommands`).
+// and covered by the parity guard (the `parity_tests` module).
 
 #[tokio::test]
 async fn pubsub_channels_with_and_without_pattern() {
@@ -34,6 +27,7 @@ async fn pubsub_numpat_int() {
     m.assert_args(&["PUBSUB", "NUMPAT"]);
 }
 
+// TODO #7688: Update for `pubsub_numsub` returning a `HashMap`.
 #[tokio::test]
 async fn pubsub_numsub_pairs() {
     let m = Mock::array(vec![
@@ -50,6 +44,7 @@ async fn pubsub_numsub_pairs() {
     );
 }
 
+// TODO #7688: Update for `pubsub_shardnumsub` returning a `HashMap`.
 #[tokio::test]
 async fn pubsub_shard_variants() {
     let m = Mock::array(vec![ValkeyValue::BulkString(b"s".to_vec().into())]);
@@ -79,6 +74,7 @@ async fn psubscribe_encodes_patterns() {
     m.assert_args(&["PSUBSCRIBE", "news.*"]);
 }
 
+// TODO #7691: Update for `ssubscribe` moving to the cluster-only `ShardedPubSubCommands`.
 #[tokio::test]
 async fn ssubscribe_encodes_channels() {
     let m = Mock::nil();

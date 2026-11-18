@@ -27,6 +27,7 @@ import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
 import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.DelIfEq;
 import static command_request.CommandRequestOuterClass.RequestType.Dump;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
 import static command_request.CommandRequestOuterClass.RequestType.Exists;
@@ -62,6 +63,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.HExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
+import static command_request.CommandRequestOuterClass.RequestType.HGetDel;
 import static command_request.CommandRequestOuterClass.RequestType.HGetEx;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
@@ -362,6 +364,9 @@ public class BatchTests {
         batch.append("key", "value");
         results.add(Pair.of(Append, buildArgs("key", "value")));
 
+        batch.delifeq("key", "value");
+        results.add(Pair.of(DelIfEq, buildArgs("key", "value")));
+
         batch.del(new String[] {"key1", "key2"});
         results.add(Pair.of(Del, buildArgs("key1", "key2")));
 
@@ -439,6 +444,21 @@ public class BatchTests {
                                 "key", "FXX", "PX", "5000", "FIELDS", "2", "field1", "value1", "field2",
                                 "value2")));
 
+        batch.hsetex(
+                "key",
+                fieldValueMap,
+                HSetExOptions.builder()
+                        .onlyIfKeyExists()
+                        .fieldConditionalChange(FieldConditionalChange.ONLY_IF_NONE_EXIST)
+                        .expiry(ExpirySet.Seconds(10L))
+                        .build());
+        results.add(
+                Pair.of(
+                        HSetEx,
+                        buildArgs(
+                                "key", "XX", "FNX", "EX", "10", "FIELDS", "2", "field1", "value1", "field2",
+                                "value2")));
+
         batch.hsetnx("key", "field", "value");
         results.add(Pair.of(HSetNX, buildArgs("key", "field", "value")));
 
@@ -496,6 +516,10 @@ public class BatchTests {
         // Test HGETEX with no expiry (empty options)
         batch.hgetex("key", new String[] {"field1"}, HGetExOptions.builder().build());
         results.add(Pair.of(HGetEx, buildArgs("key", "FIELDS", "1", "field1")));
+
+        // HGETDEL - get and delete hash fields
+        batch.hgetdel("key", new String[] {"field1", "field2"});
+        results.add(Pair.of(HGetDel, buildArgs("key", "FIELDS", "2", "field1", "field2")));
 
         batch.hexpire(
                 "key",
@@ -633,6 +657,9 @@ public class BatchTests {
 
         batch.sismember("key", "member");
         results.add(Pair.of(SIsMember, buildArgs("key", "member")));
+
+        batch.sismemberIfExists("key", "member");
+        results.add(Pair.of(SIsMember, buildArgs("key", "member", "XX")));
 
         batch.srem("key", new String[] {"value"});
         results.add(Pair.of(SRem, buildArgs("key", "value")));

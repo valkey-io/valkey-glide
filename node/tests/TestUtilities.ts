@@ -20,6 +20,7 @@ import {
     BitwiseOperation,
     ClientTrackingInfo,
     ClusterBatch,
+    ConditionalChange,
     Decoder,
     FlushMode,
     FunctionListResponse,
@@ -47,6 +48,7 @@ import {
     TimeUnit,
     UnsignedEncoding,
     convertRecordToGlideRecord,
+    parseInfoResponse,
 } from "../build-ts";
 const execAsync = promisify(exec);
 
@@ -530,6 +532,25 @@ export async function waitForSaveNotInProgress(
         );
     }, "Timed out waiting for save to complete");
 }
+
+/** One field from each default INFO section. */
+export const INFO_DEFAULT_FIELDS = [
+    "redis_version", // server
+    "connected_clients", // clients
+    "used_memory", // memory
+    "rdb_changes_since_last_save", // persistence
+    "total_commands_processed", // stats
+    "role", // replication
+    "used_cpu_sys", // cpu
+    "cluster_enabled", // cluster
+];
+
+/**
+ * Expected server responses for the "rdb_*_bgsave_type" INFO persistence fields.
+ *
+ * @since Valkey 9.2.0.
+ */
+export const BGSAVE_TYPES = ["fork", "forkless", "none"];
 
 /** Route to a single primary node. */
 export const PRIMARY_SLOT_ROUTE_OPTION = {
@@ -1068,7 +1089,9 @@ export async function batchTest(
         key26, // sorted set
         key27, // sorted set
         key28, // move
-    ] = Array.from({ length: 28 }, () =>
+        key29, // string
+        key30, // string
+    ] = Array.from({ length: 30 }, () =>
         decodeString("{key}" + getRandomKey(), decoder),
     );
 
@@ -1200,6 +1223,68 @@ export async function batchTest(
     baseBatch.set(key2, baz, { returnOldValue: true });
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
 
+    if (!cluster.checkIfServerVersionLessThan("8.1.0")) {
+        baseBatch.set(key29, foo, {
+            conditionalSet: "onlyIfEqual",
+            comparisonValue: bar,
+        });
+        responseData.push([
+            'set(key29, "foo", {conditionalSet: "onlyIfEqual", comparisonValue: "bar"}) non-existent key',
+            null,
+        ]);
+        baseBatch.set(key29, foo);
+        responseData.push(['set(key29, "foo")', "OK"]);
+        baseBatch.set(key29, bar, {
+            conditionalSet: "onlyIfEqual",
+            comparisonValue: bar,
+        });
+        responseData.push([
+            'set(key29, "bar", {conditionalSet: "onlyIfEqual", comparisonValue: "bar"}) value not equal',
+            null,
+        ]);
+        baseBatch.set(key29, bar, {
+            conditionalSet: "onlyIfEqual",
+            comparisonValue: foo,
+        });
+        responseData.push([
+            'set(key29, "bar", {conditionalSet: "onlyIfEqual", comparisonValue: "foo"}) value equal',
+            "OK",
+        ]);
+        baseBatch.get(key29);
+        responseData.push(["get(key29)", "bar"]);
+    }
+
+    if (!cluster.checkIfServerVersionLessThan("9.2.0")) {
+        baseBatch.set(key30, foo, {
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: bar,
+        });
+        responseData.push([
+            'set(key30, "foo", {conditionalSet: "onlyIfNotEqual", comparisonValue: "bar"}) non-existent key',
+            "OK",
+        ]);
+        baseBatch.set(key30, foo);
+        responseData.push(['set(key30, "foo")', "OK"]);
+        baseBatch.set(key30, bar, {
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: foo,
+        });
+        responseData.push([
+            'set(key30, "bar", {conditionalSet: "onlyIfNotEqual", comparisonValue: "foo"}) value equal',
+            null,
+        ]);
+        baseBatch.set(key30, bar, {
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: bar,
+        });
+        responseData.push([
+            'set(key30, "bar", {conditionalSet: "onlyIfNotEqual", comparisonValue: "bar"}) value not equal',
+            "OK",
+        ]);
+        baseBatch.get(key30);
+        responseData.push(["get(key30)", "bar"]);
+    }
+
     if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
         baseBatch.set(key28, foo);
         responseData.push(['set(key1, "foo")', "OK"]);
@@ -1225,6 +1310,19 @@ export async function batchTest(
     responseData.push(["append(key1, value)", 3]);
     baseBatch.del([key1]);
     responseData.push(["del([key1])", 1]);
+
+    if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
+        const delIfEqKey = decodeString("{key}" + getRandomKey(), decoder);
+        baseBatch.set(delIfEqKey, value);
+        responseData.push(["set(delIfEqKey, value)", "OK"]);
+
+        baseBatch.delifeq(delIfEqKey, "wrong-value");
+        responseData.push(["delifeq(delIfEqKey, 'wrong-value')", false]);
+
+        baseBatch.delifeq(delIfEqKey, value);
+        responseData.push(["delifeq(delIfEqKey, value)", true]);
+    }
+
     baseBatch.hset(key4, [{ field, value }]);
     responseData.push(["hset(key4, { [field]: value })", 1]);
     baseBatch.hscan(key4, "0");
@@ -1381,6 +1479,60 @@ export async function batchTest(
         ]);
     }
 
+    if (!cluster.checkIfServerVersionLessThan("9.1.0")) {
+        // HGETDEL tests - only run if server version is 9.1.0 or higher
+        // Use a fresh hash key so the test is independent of earlier commands on key4.
+        const hgetdelKey = decodeString("{key}" + getRandomKey(), decoder);
+        baseBatch.hset(hgetdelKey, {
+            [field.toString()]: value.toString(),
+            [field2.toString()]: value.toString(),
+        });
+        responseData.push(["hset(hgetdelKey, {field, field2})", 2]);
+
+        baseBatch.hgetdel(hgetdelKey, [field.toString(), field2.toString()]);
+        responseData.push([
+            "hgetdel(hgetdelKey, [field, field2])",
+            [value.toString(), value.toString()],
+        ]);
+
+        // Fields are now deleted (and the key removed), so a second call returns nulls
+        baseBatch.hgetdel(hgetdelKey, [field.toString(), field2.toString()]);
+        responseData.push([
+            "hgetdel(hgetdelKey, [field, field2])",
+            [null, null],
+        ]);
+
+        // HSETEX key conditional change tests - only run if server version is 9.1.0 or higher
+        // hgetdelKey no longer exists at this point, so it can be used to test NX.
+        baseBatch.hsetex(
+            hgetdelKey,
+            { [field.toString()]: value },
+            { keyConditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST },
+        );
+        responseData.push([
+            "hsetex(hgetdelKey, { [field]: value }, { keyConditionalChange: ONLY_IF_DOES_NOT_EXIST })",
+            1,
+        ]);
+        baseBatch.hsetex(
+            hgetdelKey,
+            { [field.toString()]: "value2" },
+            { keyConditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST },
+        );
+        responseData.push([
+            "hsetex(hgetdelKey, { [field]: value2 }, { keyConditionalChange: ONLY_IF_DOES_NOT_EXIST })",
+            0,
+        ]);
+        baseBatch.hsetex(
+            hgetdelKey,
+            { [field.toString()]: "value2" },
+            { keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS },
+        );
+        responseData.push([
+            "hsetex(hgetdelKey, { [field]: value2 }, { keyConditionalChange: ONLY_IF_EXISTS })",
+            1,
+        ]);
+    }
+
     baseBatch.lpush(key5, [field1, field2, field3, field4]);
     responseData.push(["lpush(key5, [1, 2, 3, 4])", 4]);
 
@@ -1507,8 +1659,14 @@ export async function batchTest(
     ]);
     baseBatch.scard(key7);
     responseData.push(["scard(key7)", 1]);
+
     baseBatch.sismember(key7, bar);
     responseData.push(['sismember(key7, "bar")', true]);
+
+    if (!cluster.checkIfServerVersionLessThan("9.2.0")) {
+        baseBatch.sismemberIfExists(key7, bar);
+        responseData.push(['sismemberIfExists(key7, "bar")', 1]);
+    }
 
     if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
         baseBatch.smismember(key7, [bar, foo, baz]);
@@ -2710,13 +2868,25 @@ export function assertMemoryStatsFields(
 
     expect(stats.allocatorActive).toBeGreaterThan(0);
     expect(stats.allocatorAllocated).toBeGreaterThan(0);
-    expect(stats.allocatorFragmentationBytes).toBeGreaterThanOrEqual(0);
+    // Before 8.0 this is allocator.active - allocator.allocated. Without jemalloc (macOS), active
+    // is the RAM in use, which can be less than what was allocated, so it can go negative.
+    expect(Number.isInteger(stats.allocatorFragmentationBytes)).toBe(true);
+
+    if (serverVersion < "8.0.0") {
+        expect(stats.allocatorFragmentationBytes).toBe(
+            stats.allocatorActive - stats.allocatorAllocated,
+        );
+    } else {
+        expect(stats.allocatorFragmentationBytes).toBeGreaterThanOrEqual(0);
+    }
+
     expect(stats.allocatorResident).toBeGreaterThan(0);
     expect(typeof stats.allocatorRssBytes).toBe("number");
     expect(stats.aofBuffer).toBeGreaterThanOrEqual(0);
     expect(stats.clientsNormal).toBeGreaterThanOrEqual(0);
     expect(stats.clientsSlaves).toBeGreaterThanOrEqual(0);
-    expect(stats.datasetBytes).toBeGreaterThanOrEqual(0);
+    // dataset.bytes can be negative depending on engine memory accounting, so only check its type.
+    expect(typeof stats.datasetBytes).toBe("number");
     expect(typeof stats.fragmentationBytes).toBe("number");
     expect(stats.keysBytesPerKey).toBeGreaterThanOrEqual(0);
     expect(stats.keysCount).toBeGreaterThanOrEqual(0);
@@ -2756,4 +2926,43 @@ export function assertMemoryStatsFields(
         expect(stats.overheadDbHashtableLut).toBeUndefined();
         expect(stats.overheadDbHashtableRehashing).toBeUndefined();
     }
+}
+
+/**
+ * Returns the fields and values from the given INFO sections.
+ * For cluster clients, the command is sent to all primary nodes.
+ *
+ * @param client - A client that is connected to the server.
+ * @param sections - The INFO sections to request. Defaults to the default sections.
+ * @returns One record per node reply, mapping each INFO field name to its value.
+ */
+export async function getInfo(
+    client: BaseClient,
+    sections?: InfoOptions[],
+): Promise<Record<string, string>[]> {
+    const info =
+        client instanceof GlideClusterClient
+            ? await client.info({ sections })
+            : await (client as GlideClient).info(sections);
+    const replies = typeof info === "string" ? [info] : Object.values(info);
+
+    // TODO #7368: Inline `parseInfoResponse` here when it is removed.
+    return replies.map((reply) => parseInfoResponse(reply));
+}
+
+/**
+ * Asserts that value is an integer and returns it.
+ *
+ * @param value - The value to parse.
+ * @param name - The name that identifies the value in the failure message.
+ * @returns The integer value.
+ */
+export function parseInteger(value: string | undefined, name: string): number {
+    const result = Number(value);
+
+    if (!Number.isInteger(result) || String(result) !== value) {
+        throw new Error(`${name} is not an integer: "${value}"`);
+    }
+
+    return result;
 }

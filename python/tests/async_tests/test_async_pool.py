@@ -12,15 +12,21 @@ cluster deployments behave identically.
 import asyncio
 import uuid
 
+import anyio
 import pytest
 from glide import (
     AllNodes,
     AsyncClientPool,
+    AwsCredentials,
     GlideClient,
     GlideClientConfiguration,
     GlideClusterClient,
     GlideClusterClientConfiguration,
+    IamAuthConfig,
+    NodeAddress,
     PoolConfig,
+    ServerCredentials,
+    ServiceType,
 )
 
 from tests.utils.utils import check_if_server_version_lt
@@ -167,6 +173,34 @@ class TestAsyncClientPool:
             # Second acquire should timeout
             with pytest.raises(TimeoutError):
                 await pool.acquire(timeout=0.5)
+
+            pool.release(client_id)
+        finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_pool_acquire_timeout_zero_fails_immediately(self, cluster_mode):
+        """acquire(timeout=0) must fail immediately on an exhausted pool.
+
+        A falsy-check (`timeout or default`) would replace 0 with the pool's
+        acquire_timeout_s and block for that long instead.
+        """
+        import time
+
+        config = _get_pool_client_config(cluster_mode)
+        # A long default makes the difference between "0" and "fell back to the default" obvious.
+        pool = await AsyncClientPool.create(
+            config, PoolConfig(max_size=1, min_idle=1, acquire_timeout_s=30.0)
+        )
+        await _wait_for_pool_ready(pool, 1)
+
+        try:
+            client_id = await pool.acquire()
+
+            start = time.monotonic()
+            with pytest.raises(TimeoutError):
+                await pool.acquire(timeout=0)
+            assert time.monotonic() - start < 5.0
 
             pool.release(client_id)
         finally:
@@ -367,7 +401,7 @@ class TestAsyncClientPool:
 
         try:
             # Acquire the only client — do NOT release it
-            await pool.acquire()
+            abandoned_id = await pool.acquire()
             assert pool.active_count == 1
             assert pool.idle_count == 0
 
@@ -387,7 +421,39 @@ class TestAsyncClientPool:
             # Verify the pool can still serve new requests (creates a fresh client)
             new_client_id = await pool.acquire(timeout=5)
             assert new_client_id is not None
+
+            # That acquire drains core's discarded ids, which is when the binding
+            # must release the abandoned client's adapter entry.
+            assert pool._lib.glide_pool_get_client_ptr(abandoned_id) == 0
+            assert pool._lib.glide_pool_get_client_ptr(new_client_id) != 0
             pool.release(new_client_id)
+        finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_pool_abandon_skips_client_whose_scope_is_blocking(
+        self, cluster_mode
+    ):
+        """A scope blocking on behalf of a borrowed client keeps the abandon
+        monitor from reclaiming that client."""
+        config = _get_pool_client_config(cluster_mode)
+        pool = await AsyncClientPool.create(
+            config,
+            PoolConfig(max_size=1, min_idle=1, abandon_timeout_ms=2000),
+        )
+        await _wait_for_pool_ready(pool, 1)
+        key = _make_key(cluster_mode, "scope-blocking-abandon")
+        try:
+            async with pool.borrow() as client:
+                async with await client.scoped_connection() as scope:
+                    blpop = asyncio.create_task(
+                        scope.execute_command("BLPOP", key, "4")
+                    )
+                    await asyncio.sleep(3.5)
+                    assert (
+                        pool.active_count == 1
+                    ), "the blocked scope's parent was reclaimed"
+                    assert await blpop is None
         finally:
             pool.close()
 
@@ -418,6 +484,52 @@ class TestAsyncClientPool:
             assert pool.idle_count == 1
         finally:
             pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_ordinary_client_survives_pool_borrow_release(self, cluster_mode):
+        """Ordinary and pooled async clients draw pipe ids from one sequence, so
+        a pooled client cannot displace an ordinary one in the pipe registry.
+        ``fail_after`` turns a regression into a failure instead of a hang.
+        """
+        from glide._ffi_instance import _ASYNC_FFI
+        from glide.glide_client import _client_registry
+
+        ReaderClass = GlideClusterClient if cluster_mode else GlideClient
+
+        # A shared-sequence id falls strictly between these two samples; a local
+        # counter does not, however many clients this process already created.
+        seq_before = _ASYNC_FFI.lib.glide_allocate_client_id()
+        reader = await ReaderClass.create(_get_pool_client_config(cluster_mode))
+        try:
+            seq_after = _ASYNC_FFI.lib.glide_allocate_client_id()
+            assert seq_before < reader._pipe_client_id < seq_after
+
+            pool = await AsyncClientPool.create(
+                _get_pool_client_config(cluster_mode),
+                PoolConfig(max_size=1, min_idle=1),
+            )
+            try:
+                await _wait_for_pool_ready(pool, 1)
+
+                key = _make_key(cluster_mode, "survives")
+
+                async def reader_roundtrip():
+                    await reader.set(key, "seeded")
+                    assert await reader.get(key) == b"seeded"
+
+                assert _client_registry[reader._pipe_client_id] is reader
+                with anyio.fail_after(10):
+                    await reader_roundtrip()
+
+                async with pool.borrow():
+                    pass
+                assert _client_registry[reader._pipe_client_id] is reader
+                with anyio.fail_after(10):
+                    await reader_roundtrip()
+            finally:
+                pool.close()
+        finally:
+            await reader.close()
 
 
 def _has_client_info_field(client_info: str, field: str, expected: str) -> bool:
@@ -566,6 +678,28 @@ class TestPoolPubsubRejection:
         )
         with pytest.raises(ValueError, match="pubsub"):
             AsyncClientPool(config, PoolConfig(max_size=2, min_idle=1))
+
+    async def test_pool_rejects_custom_credential_provider_before_native_call(
+        self, monkeypatch
+    ):
+        """Custom providers are direct-client-only in this release."""
+        import glide.client_pool as pool_module
+
+        monkeypatch.setattr(pool_module, "_ASYNC_FFI", None)
+        config = GlideClientConfiguration(
+            addresses=[NodeAddress()],
+            credentials=ServerCredentials(
+                username="user",
+                iam_config=IamAuthConfig(
+                    cluster_name="cluster",
+                    service=ServiceType.ELASTICACHE,
+                    region="us-east-1",
+                    credential_provider=lambda: AwsCredentials("access", "secret"),
+                ),
+            ),
+        )
+        with pytest.raises(ValueError, match="cannot use a custom IAM"):
+            AsyncClientPool(config, PoolConfig(max_size=1, min_idle=0))
 
 
 @pytest.mark.anyio

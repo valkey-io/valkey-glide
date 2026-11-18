@@ -15,7 +15,11 @@ public enum RedisProtocol {
         return RESP2;
     }
 
-    /** Convert to GLIDE ProtocolVersion. */
+    /**
+     * Convert to GLIDE ProtocolVersion.
+     *
+     * @return the GLIDE {@code ProtocolVersion} matching this protocol
+     */
     public ProtocolVersion toGlideProtocol() {
         switch (this) {
             case RESP2:

@@ -1,0 +1,95 @@
+name: Benchmark test
+description: Build one language's benchmark program and run it once against a local server
+
+# This action decides whether the calling matrix cell runs the check; callers
+# pass the cell's facts and carry no `if:` of their own, so the rule lives in
+# one place and every language is checked under the same conditions.
+#
+# It does not run on pull requests. The check exists to catch a benchmark
+# program that no longer compiles against the client; the push run after a
+# merge names the one PR that broke it, and the nightly and dispatched runs
+# keep running it on the same cells as a push. On a pull request it is a second
+# release build of the client (4-12 minutes on the Node, Rust and Python cells)
+# that nothing shipped depends on.
+
+inputs:
+    language-flag:
+        description: "flag that tells the benchmark to run a certain language"
+        required: true
+    engine-run:
+        description: "matrix.engine.run of the calling cell"
+        required: true
+    target:
+        description: "matrix.host.TARGET of the calling cell"
+        required: true
+    language-version:
+        description: "language version of the calling cell; omit for languages without a version matrix"
+        required: false
+        default: ""
+    base-language-version:
+        description: "language version the smoke check runs on; omit for languages without a version matrix"
+        required: false
+        default: ""
+
+runs:
+    using: "composite"
+
+    steps:
+        # Match on the cell's identity (engine.run, host.TARGET), not on values
+        # that get edited for unrelated reasons (engine.version, host.RUNNER);
+        # a guard on those goes silently false the next time the matrix is retuned.
+        - name: Decide whether this cell runs the benchmark
+          id: gate
+          shell: bash
+          env:
+              LANGUAGE_FLAG: ${{ inputs.language-flag }}
+              EVENT_NAME: ${{ github.event_name }}
+              ENGINE_RUN: ${{ inputs.engine-run }}
+              TARGET: ${{ inputs.target }}
+              LANGUAGE_VERSION: ${{ inputs.language-version }}
+              BASE_LANGUAGE_VERSION: ${{ inputs.base-language-version }}
+          run: |
+              decision=RUN
+              if [[ "$EVENT_NAME" == "pull_request" ]]; then
+                  decision="SKIP (event is pull_request)"
+              elif [[ "$ENGINE_RUN" != "always" ]]; then
+                  decision="SKIP (engine.run is '${ENGINE_RUN:-unset}', not 'always')"
+              elif [[ "$TARGET" != "x86_64-unknown-linux-gnu" ]]; then
+                  decision="SKIP (target is $TARGET)"
+              elif [[ "$LANGUAGE_VERSION" != "$BASE_LANGUAGE_VERSION" ]]; then
+                  decision="SKIP (language version is $LANGUAGE_VERSION, base is $BASE_LANGUAGE_VERSION)"
+              fi
+              line="benchmark ${LANGUAGE_FLAG}: engine.run=${ENGINE_RUN:-unset} target=${TARGET} language=${LANGUAGE_VERSION:-n/a} -> ${decision}"
+              echo "$line"
+              echo "- \`$line\`" >> "$GITHUB_STEP_SUMMARY"
+              if [[ "$decision" == RUN ]]; then
+                  echo "run=true" >> "$GITHUB_OUTPUT"
+              fi
+
+        # SH ephemeral runner is a VM which created anew every time and it doesn't have some required software
+        - name: Install Node on self-hosted runner
+          if: ${{ steps.gate.outputs.run == 'true' && runner.environment == 'self-hosted' }}
+          uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+          with:
+              node-version: 26
+
+        - name: Install extra software on self-hosted runner
+          if: ${{ steps.gate.outputs.run == 'true' && runner.environment == 'self-hosted' }}
+          shell: bash
+          run: |
+              sudo apt-get update
+              sudo apt-get install -y npm
+
+        - name: Start server
+          if: ${{ steps.gate.outputs.run == 'true' }}
+          shell: bash
+          # Disable RDB snapshots to avoid configuration errors
+          run: redis-server --save "" --daemonize "yes"
+
+        - name: Run benchmark
+          if: ${{ steps.gate.outputs.run == 'true' }}
+          shell: bash
+          working-directory: ./benchmarks
+          env:
+              LANGUAGE_FLAG: ${{ inputs.language-flag }}
+          run: ./install_and_test.sh -no-tls -minimal -only-glide -data 1 -tasks 10 $LANGUAGE_FLAG

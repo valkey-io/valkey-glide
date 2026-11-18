@@ -29,6 +29,7 @@ import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
 import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.DelIfEq;
 import static command_request.CommandRequestOuterClass.RequestType.Dump;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
 import static command_request.CommandRequestOuterClass.RequestType.Exists;
@@ -64,6 +65,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.HExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
+import static command_request.CommandRequestOuterClass.RequestType.HGetDel;
 import static command_request.CommandRequestOuterClass.RequestType.HGetEx;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
@@ -236,6 +238,7 @@ import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_V
 import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_VALKEY_API;
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
+import static glide.internal.ValkeyKeywords.XX;
 import static glide.utils.ArgsBuilder.checkTypeOrThrow;
 import static glide.utils.ArgsBuilder.newArgsBuilder;
 import static glide.utils.ArrayTransformUtils.flattenAllKeysFollowedByAllValues;
@@ -272,7 +275,6 @@ import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.WeightAggregateOptions;
@@ -530,7 +532,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Valkey 6.2.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
@@ -547,7 +548,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Valkey 6.2.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
@@ -579,19 +579,18 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Sets the given key with the given value. Return value is dependent on the passed options.
+     * Sets the value of a key with the given options.
      *
      * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @param key The key to store.
-     * @param value The value to store with the given key.
+     * @param value The value to store with the given <code>key</code>.
      * @param options The Set options.
-     * @return Command Response - A <code>String</code> or <code>null</code> response. The old value
-     *     as a <code>String</code> if {@link SetOptionsBuilder#returnOldValue(boolean)} is set.
-     *     Otherwise, if the value isn't set because of {@link ConditionalSet#ONLY_IF_EXISTS} or
-     *     {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST} conditions, return <code>null</code>.
-     *     Otherwise, return <code>OK</code>.
+     * @return Command Response - If {@link SetOptionsBuilder#returnOldValue(boolean)} is not set,
+     *     <code>"OK"</code> if the key was set, or <code>null</code> if the condition was not met. If
+     *     it is set, the old value stored at <code>key</code>, or <code>null</code> if <code>key
+     *     </code> did not exist.
      */
     public <ArgType> T set(
             @NonNull ArgType key, @NonNull ArgType value, @NonNull SetOptions options) {
@@ -615,6 +614,26 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     public <ArgType> T append(@NonNull ArgType key, @NonNull ArgType value) {
         checkTypeOrThrow(key);
         addCommand(Append, newArgsBuilder().add(key).add(value));
+        return getThis();
+    }
+
+    /**
+     * Deletes <code>key</code> if its value equals <code>value</code>.
+     *
+     * @since Valkey 9.0.0.
+     * @see <a href="https://valkey.io/commands/delifeq/">valkey.io</a> for details.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @param key The key to delete.
+     * @param value The comparison value. The key is only deleted if its current value matches
+     *     exactly.
+     * @return Command Response - <code>true</code> if <code>key</code> was deleted, <code>false
+     *     </code> if <code>key</code> did not exist or its value did not match <code>value</code>.
+     */
+    public <ArgType> T delifeq(@NonNull ArgType key, @NonNull ArgType value) {
+        checkTypeOrThrow(key);
+        checkTypeOrThrow(value);
+        addCommand(DelIfEq, newArgsBuilder().add(key).add(value));
         return getThis();
     }
 
@@ -956,7 +975,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hexpire/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param seconds The expiration time in seconds.
@@ -1003,7 +1022,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpersist/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to remove expiration from.
@@ -1025,7 +1044,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Sets expiration time for hash fields, in milliseconds. Creates the hash if it doesn't exist. If
      * a field is already expired, it will be deleted rather than expired.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpexpire/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param milliseconds The expiration time to set for the fields, in milliseconds.
@@ -1074,7 +1093,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * hash if it doesn't exist. If a field is already expired, it will be deleted rather than
      * expired.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hexpireat/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param unixSeconds The expiration time to set for the fields, as a Unix timestamp in seconds.
@@ -1125,7 +1144,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * at which the field will expire is specified in milliseconds instead of seconds. See {@link
      * #hexpireat(Object, long, Object[], HashFieldExpirationConditionOptions)} for more details.
      *
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpexpireat/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param unixMilliseconds The expiration time to set for the fields, as a Unix timestamp in
@@ -1176,7 +1195,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/httl/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to get the TTL for.
@@ -1199,7 +1218,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpttl/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to get the TTL for.
@@ -1222,7 +1241,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, using any other
      *     type will throw {@link IllegalArgumentException}.
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hexpiretime/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to get the expiration timestamp for.
@@ -1248,7 +1267,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, using any other
      *     type will throw {@link IllegalArgumentException}.
-     * @since Valkey 9.0 and above.
+     * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/hpexpiretime/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to get the expiration timestamp for.
@@ -1305,6 +1324,28 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     public <ArgType> T hdel(@NonNull ArgType key, @NonNull ArgType[] fields) {
         checkTypeOrThrow(key);
         addCommand(HDel, newArgsBuilder().add(key).add(fields));
+        return getThis();
+    }
+
+    /**
+     * Gets and deletes the specified fields from the hash stored at <code>key</code>. This command
+     * atomically retrieves the values of the given fields and removes them from the hash in a single
+     * operation. When the last field is removed, the key is deleted automatically.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @since Valkey 9.1.0.
+     * @see <a href="https://valkey.io/commands/hgetdel/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get and delete from the hash stored at <code>key</code>.
+     * @return Command Response - An array of values associated with the given fields, in the same
+     *     order as they are requested. For every field that does not exist in the hash, a <code>null
+     *     </code> value is returned.
+     */
+    public <ArgType> T hgetdel(@NonNull ArgType key, @NonNull ArgType[] fields) {
+        checkTypeOrThrow(key);
+        addCommand(
+                HGetDel, newArgsBuilder().add(key).add(FIELDS_VALKEY_API).add(fields.length).add(fields));
         return getThis();
     }
 
@@ -1480,7 +1521,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Returns a random field name from the hash value stored at <code>key</code>.
      *
-     * @since Valkey 6.2 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
@@ -1498,7 +1538,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Retrieves up to <code>count</code> random field names from the hash value stored at <code>key
      * </code>.
      *
-     * @since Valkey 6.2 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
@@ -1519,7 +1558,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Retrieves up to <code>count</code> random field names along with their values from the hash
      * value stored at <code>key</code>.
      *
-     * @since Valkey 6.2 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
@@ -1578,7 +1616,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the index of the first occurrence of <code>element</code> inside the list specified by
      * <code>key</code>. If no match is found, <code>null</code> is returned.
      *
-     * @since Valkey 6.0.6.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
@@ -1597,7 +1634,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the index of an occurrence of <code>element</code> within a list based on the given
      * <code>options</code>. If no match is found, <code>null</code> is returned.
      *
-     * @since Valkey 6.0.6.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
@@ -1617,7 +1653,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Returns an <code>array</code> of indices of matching elements within a list.
      *
-     * @since Valkey 6.0.6.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
@@ -1637,7 +1672,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns an <code>array</code> of indices of matching elements within a list based on the given
      * <code>options</code>. If no match is found, an empty <code>array</code>is returned.
      *
-     * @since Valkey 6.0.6.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
@@ -1895,6 +1929,29 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
+     * Returns if <code>member</code> is a member of the set stored at <code>key</code>, or <code>-1
+     * </code> if <code>key</code> does not exist.
+     *
+     * @since Valkey 9.2.0.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/sismember/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param member The member to check for existence in the set.
+     * @return Command Response - A status code indicating membership:
+     *     <ul>
+     *       <li><code>1</code> if the member exists in the set.
+     *       <li><code>0</code> if <code>key</code> exists but the member does not exist in the set.
+     *       <li><code>-1</code> if <code>key</code> does not exist.
+     *     </ul>
+     */
+    public <ArgType> T sismemberIfExists(@NonNull ArgType key, @NonNull ArgType member) {
+        checkTypeOrThrow(key);
+        addCommand(SIsMember, newArgsBuilder().add(key).add(member).add(XX));
+        return getThis();
+    }
+
+    /**
      * Removes specified members from the set stored at <code>key</code>. Specified members that are
      * not a member of this set are ignored.
      *
@@ -2055,7 +2112,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
@@ -2072,7 +2129,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
@@ -2401,7 +2458,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * will expire, in seconds.<br>
      * To get the expiration with millisecond precision, use {@link #pexpiretime(ArgType)}.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/expiretime/">valkey.io</a> for details.
@@ -2420,7 +2477,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
      * will expire, in milliseconds.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/pexpiretime/">valkey.io</a> for details.
@@ -2960,7 +3017,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
      * score, where scores are ordered from the lowest to highest, starting from <code>0</code>.
      *
-     * @since Valkey 7.2.0 and above.
+     * @since Valkey 7.2.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for more details.
@@ -3002,7 +3059,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
      * score, where scores are ordered from the highest to lowest, starting from <code>0</code>.
      *
-     * @since Valkey 7.2.0 and above.
+     * @since Valkey 7.2.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a> for more details.
@@ -3043,7 +3100,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the difference between the first sorted set and all the successive sorted sets.<br>
      * To get the elements with their scores, see {@link #zdiffWithScores}.
      *
-     * @since Valkey 6.2 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a> for more details.
@@ -3062,7 +3118,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Returns the difference between the first sorted set and all the successive sorted sets.
      *
-     * @since Valkey 6.2 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a> for more details.
@@ -3083,7 +3138,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * <code>keys</code> and stores the difference as a sorted set to <code>destination</code>,
      * overwriting it if it already exists. Non-existent keys are treated as empty sets.
      *
-     * @since Valkey 6.2 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zdiffstore/">valkey.io</a> for more details.
@@ -3452,7 +3506,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zintercard/">valkey.io</a> for more details.
@@ -3470,7 +3524,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * If the intersection cardinality reaches <code>limit</code> partway through the computation, the
      * algorithm will exit early and yield <code>limit</code> as the cardinality.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zintercard/">valkey.io</a> for more details.
@@ -3539,7 +3593,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - The resulting sorted set from the union.
@@ -3553,7 +3606,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - The resulting sorted set from the union.
@@ -3567,7 +3619,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the union of members and their scores from sorted sets specified by the given <code>
      *  keysOrWeightedKeys</code>.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -3594,7 +3645,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the union of members and their scores from sorted sets specified by the given <code>
      *  keysOrWeightedKeys</code>.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -3623,7 +3673,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
      * #zunionWithScores(KeysOrWeightedKeys, Aggregate)}.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -3645,7 +3694,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
      * #zunionWithScores(KeysOrWeightedKeys, Aggregate)}.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -3666,7 +3714,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * <br>
      * To get the elements with their scores, see {@link #zinterWithScores}.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - The resulting sorted set from the intersection.
@@ -3681,7 +3728,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * <br>
      * To get the elements with their scores, see {@link #zinterWithScores}.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - The resulting sorted set from the intersection.
@@ -3696,7 +3742,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * <code>keysOrWeightedKeys</code>. To perform a <code>zinter</code> operation while specifying
      * aggregation settings, use {@link #zinterWithScores(KeysOrWeightedKeys, Aggregate)}.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -3717,7 +3762,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * <code>keysOrWeightedKeys</code>. To perform a <code>zinter</code> operation while specifying
      * aggregation settings, use {@link #zinterWithScores(KeysOrWeightedKeys, Aggregate)}.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -3737,7 +3781,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the intersection of members and their scores from sorted sets specified by the given
      * <code>keysOrWeightedKeys</code>.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -3764,7 +3807,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the intersection of members and their scores from sorted sets specified by the given
      * <code>keysOrWeightedKeys</code>.
      *
-     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -3971,16 +4013,16 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param start Starting stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
-     *           exclusive bounded stream entry ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
-     *           exclusive bounded stream entry ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -4004,16 +4046,16 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param start Starting stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
-     *           exclusive bounded stream entry ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
-     *           exclusive bounded stream entry ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -4041,16 +4083,16 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param end Ending stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
-     *           exclusive bounded stream entry ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param start Starting stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
-     *           exclusive bounded stream entry ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
@@ -4076,16 +4118,16 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param start Starting stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
-     *           exclusive bounded stream entry ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream entry IDs bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
-     *       <li>Since Valkey 6.2.0, use {@link StreamRange.IdBound#ofExclusive} to specify an
-     *           exclusive bounded stream entry ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           entry ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -4228,7 +4270,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The consumer group name.
@@ -4468,7 +4510,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * The output is limited by first <code>10</code> PEL entries.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     * @since Valkey 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @return Command Response - A <code>Map</code> of detailed stream information for the given
@@ -4484,7 +4525,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * The output is limited by first <code>10</code> PEL entries.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     * @since Valkey 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
@@ -5359,7 +5399,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -5381,7 +5421,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -5405,7 +5445,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
      * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(ArgType[], ScoreFilter)}.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
@@ -5435,7 +5475,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * provided.<br>
      * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(ArgType[], ScoreFilter, long)}.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
@@ -5618,7 +5658,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * <code>replace</code> is true, removes the <code>destination</code> key first if it already
      * exists, otherwise performs no action.
      *
-     * @since Valkey 6.2.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
@@ -5639,7 +5678,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Copies the value stored at the <code>source</code> to the <code>destination</code> key if the
      * <code>destination</code> key does not yet exist.
      *
-     * @since Valkey 6.2.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
@@ -5657,8 +5695,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @since Valkey 6.2.0 and above for standalone Client.
-     * @since Valkey 9.0.0 and above for standaloneClient.
+     * @since Valkey 9.0.0 for cluster client.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
@@ -5678,8 +5715,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @since Valkey 6.2.0 and above for standalone Client.
-     * @since Valkey 9.0.0 and above for standaloneClient.
+     * @since Valkey 9.0.0 for cluster client.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
@@ -5833,7 +5869,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * <code>-1</code> being the last element of the list, <code>-2</code> being the penultimate, and
      * so on.
      *
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
@@ -5992,7 +6028,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Loads a library to Valkey.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
@@ -6010,7 +6046,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @return Command Response - Info about all libraries and their functions.
@@ -6023,7 +6059,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
@@ -6045,7 +6081,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Invokes a previously loaded function.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
@@ -6067,7 +6103,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Invokes a previously loaded read-only function.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
@@ -6083,7 +6119,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Invokes a previously loaded read-only function.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
@@ -6106,7 +6142,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Invokes a previously loaded function.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
@@ -6123,7 +6159,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns information about the function that's currently running and information about the
      * available execution engines.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
      * @return Command Response - A <code>Map</code> with two keys:
      *     <ul>
@@ -6140,7 +6176,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the serialized payload of all loaded libraries. The command will be routed to a random
      * node.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-dump/">valkey.io</a> for details.
      * @return Command Response - The serialized payload of all loaded libraries.
      */
@@ -6153,7 +6189,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Restores libraries from the serialized payload returned by {@link #functionDump()}. The command
      * will be routed to all primary nodes.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @return Command Response - <code>"OK"</code> response on success.
@@ -6167,7 +6203,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Restores libraries from the serialized payload returned by {@link #functionDump()}. The command
      * will be routed to all primary nodes.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param policy A policy for handling existing libraries.
@@ -6229,7 +6265,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @apiNote <code>BLMPOP</code> is a client blocking command, see <a
      *     href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
      * @param keys The list of provided <code>key</code> names.
      * @param direction The direction based on which elements are popped from - see {@link
@@ -6269,7 +6305,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @apiNote <code>BLMPOP</code> is a client blocking command, see <a
      *     href="https://glide.valkey.io/how-to/connection-management/#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys The list of provided <code>key</code> names.
      * @param direction The direction based on which elements are popped from - see {@link
@@ -6362,7 +6398,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * offsets starting at the end of the list, with <code>-1</code> being the last element of the
      * list, <code>-2</code> being the penultimate, and so on.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
@@ -6408,7 +6444,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Pops one or more elements from the first non-empty list from the provided <code>keys
      * </code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
@@ -6436,7 +6472,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Pops one element from the first non-empty list from the provided <code>keys</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
@@ -6477,7 +6513,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * </code> depending on <code>whereFrom</code>, and pushes the element at the first/last element
      * of the list stored at <code>destination</code> depending on <code>whereFrom</code>.
      *
-     * @since Valkey 6.2.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
@@ -6506,7 +6541,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * <code>BLMove</code> is the blocking variant of {@link #lmove(ArgType, ArgType, ListDirection,
      * ListDirection)}.
      *
-     * @since Valkey 6.2.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @apiNote <code>BLMove</code> is a client blocking command, see <a
@@ -6645,7 +6679,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * specified <code>subCommands</code>.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Valkey 6.0 and above
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/bitfield_ro/">valkey.io</a> for details.
@@ -6664,7 +6697,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Deletes all function libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @return Command Response - <code>"OK"</code> response on success.
      */
@@ -6676,7 +6709,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Deletes all function libraries.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
@@ -6690,7 +6723,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Deletes a library and all its functions.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/function-delete/">valkey.io</a> for details.
@@ -6707,7 +6740,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns all the longest common subsequences combined between strings stored at <code>key1
      * </code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -6727,7 +6760,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the total length of all the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -6847,7 +6880,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -6875,7 +6908,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the indices and the total length of all the longest common subsequences between strings
      * stored at <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -6912,7 +6945,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the indices and lengths of the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -6947,7 +6980,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the indices and lengths of the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -7012,7 +7045,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same slot. The
      *     use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
-     *     supported since Valkey version 8.0.
+     *     supported since Valkey 8.0.0.
      * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
@@ -7032,7 +7065,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @return Command Response - An <code>Array</code> of sorted elements.
@@ -7048,13 +7081,13 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
      * and apply transformations on sorted elements.<br>
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same slot. The
      *     use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
-     *     supported since Valkey version 8.0.
+     *     supported since Valkey 8.0.0.
      * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
@@ -7103,7 +7136,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *           SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same
      *           slot.
      *       <li>The use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in
-     *           cluster mode is supported since Valkey version 8.0.
+     *           cluster mode is supported since Valkey 8.0.0.
      *     </ul>
      *
      * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
@@ -7130,7 +7163,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(ArgType, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Valkey 6.2.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
@@ -7164,7 +7196,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(ArgType, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Valkey 6.2.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
@@ -7208,7 +7239,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(ArgType, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Valkey 6.2.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
@@ -7259,7 +7289,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(ArgType, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Valkey 6.2.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
@@ -7317,7 +7346,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * created. To get the result directly, see `{@link #geosearch(ArgType, SearchOrigin,
      * GeoSearchShape)}.
      *
-     * @since Valkey 6.2.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
@@ -7363,7 +7391,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * created. To get the result directly, see `{@link #geosearch(ArgType, SearchOrigin,
      * GeoSearchShape, GeoSearchResultOptions)}.
      *
-     * @since Valkey 6.2.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
@@ -7413,7 +7440,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * created. To get the result directly, see `{@link #geosearch(ArgType, SearchOrigin,
      * GeoSearchShape, GeoSearchOptions)}.
      *
-     * @since Valkey 6.2.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
@@ -7462,7 +7488,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * created. To get the result directly, see `{@link #geosearch(ArgType, SearchOrigin,
      * GeoSearchShape, GeoSearchOptions, GeoSearchResultOptions)}.
      *
-     * @since Valkey 6.2.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.

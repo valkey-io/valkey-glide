@@ -174,6 +174,36 @@ test_standalone_client()
 
 ---
 
+### Unix Domain Socket
+
+Standalone clients can connect through the server's `unixsocket` instead of TCP. Cluster mode and TLS are not supported.
+
+```python
+import asyncio
+from glide import GlideClientConfiguration, NodeAddress, GlideClient
+
+async def test_unix_socket_client():
+    config = GlideClientConfiguration(
+        [NodeAddress(unix_socket_path="/run/valkey/valkey.sock")]
+    )
+    client = await GlideClient.create(config)
+    print(await client.ping())
+
+asyncio.run(test_unix_socket_client())
+```
+
+```python
+from glide_sync import GlideClientConfiguration, NodeAddress, GlideClient
+
+config = GlideClientConfiguration(
+    [NodeAddress(unix_socket_path="/run/valkey/valkey.sock")]
+)
+client = GlideClient.create(config)
+print(client.ping())
+```
+
+---
+
 ## PubSub Configuration
 
 Valkey GLIDE supports dynamic PubSub with automatic subscription reconciliation. Configure the reconciliation interval to ensure subscriptions remain synchronized:
@@ -352,6 +382,83 @@ current_rate = OpenTelemetry.get_sample_percentage()
 
 **Note**: OpenTelemetry can only be initialized once per process. To change configuration, restart your application.
 
+### Trace Context Propagation
+
+Trace context propagation is disabled by default. Set `enable_trace_context_propagation=True` to use the active application span as the parent of sampled GLIDE spans. GLIDE's default `sample_percentage=1` selects about 1% of commands even inside a sampled parent, set it to `100` when every command span should join the application trace. The active span is picked up through Python's `contextvars`, so no context argument is needed for sync, `asyncio` or `trio` commands.
+
+GLIDE only needs the optional `opentelemetry-api>=1.6.0` package to read the active span. The following example also uses your application's OpenTelemetry SDK and OTLP/HTTP exporter. With the API package alone, there is no recording provider and therefore no valid parent span.
+
+Install the API through the `otel` extra for the client you use:
+
+```bash
+pip install "valkey-glide[otel]"       # async client
+pip install "valkey-glide-sync[otel]"  # sync client
+```
+
+```bash
+pip install opentelemetry-sdk opentelemetry-exporter-otlp-proto-http
+```
+
+With a Valkey server on `localhost:6379` and an OTLP/HTTP collector on `localhost:4318`, this example exports both sides of the trace to the same collector:
+
+```python
+import asyncio
+
+from glide import (
+    GlideClient, GlideClientConfiguration, NodeAddress,
+    OpenTelemetry, OpenTelemetryConfig, OpenTelemetryTracesConfig,
+)
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+traces_endpoint = "http://localhost:4318/v1/traces"
+
+# Application spans use the application's SDK exporter.
+provider = TracerProvider()
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=traces_endpoint)))
+trace.set_tracer_provider(provider)
+
+# GLIDE spans use GLIDE's separate exporter at the same OTLP/HTTP endpoint.
+OpenTelemetry.init(OpenTelemetryConfig(
+    traces=OpenTelemetryTracesConfig(
+        endpoint=traces_endpoint,
+        sample_percentage=100,
+        enable_trace_context_propagation=True,
+    ),
+    flush_interval_ms=1000,
+))
+
+async def main():
+    client = await GlideClient.create(GlideClientConfiguration(
+        addresses=[NodeAddress("localhost", 6379)],
+    ))
+    try:
+        with trace.get_tracer(__name__).start_as_current_span("checkout"):
+            await client.set("cart:42", "value")
+            await client.get("cart:42")
+    finally:
+        await client.close()
+        provider.force_flush()
+        await asyncio.sleep(2)  # Allow GLIDE's exporter to flush before exit.
+
+asyncio.run(main())
+```
+
+#### Where GLIDE's Spans Are Exported
+
+GLIDE exports its spans through the `endpoint` given to `OpenTelemetryTracesConfig`. Your application exports the parent through its own SDK. They share a trace ID but travel as separate streams. If the endpoints feed different backends or either exporter drops a span, the backend can show a parent without its GLIDE child or a child with a dangling `parent_span_id`. GLIDE cannot detect this from the command response. Point both exporters at the same collector and check both pipelines when a joined trace is missing.
+
+#### Sampling and the Parent Span
+
+- **Propagation is enabled and a valid parent span is active**: `sample_percentage` decides whether GLIDE creates a child span. At `0`, no GLIDE span is created. When a span is selected, it uses the active span as its parent. The parent's sampled flag then controls whether the Rust OpenTelemetry SDK exports the child. An unsampled parent produces no exported GLIDE child spans, even when `sample_percentage` is `100`.
+- **Propagation is disabled or no valid parent span is active**: `sample_percentage` decides whether GLIDE creates an independent trace root.
+
+#### Without `opentelemetry-api`
+
+The package is optional and only needed when `enable_trace_context_propagation=True`. Without it installed, propagation is off and GLIDE spans behave as they always have: independent trace roots governed by `sample_percentage` alone. If reading the active span context ever fails, it never fails your command. GLIDE logs each failure at debug level and continues as if no span were active, leaving `sample_percentage` to decide.
+
 ---
 
 ## Compression Configuration (EXPERIMENTAL)
@@ -360,8 +467,10 @@ current_rate = OpenTelemetry.get_sample_percentage()
 
 Valkey GLIDE supports automatic compression and decompression of string values to reduce memory usage and network bandwidth.
 
-**Incompatible Commands**: Compression is NOT compatible with commands that manipulate string data on the server:
-- APPEND, GETRANGE, SETRANGE, STRLEN, LCS
+**Incompatible Commands**: Compression is NOT compatible with commands that manipulate or compare string data on the server:
+
+- APPEND, GETRANGE, SETRANGE, STRLEN, LCS, SUBSTR
+- DELIFEQ and SET with IFEQ or IFNE
 - INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY
 - GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP
 
@@ -416,6 +525,82 @@ print(f"Original bytes: {stats['total_original_bytes']}")
 print(f"Compressed bytes: {stats['total_bytes_compressed']}")
 print(f"Compression skipped: {stats['compression_skipped_count']}")
 ```
+
+## RDMA Transfers (EXPERIMENTAL)
+
+**⚠️ WARNING: This feature is experimental. Its API may change in a future release.**
+
+The sync client can read and write values with RDMA (remote direct memory access): the server
+copies a value straight into, or out of, memory you registered, with no copy through the client.
+It needs a server that serves the `BLOB.RDMA_*` commands, and `libfabric` 2.4 or newer on the
+client machine. libfabric is loaded only when a client asks for RDMA, so the published
+`valkey-glide-sync` wheel runs anywhere.
+
+RDMA is only in the sync client. It cannot be combined with enabled compression, `lazy_connect`,
+read-only mode or static node discovery, and `ClientPool` does not support it. Transfers always go
+to the key's primary.
+
+### Basic RDMA Setup
+
+```python
+from glide_sync import (
+    GlideClient, GlideClientConfiguration, NodeAddress,
+    RdmaConfiguration, RdmaProvider, RdmaSetChecksum,
+)
+
+# rdma_available: this build has RDMA. rdma_usable: libfabric also loads here.
+if not GlideClient.rdma_usable():
+    raise SystemExit("needs libfabric 2.4 or newer")
+
+client = GlideClient.create(GlideClientConfiguration(
+    addresses=[NodeAddress("localhost", 6379)],
+    # EfaDirect() for EFA hardware. Tcp() emulates RDMA over TCP; only a development
+    # build honors it.
+    rdma=RdmaConfiguration(provider=RdmaProvider.EfaDirect()),
+))
+
+# Register memory once: it pins the pages, which is slow. Then transfer through windows of it.
+slab = bytearray(64 << 20)  # or an mmap, a NumPy array, a tensor's storage
+with client.register_rdma_region(slab) as region:
+    window = region.window(0, 11)
+    window.memoryview()[:] = b"hello world"
+    client.rdma_set(b"greeting", window, checksum=RdmaSetChecksum.Compute())
+
+    receipt = client.rdma_get(b"greeting", region.window(4096, 4096))
+    if receipt is not None:  # None: the key does not exist
+        value = region.window(4096, receipt.bytes_written).memoryview()
+client.close()
+```
+
+- GLIDE never copies or frees your memory. The region keeps a reference to it, so it stays alive
+  while the region is open. Close regions when you are done (or use `with`), since their pages
+  stay pinned until then.
+- A region carries one transfer at a time. Threads that transfer at once each need their own
+  region, for example one per non-overlapping slice of the same buffer.
+- `rdma_get` checks every value it reads against the CRC-32c the server reports. `rdma_set` checks
+  only if you pass a checksum: `Skip()` (the default), `Compute()`, or `Known(crc)`.
+- Transfers have no timeout. To cancel one, call `client.close()` from another thread; the blocked
+  call raises `ClosingError`, and you need a new client.
+
+### Handling a Failed Transfer
+
+Some failures close the region because the server might still be using the memory. Check
+`region.closed` after any error rather than the error's class:
+
+```python
+from glide_sync import GlideError
+
+try:
+    receipt = client.rdma_get(key, region.window(offset, length))
+except GlideError:
+    if region.closed and not client.closed:
+        region = client.register_rdma_region(slab)
+    raise
+```
+
+GLIDE never retries a transfer, since only you know whether sending a value again is safe.
+Registering again raises `RdmaError` while GLIDE still holds the memory, which only happens with
+the `Tcp()` provider or after a device error; `region.memory_released` tells you when it is free.
 
 ---
 

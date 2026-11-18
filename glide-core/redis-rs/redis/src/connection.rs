@@ -1333,10 +1333,9 @@ impl Connection {
         };
         // shutdown connection on protocol error
         if let Err(e) = &result {
-            let shutdown = match e.as_io_error() {
-                Some(e) => e.kind() == io::ErrorKind::UnexpectedEof,
-                None => false,
-            };
+            // Not just UnexpectedEof: a peer killed with data in flight delivers RST,
+            // which surfaces as ConnectionReset and must also mark the socket closed.
+            let shutdown = e.is_connection_dropped();
             if shutdown {
                 // Notify the PushManager that the connection was lost
                 self.push_manager.try_send_raw(&Value::Push {
@@ -1860,6 +1859,84 @@ pub fn get_resp3_hello_command_error(err: RedisError) -> RedisError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_read_response_connection_reset_closes_and_notifies() {
+        use std::net::TcpListener;
+        use std::time::Instant;
+
+        let timeout = Duration::from_secs(5);
+        for protocol in [ProtocolVersion::RESP2, ProtocolVersion::RESP3] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.set_nonblocking(true).unwrap();
+            let addr = listener.local_addr().unwrap();
+            let transport = ActualConnection::new(
+                &ConnectionAddr::Tcp(addr.ip().to_string(), addr.port()),
+                Some(timeout),
+            )
+            .unwrap();
+            let deadline = Instant::now() + timeout;
+            let mut peer = loop {
+                match listener.accept() {
+                    Ok((peer, _)) => break peer,
+                    Err(err)
+                        if err.kind() == io::ErrorKind::WouldBlock && Instant::now() < deadline =>
+                    {
+                        std::thread::sleep(Duration::from_millis(1));
+                    }
+                    Err(err) => panic!("test peer did not accept the connection: {err}"),
+                }
+            };
+            // macOS can inherit the listener's nonblocking mode on accepted sockets.
+            peer.set_nonblocking(false).unwrap();
+            peer.set_read_timeout(Some(timeout)).unwrap();
+
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+            // Post-handshake state isolates response handling from setup errors.
+            let mut con = Connection {
+                con: transport,
+                parser: Parser::new(),
+                db: 0,
+                pubsub: false,
+                protocol,
+                push_manager: PushManager::new(Some(tx), None, None),
+            };
+            con.set_read_timeout(Some(timeout)).unwrap();
+            con.set_write_timeout(Some(timeout)).unwrap();
+
+            // Consuming the request before the reset rules out a write-side error.
+            con.send_packed_command(&cmd("PING").get_packed_command())
+                .unwrap();
+            assert_eq!(
+                Parser::new().parse_value(&mut peer).unwrap(),
+                Value::Array(vec![Value::BulkString(b"PING".to_vec().into())])
+            );
+            assert!(con.is_open());
+            assert_eq!(
+                rx.try_recv().unwrap_err(),
+                tokio::sync::mpsc::error::TryRecvError::Empty
+            );
+
+            // An ordinary close can produce EOF, which the old predicate already handled.
+            socket2::SockRef::from(&peer)
+                .set_linger(Some(Duration::ZERO))
+                .unwrap();
+            drop(peer);
+
+            let err = con.recv_response().unwrap_err();
+            assert_eq!(
+                err.as_io_error().map(io::Error::kind),
+                Some(io::ErrorKind::ConnectionReset),
+                "expected a read-side reset for {protocol:?}, got {err}"
+            );
+            assert!(!con.is_open(), "read-side reset left {protocol:?} open");
+            let push = rx
+                .try_recv()
+                .expect("missing disconnection push after reset");
+            assert_eq!(push.kind, PushKind::Disconnection);
+            assert!(push.data.is_empty());
+        }
+    }
 
     #[test]
     fn test_effective_lib_name() {

@@ -1,15 +1,21 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-//! Client-level integration tests that exercise the parts of `client.rs` not
-//! covered by the per-family command suites: the cluster-scan iterator,
-//! `route_command`, and the Pub/Sub subscribe→publish→receive path.
+//! Client-level integration tests that exercise client construction and the
+//! parts of `client.rs` not covered by the per-family command suites: the
+//! cluster-scan iterator, `route_command`, the Pub/Sub
+//! subscribe→publish→receive path, and connecting from a URL.
+
+// TODO #7236: this file groups unrelated client-level tests (Pub/Sub, cluster
+// scan, `route_command`, connection URLs), some overlapping the per-feature
+// suites (`it_pubsub.rs`, `it_scan.rs`). Split or move them into specific files.
 
 mod common;
 
-use glide::Cmd;
 use glide::client::{ClusterScanCursor, PubSubMessageKind};
+use glide::cmd;
 use glide::config::{PubSubChannelMode, PubSubSubscriptions};
 use glide::{
-    AsyncCommands, CustomCommand, FromValkeyValue, GlideClient, GlideClientConfiguration, Route,
+    AsyncTypedCommands, CustomCommand, FromValkeyValue, GlideClient, GlideClientConfiguration,
+    GlideClusterClientConfiguration, Route,
 };
 use std::collections::HashSet;
 use std::time::Duration;
@@ -20,23 +26,23 @@ use std::time::Duration;
 
 timed_tokio_test!(
     async fn pubsub_publish_receive_exact() {
-        let srv = server_or_skip!();
+        let server = common::TestServer::start();
         let channel = common::key("chan");
 
         let subs = PubSubSubscriptions::new().subscribe(PubSubChannelMode::Exact, channel.clone());
         let subscriber = GlideClient::connect(
-            GlideClientConfiguration::with_address("127.0.0.1", srv.port).subscriptions(subs),
+            GlideClientConfiguration::with_address("127.0.0.1", server.port).subscriptions(subs),
         )
         .await
         .expect("connect subscriber");
-        let publisher = srv.client().await;
+        let publisher = server.client().await;
 
         // Wait until the subscription is registered server-side (poll, not sleep).
         assert!(
             common::wait_for_numsub(&publisher, &channel, |n| n >= 1, Duration::from_secs(3)).await,
             "subscription was not registered server-side in time"
         );
-        let n: i64 = publisher.publish(&channel, "hello").await.unwrap();
+        let n: usize = publisher.publish(&channel, "hello").await.unwrap();
         assert!(n >= 1, "expected at least one receiver, got {n}");
 
         let msg = tokio::time::timeout(Duration::from_secs(3), subscriber.get_pubsub_message())
@@ -52,20 +58,20 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn pubsub_pattern_receive() {
-        let srv = server_or_skip!();
+        let server = common::TestServer::start();
         let subs = PubSubSubscriptions::new().subscribe(PubSubChannelMode::Pattern, "news.*");
         let subscriber = GlideClient::connect(
-            GlideClientConfiguration::with_address("127.0.0.1", srv.port).subscriptions(subs),
+            GlideClientConfiguration::with_address("127.0.0.1", server.port).subscriptions(subs),
         )
         .await
         .expect("connect subscriber");
-        let publisher = srv.client().await;
+        let publisher = server.client().await;
 
         assert!(
             common::wait_for_numpat(&publisher, |n| n >= 1, Duration::from_secs(3)).await,
             "pattern subscription was not registered server-side in time"
         );
-        let _: i64 = publisher.publish("news.tech", "breaking").await.unwrap();
+        let _: usize = publisher.publish("news.tech", "breaking").await.unwrap();
 
         let msg = tokio::time::timeout(Duration::from_secs(3), subscriber.get_pubsub_message())
             .await
@@ -80,10 +86,10 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn pubsub_try_get_empty_returns_none() {
-        let srv = server_or_skip!();
+        let server = common::TestServer::start();
         let subs = PubSubSubscriptions::new().subscribe(PubSubChannelMode::Exact, "quiet");
         let subscriber = GlideClient::connect(
-            GlideClientConfiguration::with_address("127.0.0.1", srv.port).subscriptions(subs),
+            GlideClientConfiguration::with_address("127.0.0.1", server.port).subscriptions(subs),
         )
         .await
         .expect("connect subscriber");
@@ -94,11 +100,11 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn pubsub_without_subscriptions_errors() {
-        let srv = server_or_skip!();
-        let c = srv.client().await;
+        let server = common::TestServer::start();
+        let client = server.client().await;
         // A client not configured with subscriptions cannot receive.
-        assert!(c.get_pubsub_message().await.is_err());
-        assert!(c.try_get_pubsub_message().await.is_err());
+        assert!(client.get_pubsub_message().await.is_err());
+        assert!(client.try_get_pubsub_message().await.is_err());
     }
 );
 
@@ -108,7 +114,7 @@ timed_tokio_test!(
 
 timed_tokio_test!(
     async fn client_info_reports_lib_name_and_ver() {
-        let server = server_or_skip!();
+        let server = common::TestServer::start();
         let client = server.client().await;
 
         skip_if_version_below!(client, 7, 2, 0);
@@ -240,8 +246,7 @@ timed_tokio_test!(
 
         // ECHO to all primaries returns reply per primary node.
         let msg = "glide-route-probe";
-        let mut echo = Cmd::new();
-        echo.arg("ECHO").arg(msg);
+        let echo = cmd("ECHO").with_arg(msg);
         let r = client
             .route_command(echo, Route::AllPrimaries)
             .await
@@ -261,20 +266,73 @@ timed_tokio_test!(
         );
 
         // PING to a random node returns PONG.
-        let mut ping = Cmd::new();
-        ping.arg("PING");
+        let ping = cmd("PING");
         let r2 = client.route_command(ping, Route::RandomNode).await.unwrap();
         assert_eq!(String::from_owned_valkey_value(r2).unwrap(), "PONG");
 
         // A key-routed SET then GET through the slot-key route.
         let k = common::key("route:k");
-        let mut set = Cmd::new();
-        set.arg("SET").arg(&k).arg("v");
+        let set = cmd("SET").with_arg(&k).with_arg("v");
         client
             .route_command(set, Route::slot_key(k.clone(), glide::SlotType::Primary))
             .await
             .unwrap();
-        let got: Option<glide::Bytes> = client.get(&k).await.unwrap();
-        assert_eq!(got.as_deref(), Some(&b"v"[..]));
+        let got: Option<String> = client.get(&k).await.unwrap();
+        assert_eq!(got.as_deref(), Some("v"));
+    }
+);
+
+// ---------------------------------------------------------------------------
+// Connection URLs
+// ---------------------------------------------------------------------------
+
+timed_tokio_test!(
+    async fn from_url_connects_and_selects_db() {
+        let server = common::TestServer::start();
+        let url = format!("redis://127.0.0.1:{}/1", server.port);
+        let cfg = GlideClientConfiguration::from_url(&url).unwrap();
+        assert_eq!(cfg.database_id, 1);
+        let c1 = GlideClient::connect(cfg).await.unwrap();
+
+        let k = common::key("cmd_url_db");
+        c1.set(&k, "in-db-1").await.unwrap();
+
+        // A db-0 client must not see the key; a second db-1 client must.
+        let c0 = GlideClient::connect(
+            GlideClientConfiguration::from_url(format!("redis://127.0.0.1:{}", server.port))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+        let miss: Option<String> = c0.get(&k).await.unwrap();
+        assert_eq!(miss, None);
+        let hit: Option<String> = c1.get(&k).await.unwrap();
+        assert_eq!(hit.as_deref(), Some("in-db-1"));
+    }
+);
+
+timed_tokio_test!(
+    async fn cluster_from_urls_connects_and_routes() {
+        let cluster = common::ClusterHarness::start().await;
+        let urls: Vec<String> = cluster
+            .primary_ports
+            .iter()
+            .map(|p| format!("redis://127.0.0.1:{p}"))
+            .collect();
+        let cfg =
+            GlideClusterClientConfiguration::from_urls(urls.iter().map(String::as_str)).unwrap();
+        assert_eq!(cfg.addresses.len(), cluster.primary_ports.len());
+
+        let client: glide::GlideClusterClient = glide::GlideClusterClient::connect(cfg)
+            .await
+            .expect("connect cluster client");
+
+        // Keys hash to different slots; each is routed to its owning node.
+        for i in 0..20 {
+            let k = format!("cmd_cluster_url:{i}");
+            client.set(&k, i).await.unwrap();
+            let v: Option<String> = client.get(&k).await.unwrap();
+            assert_eq!(v, Some(i.to_string()));
+        }
     }
 );

@@ -1,12 +1,16 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
+import threading
+import time
 from typing import AsyncGenerator
 
 import anyio
 import pytest
 from glide.glide_client import TGlideClient
+from glide_shared.commands.batch import Batch
 from glide_shared.config import (
+    AwsCredentials,
     BackoffStrategy,
     IamAuthConfig,
     ProtocolVersion,
@@ -173,6 +177,7 @@ async def create_iam_client(
     cluster_mode: bool,
     protocol: ProtocolVersion,
     refresh_interval_seconds: int = IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
+    credential_provider=None,
 ):
     """Helper to create a client with IAM authentication."""
     iam_config = IamAuthConfig(
@@ -180,16 +185,29 @@ async def create_iam_client(
         service=ServiceType.ELASTICACHE,
         region=IAM_TEST_REGION_US_EAST_1,
         refresh_interval_seconds=refresh_interval_seconds,
+        credential_provider=credential_provider,
     )
 
     credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
 
-    # Note: use_tls is set from request which respects the --tls flag
+    # IAM auth requires TLS, so ignore --tls and always go over the TLS cluster
+    # fixture. Certs are self-signed, hence insecure TLS. Under
+    # --cluster-endpoints/--standalone-endpoints conftest provisions no TLS
+    # fixture (the endpoints are plaintext), so skip rather than error.
+    attr = "valkey_tls_cluster" if cluster_mode else "standalone_tls_cluster"
+    tls_cluster = getattr(pytest, attr, None)
+    if tls_cluster is None:
+        pytest.skip(
+            "IAM tests require a TLS server; none provisioned for external endpoints"
+        )
     return await create_client(
         request=request,
         cluster_mode=cluster_mode,
         protocol=protocol,
         credentials=credentials,
+        use_tls=True,
+        tls_insecure=True,
+        valkey_cluster=tls_cluster,
     )
 
 
@@ -523,7 +541,10 @@ class TestAuthCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_update_connection_password_with_acl_user(
-        self, acl_glide_client: TGlideClient, management_client: TGlideClient
+        self,
+        acl_glide_client: TGlideClient,
+        management_client: TGlideClient,
+        cluster_mode: bool,
     ):
         """
         Test replacing the connection password for an ACL user without immediate re-authentication.
@@ -551,16 +572,40 @@ class TestAuthCommands:
             management_client, USERNAME, NEW_PASSWORD
         )
 
-        # Sleep to allow enough time for reconnecting
-        await anyio.sleep(2)
+        async def _reconnected() -> bool:
+            try:
+                return await acl_glide_client.get("test_key") == b"test_value"
+            except Exception:
+                return False
 
-        # The client should now reconnect with the new password automatically
-        # Verify that the client is still able to perform operations
+        reconnect_timeout = (
+            _CLUSTER_RECONNECT_TIMEOUT_SEC
+            if cluster_mode
+            else _STANDALONE_RECONNECT_TIMEOUT_SEC
+        )
+        await wait_for(
+            _reconnected,
+            "Client did not reconnect with the new password",
+            timeout=reconnect_timeout,
+        )
         value = await acl_glide_client.get("test_key")
         assert value == b"test_value"
 
-        await acl_glide_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=True
+        async def _immediate_auth_after_reconnect() -> bool:
+            try:
+                return (
+                    await acl_glide_client.update_connection_password(
+                        NEW_PASSWORD, immediate_auth=True
+                    )
+                    == OK
+                )
+            except Exception:
+                return False
+
+        await wait_for(
+            _immediate_auth_after_reconnect,
+            "Client did not accept immediate-auth after reconnect",
+            timeout=reconnect_timeout,
         )
 
         assert await acl_glide_client.set("new_key", "new_value") == OK
@@ -585,9 +630,6 @@ class TestAuthCommands:
         await set_new_acl_username_with_password(
             management_client, USERNAME, NEW_PASSWORD
         )
-
-        # Sleep to allow enough time for reconnecting
-        await anyio.sleep(2)
 
         # This command right after disconnection requires the acl_glide_client to have a request timeout of 2000 ms
         # for full matrix tests to pass (otherwise failing on linux-aarch64 architecture).
@@ -703,22 +745,24 @@ class TestAuthCommands:
         3. Operations continue to work after token refresh
         """
         client = await create_iam_client(request, cluster_mode, protocol)
+        try:
+            # Verify connection works
+            await assert_connected(client)
 
-        # Verify connection works
-        await assert_connected(client)
+            # Test basic operations
+            await client.set("iam_test_key", "iam_test_value")
+            value = await client.get("iam_test_key")
+            assert value == b"iam_test_value"
 
-        # Test basic operations
-        await client.set("iam_test_key", "iam_test_value")
-        value = await client.get("iam_test_key")
-        assert value == b"iam_test_value"
+            # Test manual token refresh
+            await client.refresh_iam_token()
 
-        # Test manual token refresh
-        await client.refresh_iam_token()
-
-        # Verify operations still work after token refresh
-        await client.set("iam_test_key2", "iam_test_value2")
-        value2 = await client.get("iam_test_key2")
-        assert value2 == b"iam_test_value2"
+            # Verify operations still work after token refresh
+            await client.set("iam_test_key2", "iam_test_value2")
+            value2 = await client.get("iam_test_key2")
+            assert value2 == b"iam_test_value2"
+        finally:
+            await client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -734,14 +778,379 @@ class TestAuthCommands:
         client = await create_iam_client(
             request, cluster_mode, protocol, refresh_interval_seconds=2
         )
+        try:
+            # Verify initial connection
+            await assert_connected(client)
 
-        # Verify initial connection
+            # Wait for automatic token refresh to occur
+            await anyio.sleep(3)
+
+            # Verify client still works after automatic refresh
+            await client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
+            value = await client.get("iam_auto_refresh_key")
+            assert value == b"iam_auto_refresh_value"
+        finally:
+            await client.close()
+
+
+class _CountingCredentialProvider:
+    def __init__(self, session_token=None, expiry=None, token_size=0):
+        self.calls = 0
+        self.session_token = session_token or ("t" * token_size if token_size else None)
+        self.expiry = expiry
+
+    def __call__(self):
+        self.calls += 1
+        return AwsCredentials(
+            "test_access_key",
+            "test_secret_key",
+            self.session_token,
+            self.expiry,
+        )
+
+
+class _BlockingCredentialProvider:
+    def __init__(self):
+        self.calls = 0
+        self.active = 0
+        self.max_active = 0
+        self._lock = threading.Lock()
+        self.block = threading.Event()
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.finished = threading.Event()
+
+    def _snapshot(self):
+        with self._lock:
+            return self.calls, self.active, self.max_active
+
+    def __call__(self):
+        with self._lock:
+            self.calls += 1
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+        try:
+            if self.block.is_set():
+                self.entered.set()
+                try:
+                    assert self.release.wait(timeout=20)
+                finally:
+                    self.finished.set()
+            return AwsCredentials(
+                "test_access_key", "test_secret_key", "test_session_token"
+            )
+        finally:
+            with self._lock:
+                self.active -= 1
+
+
+@pytest.mark.timeout(120)
+@pytest.mark.anyio
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+async def test_live_async_sync_provider_ids_coexist_without_registry_leaks(
+    request, cluster_mode, protocol
+):
+    """Create both direct client kinds concurrently in one provider registry."""
+    import glide_shared.ffi_helpers as helpers
+
+    from tests.sync_tests.conftest import create_sync_client
+
+    with helpers._credential_provider_owners._lock:
+        baseline_provider_ids = set(helpers._credential_provider_owners._owners)
+    async_clients = []
+    sync_clients = []
+
+    # IAM auth requires TLS; the direct sync client must use the same TLS
+    # cluster fixture create_iam_client resolves for the async side. Under
+    # external endpoints conftest provisions none, so skip rather than error.
+    tls_attr = "valkey_tls_cluster" if cluster_mode else "standalone_tls_cluster"
+    tls_cluster = getattr(pytest, tls_attr, None)
+    if tls_cluster is None:
+        pytest.skip(
+            "IAM tests require a TLS server; none provisioned for external endpoints"
+        )
+
+    def _credentials():
+        return ServerCredentials(
+            username=IAM_USERNAME,
+            iam_config=IamAuthConfig(
+                cluster_name=IAM_TEST_CLUSTER_NAME,
+                service=ServiceType.ELASTICACHE,
+                region=IAM_TEST_REGION_US_EAST_1,
+                credential_provider=lambda: AwsCredentials(
+                    "test_access_key", "test_secret_key", "test_session_token"
+                ),
+            ),
+        )
+
+    async def _create_async_client():
+        client = await create_iam_client(
+            request,
+            cluster_mode,
+            protocol,
+            credential_provider=lambda: AwsCredentials(
+                "test_access_key", "test_secret_key", "test_session_token"
+            ),
+        )
+        async_clients.append(client)
+
+    async def _create_sync_client_on_worker():
+        client = await anyio.to_thread.run_sync(
+            lambda: create_sync_client(
+                request=request,
+                cluster_mode=cluster_mode,
+                protocol=protocol,
+                credentials=_credentials(),
+                valkey_cluster=tls_cluster,
+                use_tls=True,
+                tls_insecure=True,
+            )
+        )
+        sync_clients.append(client)
+
+    try:
+        async with anyio.create_task_group() as task_group:
+            for _ in range(8):
+                task_group.start_soon(_create_async_client)
+                task_group.start_soon(_create_sync_client_on_worker)
+        assert len(async_clients) == len(sync_clients) == 8
+        assert (
+            len(
+                {
+                    client._credential_provider_callback_owner.callback_id
+                    for client in [*async_clients, *sync_clients]
+                }
+            )
+            == 16
+        )
+    finally:
+        for client in async_clients:
+            await client.close()
+        for client in sync_clients:
+            await anyio.to_thread.run_sync(client.close)
+        with helpers._credential_provider_owners._lock:
+            assert (
+                set(helpers._credential_provider_owners._owners)
+                == baseline_provider_ids
+            )
+
+
+@pytest.mark.timeout(120)
+@pytest.mark.anyio
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+async def test_hung_custom_provider_timeout_does_not_block_close(
+    request, cluster_mode, protocol
+):
+    """A timed-out synchronous callback may finish after async close returns."""
+    provider = _BlockingCredentialProvider()
+    client = await create_iam_client(
+        request, cluster_mode, protocol, credential_provider=provider
+    )
+    assert provider._snapshot()[0] > 0
+    try:
+        with anyio.fail_after(25):
+            provider.block.set()
+            started = time.monotonic()
+            with pytest.raises(
+                (RequestError, ClosingError), match="credential|Credential|callback"
+            ):
+                await client.refresh_iam_token()
+            elapsed = time.monotonic() - started
+            assert 9 <= elapsed < 13
+            assert provider.entered.is_set()
+            blocked_state = provider._snapshot()
+            assert blocked_state[1:] == (1, 1)
+
+            for _ in range(3):
+                started = time.monotonic()
+                with anyio.fail_after(2):
+                    with pytest.raises(
+                        (RequestError, ClosingError), match="still running"
+                    ):
+                        await client.refresh_iam_token()
+                assert time.monotonic() - started < 2
+            assert provider._snapshot() == blocked_state
+
+            started = time.monotonic()
+            with anyio.fail_after(2):
+                await client.close()
+            assert time.monotonic() - started < 2
+
+            provider.release.set()
+            assert await anyio.to_thread.run_sync(provider.finished.wait, 2)
+    finally:
+        provider.release.set()
+        with anyio.fail_after(5):
+            await client.close()
+
+
+async def _async_credentials_provider():
+    await anyio.sleep(0)
+    return AwsCredentials("test_access_key", "test_secret_key")
+
+
+class _AsyncCallableCredentialProvider:
+    async def __call__(self):
+        return await _async_credentials_provider()
+
+
+def _awaitable_credentials_provider():
+    return _async_credentials_provider()
+
+
+def _failing_credentials_provider():
+    raise RuntimeError("credentials unavailable")
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("cluster_mode", [True, False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+@pytest.mark.parametrize(
+    "session_token,expiry", [(None, None), ("test_session_token", 4_000_000_000_000)]
+)
+async def test_iam_custom_provider_initial_and_manual_refresh(
+    request, cluster_mode, protocol, session_token, expiry
+):
+    """A direct async client supports optional fields and manual refresh."""
+    provider = _CountingCredentialProvider(session_token, expiry)
+    client = await create_iam_client(
+        request, cluster_mode, protocol, credential_provider=provider
+    )
+    try:
         await assert_connected(client)
+        calls_before_refresh = provider.calls
+        await client.refresh_iam_token()
+        assert provider.calls > calls_before_refresh
+    finally:
+        await client.close()
 
-        # Wait for automatic token refresh to occur
-        await anyio.sleep(3)
 
-        # Verify client still works after automatic refresh
-        await client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
-        value = await client.get("iam_auto_refresh_key")
-        assert value == b"iam_auto_refresh_value"
+@pytest.mark.anyio
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+@pytest.mark.parametrize("provider_kind", ["function", "object", "awaitable"])
+async def test_iam_custom_async_provider_forms(
+    request, cluster_mode, protocol, provider_kind
+):
+    """Async functions, async callable objects, and awaitable results work."""
+    providers = {
+        "function": _async_credentials_provider,
+        "object": _AsyncCallableCredentialProvider(),
+        "awaitable": _awaitable_credentials_provider,
+    }
+    client = await create_iam_client(
+        request,
+        cluster_mode,
+        protocol,
+        credential_provider=providers[provider_kind],
+    )
+    try:
+        await assert_connected(client)
+    finally:
+        await client.close()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("cluster_mode", [True, False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+async def test_iam_custom_provider_automatic_refresh_and_large_token(
+    request, cluster_mode, protocol
+):
+    """Large credentials negotiate twice and remain usable during refresh."""
+    provider = _CountingCredentialProvider(token_size=8192)
+    client = await create_iam_client(
+        request,
+        cluster_mode,
+        protocol,
+        refresh_interval_seconds=1,
+        credential_provider=provider,
+    )
+    try:
+        await assert_connected(client)
+        batch = Batch(is_atomic=False)
+        batch.set("iam-large-token-batch", "value")
+        batch.get("iam-large-token-batch")
+        assert await client.exec(batch, raise_on_error=True) == [OK, b"value"]
+        assert provider.calls >= 2
+        calls_after_connect = provider.calls
+
+        async def _refreshed():
+            return provider.calls > calls_after_connect
+
+        await wait_for(_refreshed, "credential provider was not refreshed", timeout=5)
+        await assert_connected(client)
+    finally:
+        await client.close()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("cluster_mode", [True, False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+async def test_iam_custom_provider_exception_fails_direct_creation(
+    request, cluster_mode, protocol
+):
+    """Provider failures surface as direct-client credential errors."""
+    with pytest.raises(ClosingError, match="credential|Credential|provider|callback"):
+        await create_iam_client(
+            request,
+            cluster_mode,
+            protocol,
+            credential_provider=_failing_credentials_provider,
+        )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("cluster_mode", [False])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+async def test_iam_close_during_provider_refresh_does_not_block_owner_runtime(
+    request, cluster_mode, protocol
+):
+    """Native close leaves the owner runtime free to finish provider refresh."""
+    provider_entered = anyio.Event()
+    release_provider = anyio.Event()
+    should_block = False
+
+    async def _provider():
+        if should_block:
+            provider_entered.set()
+            await release_provider.wait()
+        return AwsCredentials("test_access_key", "test_secret_key")
+
+    client = await create_iam_client(
+        request, cluster_mode, protocol, credential_provider=_provider
+    )
+    should_block = True
+    refresh_errors = []
+    closes_completed = []
+
+    async def _refresh():
+        try:
+            await client.refresh_iam_token()
+        except ClosingError as error:
+            refresh_errors.append(error)
+
+    async def _close():
+        await client.close()
+        closes_completed.append(True)
+
+    try:
+        with anyio.fail_after(5):
+            async with anyio.create_task_group() as task_group:
+                task_group.start_soon(_refresh)
+                await provider_entered.wait()
+                task_group.start_soon(_close)
+                task_group.start_soon(_close)
+
+                async def _close_started():
+                    return client._is_closed
+
+                await wait_for(_close_started, "close did not start", timeout=1)
+                release_provider.set()
+    finally:
+        release_provider.set()
+        await client.close()
+
+    assert closes_completed == [True, True]
+    assert len(refresh_errors) <= 1

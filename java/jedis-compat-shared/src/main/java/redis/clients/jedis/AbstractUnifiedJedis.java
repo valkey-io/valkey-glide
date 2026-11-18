@@ -263,12 +263,25 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
         }
     }
 
-    /** Constructor with host, port and config */
+    /**
+     * Constructor with host, port and config
+     *
+     * @param host the server host
+     * @param port the server port
+     * @param clientConfig the client configuration
+     */
     protected AbstractUnifiedJedis(String host, int port, JedisClientConfig clientConfig) {
         this(new HostAndPort(host, port), clientConfig);
     }
 
-    /** Constructor with host, port, timeout and password */
+    /**
+     * Constructor with host, port, timeout and password
+     *
+     * @param host the server host
+     * @param port the server port
+     * @param timeout the socket timeout, in milliseconds
+     * @param password the password to authenticate with
+     */
     protected AbstractUnifiedJedis(String host, int port, int timeout, String password) {
         this(
                 host,
@@ -276,12 +289,26 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
                 DefaultJedisClientConfig.builder().socketTimeoutMillis(timeout).password(password).build());
     }
 
-    /** Constructor with host, port and timeout */
+    /**
+     * Constructor with host, port and timeout
+     *
+     * @param host the server host
+     * @param port the server port
+     * @param timeout the socket timeout, in milliseconds
+     */
     protected AbstractUnifiedJedis(String host, int port, int timeout) {
         this(host, port, DefaultJedisClientConfig.builder().socketTimeoutMillis(timeout).build());
     }
 
-    /** Constructor with host, port, timeout, password and database */
+    /**
+     * Constructor with host, port, timeout, password and database
+     *
+     * @param host the server host
+     * @param port the server port
+     * @param timeout the socket timeout, in milliseconds
+     * @param password the password to authenticate with
+     * @param database the logical database index to select
+     */
     protected AbstractUnifiedJedis(
             String host, int port, int timeout, String password, int database) {
         this(
@@ -294,7 +321,16 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
                         .build());
     }
 
-    /** Constructor with host, port, timeout, password, database and clientName */
+    /**
+     * Constructor with host, port, timeout, password, database and clientName
+     *
+     * @param host the server host
+     * @param port the server port
+     * @param timeout the socket timeout, in milliseconds
+     * @param password the password to authenticate with
+     * @param database the logical database index to select
+     * @param clientName the client name to register with the server
+     */
     protected AbstractUnifiedJedis(
             String host, int port, int timeout, String password, int database, String clientName) {
         this(
@@ -310,12 +346,21 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
 
     // ========== CLUSTER CONSTRUCTORS ==========
 
-    /** Constructor for cluster with Set of nodes */
+    /**
+     * Constructor for cluster with Set of nodes
+     *
+     * @param jedisClusterNodes the cluster node addresses
+     */
     protected AbstractUnifiedJedis(Set<HostAndPort> jedisClusterNodes) {
         this(jedisClusterNodes, DefaultJedisClientConfig.builder().build());
     }
 
-    /** Constructor for cluster with Set of nodes and config */
+    /**
+     * Constructor for cluster with Set of nodes and config
+     *
+     * @param jedisClusterNodes the cluster node addresses
+     * @param clientConfig the client configuration
+     */
     protected AbstractUnifiedJedis(
             Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig) {
         this(false, jedisClusterNodes, clientConfig); // Default to Jedis 4.x for backward compatibility
@@ -351,6 +396,10 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
     /**
      * Constructor for cluster with Set of nodes, config and max attempts Note: maxAttempts is for
      * Jedis compatibility but not used in GLIDE configuration
+     *
+     * @param jedisClusterNodes the cluster node addresses
+     * @param clientConfig the client configuration
+     * @param maxAttempts accepted for Jedis compatibility and ignored
      */
     protected AbstractUnifiedJedis(
             Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig, int maxAttempts) {
@@ -361,6 +410,11 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * Constructor for cluster with Set of nodes, config, max attempts and max retry duration Note:
      * maxAttempts and maxTotalRetriesDuration are for Jedis compatibility but not used in GLIDE
      * configuration
+     *
+     * @param jedisClusterNodes the cluster node addresses
+     * @param clientConfig the client configuration
+     * @param maxAttempts accepted for Jedis compatibility and ignored
+     * @param maxTotalRetriesDuration accepted for Jedis compatibility and ignored
      */
     protected AbstractUnifiedJedis(
             Set<HostAndPort> jedisClusterNodes,
@@ -372,7 +426,11 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
 
     // ========== PROVIDER-BASED CONSTRUCTORS (for compatibility) ==========
 
-    /** Constructor with ConnectionProvider (for compatibility) */
+    /**
+     * Constructor with ConnectionProvider (for compatibility)
+     *
+     * @param provider supplies the address and client configuration to connect with
+     */
     protected AbstractUnifiedJedis(ConnectionProvider provider) {
         this(false, provider); // Default to Jedis 4.x for backward compatibility
     }
@@ -434,7 +492,13 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
         }
     }
 
-    /** Constructor with ConnectionProvider and max attempts */
+    /**
+     * Constructor with ConnectionProvider and max attempts
+     *
+     * @param provider supplies the address and client configuration to connect with
+     * @param maxAttempts accepted for Jedis compatibility and ignored
+     * @param maxTotalRetriesDuration accepted for Jedis compatibility and ignored
+     */
     protected AbstractUnifiedJedis(
             ConnectionProvider provider, int maxAttempts, Duration maxTotalRetriesDuration) {
         this(provider); // Delegate to main provider constructor for now
@@ -442,7 +506,12 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
 
     // ========== PROTECTED CONSTRUCTORS ==========
 
-    /** Protected constructor for internal use with standalone client */
+    /**
+     * Protected constructor for internal use with standalone client
+     *
+     * @param glideClient the standalone GLIDE client to wrap
+     * @param jedisConfig the client configuration
+     */
     protected AbstractUnifiedJedis(GlideClient glideClient, JedisClientConfig jedisConfig) {
         this(false, glideClient, jedisConfig); // Default to Jedis 4.x for backward compatibility
     }
@@ -464,7 +533,12 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
         this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
     }
 
-    /** Protected constructor for internal use with cluster client */
+    /**
+     * Protected constructor for internal use with cluster client
+     *
+     * @param glideClusterClient the cluster GLIDE client to wrap
+     * @param jedisConfig the client configuration
+     */
     protected AbstractUnifiedJedis(
             GlideClusterClient glideClusterClient, JedisClientConfig jedisConfig) {
         this(false, glideClusterClient, jedisConfig); // Default to Jedis 4.x for backward compatibility
@@ -566,7 +640,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the string value to set (must not be null)
      * @return "OK" if successful
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public String set(String key, String value) {
         checkNotClosed();
@@ -584,7 +657,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to retrieve the value from (must not be null)
      * @return the string value stored at the key, or null if the key does not exist
      * @throws JedisException if the operation fails or the key contains a non-string value
-     * @since Valkey 1.0.0
      */
     public String get(String key) {
         checkNotClosed();
@@ -620,7 +692,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @throws JedisException if the operation fails
      * @apiNote In cluster mode, if keys map to different hash slots, multiple round trips may be
      *     required
-     * @since Valkey 1.0.0
      */
     public long del(String... keys) {
         checkNotClosed();
@@ -646,7 +717,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @throws JedisException if the operation fails
      * @see #del(String...) for deleting multiple keys
      * @see #unlink(String) for non-blocking deletion of large objects
-     * @since Valkey 1.0.0
      */
     public long del(String key) {
         return del(new String[] {key});
@@ -679,7 +749,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @throws JedisException if the operation fails
      * @apiNote In cluster mode, if keys map to different hash slots, multiple round trips may be
      *     required
-     * @since Valkey 1.0.0
      */
     /**
      * <b><a href="https://valkey.io/commands/del">DEL Command</a></b> Removes the specified keys.
@@ -687,7 +756,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keys the keys to delete
      * @return the number of keys that were removed
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public long del(byte[]... keys) {
         checkNotClosed();
@@ -720,7 +788,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @throws JedisException if the operation fails
      * @see #del(byte[]...) for deleting multiple binary keys
      * @see #del(String) for deleting string keys
-     * @since Valkey 1.0.0
      */
     public long del(byte[] key) {
         checkNotClosed();
@@ -738,7 +805,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
      * @return "PONG" if the server is responding
      * @throws JedisException if the operation fails or connection is lost
-     * @since Valkey 1.0.0
      */
     public String ping() {
         checkNotClosed();
@@ -762,7 +828,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param message the message to echo back (must not be null)
      * @return the echoed message exactly as sent
      * @throws JedisException if the operation fails or connection is lost
-     * @since Valkey 2.8.0
      */
     public String ping(String message) {
         checkNotClosed();
@@ -777,7 +842,11 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
         }
     }
 
-    /** Check if the connection is closed. */
+    /**
+     * Check if the connection is closed.
+     *
+     * @return {@code true} if this instance has been closed
+     */
     public boolean isClosed() {
         return closed;
     }
@@ -835,7 +904,7 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * with optional parameters. This method provides advanced SET functionality including conditional
      * setting, expiration, and atomic get-and-set operations.
      *
-     * <p>The AbstractSetParams<?> object allows you to specify:
+     * <p>The {@code AbstractSetParams<?>} object allows you to specify:
      *
      * <ul>
      *   <li>Existence conditions (NX - only if key doesn't exist, XX - only if key exists)
@@ -852,7 +921,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @return "OK" if successful, null if not set due to NX/XX conditions, or the old value if GET
      *     option is used
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public String set(String key, String value, AbstractSetParams<?> params) {
         checkNotClosed();
@@ -885,7 +953,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the new value to set (must not be null)
      * @return the old value stored at the key, or null if the key did not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 6.2.0
      */
     public String setGet(String key, String value) {
         checkNotClosed();
@@ -912,7 +979,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @return the old value stored at the key, or null if the key did not exist or conditions weren't
      *     met
      * @throws JedisException if the operation fails
-     * @since Valkey 6.2.0
      */
     public String setGet(String key, String value, AbstractSetParams<?> params) {
         checkNotClosed();
@@ -993,7 +1059,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keys the keys to retrieve values for (must not be null, can be empty)
      * @return a list of values corresponding to the given keys, with null for non-existent keys
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public List<String> mget(String... keys) {
         checkNotClosed();
@@ -1018,7 +1083,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @throws IllegalArgumentException if the number of arguments is odd
      * @throws JedisException if the operation fails
      * @apiNote In cluster mode, all keys must map to the same hash slot
-     * @since Valkey 1.0.1
      */
     public String mset(String... keysvalues) {
         checkNotClosed();
@@ -1049,7 +1113,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the value to set (must not be null)
      * @return 1 if the key was set, 0 if the key already exists and was not set
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public long setnx(String key, String value) {
         checkNotClosed();
@@ -1074,7 +1137,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the value to set (must not be null)
      * @return "OK" if successful
      * @throws JedisException if the operation fails
-     * @since Valkey 2.0.0
      */
     public String setex(String key, long seconds, String value) {
         checkNotClosed();
@@ -1099,7 +1161,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the value to set (must not be null)
      * @return "OK" if successful
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public String psetex(String key, long milliseconds, String value) {
         checkNotClosed();
@@ -1123,7 +1184,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @return the old value stored at the key, or null if the key did not exist
      * @throws JedisException if the operation fails
      * @deprecated Use {@link #setGet(String, String)} instead
-     * @since Valkey 1.0.0
      */
     @Deprecated
     public String getSet(String key, String value) {
@@ -1139,7 +1199,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to get and delete (must not be null)
      * @return the value that was stored at the key, or null if the key did not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 6.2.0
      */
     public String getDel(String key) {
         checkNotClosed();
@@ -1160,7 +1219,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param params the expiration parameters (can be null to just get without changing expiration)
      * @return the value stored at the key, or null if the key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 6.2.0
      */
     public String getEx(String key, AbstractGetExParams<?> params) {
         checkNotClosed();
@@ -1207,7 +1265,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the value to append (must not be null)
      * @return the length of the string after the append operation
      * @throws JedisException if the operation fails
-     * @since Valkey 2.0.0
      */
     public long append(String key, String value) {
         checkNotClosed();
@@ -1226,7 +1283,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to get the string length for (must not be null)
      * @return the length of the string stored at the key, or 0 if the key does not exist
      * @throws JedisException if the operation fails or the key contains a non-string value
-     * @since Valkey 2.2.0
      */
     public long strlen(String key) {
         checkNotClosed();
@@ -1246,7 +1302,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key whose value to increment (must not be null)
      * @return the value of the key after incrementing
      * @throws JedisException if the operation fails or the value is not an integer
-     * @since Valkey 1.0.0
      */
     public long incr(String key) {
         checkNotClosed();
@@ -1267,7 +1322,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param increment the amount to increment by (can be negative for decrement)
      * @return the value of the key after incrementing
      * @throws JedisException if the operation fails or the value is not an integer
-     * @since Valkey 1.0.0
      */
     public long incrBy(String key, long increment) {
         checkNotClosed();
@@ -1288,7 +1342,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param increment the floating-point amount to increment by (can be negative for decrement)
      * @return the value of the key after incrementing
      * @throws JedisException if the operation fails or the value is not a valid float
-     * @since Valkey 2.6.0
      */
     public double incrByFloat(String key, double increment) {
         checkNotClosed();
@@ -1308,7 +1361,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key whose value to decrement (must not be null)
      * @return the value of the key after decrementing
      * @throws JedisException if the operation fails or the value is not an integer
-     * @since Valkey 1.0.0
      */
     public long decr(String key) {
         checkNotClosed();
@@ -1329,7 +1381,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param decrement the amount to decrement by (must be positive)
      * @return the value of the key after decrementing
      * @throws JedisException if the operation fails or the value is not an integer
-     * @since Valkey 1.0.0
      */
     public long decrBy(String key, long decrement) {
         checkNotClosed();
@@ -1349,7 +1400,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param endOffset the end position (inclusive, can be negative)
      * @return the substring, or empty string if the key does not exist
      * @throws JedisException if the operation fails or the key contains a non-string value
-     * @since Valkey 2.4.0
      */
     public String getrange(String key, long startOffset, long endOffset) {
         checkNotClosed();
@@ -1375,7 +1425,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the string to write at the specified offset (must not be null)
      * @return the length of the string after the operation
      * @throws JedisException if the operation fails or the key contains a non-string value
-     * @since Valkey 2.2.0
      */
     public long setrange(String key, long offset, String value) {
         checkNotClosed();
@@ -1396,6 +1445,7 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @return the substring, or empty string if the key does not exist
      * @deprecated Use {@link #getrange(String, long, long)} instead
      */
+    @Deprecated
     public String substr(String key, int start, int end) {
         return getrange(key, start, end);
     }
@@ -1410,7 +1460,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to check for existence (must not be null)
      * @return true if the key exists, false otherwise
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public boolean exists(String key) {
         checkNotClosed();
@@ -1428,7 +1477,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keys the keys to check for existence (must not be null, can be empty)
      * @return the number of keys that exist (0 to keys.length)
      * @throws JedisException if the operation fails
-     * @since Valkey 3.0.3
      */
     public long exists(String... keys) {
         checkNotClosed();
@@ -1448,7 +1496,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to delete asynchronously (must not be null)
      * @return the number of keys that were deleted (0 or 1)
      * @throws JedisException if the operation fails
-     * @since Valkey 4.0.0
      */
     public long unlink(String key) {
         checkNotClosed();
@@ -1468,7 +1515,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keys the keys to delete asynchronously (must not be null, can be empty)
      * @return the number of keys that were deleted
      * @throws JedisException if the operation fails
-     * @since Valkey 4.0.0
      */
     public long unlink(String... keys) {
         checkNotClosed();
@@ -1488,7 +1534,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @return the type of the value ("string", "list", "set", "zset", "hash", "stream", or "none" if
      *     key doesn't exist)
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public String type(String key) {
         checkNotClosed();
@@ -1517,7 +1562,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @throws JedisException if the operation fails
      * @apiNote In cluster mode, KEYS is sent via {@code customCommand} using GLIDE default routing
      *     (single node), not merged across the whole cluster.
-     * @since Valkey 1.0.0
      */
     public Set<String> keys(String pattern) {
         checkNotClosed();
@@ -1558,7 +1602,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @throws JedisException if the operation fails
      * @apiNote In cluster mode, the command is routed to all primary nodes and returns the first
      *     successful result
-     * @since Valkey 1.0.0
      */
     public String randomKey() {
         checkNotClosed();
@@ -1582,7 +1625,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param newkey the new name for the key (must not be null)
      * @return "OK" if successful
      * @throws JedisException if the operation fails or the source key does not exist
-     * @since Valkey 1.0.0
      */
     public String rename(String oldkey, String newkey) {
         checkNotClosed();
@@ -1602,7 +1644,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param newkey the new name for the key (must not be null and must not exist)
      * @return 1 if the key was renamed, 0 if the destination key already exists
      * @throws JedisException if the operation fails or the source key does not exist
-     * @since Valkey 1.0.0
      */
     public long renamenx(String oldkey, String newkey) {
         checkNotClosed();
@@ -1623,7 +1664,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param seconds the expiration timeout in seconds (must be positive)
      * @return 1 if the timeout was set, 0 if the key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public long expire(String key, long seconds) {
         checkNotClosed();
@@ -1686,7 +1726,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param unixTime the expiration time as Unix timestamp in seconds
      * @return 1 if the timeout was set, 0 if the key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 1.2.0
      */
     public long expireAt(String key, long unixTime) {
         checkNotClosed();
@@ -1733,7 +1772,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param milliseconds the expiration time in milliseconds
      * @return 1 if the expiration was set, 0 otherwise
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long pexpire(String key, long milliseconds) {
         checkNotClosed();
@@ -1780,7 +1818,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param millisecondsTimestamp the Unix timestamp in milliseconds when the key should expire
      * @return 1 if the expiration was set, 0 otherwise
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long pexpireAt(String key, long millisecondsTimestamp) {
         checkNotClosed();
@@ -1866,7 +1903,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @return the TTL in seconds, -1 if the key exists but has no expiration, -2 if the key does not
      *     exist
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public long ttl(String key) {
         checkNotClosed();
@@ -1886,7 +1922,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @return the TTL in milliseconds, -1 if the key exists but has no expiration, -2 if the key does
      *     not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long pttl(String key) {
         checkNotClosed();
@@ -1905,7 +1940,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to make persistent (must not be null)
      * @return 1 if the expiration was removed, 0 if the key does not exist or has no expiration
      * @throws JedisException if the operation fails
-     * @since Valkey 2.2.0
      */
     public long persist(String key) {
         checkNotClosed();
@@ -1928,7 +1962,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key of the list, set or sorted set to sort
      * @return the sorted elements as a list
      * @throws JedisException if the operation fails
-     * @since Redis 1.0.0
      */
     public List<String> sort(String key) {
         checkNotClosed();
@@ -1952,7 +1985,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param sortingParams the parameters controlling sort behavior (can be null for default sorting)
      * @return the sorted elements as a list
      * @throws JedisException if the operation fails
-     * @since Redis 1.0.0
      */
     public List<String> sort(String key, AbstractSortingParams<?> sortingParams) {
         checkNotClosed();
@@ -2069,7 +2101,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param dstkey the destination key where the sorted result will be stored
      * @return the number of elements in the sorted result
      * @throws JedisException if the operation fails
-     * @since Redis 1.0.0
      */
     public long sort(String key, String dstkey) {
         checkNotClosed();
@@ -2093,7 +2124,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param dstkey the destination key where the sorted result will be stored
      * @return the number of elements in the sorted result
      * @throws JedisException if the operation fails
-     * @since Redis 1.0.0
      */
     public long sort(String key, AbstractSortingParams<?> sortingParams, String dstkey) {
         checkNotClosed();
@@ -2152,7 +2182,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to serialize
      * @return the serialized value as a byte array
      * @throws JedisException if the operation fails or the key does not exist
-     * @since Redis 2.6.0
      */
     public byte[] dump(String key) {
         checkNotClosed();
@@ -2177,7 +2206,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param serializedValue the serialized value obtained from DUMP
      * @return "OK" if successful
      * @throws JedisException if the operation fails or the key already exists
-     * @since Redis 2.6.0
      */
     public String restore(String key, long ttl, byte[] serializedValue) {
         checkNotClosed();
@@ -2203,7 +2231,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param params additional restore parameters (can be null for default behavior)
      * @return "OK" if successful
      * @throws JedisException if the operation fails
-     * @since Redis 3.0.0
      */
     public String restore(
             String key, long ttl, byte[] serializedValue, AbstractRestoreParams<?> params) {
@@ -2265,7 +2292,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param timeout the timeout in milliseconds
      * @return "OK" if successful
      * @throws JedisException if the operation fails
-     * @since Redis 2.6.0
      */
     public String migrate(String host, int port, String key, int timeout) {
         checkNotClosed();
@@ -2307,7 +2333,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keys the keys to migrate
      * @return "OK" if successful
      * @throws JedisException if the operation fails
-     * @since Redis 3.0.0
      */
     public String migrate(
             String host, int port, int timeout, AbstractMigrateParams<?> params, String... keys) {
@@ -2361,7 +2386,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param dbIndex the destination database index
      * @return 1 if key was moved, 0 if key was not moved
      * @throws JedisException if used in cluster mode or if the operation fails
-     * @since Redis 1.0.0
      */
     public long move(String key, int dbIndex) {
         checkNotClosed();
@@ -2384,7 +2408,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param cursor the cursor value ("0" to start iteration, or value from previous SCAN)
      * @return a ScanResult containing the next cursor and a list of keys
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.0
      */
     public ScanResult<String> scan(String cursor) {
         checkNotClosed();
@@ -2436,7 +2459,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param params the scan parameters for filtering and controlling iteration (can be null)
      * @return a ScanResult containing the next cursor and a list of keys
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.0
      */
     public ScanResult<String> scan(String cursor, AbstractScanParams<?> params) {
         checkNotClosed();
@@ -2558,7 +2580,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      *     "stream")
      * @return a ScanResult containing the next cursor and a list of keys
      * @throws JedisException if the operation fails
-     * @since Redis 2.8.0
      */
     public ScanResult<String> scan(String cursor, AbstractScanParams<?> params, String type) {
         checkNotClosed();
@@ -2650,7 +2671,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to touch
      * @return 1 if the key was touched, 0 if the key does not exist
      * @throws JedisException if the operation fails
-     * @since Redis 3.2.1
      */
     public long touch(String key) {
         checkNotClosed();
@@ -2670,7 +2690,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keys the keys to touch
      * @return the number of keys that were touched
      * @throws JedisException if the operation fails
-     * @since Redis 3.2.1
      */
     public long touch(String... keys) {
         checkNotClosed();
@@ -2694,7 +2713,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @return true if the key was copied, false if the source key does not exist or destination
      *     exists and replace is false
      * @throws JedisException if the operation fails
-     * @since Redis 6.2.0
      */
     public boolean copy(String srcKey, String dstKey, boolean replace) {
         checkNotClosed();
@@ -2716,7 +2734,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @return 1 if all keys were set, 0 if no key was set (at least one key already existed)
      * @throws JedisException if the operation fails or if the number of arguments is not even
      * @apiNote In cluster mode, all keys must map to the same hash slot
-     * @since Valkey 1.0.1
      */
     public long msetnx(String... keysvalues) {
         checkNotClosed();
@@ -2751,7 +2768,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the bit value to set (true for 1, false for 0)
      * @return the original bit value at the offset before it was set
      * @throws JedisException if the operation fails
-     * @since Valkey 2.2.0
      */
     public boolean setbit(String key, long offset, boolean value) {
         checkNotClosed();
@@ -2772,7 +2788,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param offset the bit offset to get (must be non-negative)
      * @return the bit value at the offset (true for 1, false for 0)
      * @throws JedisException if the operation fails
-     * @since Valkey 2.2.0
      */
     public boolean getbit(String key, long offset) {
         checkNotClosed();
@@ -2792,7 +2807,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key containing the bitmap (must not be null)
      * @return the number of bits set to 1
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long bitcount(String key) {
         checkNotClosed();
@@ -2812,7 +2826,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param end the end byte position (inclusive, can be negative for end-relative)
      * @return the number of bits set to 1 in the specified range
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long bitcount(String key, long start, long end) {
         checkNotClosed();
@@ -2833,7 +2846,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param option the indexing option (BYTE or BIT)
      * @return the number of set bits in the specified range
      * @throws JedisException if the operation fails
-     * @since Redis 2.6.0
      */
     public long bitcount(String key, long start, long end, BitCountOption option) {
         checkNotClosed();
@@ -2859,7 +2871,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the bit value to search for (true for 1, false for 0)
      * @return the position of the first bit set to the specified value, or -1 if not found
      * @throws JedisException if the operation fails
-     * @since Redis 2.8.7
      */
     public long bitpos(String key, boolean value) {
         checkNotClosed();
@@ -2882,7 +2893,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param params additional parameters for controlling the search range (can be null)
      * @return the position of the first bit set to the specified value, or -1 if not found
      * @throws JedisException if the operation fails
-     * @since Redis 2.8.7
      */
     public long bitpos(String key, boolean value, AbstractBitPosParams<?> params) {
         checkNotClosed();
@@ -2927,7 +2937,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param srcKeys the source keys to perform the operation on
      * @return the size of the string stored in the destination key
      * @throws JedisException if the operation fails
-     * @since Redis 2.6.0
      */
     public long bitop(BitOP op, String destKey, String... srcKeys) {
         checkNotClosed();
@@ -2981,7 +2990,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param arguments the bit field operations in the format: subcommand type offset [value]
      * @return a list of results for each subcommand (may contain null values for some operations)
      * @throws JedisException if the operation fails
-     * @since Redis 3.2.0
      */
     public List<Long> bitfield(String key, String... arguments) {
         checkNotClosed();
@@ -3033,7 +3041,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param arguments the bit field GET operations in the format: GET type offset
      * @return a list of results for each GET subcommand
      * @throws JedisException if the operation fails
-     * @since Redis 6.0.0
      */
     public List<Long> bitfieldReadonly(String key, String... arguments) {
         checkNotClosed();
@@ -3072,7 +3079,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param elements the elements to add (must not be null, can be empty)
      * @return 1 if the HyperLogLog was modified, 0 if it was not modified
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.9
      */
     public long pfadd(String key, String... elements) {
         checkNotClosed();
@@ -3092,7 +3098,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key of the HyperLogLog (must not be null)
      * @return the estimated cardinality
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.9
      */
     public long pfcount(String key) {
         checkNotClosed();
@@ -3111,7 +3116,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keys the keys of the HyperLogLogs to union (must not be null, should not be empty)
      * @return the estimated cardinality of the union
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.9
      */
     public long pfcount(String... keys) {
         checkNotClosed();
@@ -3130,7 +3134,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param sourcekeys the source HyperLogLog keys to merge (must not be null, should not be empty)
      * @return "OK" if successful
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.9
      */
     public String pfmerge(String destkey, String... sourcekeys) {
         checkNotClosed();
@@ -3150,7 +3153,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the binary value to append
      * @return the length of the string after the append operation
      * @throws JedisException if the operation fails
-     * @since Valkey 2.0.0
      */
     public long append(byte[] key, byte[] value) {
         checkNotClosed();
@@ -3168,7 +3170,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key containing the string
      * @return the number of bits set to 1
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long bitcount(byte[] key) {
         checkNotClosed();
@@ -3188,7 +3189,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param end the end offset
      * @return the number of bits set to 1 in the specified range
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long bitcount(byte[] key, long start, long end) {
         checkNotClosed();
@@ -3230,7 +3230,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param arguments the bitfield operation arguments
      * @return a list of results for each subcommand
      * @throws JedisException if the operation fails
-     * @since Valkey 3.2.0
      */
     public List<Long> bitfield(byte[] key, byte[]... arguments) {
         checkNotClosed();
@@ -3268,7 +3267,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param srcKeys the source keys for the operation
      * @return the size of the string stored in the destination key
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long bitop(BitOP op, byte[] destKey, byte[]... srcKeys) {
         checkNotClosed();
@@ -3290,7 +3288,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the bit value to search for (true for 1, false for 0)
      * @return the position of the first bit set to the specified value
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.7
      */
     public long bitpos(byte[] key, boolean value) {
         checkNotClosed();
@@ -3310,7 +3307,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param params additional parameters for the bitpos operation
      * @return the position of the first bit set to the specified value
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.7
      */
     public long bitpos(byte[] key, boolean value, AbstractBitPosParams<?> params) {
         checkNotClosed();
@@ -3342,7 +3338,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param replace whether to replace the destination key if it exists
      * @return true if the key was copied, false otherwise
      * @throws JedisException if the operation fails
-     * @since Valkey 6.2.0
      */
     public boolean copy(byte[] srcKey, byte[] dstKey, boolean replace) {
         checkNotClosed();
@@ -3360,7 +3355,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to decrement
      * @return the value of key after the decrement
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public long decr(byte[] key) {
         checkNotClosed();
@@ -3379,7 +3373,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param decrement the amount to decrement by
      * @return the value of key after the decrement
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public long decrBy(byte[] key, long decrement) {
         checkNotClosed();
@@ -3397,7 +3390,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to serialize
      * @return the serialized value as a byte array
      * @throws JedisException if the operation fails or the key does not exist
-     * @since Valkey 2.6.0
      */
     public byte[] dump(byte[] key) {
         checkNotClosed();
@@ -3414,7 +3406,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to check
      * @return true if the key exists, false otherwise
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public boolean exists(byte[] key) {
         checkNotClosed();
@@ -3432,7 +3423,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keys the keys to check
      * @return the number of keys existing among the specified arguments
      * @throws JedisException if the operation fails
-     * @since Valkey 3.0.3
      */
     public long exists(byte[]... keys) {
         checkNotClosed();
@@ -3452,7 +3442,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param seconds the timeout in seconds
      * @return 1 if the timeout was set, 0 if key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public long expire(byte[] key, long seconds) {
         checkNotClosed();
@@ -3499,7 +3488,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param unixTime the UNIX timestamp when the key should expire
      * @return 1 if the timeout was set, 0 if key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 1.2.0
      */
     public long expireAt(byte[] key, long unixTime) {
         checkNotClosed();
@@ -3565,7 +3553,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to retrieve
      * @return the value of key, or null when key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public byte[] get(byte[] key) {
         checkNotClosed();
@@ -3584,7 +3571,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to get and delete
      * @return the value of key, or null when key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 6.2.0
      */
     public byte[] getDel(byte[] key) {
         checkNotClosed();
@@ -3604,7 +3590,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param offset the bit offset
      * @return the bit value stored at offset
      * @throws JedisException if the operation fails
-     * @since Valkey 2.2.0
      */
     public boolean getbit(byte[] key, long offset) {
         checkNotClosed();
@@ -3624,7 +3609,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param endOffset the end offset
      * @return the substring as a byte array
      * @throws JedisException if the operation fails
-     * @since Valkey 2.4.0
      */
     public byte[] getrange(byte[] key, long startOffset, long endOffset) {
         checkNotClosed();
@@ -3644,7 +3628,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to increment
      * @return the value of key after the increment
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public long incr(byte[] key) {
         checkNotClosed();
@@ -3663,7 +3646,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param increment the amount to increment by
      * @return the value of key after the increment
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public long incrBy(byte[] key, long increment) {
         checkNotClosed();
@@ -3682,7 +3664,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param increment the float amount to increment by
      * @return the value of key after the increment
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public double incrByFloat(byte[] key, double increment) {
         checkNotClosed();
@@ -3700,7 +3681,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keys the keys to retrieve
      * @return list of values at the specified keys
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public List<byte[]> mget(byte[]... keys) {
         checkNotClosed();
@@ -3723,7 +3703,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keysvalues alternating keys and values (key1, value1, key2, value2, ...)
      * @return Simple string reply: always OK
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.1
      */
     public String mset(byte[]... keysvalues) {
         checkNotClosed();
@@ -3745,7 +3724,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keysvalues alternating keys and values (key1, value1, key2, value2, ...)
      * @return 1 if all keys were set, 0 if no key was set
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.1
      */
     public long msetnx(byte[]... keysvalues) {
         checkNotClosed();
@@ -3767,7 +3745,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to remove timeout from
      * @return 1 if the timeout was removed, 0 if key does not exist or does not have a timeout
      * @throws JedisException if the operation fails
-     * @since Valkey 2.2.0
      */
     public long persist(byte[] key) {
         checkNotClosed();
@@ -3786,7 +3763,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param milliseconds the timeout in milliseconds
      * @return 1 if the timeout was set, 0 if key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long pexpire(byte[] key, long milliseconds) {
         checkNotClosed();
@@ -3833,7 +3809,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param millisecondsTimestamp the UNIX timestamp in milliseconds when the key should expire
      * @return 1 if the timeout was set, 0 if key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long pexpireAt(byte[] key, long millisecondsTimestamp) {
         checkNotClosed();
@@ -3901,7 +3876,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param elements the elements to add
      * @return 1 if at least one element was added, 0 otherwise
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.9
      */
     public long pfadd(byte[] key, byte[]... elements) {
         checkNotClosed();
@@ -3921,7 +3895,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key of the HyperLogLog
      * @return the approximated cardinality
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.9
      */
     public long pfcount(byte[] key) {
         checkNotClosed();
@@ -3939,7 +3912,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keys the keys of the HyperLogLogs
      * @return the approximated cardinality of the union
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.9
      */
     public long pfcount(byte[]... keys) {
         checkNotClosed();
@@ -3960,7 +3932,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param sourcekeys the source keys to merge
      * @return Simple string reply: OK
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.9
      */
     public String pfmerge(byte[] destkey, byte[]... sourcekeys) {
         checkNotClosed();
@@ -3982,7 +3953,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the binary value to set
      * @return Simple string reply: OK
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public String psetex(byte[] key, long milliseconds, byte[] value) {
         checkNotClosed();
@@ -4002,7 +3972,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to check
      * @return TTL in milliseconds, or -1 if key exists but has no expiry, or -2 if key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public long pttl(byte[] key) {
         checkNotClosed();
@@ -4020,7 +3989,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param newkey the new key name
      * @return Simple string reply: OK
      * @throws JedisException if the operation fails or oldkey does not exist
-     * @since Valkey 1.0.0
      */
     public String rename(byte[] oldkey, byte[] newkey) {
         checkNotClosed();
@@ -4039,7 +4007,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param newkey the new key name
      * @return 1 if key was renamed, 0 if newkey already exists
      * @throws JedisException if the operation fails or oldkey does not exist
-     * @since Valkey 1.0.0
      */
     public long renamenx(byte[] oldkey, byte[] newkey) {
         checkNotClosed();
@@ -4059,7 +4026,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param serializedValue the serialized value from DUMP
      * @return Simple string reply: OK
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.0
      */
     public String restore(byte[] key, long ttl, byte[] serializedValue) {
         checkNotClosed();
@@ -4080,7 +4046,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param params additional restore parameters
      * @return Simple string reply: OK
      * @throws JedisException if the operation fails
-     * @since Valkey 3.0.0
      */
     public String restore(
             byte[] key, long ttl, byte[] serializedValue, AbstractRestoreParams<?> params) {
@@ -4104,7 +4069,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the binary value to set
      * @return Simple string reply: OK if SET was executed correctly
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public String set(byte[] key, byte[] value) {
         checkNotClosed();
@@ -4124,7 +4088,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param params additional set parameters (EX, PX, NX, XX, etc.)
      * @return Simple string reply: OK if SET was executed correctly, or null if condition not met
      * @throws JedisException if the operation fails
-     * @since Valkey 2.6.12
      */
     public String set(byte[] key, byte[] value, AbstractSetParams<?> params) {
         checkNotClosed();
@@ -4144,7 +4107,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the binary value to set
      * @return the old value stored at key, or null when key did not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 6.2.0
      */
     public byte[] setGet(byte[] key, byte[] value) {
         checkNotClosed();
@@ -4166,7 +4128,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param params additional set parameters (EX, PX, NX, XX, etc.)
      * @return the old value stored at key, or null when key did not exist or condition not met
      * @throws JedisException if the operation fails
-     * @since Valkey 6.2.0
      */
     public byte[] setGet(byte[] key, byte[] value, AbstractSetParams<?> params) {
         checkNotClosed();
@@ -4189,7 +4150,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the bit value to set (true for 1, false for 0)
      * @return the original bit value stored at offset
      * @throws JedisException if the operation fails
-     * @since Valkey 2.2.0
      */
     public boolean setbit(byte[] key, long offset, boolean value) {
         checkNotClosed();
@@ -4209,7 +4169,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the binary value to set
      * @return Simple string reply: OK
      * @throws JedisException if the operation fails
-     * @since Valkey 2.0.0
      */
     public String setex(byte[] key, long seconds, byte[] value) {
         checkNotClosed();
@@ -4229,7 +4188,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the binary value to set
      * @return 1 if the key was set, 0 if the key was not set
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public long setnx(byte[] key, byte[] value) {
         checkNotClosed();
@@ -4254,7 +4212,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the binary value to write
      * @return the length of the string after it was modified
      * @throws JedisException if the operation fails
-     * @since Valkey 2.2.0
      */
     public long setrange(byte[] key, long offset, byte[] value) {
         checkNotClosed();
@@ -4272,7 +4229,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key of the list, set or sorted set to sort
      * @return the sorted elements as a list of byte arrays
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public List<byte[]> sort(byte[] key) {
         checkNotClosed();
@@ -4292,7 +4248,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param sortingParams the parameters controlling sort behavior
      * @return the sorted elements as a list of byte arrays
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public List<byte[]> sort(byte[] key, AbstractSortingParams<?> sortingParams) {
         checkNotClosed();
@@ -4318,7 +4273,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param dstkey the destination key to store the sorted result
      * @return the number of elements in the sorted list
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public long sort(byte[] key, byte[] dstkey) {
         checkNotClosed();
@@ -4338,7 +4292,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param dstkey the destination key to store the sorted result
      * @return the number of elements in the sorted list
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public long sort(byte[] key, AbstractSortingParams<?> sortingParams, byte[] dstkey) {
         checkNotClosed();
@@ -4388,7 +4341,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key containing the string
      * @return the length of the string at key, or 0 when key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 2.2.0
      */
     public long strlen(byte[] key) {
         checkNotClosed();
@@ -4401,15 +4353,17 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
 
     /**
      * <b><a href="https://valkey.io/commands/substr">SUBSTR Command</a></b> Returns a substring of
-     * the string value stored at key.
+     * the string value stored at key. This method is deprecated in favor of {@link #getrange(byte[],
+     * long, long)} which provides the same functionality.
      *
      * @param key the key containing the string
      * @param start the start offset
      * @param end the end offset
      * @return the substring as a byte array
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
+     * @deprecated Use {@link #getrange(byte[], long, long)} instead
      */
+    @Deprecated
     public byte[] substr(byte[] key, int start, int end) {
         checkNotClosed();
         try {
@@ -4427,7 +4381,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to touch
      * @return 1 if the key was touched, 0 if the key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 3.2.1
      */
     public long touch(byte[] key) {
         checkNotClosed();
@@ -4445,7 +4398,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keys the keys to touch
      * @return the number of keys that were touched
      * @throws JedisException if the operation fails
-     * @since Valkey 3.2.1
      */
     public long touch(byte[]... keys) {
         checkNotClosed();
@@ -4465,7 +4417,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to check
      * @return TTL in seconds, or -1 if key exists but has no expiry, or -2 if key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public long ttl(byte[] key) {
         checkNotClosed();
@@ -4483,7 +4434,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to check
      * @return type of key, or "none" when key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public String type(byte[] key) {
         checkNotClosed();
@@ -4501,7 +4451,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param key the key to unlink
      * @return 1 if the key was unlinked, 0 if the key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 4.0.0
      */
     public long unlink(byte[] key) {
         checkNotClosed();
@@ -4519,7 +4468,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keys the keys to unlink
      * @return the number of keys that were unlinked
      * @throws JedisException if the operation fails
-     * @since Valkey 4.0.0
      */
     public long unlink(byte[]... keys) {
         checkNotClosed();
@@ -4540,7 +4488,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param arguments the bitfield operation arguments
      * @return a list of results for each subcommand
      * @throws JedisException if the operation fails
-     * @since Valkey 6.0.0
      */
     public List<Long> bitfieldReadonly(byte[] key, byte[]... arguments) {
         checkNotClosed();
@@ -4577,7 +4524,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param params expiration parameters
      * @return the value of key, or null when key does not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 6.2.0
      */
     public byte[] getEx(byte[] key, AbstractGetExParams<?> params) {
         checkNotClosed();
@@ -4604,7 +4550,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param value the new binary value to set
      * @return the old value stored at key, or null when key did not exist
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public byte[] getSet(byte[] key, byte[] value) {
         checkNotClosed();
@@ -4625,7 +4570,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param pattern the pattern to match keys against
      * @return set of keys matching the pattern
      * @throws JedisException if the operation fails
-     * @since Valkey 1.0.0
      */
     public Set<byte[]> keys(byte[] pattern) {
         checkNotClosed();
@@ -4665,7 +4609,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param timeout timeout in milliseconds
      * @return Simple string reply: OK on success
      * @throws JedisException if the operation fails
-     * @since Redis 2.6.0
      */
     public String migrate(String host, int port, byte[] key, int timeout) {
         checkNotClosed();
@@ -4703,7 +4646,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param keys the keys to migrate
      * @return Simple string reply: OK on success
      * @throws JedisException if the operation fails
-     * @since Redis 3.0.0
      */
     public String migrate(
             String host, int port, int timeout, AbstractMigrateParams<?> params, byte[]... keys) {
@@ -4751,7 +4693,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param cursor the cursor for iteration
      * @return scan result containing next cursor and keys
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.0
      */
     public ScanResult<byte[]> scan(byte[] cursor) {
         checkNotClosed();
@@ -4813,7 +4754,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param params scan parameters (MATCH, COUNT, etc.)
      * @return scan result containing next cursor and keys
      * @throws JedisException if the operation fails
-     * @since Valkey 2.8.0
      */
     public ScanResult<byte[]> scan(byte[] cursor, AbstractScanParams<?> params) {
         checkNotClosed();
@@ -4899,7 +4839,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @param type the type of keys to return
      * @return scan result containing next cursor and keys
      * @throws JedisException if the operation fails
-     * @since Redis 2.8.0
      */
     public ScanResult<byte[]> scan(byte[] cursor, AbstractScanParams<?> params, byte[] type) {
         checkNotClosed();
@@ -5035,7 +4974,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @return "OK" if successful
      * @throws JedisException if the operation fails or the database index is invalid
      * @throws UnsupportedOperationException if called in cluster mode
-     * @since Valkey 1.0.0
      */
     public String select(int database) {
         checkNotClosed();

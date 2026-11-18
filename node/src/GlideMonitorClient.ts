@@ -35,6 +35,12 @@ export class GlideMonitorClient {
         options: BaseClientConfiguration,
         callback?: (line: MonitorLine) => void,
     ): Promise<GlideMonitorClient> {
+        if (options.credentials != null && "iamConfig" in options.credentials) {
+            throw new Error(
+                "Monitor clients do not support IAM authentication or custom credential providers.",
+            );
+        }
+
         const client = new GlideMonitorClient();
         const request = GlideMonitorClient.buildConnectionRequest(options);
         const bytes =

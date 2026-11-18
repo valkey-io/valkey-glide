@@ -37,7 +37,7 @@ def _get_export_rename_map(package: str):
     tree = ast.parse(source_code)
     rename_map = {}
     for node in tree.body:
-        if isinstance(node, ast.ImportFrom) or isinstance(node, ast.ImportFrom):
+        if isinstance(node, ast.Import) or isinstance(node, ast.ImportFrom):
             for alias in node.names:
                 if alias.asname and alias.asname in exported_symbol_list:
                     rename_map[alias.name] = alias.asname
@@ -83,6 +83,7 @@ excluded_shared_symbols = [
     "T",
     "TRequest",
     # python/glide-shared/glide_shared/exceptions.py
+    "get_connection_error_class",  # FunctionDef
     "get_request_error_class",  # FunctionDef
     # python/glide-shared/glide_shared/routes.py
     "to_protobuf_slot_type",  # FunctionDef
@@ -102,12 +103,18 @@ excluded_shared_symbols = [
     "BaseBatchOptions",
     # python/glide-shared/glide_shared/commands/sorted_set.py
     "separate_keys",  # FunctionDef
+    # python/glide-shared/glide_shared/commands/server_modules/ft_options/ft_aggregate_options.py
+    "load_fields_to_args",  # FunctionDef - internal serializer shared with ft_hybrid_options.py
+    "params_to_args",  # FunctionDef - internal serializer shared with ft_hybrid_options.py
     # python/glide-shared/glide_shared/commands/server_modules/ft_options/ft_constants.py
     "CommandNames",  # ClassDef
     "FtCreateKeywords",  # ClassDef
     "FtSearchKeywords",  # ClassDef
     "FtAggregateKeywords",  # ClassDef
+    "FtAggregateReducerKeywords",  # ClassDef
     "FtProfileKeywords",  # ClassDef
+    "FtCursorKeywords",  # ClassDef
+    "FtHybridKeywords",  # ClassDef
     # python/glide-shared/glide_shared/_glide_ffi.py
     "find_libglide_ffi",  # FunctionDef
     "CURR_DIR",  # Assignment
@@ -132,6 +139,7 @@ excluded_shared_symbols = [
     "convert_commands_to_c_batch_info",  # FunctionDef
     "create_c_batch_options",  # FunctionDef
     "create_address_resolver_callback",  # FunctionDef
+    "create_credential_provider_callback",  # FunctionDef
     "handle_command_result",  # FunctionDef
     "parse_inline_pubsub",  # FunctionDef
     # python/glide-shared/glide_shared/request_type.py
@@ -142,7 +150,14 @@ excluded_shared_symbols = [
 
 allowed_missing_re_exports_in_async = [
     # python/glide-shared/glide_shared/exceptions.py
-    "LoggerError"
+    "LoggerError",
+    # RDMA is sync-only, and the async client refuses an RDMA configuration.
+    # python/glide-shared/glide_shared/config.py
+    "RdmaConfiguration",
+    "RdmaProvider",
+    "RdmaSetChecksum",
+    # python/glide-shared/glide_shared/exceptions.py
+    "RdmaError",
 ]
 
 allowed_missing_re_exports_in_sync: list[str] = []
@@ -302,12 +317,12 @@ class TestAPIExport:
             ):
                 missing_from_sync.append(shared_symbol)
 
-            assert not missing_from_async, (
-                "Shared symbols missing from async package exports. "
-                + f"Missing symbols: {missing_from_async}"
-            )
+        assert not missing_from_async, (
+            "Shared symbols missing from async package exports. "
+            + f"Missing symbols: {missing_from_async}"
+        )
 
-            assert not missing_from_sync, (
-                "Shared symbols missing from sync package exports. "
-                + f"Missing symbols: {missing_from_sync}"
-            )
+        assert not missing_from_sync, (
+            "Shared symbols missing from sync package exports. "
+            + f"Missing symbols: {missing_from_sync}"
+        )

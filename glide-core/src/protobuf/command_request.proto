@@ -190,6 +190,7 @@ enum RequestType {
     HPTtl                          = 625;
     HExpireTime                    = 626;
     HPExpireTime                   = 627;
+    HGetDel                        = 628;
 
     //// HyperLogLog commands
 
@@ -441,6 +442,7 @@ enum RequestType {
     SetRange                       = 1520;
     Strlen                         = 1521;
     Substr                         = 1522;
+    DelIfEq                        = 1523;
 
     //// Transaction commands
 

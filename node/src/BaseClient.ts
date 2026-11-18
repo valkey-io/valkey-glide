@@ -74,7 +74,9 @@ import {
     GlideClientHandle,
     createLeakedStringVec,
     registerAddressResolver,
+    registerCredentialProvider,
     removeAddressResolver,
+    removeCredentialProvider,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -105,6 +107,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDelIfEq,
     createDump,
     createExists,
     createExpire,
@@ -131,6 +134,7 @@ import {
     createHGet,
     createHGetAll,
     createHGetEx,
+    createHGetDel,
     createHIncrBy,
     createHIncrByFloat,
     createHKeys,
@@ -287,6 +291,7 @@ import {
     dropOtelSpan,
     getStatistics,
     compressionConfigToProtobuf,
+    toClientCreationError,
     validateCompressionConfiguration,
     valueFromPointer,
     valueFromSplitPointer,
@@ -297,6 +302,11 @@ import {
     response,
 } from "../build-ts/ProtobufMessage";
 import { resolveClientLibraryName } from "./ClientLibraryNameResolver.js";
+import { IsolatedScope } from "./IsolatedScope.js";
+import {
+    clearScopeConnectionRequest,
+    setScopeConnectionRequest,
+} from "./ScopeInternal.js";
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: ValkeyError) => void;
@@ -383,6 +393,9 @@ export type MutualTls =
  * @internal
  */
 const MAX_UINT32 = 2 ** 32 - 1;
+
+/** The largest reconnect jitter the core accepts. */
+const MAX_JITTER_PERCENT = 100;
 
 /**
  * Reads a PEM file for TLS configuration. Shared by
@@ -492,6 +505,38 @@ function validateReloadInterval(value: number | undefined): void {
         throw new ConfigurationError(
             `mutualTls.reloadIntervalSeconds must be a positive integer no greater than ${MAX_UINT32}.`,
         );
+    }
+}
+
+/**
+ * Rejects a reconnect strategy value outside the range the core accepts, instead of letting
+ * protobuf wrap a negative or oversized value into a different unsigned one.
+ *
+ * @internal
+ */
+function validateConnectionBackoff(
+    backoff: BaseClientConfiguration["connectionBackoff"],
+): void {
+    if (backoff === undefined) {
+        return;
+    }
+
+    const fields: [string, number | undefined, number][] = [
+        ["numberOfRetries", backoff.numberOfRetries, MAX_UINT32],
+        ["factor", backoff.factor, MAX_UINT32],
+        ["exponentBase", backoff.exponentBase, MAX_UINT32],
+        ["jitterPercent", backoff.jitterPercent, MAX_JITTER_PERCENT],
+    ];
+
+    for (const [name, value, max] of fields) {
+        if (
+            value !== undefined &&
+            (!Number.isInteger(value) || value < 0 || value > max)
+        ) {
+            throw new ConfigurationError(
+                `invalid reconnect strategy: ${name} must be an integer between 0 and ${max}, got ${value}`,
+            );
+        }
     }
 }
 
@@ -802,6 +847,19 @@ export enum ServiceType {
     MemoryDB = "MemoryDB",
 }
 
+/** AWS credentials returned by a custom credential provider. */
+export interface AwsCredentials {
+    accessKeyId: string;
+    secretAccessKey: string;
+    sessionToken?: string;
+    /** Unix epoch milliseconds; omit when expiry is unknown. */
+    expiresAtEpochMillis?: number;
+}
+
+/** Supplies credentials synchronously or asynchronously for IAM token signing. */
+export type GlideCredentialProvider = () =>
+    AwsCredentials | Promise<AwsCredentials>;
+
 /** Configuration settings for IAM authentication. */
 export interface IamAuthConfig {
     /** The name of the ElastiCache/MemoryDB cluster. */
@@ -815,6 +873,8 @@ export interface IamAuthConfig {
      * If not provided, defaults to 300 seconds (5 min).
      */
     refreshIntervalSeconds?: number;
+    /** Optional direct-client credential source replacing the default AWS chain. */
+    credentialProvider?: GlideCredentialProvider;
 }
 
 /** Represents the credentials for connecting to a server. */
@@ -950,9 +1010,9 @@ export enum NodeDiscoveryMode {
  * - **Reconnection Strategy**: Customize how the client should attempt reconnections using `connectionBackoff`.
  *   - `numberOfRetries`: The maximum number of retry attempts with increasing delays.
  *     - After this limit is reached, the retry interval becomes constant.
- *   - `factor`: A multiplier applied to the base delay between retries, specified in milliseconds (e.g., `500` means a 500ms base delay).
- *   - `exponentBase`: The exponential growth factor for delays (e.g., `2` means the delay doubles with each retry).
- *  - `jitterPercent`: An optional percentage of jitter to add to the delay (e.g., `30` means the final delay will vary randomly between 70% and 130% of the calculated delay).
+ *   - `factor`: A multiplier applied to the base delay between retries, specified in milliseconds (e.g., `500` means a 500ms base delay). A value of `0` means the default (`100`) is used.
+ *   - `exponentBase`: The exponential growth factor for delays (e.g., `2` means the delay doubles with each retry). A value of `0` means the default (`2`) is used.
+ *  - `jitterPercent`: An optional percentage of jitter to add to the delay, between `0` and `100` (e.g., `30` means the final delay will vary randomly between 70% and 130% of the calculated delay). A value outside that range is rejected when the client is created.
  *
  * @example
  * ```typescript
@@ -1140,23 +1200,25 @@ export interface BaseClientConfiguration {
         /**
          * Number of retry attempts that the client should perform when disconnected from the server, where the time between retries increases.
          * Once the retries have reached the maximum value, the time between retries will remain constant until a reconnect attempt is succesful.
-         * Value must be an integer.
+         * Value must be an integer between 0 and 2^32 - 1; any other value is rejected when the client is created.
          */
         numberOfRetries: number;
         /**
          * The multiplier that will be applied to the waiting time between each retry.
          * This value is specified in milliseconds.
-         * Value must be an integer.
+         * Value must be an integer between 0 and 2^32 - 1; any other value is rejected when the client is created.
+         * A value of 0 means the default (100) is used.
          */
         factor: number;
         /**
          * The exponent base configured for the strategy.
-         * Value must be an integer.
+         * Value must be an integer between 0 and 2^32 - 1; any other value is rejected when the client is created.
+         * A value of 0 means the default (2) is used.
          */
         exponentBase: number;
-        /** The Jitter percent on the calculated duration.
+        /** The Jitter percent on the calculated duration, between 0 and 100.
+         * Any other value, or a non-integer, is rejected when the client is created.
          * If not set, a default value will be used.
-         * Value is optional, and must be an integer.
          */
         jitterPercent?: number;
     };
@@ -1339,6 +1401,8 @@ export interface AdvancedBaseClientConfiguration {
      * such as enabling an insecure mode that bypasses certificate validation.
      */
     tlsAdvancedConfiguration?: {
+        // TODO #7707: Document that root certificates or IAM authentication with `insecure`
+        // is rejected.
         /**
          * Whether to bypass TLS certificate verification.
          *
@@ -1494,6 +1558,12 @@ type WritePromiseOptions =
  * Base client interface for GLIDE
  */
 export class BaseClient {
+    private static nativeCreateDirectClient = CreateDirectClient;
+    private static nativeRegisterAddressResolver = registerAddressResolver;
+    private static nativeRemoveAddressResolver = removeAddressResolver;
+    private static nativeRegisterCredentialProvider =
+        registerCredentialProvider;
+    private static nativeRemoveCredentialProvider = removeCredentialProvider;
     protected readonly promiseCallbackFunctions:
         | [PromiseFunction, ErrorFunction, Decoder | undefined][]
         | [PromiseFunction, ErrorFunction][] = [];
@@ -1504,6 +1574,7 @@ export class BaseClient {
     private pendingPushNotification: response.Response[] = [];
     private config: BaseClientConfiguration | undefined;
     private addressResolverKey: string | undefined;
+    private credentialProviderKey: string | undefined;
     protected clientHandle: GlideClientHandle | null = null;
     /** Stores OTel span pointers keyed by callbackIndex for span lifecycle management. */
     private readonly otelSpanPointers = new Map<number, bigint>();
@@ -1513,6 +1584,7 @@ export class BaseClient {
         configuration: connection_request.IConnectionRequest,
     ) {
         if (options.pubsubSubscriptions) {
+            // TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
             if (options.protocol == ProtocolVersion.RESP2) {
                 throw new ConfigurationError(
                     "PubSub subscriptions require RESP3 protocol, but RESP2 was configured.",
@@ -1793,6 +1865,20 @@ export class BaseClient {
     }
 
     /**
+     * Like {@link ensureClientIsOpen}, but also rejects a client with no native
+     * handle, such as one released back to a `ClientPool`.
+     */
+    private ensureClientIsUsable() {
+        this.ensureClientIsOpen();
+
+        if (!this.clientHandle) {
+            throw new ClosingError(
+                "Client handle not initialized. Please create a new client.",
+            );
+        }
+    }
+
+    /**
      * @internal
      *
      * Creates a promise that resolves or rejects based on the result of a command request.
@@ -1812,13 +1898,7 @@ export class BaseClient {
 
         raiseOnError = false,
     ): Promise<T> {
-        this.ensureClientIsOpen();
-
-        if (!this.clientHandle) {
-            throw new ClosingError(
-                "Client handle not initialized. Please create a new client.",
-            );
-        }
+        this.ensureClientIsUsable();
 
         if (!Array.isArray(command)) {
             return this.sendCommand<T>(command, options);
@@ -2372,13 +2452,7 @@ export class BaseClient {
 
             const messageKind = nextPushNotificationValue["kind"];
 
-            if (messageKind === "Disconnect") {
-                Logger.log(
-                    "warn",
-                    "disconnect notification",
-                    "Transport disconnected, messages might be lost",
-                );
-            } else if (
+            if (
                 messageKind === "Message" ||
                 messageKind === "PMessage" ||
                 messageKind === "SMessage"
@@ -2468,7 +2542,6 @@ export class BaseClient {
      * Get the value of `key` and optionally set its expiration. `GETEX` is similar to {@link get}.
      *
      * @see {@link https://valkey.io/commands/getex/|valkey.op} for more details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key to retrieve from the database.
      * @param options - (Optional) Additional Parameters:
@@ -2570,17 +2643,16 @@ export class BaseClient {
         );
     }
 
-    /** Set the given key with the given value. Return value is dependent on the passed options.
+    /**
+     * Sets the value of a key with the given options.
      *
      * @see {@link https://valkey.io/commands/set/|valkey.io} for details.
      *
      * @param key - The key to store.
-     * @param value - The value to store with the given key.
+     * @param value - The value to store with the given `key`.
      * @param options - (Optional) See {@link SetOptions} and {@link DecoderOption}.
-     * @returns - If the value is successfully set, return OK.
-     * If `conditional` in `options` is not set, the value will be set regardless of prior value existence.
-     * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` or `onlyIfEqual` conditions, return `null`.
-     * If `returnOldValue` is set, return the old value as a string.
+     * @returns If `returnOldValue` is not set, `"OK"` if the key was set, or `null` if the condition was not met.
+     * If `returnOldValue` is set, the old value stored at `key`, or `null` if `key` did not exist.
      *
      * @example
      * ```typescript
@@ -2617,6 +2689,17 @@ export class BaseClient {
      * console.log(result6);
      * // Output: null
      * // Value wasn't set because the comparisonValue is not equal to the current value of `key`. Value of `key` remains "new_value".
+     *
+     * // Example usage of set method with conditional option IFNE
+     * const result7 = await client.set("key", "another_new_value", {conditionalSet: "onlyIfNotEqual", comparisonValue: "new_value"});
+     * console.log(result7);
+     * // Output: null
+     * // Value wasn't set because the comparisonValue is equal to the current value of `key`. Value of `key` remains "new_value".
+     *
+     * const result8 = await client.set("key", "another_new_value", {conditionalSet: "onlyIfNotEqual", comparisonValue: "value we will compare to"});
+     * console.log(result8);
+     * // Output: 'OK'
+     * // Set "another_new_value" to "key" only if comparisonValue is not equal to the current value of "key".
      * ```
      */
     public async set(
@@ -2841,7 +2924,7 @@ export class BaseClient {
     /**
      * Move `key` from the currently selected database to the database specified by `dbIndex`.
      *
-     * @remarks Move is available for cluster mode since Valkey 9.0.0 and above.
+     * @since Valkey 9.0.0 for cluster client.
      *
      * @see {@link https://valkey.io/commands/move/|valkey.io} for more details.
      *
@@ -2931,7 +3014,7 @@ export class BaseClient {
      * no action.
      *
      * @see {@link https://valkey.io/commands/copy/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.2.0. destinationDB parameter for cluster mode is supported since Valkey 9.0.0 and above
+     * @since Valkey 9.0.0 for cluster client.
      *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
@@ -3226,7 +3309,6 @@ export class BaseClient {
      * Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
      *
      * @see {@link https://valkey.io/commands/bitfield_ro/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.0.0.
      *
      * @param key - The key of the string.
      * @param subcommands - The {@link BitFieldGet} subcommands to be performed.
@@ -3644,7 +3726,6 @@ export class BaseClient {
      * Returns a random field name from the hash value stored at `key`.
      *
      * @see {@link https://valkey.io/commands/hrandfield/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -3744,7 +3825,6 @@ export class BaseClient {
      * Retrieves up to `count` random field names from the hash value stored at `key`.
      *
      * @see {@link https://valkey.io/commands/hrandfield/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
@@ -3775,7 +3855,6 @@ export class BaseClient {
      * value stored at `key`.
      *
      * @see {@link https://valkey.io/commands/hrandfield/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
@@ -3810,7 +3889,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param fieldsAndValues - A map or array of field-value pairs to set.
-     * @param options - Optional parameters including field conditional changes and expiry settings.
+     * @param options - Optional parameters including key and field conditional changes and expiry settings.
      *                  See {@link HSetExOptions}.
      * @returns A number of fields that were set.
      *
@@ -3861,9 +3940,17 @@ export class BaseClient {
      *     }
      * );
      * console.log(updateResult); // 0 or 1 depending on whether field1 exists
+     *
+     * // Set fields only if the key already exists.
+     * const keyExistsResult = await client.hsetex(
+     *     "myHash",
+     *     { field1: "newValue1" },
+     *     { keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS }
+     * );
+     * console.log(keyExistsResult); // 1 - "myHash" exists, so the field was set
      * ```
      *
-     * @since Valkey 9.0.0
+     * @since Valkey 9.0.0.
      * @see {@link https://valkey.io/commands/hsetex/|valkey.io}
      */
     public async hsetex(
@@ -3930,7 +4017,7 @@ export class BaseClient {
      * console.log(timestampValues); // ["value5"] - field expires in 1 minute
      * ```
      *
-     * @since Valkey 9.0.0
+     * @since Valkey 9.0.0.
      * @see {@link https://valkey.io/commands/hgetex/|valkey.io}
      */
     public async hgetex(
@@ -3942,6 +4029,40 @@ export class BaseClient {
             createHGetEx(key, fields, options),
             options,
         );
+    }
+
+    /**
+     * Gets and deletes the values associated with the specified `fields` in the hash
+     * stored at `key`. This is an atomic get-and-delete operation.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The fields in the hash stored at `key` to retrieve and delete.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns An array of values associated with the given fields, in the same order
+     *          as they are requested. For every field that does not exist in the hash,
+     *          a null value is returned. If `key` does not exist, returns an array of
+     *          null values. The key is deleted automatically when its last field is removed.
+     *
+     * @example
+     * ```typescript
+     * // Get and delete fields from a hash
+     * const values = await client.hgetdel("myHash", ["field1", "field2"]);
+     * console.log(values); // ["value1", "value2"] - the fields are now removed
+     *
+     * // Fields that do not exist return null
+     * const mixed = await client.hgetdel("myHash", ["field3", "missing"]);
+     * console.log(mixed); // ["value3", null]
+     * ```
+     *
+     * @since Valkey 9.1.0.
+     * @see {@link https://valkey.io/commands/hgetdel/|valkey.io}
+     */
+    public async hgetdel(
+        key: GlideString,
+        fields: GlideString[],
+        options?: DecoderOption,
+    ): Promise<(GlideString | null)[]> {
+        return this.createWritePromise(createHGetDel(key, fields), options);
     }
 
     /**
@@ -4528,7 +4649,6 @@ export class BaseClient {
      * stored at `destination` depending on `whereFrom`, see {@link ListDirection}.
      *
      * @see {@link https://valkey.io/commands/lmove/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
@@ -4580,7 +4700,6 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/blmove/|valkey.io} for details.
      * @remarks When in cluster mode, both `source` and `destination` must map to the same hash slot.
      * @remarks `BLMOVE` is a client blocking command, see {@link https://glide.valkey.io/how-to/connection-management/#blocking-commands|Valkey GLIDE Documentation} for more details and best practices.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
@@ -5084,7 +5203,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/sintercard/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - The keys of the sets.
      * @param options - (Optional) Additional parameters:
@@ -5291,11 +5410,54 @@ export class BaseClient {
         return this.createWritePromise(createSIsMember(key, member));
     }
 
+    /** Returns if `member` is a member of the set stored at `key`,
+     * or `-1` if `key` does not exist.
+     *
+     * @see {@link https://valkey.io/commands/sismember/|valkey.io} for more details.
+     * @since Valkey 9.2.0.
+     *
+     * @param key - The key of the set.
+     * @param member - The member to check for existence in the set.
+     * @returns A status code indicating membership:
+     * - `1`: The member exists in the set.
+     * - `0`: The key exists but the member does not exist in the set.
+     * - `-1`: The key does not exist.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.sismemberIfExists("my_set", "member1");
+     * console.log(result);
+     * // Output: 1
+     * // Indicates that `member1` exists in the set `my_set`.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.sismemberIfExists("my_set", "non_existing_member");
+     * console.log(result);
+     * // Output: 0
+     * // Indicates that `my_set` exists but `non_existing_member` does not exist in it.
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.sismemberIfExists("non_existing_set", "member1");
+     * console.log(result);
+     * // Output: -1
+     * // Indicates that `non_existing_set` does not exist.
+     * ```
+     */
+    public async sismemberIfExists(
+        key: GlideString,
+        member: GlideString,
+    ): Promise<number> {
+        return this.createWritePromise(createSIsMember(key, member, true));
+    }
+
     /**
      * Checks whether each member is contained in the members of the set stored at `key`.
      *
      * @see {@link https://valkey.io/commands/smismember/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the set to check.
      * @param members - A list of members to check for existence in the set.
@@ -5604,7 +5766,7 @@ export class BaseClient {
      * To get the expiration with millisecond precision, use {@link pexpiretime}.
      *
      * @see {@link https://valkey.io/commands/expiretime/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key - The `key` to determine the expiration value of.
      * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
@@ -5705,7 +5867,7 @@ export class BaseClient {
      * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in milliseconds.
      *
      * @see {@link https://valkey.io/commands/pexpiretime/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key - The `key` to determine the expiration value of.
      * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
@@ -5825,7 +5987,7 @@ export class BaseClient {
      * Returns the original source code of a script in the script cache.
      *
      * @see {@link https://valkey.io/commands/script-show|valkey.io} for more details.
-     * @remarks Since Valkey version 8.0.0.
+     * @since Valkey 8.0.0.
      *
      * @param sha1 - The SHA1 digest of the script.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -5856,11 +6018,11 @@ export class BaseClient {
      * @param key - The key of the stream.
      * @param start - The starting stream entry ID bound for the range.
      *     - Use `value` to specify a stream entry ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID.
      *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
      * @param end - The ending stream entry ID bound for the range.
      *     - Use `value` to specify a stream entry ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID.
      *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `count`: the maximum count of stream entries to return.
@@ -5903,11 +6065,11 @@ export class BaseClient {
      * @param key - The key of the stream.
      * @param end - The ending stream entry ID bound for the range.
      *     - Use `value` to specify a stream entry ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID.
      *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
      * @param start - The ending stream ID bound for the range.
      *     - Use `value` to specify a stream entry ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID.
      *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `count`: the maximum count of stream entries to return.
@@ -6105,7 +6267,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/zintercard/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - The keys of the sorted sets to intersect.
      * @param options - (Optional) Additional parameters:
@@ -6133,7 +6295,6 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/zdiff/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -6164,7 +6325,6 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/zdiff/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -6199,7 +6359,6 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/zdiffstore/|valkey.io} for more details.
      * @remarks When in cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param destination - The key for the resulting sorted set.
      * @param keys - The keys of the sorted sets to compare.
@@ -6339,7 +6498,6 @@ export class BaseClient {
      * Returns the scores associated with the specified `members` in the sorted set stored at `key`.
      *
      * @see {@link https://valkey.io/commands/zmscore/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the sorted set.
      * @param members - A list of members in the sorted set.
@@ -6508,7 +6666,6 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/zrangestore/|valkey.io} for more details.
      * @remarks When in cluster mode, `destination` and `source` must map to the same hash slot.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param destination - The key for the destination sorted set.
      * @param source - The key of the source sorted set.
@@ -6609,8 +6766,6 @@ export class BaseClient {
      *
      * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
      *
-     * @remarks Since Valkey version 6.2.0.
-     *
      * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
      *
      * @param keys - The keys of the sorted sets.
@@ -6642,8 +6797,6 @@ export class BaseClient {
      * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
      *
      * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
-     *
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets with possible formats:
      *  - `GlideString[]` - for keys only.
@@ -6688,7 +6841,6 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
      * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -6718,8 +6870,6 @@ export class BaseClient {
      * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
      *
      * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
-     *
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets with possible formats:
      *  - string[] - for keys only.
@@ -6985,7 +7135,7 @@ export class BaseClient {
      *
      * @param keys - The keys of the sorted sets.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
-     *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     *     `0` will block indefinitely.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
@@ -7064,7 +7214,7 @@ export class BaseClient {
      *
      * @param keys - The keys of the sorted sets.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
-     *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     *     `0` will block indefinitely.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
@@ -7311,7 +7461,7 @@ export class BaseClient {
      * Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
      *
      * @see {@link https://valkey.io/commands/zrank/|valkey.io} for more details.
-     * @remarks Since Valkey version 7.2.0.
+     * @since Valkey 7.2.0.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
@@ -7375,7 +7525,7 @@ export class BaseClient {
      * score, where scores are ordered from the highest to lowest, starting from `0`.
      *
      * @see {@link https://valkey.io/commands/zrevrank/|valkey.io} for more details.
-     * @remarks Since Valkey version 7.2.0.
+     * @since Valkey 7.2.0.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
@@ -7803,7 +7953,6 @@ export class BaseClient {
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
      * @see {@link https://valkey.io/commands/xautoclaim/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the stream.
      * @param group - The consumer group name.
@@ -7879,7 +8028,6 @@ export class BaseClient {
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
      * @see {@link https://valkey.io/commands/xautoclaim/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the stream.
      * @param group - The consumer group name.
@@ -8039,7 +8187,6 @@ export class BaseClient {
      * - (Optional) `fullOptions`: If `true`, returns verbose information with a limit of the first 10 PEL entries.
      * If `number` is specified, returns verbose information limiting the returned PEL entries.
      * If `0` is specified, returns verbose information with no limit.
-     * @remark `fullOptions` - Available since Valkey version 6.0.0
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A {@link ReturnTypeXinfoStream} of detailed stream information for the given `key`. See
      *     the example for a sample response.
@@ -8627,7 +8774,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/fcall/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param func - The function name.
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
@@ -8656,7 +8803,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/fcall/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param func - The function name.
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
@@ -8692,7 +8839,6 @@ export class BaseClient {
      * an `array` of indices of matching elements within the list.
      *
      * @see {@link https://valkey.io/commands/lpos/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.0.6.
      *
      * @param key - The name of the list.
      * @param element - The value to search for within the list.
@@ -8803,7 +8949,6 @@ export class BaseClient {
      * which are within the borders of the area specified by a given shape.
      *
      * @see {@link https://valkey.io/commands/geosearch/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the sorted set.
      * @param searchFrom - The query's center point options, could be one of:
@@ -8890,7 +9035,6 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/geosearchstore/|valkey.io} for more details.
      * @remarks When in cluster mode, `destination` and `source` must map to the same hash slot.
-     * @remarks Since Valkey version 6.2.0.
      *
      * @param destination - The key of the destination sorted set.
      * @param source - The key of the sorted set.
@@ -9001,7 +9145,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/zmpop/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
@@ -9048,7 +9192,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/bzmpop/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @remarks `BZMPOP` is a client blocking command, see {@link https://glide.valkey.io/how-to/connection-management/#blocking-commands | Valkey GLIDE Documentation} for more details and best practices.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
@@ -9268,7 +9412,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/lcs/|valkey.io} for more details.
      * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -9298,7 +9442,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/lcs/|valkey.io} for more details.
      * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -9331,7 +9475,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/lcs/|valkey.io} for more details.
      * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -9575,11 +9719,37 @@ export class BaseClient {
     }
 
     /**
+     * Deletes `key` if its value equals `value`.
+     *
+     * @see {@link https://valkey.io/commands/delifeq/|valkey.io} for more details.
+     *
+     * @param key - The key to delete.
+     * @param value - The comparison value. The key is only deleted if its current value matches
+     *     exactly.
+     * @returns `true` if `key` was deleted, or `false` if `key` did not exist or its value did
+     *     not match `value`.
+     *
+     * @example
+     * ```typescript
+     * const deleted = await client.delifeq("key", "value");
+     * console.log(deleted); // Output: true
+     * ```
+     *
+     * @since Valkey 9.0.0
+     */
+    public async delifeq(
+        key: GlideString,
+        value: GlideString,
+    ): Promise<boolean> {
+        return this.createWritePromise(createDelIfEq(key, value));
+    }
+
+    /**
      * Pops one or more elements from the first non-empty list from the provided `keys`.
      *
      * @see {@link https://valkey.io/commands/lmpop/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - An array of keys.
      * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
@@ -9621,7 +9791,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/blmpop/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param keys - An array of keys.
      * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
@@ -9760,7 +9930,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
      * @remarks When in cluster mode, both `key` and the patterns specified in {@link SortOptions.byPattern}
      * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
-     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey version 8.0.
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey 8.0.0.
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - (Optional) The {@link SortOptions} and {@link DecoderOption}.
      *
@@ -9793,10 +9963,10 @@ export class BaseClient {
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
      * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      * @remarks When in cluster mode, both `key` and the patterns specified in {@link SortOptions.byPattern}
      * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
-     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey version 8.0.
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey 8.0.0.
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - (Optional) The {@link SortOptions} and {@link DecoderOption}.
      * @returns An `Array` of sorted elements
@@ -9834,7 +10004,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/sort|valkey.io} for more details.
      * @remarks When in cluster mode, `key`, `destination` and the patterns specified in {@link SortOptions.byPattern}
      * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
-     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey version 8.0.
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey 8.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.
@@ -9871,6 +10041,8 @@ export class BaseClient {
     protected createClientRequest(
         options: BaseClientConfiguration,
     ): connection_request.IConnectionRequest {
+        validateConnectionBackoff(options.connectionBackoff);
+
         const readFrom = options.readFrom
             ? this.MAP_READ_FROM_STRATEGY[options.readFrom]
             : connection_request.ReadFrom.Primary;
@@ -10078,38 +10250,103 @@ export class BaseClient {
     protected async connectToServer(
         options: BaseClientConfiguration,
     ): Promise<void> {
-        const request = this.createClientRequest(options);
-
-        if (options.addressResolver) {
-            this.addressResolverKey = registerAddressResolver(
-                options.addressResolver,
-            );
-            request.addressResolverKey = this.addressResolverKey;
-        }
-
         try {
+            const credentials = options.credentials;
+            const credentialProvider =
+                credentials && "iamConfig" in credentials
+                    ? (
+                          credentials.iamConfig as {
+                              credentialProvider?: unknown;
+                          }
+                      ).credentialProvider
+                    : undefined;
+
+            if (
+                credentialProvider !== undefined &&
+                typeof credentialProvider !== "function"
+            ) {
+                throw new ConfigurationError(
+                    "credentialProvider must be a function or undefined.",
+                );
+            }
+
+            const request = this.createClientRequest(options);
+
+            if (options.addressResolver) {
+                this.addressResolverKey =
+                    BaseClient.nativeRegisterAddressResolver(
+                        options.addressResolver,
+                    );
+                request.addressResolverKey = this.addressResolverKey;
+            }
+
+            if (credentialProvider) {
+                this.credentialProviderKey =
+                    BaseClient.nativeRegisterCredentialProvider(
+                        credentialProvider as GlideCredentialProvider,
+                    );
+                request.credentialProviderKey = this.credentialProviderKey;
+            }
+
             const connectionRequestBytes = Buffer.from(
                 connection_request.ConnectionRequest.encode(
                     connection_request.ConnectionRequest.create(request),
                 ).finish(),
             );
 
-            this.clientHandle = await CreateDirectClient(
+            // Keep the exact bytes used to connect for scopedConnection().
+            setScopeConnectionRequest(this, connectionRequestBytes);
+
+            this.clientHandle = await BaseClient.createNativeClient(
                 connectionRequestBytes,
                 this.handleResponsesAvailable,
             );
+            // Native direct creation consumed the provider claim only after
+            // successful GlideClientHandle conversion.
+            this.credentialProviderKey = undefined;
             Logger.log(
                 "info",
                 "Client lifetime",
                 "Client connection established",
             );
         } catch (err) {
-            if (this.addressResolverKey) {
-                removeAddressResolver(this.addressResolverKey);
-                this.addressResolverKey = undefined;
-            }
-
+            this.cleanupConnectionRegistrations();
             throw err;
+        }
+    }
+
+    /** Creates the native client handle; a failure rejects with a `ValkeyError`. */
+    private static async createNativeClient(
+        connectionRequestBytes: Uint8Array,
+        wakeCallback: () => void,
+    ): Promise<GlideClientHandle> {
+        try {
+            return await BaseClient.nativeCreateDirectClient(
+                connectionRequestBytes,
+                wakeCallback,
+            );
+        } catch (error) {
+            throw toClientCreationError(error);
+        }
+    }
+
+    /** Remove setup registrations exactly once. */
+    private cleanupConnectionRegistrations(): void {
+        const addressResolverKey = this.addressResolverKey;
+        const credentialProviderKey = this.credentialProviderKey;
+        this.addressResolverKey = undefined;
+        this.credentialProviderKey = undefined;
+
+        try {
+            if (addressResolverKey) {
+                BaseClient.nativeRemoveAddressResolver(addressResolverKey);
+            }
+        } finally {
+            if (credentialProviderKey) {
+                BaseClient.nativeRemoveCredentialProvider(
+                    credentialProviderKey,
+                );
+            }
         }
     }
 
@@ -10147,6 +10384,51 @@ export class BaseClient {
     }
 
     /**
+     * Acquire an isolated execution scope on this client: a dedicated connection
+     * for operations that need per-connection state, such as `WATCH`/`MULTI`/`EXEC`
+     * transactions, `CLIENT TRACKING`, and blocking commands.
+     *
+     * The scope runs on its own connection through glide-core rather than the
+     * shared multiplexed one, so its state does not affect other commands on this
+     * client. This works on both a standalone client and a pool-borrowed client;
+     * the connection request captured at connect time is reused, so the caller
+     * does not have to produce any bytes.
+     *
+     * Release the scope when finished, or wrap it in a `try`/`finally`.
+     *
+     * @example
+     * ```typescript
+     * const scope = await client.scopedConnection();
+     * try {
+     *     await scope.watch("key");
+     *     const value = await scope.get("key");
+     *     await scope.multi();
+     *     await scope.set("key", String(Number(value ?? "0") + 1));
+     *     await scope.exec();
+     * } finally {
+     *     scope.release();
+     * }
+     * ```
+     *
+     * @param routingKey - In cluster mode, the key whose hash slot decides which
+     *     node the scope connects to. Every key used in the scope must hash to the
+     *     same slot. Defaults to slot 0.
+     * @param timeoutMs - Maximum time to wait for a scope, in milliseconds.
+     *     Default: 5000.
+     * @returns A new {@link IsolatedScope}.
+     * @throws {TimeoutError} if no scope became available within `timeoutMs`.
+     * @throws {ConnectionError} if the client was closed while waiting.
+     * @throws {RequestError} if the client's configuration cannot produce a scoped connection.
+     */
+    public async scopedConnection(
+        routingKey?: string,
+        timeoutMs = 5000,
+    ): Promise<IsolatedScope> {
+        this.ensureClientIsUsable();
+        return IsolatedScope.acquire(this, routingKey, timeoutMs);
+    }
+
+    /**
      *  Terminate the client by closing all associated resources and any active promises.
      *  All open promises will be closed with an exception.
      * @param errorMessage - If defined, this error message will be passed along with the exceptions when closing all open promises.
@@ -10162,11 +10444,13 @@ export class BaseClient {
             reject(new ClosingError(errorMessage || ""));
         });
 
-        // Clean up address resolver from the global registry
-        if (this.addressResolverKey) {
-            removeAddressResolver(this.addressResolverKey);
-            this.addressResolverKey = undefined;
-        }
+        // Drop the cached connection request so its credentials do not outlive
+        // the client.
+        clearScopeConnectionRequest(this);
+
+        // Clean up setup registrations. A consumed provider key was cleared
+        // after successful handle conversion and is therefore not removed here.
+        this.cleanupConnectionRegistrations();
 
         // Clean up OTel spans for in-flight requests to prevent memory leaks
         for (const spanPtr of this.otelSpanPointers.values()) {

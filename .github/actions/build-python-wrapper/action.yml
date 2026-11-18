@@ -1,0 +1,60 @@
+name: Build Python wrapper
+description: Install dependencies and build the GLIDE Python sync and async clients
+
+inputs:
+    os:
+        description: "The current operating system (one of: amazon-linux, macos, ubuntu)"
+        required: true
+    target:
+        description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
+        required: true
+    engine-version:
+        description: "Engine version to install"
+        required: false
+    publish:
+        description: "Enable building the wrapper in release mode"
+        required: false
+        default: "false"
+    github-token:
+        description: "GITHUB_TOKEN, GitHub App installation access token"
+        required: true
+    features:
+        description: "Comma separated list of Rust features to enable for maturin"
+        required: false
+
+runs:
+    using: "composite"
+    steps:
+        - name: Install shared software dependencies
+          uses: ./.github/actions/install-shared-dependencies
+          with:
+              os: ${{ inputs.os }}
+              target: ${{ inputs.target }}
+              github-token: ${{ inputs.github-token }}
+              engine-version: ${{ inputs.engine-version }}
+
+        - name: Install Python software dependencies
+          shell: bash
+          env:
+              OS: ${{ inputs.os }}
+          run: |
+              # Disregarding PEP 668 as it addresses package managers conflicts, which is not applicable in the CI scope.
+              INSTALL_FLAGS=`if [[ "$OS" =~ .*"macos".*  ]]; then echo "--break-system-packages"; else echo ""; fi`
+              python3 -m ensurepip --upgrade || true
+              python3 -m pip install --upgrade pip $INSTALL_FLAGS
+              python3 -m pip install virtualenv mypy-protobuf $INSTALL_FLAGS
+
+        - name: Build GLIDE Python Sync and Async clients
+          shell: bash
+          working-directory: ./python
+          if: ${{ inputs.publish != 'true' }}
+          env:
+              CARGO_TERM_COLOR: always
+              FEATURES: ${{ inputs.features }}
+          run: |
+              FEATURE_ARGS=""
+                  if [ -n "$FEATURES" ]; then
+                      FEATURE_ARGS="--features $FEATURES"
+                  fi
+
+                  python3 dev.py build --no-cache $FEATURE_ARGS

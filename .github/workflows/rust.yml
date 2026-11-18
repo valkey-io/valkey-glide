@@ -11,34 +11,66 @@ on:
             - v*
         paths:
             - rust/**
+
+            # Rust dependencies
             - glide-logger/**
             - glide-telemetry/**
+            - glide-rdma/**
             - glide-core/**
             - deny.toml
-            - utils/cluster_manager.py
+            - .cargo/config.toml
+
+            # GitHub workflows
+            - .github/workflows/rust.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
-            - .github/workflows/lint-rust/action.yml
-            - .github/workflows/rust.yml
+            - .github/actions/install-zig/action.yml
+            - .github/actions/lint-rust/action.yml
+
+            - utils/cluster_manager.py
+
+            # Exclusions
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
+            # Re-include: compiled as doctests by rust/src/lib.rs
+            - rust/README.md
+            - rust/migration.md
     pull_request:
         paths:
             - rust/**
+
+            # Rust dependencies
             - glide-logger/**
             - glide-telemetry/**
+            - glide-rdma/**
             - glide-core/**
             - deny.toml
-            - utils/cluster_manager.py
+            - .cargo/config.toml
+
+            # GitHub workflows
+            - .github/workflows/rust.yml
             - .github/actions/install-engine/action.yml
+            - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
-            - .github/workflows/lint-rust/action.yml
-            - .github/workflows/rust.yml
+            - .github/actions/install-zig/action.yml
+            - .github/actions/lint-rust/action.yml
+
+            - utils/cluster_manager.py
+
+            # Exclusions
+            - "!**/*.md"
+            - "!**/THIRD_PARTY_LICENSES*"
+            # Re-include: compiled as doctests by rust/src/lib.rs
+            - rust/README.md
+            - rust/migration.md
     workflow_dispatch:
     workflow_call:
 
 concurrency:
-    group: rust-${{ github.head_ref || github.ref }}
+    group: rust-${{ github.head_ref || github.ref }}-${{ github.workflow }}
     cancel-in-progress: true
 
 env:
@@ -47,14 +79,14 @@ env:
 jobs:
     lint:
         name: Lint - Rust client
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
 
-            - uses: ./.github/workflows/lint-rust
+            - uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: rust
                   github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -66,21 +98,21 @@ jobs:
         timeout-minutes: 60
         strategy:
             fail-fast: false
+            # TODO #6997: Use the shared test matrix. The hosts are duplicated in rust-cd.yml.
             matrix:
                 host:
-                    - {
-                          arch: x64,
-                          runner: ubuntu-24.04,
-                          target: x86_64-unknown-linux-gnu,
-                      }
-                    - {
-                          arch: arm64,
-                          runner: ubuntu-24.04-arm,
-                          target: aarch64-unknown-linux-gnu,
-                      }
+                    - arch: x64
+                      runner: ubuntu-24.04
+                      target: x86_64-unknown-linux-gnu
+                    - arch: arm64
+                      runner: ubuntu-24.04-arm
+                      target: aarch64-unknown-linux-gnu
                 engine:
-                    - { type: valkey, version: "9.0" }
-                    - { type: redis, version: "6.2" }
+                    # TODO #7312: Bump to 9.2.0 once released
+                    - type: valkey
+                      version: "9.2.0-rc1"
+                    - type: redis
+                      version: "6.2"
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
@@ -108,6 +140,14 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Run rust client tests
+            - name: Run unit tests
               working-directory: ./rust
-              run: cargo test --locked -- --show-output
+              run: cargo unit-tests --locked -- --show-output
+
+            - name: Run doctests
+              working-directory: ./rust
+              run: cargo doc-tests --locked -- --show-output
+
+            - name: Run integration tests
+              working-directory: ./rust
+              run: cargo integration-tests --locked -- --show-output

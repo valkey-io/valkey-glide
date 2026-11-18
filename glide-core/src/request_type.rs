@@ -155,6 +155,7 @@ pub enum RequestType {
     HPTtl = 625,
     HExpireTime = 626,
     HPExpireTime = 627,
+    HGetDel = 628,
 
     //// HyperLogLog commands
     PfAdd = 701,
@@ -395,6 +396,7 @@ pub enum RequestType {
     SetRange = 1520,
     Strlen = 1521,
     Substr = 1522,
+    DelIfEq = 1523,
 
     //// Transaction commands
     Discard = 1601,
@@ -557,6 +559,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::HPTtl => RequestType::HPTtl,
             ProtobufRequestType::HExpireTime => RequestType::HExpireTime,
             ProtobufRequestType::HPExpireTime => RequestType::HPExpireTime,
+            ProtobufRequestType::HGetDel => RequestType::HGetDel,
             ProtobufRequestType::PTTL => RequestType::PTTL,
             ProtobufRequestType::ZRemRangeByRank => RequestType::ZRemRangeByRank,
             ProtobufRequestType::Persist => RequestType::Persist,
@@ -582,6 +585,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ZRemRangeByLex => RequestType::ZRemRangeByLex,
             ProtobufRequestType::ZLexCount => RequestType::ZLexCount,
             ProtobufRequestType::Append => RequestType::Append,
+            ProtobufRequestType::DelIfEq => RequestType::DelIfEq,
             ProtobufRequestType::SDiffStore => RequestType::SDiffStore,
             ProtobufRequestType::SInter => RequestType::SInter,
             ProtobufRequestType::SInterStore => RequestType::SInterStore,
@@ -848,51 +852,62 @@ impl RequestType {
     pub fn compression_behavior(self) -> crate::compression::CommandCompressionBehavior {
         use crate::compression::CommandCompressionBehavior;
         match self {
-            RequestType::Set => CommandCompressionBehavior::CompressValues,
+            RequestType::Get => CommandCompressionBehavior::DecompressValues,
+            RequestType::GetDel => CommandCompressionBehavior::DecompressValues,
+            RequestType::GetEx => CommandCompressionBehavior::DecompressValues,
+            RequestType::GetSet => CommandCompressionBehavior::CompressAndDecompressValues,
+            RequestType::MGet => CommandCompressionBehavior::DecompressValues,
             RequestType::MSet => CommandCompressionBehavior::CompressValues,
             RequestType::MSetNX => CommandCompressionBehavior::CompressValues,
-            RequestType::SetEx => CommandCompressionBehavior::CompressValues,
             RequestType::PSetEx => CommandCompressionBehavior::CompressValues,
+            RequestType::Set => CommandCompressionBehavior::CompressValues,
+            RequestType::SetEx => CommandCompressionBehavior::CompressValues,
             RequestType::SetNX => CommandCompressionBehavior::CompressValues,
-            RequestType::Get => CommandCompressionBehavior::DecompressValues,
-            RequestType::MGet => CommandCompressionBehavior::DecompressValues,
-            RequestType::GetEx => CommandCompressionBehavior::DecompressValues,
-            RequestType::GetDel => CommandCompressionBehavior::DecompressValues,
-            RequestType::GetSet => CommandCompressionBehavior::DecompressValues,
             _ => CommandCompressionBehavior::NoCompression,
         }
     }
 
     /// Returns the reason why this command is incompatible with compression, if any.
     /// Returns `None` if the command is compatible with compression.
+    /// `args` are the command arguments, excluding the command name.
     ///
     /// Commands that are incompatible with compression are those that:
-    /// - Manipulate string data on the server side (APPEND, GETRANGE, SETRANGE, STRLEN, LCS)
-    /// - Perform numeric operations on string values (INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY)
-    /// - Perform bit operations on string values (GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP)
-    pub fn compression_incompatibility_reason(self) -> Option<&'static str> {
+    /// - Manipulate or compare string data on the server side (e.g. APPEND, SET with IFEQ)
+    /// - Perform numeric operations on string values (e.g. INCR)
+    /// - Perform bit operations on string values (e.g. GETBIT)
+    pub fn compression_incompatibility_reason(self, args: &[Vec<u8>]) -> Option<&'static str> {
         match self {
             // String manipulation commands - operate on raw bytes server-side
             RequestType::Append => Some(
                 "APPEND modifies string data on the server, which would corrupt compressed values",
             ),
+            RequestType::DelIfEq => Some(
+                "DELIFEQ compares the stored value against raw bytes on the server, which would compare against compressed data instead of the original value",
+            ),
             RequestType::GetRange => Some(
                 "GETRANGE returns a substring of the raw bytes, which would return compressed data instead of the original value",
             ),
+            RequestType::LCS => Some(
+                "LCS compares raw bytes between strings, which would compare compressed data instead of original values",
+            ),
+            RequestType::Set => Self::compression_incompatibility_reason_set(args),
             RequestType::SetRange => Some(
                 "SETRANGE modifies bytes at a specific offset, which would corrupt compressed values",
             ),
             RequestType::Strlen => Some(
                 "STRLEN returns the length of the raw bytes, which would return the compressed size instead of the original size",
             ),
-            RequestType::LCS => Some(
-                "LCS compares raw bytes between strings, which would compare compressed data instead of original values",
-            ),
             RequestType::Substr => Some(
                 "SUBSTR (deprecated alias for GETRANGE) returns a substring of raw bytes, which would return compressed data",
             ),
 
             // Numeric operations - expect numeric string values
+            RequestType::Decr => {
+                Some("DECR expects a numeric string value, but would receive compressed bytes")
+            }
+            RequestType::DecrBy => {
+                Some("DECRBY expects a numeric string value, but would receive compressed bytes")
+            }
             RequestType::Incr => {
                 Some("INCR expects a numeric string value, but would receive compressed bytes")
             }
@@ -902,25 +917,10 @@ impl RequestType {
             RequestType::IncrByFloat => Some(
                 "INCRBYFLOAT expects a numeric string value, but would receive compressed bytes",
             ),
-            RequestType::Decr => {
-                Some("DECR expects a numeric string value, but would receive compressed bytes")
-            }
-            RequestType::DecrBy => {
-                Some("DECRBY expects a numeric string value, but would receive compressed bytes")
-            }
 
             // Bit operations - operate on raw binary data
-            RequestType::GetBit => Some(
-                "GETBIT reads bits from raw bytes, which would read from compressed data instead of original value",
-            ),
-            RequestType::SetBit => {
-                Some("SETBIT modifies bits in raw bytes, which would corrupt compressed values")
-            }
             RequestType::BitCount => Some(
                 "BITCOUNT counts bits in raw bytes, which would count bits in compressed data instead of original value",
-            ),
-            RequestType::BitPos => Some(
-                "BITPOS finds bit positions in raw bytes, which would search in compressed data instead of original value",
             ),
             RequestType::BitField => Some(
                 "BITFIELD performs bit operations on raw bytes, which would operate on compressed data",
@@ -931,46 +931,71 @@ impl RequestType {
             RequestType::BitOp => Some(
                 "BITOP performs bitwise operations between strings, which would operate on compressed data",
             ),
+            RequestType::BitPos => Some(
+                "BITPOS finds bit positions in raw bytes, which would search in compressed data instead of original value",
+            ),
+            RequestType::GetBit => Some(
+                "GETBIT reads bits from raw bytes, which would read from compressed data instead of original value",
+            ),
+            RequestType::SetBit => {
+                Some("SETBIT modifies bits in raw bytes, which would corrupt compressed values")
+            }
 
             // All other commands are compatible
             _ => None,
         }
     }
 
+    /// Returns the reason why a `SET` command with these arguments is incompatible with compression, if any.
+    fn compression_incompatibility_reason_set(args: &[Vec<u8>]) -> Option<&'static str> {
+        args.iter()
+            .skip(2)
+            .any(|arg| arg.eq_ignore_ascii_case(b"IFEQ") || arg.eq_ignore_ascii_case(b"IFNE"))
+            .then_some(
+                "SET with IFEQ or IFNE compares the stored value against raw bytes on the server, which would compare against compressed data instead of the original value",
+            )
+    }
+
     /// Returns the command name as a string, if available.
+    ///
+    /// Note: this only contains the commands relevant to compression (see
+    /// `from_command_name` and `compression_incompatibility_reason`), not every
+    /// `RequestType` variant. Entries below `InvalidRequest`/`CustomCommand` are
+    /// ordered alphabetically by command name.
     pub fn command_name(self) -> Option<&'static str> {
         match self {
             RequestType::InvalidRequest => None,
             RequestType::CustomCommand => Some("CUSTOM"),
-            RequestType::Get => Some("GET"),
-            RequestType::Set => Some("SET"),
             RequestType::Append => Some("APPEND"),
-            RequestType::GetRange => Some("GETRANGE"),
-            RequestType::SetRange => Some("SETRANGE"),
-            RequestType::Strlen => Some("STRLEN"),
-            RequestType::LCS => Some("LCS"),
-            RequestType::Substr => Some("SUBSTR"),
-            RequestType::Incr => Some("INCR"),
-            RequestType::IncrBy => Some("INCRBY"),
-            RequestType::IncrByFloat => Some("INCRBYFLOAT"),
-            RequestType::Decr => Some("DECR"),
-            RequestType::DecrBy => Some("DECRBY"),
-            RequestType::GetBit => Some("GETBIT"),
-            RequestType::SetBit => Some("SETBIT"),
             RequestType::BitCount => Some("BITCOUNT"),
-            RequestType::BitPos => Some("BITPOS"),
             RequestType::BitField => Some("BITFIELD"),
             RequestType::BitFieldReadOnly => Some("BITFIELD_RO"),
             RequestType::BitOp => Some("BITOP"),
+            RequestType::BitPos => Some("BITPOS"),
+            RequestType::Decr => Some("DECR"),
+            RequestType::DecrBy => Some("DECRBY"),
+            RequestType::DelIfEq => Some("DELIFEQ"),
+            RequestType::Get => Some("GET"),
+            RequestType::GetBit => Some("GETBIT"),
+            RequestType::GetDel => Some("GETDEL"),
+            RequestType::GetEx => Some("GETEX"),
+            RequestType::GetRange => Some("GETRANGE"),
+            RequestType::GetSet => Some("GETSET"),
+            RequestType::Incr => Some("INCR"),
+            RequestType::IncrBy => Some("INCRBY"),
+            RequestType::IncrByFloat => Some("INCRBYFLOAT"),
+            RequestType::LCS => Some("LCS"),
             RequestType::MGet => Some("MGET"),
             RequestType::MSet => Some("MSET"),
             RequestType::MSetNX => Some("MSETNX"),
-            RequestType::SetEx => Some("SETEX"),
             RequestType::PSetEx => Some("PSETEX"),
+            RequestType::Set => Some("SET"),
+            RequestType::SetBit => Some("SETBIT"),
+            RequestType::SetEx => Some("SETEX"),
             RequestType::SetNX => Some("SETNX"),
-            RequestType::GetEx => Some("GETEX"),
-            RequestType::GetDel => Some("GETDEL"),
-            RequestType::GetSet => Some("GETSET"),
+            RequestType::SetRange => Some("SETRANGE"),
+            RequestType::Strlen => Some("STRLEN"),
+            RequestType::Substr => Some("SUBSTR"),
             _ => None, // For other commands, return None
         }
     }
@@ -983,38 +1008,39 @@ impl RequestType {
     pub fn from_command_name(name: &str) -> Option<Self> {
         match name.to_uppercase().as_str() {
             // Commands that support compression
-            "SET" => Some(RequestType::Set),
+            "GET" => Some(RequestType::Get),
+            "GETDEL" => Some(RequestType::GetDel),
+            "GETEX" => Some(RequestType::GetEx),
+            "GETSET" => Some(RequestType::GetSet),
+            "MGET" => Some(RequestType::MGet),
             "MSET" => Some(RequestType::MSet),
             "MSETNX" => Some(RequestType::MSetNX),
-            "SETEX" => Some(RequestType::SetEx),
             "PSETEX" => Some(RequestType::PSetEx),
+            "SET" => Some(RequestType::Set),
+            "SETEX" => Some(RequestType::SetEx),
             "SETNX" => Some(RequestType::SetNX),
-            "GET" => Some(RequestType::Get),
-            "MGET" => Some(RequestType::MGet),
-            "GETEX" => Some(RequestType::GetEx),
-            "GETDEL" => Some(RequestType::GetDel),
-            "GETSET" => Some(RequestType::GetSet),
             // Incompatible commands - string manipulation
             "APPEND" => Some(RequestType::Append),
+            "DELIFEQ" => Some(RequestType::DelIfEq),
             "GETRANGE" => Some(RequestType::GetRange),
+            "LCS" => Some(RequestType::LCS),
             "SETRANGE" => Some(RequestType::SetRange),
             "STRLEN" => Some(RequestType::Strlen),
-            "LCS" => Some(RequestType::LCS),
             "SUBSTR" => Some(RequestType::Substr),
             // Incompatible commands - numeric operations
+            "DECR" => Some(RequestType::Decr),
+            "DECRBY" => Some(RequestType::DecrBy),
             "INCR" => Some(RequestType::Incr),
             "INCRBY" => Some(RequestType::IncrBy),
             "INCRBYFLOAT" => Some(RequestType::IncrByFloat),
-            "DECR" => Some(RequestType::Decr),
-            "DECRBY" => Some(RequestType::DecrBy),
             // Incompatible commands - bit operations
-            "GETBIT" => Some(RequestType::GetBit),
-            "SETBIT" => Some(RequestType::SetBit),
             "BITCOUNT" => Some(RequestType::BitCount),
-            "BITPOS" => Some(RequestType::BitPos),
             "BITFIELD" => Some(RequestType::BitField),
             "BITFIELD_RO" => Some(RequestType::BitFieldReadOnly),
             "BITOP" => Some(RequestType::BitOp),
+            "BITPOS" => Some(RequestType::BitPos),
+            "GETBIT" => Some(RequestType::GetBit),
+            "SETBIT" => Some(RequestType::SetBit),
             // Unknown command - not relevant for compression
             _ => None,
         }
@@ -1127,6 +1153,7 @@ impl RequestType {
             RequestType::HPTtl => Some(cmd("HPTTL")),
             RequestType::HExpireTime => Some(cmd("HEXPIRETIME")),
             RequestType::HPExpireTime => Some(cmd("HPEXPIRETIME")),
+            RequestType::HGetDel => Some(cmd("HGETDEL")),
             RequestType::PTTL => Some(cmd("PTTL")),
             RequestType::ZRemRangeByRank => Some(cmd("ZREMRANGEBYRANK")),
             RequestType::Persist => Some(cmd("PERSIST")),
@@ -1157,6 +1184,7 @@ impl RequestType {
             RequestType::ZRemRangeByLex => Some(cmd("ZREMRANGEBYLEX")),
             RequestType::ZLexCount => Some(cmd("ZLEXCOUNT")),
             RequestType::Append => Some(cmd("APPEND")),
+            RequestType::DelIfEq => Some(cmd("DELIFEQ")),
             RequestType::SDiffStore => Some(cmd("SDIFFSTORE")),
             RequestType::SInter => Some(cmd("SINTER")),
             RequestType::SInterStore => Some(cmd("SINTERSTORE")),

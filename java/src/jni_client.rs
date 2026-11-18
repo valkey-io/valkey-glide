@@ -166,11 +166,10 @@ pub(crate) fn get_pending_map() -> &'static PendingMap {
     PENDING_CONFIGS.get_or_init(|| Arc::new(DashMap::new()))
 }
 
-/// Generate unique safe handle for JNI resource management
-static NEXT_HANDLE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-
+/// Allocate a JNI handle for an ordinary client. Draws from the shared
+/// `glide_core::pool::allocate_client_id` sequence (see its doc for why).
 pub fn generate_safe_handle() -> u64 {
-    NEXT_HANDLE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    glide_core::pool::allocate_client_id()
 }
 
 /// Create actual glide-core Valkey client with specified configuration
@@ -518,7 +517,11 @@ pub(crate) fn client_error_unless_timeout(err: ServerError, context: &'static st
     if err.is_timeout() {
         err
     } else {
-        ServerError::from((redis::ErrorKind::ClientError, context, err.to_string()))
+        ServerError::from((
+            redis::ErrorKind::ClientError,
+            context,
+            glide_core::errors::error_text(&err),
+        ))
     }
 }
 
@@ -1076,7 +1079,7 @@ pub fn complete_error_sync(
 
 #[cfg(test)]
 mod tests {
-    use super::{client_error_unless_timeout, serialize_array_to_bytes};
+    use super::{client_error_unless_timeout, generate_safe_handle, serialize_array_to_bytes};
     use glide_core::errors::{RequestErrorType, error_type};
     use redis::{RedisError, Value, parse_redis_value};
 
@@ -1093,6 +1096,25 @@ mod tests {
         assert_eq!(error_type(&err), RequestErrorType::Disconnect);
         let bridged = client_error_unless_timeout(err, "ctx");
         assert_eq!(error_type(&bridged), RequestErrorType::Unspecified);
+    }
+
+    #[test]
+    fn ordinary_handles_and_pooled_ids_never_collide() {
+        // Both allocators share one sequence (invariant on `allocate_client_id`).
+        use std::collections::HashSet;
+        let mut seen = HashSet::new();
+        for _ in 0..1000 {
+            let handle = generate_safe_handle();
+            assert!(
+                seen.insert(handle),
+                "generate_safe_handle produced a duplicate id: {handle}"
+            );
+            let pooled = glide_core::pool::allocate_client_id();
+            assert!(
+                seen.insert(pooled),
+                "allocate_client_id collided with an ordinary handle: {pooled}"
+            );
+        }
     }
 
     #[test]

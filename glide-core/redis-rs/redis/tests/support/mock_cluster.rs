@@ -48,9 +48,17 @@ impl MockConnectionBehavior {
         }
     }
 
+    /// `id` must be unique per live test: it keys the process-global mock registry.
     #[must_use]
     pub fn register_new(id: &str, handler: Handler) -> RemoveHandler {
-        get_behaviors().insert(id.to_string(), Self::new(id, handler));
+        let previous = get_behaviors().insert(id.to_string(), Self::new(id, handler));
+        // The behaviors map is process-global and `RemoveHandler::drop` evicts by name,
+        // so two live tests sharing a name would tear each other's handler down.
+        assert!(
+            previous.is_none(),
+            "mock connection behavior `{id}` is already registered; use a unique name per test \
+             (e.g. the test function name)"
+        );
         RemoveHandler(vec![id.to_string()])
     }
 
@@ -491,6 +499,15 @@ impl MockEnv {
         id: &str,
         handler: impl Fn(&[u8], u16) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
     ) -> Self {
+        Self::with_client_builder_and_behavior(client_builder, id, handler, |_| {})
+    }
+
+    pub fn with_client_builder_and_behavior(
+        client_builder: ClusterClientBuilder,
+        id: &str,
+        handler: impl Fn(&[u8], u16) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
+        configure: impl FnOnce(&mut MockConnectionBehavior),
+    ) -> Self {
         #[cfg(feature = "cluster-async")]
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_io()
@@ -503,6 +520,7 @@ impl MockEnv {
             &id,
             Arc::new(move |cmd, port| handler(cmd, port)),
         );
+        modify_mock_connection_behavior(&id, configure);
         let client = client_builder.build().unwrap();
         let connection = client.get_generic_connection(None).unwrap();
         #[cfg(feature = "cluster-async")]

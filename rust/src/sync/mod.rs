@@ -12,8 +12,8 @@
 //! (a running Tokio runtime) — doing so panics with tokio's "cannot block the
 //! current thread from within a runtime".
 
+use crate::AsyncTypedCommands;
 use crate::client::{GlideClient, GlideClusterClient};
-use crate::commands::prelude::*;
 use crate::config::{GlideClientConfiguration, GlideClusterClientConfiguration};
 use crate::executor::CustomCommand;
 use crate::pipeline_options::PipelineOptions;
@@ -100,6 +100,8 @@ impl SyncGlideClient {
         runtime().block_on(self.inner.custom_command(args))
     }
 
+    // TODO #7672: Return `ValkeyResult<Option<Vec<ValkeyValue>>>`
+    // with `None` for a transaction aborted by `WATCH`.
     /// Execute a [`crate::Pipeline`] with GLIDE execution options
     /// (blocking). See [`crate::GlideClient::exec`]; for plain
     /// typed execution prefer [`PipelineExt::query`].
@@ -114,7 +116,7 @@ impl SyncGlideClient {
 
     /// Blocking `PING`.
     pub fn ping(&self) -> ValkeyResult<String> {
-        runtime().block_on(self.inner.ping())
+        runtime().block_on(AsyncTypedCommands::ping(&self.inner))
     }
 }
 
@@ -172,6 +174,8 @@ impl SyncGlideClusterClient {
         )
     }
 
+    // TODO #7672: Return `ValkeyResult<Option<Vec<ValkeyValue>>>`
+    // with `None` for a transaction aborted by `WATCH`.
     /// Execute a [`crate::pipeline::Pipeline`] with GLIDE execution options,
     /// optionally routed (blocking). See
     /// [`crate::GlideClusterClient::exec`].
@@ -179,6 +183,7 @@ impl SyncGlideClusterClient {
         &self,
         pipeline: &crate::pipeline::Pipeline,
         raise_on_error: bool,
+        // TODO #7673: Accept only single-node routes.
         route: Option<crate::Route>,
         options: &PipelineOptions,
     ) -> ValkeyResult<Vec<ValkeyValue>> {
@@ -187,7 +192,7 @@ impl SyncGlideClusterClient {
 
     /// Blocking `PING`.
     pub fn ping(&self) -> ValkeyResult<String> {
-        runtime().block_on(self.inner.ping())
+        runtime().block_on(AsyncTypedCommands::ping(&self.inner))
     }
 }
 
@@ -195,12 +200,15 @@ impl SyncGlideClusterClient {
 
 macro_rules! impl_sync_command_dispatch {
     ($ty:ty) => {
-        impl crate::commands::core::Commands for $ty {
-            fn glide_send_command(&self, cmd: crate::cmd::Cmd) -> ValkeyResult<ValkeyValue> {
-                runtime().block_on(crate::commands::core::AsyncCommands::glide_send_command(
-                    &self.inner,
-                    cmd,
-                ))
+        #[::sealed::sealed]
+        impl crate::commands::core::SyncCommandDispatch for $ty {
+            fn glide_dispatch_command(&self, cmd: crate::cmd::Cmd) -> ValkeyResult<ValkeyValue> {
+                runtime().block_on(
+                    crate::commands::core::CommandDispatch::glide_dispatch_command(
+                        &self.inner,
+                        cmd,
+                    ),
+                )
             }
         }
     };

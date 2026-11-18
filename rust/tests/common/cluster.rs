@@ -120,6 +120,12 @@ impl ClusterHarness {
             shards.as_str(),
             "-r",
             replicas.as_str(),
+            // A short node timeout forms the cluster faster. It is safe only
+            // while no Rust test runs a Lua script long enough for the other
+            // nodes to fail over the busy primary; a test that needs a busy
+            // script must start its cluster without this flag.
+            "--cluster-node-timeout",
+            "2000",
         ]);
 
         if mtls {
@@ -335,8 +341,7 @@ pub fn is_transient_cluster_error(e: &glide::GlideError) -> bool {
 /// on a non-transient error, leaving the test to surface any real problem).
 async fn warm_up_cluster(client: &GlideClusterClient) {
     for attempt in 0..20u32 {
-        let mut ping = glide::Cmd::new();
-        ping.arg("PING");
+        let ping = glide::cmd("PING");
         match client.route_command(ping, Route::AllPrimaries).await {
             Ok(_) => return,
             Err(e) if is_transient_cluster_error(&e) => {

@@ -9,12 +9,10 @@ import java.util.Iterator;
 import java.util.Set;
 
 /**
- * A Set<byte[]> wrapper around Set<GlideString> that avoids the performance degradation of
- * HashSet<byte[]>.
- *
- * <p>byte[] arrays use identity hashCode, causing all entries to hash to the same bucket in a
- * HashSet, degrading performance to O(n). This wrapper keeps data as GlideString internally (which
- * has proper hashCode/equals implementations) and converts to byte[] only when accessed.
+ * A {@code Set<byte[]>} view over a {@code Set<GlideString>} that compares elements by content. A
+ * {@code HashSet<byte[]>} compares arrays by identity, so two arrays holding the same bytes are
+ * different members, whereas here {@code contains}, {@code equals} and {@code hashCode} all use the
+ * bytes.
  *
  * <p>This is an unmodifiable Set - all mutation operations throw UnsupportedOperationException.
  */

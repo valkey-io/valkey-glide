@@ -1,8 +1,9 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import List, Optional, Type, Union, get_args
+from typing import List, Mapping, Optional, Type, Union, get_args
 
 from glide_shared.commands.command_args import Limit, OrderBy
 from glide_shared.constants import TEncodable
@@ -46,7 +47,7 @@ class MonitorMsg:
 
 class ConditionalChange(Enum):
     """
-    A condition to the `SET`, `ZADD` and `GEOADD` commands.
+    A condition to the `SET`, `ZADD`, `GEOADD` and `HSETEX` commands.
     """
 
     ONLY_IF_EXISTS = "XX"
@@ -54,6 +55,12 @@ class ConditionalChange(Enum):
 
     ONLY_IF_DOES_NOT_EXIST = "NX"
     """ Only set key / add elements that does not already exist. Equivalent to `NX` in the Valkey API. """
+
+    def _to_args(self) -> List[TEncodable]:
+        """
+        Returns the condition as a list of command arguments.
+        """
+        return [self.value]
 
 
 class HashFieldConditionalChange(Enum):
@@ -69,18 +76,52 @@ class HashFieldConditionalChange(Enum):
 
 
 @dataclass
-class OnlyIfEqual:
+class ValueComparison(ABC):
     """
-    Change condition to the `SET` command,
-    For additional conditonal options see ConditionalChange
+    A condition that compares the current value of a key to a comparison value.
 
-    - comparison_value - value to compare to the current value of a key.
-
-    If comparison_value is equal to the key, it will overwrite the value of key to the new provided value
-    Equivalent to the IFEQ comparison-value in the Valkey API
+    Attributes:
+        comparison_value (TEncodable): The value to compare to the current value of a key.
     """
 
     comparison_value: TEncodable
+
+    @abstractmethod
+    def _to_args(self) -> List[TEncodable]:
+        """
+        Returns the condition as a list of command arguments.
+        """
+        pass
+
+
+class OnlyIfEqual(ValueComparison):
+    """
+    A condition that is met if the key exists and its current value is equal to the comparison value.
+    Used by the `SET` command. Equivalent to the `IFEQ comparison-value` in the Valkey API.
+
+    Not supported when compression is enabled. See
+    `Valkey GLIDE - Data Compression <https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands>`_.
+
+    Since: Valkey 8.1.0.
+    """
+
+    def _to_args(self) -> List[TEncodable]:
+        return ["IFEQ", self.comparison_value]
+
+
+class OnlyIfNotEqual(ValueComparison):
+    """
+    A condition that is met if the key does not exist or its current value is not equal to the comparison value.
+    Used by the `SET` command. Equivalent to the `IFNE comparison-value` in the Valkey API.
+
+    Not supported when compression is enabled. See
+    `Valkey GLIDE - Data Compression <https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands>`_.
+
+    Since: Valkey 9.2.0.
+    """
+
+    def _to_args(self) -> List[TEncodable]:
+        return ["IFNE", self.comparison_value]
 
 
 class ExpiryType(Enum):
@@ -142,56 +183,63 @@ class InfoSection(Enum):
     When no parameter is provided, the default option is assumed.
     """
 
-    SERVER = "server"
-    """ General information about the server """
+    ALL = "all"
+    """ Return all sections (excluding module generated ones) """
 
     CLIENTS = "clients"
     """ Client connections section """
 
-    MEMORY = "memory"
-    """ Memory consumption related information """
+    CLUSTER = "cluster"
+    """ Valkey Cluster section """
 
-    PERSISTENCE = "persistence"
-    """ RDB and AOF related information """
+    CLUSTER_INFO = "cluster_info"
+    """
+    Valkey Cluster information.
 
-    STATS = "stats"
-    """ General statistics """
-
-    REPLICATION = "replication"
-    """ Master/replica replication information """
-
-    CPU = "cpu"
-    """ CPU consumption statistics """
+    Since: Valkey 9.1.0.
+    """
 
     COMMAND_STATS = "commandstats"
     """ Valkey command statistics """
 
-    LATENCY_STATS = "latencystats"
-    """ Valkey command latency percentile distribution statistics """
-
-    SENTINEL = "sentinel"
-    """ Valkey Sentinel section (only applicable to Sentinel instances) """
-
-    CLUSTER = "cluster"
-    """ Valkey Cluster section """
-
-    MODULES = "modules"
-    """ Modules section """
-
-    KEYSPACE = "keyspace"
-    """ Database related statistics """
-
-    ERROR_STATS = "errorstats"
-    """ Valkey error statistics """
-
-    ALL = "all"
-    """ Return all sections (excluding module generated ones) """
+    CPU = "cpu"
+    """ CPU consumption statistics """
 
     DEFAULT = "default"
     """ Return only the default set of sections """
 
+    ERROR_STATS = "errorstats"
+    """ Valkey error statistics """
+
     EVERYTHING = "everything"
     """ Includes all and modules """
+
+    KEYSPACE = "keyspace"
+    """ Database related statistics """
+
+    LATENCY_STATS = "latencystats"
+    """ Valkey command latency percentile distribution statistics """
+
+    MEMORY = "memory"
+    """ Memory consumption related information """
+
+    MODULES = "modules"
+    """ Modules section """
+
+    PERSISTENCE = "persistence"
+    """ RDB and AOF related information """
+
+    REPLICATION = "replication"
+    """ Master/replica replication information """
+
+    SENTINEL = "sentinel"
+    """ Valkey Sentinel section (only applicable to Sentinel instances) """
+
+    SERVER = "server"
+    """ General information about the server """
+
+    STATS = "stats"
+    """ General statistics """
 
 
 class ExpireOptions(Enum):
@@ -287,7 +335,7 @@ class ExpirySet:
                 value = int(value.timestamp() * 1000)
         elif self.expiry_type == ExpiryType.KEEP_TTL:
             self.cmd_arg = "KEEPTTL"
-        self.value = str(value) if value else None
+        self.value = str(value) if value is not None else None
 
     def get_cmd_args(self) -> List[str]:
         return [self.cmd_arg] if self.value is None else [self.cmd_arg, self.value]
@@ -349,7 +397,7 @@ class ExpiryGetEx:
                 value = int(value.timestamp() * 1000)
         elif self.expiry_type == ExpiryTypeGetEx.PERSIST:
             self.cmd_arg = "PERSIST"
-        self.value = str(value) if value else None
+        self.value = str(value) if value is not None else None
 
     def get_cmd_args(self) -> List[str]:
         return [self.cmd_arg] if self.value is None else [self.cmd_arg, self.value]
@@ -368,8 +416,6 @@ class FlushMode(Enum):
 
     See [FLUSHALL](https://valkey.io/commands/flushall/) and [FUNCTION-FLUSH](https://valkey.io/commands/function-flush/)
     for details
-
-    SYNC was introduced in version 6.2.0.
     """
 
     ASYNC = "ASYNC"
@@ -406,6 +452,32 @@ class ClientPauseMode(Enum):
 
     WRITE = "WRITE"
     """ Pause client write commands. """
+
+
+def _build_hsetex_args(
+    key: TEncodable,
+    field_value_map: Mapping[TEncodable, TEncodable],
+    key_conditional_change: Optional[ConditionalChange] = None,
+    field_conditional_change: Optional[HashFieldConditionalChange] = None,
+    expiry: Optional[ExpirySet] = None,
+) -> List[TEncodable]:
+    args: List[TEncodable] = [key]
+
+    if key_conditional_change is not None:
+        args.append(key_conditional_change.value)
+
+    if field_conditional_change is not None:
+        args.append(field_conditional_change.value)
+
+    if expiry is not None:
+        args.extend(expiry.get_cmd_args())
+
+    args.extend(["FIELDS", str(len(field_value_map))])
+
+    for field, value in field_value_map.items():
+        args.extend([field, value])
+
+    return args
 
 
 def _build_sort_args(

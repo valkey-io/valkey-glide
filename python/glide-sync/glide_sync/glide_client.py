@@ -1,10 +1,14 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import collections
 import os
 import sys
 import threading
+import warnings
+import weakref
+from dataclasses import dataclass
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 if TYPE_CHECKING:
     from .isolated_scope import IsolatedScope
@@ -16,15 +20,25 @@ from glide_shared.config import (
     BaseClientConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
+    RdmaSetChecksum,
+    _is_async_callable,
 )
 from glide_shared.connection_request import _create_sync_connection_request
 from glide_shared.constants import OK, TEncodable, TResult
 from glide_shared.exceptions import (
     ClosingError,
     ConfigurationError,
+    RdmaError,
     RequestError,
+    get_connection_error_class,
     get_request_error_class,
 )
+from glide_shared.ffi_helpers import (
+    _is_credential_provider_executing,
+    create_credential_provider_callback,
+    handle_command_result,
+)
+from glide_shared.opentelemetry import _create_batch_span, _create_command_span
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import (
     AllNodes,
@@ -59,6 +73,29 @@ _EVALSHA_SPAN_NAME = _SYNC_FFI.ffi.new("char[]", b"EVALSHA")
 ENCODING = "utf-8"
 
 
+def _arg_buffer(arg: TEncodable) -> Tuple[Union[bytes, bytearray, memoryview], int]:
+    """
+    Return a command argument as a buffer for `ffi.from_buffer` and its length in bytes.
+
+    The buffer is passed to the FFI without copying. A `memoryview` is measured with
+    `nbytes`, because `len()` counts elements (or the first dimension of an N-D view),
+    not bytes.
+    """
+    if isinstance(arg, str):
+        encoded = arg.encode(ENCODING)
+        return encoded, len(encoded)
+    if isinstance(arg, (bytes, bytearray)):
+        return arg, len(arg)
+    if isinstance(arg, memoryview):
+        return arg, arg.nbytes
+    raise TypeError(f"Unsupported argument type: {type(arg)}")
+
+
+# Beginning of the message of a transfer cancelled by closing the client.
+# Must match glide-core's `rdma::protocol::CANCELLED`.
+_RDMA_CANCELLED = "RDMA transfer cancelled"
+
+
 # Enum values must match the Rust definition
 class FFIClientTypeEnum:
     Async = 0
@@ -89,6 +126,480 @@ def _slot_for_key(key: bytes) -> int:
     return crc % 16384
 
 
+@dataclass(frozen=True)
+class RdmaReadReceipt:
+    """
+    What the server reported about a completed read.
+
+    Attributes:
+        bytes_written (int): Bytes the server moved into the window.
+        checksum (Optional[int]): CRC-32c the server computed over those bytes.
+            The landed bytes have already been verified against it.
+    """
+
+    bytes_written: int
+    checksum: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class RdmaWindow:
+    """
+    The span of a registered region one transfer uses.
+
+    Attributes:
+        region (RdmaRegion): The region the window belongs to.
+        offset (int): Where the window starts within the region.
+        length (int): How many bytes it covers.
+    """
+
+    region: "RdmaRegion"
+    offset: int
+    length: int
+
+    def memoryview(self) -> memoryview:
+        """
+        A view of just this window for reading what a transfer landed or
+        staging what one will send.
+
+        Raises:
+            RdmaError: If the region has been closed.
+        """
+        return self.region.memoryview()[self.offset : self.offset + self.length]
+
+
+def _memory_span(memory: Any) -> Tuple[int, int]:
+    """The address range ``[start, end)`` that `memory`'s bytes occupy."""
+    ffi = _SYNC_FFI.ffi
+    view = memoryview(memory)
+    start = int(ffi.cast("uintptr_t", ffi.from_buffer(view)))
+    return start, start + view.nbytes
+
+
+class _RetainedRdmaMemory:
+    """
+    Caller memory the fabric still holds after its region was closed.
+
+    That happens when a transfer ended before the server was known to be done
+    with the memory on a provider where a write could still land (tcp), or when
+    the region failed to close.
+    The memory is kept referenced here so Python cannot free it until the
+    fabric reports it released. For a region that failed to close, that is never.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        # (lib, hold, memory, view, span) for each region whose memory is still
+        # held, where span is the memory's address range.
+        self._held: List[Tuple[Any, Any, Any, Any, Tuple[int, int]]] = []
+        # Entries kept by a region's finalizer, not yet moved into `_held`. A
+        # finalizer can run during any allocation, including one made while this
+        # thread holds `_lock`, so it must not take the lock. Appending to a
+        # deque is atomic, and every method below that reads `_held` moves these
+        # in first, under the lock.
+        self._pending: (
+            "collections.deque[Tuple[Any, Any, Any, Any, Tuple[int, int]]]"
+        ) = collections.deque()
+
+    def keep(self, lib, hold, memory, view, span: Tuple[int, int]) -> None:
+        with self._lock:
+            self._held.append((lib, hold, memory, view, span))
+
+    def keep_from_finalizer(
+        self, lib, hold, memory, view, span: Tuple[int, int]
+    ) -> None:
+        """:meth:`keep`, without taking the lock; see `_pending`."""
+        self._pending.append((lib, hold, memory, view, span))
+
+    def _take_pending_locked(self) -> None:
+        """Move what finalizers kept into `_held`. Call with `_lock` held."""
+        while True:
+            try:
+                self._held.append(self._pending.popleft())
+            except IndexError:
+                return
+
+    def release_what_is_free(self) -> None:
+        """Drop the references to memory the fabric has let go of."""
+        with self._lock:
+            self._take_pending_locked()
+            still_held = []
+            for entry in self._held:
+                lib, hold = entry[0], entry[1]
+                if lib.rdma_memory_released(hold):
+                    lib.free_rdma_memory_hold(hold)
+                else:
+                    still_held.append(entry)
+            self._held = still_held
+
+    def holds(self, memory: Any) -> bool:
+        """Whether `memory` is being kept here."""
+        with self._lock:
+            self._take_pending_locked()
+            return any(entry[2] is memory for entry in self._held)
+
+    def overlaps(self, span: Tuple[int, int]) -> bool:
+        """
+        Whether any byte of the address range `span` is in memory kept here.
+
+        Compares addresses, not objects, so a different view of a kept buffer,
+        or a slice of one, counts too.
+        """
+        self.release_what_is_free()
+        start, end = span
+        with self._lock:
+            self._take_pending_locked()
+            return any(
+                start < kept_end and kept_start < end
+                for (kept_start, kept_end) in (entry[4] for entry in self._held)
+            )
+
+    def released(self, hold) -> bool:
+        """Whether the fabric has let go of the memory `hold` kept."""
+        self.release_what_is_free()
+        with self._lock:
+            self._take_pending_locked()
+            return not any(entry[1] is hold for entry in self._held)
+
+
+_RETAINED_RDMA_MEMORY = _RetainedRdmaMemory()
+
+
+def _free_rdma_region(lib, ffi, region, memory, view, span: Tuple[int, int]):
+    """
+    Free `region` and return the hold the fabric hands back, or None.
+
+    A hold means the fabric still keeps the memory, so `memory` and `view` go to
+    ``_RETAINED_RDMA_MEMORY`` to keep Python from freeing it until the fabric
+    lets go.
+    """
+    hold = lib.free_rdma_region(region)
+    if hold == ffi.NULL:
+        hold = None
+    else:
+        _RETAINED_RDMA_MEMORY.keep(lib, hold, memory, view, span)
+    # Closing this region may have been what let the fabric go of others'.
+    _RETAINED_RDMA_MEMORY.release_what_is_free()
+    return hold
+
+
+def _finalize_rdma_region(lib, ffi, region, memory, view, span) -> None:
+    """
+    Free a region that was garbage-collected without being closed.
+
+    Unlike :func:`_free_rdma_region`, this takes no lock: a finalizer can run
+    while this thread already holds one, and would then wait on itself.
+    """
+    hold = lib.free_rdma_region(region)
+    if hold != ffi.NULL:
+        _RETAINED_RDMA_MEMORY.keep_from_finalizer(lib, hold, memory, view, span)
+    # Last, because a warnings filter can turn the warning into an exception
+    # (`-W error`), which would skip anything after it.
+    warnings.warn(
+        "an RdmaRegion was garbage-collected without being closed; close it, "
+        "or use it in a with block, to release its pinned pages promptly",
+        ResourceWarning,
+        stacklevel=2,
+    )
+
+
+class RdmaRegion:
+    """
+    Memory registered with the server for RDMA transfers.
+
+    The memory is the caller's: this holds a reference to it and registers it
+    with the client's fabric, but never copies or owns it. Register one
+    large region at start-up and address windows of it per transfer rather than
+    registering per operation.
+
+    The pages stay pinned until :meth:`close` is called, and the buffer must not
+    be resized or freed before then. The server writes into it at times the
+    caller does not control, so a transfer must not overlap any other use of the
+    same window.
+
+    Only one transfer may use a region at a time, even when each transfer uses
+    a different window. Threads that transfer concurrently each need their own
+    region, for example one per non-overlapping slice of the same buffer. A
+    transfer that finds the region already in use by another raises
+    ``RdmaError``, and so does :meth:`close` while a transfer is using it.
+
+    Create one with :meth:`BaseClient.register_rdma_region`. Close it with
+    :meth:`close`, or use it as a context manager. A region garbage-collected
+    without being closed is freed then, with a ``ResourceWarning``; until
+    then its pages stay pinned::
+
+        with client.register_rdma_region(bytearray(1 << 20)) as region:
+            client.rdma_set(b"key", region.window(0, 4096))
+
+    Handling a failed transfer: some failures leave the region usable, such as
+    a value too large for its window, a checksum mismatch, or a refusal from
+    the server. Others close it, because the server might still be using the
+    memory:
+
+    - the connection was lost while the transfer was in flight;
+    - the client was closed to cancel the transfer;
+    - the server's reply was neither a result nor an error, such as the
+      ``+QUEUED`` a server sends when another thread has a ``MULTI`` open on
+      this client, which means the server may still run the transfer on
+      ``EXEC``.
+
+    The error's class does not say which happened. For example, a handshake
+    that leaves the connection unusable raises ``ConnectionError`` but keeps
+    the region open, since the transfer was never sent, and the client
+    reconnects for the next one. So check :attr:`closed` after any error, and
+    register the memory again if the client is still open::
+
+        try:
+            receipt = client.rdma_get(key, region.window(offset, length))
+        except GlideError:
+            if region.closed and not client.closed:
+                region = client.register_rdma_region(slab)
+            raise
+
+    Whether to retry is left to the caller, since only the caller knows whether
+    sending a value again is safe. On efa-direct the same memory can be
+    registered again at once. GLIDE refuses it, raising ``RdmaError``, only
+    while it still holds the memory: on the tcp provider, which is for
+    development only, or after a failed deregistration. See
+    :attr:`memory_released`.
+    """
+
+    def __init__(self, client: "BaseClient", memory: Any, region):
+        # Both references keep the caller's allocation alive for as long as the
+        # server may write to it: the object itself, and the cdata view CFFI
+        # made of it.
+        self._memory = memory
+        self._view = client._ffi.from_buffer(memory)
+        try:
+            self._span = _memory_span(memory)
+            self._client = client
+            self._region = region
+            # The FFI registers exactly the bytes it is handed, so the region
+            # holds as many bytes as the memory spans.
+            self._capacity = self._span[1] - self._span[0]
+            # Set by `close` when the fabric still kept the memory.
+            self._hold = None
+            # Guards `_region` and `_busy`. Held only briefly, never for the
+            # length of a transfer, so closing the client can still cancel one.
+            self._lock = threading.Lock()
+            # Whether a transfer is using the region. The FFI frees the region
+            # in `free_rdma_region` and takes it exclusively for each transfer,
+            # so a second transfer or a close while this is set would corrupt
+            # memory.
+            self._busy = False
+            # Frees the region if this object is collected without `close`. Its
+            # arguments keep the caller's memory alive until then, so the memory
+            # is never freed while still registered. A transfer in flight keeps
+            # this object reachable, so the finalizer never runs under one.
+            # Skipped at interpreter exit, when the library may already be gone
+            # and the process's teardown releases the memory anyway.
+            #
+            # Keep this the last step that can fail. If construction raises
+            # before it, `register_rdma_region` frees the region, and a
+            # finalizer already attached would free it a second time.
+            self._finalizer = weakref.finalize(
+                self,
+                _finalize_rdma_region,
+                client._lib,
+                client._ffi,
+                region,
+                memory,
+                self._view,
+                self._span,
+            )
+            # A documented writable property that typeshed's stub leaves out.
+            self._finalizer.atexit = False  # type: ignore[misc]
+        except BaseException:
+            # The error's traceback keeps `_view` alive, through this half-built
+            # region and through the arguments of whatever call failed. If
+            # `memory` is a memoryview and the error ends up in a reference
+            # cycle, Python 3.9's garbage collector crashes freeing it while
+            # `_view` still holds an export on it. Releasing ends the export
+            # however many references remain. `register_rdma_region` keeps its
+            # own export if the fabric still holds the memory, so this one is
+            # not needed for that.
+            client._ffi.release(self._view)
+            raise
+
+    @property
+    def capacity(self) -> int:
+        """How many bytes were registered."""
+        return self._capacity
+
+    @property
+    def closed(self) -> bool:
+        """
+        Whether the region has been deregistered, by :meth:`close` or by a
+        transfer that ended before the server was known to be done with the
+        memory; see :class:`RdmaRegion`.
+        """
+        return self._region is None
+
+    @property
+    def memory_released(self) -> bool:
+        """
+        Whether the caller may reuse or free the registered memory.
+
+        False while the region is open. After it closes, False while GLIDE
+        still holds the memory because a write could still land in it: after
+        a transfer closed the region on the tcp provider, until the client and
+        all its regions are closed, or after a failed deregistration, for good.
+        True otherwise, which on efa-direct is as soon as the region closes.
+
+        Registering memory GLIDE still holds is refused, so a caller who only
+        wants to register the same memory again can try that and handle the
+        error rather than check this first.
+
+        Example:
+            >>> region.close()
+            >>> if not region.memory_released:
+            ...     slab = bytearray(len(slab))  # the old one may still be written
+        """
+        if not self.closed:
+            return False
+        return self._hold is None or _RETAINED_RDMA_MEMORY.released(self._hold)
+
+    def window(self, offset: int = 0, length: Optional[int] = None) -> RdmaWindow:
+        """
+        The span of this region a transfer should use.
+
+        Args:
+            offset (int): Where the window starts. Defaults to 0.
+            length (Optional[int]): How many bytes it covers. If not set, the
+                rest of the region from ``offset``.
+
+        Returns:
+            RdmaWindow: The window, to pass to ``rdma_get`` or ``rdma_set``.
+
+        Raises:
+            RdmaError: If the region is closed or the window runs outside it.
+
+        Example:
+            >>> region.window()            # the whole region
+            >>> region.window(4096, 1024)  # 1 KiB starting 4 KiB in
+        """
+        self._require_open()
+
+        if offset < 0:
+            raise RdmaError(f"offset must not be negative, got {offset}")
+        if offset > self._capacity:
+            raise RdmaError(
+                f"offset {offset} is past the end of a region of "
+                f"{self._capacity} bytes"
+            )
+
+        if length is None:
+            length = self._capacity - offset
+        elif length < 0:
+            raise RdmaError(f"length must not be negative, got {length}")
+        elif offset + length > self._capacity:
+            raise RdmaError(
+                f"window [{offset}, {offset + length}) runs past the end of a "
+                f"region of {self._capacity} bytes"
+            )
+
+        return RdmaWindow(self, offset, length)
+
+    def memoryview(self) -> memoryview:
+        """
+        A view of the registered memory as a span of bytes.
+
+        Raises:
+            RdmaError: If the region has been closed.
+        """
+        self._require_open()
+        return memoryview(self._memory).cast("B")
+
+    def close(self) -> None:
+        """
+        Deregister the memory and release the pinned pages.
+
+        The caller's buffer is not freed. Usually it can be reused or freed once
+        this returns. The exception is a region a transfer closed on the tcp
+        provider, or whose deregistration failed: a write may still land in it,
+        so GLIDE keeps the buffer referenced until the fabric is done with it,
+        and the caller should not reuse it either. On tcp that is once the
+        client and all its regions are closed; after a failed deregistration,
+        which is logged as an error, it is never. :attr:`memory_released` says
+        which. Closing twice is a no-op, so this is safe in a ``finally``.
+
+        This is not a way to cancel a transfer. To cancel one in flight, close
+        the client from another thread: the transfer then closes its region on
+        the way out, so closing it again is a no-op.
+
+        Raises:
+            RdmaError: If a transfer is using the region. Closing it then would
+                free the region under the transfer.
+        """
+        with self._lock:
+            if self._busy:
+                raise RdmaError(
+                    "this RDMA region is in use by a transfer, so it cannot be "
+                    "closed yet; close the client to cancel the transfer, which "
+                    "then closes the region itself"
+                )
+            self._close_locked()
+
+    def _close_locked(self) -> None:
+        """:meth:`close`, with `_lock` held and no transfer using the region."""
+        self._region = None
+        # `detach` hands back the finalizer's arguments only the first time,
+        # so the region is freed exactly once, by this or by the finalizer.
+        detached = self._finalizer.detach()
+        if detached is not None:
+            _, _, arguments, _ = detached
+            self._hold = _free_rdma_region(*arguments)
+        else:
+            _RETAINED_RDMA_MEMORY.release_what_is_free()
+        self._view = None
+        self._memory = None
+
+    def _require_open(self):
+        """The region pointer, or an error naming what went wrong."""
+        if self._region is None:
+            raise RdmaError("this RDMA region is closed")
+        return self._region
+
+    def _begin_transfer(self):
+        """
+        Mark the region in use by a transfer and return its pointer. Every call
+        must be paired with :meth:`_end_transfer`.
+        """
+        with self._lock:
+            if self._busy:
+                raise RdmaError(
+                    "this RDMA region is in use by another transfer; only one "
+                    "transfer may use a region at a time"
+                )
+            region = self._require_open()
+            self._busy = True
+            return region
+
+    def _end_transfer(self, close: bool) -> None:
+        """
+        Mark the transfer done, first closing the region if the transfer left
+        it unusable, so no other call can use the region in between.
+        """
+        with self._lock:
+            self._busy = False
+            if close:
+                self._close_locked()
+
+    def __enter__(self) -> "RdmaRegion":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc: Optional[BaseException],
+        tb: Optional[TracebackType],
+    ) -> None:
+        self.close()
+
+    def __repr__(self) -> str:
+        state = "closed" if self.closed else f"{self._capacity} bytes"
+        return f"RdmaRegion({state})"
+
+
 class BaseClient(CoreCommands):
 
     def __init__(self, config: BaseClientConfiguration):
@@ -103,10 +614,23 @@ class BaseClient(CoreCommands):
         self._pubsub_lock = threading.Lock()
         self._pubsub_condition = threading.Condition(self._pubsub_lock)
         self._pubsub_callback_ref = None  # Keep callback alive
+        self._credential_provider_callback_ref = None
+        self._credential_provider_callback_owner = None
+        self._core_client = self._ffi.NULL
         # Lock protecting _core_client and _is_closed for free-threading safety.
         # Under GIL builds this is a no-op (GIL serializes access).
         # Under free-threaded builds this prevents use-after-free on concurrent close.
         self._client_lock = threading.Lock()
+        # How many RDMA FFI calls are using `_core_client`. Guarded by
+        # `_client_lock`. `close` cannot free the native client under them, so
+        # it cancels their transfers instead and leaves the freeing to the last
+        # one out.
+        self._rdma_calls = 0
+        # The native client `close` left for the last RDMA call to free.
+        self._deferred_core_client = self._ffi.NULL
+        # The callbacks that native client can still call, kept until it is
+        # freed.
+        self._deferred_callback_refs: Tuple[Any, ...] = ()
 
         self._is_closed: bool = False
 
@@ -122,13 +646,37 @@ class BaseClient(CoreCommands):
         self._config = config
         self._is_closed = False
 
-        os.register_at_fork(after_in_child=self._create_core_client)
+        if hasattr(os, "register_at_fork"):
+            os.register_at_fork(after_in_child=self._create_core_client)
 
         self._create_core_client()
 
         return self
 
-    def _create_core_client(self):
+    def _create_core_client(self):  # noqa: C901
+        previous_owner = self._credential_provider_callback_owner
+        if previous_owner is not None:
+            previous_owner.close()
+        self._credential_provider_callback_owner = None
+        self._credential_provider_callback_ref = None
+        # After a fork, the child has none of the parent's threads, so none of
+        # the RDMA calls the parent had running will ever end here.
+        self._rdma_calls = 0
+        self._deferred_core_client = self._ffi.NULL
+        self._deferred_callback_refs = ()
+        credential_provider = None
+        if (
+            self._config.credentials is not None
+            and self._config.credentials.iam_config is not None
+        ):
+            credential_provider = (
+                self._config.credentials.iam_config.credential_provider
+            )
+        if credential_provider is not None and _is_async_callable(credential_provider):
+            raise ConfigurationError(
+                "The sync client does not support async credential providers; use the async client"
+            )
+
         # This check is needed in case a fork happens after the client already closed
         # In that case the registered fork function will kick in even if the
         # client already closed, and recreate it anyway.
@@ -185,42 +733,106 @@ class BaseClient(CoreCommands):
             # Store reference to prevent garbage collection
             self._address_resolver_callback_ref = address_resolver_callback
 
-        client_response_ptr = self._lib.create_client(
-            conn_req_bytes,
-            len(conn_req_bytes),
-            client_type,
-            pubsub_callback,
-            address_resolver_callback,
-            0,  # client_id is not used by the Python client
+        if credential_provider is None:
+            # Preserve the ordinary latest-main creation path exactly.
+            client_response_ptr = self._lib.create_client(
+                conn_req_bytes,
+                len(conn_req_bytes),
+                client_type,
+                pubsub_callback,
+                address_resolver_callback,
+                0,  # client_id is not used by the Python client
+            )
+
+            Logger.log(Level.INFO, "connection info", "new connection established")
+
+            # Handle the connection response
+            if client_response_ptr != self._ffi.NULL:
+                client_response = self._try_ffi_cast(
+                    "ConnectionResponse*", client_response_ptr
+                )
+                if client_response.conn_ptr != self._ffi.NULL:
+                    self._core_client = client_response.conn_ptr
+                else:
+                    error_message = (
+                        self._ffi.string(
+                            client_response.connection_error_message
+                        ).decode(ENCODING)
+                        if client_response.connection_error_message != self._ffi.NULL
+                        else "Unknown error"
+                    )
+                    error_class = get_connection_error_class(
+                        client_response.connection_error_type
+                    )
+                    self._lib.free_connection_response(client_response_ptr)
+                    raise error_class(error_message)
+
+                # Free the connection response to avoid memory leaks
+                self._lib.free_connection_response(client_response_ptr)
+
+                # Note: scope prewarm is deferred to first scoped_connection() call
+                # to avoid creating extra connections at client startup (which breaks
+                # lazy connection tests and connection count assertions).
+            else:
+                raise ClosingError("Failed to create client, response pointer is NULL.")
+            return
+
+        credential_callback, credential_owner = create_credential_provider_callback(
+            self._ffi,
+            credential_provider,
+            allow_async=False,
+            provider_owner=self,
         )
+        try:
+            client_response_ptr = self._lib.create_client_with_credential_provider(
+                conn_req_bytes,
+                len(conn_req_bytes),
+                client_type,
+                pubsub_callback,
+                address_resolver_callback,
+                credential_owner.callback_id,
+                credential_callback,
+            )
+        except BaseException:
+            credential_owner.close()
+            raise
 
         Logger.log(Level.INFO, "connection info", "new connection established")
 
-        # Handle the connection response
-        if client_response_ptr != self._ffi.NULL:
-            client_response = self._try_ffi_cast(
-                "ConnectionResponse*", client_response_ptr
-            )
-            if client_response.conn_ptr != self._ffi.NULL:
-                self._core_client = client_response.conn_ptr
-            else:
-                error_message = (
-                    self._ffi.string(client_response.connection_error_message).decode(
-                        ENCODING
-                    )
-                    if client_response.connection_error_message != self._ffi.NULL
-                    else "Unknown error"
-                )
-                raise ClosingError(error_message)
-
-            # Free the connection response to avoid memory leaks
-            self._lib.free_connection_response(client_response_ptr)
-
-            # Note: scope prewarm is deferred to first scoped_connection() call
-            # to avoid creating extra connections at client startup (which breaks
-            # lazy connection tests and connection count assertions).
-        else:
+        if client_response_ptr == self._ffi.NULL:
+            credential_owner.close()
             raise ClosingError("Failed to create client, response pointer is NULL.")
+
+        client_response = self._try_ffi_cast("ConnectionResponse*", client_response_ptr)
+        if client_response.conn_ptr == self._ffi.NULL:
+            error_message = (
+                self._ffi.string(client_response.connection_error_message).decode(
+                    ENCODING
+                )
+                if client_response.connection_error_message != self._ffi.NULL
+                else "Unknown error"
+            )
+            error_class = get_connection_error_class(
+                client_response.connection_error_type
+            )
+            credential_owner.close()
+            self._lib.free_connection_response(client_response_ptr)
+            raise error_class(error_message)
+
+        core_client = client_response.conn_ptr
+        self._lib.free_connection_response(client_response_ptr)
+        with self._client_lock:
+            if self._is_closed:
+                adopt_client = False
+            else:
+                self._core_client = core_client
+                self._credential_provider_callback_ref = credential_callback
+                self._credential_provider_callback_owner = credential_owner
+                adopt_client = True
+        if not adopt_client:
+            credential_owner.close()
+            self._lib.close_client(core_client)
+            raise ClosingError("Client was closed during native creation.")
 
     def _create_push_handle_callback(self):
         """Create the FFI pubsub callback function"""
@@ -404,19 +1016,14 @@ class BaseClient(CoreCommands):
         buffers = []  # Keep a reference to prevent premature garbage collection
 
         for arg in args:
-            if isinstance(arg, str):
-                arg_bytes = arg.encode(ENCODING)
-            elif isinstance(arg, (bytes, bytearray, memoryview)):
-                arg_bytes = arg
-            else:
-                raise TypeError(f"Unsupported argument type: {type(arg)}")
+            arg_bytes, arg_len = _arg_buffer(arg)
 
             # Use ffi.from_buffer for zero-copy conversion
             buffers.append(arg_bytes)  # Keep the byte buffer alive
             c_strings.append(
                 self._try_ffi_cast("size_t", self._ffi.from_buffer(arg_bytes))
             )
-            string_lengths.append(len(arg_bytes))
+            string_lengths.append(arg_len)
         # Return C-compatible arrays and keep buffers alive
         return (
             self._ffi.new("size_t[]", c_strings),
@@ -491,17 +1098,19 @@ class BaseClient(CoreCommands):
         if response_buffers is not None:
             self._validate_response_buffers(response_buffers)
 
-        # Create span if OpenTelemetry is configured and sampling indicates we should trace
+        # Sample before reading the caller's context. A sampled command span uses
+        # the active OTel span as its parent when one is available.
         from .opentelemetry import OpenTelemetry
 
         span = 0
         span_name_cstr = None
-        if OpenTelemetry.should_sample():
-            from glide_shared.protobuf.command_request_pb2 import RequestType
-
+        if OpenTelemetry.is_tracing_enabled() and OpenTelemetry.should_sample():
+            parent_ctx = OpenTelemetry._get_parent_span_context()
             command_name = RequestType.Name(request_type)
             span_name_cstr = self._ffi.new("char[]", command_name.encode())
-            span = self._lib.create_named_otel_span(span_name_cstr)
+            span = _create_command_span(
+                self._ffi, self._lib, span_name_cstr, parent_ctx
+            )
 
         try:
             # Convert the arguments to C-compatible pointers
@@ -617,6 +1226,19 @@ class BaseClient(CoreCommands):
         )
         return self._handle_cmd_result(result)
 
+    def _refresh_iam_token(self) -> TResult:
+        if self._is_closed:
+            raise ClosingError("Client is closed.")
+        client_adapter_ptr = self._core_client
+        if client_adapter_ptr == self._ffi.NULL:
+            raise ValueError("Invalid client pointer.")
+
+        result = self._lib.refresh_iam_token(
+            client_adapter_ptr,
+            0,  # Request ID (0 for sync use)
+        )
+        return self._handle_cmd_result(result)
+
     def _execute_batch(
         self,
         commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],  # type: ignore[override]
@@ -645,8 +1267,9 @@ class BaseClient(CoreCommands):
         from .opentelemetry import OpenTelemetry
 
         span = 0
-        if OpenTelemetry.should_sample():
-            span = self._lib.create_batch_otel_span()
+        if OpenTelemetry.is_tracing_enabled() and OpenTelemetry.should_sample():
+            parent_ctx = OpenTelemetry._get_parent_span_context()
+            span = _create_batch_span(self._ffi, self._lib, parent_ctx)
 
         try:
             # Note: batch_refs and option_refs must remain in scope
@@ -702,16 +1325,11 @@ class BaseClient(CoreCommands):
             arg_lengths = []
 
             for arg in args:
-                if isinstance(arg, str):
-                    arg_bytes = arg.encode(ENCODING)
-                elif isinstance(arg, (bytes, bytearray, memoryview)):
-                    arg_bytes = arg
-                else:
-                    raise TypeError(f"Unsupported argument type: {type(arg)}")
+                arg_bytes, arg_len = _arg_buffer(arg)
 
                 args_buffers.append(arg_bytes)
                 arg_ptrs.append(self._ffi.from_buffer(arg_bytes))
-                arg_lengths.append(len(arg_bytes))
+                arg_lengths.append(arg_len)
 
             c_arg_array = self._ffi.new("const uint8_t*[]", arg_ptrs)
             c_lengths = self._ffi.new("size_t[]", arg_lengths)
@@ -874,8 +1492,11 @@ class BaseClient(CoreCommands):
         from .opentelemetry import OpenTelemetry
 
         span = 0
-        if OpenTelemetry.should_sample():
-            span = self._lib.create_named_otel_span(_EVALSHA_SPAN_NAME)
+        if OpenTelemetry.is_tracing_enabled() and OpenTelemetry.should_sample():
+            parent_ctx = OpenTelemetry._get_parent_span_context()
+            span = _create_command_span(
+                self._ffi, self._lib, _EVALSHA_SPAN_NAME, parent_ctx
+            )
 
         try:
             result = self._lib.invoke_script(
@@ -1052,15 +1673,533 @@ class BaseClient(CoreCommands):
         )
         return self._handle_cmd_result(result)
 
+    @staticmethod
+    def rdma_available() -> bool:
+        """
+        Whether this build of GLIDE has RDMA compiled in.
+
+        A build from source without the RDMA feature returns false.
+
+        This says nothing about whether libfabric is on the machine.
+        For whether RDMA can actually happen here, use :meth:`rdma_usable`.
+
+        Returns:
+            bool: True if RDMA support is present in this build.
+
+        Example:
+            >>> BaseClient.rdma_available()
+            True
+        """
+        return bool(_SYNC_FFI.lib.rdma_available())
+
+    @staticmethod
+    def rdma_usable() -> bool:
+        """
+        Whether this build has RDMA support and can load a compatible libfabric
+        on this machine.
+
+        It does not look for fabric hardware, so creating an RDMA client can
+        still fail, for example with ``RdmaProvider.EfaDirect()`` on a machine
+        without an EFA device.
+
+        Returns:
+            bool: True if libfabric loads and this build supports RDMA.
+
+        Example:
+            >>> BaseClient.rdma_usable()
+            False
+        """
+        return bool(_SYNC_FFI.lib.rdma_usable())
+
+    def register_rdma_region(self, memory: Any) -> RdmaRegion:
+        """
+        Register memory so the server can transfer into or out of it directly.
+
+        The memory stays the caller's. Anything supporting the writable buffer
+        protocol works: a ``bytearray``, an ``mmap``, a NumPy array, a tensor's
+        backing store. It must not be resized or freed until the returned region
+        is closed.
+
+        Register one large region and address windows of it per transfer rather
+        than registering per operation.
+
+        Memory that GLIDE still holds from a closed region, which
+        :attr:`RdmaRegion.memory_released` reports, is refused, because a write
+        from that region's last transfer could still land in it. That includes
+        any other view or slice of the same bytes. On efa-direct this happens
+        only after a failed deregistration.
+
+        Args:
+            memory (Any): A writable, C-contiguous buffer to register.
+
+        Returns:
+            RdmaRegion: The registered region. Close when done with it.
+
+        Raises:
+            RdmaError: If this build has no RDMA support, the client was not
+                configured for RDMA, the memory is still held from a closed
+                region, or the fabric refused the registration.
+            ClosingError: If the client is closed.
+            TypeError: If the buffer is not writable and C-contiguous.
+
+        Example:
+            >>> region = client.register_rdma_region(bytearray(1 << 20))
+            >>> region.capacity
+            1048576
+        """
+        view = memoryview(memory)
+        if view.readonly:
+            raise TypeError("memory must be writable")
+        if not view.c_contiguous:
+            raise TypeError("memory must be C-contiguous")
+        span = _memory_span(view)
+        if _RETAINED_RDMA_MEMORY.overlaps(span):
+            raise RdmaError(
+                "this memory belongs to a closed RDMA region whose last transfer "
+                "could still write into it; register different memory"
+            )
+
+        client_adapter_ptr = self._begin_rdma_call()
+        buffer = self._ffi.from_buffer(view)
+        try:
+            registration = self._lib.register_rdma_region(
+                client_adapter_ptr, buffer, view.nbytes
+            )
+            if registration == self._ffi.NULL:
+                raise RdmaError(
+                    "Internal error: received NULL from register_rdma_region"
+                )
+            try:
+                if registration.error_message != self._ffi.NULL:
+                    raise RdmaError(
+                        self._ffi.string(registration.error_message).decode(ENCODING)
+                    )
+                region = registration.region
+                try:
+                    return RdmaRegion(self, memory, region)
+                except BaseException:
+                    # Until the RdmaRegion is built, nothing else will free the
+                    # region, so free it here instead of leaking its pinned pages.
+                    _free_rdma_region(
+                        self._lib, self._ffi, region, memory, buffer, span
+                    )
+                    raise
+            finally:
+                self._lib.free_rdma_registration(registration)
+        except BaseException:
+            # The error's traceback keeps this frame alive, and with it `view`.
+            # If the error ends up in a reference cycle, Python 3.9's garbage
+            # collector crashes freeing a memoryview that `buffer` still holds
+            # an export on, so let go of the export before the error leaves.
+            del buffer
+            raise
+        finally:
+            self._end_rdma_call()
+
+    def rdma_get(
+        self,
+        key: TEncodable,
+        window: RdmaWindow,
+    ) -> Optional[RdmaReadReceipt]:
+        """
+        Read a value directly into a window of registered memory.
+
+        Waits until the transfer completes. The bytes are in the window by the
+        time this returns. The value never travels in the RESP reply.
+
+        There is no timeout. The server moves the payload with a remote memory
+        operation that nothing can call off once it is posted, so giving up
+        early would leave the server writing into the window while the caller
+        believed it was free.
+
+        To cancel a transfer, call :meth:`close` on the client from another
+        thread. That first cuts the server off from every region the client
+        registered, then this call returns raising ``ClosingError``, unless
+        the server's reply was already arriving, in which case it returns as
+        usual. Bytes that landed before the close stay, so the window then
+        holds an unknown mix of old and new bytes. See :meth:`close` for the
+        rare case where the close cannot cancel the transfer.
+
+        A transfer that ends before the server is known to be done with the
+        memory closes the region, for example one cancelled that way or one
+        whose connection was lost. See :class:`RdmaRegion` for every case and
+        how to recover.
+
+        Args:
+            key (TEncodable): The key to read.
+            window (RdmaWindow): Where the value should land, from
+                :meth:`RdmaRegion.window`. The server is told the window's
+                length and refuses a larger value before writing anything, so
+                the bytes around the window are never touched.
+
+        Returns:
+            Optional[RdmaReadReceipt]: What the server transferred, or None if the
+            key does not exist. The landed bytes have already been verified
+            against the receipt's ``checksum``.
+
+        Raises:
+            RdmaError: If the region is closed, in use by another transfer, or
+                belongs to another client; a ``MULTI`` is open on this client;
+                the value was larger than the window (the region stays usable);
+                the landed bytes did not match the checksum; or the server
+                refused the transfer or its handshake.
+            ConnectionError: If the connection failed, or has to be replaced
+                because its handshake left it unusable. Check
+                ``region.closed``: the region stays open when the transfer was
+                never sent.
+            ClosingError: If the client is closed, including when it is closed
+                during the transfer to cancel it.
+            TypeError: If ``window`` is not an ``RdmaWindow``.
+
+        Example:
+            >>> receipt = client.rdma_get(b"key", region.window(4096, 4096))
+            >>> receipt.bytes_written if receipt else "missing"
+        """
+        c_key = self._to_c_key(key)
+        return self._rdma_transfer(
+            window,
+            lambda client, region: self._lib.rdma_get(
+                client, *c_key, region, window.offset, window.length
+            ),
+        )
+
+    def rdma_set(
+        self,
+        key: TEncodable,
+        window: RdmaWindow,
+        checksum: Union[
+            RdmaSetChecksum.Skip, RdmaSetChecksum.Compute, RdmaSetChecksum.Known
+        ] = RdmaSetChecksum.Skip(),
+    ) -> None:
+        """
+        Store a value the server reads directly out of a window of registered
+        memory.
+
+        As with ``rdma_get``, there is no timeout, closing the client from
+        another thread cancels the call, raising ``ClosingError``, and a
+        transfer that ends before the server is known to be done with the
+        memory closes the region. See :class:`RdmaRegion` for how to recover.
+
+        Args:
+            key (TEncodable): The key to write.
+            window (RdmaWindow): The bytes to send, from
+                :meth:`RdmaRegion.window`.
+            checksum: Whether the server checks the bytes it read against a
+                CRC-32c before storing them; see :class:`RdmaSetChecksum`.
+                Defaults to ``RdmaSetChecksum.Skip()``, which sends none.
+
+        Returns:
+            None. The server acknowledges without reporting a length, having
+            read exactly the number of bytes the command named. A short read
+            fails the transfer and raises instead.
+
+        Raises:
+            RdmaError: If the region is closed, in use by another transfer, or
+                belongs to another client; a ``MULTI`` is open on this client;
+                or the server refused the write or its handshake, including when
+                the bytes it read do not match the checksum. A refused write
+                stores nothing and leaves the region usable. If the region
+                closed instead, the outcome is unknown: for example, a write
+                the server queued inside another thread's ``MULTI`` may still
+                be stored on ``EXEC``.
+            ConnectionError: As for ``rdma_get``.
+            ClosingError: If the client is closed, including when it is closed
+                during the transfer to cancel it.
+            TypeError: If ``window`` is not an ``RdmaWindow``, or ``checksum``
+                is not an ``RdmaSetChecksum`` choice.
+            ValueError: If a known checksum is not an unsigned 32-bit integer.
+
+        Example:
+            >>> window = region.window(0, 11)
+            >>> window.memoryview()[:] = b"hello world"
+            >>> client.rdma_set(b"key", window, checksum=RdmaSetChecksum.Compute())
+        """
+        checksum_mode, checksum_value = self._rdma_set_checksum(checksum)
+        c_key = self._to_c_key(key)
+        self._rdma_transfer(
+            window,
+            lambda client, region: self._lib.rdma_set(
+                client,
+                *c_key,
+                region,
+                window.offset,
+                window.length,
+                checksum_mode,
+                checksum_value,
+            ),
+        )
+
+    @staticmethod
+    def rdma_checksum(data: Any) -> int:
+        """
+        CRC-32c of ``data``, the integrity check the RDMA protocol carries.
+
+        The same value the server computes, so a caller can verify what landed
+        after a read, or compute one before sending to pass to ``rdma_set`` as
+        ``RdmaSetChecksum.Known``. ``rdma_get`` verifies every read against the
+        checksum the server sends with its reply.
+
+        Args:
+            data (Any): Any bytes-like object.
+
+        Returns:
+            int: The CRC-32c, as an unsigned 32-bit integer.
+
+        Raises:
+            RdmaError: If this build has no RDMA support.
+
+        Example:
+            >>> GlideClient.rdma_checksum(b"123456789")
+            3808858755
+        """
+        ffi, lib = _SYNC_FFI.ffi, _SYNC_FFI.lib
+        # Check before `view` and `buffer` exist. An error raised while `buffer`
+        # holds an export on `view` keeps both alive in its traceback, and
+        # Python 3.9's garbage collector crashes if that error ends up in a
+        # reference cycle.
+        if not lib.rdma_available():
+            raise RdmaError(
+                "this build of GLIDE has no RDMA support compiled in, so it "
+                "cannot compute a transfer checksum"
+            )
+        view = memoryview(data)
+        out = ffi.new("uint32_t*")
+        buffer = ffi.from_buffer(view) if view.nbytes else ffi.NULL
+        if not lib.rdma_checksum(buffer, view.nbytes, out):
+            raise RdmaError("Internal error: rdma_checksum failed")
+        return int(out[0])
+
+    def _begin_rdma_call(self):
+        """
+        The client pointer for one RDMA FFI call, or an error naming what went
+        wrong. Until the matching `_end_rdma_call`, `close` will not free the
+        native client.
+        """
+        with self._client_lock:
+            if self._is_closed:
+                raise ClosingError(
+                    "Unable to execute requests; the client is closed. Please create a new client."
+                )
+            client_adapter_ptr = self._core_client
+            if client_adapter_ptr == self._ffi.NULL:
+                raise ValueError("Invalid client pointer.")
+            self._rdma_calls += 1
+            return client_adapter_ptr
+
+    def _end_rdma_call(self) -> None:
+        """
+        End a call `_begin_rdma_call` began, and free the native client if
+        `close` left that to the last call out and this is it.
+        """
+        with self._client_lock:
+            self._rdma_calls -= 1
+            core_client = self._deferred_core_client
+            if self._rdma_calls > 0 or core_client == self._ffi.NULL:
+                return
+            self._deferred_core_client = self._ffi.NULL
+            callback_refs = self._deferred_callback_refs
+            self._deferred_callback_refs = ()
+            owner = self._credential_provider_callback_owner
+            self._credential_provider_callback_owner = None
+        self._lib.close_client(core_client)
+        # Now that the native client is closed, nothing can call the callbacks
+        # or refresh the IAM token.
+        if owner is not None:
+            owner.close()
+        del callback_refs
+        # Closing the client may be what lets the fabric go of memory it held.
+        _RETAINED_RDMA_MEMORY.release_what_is_free()
+
+    def _to_c_key(self, key: TEncodable) -> Tuple[Any, int]:
+        """A key as a pointer and a length, with the bytes kept alive by CFFI."""
+        key_bytes = key.encode(ENCODING) if isinstance(key, str) else bytes(key)
+        return self._ffi.from_buffer(key_bytes), len(key_bytes)
+
+    def _rdma_set_checksum(self, checksum: Any) -> Tuple[Any, int]:
+        """The checksum mode and value ``rdma_set`` passes across the FFI."""
+        if isinstance(checksum, RdmaSetChecksum.Skip):
+            return self._lib.RDMA_SET_CHECKSUM_SKIP, 0
+        if isinstance(checksum, RdmaSetChecksum.Compute):
+            return self._lib.RDMA_SET_CHECKSUM_COMPUTE, 0
+        if isinstance(checksum, RdmaSetChecksum.Known):
+            value = checksum.value
+            if (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or not 0 <= value <= 0xFFFFFFFF
+            ):
+                raise ValueError(
+                    "a known checksum must be an unsigned 32-bit integer, "
+                    f"got {value!r}"
+                )
+            return self._lib.RDMA_SET_CHECKSUM_KNOWN, value
+        raise TypeError(
+            "checksum must be RdmaSetChecksum.Skip(), .Compute() or .Known(value), "
+            f"got {type(checksum).__name__}"
+        )
+
+    def _rdma_transfer(
+        self, window: RdmaWindow, call: Callable[[Any, Any], Any]
+    ) -> Optional[RdmaReadReceipt]:
+        """
+        Run one transfer through `window`'s region with `call`, which takes the
+        client and region pointers and makes the FFI call.
+
+        Refuses a window that is not one, or whose region belongs to another
+        client, then a closed client, then a region that is closed or already
+        in use. The region stays marked in use until the FFI call returns, and
+        is closed before it is released if the transfer left it unusable, so
+        ``region.closed`` says so.
+        """
+        if not isinstance(window, RdmaWindow):
+            raise TypeError(
+                "window must be an RdmaWindow from region.window(), got "
+                f"{type(window).__name__}"
+            )
+        region = window.region
+        if region._client is not self:
+            raise RdmaError(
+                "this region is registered with a different client, so this "
+                "client cannot transfer with it"
+            )
+        client_ptr = self._begin_rdma_call()
+        try:
+            region_ptr = region._begin_transfer()
+            region_closed = False
+            try:
+                result = call(client_ptr, region_ptr)
+                if result == self._ffi.NULL:
+                    raise RdmaError("Internal error: received NULL as an RDMA result")
+                region_closed = bool(result.region_closed)
+                return self._handle_rdma_result(result)
+            finally:
+                region._end_transfer(close=region_closed)
+        finally:
+            self._end_rdma_call()
+
+    def _handle_rdma_result(self, result) -> Optional[RdmaReadReceipt]:
+        """
+        Turn a non-null transfer result into a receipt and free it, raising on
+        failure.
+
+        None means the key was absent, meaning nothing was transferred and
+        the window is untouched.
+
+        A transfer cancelled by closing the client raises ``ClosingError``.
+        Any other failure keeps its own class even if the client was closed,
+        so a reply larger than the window or a checksum mismatch that happened
+        just before the close is still reported.
+        """
+        try:
+            if result.error_message != self._ffi.NULL:
+                message = self._ffi.string(result.error_message).decode(ENCODING)
+                if message.startswith(_RDMA_CANCELLED):
+                    raise ClosingError(message)
+                error_class = get_request_error_class(result.error_type)
+                if error_class is RequestError:
+                    error_class = RdmaError
+                raise error_class(message)
+            if not result.found:
+                return None
+            return RdmaReadReceipt(
+                bytes_written=int(result.bytes_written),
+                checksum=int(result.checksum) if result.has_checksum else None,
+            )
+        finally:
+            self._lib.free_rdma_result(result)
+
+    @property
+    def closed(self) -> bool:
+        """
+        Whether :meth:`close` has been called. A closed client refuses every
+        later command, registration, and transfer, so a new client is needed.
+        After a failed RDMA transfer this says whether the region can be
+        registered again on this client; see :class:`RdmaRegion`.
+
+        Example:
+            >>> client.close()
+            >>> client.closed
+            True
+        """
+        return self._is_closed
+
     def close(self) -> None:
+        """
+        Close the client. Closing twice is a no-op.
+
+        With RDMA, this also cancels every transfer in flight on another thread:
+        it cuts the server off from every region the client registered, and
+        each blocked ``rdma_get`` or ``rdma_set`` then raises ``ClosingError``,
+        unless its reply was already arriving, in which case it returns as
+        usual.
+
+        This returns without waiting for those calls. Close a region only after
+        every transfer call using it has returned; while one is still running,
+        :meth:`RdmaRegion.close` raises ``RdmaError``. A cancelled transfer
+        closes its own region on the way out, so there is usually nothing left
+        to close.
+
+        If deregistering a region fails, which takes a device or driver error
+        and is logged as an error, a transfer using it is not cancelled. It
+        keeps waiting until the server replies or the connection fails, since
+        the server could still reach the memory, and that memory is never
+        released; see :attr:`RdmaRegion.memory_released`.
+        """
+        if _is_credential_provider_executing(self):
+            raise RuntimeError(
+                "Cannot close a client from its own credential provider callback"
+            )
         with self._client_lock:
             if not self._is_closed:
                 self._is_closed = True
                 with self._pubsub_condition:
                     self._pubsub_condition.notify_all()
-                self._lib.close_client(self._core_client)
-                self._core_client = self._ffi.NULL
+                core_client = getattr(self, "_core_client", self._ffi.NULL)
+                if core_client != self._ffi.NULL:
+                    self._core_client = self._ffi.NULL
+                    if getattr(self, "_rdma_calls", 0) == 0:
+                        self._lib.close_client(core_client)
+                    else:
+                        # Freeing the native client now could free it under an
+                        # RDMA call on another thread. Cancel their transfers
+                        # instead, and let the last call out free it.
+                        self._deferred_core_client = core_client
+                        # It keeps delivering pubsub messages and refreshing
+                        # IAM tokens until it is freed, so its callbacks and
+                        # the credential owner must outlive it.
+                        self._deferred_callback_refs = (
+                            self._pubsub_callback_ref,
+                            self._credential_provider_callback_ref,
+                        )
+                        self._cancel_rdma(core_client)
                 self._pubsub_callback_ref = None
+                deferred = getattr(self, "_deferred_core_client", self._ffi.NULL)
+                if deferred == self._ffi.NULL:
+                    owner = getattr(self, "_credential_provider_callback_owner", None)
+                    if owner is not None:
+                        owner.close()
+                    self._credential_provider_callback_owner = None
+                self._credential_provider_callback_ref = None
+        # Closing the client may be what lets the fabric go of memory it held.
+        _RETAINED_RDMA_MEMORY.release_what_is_free()
+
+    def _cancel_rdma(self, core_client) -> None:
+        """
+        Revoke every region the client registered, which cancels every
+        transfer in flight on it, without freeing the native client.
+        """
+        error = self._lib.rdma_close_regions(core_client)
+        if error != self._ffi.NULL:
+            try:
+                message = self._ffi.string(error).decode(ENCODING)
+            finally:
+                self._lib.free_c_string(error)
+            Logger.log(
+                Level.ERROR,
+                "close",
+                "could not revoke every RDMA region, so a transfer may still be "
+                f"waiting: {message}",
+            )
 
     def __enter__(self) -> Self:
         return self
@@ -1094,18 +2233,24 @@ class BaseClient(CoreCommands):
         Args:
             timeout: Maximum seconds to wait for a scope connection (default 5.0).
             routing_key: In cluster mode, the key whose hash slot determines which
-                node the scope connects to. All keys used in the scope must hash to
-                the same slot. If None, defaults to slot 0.
+                node the scope connects to, and against which the scope's first
+                keyed command is validated (a command for a different slot is
+                rejected locally with CROSSSLOT). If None, the scope starts
+                unconstrained (slot 0 selects only the initial connection target):
+                the first keyed command may target any slot and pins the scope to
+                it, after which later keyed commands for a different slot receive
+                CROSSSLOT. In standalone mode this argument is ignored.
 
         Returns:
             An IsolatedScope instance.
 
         Raises:
             TimeoutError: If no scope is available within the timeout.
-            ClosingError: If the client is closed.
+            ConnectionError: If the client is closed while waiting.
+            RequestError: If the client's configuration cannot produce a
+                scoped connection.
+            ClosingError: If the client is already closed.
         """
-        import time
-
         from .isolated_scope import IsolatedScope
 
         if self._is_closed:
@@ -1115,45 +2260,34 @@ class BaseClient(CoreCommands):
         client_id = int(self._ffi.cast("uintptr_t", self._core_client))
         conn_req_bytes = self._conn_req_bytes
 
-        # Compute routing slot from key
-        if routing_key is not None:
-            routing_slot = _slot_for_key(routing_key.encode("utf-8"))
-        else:
-            routing_slot = 0
+        # Compute routing slot from key. Presence is carried separately so a
+        # cluster scope with no routing key stays unconstrained (any primary)
+        # rather than being pinned to slot 0, which is a real slot.
+        has_routing_slot = routing_key is not None
+        routing_slot = (
+            _slot_for_key(routing_key.encode("utf-8")) if routing_key is not None else 0
+        )
 
-        deadline = time.monotonic() + timeout
-        backoff = 0.01  # Start at 10ms (first scope needs ~500ms for TCP connect)
-
-        # One logical acquire: one stable token across the retry loop, so the core
-        # dedupes this acquire's retries without serializing distinct borrowers.
-        attempt_token = self._lib.glide_scope_next_attempt_token()
-
-        while True:
-            buf = self._ffi.from_buffer(conn_req_bytes)
-            scope_id = self._lib.glide_scope_try_acquire(
-                client_id,
-                self._ffi.cast("const uint8_t*", buf),
-                len(conn_req_bytes),
-                routing_slot,
-                attempt_token,
-            )
-
-            if scope_id >= 0:
-                return IsolatedScope(
-                    scope_id,
-                    client_id,
-                    _SYNC_FFI,
-                    self._parse_scope_response,
-                )
-
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise TimeoutError(
-                    "Timed out waiting for isolated scope (pool exhausted)"
-                )
-
-            time.sleep(min(backoff, remaining))
-            backoff = min(backoff * 2, 0.5)  # Cap at 500ms
+        buf = self._ffi.from_buffer(conn_req_bytes)
+        result = self._lib.glide_scope_acquire_blocking(
+            client_id,
+            self._ffi.cast("const uint8_t*", buf),
+            len(conn_req_bytes),
+            has_routing_slot,
+            routing_slot,
+            # uint64_t on the FFI side: a negative value would raise OverflowError
+            # instead of the documented TimeoutError. Negative means no wait.
+            max(0, int(timeout * 1000)),
+        )
+        scope_id = handle_command_result(
+            self._ffi, self._lib, result, lambda resp: resp.int_value
+        )
+        return IsolatedScope(
+            scope_id,
+            client_id,
+            _SYNC_FFI,
+            self._parse_scope_response,
+        )
 
     def _parse_scope_response(self, response_ptr) -> Optional[str]:  # noqa: C901
         """Parse a CommandResponse pointer from a scope execution into a Python string."""

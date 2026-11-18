@@ -88,12 +88,18 @@ async fn function_delete_and_flush() {
 // ---- FUNCTION / SCRIPT management variants ----
 
 #[tokio::test]
-async fn function_flush_mode_encoding() {
+async fn function_flush_options_encoding() {
     let m = Mock::ok();
-    m.function_flush_mode(crate::commands::options::FlushMode::Async)
+    m.function_flush_options(&crate::FunctionFlushOptions::default())
         .await
         .unwrap();
     m.assert_args(&["FUNCTION", "FLUSH", "ASYNC"]);
+
+    let m = Mock::ok();
+    m.function_flush_options(&crate::FunctionFlushOptions::default().blocking(true))
+        .await
+        .unwrap();
+    m.assert_args(&["FUNCTION", "FLUSH", "SYNC"]);
 }
 
 #[tokio::test]

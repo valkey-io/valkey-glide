@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 //! DNS resolution tests.
-//! See [DNS Tests](../README.md#dns-tests) for setup instructions.
+//! See [DNS Tests](../DEVELOPER.md#dns-tests) for setup instructions.
 
 mod constants;
 mod utilities;

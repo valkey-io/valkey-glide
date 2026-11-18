@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * Umbrella base for Valkey GLIDE Jedis compatibility facades.
  *
- * <p>Both the classic {@link Jedis} implementation path ({@link AbstractGlideJedis}) and the
+ * <p>Both the classic {@code Jedis} implementation path ({@link AbstractGlideJedis}) and the
  * unified standalone/cluster path ({@link AbstractUnifiedJedis}) extend this type so callers,
  * tests, or adapters can treat them under one supertype (e.g. {@code instance of JedisCommon})
  * while sharing layer-discrimination hooks.
@@ -22,12 +22,16 @@ public abstract class JedisCommon implements Closeable {
      * {@code true} when this instance follows Jedis 5.x-shaped compatibility semantics; {@code false}
      * for Jedis 4.x-shaped semantics (encoding, {@code SELECT}/{@code CLIENT} behavior, protocol
      * mapping, cluster scan paths, etc.).
+     *
+     * @return {@code true} for the Jedis 5.x-shaped layer, {@code false} for the Jedis 4.x-shaped one
      */
     protected abstract boolean isJedis5CompatibilityLayer();
 
     /**
      * Charset used for binary/string conversions where the Jedis 4.x and 5.x layers intentionally
      * differ (Jedis 5-shaped uses the platform default; Jedis 4-shaped uses UTF-8).
+     *
+     * @return the platform default charset on the Jedis 5-shaped layer, UTF-8 on the 4-shaped one
      */
     protected Charset jedisBinaryCharset() {
         return isJedis5CompatibilityLayer() ? Charset.defaultCharset() : StandardCharsets.UTF_8;

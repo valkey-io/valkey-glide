@@ -51,7 +51,7 @@ run-name: ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && 
 jobs:
     test-modules-linux:
         name: Modules Tests (Linux)
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 35
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -78,7 +78,6 @@ jobs:
               with:
                   path: |
                       node/rust-client/target
-                      glide-core/src/generated
                   key: x86_64-unknown-linux-gnu-node
                   restore-keys: |
                       x86_64-unknown-linux-gnu-glide-core
@@ -115,7 +114,7 @@ jobs:
 
         steps:
             - name: Setup self-hosted runner access
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+              run: sudo chown -R "$USER:$USER" /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -128,7 +127,6 @@ jobs:
               with:
                   path: |
                       node/rust-client/target
-                      glide-core/src/generated
                   key: aarch64-unknown-linux-gnu-node
                   restore-keys: |
                       aarch64-unknown-linux-gnu-glide-core

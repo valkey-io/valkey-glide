@@ -1,4 +1,3 @@
-#![allow(unknown_lints, dependency_on_unit_never_type_fallback)]
 #![cfg(feature = "cluster-async")]
 mod support;
 
@@ -32,13 +31,86 @@ mod cluster_async {
             MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
         },
         cluster_topology::{get_slot, DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES},
-        cmd, fenced_cmd, from_owned_redis_value, parse_redis_value, AsyncCommands, Cmd,
-        ConnectionAddr, ErrorKind, FromRedisValue, GlideConnectionOptions, InfoDict,
+        cmd, fenced_cmd, from_owned_redis_value, parse_redis_value, AddressResolver, AsyncCommands,
+        Cmd, ConnectionAddr, ErrorKind, FromRedisValue, GlideConnectionOptions, InfoDict,
         IntoConnectionInfo, PipelineRetryStrategy, ProtocolVersion, RedisError, RedisFuture,
         RedisResult, Value,
     };
 
     use crate::support::*;
+
+    #[derive(Debug)]
+    struct NonIdempotentRedirectResolver {
+        resolved_name: &'static str,
+        redirect_resolutions: Arc<atomic::AtomicUsize>,
+    }
+
+    impl AddressResolver for NonIdempotentRedirectResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            if port != 6380 {
+                return (host.to_owned(), port);
+            }
+
+            let call = self
+                .redirect_resolutions
+                .fetch_add(1, atomic::Ordering::SeqCst);
+            if host == "internal-node" && call == 0 {
+                (self.resolved_name.to_owned(), port)
+            } else {
+                (self.resolved_name.to_owned(), 6381)
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    struct PipelineAskResolver {
+        resolved_name: &'static str,
+        redirect_resolutions: Arc<atomic::AtomicUsize>,
+        raw_redirect_seen: Arc<atomic::AtomicBool>,
+    }
+
+    #[derive(Debug)]
+    struct TopologyRewriteResolver {
+        resolved_name: &'static str,
+        raw_address_resolutions: Arc<atomic::AtomicUsize>,
+        redirect_calls: Arc<atomic::AtomicUsize>,
+        canonical_calls: Arc<atomic::AtomicUsize>,
+    }
+
+    impl AddressResolver for TopologyRewriteResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            if host == self.resolved_name && port == 6379 {
+                self.raw_address_resolutions.fetch_add(1, Ordering::SeqCst);
+                (self.resolved_name.to_owned(), 6380)
+            } else if host == "internal-node" && port == 6381 {
+                self.redirect_calls.fetch_add(1, Ordering::SeqCst);
+                (self.resolved_name.to_owned(), 6381)
+            } else if host == self.resolved_name && matches!(port, 6380 | 6381) {
+                self.canonical_calls.fetch_add(1, Ordering::SeqCst);
+                (self.resolved_name.to_owned(), port)
+            } else {
+                (host.to_owned(), port)
+            }
+        }
+    }
+
+    impl AddressResolver for PipelineAskResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            if host == "internal-node" {
+                self.redirect_resolutions.fetch_add(1, Ordering::SeqCst);
+                self.raw_redirect_seen.store(true, Ordering::SeqCst);
+                (self.resolved_name.to_owned(), port)
+            } else if host == self.resolved_name
+                && port == 6382
+                && self.raw_redirect_seen.load(Ordering::SeqCst)
+            {
+                (self.resolved_name.to_owned(), 6399)
+            } else {
+                (host.to_owned(), port)
+            }
+        }
+    }
+
     fn broken_pipe_error() -> RedisError {
         RedisError::from(std::io::Error::new(
             std::io::ErrorKind::BrokenPipe,
@@ -46,8 +118,24 @@ mod cluster_async {
         ))
     }
 
-    const SPANS_JSON: &str = "/tmp/spans.json";
-    const METRICS_JSON: &str = "/tmp/metrics.json";
+    // The OpenTelemetry exporter is a process singleton, so its output files are
+    // scoped to the process too: per-test files would not match what it writes.
+    fn otel_dir() -> &'static std::path::Path {
+        static DIR: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+        DIR.get_or_init(|| {
+            tempfile::Builder::new()
+                .prefix("glide-otel")
+                .tempdir()
+                .expect("failed to create OpenTelemetry output dir")
+        })
+        .path()
+    }
+    fn spans_json() -> PathBuf {
+        otel_dir().join("spans.json")
+    }
+    fn metrics_json() -> PathBuf {
+        otel_dir().join("metrics.json")
+    }
     // const SPANS_CLOUDWATCH: &str = "http://localhost:4318/v1/traces";
     // const METRICS_CLOUDWATCH: &str = "http://localhost:4318/v1/metrics";
     const PUBLISH_TIME: u64 = 2000;
@@ -58,12 +146,10 @@ mod cluster_async {
         let config = GlideOpenTelemetryConfigBuilder::default()
             .with_flush_interval(Duration::from_millis(PUBLISH_TIME))
             .with_trace_exporter(
-                GlideOpenTelemetrySignalsExporter::File(PathBuf::from(SPANS_JSON)),
+                GlideOpenTelemetrySignalsExporter::File(spans_json()),
                 Some(100),
             )
-            .with_metrics_exporter(GlideOpenTelemetrySignalsExporter::File(PathBuf::from(
-                METRICS_JSON,
-            )))
+            .with_metrics_exporter(GlideOpenTelemetrySignalsExporter::File(metrics_json()))
             .build();
         if let Err(e) = GlideOpenTelemetry::initialise(config) {
             panic!("Failed to initialize OpenTelemetry: {e}");
@@ -156,7 +242,7 @@ mod cluster_async {
 
     fn read_latest_metrics_json() -> serde_json::Value {
         let file_content =
-            std::fs::read_to_string(METRICS_JSON).expect("Failed to read metrics JSON file");
+            std::fs::read_to_string(metrics_json()).expect("Failed to read metrics JSON file");
         let lines: Vec<&str> = file_content
             .lines()
             .filter(|l| !l.trim().is_empty())
@@ -178,7 +264,7 @@ mod cluster_async {
     }
 
     fn get_start_value(metric_name: &str) -> u64 {
-        let file_content = match std::fs::read_to_string(METRICS_JSON) {
+        let file_content = match std::fs::read_to_string(metrics_json()) {
             Ok(content) => content,
             Err(_) => return 0, // File not found or unreadable
         };
@@ -209,7 +295,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_basic_cmd() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -232,11 +318,11 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     fn test_async_open_telemetry_moved_command() {
         let rt = shared_runtime();
         rt.block_on(async {
-            let _ = std::fs::remove_file(METRICS_JSON);
+            let _ = std::fs::remove_file(metrics_json());
             init_otel().await.unwrap();
 
             sleep(Duration::from_millis(PUBLISH_TIME + 100).into()).await;
@@ -308,11 +394,11 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     fn test_async_open_telemetry_moved_pipeline_atomic() {
         let rt = shared_runtime();
         rt.block_on(async {
-            let _ = std::fs::remove_file(METRICS_JSON);
+            let _ = std::fs::remove_file(metrics_json());
             init_otel().await.unwrap();
 
             sleep(Duration::from_millis(PUBLISH_TIME + 100).into()).await;
@@ -397,11 +483,11 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     fn test_async_open_telemetry_moved_pipeline_non_atomic() {
         let rt = shared_runtime();
         rt.block_on(async {
-            let _ = std::fs::remove_file(METRICS_JSON);
+            let _ = std::fs::remove_file(metrics_json());
             init_otel().await.unwrap();
 
             sleep(Duration::from_millis(PUBLISH_TIME + 100).into()).await;
@@ -483,11 +569,11 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     fn test_async_open_telemetry_retry_pipeline_atomic() {
         let rt = shared_runtime();
         rt.block_on(async {
-            let _ = std::fs::remove_file(METRICS_JSON);
+            let _ = std::fs::remove_file(metrics_json());
             init_otel().await.unwrap();
 
             sleep(Duration::from_millis(PUBLISH_TIME + 100).into()).await;
@@ -580,11 +666,11 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     fn test_async_open_telemetry_retry_pipeline_non_atomic() {
         let rt = shared_runtime();
         rt.block_on(async {
-            let _ = std::fs::remove_file(METRICS_JSON);
+            let _ = std::fs::remove_file(metrics_json());
             init_otel().await.unwrap();
 
             sleep(Duration::from_millis(PUBLISH_TIME + 100).into()).await;
@@ -689,7 +775,7 @@ mod cluster_async {
     /// Helper to read the spans file and find a span by name.
     fn read_span_from_file(span_name: &str) -> serde_json::Value {
         let file_content =
-            std::fs::read_to_string(SPANS_JSON).expect("Failed to read spans JSON file");
+            std::fs::read_to_string(spans_json()).expect("Failed to read spans JSON file");
         file_content
             .lines()
             .filter(|l| !l.trim().is_empty())
@@ -711,11 +797,11 @@ mod cluster_async {
     /// Sends two commands to different cluster nodes and verifies that each span's
     /// `server.port` reflects the actual routed node, not a fixed initial value.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     fn test_async_open_telemetry_cluster_routed_node_address() {
         let rt = shared_runtime();
         rt.block_on(async {
-            let _ = std::fs::remove_file(SPANS_JSON);
+            let _ = std::fs::remove_file(spans_json());
             init_otel().await.unwrap();
 
             let cluster = TestClusterContext::new(3, 0);
@@ -801,11 +887,11 @@ mod cluster_async {
 
     /// Same as the command test but for pipelines.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     fn test_async_open_telemetry_cluster_routed_node_address_pipeline() {
         let rt = shared_runtime();
         rt.block_on(async {
-            let _ = std::fs::remove_file(SPANS_JSON);
+            let _ = std::fs::remove_file(spans_json());
             init_otel().await.unwrap();
 
             let cluster = TestClusterContext::new(3, 0);
@@ -891,17 +977,20 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_routing_by_slot_to_replica_with_az_affinity_strategy_to_half_replicas() {
         test_az_affinity_helper(StrategyVariant::Replicas).await;
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_routing_by_slot_to_replica_with_az_affinity_replicas_and_primary_strategy_to_half_replicas(
     ) {
         test_az_affinity_helper(StrategyVariant::ReplicasAndPrimary).await;
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_routing_by_slot_to_replica_with_az_affinity_all_nodes_strategy_to_half_replicas()
     {
         test_az_affinity_helper(StrategyVariant::AllNodes).await;
@@ -1013,16 +1102,19 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_az_affinity_strategy_to_all_replicas() {
         test_all_replicas_helper(StrategyVariant::Replicas).await;
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_az_affinity_replicas_and_primary_to_all_replicas() {
         test_all_replicas_helper(StrategyVariant::ReplicasAndPrimary).await;
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_az_affinity_all_nodes_to_all_nodes() {
         test_all_replicas_helper(StrategyVariant::AllNodes).await;
     }
@@ -1130,6 +1222,7 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_az_affinity_replicas_and_primary_prefers_local_primary() {
         // Skip test if version is less than Valkey 8.0
         if engine_version_less_than("8.0").await {
@@ -1236,6 +1329,7 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_az_affinity_all_nodes_splits_reads_between_local_primary_and_replica() {
         // Skip test if version is less than Valkey 8.0
         if engine_version_less_than("8.0").await {
@@ -1351,6 +1445,7 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_az_affinity_all_nodes_replica_required_reads_stay_on_replicas() {
         // Skip test if version is less than Valkey 8.0
         if engine_version_less_than("8.0").await {
@@ -1478,6 +1573,7 @@ mod cluster_async {
     }
 
     #[tokio::test]
+    #[serial_test::parallel(otel)]
     async fn test_az_affinity_all_nodes_cluster_scan_stays_on_replicas() {
         // Skip test if version is less than Valkey 8.0
         if engine_version_less_than("8.0").await {
@@ -1590,7 +1686,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_basic_eval() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -1610,7 +1706,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_route_flush_to_specific_node() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -1646,7 +1742,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_route_flush_to_node_by_address() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -1687,7 +1783,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_route_info_to_nodes() {
         let cluster = TestClusterContext::new(12, 1);
 
@@ -1767,7 +1863,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_resp3() {
         if use_protocol() == ProtocolVersion::RESP2 {
             return;
@@ -1807,7 +1903,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_basic_pipe() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -1827,7 +1923,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_multi_shard_commands() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -1846,7 +1942,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_basic_failover() {
         block_on_all(async move {
             test_failover(&TestClusterContext::new(6, 1), 10, 123, false).await;
@@ -2040,7 +2136,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_error_in_inner_connection() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -2065,7 +2161,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_can_connect_to_server_that_sends_cluster_slots_without_host_name() {
         let name =
             "test_async_cluster_can_connect_to_server_that_sends_cluster_slots_without_host_name";
@@ -2101,7 +2197,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_can_connect_to_server_that_sends_cluster_slots_with_null_host_name() {
         let name =
             "test_async_cluster_can_connect_to_server_that_sends_cluster_slots_with_null_host_name";
@@ -2134,7 +2230,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_cannot_connect_to_server_with_unknown_host_name() {
         let name = "test_async_cluster_cannot_connect_to_server_with_unknown_host_name";
         let handler = move |cmd: &[u8], _| {
@@ -2165,7 +2261,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_can_connect_to_server_that_sends_cluster_slots_with_partial_nodes_with_unknown_host_name(
     ) {
         let name = "test_async_cluster_can_connect_to_server_that_sends_cluster_slots_with_partial_nodes_with_unknown_host_name";
@@ -2211,7 +2307,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_retries() {
         let name = "tryagain";
 
@@ -2244,7 +2340,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_tryagain_exhaust_retries() {
         let name = "tryagain_exhaust_retries";
 
@@ -2302,7 +2398,7 @@ mod cluster_async {
         }
     }
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_move_error_when_new_node_is_added() {
         let name = "rebuild_with_extra_nodes";
 
@@ -2381,13 +2477,409 @@ mod cluster_async {
         assert_eq!(value, Ok(Some(123)));
     }
 
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_uncached_moved_resolves_address_once() {
+        let name = "test_async_cluster_uncached_moved_resolves_address_once";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let requests_clone = requests.clone();
+        let redirect_resolutions = Arc::new(atomic::AtomicUsize::new(0));
+        let retry_port = Arc::new(atomic::AtomicU16::new(0));
+        let retry_port_clone = retry_port.clone();
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
+                NonIdempotentRedirectResolver {
+                    resolved_name: name,
+                    redirect_resolutions: redirect_resolutions.clone(),
+                },
+            )),
+            name,
+            move |cmd: &[u8], port| {
+                respond_startup(name, cmd)?;
+
+                let count = requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                match (port, count) {
+                    (6379, 0) => Err(parse_redis_value(b"-MOVED 14000 internal-node:6380\r\n")),
+                    (6380 | 6381, 1) => {
+                        retry_port_clone.store(port, atomic::Ordering::SeqCst);
+                        Err(Ok(Value::BulkString(b"123".to_vec().into())))
+                    }
+                    _ => panic!("Unexpected command on port {port}: {cmd:?}"),
+                }
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+        assert_eq!(redirect_resolutions.load(atomic::Ordering::SeqCst), 1);
+        assert_eq!(retry_port.load(atomic::Ordering::SeqCst), 6380);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_moved_with_rewritten_topology() {
+        let name = "test_async_cluster_moved_with_rewritten_topology";
+        let raw_address_resolutions = Arc::new(atomic::AtomicUsize::new(0));
+        let redirect_calls = Arc::new(atomic::AtomicUsize::new(0));
+        let canonical_calls = Arc::new(atomic::AtomicUsize::new(0));
+        let commands = Arc::new(atomic::AtomicUsize::new(0));
+        let commands_clone = commands.clone();
+        let target_port = Arc::new(atomic::AtomicU16::new(0));
+        let target_port_clone = target_port.clone();
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
+                TopologyRewriteResolver {
+                    resolved_name: name,
+                    raw_address_resolutions,
+                    redirect_calls: redirect_calls.clone(),
+                    canonical_calls: canonical_calls.clone(),
+                },
+            )),
+            name,
+            move |cmd: &[u8], port| {
+                respond_startup(name, cmd)?;
+                let n = commands_clone.fetch_add(1, Ordering::SeqCst);
+                match (port, n) {
+                    (6380, 0) => Err(parse_redis_value(b"-MOVED 14000 internal-node:6381\r\n")),
+                    (6381, 1) => {
+                        target_port_clone.store(port, Ordering::SeqCst);
+                        Err(Ok(Value::BulkString(b"123".to_vec().into())))
+                    }
+                    _ => panic!("unexpected command on port {port}: {cmd:?}"),
+                }
+            },
+        );
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(target_port.load(Ordering::SeqCst), 6381);
+        assert_eq!(redirect_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(canonical_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_circular_moved_with_rewritten_topology() {
+        let name = "test_async_cluster_circular_moved_with_rewritten_topology";
+        let raw_address_resolutions = Arc::new(atomic::AtomicUsize::new(0));
+        let redirect_calls = Arc::new(atomic::AtomicUsize::new(0));
+        let canonical_calls = Arc::new(atomic::AtomicUsize::new(0));
+        let commands = Arc::new(atomic::AtomicUsize::new(0));
+        let moved_seen = Arc::new(atomic::AtomicBool::new(false));
+        let pings = Arc::new(atomic::AtomicUsize::new(0));
+        let ping_at_get_0 = Arc::new(atomic::AtomicUsize::new(0));
+        let ping_at_get_1 = Arc::new(atomic::AtomicUsize::new(0));
+        let commands_clone = commands.clone();
+        let moved_seen_clone = moved_seen.clone();
+        let pings_clone = pings.clone();
+        let pings_for_get = pings.clone();
+        let ping_at_get_0_clone = ping_at_get_0.clone();
+        let ping_at_get_1_clone = ping_at_get_1.clone();
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
+                TopologyRewriteResolver {
+                    resolved_name: name,
+                    raw_address_resolutions: raw_address_resolutions.clone(),
+                    redirect_calls: redirect_calls.clone(),
+                    canonical_calls: canonical_calls.clone(),
+                },
+            )),
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    assert!(
+                        !moved_seen_clone.load(Ordering::SeqCst),
+                        "circular MOVED should reconnect without refreshing slots"
+                    );
+                }
+                if contains_slice(cmd, b"PING") {
+                    pings_clone.fetch_add(1, Ordering::SeqCst);
+                    return Err(Ok(Value::SimpleString("PONG".into())));
+                }
+                respond_startup(name, cmd)?;
+                let n = commands_clone.fetch_add(1, Ordering::SeqCst);
+                match (port, n) {
+                    (6380, 0) => {
+                        moved_seen_clone.store(true, Ordering::SeqCst);
+                        ping_at_get_0_clone
+                            .store(pings_for_get.load(Ordering::SeqCst), Ordering::SeqCst);
+                        Err(parse_redis_value(
+                            format!("-MOVED 14000 {name}:6379\r\n").as_bytes(),
+                        ))
+                    }
+                    (6380, 1) => {
+                        ping_at_get_1_clone
+                            .store(pings_for_get.load(Ordering::SeqCst), Ordering::SeqCst);
+                        Err(Ok(Value::BulkString(b"123".to_vec().into())))
+                    }
+                    _ => panic!("unexpected command on port {port}: {cmd:?}"),
+                }
+            },
+        );
+        let raw_address_resolutions_before = raw_address_resolutions.load(Ordering::SeqCst);
+        let connections_before = mock_connection_count(name);
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+        let connections_after = mock_connection_count(name);
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(
+            raw_address_resolutions.load(Ordering::SeqCst),
+            raw_address_resolutions_before + 1
+        );
+        assert_eq!(redirect_calls.load(Ordering::SeqCst), 0);
+        assert_eq!(canonical_calls.load(Ordering::SeqCst), 0);
+        assert!(
+            connections_after > connections_before,
+            "expected circular MOVED to create a replacement connection, before={}, after={}",
+            connections_before,
+            connections_after
+        );
+        assert!(
+            ping_at_get_1.load(Ordering::SeqCst) > ping_at_get_0.load(Ordering::SeqCst),
+            "expected the replacement connection's handshake PING between GETs: first PING count {}, retry PING count {}",
+            ping_at_get_0.load(Ordering::SeqCst),
+            ping_at_get_1.load(Ordering::SeqCst)
+        );
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_ask_redirect_with_address_resolver() {
+        let name = "test_async_cluster_ask_redirect_with_address_resolver";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let requests_clone = requests.clone();
+        let asking_requests = Arc::new(atomic::AtomicUsize::new(0));
+        let asking_requests_clone = asking_requests.clone();
+        let redirect_resolutions = Arc::new(atomic::AtomicUsize::new(0));
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).address_resolver(Arc::new(
+                NonIdempotentRedirectResolver {
+                    resolved_name: name,
+                    redirect_resolutions: redirect_resolutions.clone(),
+                },
+            )),
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"ASKING") {
+                    assert_eq!(port, 6380);
+                    asking_requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+
+                respond_startup(name, cmd)?;
+
+                let count = requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                match (port, count) {
+                    (6379, 0) => Err(parse_redis_value(b"-ASK 14000 internal-node:6380\r\n")),
+                    (6380, 1) => Err(parse_redis_value(b"-TRYAGAIN please retry\r\n")),
+                    (6380, 2) => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
+                    _ => panic!("Unexpected command on port {port}: {cmd:?}"),
+                }
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 3);
+        assert_eq!(asking_requests.load(atomic::Ordering::SeqCst), 2);
+        assert_eq!(redirect_resolutions.load(atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_moved_redirect_with_bracketed_ipv6_address() {
+        let name = "test_async_cluster_moved_redirect_with_bracketed_ipv6_address";
+        let redirect_host = "2001:db8::1";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let resolutions = Arc::new(atomic::AtomicUsize::new(0));
+        let resolver_resolutions = resolutions.clone();
+        let handler = Arc::new(move |cmd: &[u8], port| {
+            if contains_slice(cmd, b"PING") || contains_slice(cmd, b"SETNAME") {
+                return Err(Ok(Value::SimpleString("OK".into())));
+            }
+            if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                return Err(Ok(Value::Array(vec![Value::Array(vec![
+                    Value::Int(0),
+                    Value::Int(16383),
+                    Value::Array(vec![
+                        Value::BulkString(name.as_bytes().to_vec().into()),
+                        Value::Int(6379),
+                    ]),
+                ])])));
+            }
+            let count = requests.fetch_add(1, Ordering::SeqCst);
+            match (port, count) {
+                (6379, 0) => Err(parse_redis_value(b"-MOVED 123 [2001:db8::1]:6380\r\n")),
+                (6380, 1) => Err(Ok(Value::BulkString(b"ipv6-ok".to_vec().into()))),
+                _ => panic!("unexpected request on port {port}: {cmd:?}"),
+            }
+        });
+        let _initial_handler = MockConnectionBehavior::register_new(name, handler.clone());
+        let _redirect_handler = MockConnectionBehavior::register_new(redirect_host, handler);
+        #[derive(Debug)]
+        struct BareIpv6Resolver(Arc<atomic::AtomicUsize>);
+        impl AddressResolver for BareIpv6Resolver {
+            fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+                if host == "2001:db8::1" {
+                    self.0.fetch_add(1, Ordering::SeqCst);
+                }
+                (host.to_owned(), port)
+            }
+        }
+        let client = ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .address_resolver(Arc::new(BareIpv6Resolver(resolver_resolutions)))
+            .build()
+            .unwrap();
+        let runtime = Runtime::new().unwrap();
+        let mut connection: redis::cluster_async::ClusterConnection<MockConnection> = runtime
+            .block_on(client.get_async_generic_connection())
+            .unwrap();
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Value>(&mut connection),
+        );
+        assert_eq!(value, Ok(Value::BulkString(b"ipv6-ok".to_vec().into())));
+        assert_eq!(resolutions.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_moved_raw_ip_redirect_with_shared_ip() {
+        let name = "test_async_cluster_moved_raw_ip_redirect_with_shared_ip";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let requests_clone = requests.clone();
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder_and_behavior(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]),
+            name,
+            move |cmd: &[u8], port| {
+                respond_startup_two_nodes(name, cmd)?;
+
+                let count = requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                match (port, count) {
+                    (6379, 0) => Err(parse_redis_value(b"-MOVED 14000 127.0.0.1:6380\r\n")),
+                    (6380, 1) => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
+                    _ => panic!("Unexpected command on port {port}: {cmd:?}"),
+                }
+            },
+            |behavior| {
+                behavior.returned_ip_type =
+                    ConnectionIPReturnType::Specified("127.0.0.1".parse().unwrap());
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_ask_raw_ip_redirect_with_shared_ip() {
+        let name = "test_async_cluster_ask_raw_ip_redirect_with_shared_ip";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let requests_clone = requests.clone();
+        let asking_requests = Arc::new(atomic::AtomicUsize::new(0));
+        let asking_requests_clone = asking_requests.clone();
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder_and_behavior(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]),
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"ASKING") {
+                    assert_eq!(port, 6380);
+                    asking_requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+
+                respond_startup_two_nodes(name, cmd)?;
+
+                let count = requests_clone.fetch_add(1, atomic::Ordering::SeqCst);
+                match (port, count) {
+                    (6379, 0) => Err(parse_redis_value(b"-ASK 14000 127.0.0.1:6380\r\n")),
+                    (6380, 1) => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
+                    _ => panic!("Unexpected command on port {port}: {cmd:?}"),
+                }
+            },
+            |behavior| {
+                behavior.returned_ip_type =
+                    ConnectionIPReturnType::Specified("127.0.0.1".parse().unwrap());
+            },
+        );
+
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg("test")
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+        assert_eq!(asking_requests.load(atomic::Ordering::SeqCst), 1);
+    }
+
     fn test_async_cluster_refresh_topology_after_moved_assert_get_succeed_and_expected_retries(
+        name: &'static str,
         slots_config_vec: Vec<Vec<MockSlotRange>>,
         ports: Vec<u16>,
         has_a_majority: bool,
     ) {
         assert!(!ports.is_empty() && !slots_config_vec.is_empty());
-        let name = "refresh_topology_moved";
         let num_of_nodes = ports.len();
         let requests = atomic::AtomicUsize::new(0);
         let started = atomic::AtomicBool::new(false);
@@ -2582,11 +3074,11 @@ mod cluster_async {
     }
 
     fn test_async_cluster_refresh_topology_in_client_init_get_succeed(
+        name: &'static str,
         slots_config_vec: Vec<Vec<MockSlotRange>>,
         ports: Vec<u16>,
     ) {
         assert!(!ports.is_empty() && !slots_config_vec.is_empty());
-        let name = "refresh_topology_client_init";
         let started = atomic::AtomicBool::new(false);
         let MockEnv {
             runtime,
@@ -2682,10 +3174,11 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_refresh_topology_after_moved_error_all_nodes_agree_get_succeed() {
         let ports = get_ports(3);
         test_async_cluster_refresh_topology_after_moved_assert_get_succeed_and_expected_retries(
+            "test_async_cluster_refresh_topology_after_moved_error_all_nodes_agree_get_succeed",
             get_topology_with_majority(&ports),
             ports,
             true,
@@ -2693,7 +3186,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     /// This test verifies the behavior of refreshing topology from initial nodes.
     ///
     /// This test simulates a network partition in a 3-node cluster to verify how
@@ -2879,21 +3372,23 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_refresh_topology_in_client_init_all_nodes_agree_get_succeed() {
         let ports = get_ports(3);
         test_async_cluster_refresh_topology_in_client_init_get_succeed(
+            "test_async_cluster_refresh_topology_in_client_init_all_nodes_agree_get_succeed",
             get_topology_with_majority(&ports),
             ports,
         );
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_refresh_topology_after_moved_error_with_no_majority_get_succeed() {
         for num_of_nodes in 2..4 {
             let ports = get_ports(num_of_nodes);
             test_async_cluster_refresh_topology_after_moved_assert_get_succeed_and_expected_retries(
+                "test_async_cluster_refresh_topology_after_moved_error_with_no_majority_get_succeed",
                 get_no_majority_topology_view(&ports),
                 ports,
                 false,
@@ -2902,11 +3397,12 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_refresh_topology_in_client_init_with_no_majority_get_succeed() {
         for num_of_nodes in 2..4 {
             let ports = get_ports(num_of_nodes);
             test_async_cluster_refresh_topology_in_client_init_get_succeed(
+                "test_async_cluster_refresh_topology_in_client_init_with_no_majority_get_succeed",
                 get_no_majority_topology_view(&ports),
                 ports,
             );
@@ -2914,7 +3410,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_refresh_topology_is_not_blocking() {
         // Test: Non-Head-of-Line Blocking During Slot Refresh
         //
@@ -3167,6 +3663,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_scan_timeout_does_not_block_later_slot_refreshes() {
         // A cluster_scan that times out can cancel the slot refresh it triggered. If the
         // refresh kept its in-progress flag, every later refresh would silently skip.
@@ -3266,6 +3763,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_update_slots_based_on_moved_error_indicates_slot_migration() {
         // This test simulates the scenario where the client receives a MOVED error indicating that a key is now
         // stored on the primary node of another shard.
@@ -3382,6 +3880,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_update_slots_based_on_moved_error_indicates_failover() {
         // This test simulates a failover scenario, where the client receives a MOVED error and the replica becomes the new primary.
         // The test verifies that the client updates the slot mapping to promote the replica to the primary and routes future requests
@@ -3487,6 +3986,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_update_slots_based_on_moved_error_indicates_new_primary() {
         // This test simulates the scenario where the client receives a MOVED error indicating that the key now belongs to
         // an entirely new primary node that wasn't previously known. The test verifies that the client correctly adds the new
@@ -3600,6 +4100,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_update_slots_based_on_moved_error_indicates_replica_of_different_shard() {
         // This test simulates a scenario where the client receives a MOVED error indicating that a key
         // has been moved to a replica in a different shard. The replica is then promoted to primary and
@@ -3719,6 +4220,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_update_slots_based_on_moved_error_no_change() {
         // This test simulates a scenario where the client receives a MOVED error, but the new primary is the
         // same as the old primary (no actual change). It ensures that no additional slot map
@@ -3815,7 +4317,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_reconnect_even_with_zero_retries() {
         let name = "test_async_cluster_reconnect_even_with_zero_retries";
 
@@ -3897,7 +4399,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_refresh_slots_rate_limiter_skips_refresh() {
         let ports = get_ports(3);
         test_async_cluster_refresh_slots_rate_limiter_helper(
@@ -3908,7 +4410,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_refresh_slots_rate_limiter_does_refresh_when_wait_duration_passed() {
         let ports = get_ports(3);
         test_async_cluster_refresh_slots_rate_limiter_helper(
@@ -3919,9 +4421,9 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_ask_redirect() {
-        let name = "node";
+        let name = "test_async_cluster_ask_redirect";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv {
             async_connection: mut connection,
@@ -3939,7 +4441,9 @@ mod cluster_async {
                     let count = completed.fetch_add(1, Ordering::SeqCst);
                     match port {
                         6379 => match count {
-                            0 => Err(parse_redis_value(b"-ASK 14000 node:6380\r\n")),
+                            0 => Err(parse_redis_value(
+                                format!("-ASK 14000 {name}:6380\r\n").as_bytes(),
+                            )),
                             _ => panic!("Node should not be called now"),
                         },
                         6380 => match count {
@@ -3969,9 +4473,9 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_ask_save_new_connection() {
-        let name = "node";
+        let name = "test_async_cluster_ask_save_new_connection";
         let ping_attempts = Arc::new(AtomicI32::new(0));
         let ping_attempts_clone = ping_attempts.clone();
         let MockEnv {
@@ -3986,7 +4490,9 @@ mod cluster_async {
                 move |cmd: &[u8], port| {
                     if port != 6391 {
                         respond_startup_two_nodes(name, cmd)?;
-                        return Err(parse_redis_value(b"-ASK 14000 node:6391\r\n"));
+                        return Err(parse_redis_value(
+                            format!("-ASK 14000 {name}:6391\r\n").as_bytes(),
+                        ));
                     }
 
                     if contains_slice(cmd, b"PING") {
@@ -4012,7 +4518,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_reset_routing_if_redirect_fails() {
         let name = "test_async_cluster_reset_routing_if_redirect_fails";
         let completed = Arc::new(AtomicI32::new(0));
@@ -4051,9 +4557,9 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_ask_redirect_even_if_original_call_had_no_route() {
-        let name = "node";
+        let name = "test_async_cluster_ask_redirect_even_if_original_call_had_no_route";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv {
             async_connection: mut connection,
@@ -4070,7 +4576,9 @@ mod cluster_async {
                     // other node (i.e., not doing a full slot rebuild)
                     let count = completed.fetch_add(1, Ordering::SeqCst);
                     if count == 0 {
-                        return Err(parse_redis_value(b"-ASK 14000 node:6380\r\n"));
+                        return Err(parse_redis_value(
+                            format!("-ASK 14000 {name}:6380\r\n").as_bytes(),
+                        ));
                     }
                     match port {
                         6380 => match count {
@@ -4103,7 +4611,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_ask_error_when_new_node_is_added() {
         let name = "ask_with_extra_nodes";
 
@@ -4158,9 +4666,9 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_replica_read() {
-        let name = "node";
+        let name = "test_async_cluster_replica_read";
 
         // requests should route to replica
         let MockEnv {
@@ -4189,7 +4697,9 @@ mod cluster_async {
         );
         assert_eq!(value, Ok(Some(123)));
 
-        // requests should route to primary
+        // requests should route to primary.
+        // The first MockEnv's handler is still alive, so this one needs its own name.
+        let name = "test_async_cluster_replica_read_primary";
         let MockEnv {
             runtime,
             async_connection: mut connection,
@@ -4219,11 +4729,11 @@ mod cluster_async {
     }
 
     fn test_async_cluster_fan_out(
+        name: &'static str,
         command: &'static str,
         expected_ports: Vec<u16>,
         slots_config: Option<Vec<MockSlotRange>>,
     ) {
-        let name = "node";
         let found_ports = Arc::new(std::sync::Mutex::new(Vec::new()));
         let ports_clone = found_ports.clone();
         let mut cmd = Cmd::new();
@@ -4263,21 +4773,32 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_to_all_primaries() {
-        test_async_cluster_fan_out("FLUSHALL", vec![6379, 6381], None);
+        test_async_cluster_fan_out(
+            "test_async_cluster_fan_out_to_all_primaries",
+            "FLUSHALL",
+            vec![6379, 6381],
+            None,
+        );
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_to_all_nodes() {
-        test_async_cluster_fan_out("CONFIG SET", vec![6379, 6380, 6381, 6382], None);
+        test_async_cluster_fan_out(
+            "test_async_cluster_fan_out_to_all_nodes",
+            "CONFIG SET",
+            vec![6379, 6380, 6381, 6382],
+            None,
+        );
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_once_to_each_primary_when_no_replicas_are_available() {
         test_async_cluster_fan_out(
+            "test_async_cluster_fan_out_once_to_each_primary_when_no_replicas_are_available",
             "CONFIG SET",
             vec![6379, 6381],
             Some(vec![
@@ -4296,9 +4817,10 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_once_even_if_primary_has_multiple_slot_ranges() {
         test_async_cluster_fan_out(
+            "test_async_cluster_fan_out_once_even_if_primary_has_multiple_slot_ranges",
             "CONFIG SET",
             vec![6379, 6380, 6381, 6382],
             Some(vec![
@@ -4327,7 +4849,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_route_according_to_passed_argument() {
         let name = "test_async_cluster_route_according_to_passed_argument";
 
@@ -4392,7 +4914,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_aggregate_numeric_response_with_min() {
         let name = "test_async_cluster_fan_out_and_aggregate_numeric_response";
         let mut cmd = Cmd::new();
@@ -4423,7 +4945,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_aggregate_logical_array_response() {
         let name = "test_async_cluster_fan_out_and_aggregate_logical_array_response";
         let mut cmd = Cmd::new();
@@ -4474,7 +4996,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_return_one_succeeded_response() {
         let name = "test_async_cluster_fan_out_and_return_one_succeeded_response";
         let mut cmd = Cmd::new();
@@ -4509,7 +5031,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_fail_one_succeeded_if_there_are_no_successes() {
         let name = "test_async_cluster_fan_out_and_fail_one_succeeded_if_there_are_no_successes";
         let mut cmd = Cmd::new();
@@ -4542,7 +5064,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_return_all_succeeded_response() {
         let name = "test_async_cluster_fan_out_and_return_all_succeeded_response";
         let cmd = cmd("FLUSHALL");
@@ -4569,7 +5091,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_fail_all_succeeded_if_there_is_a_single_failure() {
         let name = "test_async_cluster_fan_out_and_fail_all_succeeded_if_there_is_a_single_failure";
         let cmd = cmd("FLUSHALL");
@@ -4603,7 +5125,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_first_succeeded_non_empty_or_all_empty_return_value_ignoring_nil_and_err_resps(
     ) {
         let name =
@@ -4642,7 +5164,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_first_succeeded_non_empty_or_all_empty_return_err_if_all_resps_are_nil_and_errors(
     ) {
         let name =
@@ -4676,7 +5198,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_first_succeeded_non_empty_or_all_empty_return_nil_if_all_resp_nil() {
         let name =
             "test_async_cluster_first_succeeded_non_empty_or_all_empty_return_nil_if_all_resp_nil";
@@ -4704,9 +5226,10 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_return_map_of_results_for_special_response_policy() {
-        let name = "foo";
+        let name =
+            "test_async_cluster_fan_out_and_return_map_of_results_for_special_response_policy";
         let mut cmd = Cmd::new();
         cmd.arg("FUNCTION").arg("STATS");
         let MockEnv {
@@ -4745,9 +5268,9 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_combine_arrays_of_values() {
-        let name = "foo";
+        let name = "test_async_cluster_fan_out_and_combine_arrays_of_values";
         let cmd = cmd("KEYS");
         let MockEnv {
             runtime,
@@ -4779,7 +5302,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_split_multi_shard_command_and_combine_arrays_of_values() {
         let name = "test_async_cluster_split_multi_shard_command_and_combine_arrays_of_values";
         let mut cmd = cmd("MGET");
@@ -4820,7 +5343,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_handle_asking_error_in_split_multi_shard_command() {
         let name = "test_async_cluster_handle_asking_error_in_split_multi_shard_command";
         let mut cmd = cmd("MGET");
@@ -4870,7 +5393,68 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_pipeline_ask_redirect_resolves_target_once() {
+        let name = "test_async_cluster_pipeline_ask_redirect_resolves_target_once";
+        let mut cmd = cmd("MGET");
+        cmd.arg("foo").arg("bar").arg("baz");
+        let redirect_resolutions = Arc::new(atomic::AtomicUsize::new(0));
+        let resolutions = redirect_resolutions.clone();
+        let raw_redirect_seen = Arc::new(atomic::AtomicBool::new(false));
+        let asking_called = Arc::new(atomic::AtomicUsize::new(0));
+        let asking_called_clone = asking_called.clone();
+        let redirected_attempts = Arc::new(atomic::AtomicUsize::new(0));
+        let redirected_attempts_clone = redirected_attempts.clone();
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .read_from_replicas()
+                .address_resolver(Arc::new(PipelineAskResolver {
+                    resolved_name: name,
+                    redirect_resolutions: resolutions,
+                    raw_redirect_seen,
+                })),
+            name,
+            move |received_cmd: &[u8], port| {
+                respond_startup_with_replica_using_config(name, received_cmd, None)?;
+                let cmd_str = std::str::from_utf8(received_cmd).unwrap();
+                if cmd_str.contains("ASKING") {
+                    assert_eq!(port, 6382);
+                    asking_called_clone.fetch_add(1, Ordering::SeqCst);
+                }
+                if port == 6380 && cmd_str.contains("baz") {
+                    return Err(parse_redis_value(b"-ASK 14000 internal-node:6382\r\n"));
+                }
+                if port == 6382 && cmd_str.contains("baz") {
+                    let attempt = redirected_attempts_clone.fetch_add(1, Ordering::SeqCst);
+                    if attempt == 0 {
+                        return Err(parse_redis_value(b"-TRYAGAIN please retry\r\n"));
+                    }
+                }
+                let results = ["foo", "bar", "baz"]
+                    .iter()
+                    .filter(|&&key| cmd_str.contains(key))
+                    .map(|&key| Value::BulkString(format!("{key}-{port}").into_bytes().into()))
+                    .collect();
+                Err(Ok(Value::Array(results)))
+            },
+        );
+
+        let result = runtime
+            .block_on(cmd.query_async::<_, Vec<String>>(&mut connection))
+            .unwrap();
+        assert_eq!(result, vec!["foo-6382", "bar-6380", "baz-6382"]);
+        assert_eq!(redirect_resolutions.load(Ordering::SeqCst), 1);
+        assert_eq!(redirected_attempts.load(Ordering::SeqCst), 2);
+        assert_eq!(asking_called.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_pass_errors_from_split_multi_shard_command() {
         let name = "test_async_cluster_pass_errors_from_split_multi_shard_command";
         let mut cmd = cmd("MGET");
@@ -4898,7 +5482,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_handle_missing_slots_in_split_multi_shard_command() {
         let name = "test_async_cluster_handle_missing_slots_in_split_multi_shard_command";
         let mut cmd = cmd("MGET");
@@ -4907,20 +5491,26 @@ mod cluster_async {
             runtime,
             async_connection: mut connection,
             ..
-        } = MockEnv::new(name, move |received_cmd: &[u8], port| {
-            respond_startup_with_replica_using_config(
-                name,
-                received_cmd,
-                Some(vec![MockSlotRange {
-                    primary_port: 6381,
-                    replica_ports: vec![6382],
-                    slot_range: (8192..16383),
-                }]),
-            )?;
-            Err(Ok(Value::Array(vec![Value::BulkString(
-                format!("{port}").into_bytes().into(),
-            )])))
-        });
+        } = MockEnv::with_client_builder(
+            // The mock never owns the slots for `bar`/`baz`, so the first attempt already
+            // yields the final error; retries would only add minutes of exponential backoff.
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(0),
+            name,
+            move |received_cmd: &[u8], port| {
+                respond_startup_with_replica_using_config(
+                    name,
+                    received_cmd,
+                    Some(vec![MockSlotRange {
+                        primary_port: 6381,
+                        replica_ports: vec![6382],
+                        slot_range: (8192..16383),
+                    }]),
+                )?;
+                Err(Ok(Value::Array(vec![Value::BulkString(
+                    format!("{port}").into_bytes().into(),
+                )])))
+            },
+        );
 
         let result = runtime
             .block_on(cmd.query_async::<_, Vec<String>>(&mut connection))
@@ -4932,7 +5522,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_with_username_and_password() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -4965,9 +5555,9 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_io_error() {
-        let name = "node";
+        let name = "test_async_cluster_io_error";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv {
             runtime,
@@ -5004,9 +5594,9 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_non_retryable_error_should_not_retry() {
-        let name = "node";
+        let name = "test_async_cluster_non_retryable_error_should_not_retry";
         let completed = Arc::new(AtomicI32::new(0));
         let MockEnv {
             async_connection: mut connection,
@@ -5040,7 +5630,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_readonly_error_should_refresh_slots_and_retry() {
         let name = "test_async_cluster_readonly_error_should_refresh_slots_and_retry";
         let requests = Arc::new(AtomicI32::new(0));
@@ -5085,7 +5675,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_readonly_error_exhausts_retries() {
         let name = "test_async_cluster_readonly_error_exhausts_retries";
         let requests = Arc::new(AtomicI32::new(0));
@@ -5123,7 +5713,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_non_retryable_io_error_should_not_retry() {
         let name = "test_async_cluster_non_retryable_io_error_should_not_retry";
         let requests = atomic::AtomicUsize::new(0);
@@ -5159,8 +5749,155 @@ mod cluster_async {
             .unwrap();
     }
 
+    /// The RDMA transfer command used by the tests below; the arguments only
+    /// need the right shape.
+    fn rdma_get_cmd() -> redis::Cmd {
+        let mut command = cmd("BLOB.RDMA_GET");
+        command.arg("foo").arg(1).arg(4096).arg(16);
+        command
+    }
+
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_rdma_transfer_is_not_retried_after_an_io_error() {
+        let name = "test_async_cluster_rdma_transfer_is_not_retried_after_an_io_error";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            {
+                let requests = requests.clone();
+                move |cmd: &[u8], _port| {
+                    respond_startup_two_nodes(name, cmd)?;
+                    match requests.fetch_add(1, atomic::Ordering::SeqCst) {
+                        // An I/O error that does not say whether the command was
+                        // sent, such as a failed write of a later command.
+                        0 => Err(Err(RedisError::from(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "io-error",
+                        )))),
+                        _ => Err(Ok(Value::Array(vec![Value::Int(16), Value::Int(0)]))),
+                    }
+                }
+            },
+        );
+        let result = runtime.block_on(rdma_get_cmd().query_async::<_, Value>(&mut connection));
+        // A retry could be answered while the first attempt is still writing into
+        // the caller's memory, so the error goes back to the caller instead.
+        assert!(result.unwrap_err().is_io_error());
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_rdma_transfer_is_retried_after_tryagain() {
+        let name = "test_async_cluster_rdma_transfer_is_retried_after_tryagain";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            {
+                let requests = requests.clone();
+                move |cmd: &[u8], _port| {
+                    respond_startup_two_nodes(name, cmd)?;
+                    match requests.fetch_add(1, atomic::Ordering::SeqCst) {
+                        // The server refused it before running it.
+                        0 => Err(parse_redis_value(b"-TRYAGAIN mock\r\n")),
+                        _ => Err(Ok(Value::Array(vec![Value::Int(16), Value::Int(0)]))),
+                    }
+                }
+            },
+        );
+        let result = runtime.block_on(rdma_get_cmd().query_async::<_, Value>(&mut connection));
+        assert_eq!(
+            result,
+            Ok(Value::Array(vec![Value::Int(16), Value::Int(0)]))
+        );
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+    }
+
+    /// A transfer whose connection could not send it, such as one whose RDMA
+    /// handshake left the connection unusable, is sent again once the connection
+    /// is replaced: the first attempt never reached the server, so it cannot still
+    /// be using the client's memory.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_rdma_transfer_is_retried_after_a_fatal_send_error() {
+        let name = "test_async_cluster_rdma_transfer_is_retried_after_a_fatal_send_error";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            {
+                let requests = requests.clone();
+                move |cmd: &[u8], _port| {
+                    respond_startup_two_nodes(name, cmd)?;
+                    match requests.fetch_add(1, atomic::Ordering::SeqCst) {
+                        // What glide-core's RDMA connection returns for a
+                        // handshake that leaves the connection unusable.
+                        0 => Err(Err(RedisError::from((
+                            ErrorKind::FatalSendError,
+                            redis::SERVER_ERROR_DESCRIPTION,
+                            "the connection is being replaced".to_string(),
+                        )))),
+                        _ => Err(Ok(Value::Array(vec![Value::Int(16), Value::Int(0)]))),
+                    }
+                }
+            },
+        );
+        let result = runtime.block_on(rdma_get_cmd().query_async::<_, Value>(&mut connection));
+        assert_eq!(
+            result,
+            Ok(Value::Array(vec![Value::Int(16), Value::Int(0)]))
+        );
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_io_error_still_retries_other_commands() {
+        let name = "test_async_cluster_io_error_still_retries_other_commands";
+        let requests = Arc::new(atomic::AtomicUsize::new(0));
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            {
+                let requests = requests.clone();
+                move |cmd: &[u8], _port| {
+                    respond_startup_two_nodes(name, cmd)?;
+                    match requests.fetch_add(1, atomic::Ordering::SeqCst) {
+                        0 => Err(Err(RedisError::from(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "io-error",
+                        )))),
+                        _ => Err(Ok(Value::Int(1))),
+                    }
+                }
+            },
+        );
+        let result = runtime.block_on(cmd("GET").arg("foo").query_async::<_, i32>(&mut connection));
+        assert_eq!(result, Ok(1));
+        assert_eq!(requests.load(atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_retry_safe_io_error_should_be_retried() {
         let name = "test_async_cluster_retry_safe_io_error_should_be_retried";
         let requests = atomic::AtomicUsize::new(0);
@@ -5198,9 +5935,9 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_read_from_primary() {
-        let name = "node";
+        let name = "test_async_cluster_read_from_primary";
         let found_ports = Arc::new(std::sync::Mutex::new(Vec::new()));
         let ports_clone = found_ports.clone();
         let MockEnv {
@@ -5256,9 +5993,9 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_round_robin_read_from_replica() {
-        let name = "node";
+        let name = "test_async_cluster_round_robin_read_from_replica";
         let found_ports = Arc::new(std::sync::Mutex::new(Vec::new()));
         let ports_clone = found_ports.clone();
         let MockEnv {
@@ -5343,7 +6080,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_handle_complete_server_disconnect_without_panicking() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -5372,7 +6109,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_test_fast_reconnect() {
         // Note the 3 seconds connection check to differentiate between notifications and periodic
         let cluster = TestClusterContext::new_with_cluster_client_builder(
@@ -5502,7 +6239,7 @@ mod cluster_async {
     // This demonstrates that a reconnection process to one node does not prevent the same client from
     // successfully communicating with healthy nodes.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_non_blocking_reconnection_with_transaction() {
         use std::time::Duration;
 
@@ -5655,7 +6392,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_periodic_checks_update_topology_after_failover() {
         // This test aims to validate the functionality of periodic topology checks by detecting and updating topology changes.
         // We will repeatedly execute CLUSTER NODES commands against the primary node responsible for slot 0, recording its node ID.
@@ -5726,7 +6463,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_recover_disconnected_management_connections() {
         // This test aims to verify that the management connections used for periodic checks are reconnected, in case that they get killed.
         // In order to test this, we choose a single node, kill all connections to it which aren't user connections, and then wait until new
@@ -5779,7 +6516,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_with_client_name() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -5816,7 +6553,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_reroute_from_replica_if_in_loading_state() {
         /* Test replica in loading state. The expected behaviour is that the request will be directed to a different replica or the primary.
         depends on the read from replica policy. */
@@ -5872,7 +6609,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_read_from_primary_when_primary_loading() {
         // Test primary in loading state. The expected behaviour is that the request will be retried until the primary is no longer in loading state.
         let name = "test_async_cluster_read_from_primary_when_primary_loading";
@@ -5927,7 +6664,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_can_be_created_with_partial_slot_coverage() {
         let name = "test_async_cluster_can_be_created_with_partial_slot_coverage";
         let slots_config = Some(vec![
@@ -5968,7 +6705,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_reconnect_after_complete_server_disconnect() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -5983,6 +6720,7 @@ mod cluster_async {
 
         block_on_all(async move {
             let mut connection = cluster.async_connection(None).await;
+            let ports = cluster.cluster.reserve_ports_for_restart();
             drop(cluster);
             let cmd = cmd("PING");
 
@@ -5997,12 +6735,8 @@ mod cluster_async {
             // TODO - this should be a NoConnectionError, but ATM we get the errors from the failing
             assert!(result.is_err());
 
-            let _cluster = TestClusterContext::new_with_cluster_client_builder(
-                3,
-                0,
-                |builder| builder.retries(2),
-                false,
-            );
+            let _cluster =
+                TestClusterContext::restart_on_ports(ports, 0, |builder| builder.retries(2), false);
 
             let max_requests = 5;
             let mut i = 0;
@@ -6029,7 +6763,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_reconnect_after_complete_server_disconnect_route_to_many() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -6039,15 +6773,11 @@ mod cluster_async {
         );
         block_on_all(async move {
             let mut connection = cluster.async_connection(None).await;
+            let ports = cluster.cluster.reserve_ports_for_restart();
             drop(cluster);
 
-            // recreate cluster
-            let _cluster = TestClusterContext::new_with_cluster_client_builder(
-                3,
-                0,
-                |builder| builder.retries(2),
-                false,
-            );
+            let _cluster =
+                TestClusterContext::restart_on_ports(ports, 0, |builder| builder.retries(2), false);
 
             let cmd = cmd("PING");
 
@@ -6086,7 +6816,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_blocking_command_when_cluster_drops() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -6114,7 +6844,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_saves_reconnected_connection() {
         let name = "test_async_cluster_saves_reconnected_connection";
         let ping_attempts = Arc::new(AtomicI32::new(0));
@@ -6144,7 +6874,7 @@ mod cluster_async {
                     // 1. initial connection,
                     // 2. refresh slots on client creation,
                     // 3. refresh_connections `check_connection` after first GET failed,
-                    // 4. refresh_connections `connect_and_check` after first GET failed,
+                    // 4. refresh_connections `connect_and_check_prepared` after first GET failed,
                     // 5. reconnect on 2nd GET attempt (may not occur with non-blocking reconnection).
                     // more than 5 attempts mean that the server reconnects more than once, which is the behavior we're testing against.
                     if past_get_attempts != 1 || connect_attempt > 3 {
@@ -6193,7 +6923,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_periodic_checks_use_management_connection() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -6294,7 +7024,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_only_management_connection_is_reconnected_after_connection_failure() {
         // This test will check two aspects:
         // 1. Ensuring that after a disconnection in the management connection, a new management connection is established.
@@ -6363,7 +7093,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_dont_route_to_a_random_on_non_key_based_cmd() {
         // This test verifies that non-key-based commands do not get routed to a random node
         // when no connection is found for the given route. Instead, the appropriate error
@@ -6427,7 +7157,66 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_dont_route_rdma_transfer_to_a_random_node() {
+        // An RDMA transfer must reach the key's primary. A random node may be a
+        // READONLY replica, which answers an RDMA read itself instead of replying
+        // MOVED. So when no connection is found for the key's slot, the transfer
+        // must fail instead of going to a random node.
+        let name = "test_async_cluster_dont_route_rdma_transfer_to_a_random_node";
+        let request_counter = Arc::new(AtomicU32::new(0));
+        let cloned_req_counter = request_counter.clone();
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(1),
+            name,
+            move |received_cmd: &[u8], _| {
+                let slots_config_vec = vec![
+                    MockSlotRange {
+                        primary_port: 6379,
+                        replica_ports: vec![],
+                        slot_range: (0_u16..8000_u16),
+                    },
+                    MockSlotRange {
+                        primary_port: 6380,
+                        replica_ports: vec![],
+                        // Don't cover all slots
+                        slot_range: (8001_u16..12000_u16),
+                    },
+                ];
+                respond_startup_with_config(name, received_cmd, Some(slots_config_vec), false)?;
+                // If requests are sent to random nodes, they will be caught and counted here.
+                request_counter.fetch_add(1, Ordering::Relaxed);
+                Err(Ok(Value::Nil))
+            },
+        );
+
+        runtime
+            .block_on(async move {
+                // The keyslot of "foo" is 12182 and it isn't covered by any node.
+                for name in ["BLOB.RDMA_GET", "BLOB.RDMA_SET"] {
+                    let mut transfer = cmd(name);
+                    transfer.arg("foo").arg("1").arg("2").arg("3");
+                    let res = connection.req_packed_command(&transfer).await;
+                    let res_err = res.unwrap_err();
+                    assert_eq!(
+                        res_err.kind(),
+                        ErrorKind::ConnectionNotFoundForRoute,
+                        "{name}: {res_err:?}"
+                    );
+                }
+                assert_eq!(cloned_req_counter.load(Ordering::Relaxed), 0);
+                Ok::<_, RedisError>(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_route_to_random_on_key_based_cmd() {
         // This test verifies that key-based commands get routed to a random node
         // when no connection is found for the given route. The command should
@@ -6484,7 +7273,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_do_not_retry_when_receiver_was_dropped() {
         let name = "test_async_cluster_do_not_retry_when_receiver_was_dropped";
         let cmd = cmd("FAKE_COMMAND");
@@ -6531,7 +7320,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fenced_command_with_successful_response() {
         // Test fenced command returns correct value (command result, then PONG).
 
@@ -6567,7 +7356,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fenced_command_with_server_error() {
         // Test fenced command correctly returns server error (error, then PONG).
 
@@ -6610,7 +7399,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fenced_command_with_connection_error() {
         // Test fenced command correctly handles connection errors.
 
@@ -6647,7 +7436,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fenced_sunsubscribe_with_moved_error() {
         // Test fenced SUNSUBSCRIBE receives MOVED error after slot migration,
         // verifying the fenced command logic handles it correctly.
@@ -6705,7 +7494,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fenced_sunsubscribe_with_slot_deletion_error() {
         // Test fenced SUNSUBSCRIBE receives error after slot deletion,
         // verifying the fenced command logic handles it correctly.
@@ -6756,7 +7545,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_fenced_sunsubscribe_successful() {
         // Test fenced SUNSUBSCRIBE correctly handles PONG as the response of the command,
         // indicating the fenced command completed successfully.
@@ -6802,7 +7591,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_multiple_fenced_commands_sequential() {
         // Test multiple fenced commands sent sequentially each receive correct responses.
 
@@ -6855,7 +7644,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_response_ordering_during_slot_migration() {
         // Verifies that if there's an unrelated InFlight request while receiving an unprompted
         // SUNSUBSCRIBE push notification, it does not interfere with response ordering
@@ -6931,7 +7720,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_protocol_desync_when_fenced_command_fails() {
         let test_user = "test_desync_user";
         let test_password = "test_password";
@@ -7031,7 +7820,7 @@ mod cluster_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     async fn test_pending_requests_channel_throughput() {
         // Validates that the lock-free channel (mpsc::UnboundedChannel) for pending_requests
         // handles high request rates without blocking the Tokio runtime.
@@ -7079,7 +7868,7 @@ mod cluster_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     async fn test_high_concurrency_no_runtime_blocking() {
         // Validates that under high concurrency, operations complete without Tokio runtime
         // starvation.
@@ -7132,7 +7921,7 @@ mod cluster_async {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
+    #[serial_test::serial(otel)]
     async fn test_cluster_params_concurrent_access() {
         // Validates that the async RwLock for cluster_params doesn't block the Tokio runtime
         // when accessed concurrently (read or write).
@@ -7209,7 +7998,7 @@ mod cluster_async {
     ///
     /// To run: cargo test --test test_cluster_async -- test_async_cluster_circular_moved_triggers_reconnect --nocapture
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_circular_moved_triggers_reconnect() {
         let name = "test_circular_moved_reconnect";
         let get_requests = Arc::new(atomic::AtomicUsize::new(0));
@@ -7345,7 +8134,7 @@ mod cluster_async {
     ///
     /// To run: cargo test --test test_cluster_async -- test_async_cluster_circular_moved_set_triggers_reconnect --nocapture
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_circular_moved_set_triggers_reconnect() {
         let name = "test_circular_moved_set_reconnect";
         let set_requests = Arc::new(atomic::AtomicUsize::new(0));
@@ -7452,7 +8241,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_circular_moved_pipeline_triggers_reconnect() {
         let name = "test_circular_moved_pipeline_reconnect";
         let set_requests = Arc::new(atomic::AtomicUsize::new(0));
@@ -7701,6 +8490,176 @@ mod cluster_async {
         (total_successes, total_errors)
     }
 
+    fn mock_connection_count(name: &str) -> usize {
+        let mut connections = 0;
+        modify_mock_connection_behavior(name, |behavior| {
+            connections = behavior.connection_id_provider.load(Ordering::SeqCst);
+        });
+        connections
+    }
+
+    /// Sets up a single-node mock cluster whose node stays healthy (answers PING) but replies to
+    /// SET with a circular MOVED until the client opens a new connection, as an old instance kept
+    /// alive behind the same endpoint does after a failover (#7333). Returns the env and the
+    /// number of SETs the node received.
+    fn circular_moved_until_new_connection_env(
+        name: &'static str,
+        retries: u32,
+    ) -> (MockEnv, Arc<atomic::AtomicUsize>) {
+        let set_calls = Arc::new(atomic::AtomicUsize::new(0));
+        let set_calls_clone = set_calls.clone();
+        let connections_at_moved = atomic::AtomicUsize::new(usize::MAX);
+        let env = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(retries)
+                .slots_refresh_rate_limit(Duration::from_secs(0), 0),
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    return Err(Ok(create_topology_from_config(
+                        name,
+                        vec![MockSlotRange {
+                            primary_port: port,
+                            replica_ports: vec![],
+                            slot_range: 0..16383,
+                        }],
+                    )));
+                }
+                // Match the RESP-encoded command name, so that `SETNAME` doesn't match.
+                if !contains_slice(cmd, b"\r\nSET\r\n") {
+                    // PING, SETNAME, etc. The node stays healthy.
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                set_calls_clone.fetch_add(1, Ordering::SeqCst);
+                let connections = mock_connection_count(name);
+                // Remember how many connections existed when the first MOVED was sent.
+                let _ = connections_at_moved.compare_exchange(
+                    usize::MAX,
+                    connections,
+                    Ordering::SeqCst,
+                    Ordering::SeqCst,
+                );
+                if connections > connections_at_moved.load(Ordering::SeqCst) {
+                    Err(Ok(Value::SimpleString("OK".into())))
+                } else {
+                    Err(parse_redis_value(
+                        format!("-MOVED 5000 {name}:{port}\r\n").as_bytes(),
+                    ))
+                }
+            },
+        );
+        (env, set_calls)
+    }
+
+    /// A circular MOVED from a node that still answers PING must replace the connection,
+    /// not reuse it after a health check (#7333).
+    ///
+    /// To run: cargo test --test test_cluster_async -- test_async_cluster_circular_moved_replaces_healthy_connection --nocapture
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_circular_moved_replaces_healthy_connection() {
+        let name = "test_circular_moved_replaces_healthy_connection";
+        let (
+            MockEnv {
+                runtime,
+                async_connection: mut connection,
+                handler: _handler,
+                ..
+            },
+            set_calls,
+        ) = circular_moved_until_new_connection_env(name, 3);
+
+        let connections_before = mock_connection_count(name);
+        let result = runtime.block_on(
+            cmd("SET")
+                .arg("test_key")
+                .arg("test_value")
+                .query_async::<_, Option<String>>(&mut connection),
+        );
+
+        assert_eq!(result, Ok(Some("OK".to_string())));
+        assert_eq!(
+            set_calls.load(Ordering::SeqCst),
+            2,
+            "expected one circular MOVED, then success on the new connection"
+        );
+        // Both the user and the management connections are replaced.
+        assert!(mock_connection_count(name) >= connections_before + 2);
+    }
+
+    /// With no retries left, a circular MOVED still replaces the connection, so the next request
+    /// doesn't reuse it.
+    ///
+    /// To run: cargo test --test test_cluster_async -- test_async_cluster_circular_moved_without_retries_replaces_connection --nocapture
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_circular_moved_without_retries_replaces_connection() {
+        let name = "test_circular_moved_without_retries_replaces_connection";
+        let (
+            MockEnv {
+                runtime,
+                async_connection: mut connection,
+                handler: _handler,
+                ..
+            },
+            set_calls,
+        ) = circular_moved_until_new_connection_env(name, 0);
+
+        let mut set = cmd("SET");
+        set.arg("test_key").arg("test_value");
+        let first = runtime.block_on(set.query_async::<_, Option<String>>(&mut connection));
+        assert_eq!(first.unwrap_err().kind(), ErrorKind::Moved);
+        let second = runtime.block_on(set.query_async::<_, Option<String>>(&mut connection));
+
+        assert_eq!(second, Ok(Some("OK".to_string())));
+        assert_eq!(set_calls.load(Ordering::SeqCst), 2);
+    }
+
+    /// Pipeline variant of `test_async_cluster_circular_moved_replaces_healthy_connection`.
+    ///
+    /// To run: cargo test --test test_cluster_async -- test_async_cluster_circular_moved_pipeline_replaces_healthy_connection --nocapture
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_circular_moved_pipeline_replaces_healthy_connection() {
+        let name = "test_circular_moved_pipeline_replaces_healthy_connection";
+        let (
+            MockEnv {
+                runtime,
+                async_connection: mut connection,
+                handler: _handler,
+                ..
+            },
+            set_calls,
+        ) = circular_moved_until_new_connection_env(name, 3);
+
+        let connections_before = mock_connection_count(name);
+        let result = runtime.block_on(async move {
+            let mut pipeline = redis::pipe();
+            pipeline.set("test_key", "test_value");
+            connection
+                .route_pipeline(
+                    &pipeline,
+                    0,
+                    1,
+                    None,
+                    Some(PipelineRetryStrategy {
+                        retry_server_error: true,
+                        retry_connection_error: false,
+                    }),
+                )
+                .await
+        });
+
+        assert_eq!(result, Ok(vec![Value::SimpleString("OK".into())]));
+        assert_eq!(
+            set_calls.load(Ordering::SeqCst),
+            2,
+            "expected one circular MOVED, then success on the new connection"
+        );
+        // Both the user and the management connections are replaced.
+        assert!(mock_connection_count(name) >= connections_before + 2);
+    }
+
     /// Mirrors the Python stress-test script that exposed the "Connection in recovery" bug.
     ///
     /// ## Scenario
@@ -7760,7 +8719,7 @@ mod cluster_async {
     /// 7. Commands arriving during recovery must be buffered and succeed after recovery.
     /// 8. Assert zero command errors across all tasks.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_concurrent_requests_during_circular_moved_reconnect() {
         let name = "test_concurrent_circular_moved";
         // Trigger circular MOVED on the Nth SET to let several pipelines succeed before disruption
@@ -7902,7 +8861,7 @@ mod cluster_async {
     /// Some command errors are expected (fail-fast), but most commands should succeed
     /// (commands before recovery starts and after recovery completes succeed).
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_concurrent_requests_fail_fast_during_reconnect_to_initial_nodes() {
         let name = "test_concurrent_reconnect_initial_nodes";
         // How many SET commands before AllConnectionsUnavailable fires
@@ -8021,7 +8980,7 @@ mod cluster_async {
     ///
     /// Zero command errors: all commands must succeed after the slot refresh completes.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_concurrent_requests_buffered_during_refreshing_slots() {
         let name = "test_concurrent_refreshing_slots";
         const MOVED_ON_SET_N: usize = 30;
@@ -8076,7 +9035,9 @@ mod cluster_async {
                         // The client will re-fetch CLUSTER SLOTS and re-route to the real node.
                         // We deliberately use a different hostname so the client does NOT take the
                         // circular-MOVED Reconnect fast-path; it must go through RefreshingSlots.
-                        return Err(parse_redis_value(b"-MOVED 0 other_host:6380\r\n"));
+                        return Err(parse_redis_value(
+                            format!("-MOVED 0 {name}_other_host:6380\r\n").as_bytes(),
+                        ));
                     }
                     if moved_fired_clone.load(atomic::Ordering::SeqCst) {
                         std::thread::sleep(std::time::Duration::from_millis(DELAY_AFTER_MOVED_MS));
@@ -8092,12 +9053,12 @@ mod cluster_async {
 
         // Register other_host so the client can resolve it if it attempts to connect
         // before the CLUSTER SLOTS topology update is applied.
-        let other_host_name = "other_host";
+        let other_host_name = format!("{name}_other_host");
         // Clone `name` so it can be captured by the other_host closure (name_handler already
         // owns a clone used by the primary handler above).
         let name_for_other_handler = name.to_string();
         let _other_handler = MockConnectionBehavior::register_new(
-            other_host_name,
+            &other_host_name,
             Arc::new(move |cmd: &[u8], _port| {
                 if contains_slice(cmd, b"PING") {
                     return Err(Ok(Value::SimpleString("OK".into())));
@@ -8164,7 +9125,7 @@ mod cluster_async {
     /// - Note: whether any command actually observes the fail-fast error depends on CI timing;
     ///   the no-silent-drops check is the reliable guarantee this test provides.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_requests_fail_fast_on_refreshing_slots_all_connections_unavailable() {
         let name = "test_concurrent_refreshing_slots_all_conn_unavailable";
         const MOVED_ON_SET_N: usize = 30;
@@ -8228,7 +9189,9 @@ mod cluster_async {
                     if i == MOVED_ON_SET_N {
                         moved_fired_clone.store(true, atomic::Ordering::SeqCst);
                         // Non-circular MOVED: different hostname triggers RefreshingSlots.
-                        return Err(parse_redis_value(b"-MOVED 0 other_host:6380\r\n"));
+                        return Err(parse_redis_value(
+                            format!("-MOVED 0 {name}_other_host:6380\r\n").as_bytes(),
+                        ));
                     }
                     if moved_fired_clone.load(atomic::Ordering::SeqCst) {
                         std::thread::sleep(std::time::Duration::from_millis(DELAY_AFTER_MOVED_MS));
@@ -8242,11 +9205,11 @@ mod cluster_async {
         // Register other_host so the client can resolve it if it attempts to connect.
         // Once MOVED fires, other_host returns AllConnectionsUnavailable for all CLUSTER SLOTS
         // queries, ensuring all_failed=true is deterministic regardless of query ordering.
-        let other_host_name = "other_host";
+        let other_host_name = format!("{name}_other_host");
         let name_for_other_handler = name.to_string();
         let moved_fired_other = moved_fired.clone();
         let _other_handler = MockConnectionBehavior::register_new(
-            other_host_name,
+            &other_host_name,
             Arc::new(move |cmd: &[u8], _port| {
                 if contains_slice(cmd, b"PING") {
                     return Err(Ok(Value::SimpleString("OK".into())));
@@ -8330,7 +9293,7 @@ mod cluster_async {
     /// - Note: whether any command actually observes the fail-fast error depends on CI timing;
     ///   the no-silent-drops check is the reliable guarantee this test provides.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_requests_fail_fast_on_refreshing_slots_task_panic() {
         let name = "test_concurrent_refreshing_slots_task_panic";
         const MOVED_ON_SET_N: usize = 30;
@@ -8395,7 +9358,9 @@ mod cluster_async {
                     if i == MOVED_ON_SET_N {
                         moved_fired_clone.store(true, atomic::Ordering::SeqCst);
                         // Non-circular MOVED: different hostname triggers RefreshingSlots.
-                        return Err(parse_redis_value(b"-MOVED 0 other_host:6380\r\n"));
+                        return Err(parse_redis_value(
+                            format!("-MOVED 0 {name}_other_host:6380\r\n").as_bytes(),
+                        ));
                     }
                     if moved_fired_clone.load(atomic::Ordering::SeqCst) {
                         std::thread::sleep(std::time::Duration::from_millis(DELAY_AFTER_MOVED_MS));
@@ -8408,10 +9373,10 @@ mod cluster_async {
 
         // Register other_host so the client can resolve it if it attempts to connect
         // before the CLUSTER SLOTS topology update is applied.
-        let other_host_name = "other_host";
+        let other_host_name = format!("{name}_other_host");
         let name_for_other_handler = name.to_string();
         let _other_handler = MockConnectionBehavior::register_new(
-            other_host_name,
+            &other_host_name,
             Arc::new(move |cmd: &[u8], _port| {
                 if contains_slice(cmd, b"PING") {
                     return Err(Ok(Value::SimpleString("OK".into())));
@@ -8466,7 +9431,7 @@ mod cluster_async {
     // must fail with a non-retryable ClientError so the retryable empty-
     // receivers branch stays scoped to the topology-refresh race (#6759).
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_multi_slot_empty_slots_is_client_error() {
         let name = "test_async_cluster_multi_slot_empty_slots_is_client_error";
         let MockEnv {
@@ -8513,7 +9478,7 @@ mod cluster_async {
     // by `empty_receivers_is_retryable_connection_not_found` in
     // `glide-core/redis-rs/redis/src/cluster_async/mod.rs`.
     #[test]
-    #[serial_test::serial]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_multi_slot_empty_slots_guard_no_retry_on_retries_gt_zero() {
         let name = "test_async_cluster_multi_slot_empty_slots_guard_no_retry_on_retries_gt_zero";
         // Counts CLUSTER SLOTS the mock sees after startup. Each retry driven
@@ -8659,7 +9624,7 @@ mod cluster_async {
         ///    SET/GET round-trip, and the material the reconnect path adopts is the
         ///    rotated certificate (its DER differs from the pre-rotation cert).
         #[test]
-        #[serial_test::serial]
+        #[serial_test::parallel(otel)]
         fn test_async_cluster_mtls_cert_rotation_reconnect() {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
 
@@ -8822,7 +9787,7 @@ mod cluster_async {
         }
 
         #[test]
-        #[serial_test::serial]
+        #[serial_test::parallel(otel)]
         fn test_async_cluster_basic_cmd_with_mtls() {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
@@ -8848,7 +9813,7 @@ mod cluster_async {
         }
 
         #[test]
-        #[serial_test::serial]
+        #[serial_test::parallel(otel)]
         fn test_async_cluster_should_not_connect_without_mtls_enabled() {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
@@ -8872,5 +9837,65 @@ mod cluster_async {
             Ok::<_, RedisError>(())
         }).unwrap();
         }
+    }
+
+    /// Every test in this binary must declare its OpenTelemetry scheduling class.
+    ///
+    /// The `test_async_open_telemetry_*` tests observe process-global state (the
+    /// `GlideOpenTelemetry` singleton and the `glide.moved_errors` /
+    /// `glide.retry_attempts` counters, which any test that triggers a MOVED or a
+    /// retry, mock or real, increments). They run `#[serial_test::serial(otel)]`
+    /// as exclusive writers; everything else runs `#[serial_test::parallel(otel)]`
+    /// as shared readers, so the two classes never overlap.
+    ///
+    /// Throughput tests that assert on wall-clock rates also run `serial(otel)`:
+    /// they need the machine to themselves.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn every_test_declares_otel_scheduling_class() {
+        // Per-spelling floors, so a change to the matching below cannot silently
+        // exempt one kind of test attribute while the other keeps the count up.
+        const MIN_SYNC_TESTS: usize = 100;
+        const MIN_TOKIO_TESTS: usize = 10;
+
+        let src = include_str!("test_cluster_async.rs");
+        let lines: Vec<&str> = src.lines().collect();
+        let mut missing = Vec::new();
+        let mut checked_sync = 0usize;
+        let mut checked_tokio = 0usize;
+        for (i, line) in lines.iter().enumerate() {
+            let attr = line.trim();
+            if attr == "#[test]" {
+                checked_sync += 1;
+            } else if attr == "#[tokio::test]" || attr.starts_with("#[tokio::test(") {
+                checked_tokio += 1;
+            } else {
+                continue;
+            }
+            let next = lines.get(i + 1).map(|l| l.trim()).unwrap_or("");
+            let ok = next.starts_with("#[serial_test::serial(otel)]")
+                || next.starts_with("#[serial_test::parallel(otel)]");
+            if !ok {
+                let name = lines[i + 1..]
+                    .iter()
+                    .find_map(|l| {
+                        let l = l.trim();
+                        l.strip_prefix("async fn ")
+                            .or_else(|| l.strip_prefix("fn "))
+                    })
+                    .map(|rest| rest.split('(').next().unwrap_or(rest))
+                    .unwrap_or("<unknown>");
+                missing.push(format!("line {}: {name}", i + 1));
+            }
+        }
+        assert!(
+            checked_sync >= MIN_SYNC_TESTS && checked_tokio >= MIN_TOKIO_TESTS,
+            "guard found {checked_sync} #[test] and {checked_tokio} #[tokio::test] attributes (expected at least {MIN_SYNC_TESTS} and {MIN_TOKIO_TESTS}); either the matching regressed or tests were removed and the floors need lowering"
+        );
+        assert!(
+            missing.is_empty(),
+            "tests missing #[serial_test::serial(otel)] or #[serial_test::parallel(otel)] directly after #[test] / #[tokio::test]:\n  {}",
+            missing.join("\n  ")
+        );
     }
 }

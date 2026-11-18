@@ -2,11 +2,12 @@
 //! Generic (key) commands. Mirrors Python's generic command surface.
 
 use crate::ValkeyResult;
-use crate::cmd::Cmd;
-use crate::commands::options::{Limit, MigrateOptions, ObjectType, OrderBy, RestoreOptions};
+use crate::cmd::cmd;
+use crate::commands::options::{Limit, MigrateOptions, OrderBy, RestoreOptions};
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
+use crate::value::to_glide_error;
 use crate::write::ToValkeyArgs;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -15,85 +16,25 @@ use bytes::Bytes;
 #[async_trait]
 pub trait GenericCommands: CommandExecutor {
     // TODO #7082: add `expire`/`pexpire`/`expire_at`/`pexpire_at` variants that take
-    // the NX/XX/GT/LT condition options (the `ExpireOptions` type already exists).
-
-    /// Iterate the keyspace with `SCAN`, with `MATCH`/`COUNT`/`TYPE` options
-    /// (cursor-style). Returns `(cursor, keys)`; a returned cursor of `"0"`
-    /// indicates iteration is complete. For simple iteration prefer the
-    /// unified [`crate::AsyncCommands::scan_match`] iterator.
-    async fn scan_cursor(
-        &self,
-        cursor: &str,
-        pattern: Option<&[u8]>,
-        count: Option<i64>,
-        type_filter: Option<ObjectType>,
-    ) -> ValkeyResult<(String, Vec<Bytes>)> {
-        let mut cmd = Cmd::new();
-        cmd.arg("SCAN").arg(cursor);
-        if let Some(p) = pattern {
-            cmd.arg("MATCH").arg(p);
-        }
-        if let Some(c) = count {
-            cmd.arg("COUNT").arg(c);
-        }
-        if let Some(t) = type_filter {
-            cmd.arg("TYPE").arg(t.to_redis().to_string().to_lowercase());
-        }
-        let reply = self.execute_command(cmd, None).await?;
-        parse_scan_reply(reply)
-    }
-
-    /// Get the absolute expiry Unix time in seconds (`EXPIRETIME`).
-    async fn expiretime<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("EXPIRETIME").arg(key);
-        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Get the absolute expiry Unix time in milliseconds (`PEXPIRETIME`).
-    async fn pexpiretime<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("PEXPIRETIME").arg(key);
-        i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
+    // the NX/XX/GT/LT condition options (the `ExpireOption` type already exists).
 
     /// Return a random key from the keyspace (`RANDOMKEY`).
     async fn randomkey(&self) -> ValkeyResult<Option<Bytes>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("RANDOMKEY");
-        Option::<Bytes>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
+        Option::<Bytes>::from_owned_valkey_value(
+            self.execute_command(cmd("RANDOMKEY"), None).await?,
+        )
     }
 
     /// Serialize `key` (`DUMP`). Returns `None` if the key does not exist.
     async fn dump<K: ToValkeyArgs + Send>(&self, key: K) -> ValkeyResult<Option<Bytes>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("DUMP").arg(key);
+        let cmd = cmd("DUMP").with_arg(key);
         Option::<Bytes>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Touch the given keys, returning how many were touched (`TOUCH`).
     async fn touch<K: ToValkeyArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("TOUCH");
-        for k in keys {
-            cmd.arg(k);
-        }
+        let cmd = cmd("TOUCH").with_arg(keys);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
-    /// Copy `source` to `destination` (`COPY`). Set `replace` to overwrite.
-    async fn copy<S: ToValkeyArgs + Send, D: ToValkeyArgs + Send>(
-        &self,
-        source: S,
-        destination: D,
-        replace: bool,
-    ) -> ValkeyResult<bool> {
-        let mut cmd = Cmd::new();
-        cmd.arg("COPY").arg(source).arg(destination);
-        if replace {
-            cmd.arg("REPLACE");
-        }
-        bool::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Sort the elements at `key` (`SORT`), optionally by order and with an
@@ -105,17 +46,11 @@ pub trait GenericCommands: CommandExecutor {
         limit: Option<Limit>,
         alpha: bool,
     ) -> ValkeyResult<Vec<Bytes>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("SORT").arg(key);
-        if let Some(l) = limit {
-            cmd.arg("LIMIT").arg(l.offset).arg(l.count);
-        }
-        if let Some(o) = order {
-            cmd.arg(o.as_arg());
-        }
-        if alpha {
-            cmd.arg("ALPHA");
-        }
+        let cmd = cmd("SORT")
+            .with_arg(key)
+            .with_arg(limit)
+            .with_arg(order)
+            .with_arg(alpha.then_some("ALPHA"));
         match self.execute_command(cmd, None).await? {
             ValkeyValue::Array(items) => items
                 .into_iter()
@@ -126,26 +61,6 @@ pub trait GenericCommands: CommandExecutor {
         }
     }
 
-    /// Copy `source` to `destination`, optionally into a different logical
-    /// database (`COPY ... DB destination_db`). Set `replace` to overwrite.
-    async fn copy_with_options<S: ToValkeyArgs + Send, D: ToValkeyArgs + Send>(
-        &self,
-        source: S,
-        destination: D,
-        destination_db: Option<i64>,
-        replace: bool,
-    ) -> ValkeyResult<bool> {
-        let mut cmd = Cmd::new();
-        cmd.arg("COPY").arg(source).arg(destination);
-        if let Some(db) = destination_db {
-            cmd.arg("DB").arg(db);
-        }
-        if replace {
-            cmd.arg("REPLACE");
-        }
-        bool::from_owned_valkey_value(self.execute_command(cmd, None).await?)
-    }
-
     /// Create a key from a serialized payload produced by `DUMP` (`RESTORE`).
     async fn restore<K: ToValkeyArgs + Send, V: ToValkeyArgs + Send>(
         &self,
@@ -154,17 +69,18 @@ pub trait GenericCommands: CommandExecutor {
         serialized: V,
         options: RestoreOptions,
     ) -> ValkeyResult<()> {
-        let mut cmd = Cmd::new();
-        cmd.arg("RESTORE").arg(key).arg(ttl_ms).arg(serialized);
-        options.add_to(&mut cmd);
+        let cmd = cmd("RESTORE")
+            .with_arg(key)
+            .with_arg(ttl_ms)
+            .with_arg(serialized)
+            .with_arg(options);
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
     /// Block until `numreplicas` replicas acknowledge previous writes, or until
     /// `timeout_ms` elapses (`WAIT`). Returns the number of replicas reached.
     async fn wait(&self, numreplicas: i64, timeout_ms: i64) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("WAIT").arg(numreplicas).arg(timeout_ms);
+        let cmd = cmd("WAIT").with_arg(numreplicas).with_arg(timeout_ms);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -178,18 +94,13 @@ pub trait GenericCommands: CommandExecutor {
         limit: Option<Limit>,
         alpha: bool,
     ) -> ValkeyResult<i64> {
-        let mut cmd = Cmd::new();
-        cmd.arg("SORT").arg(key);
-        if let Some(l) = limit {
-            cmd.arg("LIMIT").arg(l.offset).arg(l.count);
-        }
-        if let Some(o) = order {
-            cmd.arg(o.as_arg());
-        }
-        if alpha {
-            cmd.arg("ALPHA");
-        }
-        cmd.arg("STORE").arg(destination);
+        let cmd = cmd("SORT")
+            .with_arg(key)
+            .with_arg(limit)
+            .with_arg(order)
+            .with_arg(alpha.then_some("ALPHA"))
+            .with_arg("STORE")
+            .with_arg(destination);
         i64::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -201,17 +112,11 @@ pub trait GenericCommands: CommandExecutor {
         limit: Option<Limit>,
         alpha: bool,
     ) -> ValkeyResult<Vec<Bytes>> {
-        let mut cmd = Cmd::new();
-        cmd.arg("SORT_RO").arg(key);
-        if let Some(l) = limit {
-            cmd.arg("LIMIT").arg(l.offset).arg(l.count);
-        }
-        if let Some(o) = order {
-            cmd.arg(o.as_arg());
-        }
-        if alpha {
-            cmd.arg("ALPHA");
-        }
+        let cmd = cmd("SORT_RO")
+            .with_arg(key)
+            .with_arg(limit)
+            .with_arg(order)
+            .with_arg(alpha.then_some("ALPHA"));
         match self.execute_command(cmd, None).await? {
             ValkeyValue::Array(items) => items
                 .into_iter()
@@ -225,8 +130,7 @@ pub trait GenericCommands: CommandExecutor {
     /// Move `key` to another logical database (`MOVE`). Returns whether the key
     /// was moved.
     async fn move_key<K: ToValkeyArgs + Send>(&self, key: K, db: i64) -> ValkeyResult<bool> {
-        let mut cmd = Cmd::new();
-        cmd.arg("MOVE").arg(key).arg(db);
+        let cmd = cmd("MOVE").with_arg(key).with_arg(db);
         bool::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -240,14 +144,13 @@ pub trait GenericCommands: CommandExecutor {
         timeout_ms: i64,
         options: MigrateOptions,
     ) -> ValkeyResult<()> {
-        let mut cmd = Cmd::new();
-        cmd.arg("MIGRATE")
-            .arg(host)
-            .arg(port)
-            .arg(key)
-            .arg(destination_db)
-            .arg(timeout_ms);
-        options.add_to(&mut cmd);
+        let cmd = cmd("MIGRATE")
+            .with_arg(host)
+            .with_arg(port)
+            .with_arg(key)
+            .with_arg(destination_db)
+            .with_arg(timeout_ms)
+            .with_arg(options);
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -260,11 +163,7 @@ pub trait GenericCommands: CommandExecutor {
     ///
     /// [#6917]: https://github.com/valkey-io/valkey-glide/issues/6917
     async fn watch<K: ToValkeyArgs + Send + Sync>(&self, keys: &[K]) -> ValkeyResult<()> {
-        let mut cmd = Cmd::new();
-        cmd.arg("WATCH");
-        for k in keys {
-            cmd.arg(k);
-        }
+        let cmd = cmd("WATCH").with_arg(keys);
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
@@ -273,9 +172,7 @@ pub trait GenericCommands: CommandExecutor {
     /// See [`watch`](Self::watch) for the connection-scoping caveat that
     /// applies to `WATCH`/`UNWATCH` on GLIDE's multiplexed client.
     async fn unwatch(&self) -> ValkeyResult<()> {
-        let mut cmd = Cmd::new();
-        cmd.arg("UNWATCH");
-        <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
+        <()>::from_owned_valkey_value(self.execute_command(cmd("UNWATCH"), None).await?)
     }
 }
 
@@ -292,31 +189,13 @@ pub(crate) fn parse_scan_reply(reply: ValkeyValue) -> ValkeyResult<(String, Vec<
                     .collect::<ValkeyResult<Vec<_>>>()?,
                 ValkeyValue::Nil => Vec::new(),
                 other => {
-                    return Err(crate::error::GlideError::Request(format!(
-                        "unexpected SCAN keys shape: {other:?}"
-                    )));
+                    return Err(to_glide_error(other, "Unexpected SCAN keys shape."));
                 }
             };
             Ok((cursor, keys))
         }
-        _ => Err(crate::error::GlideError::Request(
-            "unexpected SCAN reply shape".into(),
-        )),
+        other => Err(to_glide_error(other, "Unexpected SCAN reply shape.")),
     }
 }
 
 impl<T: CommandExecutor + ?Sized> GenericCommands for T {}
-
-#[cfg(test)]
-mod scan_arg_probe {
-    #[test]
-    fn scan_type_arg_encoding() {
-        // strum's Display renders the variant name ("ZSet"); the wire arg
-        // must be the lowercase type name the server expects.
-        let s = crate::commands::options::ObjectType::ZSet
-            .to_redis()
-            .to_string()
-            .to_lowercase();
-        assert_eq!(s, "zset");
-    }
-}

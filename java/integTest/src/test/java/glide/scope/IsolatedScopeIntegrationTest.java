@@ -5,13 +5,24 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import glide.TestConfiguration;
 import glide.api.GlideClient;
+import glide.api.models.configuration.AdvancedGlideClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.TlsAdvancedConfiguration;
+import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.RequestException;
+import glide.api.models.exceptions.TimeoutException;
 import glide.api.models.scope.IsolatedScope;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
@@ -64,6 +75,26 @@ public class IsolatedScopeIntegrationTest {
         client.close();
 
         System.out.println("Scope acquire and basic commands test PASSED!");
+    }
+
+    @Test
+    public void testScopeNoScriptErrorKeepsServerText() throws Exception {
+        GlideClient client = GlideClient.createClient(getTestClientConfig()).get(10, TimeUnit.SECONDS);
+        try (IsolatedScope scope =
+                client.scopedConnection(Duration.ofSeconds(10)).get(10, TimeUnit.SECONDS)) {
+            ExecutionException exception =
+                    assertThrows(
+                            ExecutionException.class,
+                            () ->
+                                    scope
+                                            .executeCommand("EVALSHA", "ffffffffffffffffffffffffffffffffffffffff", "0")
+                                            .get(5, TimeUnit.SECONDS));
+            assertInstanceOf(RequestException.class, exception.getCause());
+            String message = exception.getCause().getMessage();
+            assertTrue(message.matches("NOSCRIPT No matching script\\.( Please use EVAL\\.)?"), message);
+        } finally {
+            client.close();
+        }
     }
 
     @Test
@@ -198,7 +229,7 @@ public class IsolatedScopeIntegrationTest {
         IsolatedScope scope1 =
                 client.scopedConnection(Duration.ofSeconds(10)).get(10, TimeUnit.SECONDS);
         long scopeId1 = scope1.getScopeId();
-        scope1.ping().get(5, TimeUnit.SECONDS);
+        String connId1 = scope1.executeCommand("CLIENT", "ID").get(5, TimeUnit.SECONDS);
         scope1.close();
 
         // Give the pool a moment to process the release
@@ -208,9 +239,11 @@ public class IsolatedScopeIntegrationTest {
         IsolatedScope scope2 =
                 client.scopedConnection(Duration.ofSeconds(10)).get(10, TimeUnit.SECONDS);
         long scopeId2 = scope2.getScopeId();
+        String connId2 = scope2.executeCommand("CLIENT", "ID").get(5, TimeUnit.SECONDS);
         scope2.close();
 
-        assertEquals(scopeId1, scopeId2, "LIFO reuse: same scope_id should be returned");
+        assertEquals(connId1, connId2, "LIFO reuse: same connection should be returned");
+        assertNotEquals(scopeId1, scopeId2, "a reused connection gets a fresh scope_id");
 
         client.close();
         System.out.println("Scope reuse test PASSED!");
@@ -304,5 +337,152 @@ public class IsolatedScopeIntegrationTest {
                         + "/"
                         + numThreads
                         + " threads succeeded with unique scopes.");
+    }
+
+    // ---- Acquire fails fast -------------------------------------------------
+    //
+    // An acquire stops as soon as its outcome is known: the exception class names
+    // the cause, and a cause that waiting cannot fix is reported without waiting.
+
+    /**
+     * The scope pool holds at most this many connections per client (glide-core
+     * ScopePoolConfig::default().max_total). Not configurable from Java.
+     */
+    private static final int SCOPE_POOL_MAX_TOTAL = 64;
+
+    private static List<IsolatedScope> holdWholeScopePool(GlideClient client) throws Exception {
+        List<IsolatedScope> held = new ArrayList<>(SCOPE_POOL_MAX_TOTAL);
+        for (int i = 0; i < SCOPE_POOL_MAX_TOTAL; i++) {
+            held.add(client.scopedConnection(Duration.ofSeconds(10)).get(10, TimeUnit.SECONDS));
+        }
+        return held;
+    }
+
+    private static Throwable acquireFailure(CompletableFuture<IsolatedScope> acquire)
+            throws Exception {
+        ExecutionException wrapped =
+                assertThrows(ExecutionException.class, () -> acquire.get(10, TimeUnit.SECONDS));
+        return wrapped.getCause();
+    }
+
+    @Test
+    public void exhaustedPoolTimesOutNamingTheCause() throws Exception {
+        try (GlideClient client =
+                GlideClient.createClient(getTestClientConfig()).get(10, TimeUnit.SECONDS)) {
+            List<IsolatedScope> held = holdWholeScopePool(client);
+            try {
+                long started = System.nanoTime();
+                Throwable cause = acquireFailure(client.scopedConnection(Duration.ofMillis(500)));
+                long elapsedMs = (System.nanoTime() - started) / 1_000_000;
+
+                assertInstanceOf(TimeoutException.class, cause);
+                assertTrue(cause.getMessage().contains("pool exhausted"), cause.getMessage());
+                assertTrue(elapsedMs >= 400 && elapsedMs < 1000, "elapsed " + elapsedMs + "ms");
+            } finally {
+                held.forEach(IsolatedScope::close);
+            }
+        }
+    }
+
+    @Test
+    public void closingTheClientEndsAWaitingAcquire() throws Exception {
+        GlideClient client = GlideClient.createClient(getTestClientConfig()).get(10, TimeUnit.SECONDS);
+        holdWholeScopePool(client);
+
+        CompletableFuture<Void> closer =
+                CompletableFuture.runAsync(
+                        () -> {
+                            try {
+                                Thread.sleep(200);
+                                client.close();
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            } catch (ExecutionException e) {
+                                throw new IllegalStateException(e);
+                            }
+                        });
+        long started = System.nanoTime();
+        Throwable cause = acquireFailure(client.scopedConnection(Duration.ofSeconds(5)));
+        long elapsedMs = (System.nanoTime() - started) / 1_000_000;
+
+        assertInstanceOf(ClosingException.class, cause);
+        assertTrue(elapsedMs < 2000, "waited " + elapsedMs + "ms past the close for a 5s deadline");
+        closer.get(5, TimeUnit.SECONDS);
+    }
+
+    /** A caller that stops waiting must not keep the slot the core later grants it. */
+    @Test
+    public void abandonedAcquireReturnsItsSlot() throws Exception {
+        try (GlideClient client =
+                GlideClient.createClient(getTestClientConfig()).get(10, TimeUnit.SECONDS)) {
+            List<IsolatedScope> held = holdWholeScopePool(client);
+
+            CompletableFuture<IsolatedScope> waiter = client.scopedConnection(Duration.ofSeconds(5));
+            Thread.sleep(200);
+            assertTrue(waiter.cancel(true));
+
+            // The abandoned acquire is still waiting in the core; freeing the pool
+            // lets it win a slot, which the binding must then release on its behalf.
+            held.forEach(IsolatedScope::close);
+
+            List<IsolatedScope> refilled = new ArrayList<>(SCOPE_POOL_MAX_TOTAL);
+            try {
+                for (int i = 0; i < SCOPE_POOL_MAX_TOTAL; i++) {
+                    try {
+                        refilled.add(client.scopedConnection(Duration.ofSeconds(2)).get(10, TimeUnit.SECONDS));
+                    } catch (ExecutionException e) {
+                        fail(
+                                "slot "
+                                        + (i + 1)
+                                        + " of "
+                                        + SCOPE_POOL_MAX_TOTAL
+                                        + " unavailable after an abandoned acquire: "
+                                        + e.getCause());
+                    }
+                }
+            } finally {
+                refilled.forEach(IsolatedScope::close);
+            }
+        }
+    }
+
+    @Test
+    public void lazyMtlsParentFailsWithoutWaiting() throws Exception {
+        // A lazily connected client with TLS material never dials, so there is
+        // nothing for a scoped connection to inherit. Any certificate serves as the
+        // material; read the committed glide-core fixture rather than utils/tls_crts/,
+        // which exists only after a TLS server start.
+        byte[] caCert =
+                Files.readAllBytes(
+                        Paths.get(System.getProperty("user.dir"))
+                                .getParent()
+                                .getParent()
+                                .resolve("glide-core")
+                                .resolve("src")
+                                .resolve("tls_reload")
+                                .resolve("test_data")
+                                .resolve("cert_a.pem"));
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host("127.0.0.1").port(1).build())
+                        .useTLS(true)
+                        .lazyConnect(true)
+                        .requestTimeout(5000)
+                        .advancedConfiguration(
+                                AdvancedGlideClientConfiguration.builder()
+                                        .tlsAdvancedConfiguration(
+                                                TlsAdvancedConfiguration.builder().rootCertificates(caCert).build())
+                                        .build())
+                        .build();
+
+        try (GlideClient client = GlideClient.createClient(config).get(10, TimeUnit.SECONDS)) {
+            long started = System.nanoTime();
+            Throwable cause = acquireFailure(client.scopedConnection(Duration.ofSeconds(5)));
+            long elapsedMs = (System.nanoTime() - started) / 1_000_000;
+
+            assertInstanceOf(RequestException.class, cause);
+            assertTrue(cause.getMessage().contains("certificate material"), cause.getMessage());
+            assertTrue(elapsedMs < 2000, "elapsed " + elapsedMs + "ms");
+        }
     }
 }

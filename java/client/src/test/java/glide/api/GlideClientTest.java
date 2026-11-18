@@ -28,6 +28,7 @@ import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
 import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.DelIfEq;
 import static command_request.CommandRequestOuterClass.RequestType.Dump;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
 import static command_request.CommandRequestOuterClass.RequestType.Exists;
@@ -62,6 +63,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HDel;
 import static command_request.CommandRequestOuterClass.RequestType.HExists;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
+import static command_request.CommandRequestOuterClass.RequestType.HGetDel;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
 import static command_request.CommandRequestOuterClass.RequestType.HKeys;
@@ -335,6 +337,7 @@ import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.Expiry;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
@@ -391,6 +394,7 @@ import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -409,6 +413,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -1004,8 +1009,10 @@ public class GlideClientTest {
     }
 
     @SneakyThrows
-    @Test
-    public void set_with_SetOptions_OnlyIfEqual_success() {
+    @ParameterizedTest
+    @CsvSource({"ONLY_IF_EQUAL, IFEQ", "ONLY_IF_NOT_EQUAL, IFNE"})
+    public void set_with_SetOptions_value_comparison_success(
+            ConditionalSet condition, String keyword) {
         // setup
         String key = "key";
         String value = "value";
@@ -1023,13 +1030,10 @@ public class GlideClientTest {
         assertEquals("OK", initialResponse.get());
 
         // Set `key` to `newValue` with the correct condition
-        SetOptions setOptions =
-                SetOptions.builder()
-                        .conditionalSetOnlyIfEqualTo(value) // Key must currently have `value`
-                        .expiry(Expiry.UnixSeconds(60L))
-                        .build();
+        String comparisonValue = condition == ONLY_IF_EQUAL ? value : newValue;
+        SetOptions setOptions = valueComparisonOptions(condition, comparisonValue);
         String[] correctConditionArguments =
-                new String[] {key, newValue, ONLY_IF_EQUAL.getValkeyApi(), value, "EXAT", "60"};
+                new String[] {key, newValue, keyword, comparisonValue, "EXAT", "60"};
         CompletableFuture<String> correctSetResponse = new CompletableFuture<>();
         correctSetResponse.complete("OK");
         when(commandManager.<String>submitNewCommand(eq(pSet), eq(correctConditionArguments), any()))
@@ -1050,8 +1054,9 @@ public class GlideClientTest {
     }
 
     @SneakyThrows
-    @Test
-    public void set_with_SetOptions_OnlyIfEqual_fails() {
+    @ParameterizedTest
+    @CsvSource({"ONLY_IF_EQUAL, IFEQ", "ONLY_IF_NOT_EQUAL, IFNE"})
+    public void set_with_SetOptions_value_comparison_fails(ConditionalSet condition, String keyword) {
         // Key-Value setup
         String key = "key";
         String value = "value";
@@ -1069,14 +1074,10 @@ public class GlideClientTest {
         assertEquals("OK", initialResponse.get());
 
         // Attempt to set `key` to `newValue` with the wrong condition
-        SetOptions wrongConditionOptions =
-                SetOptions.builder()
-                        .conditionalSetOnlyIfEqualTo(newValue) // Incorrect: current value of key is `value`
-                        .expiry(Expiry.UnixSeconds(60L))
-                        .build();
-
+        String comparisonValue = condition == ONLY_IF_EQUAL ? newValue : value;
+        SetOptions wrongConditionOptions = valueComparisonOptions(condition, comparisonValue);
         String[] wrongConditionArguments =
-                new String[] {key, newValue, ONLY_IF_EQUAL.getValkeyApi(), newValue, "EXAT", "60"};
+                new String[] {key, newValue, keyword, comparisonValue, "EXAT", "60"};
 
         CompletableFuture<String> failedSetResponse = new CompletableFuture<>();
         failedSetResponse.complete(null);
@@ -1098,14 +1099,17 @@ public class GlideClientTest {
     }
 
     @SneakyThrows
-    @Test
-    public void set_with_SetOptions_and_binary_condition_OnlyIfEqual_success() {
+    @ParameterizedTest
+    @CsvSource({"ONLY_IF_EQUAL, IFEQ", "ONLY_IF_NOT_EQUAL, IFNE"})
+    public void set_with_SetOptions_and_binary_value_comparison_success(
+            ConditionalSet condition, String keyword) {
         // setup
         GlideString key = gs("key");
         GlideString value = gs(new byte[] {(byte) 0xFF});
-        GlideString newValue = gs("new value");
+        GlideString newValue = gs(new byte[] {(byte) 0xC0, (byte) 0xAF});
 
         assertFalse(value.canConvertToString());
+        assertFalse(newValue.canConvertToString());
 
         // Set `key` to `value` initially
         CompletableFuture<String> initialSetResponse = new CompletableFuture<>();
@@ -1119,15 +1123,10 @@ public class GlideClientTest {
         assertEquals("OK", initialResponse.get());
 
         // Set `key` to `newValue` with the correct condition
-        SetOptions setOptions =
-                SetOptions.builder()
-                        .conditionalSetOnlyIfEqualTo(value) // Key must currently have `value`
-                        .expiry(Expiry.UnixSeconds(60L))
-                        .build();
+        GlideString comparisonValue = condition == ONLY_IF_EQUAL ? value : newValue;
+        SetOptions setOptions = valueComparisonOptions(condition, comparisonValue);
         GlideString[] correctConditionArguments =
-                new GlideString[] {
-                    key, newValue, gs(ONLY_IF_EQUAL.getValkeyApi()), value, gs("EXAT"), gs("60")
-                };
+                new GlideString[] {key, newValue, gs(keyword), comparisonValue, gs("EXAT"), gs("60")};
         CompletableFuture<String> correctSetResponse = new CompletableFuture<>();
         correctSetResponse.complete("OK");
         when(commandManager.<String>submitNewCommand(eq(pSet), eq(correctConditionArguments), any()))
@@ -1148,8 +1147,10 @@ public class GlideClientTest {
     }
 
     @SneakyThrows
-    @Test
-    public void set_with_SetOptions_and_binary_condition_OnlyIfEqual_fails() {
+    @ParameterizedTest
+    @CsvSource({"ONLY_IF_EQUAL, IFEQ", "ONLY_IF_NOT_EQUAL, IFNE"})
+    public void set_with_SetOptions_and_binary_value_comparison_fails(
+            ConditionalSet condition, String keyword) {
         // Key-Value setup
         GlideString key = gs("key");
         GlideString value = gs(new byte[] {(byte) 0xFF});
@@ -1170,16 +1171,10 @@ public class GlideClientTest {
         assertEquals("OK", initialResponse.get());
 
         // Attempt to set `key` to `newValue` with the wrong condition
-        SetOptions wrongConditionOptions =
-                SetOptions.builder()
-                        .conditionalSetOnlyIfEqualTo(newValue) // Incorrect: current value of key is `value`
-                        .expiry(Expiry.UnixSeconds(60L))
-                        .build();
-
+        GlideString comparisonValue = condition == ONLY_IF_EQUAL ? newValue : value;
+        SetOptions wrongConditionOptions = valueComparisonOptions(condition, comparisonValue);
         GlideString[] wrongConditionArguments =
-                new GlideString[] {
-                    key, newValue, gs(ONLY_IF_EQUAL.getValkeyApi()), newValue, gs("EXAT"), gs("60")
-                };
+                new GlideString[] {key, newValue, gs(keyword), comparisonValue, gs("EXAT"), gs("60")};
 
         CompletableFuture<String> failedSetResponse = new CompletableFuture<>();
         failedSetResponse.complete(null);
@@ -2769,6 +2764,56 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
+    public void hgetdel_success() {
+        // setup
+        String key = "testKey";
+        String[] fields = {"testField1", "testField2"};
+        String[] args = {key, "FIELDS", "2", "testField1", "testField2"};
+        String[] value = {"testValue1", "testValue2"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(HGetDel), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.hgetdel(key, fields);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hgetdel_success_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] fields = {gs("testField1"), gs("testField2")};
+        GlideString[] args = {key, gs("FIELDS"), gs("2"), gs("testField1"), gs("testField2")};
+        GlideString[] value = {gs("testValue1"), gs("testValue2")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(HGetDel), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.hgetdel(key, fields);
+        GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void hlen_success() {
         // setup
         String key = "testKey";
@@ -4054,6 +4099,54 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertTrue(payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sismemberIfExists_returns_success() {
+        // setup
+        String key = "testKey";
+        String member = "testMember";
+        String[] arguments = new String[] {key, member, "XX"};
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(-1L);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SIsMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sismemberIfExists(key, member);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(-1L, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sismemberIfExists_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString member = gs("testMember");
+        GlideString[] arguments = new GlideString[] {key, member, gs("XX")};
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(-1L);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SIsMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sismemberIfExists(key, member);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(-1L, payload);
     }
 
     @SneakyThrows
@@ -11323,6 +11416,27 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
+    public void delifeq() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
+        when(commandManager.<Boolean>submitNewCommand(
+                        eq(DelIfEq), eq(new String[] {key, value}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.delifeq(key, value);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(true, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void geohash_returns_success() {
         // setup
         String key = "testKey";
@@ -16708,5 +16822,43 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, response.get());
+    }
+
+    @Test
+    public void slotForKey_handles_empty_hash_tag() throws Exception {
+        java.lang.reflect.Method m = GlideClient.class.getDeclaredMethod("slotForKey", byte[].class);
+        m.setAccessible(true);
+
+        // An empty hash tag ("{}") must not consume a later '}'. The first '}' after
+        // the first '{' closes the tag; an empty tag hashes the whole key. Slot values
+        // are the server's CLUSTER KEYSLOT results.
+        assertEquals(15441, m.invoke(null, (Object) "{}user}:1".getBytes(StandardCharsets.UTF_8)));
+        assertEquals(13650, m.invoke(null, (Object) "{}{a}".getBytes(StandardCharsets.UTF_8)));
+        // Non-empty tag and no tag are unaffected.
+        assertEquals(5061, m.invoke(null, (Object) "foo{bar}baz".getBytes(StandardCharsets.UTF_8)));
+        assertEquals(8106, m.invoke(null, (Object) "{user1}".getBytes(StandardCharsets.UTF_8)));
+        // First '}' closes the tag ("{bar"); a '{' with no closing '}' hashes the whole key.
+        assertEquals(4015, m.invoke(null, (Object) "foo{{bar}}zap".getBytes(StandardCharsets.UTF_8)));
+        assertEquals(4092, m.invoke(null, (Object) "{".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    // ==================== Helper Methods ====================
+
+    /** Builds {@link SetOptions} with the given value comparison condition. */
+    private static SetOptions valueComparisonOptions(ConditionalSet condition, String value) {
+        SetOptions.SetOptionsBuilder builder = SetOptions.builder().expiry(Expiry.UnixSeconds(60L));
+        return (condition == ONLY_IF_EQUAL
+                        ? builder.conditionalSetOnlyIfEqualTo(value)
+                        : builder.conditionalSetOnlyIfNotEqualTo(value))
+                .build();
+    }
+
+    /** Builds {@link SetOptions} with the given binary value comparison condition. */
+    private static SetOptions valueComparisonOptions(ConditionalSet condition, GlideString value) {
+        SetOptions.SetOptionsBuilder builder = SetOptions.builder().expiry(Expiry.UnixSeconds(60L));
+        return (condition == ONLY_IF_EQUAL
+                        ? builder.conditionalSetOnlyIfEqualTo(value)
+                        : builder.conditionalSetOnlyIfNotEqualTo(value))
+                .build();
     }
 }

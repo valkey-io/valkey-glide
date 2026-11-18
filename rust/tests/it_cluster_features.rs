@@ -7,12 +7,13 @@ mod common;
 
 use glide::commands::pubsub::PubSubCommands;
 use glide::{
-    AsyncCommands, CustomCommand, FromValkeyValue, GlideClusterClient,
+    AsyncTypedCommands, CustomCommand, FromValkeyValue, GlideClusterClient,
     GlideClusterClientConfiguration, PipelineOptions, PubSubMessageKind, Route, ScriptingCommands,
     SortedSetCommands, pipe,
 };
 use std::time::Duration;
 
+// TODO #7673: Update for the single-node route type, and cover a routed batch.
 timed_tokio_test!(
     async fn cluster_exec_with_options() {
         let cluster = common::ClusterHarness::start().await;
@@ -103,7 +104,7 @@ timed_tokio_test!(
         subscriber.subscribe(&[chan.as_str()]).await.unwrap();
         tokio::time::sleep(Duration::from_millis(300)).await;
 
-        let n: i64 = publisher.publish(&chan, "hello").await.unwrap();
+        let n: usize = publisher.publish(&chan, "hello").await.unwrap();
         assert!(n >= 1, "expected >=1 subscriber, got {n}");
 
         let msg = tokio::time::timeout(Duration::from_secs(3), subscriber.get_pubsub_message())
@@ -155,7 +156,7 @@ timed_tokio_test!(
         // src + dst must share a slot in cluster mode (multi-key command).
         let src = common::tkey("czr", "src");
         let dst = common::tkey("czr", "dst");
-        let _: i64 = client
+        let _: usize = client
             .zadd_multiple(&src, &[(1.0, "a"), (2.0, "b"), (3.0, "c")])
             .await
             .unwrap();
@@ -171,7 +172,7 @@ timed_tokio_test!(
             .await
             .unwrap();
         assert_eq!(n, 2);
-        let card: i64 = client.zcard(&dst).await.unwrap();
+        let card: usize = client.zcard(&dst).await.unwrap();
         assert_eq!(card, 2);
     }
 );

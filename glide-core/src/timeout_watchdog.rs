@@ -9,21 +9,59 @@
 //! All diagnostic event construction moves to the consumer side (`client/mod.rs`).
 
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::ptr;
+use std::sync::atomic::{AtomicPtr, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use tokio::sync::oneshot;
 
 // ─── Public Types ────────────────────────────────────────────────────────────
 
-/// Published pending count: updated by the watchdog thread once per loop iteration.
-/// Readers use relaxed load; only the watchdog thread writes (no contention).
-static PUBLISHED_PENDING: AtomicUsize = AtomicUsize::new(0);
+/// Instance-local snapshot capabilities. Only the worker owns the writer;
+/// handles may clone readers without gaining publication authority.
+mod pending_snapshot {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
 
-/// Returns the current number of pending (registered but not yet fired/cancelled)
-/// watchdog entries.
+    #[derive(Clone)]
+    pub(super) struct Reader(Arc<AtomicUsize>);
+
+    pub(super) struct Writer(Arc<AtomicUsize>);
+
+    pub(super) fn new() -> (Reader, Writer) {
+        let count = Arc::new(AtomicUsize::new(0));
+        (Reader(Arc::clone(&count)), Writer(count))
+    }
+
+    impl Reader {
+        pub(super) fn load(&self) -> usize {
+            self.0.load(Ordering::Relaxed)
+        }
+    }
+
+    impl Writer {
+        pub(super) fn publish(&mut self, count: usize) {
+            self.0.store(count, Ordering::Relaxed);
+        }
+    }
+}
+
+/// Returns the elected watchdog's latest pending-entry snapshot, or zero
+/// before initialization. Reading diagnostics does not start a worker.
 pub fn pending_count() -> usize {
-    PUBLISHED_PENDING.load(Ordering::Relaxed)
+    let slot = GLOBAL_SLOT.load(Ordering::Acquire);
+    if slot.is_null() {
+        return 0;
+    }
+    // Safety: published slots and elected watchdogs are never freed.
+    let watchdog = unsafe { &*slot }.load(Ordering::Acquire);
+    if watchdog.is_null() {
+        0
+    } else {
+        unsafe { &*watchdog }.pending.load()
+    }
 }
 
 /// Resolve a command name from raw bytes to a &'static str without allocation.
@@ -193,6 +231,7 @@ pub fn cmd_name_from_bytes(bytes: &[u8]) -> &'static str {
             &[
                 (b"CLUSTER", "CLUSTER"),
                 (b"COMMAND", "COMMAND"),
+                (b"DELIFEQ", "DELIFEQ"),
                 (b"DISCARD", "DISCARD"),
                 (b"EVALSHA", "EVALSHA"),
                 (b"FLUSHDB", "FLUSHDB"),
@@ -201,6 +240,7 @@ pub fn cmd_name_from_bytes(bytes: &[u8]) -> &'static str {
                 (b"HEXISTS", "HEXISTS"),
                 (b"HEXPIRE", "HEXPIRE"),
                 (b"HGETALL", "HGETALL"),
+                (b"HGETDEL", "HGETDEL"),
                 (b"HINCRBY", "HINCRBY"),
                 (b"HSTRLEN", "HSTRLEN"),
                 (b"LATENCY", "LATENCY"),
@@ -557,6 +597,9 @@ impl LatencyTracker {
         // Only update count while the ring is filling. Once full, count == capacity
         // and never changes again — skip the atomic RMW entirely.
         if self.count.load(Ordering::Relaxed) < self.capacity {
+            //TODO: (#7175) `fetch_update` is deprecated for `try_update` since Rust 1.99, but `try_update`
+            // needs 1.95 and the MSRV is 1.94.1.
+            #[allow(deprecated)]
             let _ = self
                 .count
                 .fetch_update(Ordering::Release, Ordering::Relaxed, |c| {
@@ -600,17 +643,118 @@ struct DeadlineEntry {
 #[derive(Clone)]
 pub struct TimeoutWatchdog {
     tx: mpsc::Sender<DeadlineEntry>,
+    pending: pending_snapshot::Reader,
 }
 
-/// Global singleton watchdog instance. Uses an atomic pointer so the read path
-/// is lock-free and the state can be replaced after fork().
-static GLOBAL_WATCHDOG: std::sync::atomic::AtomicPtr<TimeoutWatchdog> =
-    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+/// Points to the slot that holds the global watchdog pointer. Read it
+/// through [`global_slot`]. Both are atomic pointers, so reads take no lock
+/// and a forked child can replace the watchdog.
+static GLOBAL_SLOT: AtomicPtr<AtomicPtr<TimeoutWatchdog>> = AtomicPtr::new(ptr::null_mut());
+
+/// The slot that holds the global watchdog pointer.
+///
+/// On Linux the slot has a page of its own, marked `MADV_WIPEONFORK`, so the
+/// kernel zeroes it in every forked child. The `pthread_atfork` handler is not
+/// enough there. glibc 2.36 and later drop their atfork lock while prepare
+/// handlers run, and a child skips any handler registered after its fork
+/// began. A first `global()` that runs during that window registers the
+/// handler too late for that child, yet still publishes the watchdog.
+/// Elsewhere, and wherever `mmap` or `madvise` fails (kernels older than
+/// 4.14, a sandbox that denies it), the slot is plain memory and only the
+/// handler clears it.
+#[inline]
+fn global_slot() -> &'static AtomicPtr<TimeoutWatchdog> {
+    let slot = GLOBAL_SLOT.load(Ordering::Acquire);
+    if !slot.is_null() {
+        // Safety: a published slot is never freed.
+        return unsafe { &*slot };
+    }
+    init_global_slot()
+}
+
+#[cold]
+fn init_global_slot() -> &'static AtomicPtr<TimeoutWatchdog> {
+    let slot = new_global_slot();
+    match GLOBAL_SLOT.compare_exchange(ptr::null_mut(), slot, Ordering::AcqRel, Ordering::Acquire) {
+        Ok(_) => unsafe { &*slot },
+        // Another thread published first. Ours is leaked, at most once per
+        // thread that races the first call.
+        Err(existing) => unsafe { &*existing },
+    }
+}
+
+fn new_global_slot() -> *mut AtomicPtr<TimeoutWatchdog> {
+    #[cfg(target_os = "linux")]
+    unsafe {
+        let len = libc::sysconf(libc::_SC_PAGESIZE) as usize;
+        let page = libc::mmap(
+            ptr::null_mut(),
+            len,
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+            -1,
+            0,
+        );
+        if page != libc::MAP_FAILED {
+            // If madvise fails the page is plain memory, and the atfork
+            // handler still clears it. A new anonymous page is
+            // all zeros, so the slot starts null.
+            libc::madvise(page, len, libc::MADV_WIPEONFORK);
+            return page.cast();
+        }
+    }
+    Box::into_raw(Box::new(AtomicPtr::new(ptr::null_mut())))
+}
+
+/// Unset the global watchdog so the next `global()` call starts a fresh one.
+///
+/// The old instance is leaked, never dropped. In a forked child the parent's
+/// watchdog thread does not exist, and the instance's channel and lock state
+/// were copied mid-use, so dropping it could deadlock or misbehave. Leaking
+/// one inherited instance per fork is the safe choice.
+///
+/// Only atomic loads and stores, so it is safe to run in a `pthread_atfork`
+/// child handler.
+#[cfg(unix)]
+fn reinit_global() {
+    let slot = GLOBAL_SLOT.load(Ordering::Acquire);
+    if !slot.is_null() {
+        unsafe { &*slot }.store(ptr::null_mut(), Ordering::Release);
+    }
+}
+
+/// Make sure forked children reinitialize the global watchdog.
+///
+/// fork() copies only the calling thread, so a child would otherwise inherit a
+/// global whose watchdog thread does not exist: its deadlines would never fire,
+/// and on macOS sending to it crashes the child with SIGTRAP.
+///
+/// Every caller runs this before it can publish a global, so a published global
+/// always has the handler registered. A fork that had already begun can still
+/// skip it, which [`global_slot`] covers on Linux. It never blocks: a child
+/// forked while another thread was registering just registers again. Registering more than
+/// once is harmless because reinit is idempotent. Panics if registration
+/// fails, so no global is published without the handler.
+#[cfg(unix)]
+fn ensure_reinit_in_forked_child() {
+    extern "C" fn reinit_global_in_child() {
+        reinit_global();
+    }
+    static REGISTERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if !REGISTERED.load(Ordering::Acquire) {
+        let rc = unsafe { libc::pthread_atfork(None, None, Some(reinit_global_in_child)) };
+        assert_eq!(
+            rc, 0,
+            "Failed to register the timeout watchdog fork handler"
+        );
+        REGISTERED.store(true, Ordering::Release);
+    }
+}
 
 impl TimeoutWatchdog {
     /// Get or initialize the global shared watchdog instance.
     pub fn global() -> &'static Self {
-        let ptr = GLOBAL_WATCHDOG.load(std::sync::atomic::Ordering::Acquire);
+        let ptr = global_slot().load(Ordering::Acquire);
         if !ptr.is_null() {
             // Safety: once installed as non-null, the pointer is never freed
             // until process exit (reinit_global intentionally leaks the prior
@@ -623,12 +767,14 @@ impl TimeoutWatchdog {
     /// Initialize the global watchdog (first call or after reinit).
     /// Uses compare_exchange so only one caller wins the race.
     fn init_global() -> &'static Self {
-        let ptr = Box::into_raw(Box::new(Self::start_global()));
-        match GLOBAL_WATCHDOG.compare_exchange(
-            std::ptr::null_mut(),
+        #[cfg(unix)]
+        ensure_reinit_in_forked_child();
+        let ptr = Box::into_raw(Box::new(Self::start()));
+        match global_slot().compare_exchange(
+            ptr::null_mut(),
             ptr,
-            std::sync::atomic::Ordering::AcqRel,
-            std::sync::atomic::Ordering::Acquire,
+            Ordering::AcqRel,
+            Ordering::Acquire,
         ) {
             Ok(_) => unsafe { &*ptr },
             Err(existing) => {
@@ -642,43 +788,25 @@ impl TimeoutWatchdog {
         }
     }
 
-    /// Reinitialize the global watchdog after fork().
-    ///
-    /// After fork(), the watchdog thread is dead but the AtomicPtr still points
-    /// to the old instance. This replaces it with a fresh one. The old instance
-    /// is intentionally leaked — its internal Mutex/Condvar are in undefined
-    /// state post-fork and cannot be safely dropped.
-    ///
-    /// Must only be called in a forked child process where the previous
-    /// watchdog thread is no longer running.
-    pub fn reinit_global() {
-        let w = Box::new(Self::start_global());
-        let w_ref: &'static Self = Box::leak(w);
-        let ptr = w_ref as *const Self as *mut Self;
-        GLOBAL_WATCHDOG.store(ptr, std::sync::atomic::Ordering::Release);
-        // Reset the published pending count — the old watchdog's entries are gone.
-        PUBLISHED_PENDING.store(0, Ordering::Relaxed);
-    }
-
-    /// Start the global watchdog instance (publishes pending count).
-    fn start_global() -> Self {
+    /// Construct matching registration and snapshot capabilities before spawning.
+    fn prepare() -> (
+        Self,
+        mpsc::Receiver<DeadlineEntry>,
+        pending_snapshot::Writer,
+    ) {
         let (tx, rx) = mpsc::channel();
-        std::thread::Builder::new()
-            .name("glide-timeout-watchdog".into())
-            .spawn(move || Self::run(rx, true))
-            .expect("Failed to spawn timeout watchdog thread");
-        Self { tx }
+        let (pending, writer) = pending_snapshot::new();
+        (Self { tx, pending }, rx, writer)
     }
 
-    /// Start a watchdog instance. Spawns a dedicated OS thread.
-    /// Does NOT publish to the global pending count (only the global instance does).
+    /// Start an independent watchdog with its own pending-entry snapshot.
     pub fn start() -> Self {
-        let (tx, rx) = mpsc::channel();
+        let (watchdog, rx, pending) = Self::prepare();
         std::thread::Builder::new()
             .name("glide-timeout-watchdog".into())
-            .spawn(move || Self::run(rx, false))
+            .spawn(move || Self::run(rx, pending))
             .expect("Failed to spawn timeout watchdog thread");
-        Self { tx }
+        watchdog
     }
 
     /// Register a timeout. Returns a `oneshot::Receiver<()>` that resolves
@@ -695,7 +823,7 @@ impl TimeoutWatchdog {
     }
 
     /// Watchdog thread main loop.
-    fn run(rx: mpsc::Receiver<DeadlineEntry>, publish_count: bool) {
+    fn run(rx: mpsc::Receiver<DeadlineEntry>, mut pending: pending_snapshot::Writer) {
         let mut deadlines: BTreeMap<Instant, Vec<DeadlineEntry>> = BTreeMap::new();
         let mut last_cleanup = Instant::now();
         let mut local_count: usize = 0;
@@ -750,10 +878,8 @@ impl TimeoutWatchdog {
                 }
             }
 
-            // Publish the local count once per iteration (no contention on write side)
-            if publish_count {
-                PUBLISHED_PENDING.store(local_count, Ordering::Relaxed);
-            }
+            // Only this worker can publish to this instance's snapshot.
+            pending.publish(local_count);
 
             // Wait for next event
             let wait_result = if let Some(next_deadline) = deadlines.keys().next() {
@@ -831,14 +957,16 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn pending_count_increments_and_decrements() {
-        // Use the global watchdog since PUBLISHED_PENDING is a single global.
-        // #[serial] prevents concurrent tests from perturbing the global counter
-        // while we poll for our 2 registered entries.
+    async fn pending_count_reflects_registered_entries() {
+        // Exercise the public accessor. Serial tests may replace the global
+        // slot, but retired workers cannot overwrite this instance's snapshot.
         let watchdog = TimeoutWatchdog::global();
 
-        let rx1 = watchdog.register(Duration::from_millis(500), Instant::now());
-        let rx2 = watchdog.register(Duration::from_millis(500), Instant::now());
+        // The watchdog publishes 0 as soon as these entries fire, so the deadline
+        // must outlast the whole poll bound below or a slow scheduler reads 0.
+        let timeout = Duration::from_secs(10);
+        let rx1 = watchdog.register(timeout, Instant::now());
+        let rx2 = watchdog.register(timeout, Instant::now());
 
         // Poll until the watchdog thread drains the channel and publishes our
         // two entries, or until a deadline expires. A fixed sleep is not
@@ -855,9 +983,9 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
-        // Wait for both to fire
-        let _ = rx1.await;
-        let _ = rx2.await;
+        // Cancel rather than wait for them to fire.
+        drop(rx1);
+        drop(rx2);
     }
 
     #[tokio::test]
@@ -880,6 +1008,86 @@ mod tests {
             result.is_ok(),
             "watchdog must still fire after mass cancellation"
         );
+    }
+
+    fn wait_for_pending(watchdog: &TimeoutWatchdog, expected: usize) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while watchdog.pending.load() != expected {
+            assert!(
+                Instant::now() < deadline,
+                "pending snapshot did not reach {expected}"
+            );
+            std::thread::yield_now();
+        }
+    }
+
+    fn wait_for_signal(mut signal: oneshot::Receiver<()>) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            match signal.try_recv() {
+                Ok(()) => return,
+                Err(oneshot::error::TryRecvError::Closed) => {
+                    panic!("worker dropped timeout signal")
+                }
+                Err(oneshot::error::TryRecvError::Empty) => {}
+            }
+            assert!(Instant::now() < deadline, "worker did not fire timeout");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    fn join_worker(worker: std::thread::JoinHandle<()>) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !worker.is_finished() {
+            assert!(
+                Instant::now() < deadline,
+                "worker did not exit after disconnect"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn retired_worker_cannot_overwrite_replacement_snapshot() {
+        let (retired, rx, writer) = TimeoutWatchdog::prepare();
+        let worker = std::thread::spawn(move || TimeoutWatchdog::run(rx, writer));
+        // Establish that the old worker is running before creating its replacement.
+        let first = retired.register(Duration::ZERO, Instant::now());
+        wait_for_signal(first);
+
+        let replacement = TimeoutWatchdog::start();
+        let mut first = replacement.register(Duration::from_secs(60), Instant::now());
+        let mut second = replacement.register(Duration::from_secs(60), Instant::now());
+        wait_for_pending(&replacement, 2);
+
+        // Force a publication by the retired worker AFTER the replacement's 2.
+        // Joining ensures its final zero publication has completed before asserting.
+        let wake = retired.register(Duration::ZERO, Instant::now());
+        wait_for_signal(wake);
+        drop(retired);
+        join_worker(worker);
+        assert_eq!(replacement.pending.load(), 2);
+        assert_eq!(first.try_recv(), Err(oneshot::error::TryRecvError::Empty));
+        assert_eq!(second.try_recv(), Err(oneshot::error::TryRecvError::Empty));
+    }
+
+    #[test]
+    fn losing_candidate_cannot_overwrite_elected_snapshot() {
+        let elected = TimeoutWatchdog::start();
+        let mut first = elected.register(Duration::from_secs(60), Instant::now());
+        let mut second = elected.register(Duration::from_secs(60), Instant::now());
+        wait_for_pending(&elected, 2);
+
+        // Model a candidate losing the CAS and being dropped before its spawned
+        // worker is first scheduled. The real worker loop publishes zero before
+        // observing Disconnected; that publication must belong only to the loser.
+        let (loser, rx, writer) = TimeoutWatchdog::prepare();
+        drop(loser);
+        join_worker(std::thread::spawn(move || TimeoutWatchdog::run(rx, writer)));
+        assert_eq!(elected.pending.load(), 2);
+        assert_eq!(first.try_recv(), Err(oneshot::error::TryRecvError::Empty));
+        assert_eq!(second.try_recv(), Err(oneshot::error::TryRecvError::Empty));
     }
 
     // ── Latency Tracker ──────────────────────────────────────────────────
@@ -1022,24 +1230,244 @@ mod tests {
         assert_eq!(cmd_name_from_bytes(b"unknowncmd"), "UNKNOWN");
     }
 
-    // ── Fork Safety (reinit) ─────────────────────────────────────────────
+    // ── Global Instance ──────────────────────────────────────────────────
 
     #[tokio::test]
-    async fn reinit_global_spawns_new_working_watchdog() {
-        // Ensure the global watchdog is initialized.
-        let _pre = TimeoutWatchdog::global();
-
-        // Simulate post-fork reinit: replace the global with a fresh instance.
-        TimeoutWatchdog::reinit_global();
-
-        // The new watchdog must be functional — register and await a timeout.
-        let watchdog = TimeoutWatchdog::global();
-        let rx = watchdog.register(Duration::from_millis(50), Instant::now());
-        let result = tokio::time::timeout(Duration::from_millis(500), rx).await;
+    #[serial]
+    async fn repeated_calls_reuse_the_same_instance() {
+        let before = TimeoutWatchdog::global();
+        let after = TimeoutWatchdog::global();
         assert!(
-            result.is_ok(),
-            "watchdog must fire after reinit_global (simulating post-fork)"
+            std::ptr::eq(before, after),
+            "global() must not replace a live instance"
         );
-        assert!(result.unwrap().is_ok());
+
+        let rx = after.register(Duration::from_millis(50), Instant::now());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), rx)
+                .await
+                .is_ok(),
+            "watchdog must still fire"
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn concurrent_global_calls_converge_on_one_instance() {
+        const THREADS: usize = 8;
+
+        // Clear the slot so every thread races to start the global. The old
+        // instance is leaked, as in a forked child.
+        TimeoutWatchdog::global();
+        let previous = global_slot().swap(ptr::null_mut(), Ordering::AcqRel);
+
+        let barrier = Arc::new(std::sync::Barrier::new(THREADS));
+        // Addresses, because `*const T` is not `Send`.
+        let handed_out: Vec<usize> = (0..THREADS)
+            .map(|_| {
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    TimeoutWatchdog::global() as *const TimeoutWatchdog as usize
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|worker| worker.join().expect("worker panicked"))
+            .collect();
+
+        let elected = handed_out[0];
+        assert!(
+            handed_out.iter().all(|got| *got == elected),
+            "concurrent global() calls handed out more than one instance"
+        );
+        assert_ne!(
+            elected, previous as usize,
+            "global() must start a new instance after the slot is cleared"
+        );
+
+        let elected = unsafe { &*(elected as *const TimeoutWatchdog) };
+        let rx = elected.register(Duration::from_millis(50), Instant::now());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), rx)
+                .await
+                .is_ok(),
+            "the elected watchdog must fire"
+        );
+    }
+
+    // ── Fork Safety (reinit) ─────────────────────────────────────────────
+
+    /// Run `child` in a forked child and assert it returned true. The child
+    /// never returns into the test harness, and a child that does not exit
+    /// within the deadline is killed so the test fails instead of hanging.
+    #[cfg(unix)]
+    fn assert_in_forked_child(child: impl FnOnce() -> bool + std::panic::UnwindSafe) {
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0, "fork failed");
+        if pid == 0 {
+            let ok = std::panic::catch_unwind(child);
+            unsafe { libc::_exit(if matches!(ok, Ok(true)) { 0 } else { 1 }) };
+        }
+
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let mut status = 0;
+        loop {
+            let reaped = unsafe { libc::waitpid(pid, &mut status, libc::WNOHANG) };
+            assert!(reaped >= 0, "waitpid failed");
+            if reaped == pid {
+                break;
+            }
+            if Instant::now() >= deadline {
+                unsafe {
+                    libc::kill(pid, libc::SIGKILL);
+                    libc::waitpid(pid, &mut status, 0);
+                }
+                panic!("forked child did not exit within 30 s and was killed");
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+            "forked child failed (raw wait status {status})"
+        );
+    }
+
+    /// Wait for a deadline registered on the global watchdog to fire.
+    #[cfg(unix)]
+    fn global_deadline_fires() -> bool {
+        let rx = TimeoutWatchdog::global().register(Duration::from_millis(10), Instant::now());
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap()
+            .block_on(async { tokio::time::timeout(Duration::from_secs(5), rx).await })
+            .is_ok_and(|r| r.is_ok())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn forked_child_gets_working_watchdog() {
+        // Start the global watchdog in the parent and let it fire once.
+        assert!(
+            global_deadline_fires(),
+            "parent watchdog must fire before the fork"
+        );
+
+        // The parent's watchdog thread is not copied into the child, so a
+        // deadline registered there only fires if the child got a fresh one.
+        assert_in_forked_child(global_deadline_fires);
+    }
+
+    /// glibc 2.36 and later drop their atfork lock while prepare handlers run,
+    /// and the child skips any handler registered after its fork began. If
+    /// one thread forks while another runs the first `global()`, the child
+    /// misses the reinit handler and inherits a watchdog without its thread.
+    ///
+    /// A prepare handler holds the fork in that window until the first
+    /// `global()` returns. Where the lock stays held (macOS, musl, older
+    /// glibc), that `global()` waits for the fork instead, the handler gives
+    /// up after 5 s, and the child starts its own watchdog.
+    #[cfg(unix)]
+    #[test]
+    fn child_forked_during_first_global_gets_working_watchdog() {
+        use std::sync::atomic::AtomicBool;
+
+        // The window only exists while the global has never been created,
+        // so run the scenario alone in a fresh copy of this test binary.
+        const IN_FRESH_PROCESS: &str = "GLIDE_TEST_FRESH_PROCESS";
+        const FRESH_PROCESS_PASSED: i32 = 73;
+        if std::env::var_os(IN_FRESH_PROCESS).is_none() {
+            let name = concat!(
+                module_path!(),
+                "::child_forked_during_first_global_gets_working_watchdog"
+            );
+            let name = name.split_once("::").unwrap().1;
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", name, "--test-threads=1", "--nocapture"])
+                .env(IN_FRESH_PROCESS, "1")
+                .spawn()
+                .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(60);
+            let status = loop {
+                if let Some(status) = child.try_wait().unwrap() {
+                    break status;
+                }
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    panic!("fresh test process did not exit within 60 s and was killed");
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            };
+            // A distinct code proves the scenario ran; a stale test name
+            // would make libtest run nothing and exit 0.
+            assert_eq!(
+                status.code(),
+                Some(FRESH_PROCESS_PASSED),
+                "fresh test process failed: {status}"
+            );
+            return;
+        }
+
+        static ARMED: AtomicBool = AtomicBool::new(false);
+        static FORK_IN_PREPARE: AtomicBool = AtomicBool::new(false);
+        static FIRST_GLOBAL_DONE: AtomicBool = AtomicBool::new(false);
+        extern "C" fn hold_fork_in_prepare() {
+            if !ARMED.swap(false, Ordering::AcqRel) {
+                return;
+            }
+            FORK_IN_PREPARE.store(true, Ordering::Release);
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !FIRST_GLOBAL_DONE.load(Ordering::Acquire) && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+
+        assert!(GLOBAL_SLOT.load(Ordering::Acquire).is_null());
+        // Registered before the fork starts, so it runs. The watchdog's
+        // handler is registered inside the window, after the fork took its
+        // snapshot, so glibc skips it in the child.
+        let rc = unsafe { libc::pthread_atfork(Some(hold_fork_in_prepare), None, None) };
+        assert_eq!(rc, 0);
+        ARMED.store(true, Ordering::Release);
+
+        let first_global = std::thread::spawn(|| {
+            while !FORK_IN_PREPARE.load(Ordering::Acquire) {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            TimeoutWatchdog::global();
+            FIRST_GLOBAL_DONE.store(true, Ordering::Release);
+        });
+        assert_in_forked_child(global_deadline_fires);
+        first_global.join().unwrap();
+        std::process::exit(FRESH_PROCESS_PASSED);
+    }
+
+    /// A raw clone() runs no atfork handlers, so only the wipe-on-fork page
+    /// can clear the slot in this child. This also catches a madvise call
+    /// that fails without anyone noticing.
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[serial]
+    fn slot_is_zeroed_in_child_without_atfork_handlers() {
+        TimeoutWatchdog::global();
+        assert!(!global_slot().load(Ordering::Acquire).is_null());
+
+        let pid = unsafe { libc::syscall(libc::SYS_clone, libc::SIGCHLD, 0, 0, 0, 0) };
+        assert!(pid >= 0, "clone failed");
+        if pid == 0 {
+            // Only atomic loads and _exit: the child has one thread and must
+            // not touch locks the parent's other threads may hold.
+            let wiped = global_slot().load(Ordering::Acquire).is_null();
+            unsafe { libc::_exit(if wiped { 0 } else { 1 }) };
+        }
+        let mut status = 0;
+        let reaped = unsafe { libc::waitpid(pid as libc::pid_t, &mut status, 0) };
+        assert_eq!(reaped, pid as libc::pid_t);
+        assert!(
+            libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+            "slot was not zeroed in the child (raw wait status {status})"
+        );
     }
 }

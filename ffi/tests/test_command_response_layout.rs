@@ -14,7 +14,7 @@ use std::mem;
 
 #[test]
 fn command_response_size() {
-    // On 64-bit platforms: 13 fields, mostly pointers and longs.
+    // On 64-bit platforms: 13 fields, mostly pointers and 64-bit integers.
     // This test catches any accidental field additions or removals.
     let size = mem::size_of::<CommandResponse>();
     assert!(size > 0, "CommandResponse should have a non-zero size");
@@ -27,6 +27,15 @@ fn command_response_size() {
          python/glide-shared/glide_shared/_glide_ffi.py and the fast response \
          parser in python/glide-shared/src/lib.rs"
     );
+}
+
+#[test]
+fn command_response_integer_fields_are_64_bit() {
+    let response = CommandResponse::default();
+    assert_eq!(mem::size_of_val(&response.int_value), 8);
+    assert_eq!(mem::size_of_val(&response.string_value_len), 8);
+    assert_eq!(mem::size_of_val(&response.array_value_len), 8);
+    assert_eq!(mem::size_of_val(&response.sets_value_len), 8);
 }
 
 #[test]

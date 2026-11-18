@@ -94,6 +94,7 @@ import {
     createUnWatch,
     parseClientTrackingInfoResponse,
 } from "./Commands";
+import { setScopeConnectionRequest } from "./ScopeInternal";
 
 /**
  * Constant representing all sharded channels.
@@ -160,7 +161,7 @@ export namespace GlideClusterClientConfiguration {
         Pattern = 1,
 
         /**
-         * Use sharded pubsub. Available since Valkey version 7.0.
+         * Use sharded pubsub. Available since Valkey 7.0.0.
          */
         Sharded = 2,
     }
@@ -198,7 +199,7 @@ export namespace GlideClusterClientConfiguration {
  * The subscriptions are organized by channel mode:
  * - {@link GlideClusterClientConfiguration.PubSubChannelModes.Exact | Exact}: Exact channel names
  * - {@link GlideClusterClientConfiguration.PubSubChannelModes.Pattern | Pattern}: Channel patterns using glob-style matching
- * - {@link GlideClusterClientConfiguration.PubSubChannelModes.Sharded | Sharded}: Sharded channels (available since Valkey 7.0)
+ * - {@link GlideClusterClientConfiguration.PubSubChannelModes.Sharded | Sharded}: Sharded channels (available since Valkey 7.0.0)
  *
  * @example
  * ```typescript
@@ -246,7 +247,7 @@ export interface ClusterPubSubState {
  *   - `{ duration_in_sec: number }`: Manually configure the interval for periodic checks.
  * - **Client-Side Caching**: Use `clientSideCache` (inherited from BaseClientConfiguration) to enable local caching for improved performance.
  * - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
- *   - Supports exact channels, patterns, and sharded channels (available since Valkey version 7.0).
+ *   - Supports exact channels, patterns, and sharded channels (available since Valkey 7.0.0).
  *
  * @example
  * ```typescript
@@ -754,7 +755,7 @@ export class GlideClusterClient extends BaseClient {
      *     numberOfRetries: 5,
      *     factor: 1000,
      *     exponentBase: 2,
-     *     jitter: 20,
+     *     jitterPercent: 20,
      *   },
      * });
      * ```
@@ -791,6 +792,7 @@ export class GlideClusterClient extends BaseClient {
     public static async fromPoolClientId(
         clientId: number,
         options: GlideClusterClientConfiguration,
+        connectionRequestBytes: Uint8Array,
     ): Promise<GlideClusterClient> {
         const { poolBuildHandle } = await import("../build-ts/native");
         // Create the client instance whose handleResponsesAvailable will be stored
@@ -806,6 +808,9 @@ export class GlideClusterClient extends BaseClient {
         // Inject the handle into the SAME instance whose callback was registered.
         (client as unknown as { clientHandle: typeof handle }).clientHandle =
             handle;
+        // The client never runs connectToServer, so give it the pool's
+        // connection request for scopedConnection().
+        setScopeConnectionRequest(client, connectionRequestBytes);
         return client;
     }
 
@@ -1473,7 +1478,7 @@ export class GlideClusterClient extends BaseClient {
      * The command will be routed to a random node, unless `route` is provided.
      *
      * @see {@link https://valkey.io/commands/fcall/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param func - The function name.
      * @param args - A list of `function` arguments and it should not represent names of keys.
@@ -1503,7 +1508,7 @@ export class GlideClusterClient extends BaseClient {
      * The command will be routed to a random node, unless `route` is provided.
      *
      * @see {@link https://valkey.io/commands/fcall/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param func - The function name.
      * @param args - A list of `function` arguments and it should not represent names of keys.
@@ -1532,7 +1537,7 @@ export class GlideClusterClient extends BaseClient {
      * Deletes a library and all its functions.
      *
      * @see {@link https://valkey.io/commands/function-delete/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param libraryCode - The library name to delete.
      * @param route - (Optional) The command will be routed to all primary node, unless `route` is provided, in which
@@ -1559,7 +1564,7 @@ export class GlideClusterClient extends BaseClient {
      * Loads a library to Valkey.
      *
      * @see {@link https://valkey.io/commands/function-load/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
      * @param options - (Optional) Additional parameters:
@@ -1593,7 +1598,7 @@ export class GlideClusterClient extends BaseClient {
      * Deletes all function libraries.
      *
      * @see {@link https://valkey.io/commands/function-flush/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param options - (Optional) Additional parameters:
      * - (Optional) `mode`: the flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
@@ -1623,7 +1628,7 @@ export class GlideClusterClient extends BaseClient {
      * The command will be routed to a random node, unless `route` is provided.
      *
      * @see {@link https://valkey.io/commands/function-list/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param options - (Optional) See {@link FunctionListOptions}, {@link DecoderOption}, and {@link RouteOption}.
      * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
@@ -1674,7 +1679,7 @@ export class GlideClusterClient extends BaseClient {
      * The command will be routed to all nodes, unless `route` is provided.
      *
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param options - (Optional) See {@link DecoderOption} and {@link RouteOption}.
      * @returns A `Record` with two keys:
@@ -1734,7 +1739,7 @@ export class GlideClusterClient extends BaseClient {
      * `FUNCTION KILL` terminates read-only functions only.
      *
      * @see {@link https://valkey.io/commands/function-kill/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param options - (Optional) See {@link RouteOption}.
      * @returns `"OK"` if function is terminated. Otherwise, throws an error.
@@ -1755,7 +1760,7 @@ export class GlideClusterClient extends BaseClient {
      * Returns the serialized payload of all loaded libraries.
      *
      * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param options - (Optional) See {@link RouteOption}.
      * @returns The serialized payload of all loaded libraries.
@@ -1779,7 +1784,7 @@ export class GlideClusterClient extends BaseClient {
      * Restores libraries from the serialized payload returned by {@link functionDump}.
      *
      * @see {@link https://valkey.io/commands/function-restore/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
+     * @since Valkey 7.0.0.
      *
      * @param payload - The serialized data from {@link functionDump}.
      * @param options - (Optional) Additional parameters:
@@ -1891,7 +1896,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param message - Message to publish.
      * @param channel - Channel to publish the message on.
-     * @param sharded - Use sharded pubsub mode. Available since Valkey version 7.0.
+     * @param sharded - Use sharded pubsub mode. Available since Valkey 7.0.0.
      * @returns -  Number of subscriptions in primary node that received the message.
      *
      * @example
@@ -2186,7 +2191,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/bgsave/|valkey.io} for more details.
      *
-     * @since Valkey 8.1
+     * @since Valkey 8.1.0.
      *
      * @param options - (Optional) See {@link RouteOption}.
      * @returns A non-empty status string.
@@ -2467,7 +2472,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Subscribes the client to the specified sharded channels (non-blocking).
      * Returns immediately without waiting for subscription confirmation.
-     * Available since Valkey 7.0.
+     * Available since Valkey 7.0.0.
      *
      * @see {@link https://valkey.io/commands/ssubscribe/|valkey.io} for details.
      *
@@ -2494,7 +2499,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Subscribes the client to the specified sharded channels (blocking).
      * Waits for subscription confirmation or until timeout.
-     * Available since Valkey 7.0.
+     * Available since Valkey 7.0.0.
      *
      * @see {@link https://valkey.io/commands/ssubscribe/|valkey.io} for details.
      *
@@ -2526,7 +2531,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Unsubscribes the client from the specified sharded channels (non-blocking).
      * Pass null or ALL_CHANNELS to unsubscribe from all sharded channels.
-     * Available since Valkey 7.0.
+     * Available since Valkey 7.0.0.
      *
      * @see {@link https://valkey.io/commands/sunsubscribe/|valkey.io} for details.
      *
@@ -2555,7 +2560,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Unsubscribes the client from the specified sharded channels (blocking).
      * Pass null or ALL_CHANNELS to unsubscribe from all sharded channels.
-     * Available since Valkey 7.0.
+     * Available since Valkey 7.0.0.
      *
      * @see {@link https://valkey.io/commands/sunsubscribe/|valkey.io} for details.
      *

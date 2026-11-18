@@ -2,25 +2,14 @@
 //! Mock-executor unit tests for the geospatial command family.
 use super::Mock;
 use crate::ValkeyValue;
-use crate::commands::geo::{GeoCommands, GeoSearchShape, GeoUnit, GeospatialData};
-use crate::commands::options::{ConditionalChange, OrderBy};
+use crate::commands::geo::{
+    GeoCommands, GeoCoord, GeoSearchOptions, GeoSearchResult, GeoSearchShape,
+    GeoSearchStoreOptions, GeoUnit,
+};
+use crate::commands::options::{ExistenceCheck, OrderBy};
 
-fn coord(lon: f64, lat: f64) -> GeospatialData {
-    GeospatialData {
-        longitude: lon,
-        latitude: lat,
-    }
-}
-
-#[tokio::test]
-async fn geoadd_encoding() {
-    let m = Mock::int(1);
-    let n = m
-        .geoadd("Sicily", &[("Palermo", coord(13.5, 38.5))])
-        .await
-        .unwrap();
-    m.assert_args(&["GEOADD", "Sicily", "13.5", "38.5", "Palermo"]);
-    assert_eq!(n, 1);
+fn coord(lon: f64, lat: f64) -> GeoCoord<f64> {
+    GeoCoord::lon_lat(lon, lat)
 }
 
 #[tokio::test]
@@ -28,51 +17,13 @@ async fn geoadd_options_encoding() {
     let m = Mock::int(1);
     m.geoadd_options(
         "Sicily",
-        &[("Palermo", coord(13.5, 38.5))],
-        Some(ConditionalChange::OnlyIfDoesNotExist),
+        &[(coord(13.5, 38.5), "Palermo")],
+        Some(ExistenceCheck::NX),
         true,
     )
     .await
     .unwrap();
     m.assert_args(&["GEOADD", "Sicily", "NX", "CH", "13.5", "38.5", "Palermo"]);
-}
-
-#[tokio::test]
-async fn geodist_encoding() {
-    let m = Mock::bulk("166.27");
-    let d = m
-        .geodist("Sicily", "Palermo", "Catania", Some(GeoUnit::Kilometers))
-        .await
-        .unwrap();
-    m.assert_args(&["GEODIST", "Sicily", "Palermo", "Catania", "km"]);
-    assert_eq!(d, Some(166.27));
-}
-
-#[tokio::test]
-async fn geohash_encoding() {
-    let m = Mock::array(vec![
-        ValkeyValue::BulkString(b"sqc8b49rny0".to_vec().into()),
-        ValkeyValue::Nil,
-    ]);
-    let v = m
-        .geohash("Sicily", &["Palermo", "NonExisting"])
-        .await
-        .unwrap();
-    m.assert_args(&["GEOHASH", "Sicily", "Palermo", "NonExisting"]);
-    assert_eq!(v.len(), 2);
-    assert!(v[0].is_some());
-    assert!(v[1].is_none());
-}
-
-#[tokio::test]
-async fn geopos_encoding() {
-    let m = Mock::array(vec![ValkeyValue::Array(vec![
-        ValkeyValue::BulkString(b"13.5".to_vec().into()),
-        ValkeyValue::BulkString(b"38.5".to_vec().into()),
-    ])]);
-    let v = m.geopos("Sicily", &["Palermo"]).await.unwrap();
-    m.assert_args(&["GEOPOS", "Sicily", "Palermo"]);
-    assert_eq!(v, vec![Some((13.5, 38.5))]);
 }
 
 #[tokio::test]
@@ -102,9 +53,12 @@ async fn geosearch_from_member_with_tail() {
             radius: 5.5,
             unit: GeoUnit::Kilometers,
         },
-        Some(OrderBy::Asc),
-        Some(10),
-        true,
+        GeoSearchOptions {
+            order: Some(OrderBy::Asc),
+            count: Some(10),
+            any: true,
+            ..Default::default()
+        },
     )
     .await
     .unwrap();
@@ -124,6 +78,56 @@ async fn geosearch_from_member_with_tail() {
 }
 
 #[tokio::test]
+async fn geosearch_from_member_with_extras() {
+    let m = Mock::array(vec![ValkeyValue::Array(vec![
+        ValkeyValue::BulkString(b"Palermo".to_vec().into()),
+        ValkeyValue::Array(vec![
+            ValkeyValue::Double(0.0),
+            ValkeyValue::Int(3479099956230698),
+            ValkeyValue::Array(vec![ValkeyValue::Double(13.5), ValkeyValue::Double(38.5)]),
+        ]),
+    ])]);
+    let results = m
+        .geosearch_from_member(
+            "Sicily",
+            "Palermo",
+            GeoSearchShape::ByRadius {
+                radius: 5.5,
+                unit: GeoUnit::Kilometers,
+            },
+            GeoSearchOptions {
+                with_position: true,
+                with_distance: true,
+                with_hash: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    m.assert_args(&[
+        "GEOSEARCH",
+        "Sicily",
+        "FROMMEMBER",
+        "Palermo",
+        "BYRADIUS",
+        "5.5",
+        "km",
+        "WITHCOORD",
+        "WITHDIST",
+        "WITHHASH",
+    ]);
+    assert_eq!(
+        results,
+        vec![GeoSearchResult {
+            member: "Palermo".into(),
+            position: Some(coord(13.5, 38.5)),
+            distance: Some(0.0),
+            hash: Some(3479099956230698),
+        }]
+    );
+}
+
+#[tokio::test]
 async fn geosearch_from_coord_bybox() {
     let m = Mock::array(vec![ValkeyValue::BulkString(b"Palermo".to_vec().into())]);
     m.geosearch_from_coord(
@@ -134,9 +138,7 @@ async fn geosearch_from_coord_bybox() {
             height: 3.5,
             unit: GeoUnit::Meters,
         },
-        None,
-        None,
-        false,
+        GeoSearchOptions::default(),
     )
     .await
     .unwrap();
@@ -164,10 +166,10 @@ async fn geosearchstore_from_member() {
             radius: 5.5,
             unit: GeoUnit::Kilometers,
         },
-        None,
-        None,
-        false,
-        true,
+        GeoSearchStoreOptions {
+            store_dist: true,
+            ..Default::default()
+        },
     )
     .await
     .unwrap();
@@ -195,10 +197,10 @@ async fn geosearchstore_from_coord() {
             radius: 5.5,
             unit: GeoUnit::Kilometers,
         },
-        None,
-        Some(5),
-        false,
-        false,
+        GeoSearchStoreOptions {
+            count: Some(5),
+            ..Default::default()
+        },
     )
     .await
     .unwrap();

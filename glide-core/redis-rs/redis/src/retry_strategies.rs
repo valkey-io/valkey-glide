@@ -1,5 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use crate::types::{ErrorKind, RedisError, RedisResult};
 use std::time::Duration;
 use tokio_retry2::strategy::{jitter_range, ExponentialBackoff};
 use tracing::debug;
@@ -18,9 +19,14 @@ pub(crate) const EXPONENT_BASE: u32 = 2;
 pub(crate) const FACTOR: u32 = 100;
 pub(crate) const NUMBER_OF_RETRIES: u32 = 5;
 pub(crate) const DEFAULT_JITTER_PERCENT: u32 = 20; // Default jitter ±20%
+/// Largest jitter that keeps the lower jitter bound non-negative, since the bounds are 1 ± jitter/100.
+pub const MAX_JITTER_PERCENT: u32 = 100;
 
 impl RetryStrategy {
-    /// Create RetryStrategy from given parameters
+    /// Create RetryStrategy from given parameters.
+    ///
+    /// A `jitter_percent` above [`MAX_JITTER_PERCENT`] is capped to it. Use [`Self::try_new`]
+    /// to reject it instead.
     pub fn new(
         exponent_base: u32,
         factor: u32,
@@ -33,8 +39,33 @@ impl RetryStrategy {
             EXPONENT_BASE
         };
         let factor = if factor > 0 { factor } else { FACTOR };
-        let jitter = jitter_percent.unwrap_or(DEFAULT_JITTER_PERCENT);
+        let jitter = jitter_percent
+            .unwrap_or(DEFAULT_JITTER_PERCENT)
+            .min(MAX_JITTER_PERCENT);
         Self::with_params(exponent_base, factor, number_of_retries, jitter)
+    }
+
+    /// Like [`Self::new`], but fails if `jitter_percent` exceeds [`MAX_JITTER_PERCENT`]. A larger
+    /// jitter would make the lower jitter bound negative, which `Duration::mul_f64` cannot represent.
+    pub fn try_new(
+        exponent_base: u32,
+        factor: u32,
+        number_of_retries: u32,
+        jitter_percent: Option<u32>,
+    ) -> RedisResult<Self> {
+        if let Some(jitter) = jitter_percent.filter(|&j| j > MAX_JITTER_PERCENT) {
+            return Err(RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "invalid reconnect strategy",
+                format!("jitter_percent must be between 0 and {MAX_JITTER_PERCENT}, got {jitter}"),
+            )));
+        }
+        Ok(Self::new(
+            exponent_base,
+            factor,
+            number_of_retries,
+            jitter_percent,
+        ))
     }
 
     /// Internal constructor used by `new` and `default`, emits a debug log.
@@ -69,7 +100,7 @@ impl RetryStrategy {
 
     /// Return an infinite iterator:
     /// - First number_of_retries attempts with backoff
-    /// - Then repeat the last delay forever
+    /// - Then repeat the last delay forever, re-jittered per attempt when jitter is enabled
     pub fn get_infinite_backoff_dur_iterator(&self) -> impl Iterator<Item = Duration> {
         let base_backoff =
             ExponentialBackoff::from_millis(self.exponent_base as u64).factor(self.factor as u64);
@@ -77,18 +108,25 @@ impl RetryStrategy {
         let (lower, upper) = self.jitter_bounds();
         let jitter_fn = jitter_range(lower, upper);
 
-        let last_duration = base_backoff
-            .clone()
-            .nth(self.number_of_retries as usize - 1)
-            .unwrap_or(Duration::from_millis(
-                self.factor as u64 * self.exponent_base.pow(self.number_of_retries - 1) as u64,
-            ));
+        // `ExponentialBackoff` yields `factor * exponent_base^(k+1)` at index `k`, so the last
+        // bounded delay is derived arithmetically. Walking the iterator to reach it would cost one
+        // step per retry, stalling the shared runtime thread for a retry count in the billions.
+        let last_exponent = self.number_of_retries.max(1);
+        let last_duration = Duration::from_millis(
+            (self.factor as u64)
+                .saturating_mul((self.exponent_base as u64).saturating_pow(last_exponent)),
+        );
 
         let bounded = base_backoff
             .map(jitter_fn)
             .take(self.number_of_retries as usize);
 
-        bounded.chain(std::iter::repeat(last_duration))
+        // Re-jitter each tail delay so clients that exhaust the bounded phase do not rejoin in
+        // lockstep, the same retry-storm protection the bounded phase gets.
+        let tail_jitter_fn = jitter_range(lower, upper);
+        let tail = std::iter::repeat_with(move || tail_jitter_fn(last_duration));
+
+        bounded.chain(tail)
     }
 
     /// Internal: Calculate jitter lower/upper bounds from jitter_percent
@@ -145,30 +183,111 @@ mod tests {
     }
 
     #[test]
-    fn test_infinite_backoff_behavior() {
-        let retries = 3;
-        let base = 2;
-        let factor = 100;
-        let jitter_percent = Some(20);
-        let strategy = RetryStrategy::new(base, factor, retries, jitter_percent);
-        let mut iter = strategy.get_infinite_backoff_dur_iterator();
+    fn test_jitter_percent_above_100_is_rejected() {
+        for jitter in [MAX_JITTER_PERCENT + 1, 150, u32::MAX] {
+            let err = RetryStrategy::try_new(2, 100, 3, Some(jitter)).unwrap_err();
+            assert_eq!(err.kind(), ErrorKind::InvalidClientConfig);
+            assert!(
+                err.to_string().contains("jitter_percent"),
+                "error does not name the field: {err}"
+            );
+        }
+    }
 
-        // First `retries` values should differ (jittered)
+    #[test]
+    fn test_new_caps_jitter_percent() {
+        let strategy = RetryStrategy::new(2, 100, 3, Some(u32::MAX));
+        assert_eq!(strategy.jitter_percent, MAX_JITTER_PERCENT);
+    }
+
+    #[test]
+    fn test_max_jitter_percent_is_accepted() {
+        let strategy = RetryStrategy::new(2, 100, 3, Some(MAX_JITTER_PERCENT));
+        let (lower, upper) = strategy.jitter_bounds();
+        assert_eq!(lower, 0.0);
+        assert_eq!(upper, 2.0);
+
+        // At full jitter the lower bound is exactly 0, so `Duration::mul_f64` stays in range.
+        for duration in strategy.get_bounded_backoff_dur_iterator() {
+            assert!(duration.as_millis() <= 2 * 100 * 2u128.pow(3));
+        }
+    }
+
+    #[test]
+    fn test_zero_retries_without_jitter_yields_exact_first_delay() {
+        let strategy = RetryStrategy::new(2, 100, 0, Some(0));
+        assert_eq!(strategy.get_bounded_backoff_dur_iterator().count(), 0);
+
+        // Pins the closed form itself: `factor * base^max(retries, 1)` = 200ms, no jitter to mask
+        // an off-by-one in the exponent. A `retries - 1` underflow would never return here.
+        let mut infinite = strategy.get_infinite_backoff_dur_iterator();
+        for _ in 0..6 {
+            assert_eq!(infinite.next().unwrap(), Duration::from_millis(200));
+        }
+    }
+
+    #[test]
+    fn test_infinite_tail_is_rejittered_when_jitter_enabled() {
+        let retries = 3;
+        let strategy = RetryStrategy::new(2, 100, retries, Some(20));
+        let mut iter = strategy.get_infinite_backoff_dur_iterator();
         for _ in 0..retries {
             let _ = iter.next().unwrap();
         }
 
-        // Now the iterator should yield the same (unjittered) value
-        let repeated = iter.next().unwrap();
-        for _ in 0..5 {
-            let value = iter.next().unwrap();
-            assert_eq!(
-                value,
-                repeated,
-                "Expected infinite tail with constant duration: got {} vs {}",
-                value.as_millis(),
-                repeated.as_millis()
-            );
+        // Successive tail delays must not be byte-identical, or every client that exhausts the
+        // bounded phase reconnects in lockstep. 40 samples make a false failure vanishingly rare.
+        let tail: Vec<_> = (0..40).map(|_| iter.next().unwrap()).collect();
+        let unique = tail.iter().collect::<std::collections::HashSet<_>>().len();
+        assert!(
+            unique > 1,
+            "tail repeated one value {:?} across {} samples",
+            tail[0],
+            tail.len()
+        );
+
+        // Every sample still sits in the jitter band around `factor * base^retries` = 800ms.
+        for duration in tail {
+            let ms = duration.as_millis();
+            assert!((640..=960).contains(&ms), "tail delay {ms}ms out of band");
+        }
+    }
+
+    #[test]
+    fn test_saturated_huge_retry_tail_is_prompt_and_does_not_panic() {
+        // factor and base at u32::MAX saturate the closed form to u64::MAX millis. Scaling that by
+        // the jitter upper bound must not overflow `Duration::mul_f64`, and a retry count of
+        // u32::MAX must not walk the backoff billions of steps to find the tail delay.
+        let strategy = RetryStrategy::new(u32::MAX, u32::MAX, u32::MAX, Some(100));
+        let start = std::time::Instant::now();
+        let mut infinite = strategy.get_infinite_backoff_dur_iterator();
+        for _ in 0..10 {
+            let _ = infinite.next().unwrap();
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(1),
+            "took {:?}",
+            start.elapsed()
+        );
+    }
+
+    #[test]
+    fn test_infinite_tail_matches_last_bounded_delay() {
+        let base = 2;
+        let factor = 100;
+        let retries = 4;
+        let strategy = RetryStrategy::new(base, factor, retries, Some(0));
+
+        let bounded: Vec<_> = strategy.get_bounded_backoff_dur_iterator().collect();
+        let mut infinite = strategy.get_infinite_backoff_dur_iterator();
+        for _ in 0..retries {
+            let _ = infinite.next().unwrap();
+        }
+
+        // With jitter off the tail repeats the last bounded delay, `factor * base^retries`, verbatim.
+        assert_eq!(*bounded.last().unwrap(), Duration::from_millis(1600));
+        for _ in 0..10 {
+            assert_eq!(infinite.next().unwrap(), Duration::from_millis(1600));
         }
     }
 }

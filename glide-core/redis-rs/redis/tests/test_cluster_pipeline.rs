@@ -135,7 +135,6 @@ mod test_cluster_pipeline {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_pipeline_with_killed_node() {
         // Setup a cluster with 3 nodes, no replicas.
         let cluster = TestClusterContext::new_with_cluster_client_builder(
@@ -262,7 +261,6 @@ mod test_cluster_pipeline {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_pipeline_with_moved_error() {
         for retries in [1, 0] {
             // Create a test cluster with 3 masters and no replicas.
@@ -350,7 +348,6 @@ mod test_cluster_pipeline {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_transaction_with_moved_error_with_retries() {
         for retries in [1, 0] {
             // Create a test cluster with 3 masters and no replicas.
@@ -415,7 +412,6 @@ mod test_cluster_pipeline {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_pipeline_with_specific_route() {
         // Create a test cluster with 3 masters and no replicas.
         let cluster = TestClusterContext::new(3, 0);
@@ -465,7 +461,6 @@ mod test_cluster_pipeline {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_pipeline_with_wrong_route() {
         // Create a test cluster with 3 masters and no replicas.
         let cluster = TestClusterContext::new_with_cluster_client_builder(
@@ -567,7 +562,6 @@ mod test_cluster_pipeline {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
 
     async fn test_mset_mget_with_moved_error() {
         for &retries in &[0, 1] {
@@ -674,7 +668,6 @@ mod test_cluster_pipeline {
     ///
     /// The test verifies whether the pipeline correctly handles these errors under different retry settings.
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_pipeline_with_ask_and_try_again_errors() {
         // Create a test cluster with 3 masters and no replicas.
         for retry in [false, true] {
@@ -811,7 +804,6 @@ mod test_cluster_pipeline {
     ///   - **Expected:**  
     ///     `[Value::Int(2), Value::Nil, Value::Okay]`
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_pipeline_kill_all_connections() {
         for retry in [false, true] {
             // Create a test cluster with 3 masters and no replicas.
@@ -895,7 +887,6 @@ mod test_cluster_pipeline {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_pipeline_read_from_replicas() {
         // 3 masters, 3 replicas (1 replica per master)
         let cluster = TestClusterContext::new_with_cluster_client_builder(
@@ -994,7 +985,6 @@ mod test_cluster_pipeline {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_round_robin_read_from_replicas() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             12, // 3 masters, 3 replicas per shard
@@ -1092,7 +1082,6 @@ mod test_cluster_pipeline {
     }
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn test_pipeline_read_from_az_affinity() {
         // Skip test if version is less then Valkey 8.0
         if engine_version_less_than("8.0").await {

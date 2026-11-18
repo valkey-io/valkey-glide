@@ -20,6 +20,7 @@ pub(crate) const LIB_NAME: &str = "GlideRust";
 /// Library version reported to the server.
 pub(crate) const LIB_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+// TODO #7691: Remove from the public API once `PubSubSubscriptions::subscribe` is replaced.
 /// The kind of a Pub/Sub channel subscription.
 ///
 /// Mirrors Python's `PubSubChannelModes`.
@@ -50,6 +51,8 @@ impl PubSubChannelMode {
 /// [`crate::GlideClient::try_get_pubsub_message`] (and the cluster equivalents).
 ///
 /// Mirrors Python's `*ClientConfiguration.pubsub_subscriptions`.
+// TODO #7691: Replace with `StandalonePubSubSubscriptions` and `ClusterPubSubSubscriptions`, with
+// `with_channel` / `with_pattern` (and `with_sharded_channel` for cluster only).
 #[derive(Debug, Clone, Default)]
 pub struct PubSubSubscriptions {
     channels: HashMap<PubSubChannelMode, HashSet<Vec<u8>>>,
@@ -166,6 +169,7 @@ impl NodeDiscoveryMode {
 
 /// A server address (host + port).
 ///
+// TODO #7645: Add a way to build a Unix socket address for standalone clients.
 /// Mirrors Python `NodeAddress`. Defaults to `localhost:6379`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeAddress {
@@ -196,6 +200,8 @@ impl NodeAddress {
         CoreNodeAddress {
             host: self.host.clone(),
             port: self.port,
+            // TODO #7645: Pass the Unix socket path, once `NodeAddress` can hold one.
+            unix_socket_path: None,
         }
     }
 }
@@ -417,13 +423,15 @@ impl IamAuthConfig {
 /// Mirrors Python `BackoffStrategy`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BackoffStrategy {
-    /// Number of retry attempts before giving up on a reconnection burst.
+    /// Number of retries over which the delay between attempts keeps growing. After that the delay
+    /// stops growing and the client keeps retrying until it reconnects.
     pub num_of_retries: u32,
-    /// The exponent base used for the exponential backoff.
-    pub factor: u32,
     /// The multiplier that will be applied to the waiting time between retries.
+    pub factor: u32,
+    /// The exponent base used for the exponential backoff.
     pub exponent_base: u32,
-    /// Optional jitter percentage applied to the computed delay.
+    /// Optional jitter percentage applied to the computed delay. Must be between 0 and 100; a
+    /// larger value is rejected when the client is created.
     pub jitter_percent: Option<u32>,
 }
 
@@ -472,6 +480,8 @@ pub enum TlsConfig {
     NoTls,
     /// TLS with full certificate verification.
     SecureTls,
+    // TODO #7707: Document that IAM authentication and custom CA certificates are rejected
+    // with `InsecureTls`.
     /// TLS without certificate verification (testing only).
     InsecureTls,
 }
@@ -530,6 +540,7 @@ pub(crate) fn split_connection_addr(
             };
             Ok((NodeAddress::new(host, port), tls))
         }
+        // TODO #7645: Accept Unix socket URLs for standalone clients; glide-core supports them.
         redis::ConnectionAddr::Unix(_) => Err(crate::error::GlideError::Configuration(
             "unix-socket connections are not supported by glide-core".into(),
         )),
@@ -582,6 +593,8 @@ pub(crate) fn duration_as_millis_u32(d: Duration) -> u32 {
 macro_rules! impl_common_config_builders {
     ($ty:ty) => {
         impl $ty {
+            // TODO #7702: Rename the consuming builder methods below (`tls`, `credentials`, ...) to
+            // `with_*` for consistency with the other builders in this crate.
             /// Configure for a single `host:port`.
             pub fn with_address(host: impl Into<String>, port: u16) -> Self {
                 Self::new(vec![NodeAddress::new(host, port)])
@@ -593,6 +606,8 @@ macro_rules! impl_common_config_builders {
                 self
             }
 
+            // TODO #7707: Document that combining a custom CA certificate with
+            // `TlsConfig::InsecureTls` is rejected.
             /// Trust a custom CA certificate (PEM bytes) when verifying the server with
             /// [`TlsConfig::SecureTls`]. Enables secure TLS against a server presenting a
             /// certificate signed by a private/self-signed CA. May be called more than
@@ -639,6 +654,7 @@ macro_rules! impl_common_config_builders {
                 self
             }
 
+            // TODO #7665: Reject a limit of 0 with `GlideError::Configuration`.
             /// Set the maximum number of concurrent in-flight requests.
             pub fn inflight_requests_limit(mut self, limit: u32) -> Self {
                 self.inflight_requests_limit = Some(limit);
@@ -670,6 +686,7 @@ macro_rules! impl_common_config_builders {
             }
 
             /// Set Pub/Sub subscriptions to establish on connect.
+            // TODO #7691: Take `StandalonePubSubSubscriptions` or `ClusterPubSubSubscriptions`.
             pub fn subscriptions(mut self, subscriptions: PubSubSubscriptions) -> Self {
                 self.pubsub_subscriptions = Some(subscriptions);
                 self
@@ -682,6 +699,8 @@ macro_rules! impl_common_config_builders {
             ///
             /// Note: runtime subscriptions are session-scoped — unlike connect-time
             /// subscriptions they are not automatically restored after a reconnect.
+            // TODO #7683: Reject `enable_pubsub` combined with RESP2 with
+            // `GlideError::Configuration`.
             #[must_use]
             pub fn enable_pubsub(mut self) -> Self {
                 self.force_pubsub_channel = true;

@@ -9,13 +9,22 @@ Requires a running Valkey server (standalone).
 """
 
 import asyncio
+import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
 from glide import (
+    AdvancedGlideClientConfiguration,
+    ConnectionError,
     GlideClient,
     GlideClientConfiguration,
+    NodeAddress,
+    RequestError,
+    TimeoutError,
+    TlsAdvancedConfiguration,
 )
 
 from tests.utils.utils import get_standalone_address as _get_standalone_address
@@ -46,6 +55,15 @@ class TestAsyncIsolatedScopeBasic:
             assert result == "PONG" or result == "OK"
         assert scope.is_released
 
+    async def test_scope_noscript_error_keeps_the_server_text(self, client):
+        """A NOSCRIPT reply keeps the server's text after the scope's own prefix."""
+        async with await client.scoped_connection() as scope:
+            with pytest.raises(
+                RuntimeError,
+                match=r"^Scope command error: NOSCRIPT No matching script\.( Please use EVAL\.)?$",
+            ):
+                await scope.execute_command("EVALSHA", "f" * 40, "0")
+
     async def test_scope_get_set(self, client):
         """SET and GET on a scoped connection."""
         key = f"async-scope-test-{uuid.uuid4().hex[:8]}"
@@ -75,6 +93,23 @@ class TestAsyncIsolatedScopeBasic:
         await scope.close()
         with pytest.raises(RuntimeError, match="released"):
             await scope.ping()
+
+    async def test_release_frees_thread_of_cancelled_blocking_command(self, client):
+        """Releasing a scope ends the native call a cancelled BLPOP left running,
+        so its executor thread is free again."""
+        loop = asyncio.get_running_loop()
+        loop.set_default_executor(ThreadPoolExecutor(max_workers=1))
+        key = f"async-scope-blpop-{uuid.uuid4().hex[:8]}"
+        scope = await client.scoped_connection()
+        # Bounded past the 2s check so a failed release can't pin the worker forever.
+        blpop = asyncio.create_task(scope.execute_command("BLPOP", key, "10"))
+        await asyncio.sleep(0.2)
+        blpop.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await blpop
+
+        await scope.close()
+        await asyncio.wait_for(loop.run_in_executor(None, lambda: None), timeout=2)
 
 
 class TestAsyncIsolatedScopeOCC:
@@ -160,19 +195,21 @@ class TestAsyncIsolatedScopePoolReuse:
     """Scope pool connection reuse tests."""
 
     async def test_lifo_reuse(self, client):
-        """Scopes are reused (same scope_id returned after release)."""
+        """A released connection is reused, under a fresh scope_id."""
         scope1 = await client.scoped_connection()
         id1 = scope1.scope_id
-        await scope1.ping()
+        conn1 = await scope1.execute_command("CLIENT", "ID")
         await scope1.close()
 
         await asyncio.sleep(0.1)
 
         scope2 = await client.scoped_connection()
         id2 = scope2.scope_id
+        conn2 = await scope2.execute_command("CLIENT", "ID")
         await scope2.close()
 
-        assert id1 == id2
+        assert conn1 == conn2
+        assert id1 != id2
 
     async def test_multiple_concurrent_scopes(self, client):
         """Multiple scopes can be held simultaneously."""
@@ -186,3 +223,133 @@ class TestAsyncIsolatedScopePoolReuse:
 
         await scope1.close()
         await scope2.close()
+
+
+# Any certificate serves as root material here: the client is lazy and never
+# dials, so the bytes are stored, not verified. Read the committed glide-core
+# fixture rather than utils/tls_crts/, which exists only after a TLS server start.
+_ANY_ROOT_CERT = (
+    Path(__file__).resolve().parents[3]
+    / "glide-core"
+    / "src"
+    / "tls_reload"
+    / "test_data"
+    / "cert_a.pem"
+)
+
+# The scope pool holds at most this many connections per client (glide-core
+# ScopePoolConfig::default().max_total). Not configurable from Python.
+_SCOPE_POOL_MAX_TOTAL = 64
+
+
+class TestAsyncIsolatedScopeAcquireFailsFast:
+    """An acquire stops as soon as its outcome is known: the error class names the
+    cause, and a cause that waiting cannot fix is reported without waiting."""
+
+    async def test_exhausted_pool_times_out_naming_the_cause(self, client):
+        held = [await client.scoped_connection() for _ in range(_SCOPE_POOL_MAX_TOTAL)]
+        try:
+            started = time.monotonic()
+            with pytest.raises(TimeoutError, match="pool exhausted"):
+                await client.scoped_connection(timeout=0.5)
+            elapsed = time.monotonic() - started
+            assert 0.4 <= elapsed < 1.0, elapsed
+        finally:
+            for scope in held:
+                await scope.close()
+
+    async def test_many_waiters_time_out_together(self, client):
+        # Every waiter's deadline is core's, so the count of concurrent waiters
+        # does not stretch any one of them.
+        held = [await client.scoped_connection() for _ in range(_SCOPE_POOL_MAX_TOTAL)]
+        try:
+            started = time.monotonic()
+            outcomes = await asyncio.gather(
+                *(
+                    client.scoped_connection(timeout=0.5)
+                    for _ in range(_SCOPE_POOL_MAX_TOTAL)
+                ),
+                return_exceptions=True,
+            )
+            elapsed = time.monotonic() - started
+            assert all(isinstance(o, TimeoutError) for o in outcomes), outcomes
+            assert all("pool exhausted" in str(o) for o in outcomes), outcomes
+            assert (
+                0.4 <= elapsed < 1.5
+            ), f"{_SCOPE_POOL_MAX_TOTAL} 0.5s waits took {elapsed:.2f}s"
+        finally:
+            for scope in held:
+                await scope.close()
+
+    async def test_closing_the_client_ends_a_waiting_acquire(self):
+        config = GlideClientConfiguration(
+            addresses=[_get_standalone_address()], request_timeout=5000
+        )
+        client = await GlideClient.create(config)
+        held = [await client.scoped_connection() for _ in range(_SCOPE_POOL_MAX_TOTAL)]
+
+        async def _close_soon():
+            await asyncio.sleep(0.2)
+            await client.aclose()
+
+        closer = asyncio.create_task(_close_soon())
+        started = time.monotonic()
+        with pytest.raises(ConnectionError):
+            await client.scoped_connection(timeout=5.0)
+        elapsed = time.monotonic() - started
+        assert elapsed < 2.0, f"waited {elapsed:.2f}s past the close for a 5s deadline"
+        await closer
+        del held
+
+    async def test_abandoned_acquire_returns_its_slot(self, client):
+        # A caller that stops waiting must not keep the slot the core later
+        # grants it.
+        held = [await client.scoped_connection() for _ in range(_SCOPE_POOL_MAX_TOTAL)]
+        waiter = asyncio.create_task(client.scoped_connection(timeout=5.0))
+        await asyncio.sleep(0.2)
+        waiter.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+
+        # The abandoned acquire is still waiting in the core; freeing the pool
+        # lets it win a slot, which the binding must then release on its behalf.
+        for scope in held:
+            await scope.close()
+
+        refilled = []
+        try:
+            for i in range(_SCOPE_POOL_MAX_TOTAL):
+                try:
+                    refilled.append(await client.scoped_connection(timeout=2.0))
+                except TimeoutError:
+                    pytest.fail(
+                        f"slot {i + 1} of {_SCOPE_POOL_MAX_TOTAL} unavailable "
+                        "after an abandoned acquire"
+                    )
+        finally:
+            for scope in refilled:
+                await scope.close()
+
+    async def test_lazy_mtls_parent_fails_without_waiting(self):
+        # A lazily connected client with TLS material never dials, so there is
+        # nothing for a scoped connection to inherit; no amount of waiting fixes
+        # that, so the acquire must not run out its 5 s deadline.
+        config = GlideClientConfiguration(
+            addresses=[NodeAddress("127.0.0.1", 1)],
+            use_tls=True,
+            lazy_connect=True,
+            request_timeout=5000,
+            advanced_config=AdvancedGlideClientConfiguration(
+                tls_config=TlsAdvancedConfiguration(
+                    root_pem_cacerts=_ANY_ROOT_CERT.read_bytes()
+                )
+            ),
+        )
+        client = await GlideClient.create(config)
+        try:
+            started = time.monotonic()
+            with pytest.raises(RequestError, match="certificate material"):
+                await client.scoped_connection(timeout=5.0)
+            assert time.monotonic() - started < 2.0
+        finally:
+            await client.aclose()

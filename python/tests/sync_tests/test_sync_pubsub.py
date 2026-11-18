@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import time
-from typing import List, Optional, cast
+from collections import Counter
+from typing import Callable, Dict, List, Optional, Set, Tuple, cast
 
 import pytest
 from glide_shared.commands.core_options import PubSubMsg
@@ -30,6 +31,7 @@ from tests.utils.pubsub_test_utils import (
     create_two_sync_clients_with_pubsub,
     decode_pubsub_msg,
     get_pubsub_modes,
+    is_reconnect_in_progress_error,
     new_message,
     sync_check_no_messages_left,
     sync_client_cleanup,
@@ -42,18 +44,71 @@ from tests.utils.pubsub_test_utils import (
 )
 from tests.utils.utils import (
     get_random_string,
-    run_sync_func_with_timeout_in_thread,
     sync_check_if_server_version_lt,
     sync_kill_connections_tolerant,
 )
 
 # Defaults for the publish-and-retry loop used to verify message delivery after
-# a resubscription. After subscription state is confirmed as restored, the
-# server-side subscription may still need a brief moment to become fully active
-# (especially in cluster mode), so a published message can be silently dropped.
-_MAX_PUBLISH_ATTEMPTS = 5
+# a resubscription. Pub/sub delivery is at-most-once and nothing is buffered for
+# a subscriber, so a message published while the subscriber is still
+# re-establishing its connections is simply not delivered. That is correct
+# server behaviour, not a client defect, so the loop re-publishes until a copy
+# arrives instead of asserting on the first attempt. The retry runs against a
+# wall-clock deadline rather than a fixed number of attempts, so its patience
+# matches the resubscribe window the callers allow.
+#
+# Re-publishing can leave duplicates: a copy that is only delayed, not dropped,
+# still arrives after the retry has published again. Valkey delivers each
+# PUBLISH at most once per subscribed connection, so the number of PUBLISH calls
+# issued is the exact upper bound on the copies a subscriber may legitimately
+# see, and the trailing checks enforce that bound rather than a fixed count.
+_PUBLISH_RETRY_DEADLINE_SEC = 15.0
 _PUBLISH_POLL_TIMEOUT_SEC = 3.0
 _PUBLISH_POLL_INTERVAL_SEC = 0.1
+# The many-channels test fans one publish out per channel instead of retrying a
+# single channel. While the publishing client is recovering, each of those can
+# cost a full request timeout (250 ms by default), so a single pass over 256
+# channels needs far more headroom than a single-channel publish does.
+_MANY_CHANNELS_PUBLISH_DEADLINE_SEC = 60.0
+
+
+def _try_receive_expected(
+    method: MethodTesting,
+    listening_client,
+    callback_messages: List[PubSubMsg],
+    expected_idx: int,
+) -> Optional[PubSubMsg]:
+    """Return the message at ``expected_idx`` if it has arrived yet, else None."""
+    if method == MethodTesting.Callback:
+        if len(callback_messages) > expected_idx:
+            return decode_pubsub_msg(callback_messages[expected_idx])
+        return None
+    result = listening_client.try_get_pubsub_message()
+    return decode_pubsub_msg(result) if result is not None else None
+
+
+def _take_available_messages(
+    method: MethodTesting,
+    listening_client,
+    callback_messages: List[PubSubMsg],
+    callback_cursor: int,
+) -> Tuple[List[PubSubMsg], int]:
+    """Return every message available right now, plus the new callback cursor.
+
+    The callback list only grows, so ``callback_cursor`` resumes where the
+    previous call stopped rather than re-reading the whole list. The queue read
+    methods drain the client instead and leave the cursor alone.
+    """
+    if method == MethodTesting.Callback:
+        taken = [decode_pubsub_msg(m) for m in callback_messages[callback_cursor:]]
+        return taken, len(callback_messages)
+
+    taken = []
+    while True:
+        result = listening_client.try_get_pubsub_message()
+        if result is None:
+            return taken, callback_cursor
+        taken.append(decode_pubsub_msg(result))
 
 
 def _publish_and_wait_for_message(
@@ -64,42 +119,213 @@ def _publish_and_wait_for_message(
     method: MethodTesting,
     callback_messages: List[PubSubMsg],
     expected_idx: int,
-    max_attempts: int = _MAX_PUBLISH_ATTEMPTS,
+    deadline_sec: float = _PUBLISH_RETRY_DEADLINE_SEC,
     poll_timeout: float = _PUBLISH_POLL_TIMEOUT_SEC,
     poll_interval: float = _PUBLISH_POLL_INTERVAL_SEC,
-) -> Optional[PubSubMsg]:
+    sharded: bool = False,
+) -> Tuple[Optional[PubSubMsg], int]:
     """
     Publish ``message`` to ``channel`` and poll for its receipt, re-publishing if
-    it is not received within ``poll_timeout``.
+    it is not received within ``poll_timeout``, until ``deadline_sec`` elapses.
 
-    This handles the race window after a resubscription where the server-side
-    subscription reports active but is not yet delivering messages: a message
-    published in that window is lost, so we re-publish until one arrives.
+    This handles the window after a resubscription where the subscription state
+    reads as restored but the message is still not delivered: pub/sub is
+    at-most-once, so a message published in that window is simply dropped and
+    the only way to observe the restored subscription is to publish again.
+
+    It also tolerates a publish that fails because the publishing client is
+    itself recovering from the connection kill (see
+    ``is_reconnect_in_progress_error`` for the three shapes that takes). Any
+    other error propagates. A tolerated failure does not prove the PUBLISH never
+    ran: a client-side timeout only means the client stopped waiting for the
+    reply, so a delivered message is always collected before re-publishing.
+    That keeps a duplicate out of the queue unless a copy is delayed past
+    ``poll_timeout``, in which case it can still arrive after the re-publish.
 
     Note: this intentionally polls with the non-blocking
     ``try_get_pubsub_message()`` instead of the blocking ``get_pubsub_message()``.
-    A blocking read would wait for a message that was never delivered (due to the
-    race above) until the client request timeout, surfacing as a TimeoutError.
+    The sync client's blocking read waits on a condition variable with no
+    timeout, so a message that was never delivered would hang the test rather
+    than fail it.
 
-    Returns the received message, or ``None`` if no message arrived after
-    ``max_attempts``.
+    Returns ``(message, publishes)``: the received message, or ``None`` if none
+    arrived before ``deadline_sec``, and the number of PUBLISH calls issued,
+    counting calls that raised a tolerated error. Each PUBLISH is delivered at
+    most once, so ``publishes`` bounds the copies of ``message`` the caller may
+    see; pass it to ``_check_no_unexpected_messages_left``.
     """
-    for attempt in range(max_attempts):
-        publishing_client.publish(message, channel)
 
-        # Poll for the message using try_get or callback check
-        poll_deadline = time.time() + poll_timeout
-        while time.time() < poll_deadline:
-            if method == MethodTesting.Callback:
-                if len(callback_messages) >= expected_idx + 1:
-                    return decode_pubsub_msg(callback_messages[expected_idx])
+    def _try_receive() -> Optional[PubSubMsg]:
+        return _try_receive_expected(
+            method, listening_client, callback_messages, expected_idx
+        )
+
+    publishes = 0
+    deadline = time.time() + deadline_sec
+    while time.time() < deadline:
+        # Poll before publishing: a message from an earlier publish may already
+        # have arrived, including one whose publish reported a failure but still
+        # reached the server.
+        received = _try_receive()
+        if received is not None:
+            return received, publishes
+
+        # Count before the call: the copy can be delivered, and a callback can
+        # record it, before publish() returns.
+        publishes += 1
+        try:
+            if sharded:
+                cast(GlideClusterClient, publishing_client).publish(
+                    message, channel, sharded=True
+                )
             else:
-                result = listening_client.try_get_pubsub_message()
-                if result is not None:
-                    return decode_pubsub_msg(result)
+                publishing_client.publish(message, channel)
+        except RequestError as error:
+            # The publishing client may still be recovering from the connection
+            # kill; retry before the deadline. Anything else is a real failure.
+            if not is_reconnect_in_progress_error(error):
+                raise
+
+        # Poll for the just-published message before considering a re-publish.
+        poll_deadline = min(time.time() + poll_timeout, deadline)
+        while time.time() < poll_deadline:
+            received = _try_receive()
+            if received is not None:
+                return received, publishes
             time.sleep(poll_interval)
 
-    return None
+    return None, publishes
+
+
+def _check_no_unexpected_messages_left(
+    method: MethodTesting,
+    listening_client,
+    callback_messages: List[PubSubMsg],
+    expected_count: int,
+    message: str,
+    channel: str,
+    publishes: int,
+    settle_sec: float = _PUBLISH_POLL_TIMEOUT_SEC,
+    poll_interval: float = _PUBLISH_POLL_INTERVAL_SEC,
+) -> None:
+    """Assert only the copies ``publishes`` PUBLISH calls can explain are left.
+
+    ``_publish_and_wait_for_message`` re-publishes when it does not see a
+    delivery in time, so a copy that was only delayed can still arrive after
+    the re-publish. Each PUBLISH is delivered at most once, so after the one
+    copy already consumed at most ``publishes - 1`` further copies of
+    ``message`` on ``channel`` are legitimate. This waits ``settle_sec`` for
+    late copies, then fails on one copy more than that or on any other message.
+    """
+    max_extra = max(publishes - 1, 0)
+    extras = 0
+
+    def _count(msgs: List[PubSubMsg]) -> None:
+        nonlocal extras
+        for extra_msg in msgs:
+            assert extra_msg.message == message, f"Unexpected message {extra_msg}"
+            assert extra_msg.channel == channel, f"Unexpected message {extra_msg}"
+            extras += 1
+            assert extras <= max_extra, (
+                f"{extras} extra copies of {message!r} on {channel!r}, but only "
+                f"{publishes} PUBLISH calls were issued"
+            )
+
+    cursor = expected_count
+    settle_deadline = time.time() + settle_sec
+    while True:
+        taken, cursor = _take_available_messages(
+            method, listening_client, callback_messages, cursor
+        )
+        _count(taken)
+        if time.time() >= settle_deadline:
+            break
+        time.sleep(poll_interval)
+
+    if method != MethodTesting.Callback:
+        sync_check_no_messages_left(method, listening_client, callback_messages)
+
+
+def _publish_until_all_received(
+    publishing_client,
+    listening_client,
+    method: MethodTesting,
+    callback_messages: List[PubSubMsg],
+    message: str,
+    channels: Set[str],
+    deadline_sec: float = _MANY_CHANNELS_PUBLISH_DEADLINE_SEC,
+    poll_timeout: float = _PUBLISH_POLL_TIMEOUT_SEC,
+    poll_interval: float = _PUBLISH_POLL_INTERVAL_SEC,
+    now: Callable[[], float] = time.time,
+    sleep: Callable[[float], None] = time.sleep,
+) -> Tuple[Set[str], Dict[str, int], Dict[str, int]]:
+    """Publish ``message`` to every channel until each has delivered a copy.
+
+    The fan-out version of ``_publish_and_wait_for_message``, with the same
+    rules applied per channel: a channel is published to again only once
+    ``poll_timeout`` has passed since its last PUBLISH, a transient
+    reconnect failure is tolerated and anything else propagates, and every
+    delivery must be ``message`` on one of ``channels`` with no more copies per
+    channel than PUBLISH calls issued to it. The deadline is checked inside the
+    fan-out too: while the publishing client is recovering each publish can
+    cost a full request timeout, so one uninterrupted pass over 256 channels
+    would otherwise overrun the budget many times over.
+
+    ``now`` and ``sleep`` default to the wall clock; a test may pass a fake
+    clock so the poll/re-publish ordering does not depend on host scheduling.
+
+    Returns ``(received_channels, copies, publishes)``, the last two keyed by
+    channel.
+    """
+    received: Set[str] = set()
+    copies: Counter = Counter()
+    publishes: Counter = Counter()
+    last_published: Dict[str, float] = {}
+    cursor = 0
+
+    def _drain() -> None:
+        nonlocal cursor
+        taken, cursor = _take_available_messages(
+            method, listening_client, callback_messages, cursor
+        )
+        for msg in taken:
+            channel = cast(str, msg.channel)
+            assert msg.message == message, f"Unexpected message {msg}"
+            assert msg.pattern is None, f"Unexpected message {msg}"
+            assert channel in channels, f"Unexpected message {msg}"
+            copies[channel] += 1
+            assert copies[channel] <= publishes[channel], (
+                f"{copies[channel]} copies on {channel!r}, but only "
+                f"{publishes[channel]} PUBLISH calls were issued to it"
+            )
+            received.add(channel)
+
+    deadline = now() + deadline_sec
+    while received != channels and now() < deadline:
+        _drain()
+        for channel in channels - received:
+            current = now()
+            if current >= deadline:
+                break
+            if current - last_published.get(channel, float("-inf")) < poll_timeout:
+                continue
+            # Count before the call, as in _publish_and_wait_for_message.
+            publishes[channel] += 1
+            last_published[channel] = current
+            try:
+                publishing_client.publish(message, channel)
+            except RequestError as error:
+                if not is_reconnect_in_progress_error(error):
+                    raise
+        sleep(poll_interval)
+        _drain()
+
+    # Let delayed copies land so the per-channel bound also covers them.
+    settle_deadline = now() + poll_timeout
+    while now() < settle_deadline:
+        sleep(poll_interval)
+        _drain()
+    return received, dict(copies), dict(publishes)
 
 
 class TestSyncPubSub:
@@ -150,8 +376,6 @@ class TestSyncPubSub:
             result = publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
-            # allow the message to propagate
-            time.sleep(1)
 
             pubsub_msg = sync_get_message_by_method(
                 method, listening_client, callback_messages, 0
@@ -195,11 +419,10 @@ class TestSyncPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # allow the message to propagate
-            time.sleep(1)
-
             async_msg_res = listening_client.get_pubsub_message()
-            sync_msg_res = listening_client.try_get_pubsub_message()
+            sync_msg_res = sync_get_message_by_method(
+                MethodTesting.Sync, listening_client
+            )
             assert sync_msg_res
             async_msg = decode_pubsub_msg(async_msg_res)
             sync_msg = decode_pubsub_msg(sync_msg_res)
@@ -215,11 +438,6 @@ class TestSyncPubSub:
             assert not sync_msg.message == async_msg.message
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                run_sync_func_with_timeout_in_thread(
-                    lambda: listening_client.get_pubsub_message(), timeout=3.0
-                )
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -277,9 +495,6 @@ class TestSyncPubSub:
                 result = publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
-
-            # Allow the messages to propagate
-            time.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels_and_messages)):
@@ -342,9 +557,6 @@ class TestSyncPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # Allow the messages to propagate
-            time.sleep(1)
-
             # Check if all messages are received correctly by each method
             for index in range(len(channels_and_messages)):
                 method = MethodTesting.Async if index % 2 else MethodTesting.Sync
@@ -359,11 +571,6 @@ class TestSyncPubSub:
             # check that we received all messages
             assert channels_and_messages == {}
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                run_sync_func_with_timeout_in_thread(
-                    lambda: listening_client.get_pubsub_message(), timeout=3.0
-                )
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.skip_if_version_below("7.0.0")
@@ -418,9 +625,6 @@ class TestSyncPubSub:
                 )
                 == publish_response
             )
-
-            # allow the message to propagate
-            time.sleep(1)
 
             pubsub_msg = sync_get_message_by_method(
                 method, listening_client, callback_messages, 0
@@ -480,11 +684,10 @@ class TestSyncPubSub:
                 == 1
             )
 
-            # allow the messages to propagate
-            time.sleep(1)
-
             async_msg_res = listening_client.get_pubsub_message()
-            sync_msg_res = listening_client.try_get_pubsub_message()
+            sync_msg_res = sync_get_message_by_method(
+                MethodTesting.Sync, listening_client
+            )
             assert sync_msg_res
             async_msg = decode_pubsub_msg(async_msg_res)
             sync_msg = decode_pubsub_msg(sync_msg_res)
@@ -500,11 +703,6 @@ class TestSyncPubSub:
             assert not sync_msg.message == async_msg.message
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                run_sync_func_with_timeout_in_thread(
-                    lambda: listening_client.get_pubsub_message(), timeout=3.0
-                )
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.skip_if_version_below("7.0.0")
@@ -567,9 +765,6 @@ class TestSyncPubSub:
                     )
                     == publish_response
                 )
-
-            # Allow the messages to propagate
-            time.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels_and_messages)):
@@ -641,9 +836,6 @@ class TestSyncPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # allow the message to propagate
-            time.sleep(1)
-
             # Check if all messages are received correctly
             for index in range(len(channels)):
                 pubsub_msg = sync_get_message_by_method(
@@ -697,9 +889,6 @@ class TestSyncPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # allow the message to propagate
-            time.sleep(1)
-
             # Check if all messages are received correctly by each method
             for index in range(len(channels)):
                 method = MethodTesting.Async if index % 2 else MethodTesting.Sync
@@ -715,11 +904,6 @@ class TestSyncPubSub:
             assert channels == {}
 
             # assert there are no more messages to read
-            with pytest.raises(TimeoutError):
-                run_sync_func_with_timeout_in_thread(
-                    lambda: listening_client.get_pubsub_message(), timeout=3.0
-                )
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -774,9 +958,6 @@ class TestSyncPubSub:
                 result = publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
-
-            # allow the message to propagate
-            time.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(channels)):
@@ -992,9 +1173,6 @@ class TestSyncPubSub:
                     if cluster_mode:
                         assert result == 1
 
-                # allow the messages to propagate
-                time.sleep(1)
-
                 # Verify messages for exact PUBSUB
                 for index in range(len(exact_channels_and_messages)):
                     pubsub_msg = sync_get_message_by_method(
@@ -1126,9 +1304,6 @@ class TestSyncPubSub:
                     )
                     == publish_response
                 )
-
-            # allow the messages to propagate
-            time.sleep(1)
 
             all_channels_and_messages = {
                 **exact_channels_and_messages,
@@ -1267,9 +1442,6 @@ class TestSyncPubSub:
                             )
                             == publish_response
                         )
-
-                    # allow the messages to propagate
-                    time.sleep(1)
 
                     # Verify messages for exact PUBSUB
                     for index in range(len(exact_channels_and_messages)):
@@ -1486,9 +1658,6 @@ class TestSyncPubSub:
                 == 1
             )
 
-            # allow the message to propagate
-            time.sleep(1)
-
             # Verify message for exact and pattern PUBSUB
             for client, callback_list, pattern in [  # type: ignore
                 (listening_client_exact, callback_messages_exact, None),
@@ -1594,9 +1763,6 @@ class TestSyncPubSub:
                     result = client_pattern.publish(msg, CHANNEL_NAME)
                     if cluster_mode:
                         assert result == 2
-
-                # allow the message to propagate
-                time.sleep(1)
 
                 # Verify message for exact and pattern PUBSUB
                 for client, callback_msgs, pattern in [  # type: ignore
@@ -1748,9 +1914,6 @@ class TestSyncPubSub:
                 == 1
             )
 
-            # allow the message to propagate
-            time.sleep(1)
-
             # Verify message for exact and pattern PUBSUB
             for client, callback_list, pattern in [  # type: ignore
                 (client_exact, callback_messages_exact, None),
@@ -1851,11 +2014,6 @@ class TestSyncPubSub:
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                run_sync_func_with_timeout_in_thread(
-                    lambda: listening_client.get_pubsub_message(), timeout=3.0
-                )
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.skip(
@@ -1930,11 +2088,6 @@ class TestSyncPubSub:
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                run_sync_func_with_timeout_in_thread(
-                    lambda: listening_client.get_pubsub_message(), timeout=3.0
-                )
-
             assert listening_client.try_get_pubsub_message() is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -2704,7 +2857,6 @@ class TestSyncPubSub:
             )
 
             publishing_client.publish(message1, channel)
-            time.sleep(1)
 
             # Get message
             pubsub_msg = sync_get_message_by_method(
@@ -3080,13 +3232,12 @@ class TestSyncPubSub:
 
             # Subscribe
             listening_client.subscribe_lazy({"test_channel"})
-            time.sleep(1)
-            # Publish message
+            sync_wait_for_subscription_state(
+                listening_client, expected_channels={"test_channel"}
+            )
             publishing_client.publish("test_message", "test_channel")
-            time.sleep(1)
 
-            # Verify message received via callback
-            assert len(callback_messages) >= 1
+            wait_for_messages(1, callback_messages)
 
             # Try to call get methods - should raise ConfigurationError
             with pytest.raises(ConfigurationError):
@@ -3160,7 +3311,6 @@ class TestSyncPubSub:
 
             # Publish first message
             publishing_client.publish(message1, channel)
-            time.sleep(1)
 
             # Get message
             pubsub_msg = sync_get_message_by_method(
@@ -3266,7 +3416,6 @@ class TestSyncPubSub:
             cast(GlideClusterClient, publishing_client).publish(
                 message1, channel, sharded=True
             )
-            time.sleep(1)
 
             # Get message
             pubsub_msg = sync_get_message_by_method(
@@ -3561,7 +3710,6 @@ class TestSyncPubSub:
             )
 
             publishing_client.publish(message, channel)
-            time.sleep(1)
 
             pubsub_msg = sync_get_message_by_method(
                 method, listening_client, callback_messages, 0
@@ -3631,7 +3779,6 @@ class TestSyncPubSub:
 
             # Verify subscription works before kill
             publishing_client.publish(message_before, channel)
-            time.sleep(1)
 
             msg_before = sync_get_message_by_method(
                 method, listening_client, callback_messages, 0
@@ -3656,7 +3803,7 @@ class TestSyncPubSub:
             # subscription may still need a brief moment to become fully active
             # (especially in cluster mode). Use a publish-and-retry loop to
             # handle this race condition reliably.
-            msg_after = _publish_and_wait_for_message(
+            msg_after, publishes = _publish_and_wait_for_message(
                 publishing_client,
                 message_after,
                 channel,
@@ -3667,13 +3814,21 @@ class TestSyncPubSub:
             )
 
             assert msg_after is not None, (
-                f"Failed to receive message after reconnection "
-                f"({_MAX_PUBLISH_ATTEMPTS} publish attempts)"
+                "Failed to receive message after reconnection "
+                f"(within {_PUBLISH_RETRY_DEADLINE_SEC}s)"
             )
             assert msg_after.message == message_after
             assert msg_after.channel == channel
 
-            sync_check_no_messages_left(method, listening_client, callback_messages, 2)
+            _check_no_unexpected_messages_left(
+                method,
+                listening_client,
+                callback_messages,
+                2,
+                message_after,
+                channel,
+                publishes,
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
@@ -3726,7 +3881,6 @@ class TestSyncPubSub:
 
             # Verify subscription works before kill
             publishing_client.publish(message_before, channel)
-            time.sleep(1)
 
             msg_before = sync_get_message_by_method(
                 method, listening_client, callback_messages, 0
@@ -3751,7 +3905,7 @@ class TestSyncPubSub:
             # subscription may still need a brief moment to become fully active
             # (especially in cluster mode). Use a publish-and-retry loop to
             # handle this race condition reliably.
-            msg_after = _publish_and_wait_for_message(
+            msg_after, publishes = _publish_and_wait_for_message(
                 publishing_client,
                 message_after,
                 channel,
@@ -3762,13 +3916,21 @@ class TestSyncPubSub:
             )
 
             assert msg_after is not None, (
-                f"Failed to receive message after reconnection "
-                f"({_MAX_PUBLISH_ATTEMPTS} publish attempts)"
+                "Failed to receive message after reconnection "
+                f"(within {_PUBLISH_RETRY_DEADLINE_SEC}s)"
             )
             assert msg_after.message == message_after
             assert msg_after.channel == channel
 
-            sync_check_no_messages_left(method, listening_client, callback_messages, 2)
+            _check_no_unexpected_messages_left(
+                method,
+                listening_client,
+                callback_messages,
+                2,
+                message_after,
+                channel,
+                publishes,
+            )
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -3814,8 +3976,6 @@ class TestSyncPubSub:
                 cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
                 )
-
-            time.sleep(1)
 
             # Retrieve all messages using try_get with retry
             received_messages = {}
@@ -4046,7 +4206,6 @@ class TestSyncPubSub:
             cast(GlideClusterClient, publishing_client).publish(
                 message_before, channel, sharded=True
             )
-            time.sleep(1)
 
             msg_before = sync_get_message_by_method(
                 method, listening_client, callback_messages, 0
@@ -4070,19 +4229,38 @@ class TestSyncPubSub:
                 timeout_sec=resubscribe_timeout,
             )
 
-            # Verify subscription still works after reconnection
-            cast(GlideClusterClient, publishing_client).publish(
-                message_after, channel, sharded=True
+            # Verify subscription still works after reconnection.
+            # After resubscription state is confirmed, the server-side
+            # subscription may still need a brief moment to become fully active
+            # (especially in cluster mode). Use a publish-and-retry loop to
+            # handle this race condition reliably.
+            msg_after, publishes = _publish_and_wait_for_message(
+                publishing_client,
+                message_after,
+                channel,
+                listening_client,
+                method,
+                callback_messages,
+                expected_idx=1,
+                sharded=True,
             )
-            time.sleep(1)
 
-            msg_after = sync_get_message_by_method(
-                method, listening_client, callback_messages, 1
+            assert msg_after is not None, (
+                "Failed to receive message after reconnection "
+                f"(within {_PUBLISH_RETRY_DEADLINE_SEC}s)"
             )
             assert msg_after.message == message_after
             assert msg_after.channel == channel
 
-            sync_check_no_messages_left(method, listening_client, callback_messages, 2)
+            _check_no_unexpected_messages_left(
+                method,
+                listening_client,
+                callback_messages,
+                2,
+                message_after,
+                channel,
+                publishes,
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
@@ -4148,26 +4326,22 @@ class TestSyncPubSub:
                 timeout_sec=resubscribe_timeout,
             )
 
-            # Publish to all channels after reconnection
-            for channel in channels:
-                publishing_client.publish(message_after, channel)
+            # Publish to all channels after reconnection and collect deliveries.
+            # The helper retries each channel on its own poll window, tolerates
+            # transient reconnect failures, and bounds the copies per channel by
+            # the PUBLISH calls issued to it.
+            received_channels, _, _ = _publish_until_all_received(
+                publishing_client,
+                listening_client,
+                method,
+                callback_messages,
+                message_after,
+                channels,
+            )
 
-            time.sleep(2)
-
-            # Verify all messages received
-            received_channels: set = set()
-            for index in range(NUM_CHANNELS):
-                msg = sync_get_message_by_method(
-                    method, listening_client, callback_messages, index
-                )
-                assert msg.message == message_after
-                assert msg.pattern is None
-                received_channels.add(msg.channel)
-
-            assert received_channels == channels, "Not all channels received messages"
-
-            sync_check_no_messages_left(
-                method, listening_client, callback_messages, NUM_CHANNELS
+            assert received_channels == channels, (
+                f"Not all channels received messages. "
+                f"Got {len(received_channels)}/{NUM_CHANNELS}"
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])

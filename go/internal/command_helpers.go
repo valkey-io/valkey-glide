@@ -93,6 +93,18 @@ func BuildHGetExArgs(key string, fields []string, opts options.HGetExOptions) ([
 	return args, nil
 }
 
+// BuildHGetDelArgs builds arguments for the HGETDEL command.
+func BuildHGetDelArgs(key string, fields []string) ([]string, error) {
+	if len(fields) == 0 {
+		return nil, errors.New("fields array cannot be empty")
+	}
+
+	args := []string{key}
+	args = append(args, buildFieldsArgs(fields)...)
+
+	return args, nil
+}
+
 // BuildHExpireArgs builds arguments for HEXPIRE/HEXPIREAT/HPEXPIRE/HPEXPIREAT commands.
 // Accepts either time.Duration (for relative expiration) or time.Time (for absolute expiration).
 // The useMilliseconds flag determines whether to convert to milliseconds (true) or seconds (false).

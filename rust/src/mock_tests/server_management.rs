@@ -1,8 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the server-management command family.
 use super::Mock;
+use crate::InfoSection;
 use crate::ValkeyValue;
-use crate::commands::options::FlushMode;
 use crate::commands::server_management::ServerManagementCommands;
 
 #[tokio::test]
@@ -13,7 +13,9 @@ async fn info_and_sections() {
     assert!(info.starts_with("# Server"));
 
     let m = Mock::bulk("# CPU\n");
-    m.info_sections(&["cpu", "memory"]).await.unwrap();
+    m.info_sections(&[InfoSection::Cpu, InfoSection::Memory])
+        .await
+        .unwrap();
     m.assert_args(&["INFO", "cpu", "memory"]);
 }
 
@@ -22,24 +24,6 @@ async fn dbsize_encoding() {
     let m = Mock::int(7);
     assert_eq!(m.dbsize().await.unwrap(), 7);
     m.assert_args(&["DBSIZE"]);
-}
-
-#[tokio::test]
-async fn flushdb_default_and_modes() {
-    let m = Mock::ok();
-    m.flushdb(None).await.unwrap();
-    m.assert_args(&["FLUSHDB"]);
-
-    let m = Mock::ok();
-    m.flushdb(Some(FlushMode::Async)).await.unwrap();
-    m.assert_args(&["FLUSHDB", "ASYNC"]);
-}
-
-#[tokio::test]
-async fn flushall_with_mode() {
-    let m = Mock::ok();
-    m.flushall(Some(FlushMode::Sync)).await.unwrap();
-    m.assert_args(&["FLUSHALL", "SYNC"]);
 }
 
 #[tokio::test]

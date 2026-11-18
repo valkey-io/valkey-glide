@@ -1,10 +1,10 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use crate::task::JoinHandle;
 use std::{
     future::Future,
     task::{Context, Poll},
 };
-use crate::task::JoinHandle;
 
 pub struct Runtime;
 
@@ -13,9 +13,28 @@ pub struct EnterGuard;
 #[derive(Clone)]
 pub struct Handle;
 
+#[derive(Debug)]
+pub struct TryCurrentError;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum RuntimeFlavor {
+    CurrentThread,
+    MultiThread,
+}
+
 impl Handle {
     pub fn enter(&self) -> EnterGuard {
         EnterGuard
+    }
+
+    /// The mock never establishes a runtime context, so there is never a
+    /// current handle.
+    pub fn try_current() -> Result<Handle, TryCurrentError> {
+        Err(TryCurrentError)
+    }
+
+    pub fn runtime_flavor(&self) -> RuntimeFlavor {
+        RuntimeFlavor::MultiThread
     }
 }
 
@@ -28,24 +47,24 @@ impl Runtime {
         Handle
     }
 
+    pub fn shutdown_background(self) {}
+
     pub fn block_on<F: Future>(&self, future: F) -> F::Output {
         let waker = std::task::Waker::noop();
-        let context = &mut Context::from_waker(&waker);
+        let context = &mut Context::from_waker(waker);
         match std::pin::pin!(future).poll(context) {
             Poll::Ready(result) => result,
-            _ => panic!("No result found")
+            _ => panic!("No result found"),
         }
     }
 
-    pub fn spawn<F>(&self, _future: F) -> JoinHandle<F::Output> 
+    pub fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        // Don't poll the future - just return a handle
-        // This allows long-running tasks like pubsub listeners to be spawned
         JoinHandle {
-            _p: std::marker::PhantomData::<F::Output>
+            future: Box::pin(future),
         }
     }
 }
@@ -70,6 +89,10 @@ impl Builder {
     }
 
     pub fn thread_name(&mut self, _val: impl Into<String>) -> &mut Self {
+        self
+    }
+
+    pub fn thread_stack_size(&mut self, _val: usize) -> &mut Self {
         self
     }
 

@@ -6,6 +6,7 @@ pub use glide_core::client::{GlideRt, get_or_init_runtime};
 pub struct NodeAddress {
     pub host: String,
     pub port: u16,
+    pub unix_socket_path: Option<std::path::PathBuf>,
 }
 
 /// Mirrors glide_core::client::TlsMode (internal type).
@@ -23,6 +24,12 @@ use redis::{
 };
 
 pub struct ConnectionError;
+
+impl ConnectionError {
+    pub fn is_configuration(&self) -> bool {
+        false
+    }
+}
 
 /// Mock inflight tracker for Miri tests — no-op Drop.
 pub struct MockInflightTracker;
@@ -166,6 +173,14 @@ pub type MonitorLineCallback = std::sync::Arc<dyn Fn(MonitorLine) + Send + Sync>
 pub struct MonitorClient;
 
 impl MonitorClient {
+    pub fn validate(
+        _address: &NodeAddress,
+        _redis_connection_info: &redis::RedisConnectionInfo,
+        _tls_mode: TlsMode,
+    ) -> redis::RedisResult<()> {
+        Ok(())
+    }
+
     pub async fn new(
         _address: &NodeAddress,
         _redis_connection_info: redis::RedisConnectionInfo,

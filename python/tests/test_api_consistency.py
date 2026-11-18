@@ -14,7 +14,28 @@ TESTS_SYNC_DIR = PYTHON_DIR / "tests" / "sync_tests"
 
 EXCLUDED_API_FUNCTIONS = {
     "async_only": ["aclose", "done", "result", "set_exception", "set_result"],
-    "sync_only": ["get_min_compressed_size"],
+    "sync_only": [
+        "get_min_compressed_size",
+        "rdma_available",
+        "rdma_usable",
+        "rdma_checksum",
+        "register_rdma_region",
+        "rdma_get",
+        "rdma_set",
+        # RdmaRegion and RdmaWindow members, declared in the same module.
+        "capacity",
+        "closed",
+        "memory_released",
+        "memoryview",
+        "window",
+        # Members of the private tracker that keeps memory the fabric still holds.
+        "holds",
+        "keep",
+        "keep_from_finalizer",
+        "overlaps",
+        "release_what_is_free",
+        "released",
+    ],
 }
 
 EXCLUDED_API_FILENAMES = {
@@ -28,6 +49,10 @@ EXCLUDED_TESTS = {
         "test_UDS_socket_connection_failure",
         "test_cancelled_request_handled_gracefully",
         "test_client_usable_after_cancelled_commands",
+        # Async-only: the sync client blocks in the FFI call and cannot abandon it
+        "test_abandoned_acquire_returns_its_slot",
+        # Async-only: the sync client has no event loop whose waiters could queue
+        "test_many_waiters_time_out_together",
         "test_connection_timeout_on_unavailable_host",
         "test_invalid_tls_config_fails_fast",
         "test_aclose_alias",
@@ -61,6 +86,7 @@ EXCLUDED_TESTS = {
         "poll_for_timestamp_change",
         # OpenTelemetry async helper function
         "wait_for_spans_to_be_flushed",
+        "assert_no_spans_exported",
         # Async-only lifecycle tests (pipe/event-loop specific)
         "test_concurrent_commands_from_multiple_clients",
         "test_response_after_client_close_is_managed",
@@ -96,9 +122,29 @@ EXCLUDED_TESTS = {
         # Abandon detection tests — async-only (monitor runs on tokio runtime)
         "test_pool_abandon_detection",
         "test_pool_abandon_detection_disabled",
+        "test_pool_abandon_skips_client_whose_scope_is_blocking",
+        # Scope release test — async-only (cancelled await pins an executor thread)
+        "test_release_frees_thread_of_cancelled_blocking_command",
+        # Async provider scheduling has no sync equivalent.
+        "test_iam_custom_async_provider_forms",
+        "test_iam_close_during_provider_refresh_does_not_block_owner_runtime",
+        # Coordinates both client kinds; a pure sync twin would not test coexistence.
+        "test_live_async_sync_provider_ids_coexist_without_registry_leaks",
+        # Async-only: the pipe/registry id collision it guards can't occur in sync.
+        "test_ordinary_client_survives_pool_borrow_release",
+        "reader_roundtrip",
+        # Async-only: the client registry and its finalizer are part of the
+        # event-loop pipe transport, which the sync client does not have.
+        "test_unreferenced_client_releases_connection",
+        "dropped_client_gone",
     ],
     "sync_only": [
         "test_sync_fork",
+        # RDMA is sync-only, and async clients refuse it at creation
+        "test_pool_rejects_rdma_config",
+        # `closed` exists so RDMA callers can tell whether a region can be
+        # registered again; RDMA is sync-only, so the async client has no twin.
+        "test_sync_closed_reports_whether_the_client_was_closed",
         "sync_poll_for_timestamp_change",
         "get_min_compressed_size",
         # get() with buffer — sync-only FFI path, no async equivalent
@@ -135,8 +181,11 @@ EXCLUDED_TESTS_FILENAMES = {
         "test_client_side_cache.py",
         "test_async_freethreading.py",
         "test_fork_safety.py",
+        "test_async_scope_backends.py",
+        "test_pipe_reader.py",
     ],
     "sync_only": [
+        "test_sync_rdma.py",
         "test_sync_client_side_cache.py",
         "test_sync_freethreading.py",
     ],

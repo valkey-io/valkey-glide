@@ -125,6 +125,9 @@ pub(crate) enum ConnectionType {
     PreferManagement,
 }
 
+/// Keys are logical addresses that are ready to dial. Raw configured seeds
+/// must be prepared before insertion; OS socket keys are used only when no
+/// AddressResolver is configured.
 pub(crate) struct ConnectionsMap<Connection>(pub(crate) DashMap<String, ClusterNode<Connection>>);
 
 impl<Connection> std::fmt::Display for ConnectionsMap<Connection> {
@@ -230,20 +233,35 @@ impl RefreshTaskStatus {
 // - `status`: The current state of the refresh task.
 #[derive(Debug)]
 pub(crate) struct RefreshTaskState {
+    // Unique identity for this refresh task generation.
+    pub identity: Arc<()>,
     // Handle to the background reconnection task.
     pub handle: JoinHandle<()>,
     // Current status of the refresh task.
     pub status: RefreshTaskStatus,
+    // Whether the task holds the existing connection and may keep it if it passes a health check.
+    pub may_keep_existing_conn: bool,
 }
 
 impl RefreshTaskState {
     // Creates a new `RefreshTaskState` with a `Reconnecting` status.
-    pub fn new(handle: JoinHandle<()>, notifier: RefreshTaskNotifier) -> Self {
+    pub fn new(
+        handle: JoinHandle<()>,
+        notifier: RefreshTaskNotifier,
+        identity: Arc<()>,
+        may_keep_existing_conn: bool,
+    ) -> Self {
         debug!("RefreshTaskState: Creating a new instance with a Reconnecting state.");
         RefreshTaskState {
+            identity,
             handle,
             status: RefreshTaskStatus::with_notifier(notifier),
+            may_keep_existing_conn,
         }
+    }
+
+    pub fn is_same_generation(&self, identity: &Arc<()>) -> bool {
+        Arc::ptr_eq(&self.identity, identity)
     }
 }
 
@@ -648,23 +666,27 @@ where
     // - The reconnect task is in `ReconnectingTooLong` state, with a debug log for clarity.
     pub(crate) fn notifier_for_route(&self, route: &Route) -> Option<Arc<Notify>> {
         let address = self.address_for_route(route)?;
+        self.notifier_for_address(&address)
+    }
 
+    // Returns the notifier of the refresh task in progress for `address`, if any.
+    pub(crate) fn notifier_for_address(&self, address: &str) -> Option<Arc<Notify>> {
         if let Some(task_state) = self
             .refresh_conn_state
             .refresh_address_in_progress
-            .get(&address)
+            .get(address)
         {
             match &task_state.status {
                 RefreshTaskStatus::Reconnecting(notifier) => {
                     debug!(
-                        "notifier_for_route: Found reconnect notifier for address: {}",
+                        "notifier_for_address: Found reconnect notifier for address: {}",
                         address
                     );
                     Some(notifier.get_notifier())
                 }
                 RefreshTaskStatus::ReconnectingTooLong => {
                     debug!(
-                        "notifier_for_route: Address {} is in ReconnectingTooLong state. No notifier will be returned.",
+                        "notifier_for_address: Address {} is in ReconnectingTooLong state. No notifier will be returned.",
                         address
                     );
                     None
@@ -672,7 +694,7 @@ where
             }
         } else {
             debug!(
-                "notifier_for_route: No refresh task exists for address: {}. No notifier will be returned.",
+                "notifier_for_address: No refresh task exists for address: {}. No notifier will be returned.",
                 address
             );
             None
@@ -809,6 +831,36 @@ mod tests {
     use crate::cluster_routing::Slot;
 
     use super::*;
+
+    #[tokio::test]
+    async fn refresh_task_generation_identity_does_not_survive_clear_and_reinsert() {
+        let address = "node:6379".to_owned();
+        let old_token = Arc::new(());
+        let old_state = RefreshTaskState::new(
+            tokio::spawn(async {}),
+            RefreshTaskNotifier::new(),
+            old_token.clone(),
+            true,
+        );
+        let mut states = HashMap::new();
+        states.insert(address.clone(), old_state);
+
+        let new_token = Arc::new(());
+        states.clear();
+        states.insert(
+            address,
+            RefreshTaskState::new(
+                tokio::spawn(async {}),
+                RefreshTaskNotifier::new(),
+                new_token.clone(),
+                true,
+            ),
+        );
+
+        let current = states.values().next().unwrap();
+        assert!(!current.is_same_generation(&old_token));
+        assert!(current.is_same_generation(&new_token));
+    }
     impl<Connection> ClusterNode<Connection>
     where
         Connection: Clone,

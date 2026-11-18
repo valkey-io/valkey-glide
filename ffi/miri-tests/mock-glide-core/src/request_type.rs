@@ -2,6 +2,12 @@
 
 use redis::Cmd;
 
+/// Mirror of a subset of `glide-core::request_type::RequestType`,
+/// used only so `cargo miri test` can run FFI tests without pulling in real
+/// `glide-core`. Discriminant values here are independent of the real enum's
+/// protobuf ids. When a command's compression-incompatibility or
+/// custom-command resolution behavior becomes relevant to an FFI miri test,
+/// mirror it here too.
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub enum RequestType {
@@ -50,6 +56,7 @@ pub enum RequestType {
     Strlen = 1521,
     LCS = 1522,
     Substr = 1523,
+    DelIfEq = 1531,
 
     // Incompatible commands - numeric operations
     Incr = 1510,
@@ -78,29 +85,30 @@ impl RequestType {
 
     /// Returns the reason why this command is incompatible with compression, if any.
     /// Returns `None` if the command is compatible with compression.
-    pub fn compression_incompatibility_reason(self) -> Option<&'static str> {
+    pub fn compression_incompatibility_reason(self, _args: &[Vec<u8>]) -> Option<&'static str> {
         match self {
             // String manipulation commands
             RequestType::Append => Some("APPEND modifies string data on the server"),
+            RequestType::DelIfEq => Some("DELIFEQ compares the stored value against raw bytes"),
             RequestType::GetRange => Some("GETRANGE returns a substring of raw bytes"),
+            RequestType::LCS => Some("LCS compares raw bytes between strings"),
             RequestType::SetRange => Some("SETRANGE modifies bytes at a specific offset"),
             RequestType::Strlen => Some("STRLEN returns the length of raw bytes"),
-            RequestType::LCS => Some("LCS compares raw bytes between strings"),
             RequestType::Substr => Some("SUBSTR returns a substring of raw bytes"),
             // Numeric operations
+            RequestType::Decr => Some("DECR expects a numeric string value"),
+            RequestType::DecrBy => Some("DECRBY expects a numeric string value"),
             RequestType::Incr => Some("INCR expects a numeric string value"),
             RequestType::IncrBy => Some("INCRBY expects a numeric string value"),
             RequestType::IncrByFloat => Some("INCRBYFLOAT expects a numeric string value"),
-            RequestType::Decr => Some("DECR expects a numeric string value"),
-            RequestType::DecrBy => Some("DECRBY expects a numeric string value"),
             // Bit operations
-            RequestType::GetBit => Some("GETBIT reads bits from raw bytes"),
-            RequestType::SetBit => Some("SETBIT modifies bits in raw bytes"),
             RequestType::BitCount => Some("BITCOUNT counts bits in raw bytes"),
-            RequestType::BitPos => Some("BITPOS finds bit positions in raw bytes"),
             RequestType::BitField => Some("BITFIELD performs bit operations on raw bytes"),
             RequestType::BitFieldReadOnly => Some("BITFIELD_RO reads bits from raw bytes"),
             RequestType::BitOp => Some("BITOP performs bitwise operations between strings"),
+            RequestType::BitPos => Some("BITPOS finds bit positions in raw bytes"),
+            RequestType::GetBit => Some("GETBIT reads bits from raw bytes"),
+            RequestType::SetBit => Some("SETBIT modifies bits in raw bytes"),
             // All other commands are compatible
             _ => None,
         }
@@ -114,38 +122,39 @@ impl RequestType {
     pub fn from_command_name(name: &str) -> Option<Self> {
         match name.to_uppercase().as_str() {
             // Commands that support compression
-            "SET" => Some(RequestType::Set),
+            "GET" => Some(RequestType::Get),
+            "GETDEL" => Some(RequestType::GetDel),
+            "GETEX" => Some(RequestType::GetEx),
+            "GETSET" => Some(RequestType::GetSet),
+            "MGET" => Some(RequestType::MGet),
             "MSET" => Some(RequestType::MSet),
             "MSETNX" => Some(RequestType::MSetNX),
-            "SETEX" => Some(RequestType::SetEx),
             "PSETEX" => Some(RequestType::PSetEx),
+            "SET" => Some(RequestType::Set),
+            "SETEX" => Some(RequestType::SetEx),
             "SETNX" => Some(RequestType::SetNX),
-            "GET" => Some(RequestType::Get),
-            "MGET" => Some(RequestType::MGet),
-            "GETEX" => Some(RequestType::GetEx),
-            "GETDEL" => Some(RequestType::GetDel),
-            "GETSET" => Some(RequestType::GetSet),
             // Incompatible commands - string manipulation
             "APPEND" => Some(RequestType::Append),
+            "DELIFEQ" => Some(RequestType::DelIfEq),
             "GETRANGE" => Some(RequestType::GetRange),
+            "LCS" => Some(RequestType::LCS),
             "SETRANGE" => Some(RequestType::SetRange),
             "STRLEN" => Some(RequestType::Strlen),
-            "LCS" => Some(RequestType::LCS),
             "SUBSTR" => Some(RequestType::Substr),
             // Incompatible commands - numeric operations
+            "DECR" => Some(RequestType::Decr),
+            "DECRBY" => Some(RequestType::DecrBy),
             "INCR" => Some(RequestType::Incr),
             "INCRBY" => Some(RequestType::IncrBy),
             "INCRBYFLOAT" => Some(RequestType::IncrByFloat),
-            "DECR" => Some(RequestType::Decr),
-            "DECRBY" => Some(RequestType::DecrBy),
             // Incompatible commands - bit operations
-            "GETBIT" => Some(RequestType::GetBit),
-            "SETBIT" => Some(RequestType::SetBit),
             "BITCOUNT" => Some(RequestType::BitCount),
-            "BITPOS" => Some(RequestType::BitPos),
             "BITFIELD" => Some(RequestType::BitField),
             "BITFIELD_RO" => Some(RequestType::BitFieldReadOnly),
             "BITOP" => Some(RequestType::BitOp),
+            "BITPOS" => Some(RequestType::BitPos),
+            "GETBIT" => Some(RequestType::GetBit),
+            "SETBIT" => Some(RequestType::SetBit),
             // Unknown command - not relevant for compression
             _ => None,
         }
@@ -156,46 +165,48 @@ impl RequestType {
         match self {
             RequestType::InvalidRequest => None,
             RequestType::CustomCommand => Some("CUSTOM"),
-            RequestType::Get => Some("GET"),
-            RequestType::Set => Some("SET"),
-            RequestType::Del => Some("DEL"),
-            RequestType::Exists => Some("EXISTS"),
-            RequestType::HGet => Some("HGET"),
-            RequestType::HSet => Some("HSET"),
-            RequestType::HDel => Some("HDEL"),
-            RequestType::LPush => Some("LPUSH"),
-            RequestType::RPush => Some("RPUSH"),
-            RequestType::LPop => Some("LPOP"),
-            RequestType::RPop => Some("RPOP"),
-            RequestType::Expire => Some("EXPIRE"),
-            RequestType::TTL => Some("TTL"),
-            RequestType::MSet => Some("MSET"),
-            RequestType::MSetNX => Some("MSETNX"),
-            RequestType::SetEx => Some("SETEX"),
-            RequestType::PSetEx => Some("PSETEX"),
-            RequestType::SetNX => Some("SETNX"),
-            RequestType::MGet => Some("MGET"),
-            RequestType::GetEx => Some("GETEX"),
-            RequestType::GetDel => Some("GETDEL"),
-            RequestType::GetSet => Some("GETSET"),
+
             RequestType::Append => Some("APPEND"),
-            RequestType::GetRange => Some("GETRANGE"),
-            RequestType::SetRange => Some("SETRANGE"),
-            RequestType::Strlen => Some("STRLEN"),
-            RequestType::LCS => Some("LCS"),
-            RequestType::Substr => Some("SUBSTR"),
-            RequestType::Incr => Some("INCR"),
-            RequestType::IncrBy => Some("INCRBY"),
-            RequestType::IncrByFloat => Some("INCRBYFLOAT"),
-            RequestType::Decr => Some("DECR"),
-            RequestType::DecrBy => Some("DECRBY"),
-            RequestType::GetBit => Some("GETBIT"),
-            RequestType::SetBit => Some("SETBIT"),
             RequestType::BitCount => Some("BITCOUNT"),
-            RequestType::BitPos => Some("BITPOS"),
             RequestType::BitField => Some("BITFIELD"),
             RequestType::BitFieldReadOnly => Some("BITFIELD_RO"),
             RequestType::BitOp => Some("BITOP"),
+            RequestType::BitPos => Some("BITPOS"),
+            RequestType::Decr => Some("DECR"),
+            RequestType::DecrBy => Some("DECRBY"),
+            RequestType::Del => Some("DEL"),
+            RequestType::DelIfEq => Some("DELIFEQ"),
+            RequestType::Exists => Some("EXISTS"),
+            RequestType::Expire => Some("EXPIRE"),
+            RequestType::Get => Some("GET"),
+            RequestType::GetBit => Some("GETBIT"),
+            RequestType::GetDel => Some("GETDEL"),
+            RequestType::GetEx => Some("GETEX"),
+            RequestType::GetRange => Some("GETRANGE"),
+            RequestType::GetSet => Some("GETSET"),
+            RequestType::HDel => Some("HDEL"),
+            RequestType::HGet => Some("HGET"),
+            RequestType::HSet => Some("HSET"),
+            RequestType::Incr => Some("INCR"),
+            RequestType::IncrBy => Some("INCRBY"),
+            RequestType::IncrByFloat => Some("INCRBYFLOAT"),
+            RequestType::LCS => Some("LCS"),
+            RequestType::LPop => Some("LPOP"),
+            RequestType::LPush => Some("LPUSH"),
+            RequestType::MGet => Some("MGET"),
+            RequestType::MSet => Some("MSET"),
+            RequestType::MSetNX => Some("MSETNX"),
+            RequestType::PSetEx => Some("PSETEX"),
+            RequestType::RPop => Some("RPOP"),
+            RequestType::RPush => Some("RPUSH"),
+            RequestType::Set => Some("SET"),
+            RequestType::SetBit => Some("SETBIT"),
+            RequestType::SetEx => Some("SETEX"),
+            RequestType::SetNX => Some("SETNX"),
+            RequestType::SetRange => Some("SETRANGE"),
+            RequestType::Strlen => Some("STRLEN"),
+            RequestType::Substr => Some("SUBSTR"),
+            RequestType::TTL => Some("TTL"),
         }
     }
 }

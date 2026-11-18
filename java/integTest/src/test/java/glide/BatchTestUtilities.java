@@ -361,6 +361,50 @@ public class BatchTestUtilities {
             batch.set(stringKey9, value1).getex(stringKey9).getex(stringKey9, GetExOptions.Seconds(20L));
         }
 
+        String stringKey10 = generateKey("StringKey", isAtomic);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            batch
+                    .set(stringKey10, value1)
+                    .delifeq(stringKey10, "wrong-value")
+                    .delifeq(stringKey10, value1);
+        }
+
+        String stringKey11 = generateKey("StringKey", isAtomic);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
+            batch
+                    .set(
+                            stringKey11,
+                            "value",
+                            SetOptions.builder().conditionalSetOnlyIfEqualTo("other").build())
+                    .set(stringKey11, "value")
+                    .set(
+                            stringKey11,
+                            "other",
+                            SetOptions.builder().conditionalSetOnlyIfEqualTo("other").build())
+                    .set(
+                            stringKey11,
+                            "other",
+                            SetOptions.builder().conditionalSetOnlyIfEqualTo("value").build());
+        }
+
+        String stringKey12 = generateKey("StringKey", isAtomic);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0")) {
+            batch
+                    .set(
+                            stringKey12,
+                            "value",
+                            SetOptions.builder().conditionalSetOnlyIfNotEqualTo("other").build())
+                    .set(stringKey12, "value")
+                    .set(
+                            stringKey12,
+                            "other",
+                            SetOptions.builder().conditionalSetOnlyIfNotEqualTo("value").build())
+                    .set(
+                            stringKey12,
+                            "other",
+                            SetOptions.builder().conditionalSetOnlyIfNotEqualTo("other").build());
+        }
+
         Object[] expectedResults =
                 new Object[] {
                     OK, // flushall()
@@ -414,6 +458,41 @@ public class BatchTestUtilities {
                                 OK, // set(stringKey9, value1)
                                 value1, // getex(stringKey1)
                                 value1, // getex(stringKey1,GetExOptions.Seconds(20L))
+                            });
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(stringKey10, value1)
+                                false, // delifeq(stringKey10, "wrong-value")
+                                true, // delifeq(stringKey10, value1)
+                            });
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                null, // set(stringKey11, "value", IFEQ "other") non-existent key
+                                OK, // set(stringKey11, "value")
+                                null, // set(stringKey11, "other", IFEQ "other") value not equal
+                                OK, // set(stringKey11, "other", IFEQ "value") value equal
+                            });
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(stringKey12, "value", IFNE "other") non-existent key
+                                OK, // set(stringKey12, "value")
+                                null, // set(stringKey12, "other", IFNE "value") value equal
+                                OK, // set(stringKey12, "other", IFNE "other") value not equal
                             });
         }
 
@@ -491,6 +570,26 @@ public class BatchTestUtilities {
                     .hpexpiretime(hashKey3, new String[] {field1, field2});
         }
 
+        // HGETDEL command (Valkey 9.1.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0")) {
+            String hashKey4 = generateKey("HashKey", isAtomic);
+            batch
+                    .hset(hashKey4, createMap(field1, value1, field2, value2))
+                    .hgetdel(hashKey4, new String[] {field1, field2});
+        }
+
+        // HSETEX key-level NX/XX condition (Valkey 9.1.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0")) {
+            String hashKey5 = generateKey("HashKey", isAtomic);
+            HSetExOptions hsetexNxOptions = HSetExOptions.builder().onlyIfKeyDoesNotExist().build();
+            HSetExOptions hsetexXxOptions = HSetExOptions.builder().onlyIfKeyExists().build();
+            batch
+                    .hsetex(hashKey5, createMap(field1, value1), hsetexNxOptions)
+                    .hsetex(hashKey5, createMap(field1, value2), hsetexNxOptions)
+                    .hsetex(hashKey5, createMap(field1, value2), hsetexXxOptions)
+                    .hget(hashKey5, field1);
+        }
+
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             batch
                     .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(false).build())
@@ -566,6 +665,34 @@ public class BatchTestUtilities {
                                     -2L, -2L
                                 }, // hpexpiretime(hashKey3, new String[] {field1, field2}) - fields expired (don't
                                 // exist)
+                            });
+        }
+
+        // Add expected results for HGETDEL command (Valkey 9.1.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0")) {
+            result =
+                    concatenateArrays(
+                            result,
+                            new Object[] {
+                                2L, // hset(hashKey4, createMap(field1, value1, field2, value2))
+                                new Object[] {value1, value2}, // hgetdel(hashKey4, new String[] {field1, field2})
+                            });
+        }
+
+        // Add expected results for HSETEX key-level NX/XX condition (Valkey 9.1.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0")) {
+            result =
+                    concatenateArrays(
+                            result,
+                            new Object[] {
+                                1L, // hsetex(hashKey5, createMap(field1, value1), hsetexNxOptions) - key did not
+                                // exist, NX succeeds
+                                0L, // hsetex(hashKey5, createMap(field1, value2), hsetexNxOptions) - key now
+                                // exists, NX fails (no-op)
+                                1L, // hsetex(hashKey5, createMap(field1, value2), hsetexXxOptions) - key exists,
+                                // XX succeeds
+                                value2, // hget(hashKey5, field1) - updated by the XX call, unaffected by the
+                                // failed NX call
                             });
         }
 
@@ -747,6 +874,10 @@ public class BatchTestUtilities {
                     .sintercard(new String[] {setKey5, setKey6}, 2);
         }
 
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0")) {
+            batch.sismemberIfExists(setKey2, "baz");
+        }
+
         Object[] expectedResults =
                 new Object[] {
                     2L, // sadd(setKey1, new String[] {"baz", "foo"});
@@ -772,6 +903,7 @@ public class BatchTestUtilities {
                     "foo", // spop(setKey4)
                     Collections.emptySet(), // spopCount(setKey4, 3)
                 };
+
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResults =
                     concatenateArrays(
@@ -781,6 +913,15 @@ public class BatchTestUtilities {
                                 4L, // sadd(setKey6, {"two", "three", "four", "five"})
                                 3L, // sintercard({setKey5, setKey6})
                                 2L, // sintercard({setKey5, setKey6}, 2)
+                            });
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                1L, // sismemberIfExists(setKey2, "baz")
                             });
         }
 

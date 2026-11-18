@@ -1,26 +1,33 @@
 [package]
 name = "glide-core"
-version = "0.1.0"
+version = "0.3.0"
+
+# About
 description = "Core for Valkey GLIDE. This crate isn't intended to be used directly."
 authors = ["Valkey GLIDE Maintainers"]
 license = "Apache-2.0"
 
+# References
+homepage = "https://valkey.io/valkey-glide/"
+repository = "https://github.com/valkey-io/valkey-glide"
+
+# Build
 # TODO #7175: Specify rust-version
 edition = "2024"
 
 [dependencies]
 
 # GLIDE dependencies
-glide-logger = { path = "../glide-logger", version = "0.1.0" }
-glide-telemetry = { path = "../glide-telemetry", version = "0.1.0" }
-glide-core-engine = { path = "./redis-rs/redis", version = "0.1.0", features = ["aio", "keep-alive", "tokio-comp", "tokio-rustls-comp", "connection-manager", "cluster", "cluster-async"] }
+glide-logger = { path = "../glide-logger", version = "0.1.1" }
+glide-telemetry = { path = "../glide-telemetry", version = "0.1.1" }
+glide-core-engine = { path = "./redis-rs/redis", version = "0.2.0", features = ["aio", "keep-alive", "tokio-comp", "tokio-rustls-comp", "connection-manager", "cluster", "cluster-async"] }
+glide-rdma = { path = "../glide-rdma", version = "0.2.0", optional = true }
 
 # External dependencies
 async-trait = { version = "0.1" }
 aws-config = "1"
 aws-credential-types = "1"
 aws-sigv4 = "1"
-aws-smithy-types = "<1.7"
 bytes = "1"
 dashmap = "~6.2.1"
 directories = { version = "6", optional = true }
@@ -55,6 +62,12 @@ zstd = { version = "0.14" }
 
 [features]
 proto = ["protobuf"]
+# RDMA transfers through glide-rdma.
+# Needs libfabric at run time (see DEVELOPER.md).
+rdma = ["dep:glide-rdma", "glide-rdma/libfabric", "glide-core-engine/rdma"]
+# `rdma` plus glide-rdma's `tcp` provider (see `glide_rdma::Provider::Tcp`), for the
+# tests and for a development client; never a release build.
+rdma-tcp-dev = ["rdma", "glide-rdma/tcp-dev"]
 socket-layer = [
     "proto",
     "directories",
@@ -70,7 +83,7 @@ test-util = []
 [dev-dependencies]
 
 # GLIDE dependencies
-glide-core-engine = { path = "./redis-rs/redis", version = "0.1.0", features = ["tls-rustls-insecure"] }
+glide-core-engine = { path = "./redis-rs/redis", version = "0.2.0", features = ["tls-rustls-insecure"] }
 glide-core = { path = ".", features = ["socket-layer", "test-util"] }
 
 # External dependencies

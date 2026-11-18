@@ -23,7 +23,7 @@ public class ZScanOptions extends BaseScanOptions {
 
     /**
      * When set to true, the command will not include scores in the results. This option is available
-     * from Valkey version 8.0.0 and above.
+     * since Valkey 8.0.0.
      */
     @Builder.Default protected boolean noScores = false;
 

@@ -4,6 +4,9 @@ package integTest
 
 import (
 	"context"
+	"errors"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,211 +14,222 @@ import (
 	"github.com/stretchr/testify/require"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
-// TestIamAuthenticationWithMockCredentials tests IAM authentication using mock AWS credentials.
-//
-// This test verifies:
-// 1. Client can connect using IAM authentication with mock credentials
-// 2. Basic operations work after IAM authentication
-// 3. Operations continue to work after token refresh
-func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
-	// Create IAM config
-	iamConfig := config.NewIamAuthConfig(
-		TestClusterName,
-		config.ElastiCache,
-		TestRegionUsEast1,
-	).WithRefreshIntervalSeconds(5)
-
-	// Create credentials with IAM config
+func customIamCredentials(
+	t require.TestingT,
+	provider config.GlideCredentialProvider,
+	refreshIntervalSeconds uint32,
+) *config.ServerCredentials {
+	iamConfig := config.NewIamAuthConfig(TestClusterName, config.ElastiCache, TestRegionUsEast1).
+		WithRefreshIntervalSeconds(refreshIntervalSeconds).
+		WithCredentialProvider(provider)
 	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
-	require.NoError(suite.T(), err)
-
-	// Create cluster client configuration
-	// Note: useTLS is set from suite.tls which respects the --tls flag
-	clusterConfig := config.NewClusterClientConfiguration().
-		WithAddress(&config.NodeAddress{
-			Host: suite.clusterHosts[0].Host,
-			Port: suite.clusterHosts[0].Port,
-		}).
-		WithCredentials(credentials).
-		WithUseTLS(suite.tls)
-
-	// Create client with IAM authentication
-	client, err := glide.NewClusterClient(clusterConfig)
-	require.NoError(suite.T(), err, "Failed to create client - ensure AWS mock credentials are set")
-	defer client.Close()
-
-	// Verify connection works
-	assertConnected(suite.T(), client)
-
-	// Test basic operations
-	key1 := uuid.NewString()
-	value1 := "iam_test_value"
-	setResult, err := client.Set(context.Background(), key1, value1)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "OK", setResult)
-
-	getResult, err := client.Get(context.Background(), key1)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), value1, getResult.Value())
-
-	// Test manual token refresh
-	_, err = client.RefreshIamToken(context.Background())
-	assert.NoError(suite.T(), err)
-
-	// Verify operations still work after token refresh
-	key2 := uuid.NewString()
-	value2 := "iam_test_value2"
-	setResult2, err := client.Set(context.Background(), key2, value2)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "OK", setResult2)
-
-	getResult2, err := client.Get(context.Background(), key2)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), value2, getResult2.Value())
+	require.NoError(t, err)
+	return credentials
 }
 
-// TestIamAuthenticationAutomaticTokenRefresh tests automatic IAM token refresh.
-//
-// This test verifies that the client automatically refreshes the IAM token
-// at the configured interval and continues to work correctly.
-func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefresh() {
-	// Create IAM config with very short refresh interval
-	iamConfig := config.NewIamAuthConfig(
-		TestClusterName,
-		config.ElastiCache,
-		TestRegionUsEast1,
-	).WithRefreshIntervalSeconds(2)
+func assertIamClientOperations(t require.TestingT, client interface {
+	Set(context.Context, string, string) (string, error)
+	Get(context.Context, string) (models.Result[string], error)
+},
+) {
+	key := uuid.NewString()
+	value := "iam_test_value"
+	setResult, err := client.Set(context.Background(), key, value)
+	require.NoError(t, err)
+	assert.Equal(t, glide.OK, setResult)
+	getResult, err := client.Get(context.Background(), key)
+	require.NoError(t, err)
+	assert.Equal(t, value, getResult.Value())
+}
 
-	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
-	require.NoError(suite.T(), err)
-
-	clusterConfig := config.NewClusterClientConfiguration().
-		WithAddress(&config.NodeAddress{
-			Host: suite.clusterHosts[0].Host,
-			Port: suite.clusterHosts[0].Port,
-		}).
-		WithCredentials(credentials).
-		WithUseTLS(suite.tls)
+// TestTlsIamAuthenticationWithMockCredentials verifies cluster initial authentication and manual refresh
+// through the direct custom credential-provider callback.
+func (suite *GlideTestSuite) TestTlsIamAuthenticationWithMockCredentials() {
+	skipIfTlsDisabled(suite)
+	var invocations atomic.Int32
+	provider := func() (config.AwsCredentials, error) {
+		invocations.Add(1)
+		return config.AwsCredentials{
+			AccessKeyID:          "test_access_key",
+			SecretAccessKey:      "test_secret_key",
+			SessionToken:         "test_session_token",
+			ExpiresAtEpochMillis: time.Now().Add(time.Minute).UnixMilli(),
+		}, nil
+	}
+	clusterConfig := suite.defaultClusterClientConfig().
+		WithCredentials(customIamCredentials(suite.T(), provider, 300))
 
 	client, err := glide.NewClusterClient(clusterConfig)
-	require.NoError(suite.T(), err, "Failed to create client - ensure AWS mock credentials are set")
-	defer client.Close()
-
-	// Verify initial connection
-	assertConnected(suite.T(), client)
-
-	// Wait for automatic token refresh to occur
-	time.Sleep(3 * time.Second)
-
-	// Verify client still works after automatic refresh
-	key := uuid.NewString()
-	value := "iam_auto_refresh_value"
-	setResult, err := client.Set(context.Background(), key, value)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "OK", setResult)
-
-	getResult, err := client.Get(context.Background(), key)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), value, getResult.Value())
-}
-
-// TestIamAuthenticationWithMockCredentialsStandalone tests IAM authentication using mock AWS credentials in standalone mode.
-func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentialsStandalone() {
-	// Create IAM config
-	iamConfig := config.NewIamAuthConfig(
-		TestClusterName,
-		config.ElastiCache,
-		TestRegionUsEast1,
-	).WithRefreshIntervalSeconds(5)
-
-	// Create credentials with IAM config
-	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	require.NoError(suite.T(), err)
-
-	// Create standalone client configuration
-	standaloneConfig := config.NewClientConfiguration().
-		WithAddress(&config.NodeAddress{
-			Host: suite.standaloneHosts[0].Host,
-			Port: suite.standaloneHosts[0].Port,
-		}).
-		WithCredentials(credentials).
-		WithUseTLS(suite.tls)
-
-	// Create client with IAM authentication
-	client, err := glide.NewClient(standaloneConfig)
-	require.NoError(suite.T(), err, "Failed to create client - ensure AWS mock credentials are set")
 	defer client.Close()
 
-	// Verify connection works
 	assertConnected(suite.T(), client)
+	assertIamClientOperations(suite.T(), client)
+	afterInitialAuth := invocations.Load()
+	assert.Greater(suite.T(), afterInitialAuth, int32(0))
 
-	// Test basic operations
-	key1 := uuid.NewString()
-	value1 := "iam_test_value"
-	setResult, err := client.Set(context.Background(), key1, value1)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "OK", setResult)
-
-	getResult, err := client.Get(context.Background(), key1)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), value1, getResult.Value())
-
-	// Test manual token refresh
 	_, err = client.RefreshIamToken(context.Background())
-	assert.NoError(suite.T(), err)
-
-	// Verify operations still work after token refresh
-	key2 := uuid.NewString()
-	value2 := "iam_test_value2"
-	setResult2, err := client.Set(context.Background(), key2, value2)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "OK", setResult2)
-
-	getResult2, err := client.Get(context.Background(), key2)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), value2, getResult2.Value())
+	require.NoError(suite.T(), err)
+	assert.Greater(suite.T(), invocations.Load(), afterInitialAuth)
+	assertIamClientOperations(suite.T(), client)
 }
 
-// TestIamAuthenticationAutomaticTokenRefreshStandalone tests automatic IAM token refresh in standalone mode.
-func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefreshStandalone() {
-	// Create IAM config with very short refresh interval
-	iamConfig := config.NewIamAuthConfig(
-		TestClusterName,
-		config.ElastiCache,
-		TestRegionUsEast1,
-	).WithRefreshIntervalSeconds(2)
+// TestTlsIamAuthenticationAutomaticTokenRefresh verifies cluster automatic refresh uses the direct provider.
+func (suite *GlideTestSuite) TestTlsIamAuthenticationAutomaticTokenRefresh() {
+	skipIfTlsDisabled(suite)
+	var invocations atomic.Int32
+	provider := func() (config.AwsCredentials, error) {
+		invocations.Add(1)
+		return config.AwsCredentials{AccessKeyID: "test_access_key", SecretAccessKey: "test_secret_key"}, nil
+	}
+	clusterConfig := suite.defaultClusterClientConfig().
+		WithCredentials(customIamCredentials(suite.T(), provider, 2))
 
-	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
+	client, err := glide.NewClusterClient(clusterConfig)
 	require.NoError(suite.T(), err)
-
-	standaloneConfig := config.NewClientConfiguration().
-		WithAddress(&config.NodeAddress{
-			Host: suite.standaloneHosts[0].Host,
-			Port: suite.standaloneHosts[0].Port,
-		}).
-		WithCredentials(credentials).
-		WithUseTLS(suite.tls)
-
-	client, err := glide.NewClient(standaloneConfig)
-	require.NoError(suite.T(), err, "Failed to create client - ensure AWS mock credentials are set")
 	defer client.Close()
 
-	// Verify initial connection
 	assertConnected(suite.T(), client)
+	afterInitialAuth := invocations.Load()
+	require.Greater(suite.T(), afterInitialAuth, int32(0))
+	require.Eventually(suite.T(), func() bool {
+		return invocations.Load() > afterInitialAuth
+	}, 5*time.Second, 100*time.Millisecond)
+	assertIamClientOperations(suite.T(), client)
+}
 
-	// Wait for automatic token refresh to occur
-	time.Sleep(3 * time.Second)
+// TestTlsIamAuthenticationWithMockCredentialsStandalone verifies standalone initial auth and manual refresh
+// with optional token and expiry omitted.
+func (suite *GlideTestSuite) TestTlsIamAuthenticationWithMockCredentialsStandalone() {
+	skipIfTlsDisabled(suite)
+	var invocations atomic.Int32
+	provider := func() (config.AwsCredentials, error) {
+		invocations.Add(1)
+		return config.AwsCredentials{AccessKeyID: "test_access_key", SecretAccessKey: "test_secret_key"}, nil
+	}
+	standaloneConfig := suite.defaultClientConfig().
+		WithCredentials(customIamCredentials(suite.T(), provider, 300))
 
-	// Verify client still works after automatic refresh
-	key := uuid.NewString()
-	value := "iam_auto_refresh_value"
-	setResult, err := client.Set(context.Background(), key, value)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "OK", setResult)
+	client, err := glide.NewClient(standaloneConfig)
+	require.NoError(suite.T(), err)
+	defer client.Close()
 
-	getResult, err := client.Get(context.Background(), key)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), value, getResult.Value())
+	assertConnected(suite.T(), client)
+	assertIamClientOperations(suite.T(), client)
+	afterInitialAuth := invocations.Load()
+	assert.Greater(suite.T(), afterInitialAuth, int32(0))
+
+	_, err = client.RefreshIamToken(context.Background())
+	require.NoError(suite.T(), err)
+	assert.Greater(suite.T(), invocations.Load(), afterInitialAuth)
+	assertIamClientOperations(suite.T(), client)
+}
+
+// TestTlsIamAuthenticationAutomaticTokenRefreshStandalone verifies standalone automatic refresh uses the direct provider.
+func (suite *GlideTestSuite) TestTlsIamAuthenticationAutomaticTokenRefreshStandalone() {
+	skipIfTlsDisabled(suite)
+	var invocations atomic.Int32
+	provider := func() (config.AwsCredentials, error) {
+		invocations.Add(1)
+		return config.AwsCredentials{AccessKeyID: "test_access_key", SecretAccessKey: "test_secret_key"}, nil
+	}
+	standaloneConfig := suite.defaultClientConfig().
+		WithCredentials(customIamCredentials(suite.T(), provider, 2))
+
+	client, err := glide.NewClient(standaloneConfig)
+	require.NoError(suite.T(), err)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+	afterInitialAuth := invocations.Load()
+	require.Greater(suite.T(), afterInitialAuth, int32(0))
+	require.Eventually(suite.T(), func() bool {
+		return invocations.Load() > afterInitialAuth
+	}, 5*time.Second, 100*time.Millisecond)
+	assertIamClientOperations(suite.T(), client)
+}
+
+func (suite *GlideTestSuite) TestTlsIamCustomCredentialProviderFailure() {
+	skipIfTlsDisabled(suite)
+	provider := func() (config.AwsCredentials, error) {
+		return config.AwsCredentials{}, errors.New("custom provider failed")
+	}
+
+	standaloneConfig := suite.defaultClientConfig().
+		WithCredentials(customIamCredentials(suite.T(), provider, 300))
+	client, err := glide.NewClient(standaloneConfig)
+	assert.Nil(suite.T(), client)
+	require.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "Custom credentials provider callback returned failure")
+
+	clusterConfig := suite.defaultClusterClientConfig().
+		WithCredentials(customIamCredentials(suite.T(), provider, 300))
+	clusterClient, err := glide.NewClusterClient(clusterConfig)
+	assert.Nil(suite.T(), clusterClient)
+	require.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "Custom credentials provider callback returned failure")
+}
+
+func (suite *GlideTestSuite) TestTlsIamCustomCredentialProviderRejectsWhitespaceRequiredValues() {
+	skipIfTlsDisabled(suite)
+	standaloneProvider := func() (config.AwsCredentials, error) {
+		return config.AwsCredentials{AccessKeyID: " \t\r\n", SecretAccessKey: "secret"}, nil
+	}
+	standaloneConfig := suite.defaultClientConfig().
+		WithCredentials(customIamCredentials(suite.T(), standaloneProvider, 300))
+	client, err := glide.NewClient(standaloneConfig)
+	assert.Nil(suite.T(), client)
+	require.Error(suite.T(), err)
+
+	clusterProvider := func() (config.AwsCredentials, error) {
+		return config.AwsCredentials{AccessKeyID: "access", SecretAccessKey: " \t\r\n"}, nil
+	}
+	clusterConfig := suite.defaultClusterClientConfig().
+		WithCredentials(customIamCredentials(suite.T(), clusterProvider, 300))
+	clusterClient, err := glide.NewClusterClient(clusterConfig)
+	assert.Nil(suite.T(), clusterClient)
+	require.Error(suite.T(), err)
+}
+
+func (suite *GlideTestSuite) TestTlsIamCustomCredentialProviderNegotiatesLargeSessionToken() {
+	skipIfTlsDisabled(suite)
+	largeSessionToken := strings.Repeat("t", 9*1024)
+
+	var standaloneInvocations atomic.Int32
+	standaloneProvider := func() (config.AwsCredentials, error) {
+		standaloneInvocations.Add(1)
+		return config.AwsCredentials{
+			AccessKeyID:     "test_access_key",
+			SecretAccessKey: "test_secret_key",
+			SessionToken:    largeSessionToken,
+		}, nil
+	}
+	standaloneConfig := suite.defaultClientConfig().
+		WithCredentials(customIamCredentials(suite.T(), standaloneProvider, 300))
+	client, err := glide.NewClient(standaloneConfig)
+	require.NoError(suite.T(), err)
+	assertConnected(suite.T(), client)
+	client.Close()
+	assert.GreaterOrEqual(suite.T(), standaloneInvocations.Load(), int32(2))
+
+	var clusterInvocations atomic.Int32
+	clusterProvider := func() (config.AwsCredentials, error) {
+		clusterInvocations.Add(1)
+		return config.AwsCredentials{
+			AccessKeyID:          "test_access_key",
+			SecretAccessKey:      "test_secret_key",
+			SessionToken:         largeSessionToken,
+			ExpiresAtEpochMillis: time.Now().Add(time.Minute).UnixMilli(),
+		}, nil
+	}
+	clusterConfig := suite.defaultClusterClientConfig().
+		WithCredentials(customIamCredentials(suite.T(), clusterProvider, 300))
+	clusterClient, err := glide.NewClusterClient(clusterConfig)
+	require.NoError(suite.T(), err)
+	assertConnected(suite.T(), clusterClient)
+	clusterClient.Close()
+	assert.GreaterOrEqual(suite.T(), clusterInvocations.Load(), int32(2))
 }

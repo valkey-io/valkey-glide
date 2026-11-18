@@ -9,7 +9,6 @@ pub mod scan;
 
 pub mod bitmap;
 pub mod connection_management;
-pub mod ft;
 pub mod generic;
 pub mod geo;
 pub mod hash;
@@ -27,7 +26,6 @@ pub mod string;
 pub mod prelude {
     pub use super::bitmap::BitmapCommands;
     pub use super::connection_management::ConnectionManagementCommands;
-    pub use super::ft::FtCommands;
     pub use super::generic::GenericCommands;
     pub use super::geo::GeoCommands;
     pub use super::hash::HashCommands;

@@ -20,11 +20,19 @@ func startDedicatedValkeyServer(suite *GlideTestSuite, clusterMode bool) (string
 	return startDedicatedValkeyServerWithReplicas(suite, clusterMode, 0)
 }
 
+// Starts a server outside the suite's shared fixtures. That server never speaks TLS, so a test that
+// talks to it cannot pass when the suite runs with TLS, and is skipped instead.
+//
+// The skip here only works for a test that calls this from its own method body. Skipping from inside a
+// subtest goroutine acts on the parent test and Go reports that as a failure, so a caller that reaches
+// this from within a subtest has to guard at the top of its own method instead.
 func startDedicatedValkeyServerWithReplicas(
 	suite *GlideTestSuite,
 	clusterMode bool,
 	replicaCount int,
 ) (string, error) {
+	skipIfTlsEnabled(suite)
+
 	args := []string{}
 	args = append(args, "start")
 	if clusterMode {
@@ -51,24 +59,33 @@ func createDedicatedClient(
 	lazyConnect bool,
 ) (interfaces.BaseClientCommands, error) {
 	if clusterMode {
-		cfg := defaultClusterClientConfig().
-			WithLazyConnect(lazyConnect)
-
-		for i := range addresses {
-			cfg.WithAddress(&addresses[i])
-		}
-
-		return glide.NewClusterClient(cfg)
+		return glide.NewClusterClient(
+			plaintextClusterClientConfigFor(addresses...).WithLazyConnect(lazyConnect),
+		)
 	}
 
-	cfg := defaultClientConfig().
-		WithLazyConnect(lazyConnect)
+	return glide.NewClient(plaintextClientConfigFor(addresses...).WithLazyConnect(lazyConnect))
+}
 
-	for i := range addresses {
-		cfg.WithAddress(&addresses[i])
+// createDedicatedClientWithTcpNoDelay is createDedicatedClient with TCP_NODELAY set explicitly.
+func createDedicatedClientWithTcpNoDelay(
+	addresses []config.NodeAddress,
+	clusterMode bool,
+	tcpNoDelay bool,
+) (interfaces.BaseClientCommands, error) {
+	if clusterMode {
+		return glide.NewClusterClient(
+			plaintextClusterClientConfigFor(addresses...).WithAdvancedConfiguration(
+				advancedClusterClientConfigWithoutTls().WithTcpNoDelay(tcpNoDelay),
+			),
+		)
 	}
 
-	return glide.NewClient(cfg)
+	return glide.NewClient(
+		plaintextClientConfigFor(addresses...).WithAdvancedConfiguration(
+			advancedClientConfigWithoutTls().WithTcpNoDelay(tcpNoDelay),
+		),
+	)
 }
 
 // getClientListOutputCount parses CLIENT LIST output and returns the number of clients
@@ -135,8 +152,7 @@ func getExpectedNewConnections(ctx context.Context, client interfaces.BaseClient
 }
 
 func (suite *GlideTestSuite) TestStandaloneConnect() {
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0])
-	client, err := glide.NewClient(clientConfig)
+	client, err := glide.NewClient(suite.defaultClientConfig())
 
 	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
@@ -145,12 +161,7 @@ func (suite *GlideTestSuite) TestStandaloneConnect() {
 }
 
 func (suite *GlideTestSuite) TestClusterConnect() {
-	config := config.NewClusterClientConfiguration()
-	for _, host := range suite.clusterHosts {
-		config.WithAddress(&host)
-	}
-
-	client, err := glide.NewClusterClient(config)
+	client, err := glide.NewClusterClient(clusterClientConfigFor(suite.clusterHosts...))
 
 	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
@@ -159,9 +170,7 @@ func (suite *GlideTestSuite) TestClusterConnect() {
 }
 
 func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0])
-
-	client, err := glide.NewClusterClient(clientConfig)
+	client, err := glide.NewClusterClient(suite.defaultClusterClientConfig())
 
 	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
@@ -170,9 +179,8 @@ func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
 }
 
 func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
-	config := config.NewClientConfiguration().
-		WithAddress(&config.NodeAddress{Host: "invalid-host"})
-	client, err := glide.NewClient(config)
+	clientConfig := clientConfigFor(config.NodeAddress{Host: "invalid-host"})
+	client, err := glide.NewClient(clientConfig)
 
 	suite.Nil(client)
 	suite.Error(err)
@@ -276,6 +284,9 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 }
 
 func (suite *GlideTestSuite) TestLazyConnectionEstablishesOnFirstCommand() {
+	// Needs a dedicated plaintext server, and reaches for it inside a subtest, so it guards here.
+	skipIfTlsEnabled(suite)
+
 	// Run test for both standalone and cluster modes
 	suite.runWithTimeoutClients(func(client interfaces.BaseClientCommands) {
 		ctx := context.Background()
@@ -322,6 +333,9 @@ func (suite *GlideTestSuite) TestLazyConnectionEstablishesOnFirstCommand() {
 }
 
 func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
+	// Needs a dedicated plaintext server, and reaches for it inside a subtest, so it guards here.
+	skipIfTlsEnabled(suite)
+
 	// Test TCP_NODELAY configuration for both standalone and cluster modes
 	suite.runWithTimeoutClients(func(client interfaces.BaseClientCommands) {
 		_, isCluster := client.(interfaces.GlideClusterClientCommands)
@@ -334,26 +348,7 @@ func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
 		defer stopDedicatedValkeyServer(suite, clusterFolder)
 
 		// Test with TCP_NODELAY enabled (true)
-		var clientWithTcpNoDelayTrue interfaces.BaseClientCommands
-		if isCluster {
-			cfg := config.NewClusterClientConfiguration()
-			for _, addr := range addresses {
-				cfg.WithAddress(&addr)
-			}
-			cfg.WithAdvancedConfiguration(
-				config.NewAdvancedClusterClientConfiguration().WithTcpNoDelay(true),
-			)
-			clientWithTcpNoDelayTrue, err = glide.NewClusterClient(cfg)
-		} else {
-			cfg := config.NewClientConfiguration()
-			for _, addr := range addresses {
-				cfg.WithAddress(&addr)
-			}
-			cfg.WithAdvancedConfiguration(
-				config.NewAdvancedClientConfiguration().WithTcpNoDelay(true),
-			)
-			clientWithTcpNoDelayTrue, err = glide.NewClient(cfg)
-		}
+		clientWithTcpNoDelayTrue, err := createDedicatedClientWithTcpNoDelay(addresses, isCluster, true)
 		suite.NoError(err)
 		defer clientWithTcpNoDelayTrue.Close()
 
@@ -361,26 +356,7 @@ func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
 		assertConnected(suite.T(), clientWithTcpNoDelayTrue)
 
 		// Test with TCP_NODELAY disabled (false)
-		var clientWithTcpNoDelayFalse interfaces.BaseClientCommands
-		if isCluster {
-			cfg := config.NewClusterClientConfiguration()
-			for _, addr := range addresses {
-				cfg.WithAddress(&addr)
-			}
-			cfg.WithAdvancedConfiguration(
-				config.NewAdvancedClusterClientConfiguration().WithTcpNoDelay(false),
-			)
-			clientWithTcpNoDelayFalse, err = glide.NewClusterClient(cfg)
-		} else {
-			cfg := config.NewClientConfiguration()
-			for _, addr := range addresses {
-				cfg.WithAddress(&addr)
-			}
-			cfg.WithAdvancedConfiguration(
-				config.NewAdvancedClientConfiguration().WithTcpNoDelay(false),
-			)
-			clientWithTcpNoDelayFalse, err = glide.NewClient(cfg)
-		}
+		clientWithTcpNoDelayFalse, err := createDedicatedClientWithTcpNoDelay(addresses, isCluster, false)
 		suite.NoError(err)
 		defer clientWithTcpNoDelayFalse.Close()
 
@@ -388,20 +364,7 @@ func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
 		assertConnected(suite.T(), clientWithTcpNoDelayFalse)
 
 		// Test with TCP_NODELAY not set (default behavior)
-		var clientWithDefaultTcpNoDelay interfaces.BaseClientCommands
-		if isCluster {
-			cfg := config.NewClusterClientConfiguration()
-			for _, addr := range addresses {
-				cfg.WithAddress(&addr)
-			}
-			clientWithDefaultTcpNoDelay, err = glide.NewClusterClient(cfg)
-		} else {
-			cfg := config.NewClientConfiguration()
-			for _, addr := range addresses {
-				cfg.WithAddress(&addr)
-			}
-			clientWithDefaultTcpNoDelay, err = glide.NewClient(cfg)
-		}
+		clientWithDefaultTcpNoDelay, err := createDedicatedClient(addresses, isCluster, false)
 		suite.NoError(err)
 		defer clientWithDefaultTcpNoDelay.Close()
 
@@ -413,7 +376,6 @@ func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
 // TestConnectWithIPv4AddressSucceeds_Standalone tests non-TLS connection with IPv4 address
 func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Standalone() {
 	// See 'tls_test.go' for corresponding TLS-enabled test.
-	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsEnabled(suite)
 
 	address := config.NodeAddress{
@@ -421,9 +383,7 @@ func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Standalone() {
 		Port: suite.standaloneHosts[0].Port,
 	}
 
-	clientConfig := defaultClientConfig().WithAddress(&address)
-
-	client, err := glide.NewClient(clientConfig)
+	client, err := glide.NewClient(plaintextClientConfigFor(address))
 	require.NoError(suite.T(), err)
 	defer client.Close()
 
@@ -433,7 +393,6 @@ func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Standalone() {
 // TestConnectWithIPv4AddressSucceeds_Cluster tests non-TLS connection with IPv4 address
 func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Cluster() {
 	// See 'tls_test.go' for corresponding TLS-enabled test.
-	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsEnabled(suite)
 
 	address := config.NodeAddress{
@@ -441,9 +400,7 @@ func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Cluster() {
 		Port: suite.clusterHosts[0].Port,
 	}
 
-	clientConfig := defaultClusterClientConfig().WithAddress(&address)
-
-	client, err := glide.NewClusterClient(clientConfig)
+	client, err := glide.NewClusterClient(plaintextClusterClientConfigFor(address))
 	require.NoError(suite.T(), err)
 	defer client.Close()
 
@@ -452,7 +409,6 @@ func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Cluster() {
 
 func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Standalone() {
 	// See 'tls_test.go' for corresponding TLS-enabled test.
-	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsEnabled(suite)
 
 	address := config.NodeAddress{
@@ -460,9 +416,7 @@ func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Standalone() {
 		Port: suite.standaloneHosts[0].Port,
 	}
 
-	clientConfig := defaultClientConfig().WithAddress(&address)
-
-	client, err := glide.NewClient(clientConfig)
+	client, err := glide.NewClient(plaintextClientConfigFor(address))
 	require.NoError(suite.T(), err)
 	defer client.Close()
 
@@ -471,7 +425,6 @@ func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Standalone() {
 
 func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Cluster() {
 	// See 'tls_test.go' for corresponding TLS-enabled test.
-	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsEnabled(suite)
 
 	address := config.NodeAddress{
@@ -479,9 +432,7 @@ func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Cluster() {
 		Port: suite.clusterHosts[0].Port,
 	}
 
-	clientConfig := defaultClusterClientConfig().WithAddress(&address)
-
-	client, err := glide.NewClusterClient(clientConfig)
+	client, err := glide.NewClusterClient(plaintextClusterClientConfigFor(address))
 	require.NoError(suite.T(), err)
 	defer client.Close()
 
@@ -490,8 +441,7 @@ func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Cluster() {
 
 func (suite *GlideTestSuite) TestInflightRequestsLimit_Standalone() {
 	inflightLimit := uint32(5)
-	clientConfig := defaultClientConfig().
-		WithAddress(&suite.standaloneHosts[0]).
+	clientConfig := suite.defaultClientConfig().
 		WithInflightRequestsLimit(inflightLimit)
 
 	client, err := glide.NewClient(clientConfig)
@@ -520,8 +470,7 @@ func (suite *GlideTestSuite) TestInflightRequestsLimit_Standalone() {
 	}
 
 	// Cleanup: push values to unblock pending requests
-	cleanupConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0])
-	cleanupClient, err := glide.NewClient(cleanupConfig)
+	cleanupClient, err := glide.NewClient(suite.defaultClientConfig())
 	require.NoError(suite.T(), err)
 	defer cleanupClient.Close()
 	for i := uint32(0); i < inflightLimit; i++ {
@@ -532,8 +481,7 @@ func (suite *GlideTestSuite) TestInflightRequestsLimit_Standalone() {
 
 func (suite *GlideTestSuite) TestInflightRequestsLimit_Cluster() {
 	inflightLimit := uint32(5)
-	clientConfig := defaultClusterClientConfig().
-		WithAddress(&suite.clusterHosts[0]).
+	clientConfig := suite.defaultClusterClientConfig().
 		WithInflightRequestsLimit(inflightLimit)
 
 	client, err := glide.NewClusterClient(clientConfig)
@@ -562,8 +510,7 @@ func (suite *GlideTestSuite) TestInflightRequestsLimit_Cluster() {
 	}
 
 	// Cleanup: push values to unblock pending requests
-	cleanupConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0])
-	cleanupClient, err := glide.NewClusterClient(cleanupConfig)
+	cleanupClient, err := glide.NewClusterClient(suite.defaultClusterClientConfig())
 	require.NoError(suite.T(), err)
 	defer cleanupClient.Close()
 	for i := uint32(0); i < inflightLimit; i++ {

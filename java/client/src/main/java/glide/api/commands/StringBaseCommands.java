@@ -4,7 +4,6 @@ package glide.api.commands;
 import glide.api.models.GlideString;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -16,20 +15,49 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface StringBaseCommands {
 
-    /** Valkey API keyword used to indicate that the length of the lcs should be returned. */
-    public static final String LEN_VALKEY_API = "LEN";
+    /**
+     * Valkey API keyword used to indicate that the length of the lcs should be returned.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated public static final String LEN_VALKEY_API = "LEN";
 
-    /** <code>IDX</code> option string to include in the <code>LCS</code> command. */
-    public static final String IDX_COMMAND_STRING = "IDX";
+    /**
+     * <code>IDX</code> option string to include in the <code>LCS</code> command.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated public static final String IDX_COMMAND_STRING = "IDX";
 
-    /** <code>MINMATCHLEN</code> option string to include in the <code>LCS</code> command. */
-    public static final String MINMATCHLEN_COMMAND_STRING = "MINMATCHLEN";
+    /**
+     * <code>MINMATCHLEN</code> option string to include in the <code>LCS</code> command.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated public static final String MINMATCHLEN_COMMAND_STRING = "MINMATCHLEN";
 
-    /** <code>WITHMATCHLEN</code> option string to include in the <code>LCS</code> command. */
-    public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
+    /**
+     * <code>WITHMATCHLEN</code> option string to include in the <code>LCS</code> command.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
 
-    /** Key for LCS matches result. */
-    public static final String LCS_MATCHES_RESULT_KEY = "matches";
+    /**
+     * Key for LCS matches result.
+     *
+     * @deprecated This reply key constant is internal and will be removed in a future major release.
+     */
+    // TODO #7401: Remove; BaseClient will use a private constant.
+    @Deprecated public static final String LCS_MATCHES_RESULT_KEY = "matches";
 
     /**
      * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
@@ -108,7 +136,6 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
@@ -124,7 +151,6 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
@@ -140,7 +166,6 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @param options The {@link GetExOptions} options.
@@ -159,7 +184,6 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @param options The {@link GetExOptions} options.
@@ -206,17 +230,15 @@ public interface StringBaseCommands {
     CompletableFuture<String> set(GlideString key, GlideString value);
 
     /**
-     * Sets the given key with the given value. Return value is dependent on the passed options.
+     * Sets the value of a key with the given options.
      *
      * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @param key The key to store.
-     * @param value The value to store with the given key.
+     * @param value The value to store with the given <code>key</code>.
      * @param options The Set options.
-     * @return If the value is successfully set, return <code>"OK"</code>. If value isn't set because
-     *     of {@link ConditionalSet#ONLY_IF_EXISTS} or {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST}
-     *     or {@link ConditionalSet#ONLY_IF_EQUAL} conditions, return <code>null</code>. If {@link
-     *     SetOptionsBuilder#returnOldValue(boolean)} is set, return the old value as a <code>String
-     *     </code>.
+     * @return If {@link SetOptionsBuilder#returnOldValue(boolean)} is not set, <code>"OK"</code> if
+     *     the key was set, or <code>null</code> if the condition was not met. If it is set, the old
+     *     value stored at <code>key</code>, or <code>null</code> if <code>key</code> did not exist.
      * @example
      *     <pre>{@code
      * SetOptions options = SetOptions.builder().conditionalSetOnlyIfExists().expiry(Seconds(5L)).build();
@@ -225,7 +247,13 @@ public interface StringBaseCommands {
      * }</pre>
      *     <pre>{@code
      * client.set("key", "value").get();
-     * SetOptions options = SetOptions.builder().conditionalSetIfEqualTo("value").build();
+     * SetOptions options = SetOptions.builder().conditionalSetOnlyIfEqualTo("value").build();
+     * String value = client.set("key", "newValue", options).get();
+     * assert value.equals("OK");
+     * }</pre>
+     *     <pre>{@code
+     * client.set("key", "value").get();
+     * SetOptions options = SetOptions.builder().conditionalSetOnlyIfNotEqualTo("otherValue").build();
      * String value = client.set("key", "newValue", options).get();
      * assert value.equals("OK");
      * }</pre>
@@ -233,17 +261,15 @@ public interface StringBaseCommands {
     CompletableFuture<String> set(String key, String value, SetOptions options);
 
     /**
-     * Sets the given key with the given value. Return value is dependent on the passed options.
+     * Sets the value of a key with the given options.
      *
      * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @param key The key to store.
-     * @param value The value to store with the given key.
+     * @param value The value to store with the given <code>key</code>.
      * @param options The Set options.
-     * @return If the value is successfully set, return <code>"OK"</code>. If value isn't set because
-     *     of {@link ConditionalSet#ONLY_IF_EXISTS} or {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST}
-     *     or {@link ConditionalSet#ONLY_IF_EQUAL} conditions, return <code>null</code>. If {@link
-     *     SetOptionsBuilder#returnOldValue(boolean)} is set, return the old value as a <code>String
-     *     </code>.
+     * @return If {@link SetOptionsBuilder#returnOldValue(boolean)} is not set, <code>"OK"</code> if
+     *     the key was set, or <code>null</code> if the condition was not met. If it is set, the old
+     *     value stored at <code>key</code>, or <code>null</code> if <code>key</code> did not exist.
      * @example
      *     <pre>{@code
      * SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_EXISTS).expiry(Seconds(5L)).build();
@@ -699,10 +725,46 @@ public interface StringBaseCommands {
     CompletableFuture<Long> append(GlideString key, GlideString value);
 
     /**
+     * Deletes <code>key</code> if its value equals <code>value</code>.
+     *
+     * @since Valkey 9.0.0.
+     * @see <a href="https://valkey.io/commands/delifeq/">valkey.io</a> for details.
+     * @param key The key to delete.
+     * @param value The comparison value. The key is only deleted if its current value matches
+     *     exactly.
+     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> if <code>key
+     *     </code> did not exist or its value did not match <code>value</code>.
+     * @example
+     *     <pre>{@code
+     * Boolean deleted = client.delifeq("key", "value").get();
+     * assert deleted;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> delifeq(String key, String value);
+
+    /**
+     * Deletes <code>key</code> if its value equals <code>value</code>.
+     *
+     * @since Valkey 9.0.0.
+     * @see <a href="https://valkey.io/commands/delifeq/">valkey.io</a> for details.
+     * @param key The key to delete.
+     * @param value The comparison value. The key is only deleted if its current value matches
+     *     exactly.
+     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> if <code>key
+     *     </code> did not exist or its value did not match <code>value</code>.
+     * @example
+     *     <pre>{@code
+     * Boolean deleted = client.delifeq(gs("key"), gs("value")).get();
+     * assert deleted;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> delifeq(GlideString key, GlideString value);
+
+    /**
      * Returns all the longest common subsequences combined between strings stored at <code>key1
      * </code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -724,7 +786,7 @@ public interface StringBaseCommands {
      * Returns all the longest common subsequences combined between strings stored at <code>key1
      * </code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -746,7 +808,7 @@ public interface StringBaseCommands {
      * Returns the total length of all the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -766,7 +828,7 @@ public interface StringBaseCommands {
      * Returns the total length of all the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -786,7 +848,7 @@ public interface StringBaseCommands {
      * Returns the indices and the total length of all the longest common subsequences between strings
      * stored at <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -829,7 +891,7 @@ public interface StringBaseCommands {
      * Returns the indices and the total length of all the longest common subsequences between strings
      * stored at <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -872,7 +934,7 @@ public interface StringBaseCommands {
      * Returns the indices and the total length of all the longest common subsequences between strings
      * stored at <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -917,7 +979,7 @@ public interface StringBaseCommands {
      * Returns the indices and the total length of all the longest common subsequences between strings
      * stored at <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -963,7 +1025,7 @@ public interface StringBaseCommands {
      * Returns the indices and lengths of the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -1008,7 +1070,7 @@ public interface StringBaseCommands {
      * Returns the indices and lengths of the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -1053,7 +1115,7 @@ public interface StringBaseCommands {
      * Returns the indices and lengths of the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -1101,7 +1163,7 @@ public interface StringBaseCommands {
      * Returns the indices and lengths of the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.

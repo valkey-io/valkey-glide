@@ -9,21 +9,18 @@
 
 mod common;
 
-use glide::{AsyncCommands, ConnectionManagementCommands, CustomCommand};
+use glide::{AsyncTypedCommands, ServerManagementCommands};
 
 const NEW_PASS: &str = "rotated-p4ss";
 
 #[tokio::test]
 async fn update_password_immediate_auth_succeeds() {
-    let server = server_or_skip!();
+    let server = common::TestServer::start();
     let client = server.client().await;
     assert_eq!(client.ping().await.unwrap(), "PONG");
 
     // Turn on auth at runtime; the live connection stays authenticated.
-    client
-        .custom_command(&["CONFIG", "SET", "requirepass", NEW_PASS])
-        .await
-        .unwrap();
+    client.config_set("requirepass", NEW_PASS).await.unwrap();
 
     // Rotate the client's stored password and re-AUTH immediately.
     client
@@ -33,29 +30,23 @@ async fn update_password_immediate_auth_succeeds() {
 
     // Commands still work after the rotation.
     let _: () = client.set("pw-k", "v").await.unwrap();
-    let got: Option<glide::Bytes> = client.get("pw-k").await.unwrap();
-    assert_eq!(got.as_deref(), Some(&b"v"[..]));
+    let got: Option<String> = client.get("pw-k").await.unwrap();
+    assert_eq!(got.as_deref(), Some("v"));
 
     // Clear auth so the server drops cleanly.
     client
         .update_connection_password(None, false)
         .await
         .unwrap();
-    client
-        .custom_command(&["CONFIG", "SET", "requirepass", ""])
-        .await
-        .unwrap();
+    client.config_set("requirepass", "").await.unwrap();
 }
 
 #[tokio::test]
 async fn update_password_immediate_auth_wrong_password_errors() {
-    let server = server_or_skip!();
+    let server = common::TestServer::start();
     let client = server.client().await;
 
-    client
-        .custom_command(&["CONFIG", "SET", "requirepass", NEW_PASS])
-        .await
-        .unwrap();
+    client.config_set("requirepass", NEW_PASS).await.unwrap();
 
     // Wrong password with immediate AUTH must surface an error.
     let res = client
@@ -71,15 +62,12 @@ async fn update_password_immediate_auth_wrong_password_errors() {
         .update_connection_password(Some(NEW_PASS.to_string()), true)
         .await
         .unwrap();
-    client
-        .custom_command(&["CONFIG", "SET", "requirepass", ""])
-        .await
-        .unwrap();
+    client.config_set("requirepass", "").await.unwrap();
 }
 
 #[tokio::test]
 async fn update_password_store_only_is_ok_without_auth() {
-    let server = server_or_skip!();
+    let server = common::TestServer::start();
     let client = server.client().await;
 
     // Storing a password without immediate auth is a no-op on the wire and must
@@ -102,7 +90,7 @@ fn sync_update_password_store_only() {
     use glide::GlideClientConfiguration;
     use glide::sync::SyncGlideClient;
 
-    let server = server_or_skip!();
+    let server = common::TestServer::start();
     let config = GlideClientConfiguration::with_address("127.0.0.1", server.port);
     let client = SyncGlideClient::connect(config).expect("connect");
 

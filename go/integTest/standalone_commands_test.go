@@ -42,10 +42,8 @@ func (suite *GlideTestSuite) TestCustomCommandPing_StringResponse() {
 
 func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
 	clientName := "TEST_CLIENT_NAME"
-	config := config.NewClientConfiguration().
-		WithAddress(&suite.standaloneHosts[0]).
-		WithClientName(clientName)
-	client, err := suite.client(config)
+	clientConfig := suite.defaultClientConfig().WithClientName(clientName)
+	client, err := suite.client(clientConfig)
 	require.NoError(suite.T(), err)
 
 	result, err := client.CustomCommand(context.Background(), []string{"CLIENT", "INFO"})
@@ -76,8 +74,7 @@ func (suite *GlideTestSuite) TestRegisterCustomClientInfoTag() {
 
 	for _, testCase := range testCases {
 		suite.Run(testCase.name, func() {
-			clientConfig := config.NewClientConfiguration().
-				WithAddress(&suite.standaloneHosts[0])
+			clientConfig := clientConfigFor(suite.standaloneHosts[0])
 			if testCase.libName != "" {
 				clientConfig.WithLibName(testCase.libName)
 			}
@@ -141,10 +138,8 @@ func (suite *GlideTestSuite) TestCustomCommandIncrByFloat_FloatResponse() {
 
 func (suite *GlideTestSuite) TestCustomCommandMGet_ArrayResponse() {
 	clientName := "TEST_CLIENT_NAME"
-	config := config.NewClientConfiguration().
-		WithAddress(&suite.standaloneHosts[0]).
-		WithClientName(clientName)
-	client, err := suite.client(config)
+	clientConfig := suite.defaultClientConfig().WithClientName(clientName)
+	client, err := suite.client(clientConfig)
 	require.NoError(suite.T(), err)
 
 	key1 := uuid.New().String()
@@ -421,40 +416,44 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 }
 
 func (suite *GlideTestSuite) TestInfoStandalone() {
-	DEFAULT_INFO_SECTIONS := []string{
-		"Server",
-		"Clients",
-		"Memory",
-		"Persistence",
-		"Stats",
-		"Replication",
-		"CPU",
-		"Modules",
-		"Errorstats",
-		"Cluster",
-		"Keyspace",
-	}
-
 	client := suite.defaultClient()
 	t := suite.T()
 
 	// info without options
-	info, err := client.Info(context.Background())
-	assert.NoError(t, err)
-	for _, section := range DEFAULT_INFO_SECTIONS {
-		assert.Contains(t, info, "# "+section, "Section "+section+" is missing")
+	fields := getInfo(t, client)[0]
+	for _, field := range infoDefaultFields {
+		assert.Contains(t, fields, field)
 	}
 
 	// info with option or with multiple options
 	sections := []constants.Section{constants.Cpu}
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "7.0.0" {
 		sections = append(sections, constants.Memory)
 	}
-	info, err = client.InfoWithOptions(context.Background(), options.InfoOptions{Sections: sections})
+	info, err := client.InfoWithOptions(context.Background(), options.InfoOptions{Sections: sections})
 	assert.NoError(t, err)
 	for _, section := range sections {
 		assert.Contains(t, strings.ToLower(info), strings.ToLower("# "+string(section)), "Section "+section+" is missing")
 	}
+
+	// Valkey 9.2+ fields
+	// ------------------
+
+	// TODO #5368: Compare versions semantically, not as strings.
+	if suite.serverVersion < "9.2.0" {
+		return
+	}
+
+	// Persistence fields
+	persistence := getInfo(t, client, constants.Persistence)[0]
+
+	assert.Contains(t, bgsaveTypes, persistence["rdb_current_bgsave_type"])
+	assert.Contains(t, bgsaveTypes, persistence["rdb_last_bgsave_type"])
+
+	remaining_name := "forkless_estimated_seconds_remaining"
+	remaining_value := AssertInt(t, persistence[remaining_name], remaining_name)
+	assert.GreaterOrEqual(t, remaining_value, int64(-1))
 }
 
 func (suite *GlideTestSuite) TestDBSize() {
@@ -856,6 +855,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_TwoParams() {
 	client := suite.defaultClient()
 	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "9.0.0" {
 		opts := options.NewLolwutOptions(9).SetArgs([]int{30, 4})
 		res, err := client.LolwutWithOptions(context.Background(), *opts)
@@ -870,6 +870,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_TwoParams() {
 func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_FourParams() {
 	client := suite.defaultClient()
 	// Test LOLWUT version 9 (available in Valkey 9.0.0+)
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "9.0.0" {
 		opts := options.NewLolwutOptions(9).SetArgs([]int{40, 20, 1, 2})
 		res, err := client.LolwutWithOptions(context.Background(), *opts)
@@ -1400,7 +1401,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestore() {
 	_, err = client.FunctionRestoreWithPolicy(context.Background(), dump, constants.ReplacePolicy)
 	assert.NotNil(suite.T(), err)
 	errMsg := err.Error()
-	// valkey checks names in random order and blames on first collision
+	// Valkey checks names in random order and blames on first collision
 	assert.True(suite.T(),
 		strings.Contains(errMsg, "Function "+name1+" already exists") ||
 			strings.Contains(errMsg, "Function "+name2+" already exists"))
@@ -1539,7 +1540,7 @@ func (suite *GlideTestSuite) TestMigrateMultiKey() {
 	suite.Equal(int64(0), exists)
 
 	// Keys should exist on destination
-	destClient, err := glide.NewClient(config.NewClientConfiguration().WithAddress(&destAddresses[0]))
+	destClient, err := glide.NewClient(plaintextClientConfigFor(destAddresses[0]))
 	suite.NoError(err)
 	defer destClient.Close()
 	exists, err = destClient.Exists(ctx, []string{srcKey1, srcKey2})
@@ -1599,7 +1600,7 @@ func (suite *GlideTestSuite) TestMigrateMultiKeyWithOptions() {
 	suite.Equal(int64(2), exists)
 
 	// Keys should also exist on destination
-	destClient, err := glide.NewClient(config.NewClientConfiguration().WithAddress(&destAddresses[0]))
+	destClient, err := glide.NewClient(plaintextClientConfigFor(destAddresses[0]))
 	suite.NoError(err)
 	defer destClient.Close()
 	exists, err = destClient.Exists(ctx, []string{srcKey1, srcKey2})
@@ -1616,9 +1617,7 @@ func (suite *GlideTestSuite) TestFailover() {
 	addresses := extractAddresses(suite, output)
 	defer stopDedicatedValkeyServer(suite, clusterFolder)
 
-	cfg := defaultClientConfig()
-	cfg.WithAddress(&addresses[0])
-	client, err := glide.NewClient(cfg)
+	client, err := glide.NewClient(plaintextClientConfigFor(addresses[0]))
 	suite.Require().NoError(err)
 	defer client.Close()
 

@@ -40,17 +40,25 @@ class StreamTrimOptions(ABC):
         self.method = method
         self.limit = limit
 
-    def to_args(self) -> List[str]:
+    def to_args(self) -> List[TEncodable]:
         """
         Convert options to arguments for the command.
 
         Returns:
-            List[str]: List of arguments for the command.
+            List[TEncodable]: List of arguments for the command.
         """
-        option_args = [
+        # MAXLEN thresholds are ints; MINID thresholds are passed through as bytes or str.
+        threshold: TEncodable
+        if isinstance(self.threshold, int):
+            threshold = str(self.threshold)
+        elif isinstance(self.threshold, (bytearray, memoryview)):
+            threshold = bytes(self.threshold)
+        else:
+            threshold = self.threshold
+        option_args: List[TEncodable] = [
             self.method,
             "=" if self.exact else "~",
-            str(self.threshold),
+            threshold,
         ]
         if self.limit is not None:
             option_args.extend(["LIMIT", str(self.limit)])
@@ -102,7 +110,7 @@ class StreamAddOptions:
     Attributes:
         id (Optional[TEncodable]): ID for the new entry. If set, the new entry will be added with this ID. If not
             specified, '*' is used.
-        make_stream (bool, optional): If set to False, a new stream won't be created if no stream matches the given key.
+        make_stream (bool): If set to False, a new stream won't be created if no stream matches the given key.
         trim (Optional[StreamTrimOptions]): If set, the add operation will also trim the older entries in the stream.
             See `StreamTrimOptions`.
     """
@@ -211,8 +219,6 @@ class ExclusiveIdBound(StreamRangeBound):
     a timestamp and sequence number separated by a dash ("-"), for example "1526985054069-0". Stream ID bounds can also
     be incomplete, with just a timestamp.
 
-    Since: Valkey version 6.2.0.
-
     Attributes:
         stream_id (TEncodable): The stream ID.
     """
@@ -233,9 +239,11 @@ class ExclusiveIdBound(StreamRangeBound):
         """
         Creates a stream ID boundary for a range search.
         """
-        if isinstance(stream_id, bytes):
-            stream_id = stream_id.decode("utf-8")
-        self.stream_id = f"{self.EXCLUSIVE_BOUND_VALKEY_API}{stream_id}"
+        self.stream_id: TEncodable
+        if isinstance(stream_id, str):
+            self.stream_id = f"{self.EXCLUSIVE_BOUND_VALKEY_API}{stream_id}"
+        else:
+            self.stream_id = self.EXCLUSIVE_BOUND_VALKEY_API.encode() + bytes(stream_id)
 
     def to_arg(self) -> TEncodable:
         return self.stream_id
@@ -412,15 +420,15 @@ class StreamClaimOptions:
             List[str]: The options as a list of arguments for the `XCLAIM` command.
         """
         args: List[TEncodable] = []
-        if self.idle:
+        if self.idle is not None:
             args.append(self.IDLE_VALKEY_API)
             args.append(str(self.idle))
 
-        if self.idle_unix_time:
+        if self.idle_unix_time is not None:
             args.append(self.TIME_VALKEY_API)
             args.append(str(self.idle_unix_time))
 
-        if self.retry_count:
+        if self.retry_count is not None:
             args.append(self.RETRY_COUNT_VALKEY_API)
             args.append(str(self.retry_count))
 

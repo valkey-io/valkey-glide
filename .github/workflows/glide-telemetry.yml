@@ -10,31 +10,51 @@ on:
             - release-*
             - v*
         paths:
-            - glide-logger/**
             - glide-telemetry/**
-            - .github/workflows/glide-telemetry.yml
-            - .github/workflows/lint-rust/action.yml
+
+            # Rust dependencies
+            - glide-logger/**
             - deny.toml
+            - .cargo/config.toml
+
+            # GitHub workflows
+            - .github/workflows/glide-telemetry.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/lint-rust/action.yml
+
+            # Exclusions
+            - "!**/*.md"
     pull_request:
         paths:
-            - glide-logger/**
             - glide-telemetry/**
-            - .github/workflows/glide-telemetry.yml
-            - .github/workflows/lint-rust/action.yml
+
+            # Rust dependencies
+            - glide-logger/**
             - deny.toml
+            - .cargo/config.toml
+
+            # GitHub workflows
+            - .github/workflows/glide-telemetry.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/lint-rust/action.yml
+
+            # Exclusions
+            - "!**/*.md"
     workflow_dispatch:
     workflow_call:
 
 concurrency:
-    group: glide-telemetry-${{ github.head_ref || github.ref }}
+    group: glide-telemetry-${{ github.head_ref || github.ref }}-${{ github.workflow }}
     cancel-in-progress: true
 
 env:
     CARGO_TERM_COLOR: always
 
 jobs:
-    test:
-        runs-on: ubuntu-latest
+    tests:
+        runs-on: ubuntu-24.04
         timeout-minutes: 15
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,18 +71,18 @@ jobs:
 
             - name: Run glide-telemetry tests
               working-directory: ./glide-telemetry
-              run: cargo test --all-features -- --test-threads=1
+              run: cargo test --locked --all-features -- --test-threads=1
               # TODO: Remove `--test-threads=1` once https://github.com/valkey-io/valkey-glide/issues/4057 is resolved
 
     lint:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
 
-            - uses: ./.github/workflows/lint-rust
+            - uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: glide-telemetry
                   github-token: ${{ secrets.GITHUB_TOKEN }}

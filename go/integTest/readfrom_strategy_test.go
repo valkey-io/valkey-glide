@@ -169,9 +169,7 @@ func (suite *GlideTestSuite) TestAzAffinityNonExistingAz() {
 	const nReplicaCalls = 1
 	getCmdStat := fmt.Sprintf("cmdstat_get:calls=%d", nReplicaCalls)
 
-	clientForTestingAz, err := suite.clusterClient(config.NewClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
+	clientForTestingAz, err := suite.clusterClient(suite.defaultClusterClientConfig().
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.AzAffinity).
 		WithClientAZ("non-existing-az"))
@@ -218,9 +216,7 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	getCmdStat := fmt.Sprintf("cmdstat_get:calls=%d", nGetCalls)
 
 	// Create client for setting the configs
-	clientForConfigSet, err := suite.clusterClient(config.NewClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
+	clientForConfigSet, err := suite.clusterClient(suite.defaultClusterClientConfig().
 		WithRequestTimeout(2 * time.Second))
 	require.NoError(suite.T(), err)
 
@@ -252,9 +248,7 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 	clientForConfigSet.Close()
 
 	// Create test client with AZ_AFFINITY_REPLICAS_AND_PRIMARY configuration
-	clientForTestingAz, err := suite.clusterClient(config.NewClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
+	clientForTestingAz, err := suite.clusterClient(suite.defaultClusterClientConfig().
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.AzAffinityReplicaAndPrimary).
 		WithClientAZ(az))
@@ -310,9 +304,7 @@ func (suite *GlideTestSuite) TestAzAffinityAllNodesSplitsBetweenPrimaryAndReplic
 	perNodeGetStat := fmt.Sprintf("cmdstat_get:calls=%d", nGetCalls/nodesInSameAz)
 
 	// Client used only to set AZ and reset stats.
-	clientForConfigSet, err := suite.clusterClient(config.NewClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
+	clientForConfigSet, err := suite.clusterClient(suite.defaultClusterClientConfig().
 		WithRequestTimeout(2 * time.Second))
 	require.NoError(suite.T(), err)
 
@@ -341,9 +333,7 @@ func (suite *GlideTestSuite) TestAzAffinityAllNodesSplitsBetweenPrimaryAndReplic
 	clientForConfigSet.Close()
 
 	// Create test client AFTER configuration so it picks up the AZs on connect.
-	clientForTestingAz, err := suite.clusterClient(config.NewClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
+	clientForTestingAz, err := suite.clusterClient(suite.defaultClusterClientConfig().
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.AzAffinityAllNodes).
 		WithClientAZ(az))
@@ -398,9 +388,7 @@ func (suite *GlideTestSuite) TestAzAffinityAllNodesFallsBackToAllNodesWhenNoInAz
 	// Client used only to reset stats and discover topology.
 	// No AZ is set on any node: "non-existing-az" matches nothing by default,
 	// which triggers the all-nodes fallback without needing ConfigSet.
-	clientForConfigSet, err := suite.clusterClient(config.NewClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
+	clientForConfigSet, err := suite.clusterClient(suite.defaultClusterClientConfig().
 		WithRequestTimeout(2 * time.Second))
 	require.NoError(suite.T(), err)
 
@@ -434,9 +422,7 @@ func (suite *GlideTestSuite) TestAzAffinityAllNodesFallsBackToAllNodesWhenNoInAz
 	nGetCalls := nodesInShard
 
 	// Use a client AZ that no node belongs to, triggering the all-nodes fallback.
-	clientForTestingAz, err := suite.clusterClient(config.NewClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
+	clientForTestingAz, err := suite.clusterClient(suite.defaultClusterClientConfig().
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.AzAffinityAllNodes).
 		WithClientAZ("non-existing-az"))
@@ -491,9 +477,7 @@ func (suite *GlideTestSuite) TestAllNodesRoutesToPrimaryAndReplicas() {
 
 	const nGetCalls = 100
 
-	client, err := suite.clusterClient(config.NewClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
-		WithUseTLS(suite.tls).
+	client, err := suite.clusterClient(suite.defaultClusterClientConfig().
 		WithRequestTimeout(2 * time.Second).
 		WithReadFrom(config.ReadFromAllNodes))
 	require.NoError(suite.T(), err)

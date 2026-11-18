@@ -37,8 +37,8 @@ fn masking_pattern(cmd_name: &str) -> MaskingPattern {
         // -- ShowFirst(1): only key/channel visible --
         // Note: ZADD has optional flags (NX|XX|GT|LT|CH|INCR) before score/member pairs,
         // making it hard to fit a more granular pattern. ShowFirst(1) is the safe choice.
-        "APPEND" | "GETSET" | "LPUSH" | "LPUSHX" | "PFADD" | "PUBLISH" | "RPUSH" | "RPUSHX"
-        | "SADD" | "SET" | "SETNX" | "SPUBLISH" | "XADD" | "ZADD" => {
+        "APPEND" | "DELIFEQ" | "GETSET" | "LPUSH" | "LPUSHX" | "PFADD" | "PUBLISH" | "RPUSH"
+        | "RPUSHX" | "SADD" | "SET" | "SETNX" | "SPUBLISH" | "XADD" | "ZADD" => {
             MaskingPattern::ShowFirst(1)
         }
 
@@ -71,7 +71,7 @@ fn masking_pattern(cmd_name: &str) -> MaskingPattern {
         | "SORT" | "SORT_RO" | "TOUCH" | "TTL" | "TYPE" | "UNLINK" | "WAIT" | "WAITAOF"
         | "WATCH" | "UNWATCH"
         // Hash (read)
-        | "HDEL" | "HEXISTS" | "HGET" | "HGETALL" | "HINCRBY" | "HINCRBYFLOAT"
+        | "HDEL" | "HEXISTS" | "HGET" | "HGETALL" | "HGETDEL" | "HINCRBY" | "HINCRBYFLOAT"
         | "HKEYS" | "HLEN" | "HMGET" | "HRANDFIELD" | "HSCAN" | "HSTRLEN" | "HVALS"
         // List (read/structural)
         | "LINDEX" | "LLEN" | "LMOVE" | "LMPOP" | "LPOP" | "LRANGE" | "LREM" | "LTRIM"
@@ -175,7 +175,9 @@ const DB_SYSTEM_NAME: &str = "redis";
 pub fn set_db_connection_attributes(span: &GlideSpan, client: &Client) {
     span.set_attribute("db.system.name", DB_SYSTEM_NAME);
     span.set_attribute("server.address", client.server_address().to_string());
-    span.set_attribute_i64("server.port", client.server_port() as i64);
+    if let Some(port) = client.server_port() {
+        span.set_attribute_i64("server.port", port as i64);
+    }
     span.set_attribute("db.namespace", client.db_namespace().to_string());
 }
 

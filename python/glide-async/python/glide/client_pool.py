@@ -101,6 +101,15 @@ class AsyncClientPool:
         client_config: BaseClientConfiguration,
         pool_config: Optional[PoolConfig] = None,
     ):
+        # Custom providers are direct-client-only; pools may use the default AWS chain.
+        credentials = getattr(client_config, "credentials", None)
+        iam_config = getattr(credentials, "iam_config", None)
+        if iam_config is not None and iam_config.credential_provider is not None:
+            raise ValueError(
+                "Pool clients cannot use a custom IAM credentials provider. "
+                "Configure IAM without a credential_provider to use the default AWS credential chain."
+            )
+
         # Reject pubsub subscriptions — pool state reset doesn't UNSUBSCRIBE
         if (
             hasattr(client_config, "pubsub_subscriptions")
@@ -182,11 +191,13 @@ class AsyncClientPool:
         Uses glide_pool_try_acquire (non-blocking) instead of
         glide_pool_acquire_blocking to avoid blocking thread pool threads.
         Blocking threads prevents the event loop from draining the async pipe,
-        which deadlocks the pool's release state-reset (DISCARD + SELECT).
+        which deadlocks the pool's release state reset.
         """
         if self._closed:
             raise RuntimeError("Pool is closed")
-        timeout = timeout or self._pool_config.acquire_timeout_s
+        timeout = (
+            timeout if timeout is not None else self._pool_config.acquire_timeout_s
+        )
 
         import time
 
@@ -277,38 +288,24 @@ class AsyncClientPool:
         return self._pool_id
 
     def metrics(self) -> dict:
-        """Get pool metrics: idle, active, total counts."""
-        idle = self._ffi.new("uint32_t*")
-        active = self._ffi.new("uint32_t*")
-        total = self._ffi.new("uint32_t*")
-        result = self._lib.glide_pool_metrics(self._pool_id, idle, active, total)
-        if result != 0:
-            return {"idle": 0, "active": 0, "total": 0}
-        return {"idle": idle[0], "active": active[0], "total": total[0]}
+        """Get pool metrics: idle, active, total counts.
+
+        Zeros when the pool was destroyed.
+        """
+        m = self._lib.glide_pool_metrics(self._pool_id)
+        return {"idle": m.idle, "active": m.active, "total": m.total}
 
     @property
     def idle_count(self) -> int:
-        idle = self._ffi.new("uint32_t*")
-        self._lib.glide_pool_metrics(
-            self._pool_id, idle, self._ffi.NULL, self._ffi.NULL
-        )
-        return idle[0]
+        return self.metrics()["idle"]
 
     @property
     def active_count(self) -> int:
-        active = self._ffi.new("uint32_t*")
-        self._lib.glide_pool_metrics(
-            self._pool_id, self._ffi.NULL, active, self._ffi.NULL
-        )
-        return active[0]
+        return self.metrics()["active"]
 
     @property
     def total_count(self) -> int:
-        total = self._ffi.new("uint32_t*")
-        self._lib.glide_pool_metrics(
-            self._pool_id, self._ffi.NULL, self._ffi.NULL, total
-        )
-        return total[0]
+        return self.metrics()["total"]
 
     def close(self):
         if not self._closed:
@@ -349,7 +346,7 @@ class _AsyncBorrowContext:
 
     async def __aexit__(self, *_):
         self._pool.release(self._client_id)
-        # Yield to event loop so the async release (DISCARD + SELECT) can
+        # Yield to event loop so the async release (state reset) can
         # complete via the pipe reader before the next acquire attempt.
         await asyncio.sleep(0)
         return False
