@@ -5,6 +5,7 @@
 ### Features
 
 * Core: opt-in per-node results for multi-node commands ([#7751](https://github.com/valkey-io/valkey-glide/pull/7751))
+* Rust: info_with_partial_results for the cluster client ([#7752](https://github.com/valkey-io/valkey-glide/pull/7752))
 
 ### Fixes
 

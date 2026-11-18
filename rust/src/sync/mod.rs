@@ -189,6 +189,16 @@ impl SyncGlideClusterClient {
     pub fn ping(&self) -> ValkeyResult<String> {
         runtime().block_on(AsyncTypedCommands::ping(&self.inner))
     }
+
+    /// `INFO` with partial results (blocking). See
+    /// [`GlideClusterClient::info_with_partial_results`].
+    pub fn info_with_partial_results(
+        &self,
+        sections: &[crate::commands::options::InfoSection],
+        route: Option<Route>,
+    ) -> ValkeyResult<std::collections::HashMap<String, ValkeyResult<String>>> {
+        runtime().block_on(self.inner.info_with_partial_results(sections, route))
+    }
 }
 
 // ---- Command dispatch -------------------------------------------------------
