@@ -1389,8 +1389,8 @@ class BaseClientConfiguration:
         if cache_config.eviction_policy:
             cache_request.eviction_policy = cache_config.eviction_policy.value
 
-        # Validates the (mutable) prefix as well: the core rejects the same cases,
-        # but failing before the request is built gives a clearer Python error.
+        # Only type checking and encoding happen here; an empty prefix is forwarded
+        # as-is so that the core, which owns the prefix rules, rejects it.
         tracking_prefix = cache_config._tracking_prefix_bytes()
         if tracking_prefix is not None:
             cache_request.tracking_prefix = tracking_prefix

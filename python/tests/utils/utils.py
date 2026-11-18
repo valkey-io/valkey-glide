@@ -497,28 +497,6 @@ def sync_read_until_cached(
     return reads
 
 
-async def assert_cache_hit(
-    client: TGlideClient, read: Callable[[], Awaitable[Any]], expected: Any
-) -> None:
-    """Asserts that ``read`` returns ``expected`` and is served by the cache."""
-    hits = cache_hits(client)
-    lookups = client.get_cache_total_lookups()
-    assert await read() == expected
-    assert cache_hits(client) == hits + 1, "expected a cache hit"
-    assert client.get_cache_total_lookups() == lookups + 1
-
-
-def sync_assert_cache_hit(
-    client: TSyncGlideClient, read: Callable[[], Any], expected: Any
-) -> None:
-    """Sync twin of ``assert_cache_hit``."""
-    hits = cache_hits(client)
-    lookups = client.get_cache_total_lookups()
-    assert read() == expected
-    assert cache_hits(client) == hits + 1, "expected a cache hit"
-    assert client.get_cache_total_lookups() == lookups + 1
-
-
 async def assert_cache_bypassed(
     client: TGlideClient, read: Callable[[], Awaitable[Any]], expected: Any
 ) -> None:
