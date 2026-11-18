@@ -57,19 +57,6 @@ class ClientSideCache:
     connecting; clients sharing the same ``ClientSideCache`` instance must use the
     same prefix, and creating a client with a different prefix on a cache that is
     already in use fails.
-
-    Attributes:
-        cache_id (str): Identifier of the cache. Clients created with the same
-            ``ClientSideCache`` instance share the cache.
-        max_cache_kb (int): Maximum size of the cache in kilobytes (KB).
-        entry_ttl_ms (int): Time-To-Live for cached entries in milliseconds. 0 disables
-            TTL expiration.
-        eviction_policy (Optional[EvictionPolicy]): Policy for evicting entries when
-            the cache is full. Defaults to LRU when None.
-        enable_metrics (bool): Whether to collect cache metrics such as hit/miss rates.
-        server_assisted (bool): Whether to enable server-assisted invalidation.
-        tracking_prefix (Optional[Union[str, bytes]]): Key prefix to track and cache in
-            server-assisted mode. None tracks every key. See ``create`` for details.
     """
 
     # Class variables - shared across all instances
@@ -78,12 +65,27 @@ class ClientSideCache:
 
     # Instance variables - unique per instance
     cache_id: str
+    """Identifier of the cache. Clients created with the same ``ClientSideCache``
+    instance share the cache."""
+
     max_cache_kb: int
+    """Maximum size of the cache in kilobytes (KB)."""
+
     entry_ttl_ms: int
+    """Time-To-Live for cached entries in milliseconds. 0 disables TTL expiration."""
+
     eviction_policy: Optional[EvictionPolicy] = None
+    """Policy for evicting entries when the cache is full. Defaults to LRU when None."""
+
     enable_metrics: bool = False
+    """Whether to collect cache metrics such as hit/miss rates."""
+
     server_assisted: bool = False
+    """Whether to enable server-assisted invalidation."""
+
     tracking_prefix: Optional[Union[str, bytes]] = None
+    """Key prefix to track and cache in server-assisted mode. None tracks every key.
+    See ``create`` for details."""
 
     def __post_init__(self) -> None:
         """Rejects a ``tracking_prefix`` of the wrong type on construction."""
