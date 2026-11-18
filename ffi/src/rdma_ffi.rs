@@ -83,7 +83,7 @@ pub struct RdmaMemoryHold {
 }
 
 /// The buffer a [`RdmaRegion`] holds: over host memory, or over device memory from
-/// [`register_rdma_device_region`], which nothing here reads or writes.
+/// [`register_rdma_cuda_region`], which nothing here reads or writes.
 #[cfg(feature = "rdma")]
 #[derive(Debug)]
 enum RegionBuffer {
@@ -313,7 +313,7 @@ impl RdmaResult {
     /// # Safety
     ///
     /// `region` must be null or a region from [`register_rdma_region`] or
-    /// [`register_rdma_device_region`] that [`free_rdma_region`] has not been called
+    /// [`register_rdma_cuda_region`] that [`free_rdma_region`] has not been called
     /// on.
     unsafe fn panicked(region: *mut RdmaRegion) -> Self {
         #[cfg(feature = "rdma")]
@@ -524,6 +524,16 @@ pub unsafe extern "C-unwind" fn register_rdma_region(
 /// Every other function takes the region as it takes one from
 /// [`register_rdma_region`], and [`free_rdma_region`] frees it.
 ///
+/// Make the primary context of the memory's GPU current on the calling thread
+/// first, for example with `cudaSetDevice`. libfabric uses that context to look up
+/// the memory and never sets one itself.
+///
+/// Without it, registration over dmabuf fails, and libfabric logs
+/// `CUDA_ERROR_INVALID_CONTEXT`. libfabric 2.6.0 also fails when another GPU's
+/// context is current. After a failed dmabuf registration, libfabric may stop using
+/// dmabuf for the rest of the process. The peer memory path
+/// (`FI_HMEM_CUDA_USE_DMABUF=0`) does not need a context.
+///
 /// # Returns
 ///
 /// As [`register_rdma_region`].
@@ -535,7 +545,7 @@ pub unsafe extern "C-unwind" fn register_rdma_region(
 /// the caller must not write it while a transfer of it runs. Which GPU it is on
 /// needs no argument: CUDA's unified addressing makes the pointer name it.
 #[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn register_rdma_device_region(
+pub unsafe extern "C-unwind" fn register_rdma_cuda_region(
     client_adapter_ptr: *const c_void,
     memory: *mut u8,
     length: usize,
@@ -652,7 +662,7 @@ fn register_region(
 /// might still be using the memory, so the region is revoked first and cannot
 /// be used again either. [`RdmaResult::region_closed`] says which happened.
 ///
-/// On a region from [`register_rdma_device_region`], the landed bytes are not
+/// On a region from [`register_rdma_cuda_region`], the landed bytes are not
 /// checked against the server's checksum; see there.
 ///
 /// # Returns
@@ -667,7 +677,7 @@ fn register_region(
 /// * `key` must point to `key_len` initialized bytes, which must stay valid for
 ///   the duration of the call.
 /// * `region` must be a region from [`register_rdma_region`] or
-///   [`register_rdma_device_region`] that [`free_rdma_region`] has not been
+///   [`register_rdma_cuda_region`] that [`free_rdma_region`] has not been
 ///   called on, and no other thread may use it for the duration of the call.
 /// * The caller must not read or write the region's memory until this call
 ///   returns. If it returns with [`RdmaResult::region_closed`] set, the server
@@ -983,7 +993,7 @@ pub unsafe extern "C" fn rdma_close_regions(client_adapter_ptr: *const c_void) -
 /// # Safety
 ///
 /// * `region` must be null or a region from [`register_rdma_region`] or
-///   [`register_rdma_device_region`].
+///   [`register_rdma_cuda_region`].
 /// * `free_rdma_region` may be called only once per region.
 /// * No transfer against the region may be in flight, including one that
 ///   [`rdma_close_regions`] cancelled but that has not returned yet.
@@ -1176,7 +1186,7 @@ pub unsafe extern "C" fn free_rdma_memory_hold(hold: *mut RdmaMemoryHold) {
 /// # Safety
 ///
 /// * `registration` must be null or a pointer from [`register_rdma_region`] or
-///   [`register_rdma_device_region`].
+///   [`register_rdma_cuda_region`].
 /// * `free_rdma_registration` may be called only once per registration.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_rdma_registration(registration: *mut RdmaRegistration) {
@@ -1382,12 +1392,12 @@ mod tests {
     fn a_device_registration_checks_its_arguments_as_a_host_one_does() {
         let mut memory = [0u8; 64];
         let error = take_registration_error(unsafe {
-            register_rdma_device_region(std::ptr::null(), memory.as_mut_ptr(), memory.len())
+            register_rdma_cuda_region(std::ptr::null(), memory.as_mut_ptr(), memory.len())
         })
         .expect("registering without a client must fail");
         assert_eq!(error, "cannot register a region without a client");
         let error = take_registration_error(unsafe {
-            register_rdma_device_region(unread_client_ptr(), memory.as_mut_ptr(), 0)
+            register_rdma_cuda_region(unread_client_ptr(), memory.as_mut_ptr(), 0)
         })
         .expect("registering nothing must fail");
         assert_eq!(error, "cannot register 0 bytes");

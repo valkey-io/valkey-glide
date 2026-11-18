@@ -207,6 +207,16 @@ impl RdmaFabric {
     /// The fabric must have been opened with [`FabricConfig::with_device_memory`].
     /// `owner` is dropped as for [`Self::register_raw`], at once if registration fails.
     ///
+    /// For CUDA memory, make the primary context of the memory's GPU current on the
+    /// calling thread first, for example with `cudaSetDevice`. libfabric uses that
+    /// context to look up the memory and never sets one itself.
+    ///
+    /// Without it, registration over dmabuf fails, and libfabric logs
+    /// `CUDA_ERROR_INVALID_CONTEXT`. libfabric 2.6.0 also fails when another GPU's
+    /// context is current. After a failed dmabuf registration, libfabric may stop
+    /// using dmabuf for the rest of the process. The peer memory path
+    /// (`FI_HMEM_CUDA_USE_DMABUF=0`) does not need a context.
+    ///
     /// # Safety
     ///
     /// * `memory` must be memory of `runtime`, allocated, and stay at the

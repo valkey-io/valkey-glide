@@ -19,15 +19,25 @@
 //! export GLIDE_RDMA_CLUSTER=1             # if it is a cluster
 //! export GLIDE_CUDA_DEVICE=0              # the GPU to allocate on, 0 if unset
 //! cargo test --release --features rdma --test test_rdma_device -- --ignored --nocapture
-//! # Again over the peer memory path instead of dmabuf, which needs nvidia_peermem
-//! # or efa_nv_peermem loaded:
+//! # On a host with two GPUs, run again with GPU 1. One test then registers
+//! # GPU 1's memory while GPU 0's context is current:
+//! GLIDE_CUDA_DEVICE=1 cargo test --release --features rdma --test test_rdma_device -- --ignored --nocapture
+//! # Over peer memory instead of dmabuf, which needs nvidia_peermem or
+//! # efa_nv_peermem loaded:
 //! FI_HMEM_CUDA_USE_DMABUF=0 cargo test --release --features rdma --test test_rdma_device -- --ignored --nocapture
+//! # The dmabuf refusal of a registration without a context. It turns dmabuf
+//! # off for the rest of the process, so run it on its own:
+//! GLIDE_CUDA_TEST_NO_CONTEXT=1 cargo test --release --features rdma --test test_rdma_device -- --ignored --nocapture --exact a_registration_without_a_cuda_context
 //! ```
 //!
 //! Where dmabuf does not work, libfabric falls back to peer memory on its own, so
-//! the first run can take the peer memory path too. To see which path a run took,
-//! set `FI_LOG_LEVEL=info`. Over dmabuf, libfabric logs `Registering dmabuf MR` for
-//! each region of CUDA memory, and over peer memory it does not.
+//! the first run can take the peer memory path too. A registration that fails over
+//! dmabuf can also switch the rest of a run to peer memory. To see which path a
+//! run took, set `FI_LOG_LEVEL=info`. Over dmabuf, libfabric logs `Registering
+//! dmabuf MR` for each region of CUDA memory, and over peer memory it does not.
+//!
+//! To check another libfabric than the one installed, point `GLIDE_LIBFABRIC_PATH`
+//! at its `libfabric.so.1`.
 //!
 //! The tests write keys under `glide-rdma-device-test:` and delete them.
 //!
@@ -102,8 +112,10 @@ macro_rules! cuda_api {
 cuda_api! {
     init = c"cuInit" (u32);
     device_get = c"cuDeviceGet" (*mut i32, i32);
+    device_get_count = c"cuDeviceGetCount" (*mut i32);
     primary_context_retain = c"cuDevicePrimaryCtxRetain" (*mut *mut c_void, i32);
     context_set_current = c"cuCtxSetCurrent" (*mut c_void);
+    context_get_current = c"cuCtxGetCurrent" (*mut *mut c_void);
     context_synchronize = c"cuCtxSynchronize" ();
     error_name = c"cuGetErrorName" (CuResult, *mut *const c_char);
     device_attribute = c"cuDeviceGetAttribute" (*mut i32, i32, i32);
@@ -192,18 +204,8 @@ impl Gpu {
         let ordinal = std::env::var("GLIDE_CUDA_DEVICE").map_or(0, |gpu| {
             gpu.parse().expect("GLIDE_CUDA_DEVICE is a CUDA ordinal")
         });
-        let cuda = cuda();
-        unsafe {
-            check((cuda.init)(0), "cuInit");
-            let mut device = 0;
-            check((cuda.device_get)(&mut device, ordinal), "cuDeviceGet");
-            let mut context = std::ptr::null_mut();
-            check(
-                (cuda.primary_context_retain)(&mut context, device),
-                "cuDevicePrimaryCtxRetain",
-            );
-            check((cuda.context_set_current)(context), "cuCtxSetCurrent");
-        }
+        check(unsafe { (cuda().init)(0) }, "cuInit");
+        make_primary_context_current(ordinal);
         Self { ordinal }
     }
 
@@ -340,6 +342,31 @@ impl Gpu {
     }
 }
 
+/// Make the primary context of GPU `ordinal` current on the calling thread.
+fn make_primary_context_current(ordinal: i32) {
+    let cuda = cuda();
+    unsafe {
+        let mut device = 0;
+        check((cuda.device_get)(&mut device, ordinal), "cuDeviceGet");
+        let mut context = std::ptr::null_mut();
+        check(
+            (cuda.primary_context_retain)(&mut context, device),
+            "cuDevicePrimaryCtxRetain",
+        );
+        check((cuda.context_set_current)(context), "cuCtxSetCurrent");
+    }
+}
+
+/// Whether the calling thread has no CUDA context current.
+fn no_current_context() -> bool {
+    let mut context = std::ptr::null_mut();
+    check(
+        unsafe { (cuda().context_get_current)(&mut context) },
+        "cuCtxGetCurrent",
+    );
+    context.is_null()
+}
+
 struct VmmRange {
     base: DevicePtr,
     size: usize,
@@ -438,7 +465,7 @@ fn registered(registration: *mut RdmaRegistration) -> Result<*mut RdmaRegion, St
 }
 
 fn register_device(client: *const c_void, memory: DevicePtr, length: usize) -> *mut RdmaRegion {
-    registered(unsafe { register_rdma_device_region(client, memory as *mut u8, length) })
+    registered(unsafe { register_rdma_cuda_region(client, memory as *mut u8, length) })
         .expect("registers CUDA memory")
 }
 
@@ -780,10 +807,14 @@ fn a_region_at_an_odd_offset_round_trips() {
 
 /// VMM memory, as PyTorch's expandable segments allocate it.
 ///
-/// One allocation round-trips on both registration paths. One region across two
-/// mapped allocations, and an allocation without the GPUDirect RDMA flag,
-/// register over dmabuf, but the peer memory path refuses them. Either way a
-/// refusal is an error, and the client keeps working.
+/// A single allocation round-trips over both paths. An allocation without the
+/// GPUDirect RDMA flag registers over dmabuf, and peer memory refuses it. A region
+/// across two mappings registers over dmabuf on libfabric 2.7.0 or later, and
+/// libfabric 2.6.0 and peer memory refuse it. A refusal is an error, and the
+/// client keeps working.
+///
+/// The two-mapping region goes last. When libfabric 2.6.0 refuses it, dmabuf
+/// turns off for the rest of the process.
 #[test]
 #[ignore = "needs a CUDA GPU, efa-direct and a server with the module; see the module docs"]
 fn vmm_memory_round_trips_or_is_refused() {
@@ -828,11 +859,11 @@ fn vmm_memory_round_trips_or_is_refused() {
     one.free();
     println!("VMM, one allocation: round-trips");
 
-    for (name, chunks, flag) in [("vmm-seam", 2, true), ("vmm-no-flag", 1, false)] {
+    for (name, chunks, flag) in [("vmm-no-flag", 1, false), ("vmm-seam", 2, true)] {
         let range = gpu.vmm_range(chunk, chunks, flag);
         let length = chunk * chunks;
         match registered(unsafe {
-            register_rdma_device_region(client, range.base as *mut u8, length)
+            register_rdma_cuda_region(client, range.base as *mut u8, length)
         }) {
             Ok(region) => {
                 free_region(region);
@@ -857,6 +888,200 @@ fn vmm_memory_round_trips_or_is_refused() {
 
     delete(client, &["vmm-one", "vmm-seam", "vmm-no-flag", "vmm-after"]);
     close(client);
+}
+
+/// Set `value` out of the start of `region`, which spans `memory`, and get it
+/// back into the window after it, checking the bytes and the server's checksum.
+/// `gpu`'s context must be current.
+fn round_trip_after_registering(
+    gpu: &Gpu,
+    client: *const c_void,
+    region: *mut RdmaRegion,
+    memory: DevicePtr,
+    value: &[u8],
+    name: &str,
+) {
+    let length = value.len();
+    gpu.fill(memory, 0, value);
+    gpu.clear(memory, length, length);
+    set(
+        client,
+        &key(name),
+        region,
+        (0, length),
+        RdmaSetChecksumMode::Known,
+        crc(value),
+    )
+    .succeeded(name);
+    let receipt = get(client, &key(name), region, (length, length)).succeeded(name);
+    gpu.make_landed_bytes_visible();
+    assert_eq!(
+        receipt.checksum,
+        Some(crc(value)),
+        "{name}: the server's CRC"
+    );
+    assert!(
+        gpu.read(memory, length, length) == value,
+        "{name}: the bytes landed"
+    );
+}
+
+/// Register from a worker thread the way the API asks: the thread starts with no
+/// CUDA context, makes the GPU's primary context current, then registers.
+#[test]
+#[ignore = "needs a CUDA GPU, efa-direct and a server with the module; see the module docs"]
+fn a_worker_thread_registers_once_a_context_is_current() {
+    let gpu = Gpu::current();
+    let length = 4 * MB + 1;
+    let memory = gpu.alloc(2 * length);
+    let client = connect();
+
+    let (shared, ordinal) = (client as usize, gpu.ordinal);
+    let registration = thread::spawn(move || {
+        assert!(no_current_context(), "a new thread has no current context");
+        make_primary_context_current(ordinal);
+        registered(unsafe {
+            register_rdma_cuda_region(shared as *const c_void, memory as *mut u8, 2 * length)
+        })
+        .map(|region| region as usize)
+    })
+    .join()
+    .expect("the registering thread ran");
+    let region = registration
+        .unwrap_or_else(|error| panic!("registering from a worker thread: {error}"))
+        as *mut RdmaRegion;
+
+    round_trip_after_registering(
+        &gpu,
+        client,
+        region,
+        memory,
+        &pattern(length, 21),
+        "worker-thread",
+    );
+
+    delete(client, &["worker-thread"]);
+    free_region(region);
+    close(client);
+    gpu.free(memory);
+}
+
+/// Register from a thread with no CUDA context, which the API does not allow.
+/// Over dmabuf, libfabric asks the driver for a dmabuf on this thread, gets
+/// `CUDA_ERROR_INVALID_CONTEXT`, and refuses the registration. Over peer memory
+/// it registers, since that path does not need a context.
+///
+/// The dmabuf refusal also turns dmabuf off for the rest of the process, which
+/// would change the path every later test takes. So over dmabuf this only runs
+/// when `GLIDE_CUDA_TEST_NO_CONTEXT=1` is set, and it should run on its own; see
+/// the module docs.
+#[test]
+#[ignore = "needs a CUDA GPU, efa-direct and a server with the module; see the module docs"]
+fn a_registration_without_a_cuda_context() {
+    let dmabuf = std::env::var("FI_HMEM_CUDA_USE_DMABUF")
+        .ok()
+        .is_none_or(|on| on != "0");
+    if dmabuf && !std::env::var("GLIDE_CUDA_TEST_NO_CONTEXT").is_ok_and(|on| on == "1") {
+        println!(
+            "skipped: over dmabuf this turns dmabuf off for the process, so set \
+             GLIDE_CUDA_TEST_NO_CONTEXT=1 and run it on its own"
+        );
+        return;
+    }
+    let gpu = Gpu::current();
+    let length = 4 * MB + 1;
+    let memory = gpu.alloc(2 * length);
+    let client = connect();
+
+    let shared = client as usize;
+    let registration = thread::spawn(move || {
+        assert!(no_current_context(), "a new thread has no current context");
+        registered(unsafe {
+            register_rdma_cuda_region(shared as *const c_void, memory as *mut u8, 2 * length)
+        })
+        .map(|region| region as usize)
+    })
+    .join()
+    .expect("the registering thread ran");
+
+    if dmabuf {
+        // Where dmabuf cannot work at all, libfabric quietly uses peer memory, the
+        // registration succeeds, and this fails. `FI_LOG_LEVEL=info` shows the path.
+        let error = registration.expect_err(
+            "over dmabuf a registration without a context is refused, \
+             unless libfabric used peer memory instead",
+        );
+        println!("refused without a context: {error}");
+    } else {
+        let region = registration
+            .unwrap_or_else(|error| panic!("peer memory needs no context, but: {error}"))
+            as *mut RdmaRegion;
+        round_trip_after_registering(
+            &gpu,
+            client,
+            region,
+            memory,
+            &pattern(length, 25),
+            "no-context",
+        );
+        delete(client, &["no-context"]);
+        free_region(region);
+    }
+    close(client);
+    gpu.free(memory);
+}
+
+/// A region of one GPU's memory registered while another GPU's context is
+/// current, as a thread serving several GPUs might do. The API asks for the
+/// memory's own GPU context, so this only reports what happens: libfabric 2.7.0
+/// registers it, and 2.6.0 refuses it over dmabuf. Run it with
+/// `GLIDE_CUDA_DEVICE=1` so GPU 0's context is the other one. Needs two GPUs.
+#[test]
+#[ignore = "needs a CUDA GPU, efa-direct and a server with the module; see the module docs"]
+fn a_registration_with_another_gpus_context() {
+    let gpu = Gpu::current();
+    let mut count = 0;
+    check(
+        unsafe { (cuda().device_get_count)(&mut count) },
+        "cuDeviceGetCount",
+    );
+    if count < 2 {
+        println!("this host has {count} GPU, so there is no other context to test with");
+        return;
+    }
+    let other = if gpu.ordinal == 0 { 1 } else { 0 };
+    let length = 4 * MB + 1;
+    let memory = gpu.alloc(2 * length);
+    let client = connect();
+
+    make_primary_context_current(other);
+    let registration =
+        registered(unsafe { register_rdma_cuda_region(client, memory as *mut u8, 2 * length) });
+    make_primary_context_current(gpu.ordinal);
+    match registration {
+        Ok(region) => {
+            println!(
+                "registered GPU {}'s memory with GPU {other}'s context current",
+                gpu.ordinal
+            );
+            round_trip_after_registering(
+                &gpu,
+                client,
+                region,
+                memory,
+                &pattern(length, 23),
+                "other-context",
+            );
+            delete(client, &["other-context"]);
+            free_region(region);
+        }
+        Err(error) => println!(
+            "refused GPU {}'s memory with GPU {other}'s context current: {error}",
+            gpu.ordinal
+        ),
+    }
+    close(client);
+    gpu.free(memory);
 }
 
 /// Forwards connections to `server`, but holds back everything a client sends

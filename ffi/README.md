@@ -56,15 +56,17 @@ cargo test --features rdma-tcp-dev
 ### Device memory
 
 With `device_memory` set in the RDMA configuration, the client opens the fabric with
-`FI_HMEM`, and creating it fails on a provider without it. `register_rdma_device_region`
+`FI_HMEM`, and creating it fails on a provider without it. `register_rdma_cuda_region`
 registers CUDA memory, and `rdma_get` and `rdma_set` take the region it returns. The
 server then reads and writes the GPU memory directly.
 
 GLIDE never reads device memory and does not call CUDA, so some of the work is the
-caller's. GPU work that writes a window has to finish before `rdma_set` of it, for
-example by synchronizing its stream. A set sends no checksum (`Skip`) or one the caller
-computed (`Known`), and `Compute` is refused. `rdma_get` does not check the bytes that
-landed, and the caller can check them against `RdmaResult::checksum`.
+caller's. Before calling `register_rdma_cuda_region`, make the primary context of the
+memory's GPU current on that thread, for example with `cudaSetDevice`. GPU work that
+writes a window has to finish before `rdma_set` of it, for example by synchronizing its
+stream. A set sends no checksum (`Skip`) or one the caller computed (`Known`), and
+`Compute` is refused. `rdma_get` does not check the bytes that landed, and the caller
+can check them against `RdmaResult::checksum`.
 
 GPU work that reads those bytes has to be submitted after `rdma_get` returns, since work
 already running can see stale data. If the device's
@@ -75,6 +77,16 @@ The rest is as for host memory. Run one transfer at a time per region, and leave
 memory alone until the transfer returns. Reuse or free the memory only once
 `free_rdma_region` returns null, or `rdma_memory_released` returns true for the hold it
 returns. Freeing the hold does not release the memory.
+
+libfabric registers CUDA memory through dmabuf by default, or through the peer memory
+module when `FI_HMEM_CUDA_USE_DMABUF=0` is set.
+
+- If a dmabuf registration fails, libfabric may stop using dmabuf for the rest of the
+  process. Later registrations then go through peer memory, which needs
+  `nvidia_peermem` or `efa_nv_peermem` loaded.
+- A region that spans two VMM mappings, like the ones PyTorch's expandable segments
+  create, registers through dmabuf only on libfabric 2.7.0 or later. libfabric 2.6.0
+  and the peer memory path reject it.
 
 [`tests/test_rdma_device.rs`](tests/test_rdma_device.rs) does all of this on a real GPU
 and server, including cancelling a transfer and freeing its allocation. Its tests are

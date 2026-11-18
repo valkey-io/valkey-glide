@@ -1227,7 +1227,7 @@ fn a_device_region_needs_a_client_with_device_memory() {
 
         // Host memory stands in: the registration is refused before it is used.
         let mut memory = vec![0u8; 4096];
-        let registration = register_rdma_device_region(client, memory.as_mut_ptr(), memory.len());
+        let registration = register_rdma_cuda_region(client, memory.as_mut_ptr(), memory.len());
         assert!((*registration).region.is_null());
         let error = CStr::from_ptr((*registration).error_message)
             .to_string_lossy()
