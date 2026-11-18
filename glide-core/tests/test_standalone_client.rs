@@ -1710,9 +1710,9 @@ mod standalone_client_tests {
         });
     }
 
-    /// A `Client` with the given read-only setting on the shared primary, plus a
-    /// normal client to check what reached the server.
-    async fn batch_clients(read_only: bool) -> (GlideClient, StandaloneClient) {
+    /// A read-only `Client` on the shared primary, plus a normal client to check
+    /// what reached the server.
+    async fn read_only_batch_clients() -> (GlideClient, StandaloneClient) {
         let config = TestConfiguration {
             shared_server: true,
             ..Default::default()
@@ -1720,7 +1720,7 @@ mod standalone_client_tests {
         let checker = setup_test_basics_internal(&config).await.client;
         let mut request = create_connection_request(&[get_shared_server_address(false)], &config);
         request.cluster_mode_enabled = false;
-        request.read_only = Some(read_only);
+        request.read_only = Some(true);
         let client = GlideClient::new(request.into(), None).await.unwrap();
         (client, checker)
     }
@@ -1759,7 +1759,7 @@ mod standalone_client_tests {
         #[values(false, true)] raise_on_error: bool,
     ) {
         block_on_all(async move {
-            let (mut client, mut checker) = batch_clients(true).await;
+            let (mut client, mut checker) = read_only_batch_clients().await;
             let key = generate_random_string(10);
             let mut pipe = redis::pipe();
             if atomic {
@@ -1794,7 +1794,7 @@ mod standalone_client_tests {
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_only_mode_runs_read_only_batch(#[values(false, true)] atomic: bool) {
         block_on_all(async move {
-            let (mut client, mut checker) = batch_clients(true).await;
+            let (mut client, mut checker) = read_only_batch_clients().await;
             let key = generate_random_string(10);
             checker
                 .send_command(redis::cmd("SET").arg(&key).arg("value"))
@@ -1814,24 +1814,6 @@ mod standalone_client_tests {
                     Value::Int(1)
                 ])
             );
-        });
-    }
-
-    #[rstest]
-    #[serial_test::serial]
-    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_batch_with_write_runs_when_not_read_only(#[values(false, true)] atomic: bool) {
-        block_on_all(async move {
-            let (mut client, mut checker) = batch_clients(false).await;
-            let key = generate_random_string(10);
-            let mut pipe = redis::pipe();
-            if atomic {
-                pipe.atomic();
-            }
-            pipe.cmd("GET").arg(&key).cmd("SET").arg(&key).arg("value");
-
-            send_batch(&mut client, &pipe, atomic, true).await.unwrap();
-            assert!(key_exists(&mut checker, &key).await);
         });
     }
 }

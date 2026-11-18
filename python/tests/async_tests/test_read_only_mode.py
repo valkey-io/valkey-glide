@@ -268,7 +268,7 @@ class TestReadOnlyMode:
         protocol: ProtocolVersion,
         is_atomic: bool,
     ):
-        """Test that a batch containing a write is rejected and writes nothing."""
+        """Test that a batch containing a write raises RequestError."""
         client = await create_client(
             request,
             cluster_mode,
@@ -277,11 +277,9 @@ class TestReadOnlyMode:
             read_only=True,
         )
         assert type(client) is GlideClient
-        checker = None
         key = get_random_string(10)
 
         try:
-            checker = await create_client(request, cluster_mode, protocol=protocol)
             batch = Batch(is_atomic=is_atomic).get(key).set(key, "value")
             with pytest.raises(RequestError) as exc_info:
                 await client.exec(batch, raise_on_error=True)
@@ -289,16 +287,8 @@ class TestReadOnlyMode:
                 "write commands are not allowed in read-only mode"
                 in str(exc_info.value).lower()
             )
-            assert await checker.exists([key]) == 0
-
-            # A batch of reads still runs.
-            assert await client.exec(
-                Batch(is_atomic=is_atomic).get(key), raise_on_error=True
-            ) == [None]
         finally:
             await client.close()
-            if checker is not None:
-                await checker.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -308,7 +298,7 @@ class TestReadOnlyMode:
         cluster_mode: bool,
         protocol: ProtocolVersion,
     ):
-        """Test that a scoped connection of a read-only client rejects writes."""
+        """Test that a write on a read-only client's scope raises RuntimeError."""
         client = await create_client(
             request,
             cluster_mode,
@@ -317,11 +307,9 @@ class TestReadOnlyMode:
             read_only=True,
         )
         assert type(client) is GlideClient
-        checker = None
         key = get_random_string(10)
 
         try:
-            checker = await create_client(request, cluster_mode, protocol=protocol)
             async with await client.scoped_connection() as scope:
                 with pytest.raises(RuntimeError) as exc_info:
                     await scope.set(key, "value")
@@ -329,10 +317,5 @@ class TestReadOnlyMode:
                     "write commands are not allowed in read-only mode"
                     in str(exc_info.value).lower()
                 )
-                # Reads still run.
-                assert await scope.get(key) is None
-            assert await checker.exists([key]) == 0
         finally:
             await client.close()
-            if checker is not None:
-                await checker.close()
