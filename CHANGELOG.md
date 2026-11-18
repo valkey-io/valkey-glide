@@ -56,7 +56,7 @@
 
 ### Changes
 
-* Core: In cluster mode, a single-node command routed to a primary that is in the connection map is sent from the caller's task instead of through the cluster event loop, outside recovery; an error from such an attempt goes through the event loop's retry handling as before. A connection's writer now waits one scheduling turn before flushing a small batch while other requests await replies, so concurrent requests share one write. `GLIDE_PIPELINE_COALESCE=0` turns that wait off ([#7532](https://github.com/valkey-io/valkey-glide/pull/7532))
+* Core: cluster single-node fast path from the caller's task, plus write coalescing (`GLIDE_PIPELINE_COALESCE=0` turns coalescing off) ([#7532](https://github.com/valkey-io/valkey-glide/pull/7532))
 
 ## 2.6
 
