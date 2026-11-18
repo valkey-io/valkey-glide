@@ -844,9 +844,11 @@ pub(crate) fn convert_to_expected_type(
                     let consumers_key = Value::SimpleString("consumers".into());
                     let opt_consumers_key_index = group
                         .iter()
-                        .position(
-                            |key| {
-                                let res = convert_to_expected_type(key.clone(), Some(ExpectedReturnType::SimpleString));
+                        .enumerate()
+                        .step_by(2)
+                        .find(
+                            |(_, key)| {
+                                let res = convert_to_expected_type((*key).clone(), Some(ExpectedReturnType::SimpleString));
                                 match res {
                                     Ok(converted_key) => {
                                         converted_key == consumers_key
@@ -856,7 +858,8 @@ pub(crate) fn convert_to_expected_type(
                                     }
                                 }
                             }
-                        );
+                        )
+                        .map(|(index, _)| index);
 
                     let Some(consumers_key_index) = opt_consumers_key_index else {
                         return Err((ErrorKind::TypeError, "No consumers key found").into());
@@ -2709,8 +2712,11 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn convert_xinfo_stream() {
+    #[rstest::rstest]
+    fn convert_xinfo_stream(
+        #[values("group1", "consumers")] group_name: &str,
+        #[values(false, true)] with_consumers: bool,
+    ) {
         // Only a partial response is represented here for brevity - the rest of the response follows the same format.
         let groups_resp2_response = Value::Array(vec![
             Value::BulkString("length".to_string().into_bytes().into()),
@@ -2729,23 +2735,27 @@ mod tests {
             Value::Array(vec![
                 Value::Array(vec![
                     Value::BulkString("name".to_string().into_bytes().into()),
-                    Value::BulkString("group1".to_string().into_bytes().into()),
+                    Value::BulkString(group_name.as_bytes().to_vec().into()),
                     Value::BulkString("consumers".to_string().into_bytes().into()),
-                    Value::Array(vec![
-                        Value::Array(vec![
-                            Value::BulkString("name".to_string().into_bytes().into()),
-                            Value::BulkString("consumer1".to_string().into_bytes().into()),
-                            Value::BulkString("pending".to_string().into_bytes().into()),
-                            Value::Array(vec![Value::Array(vec![
-                                Value::BulkString("1-0".to_string().into_bytes().into()),
-                                Value::Int(1),
-                            ])]),
-                        ]),
-                        Value::Array(vec![
-                            Value::BulkString("pending".to_string().into_bytes().into()),
-                            Value::Array(vec![]),
-                        ]),
-                    ]),
+                    Value::Array(if with_consumers {
+                        vec![
+                            Value::Array(vec![
+                                Value::BulkString("name".to_string().into_bytes().into()),
+                                Value::BulkString("consumer1".to_string().into_bytes().into()),
+                                Value::BulkString("pending".to_string().into_bytes().into()),
+                                Value::Array(vec![Value::Array(vec![
+                                    Value::BulkString("1-0".to_string().into_bytes().into()),
+                                    Value::Int(1),
+                                ])]),
+                            ]),
+                            Value::Array(vec![
+                                Value::BulkString("pending".to_string().into_bytes().into()),
+                                Value::Array(vec![]),
+                            ]),
+                        ]
+                    } else {
+                        vec![]
+                    }),
                 ]),
                 Value::Array(vec![
                     Value::BulkString("consumers".to_string().into_bytes().into()),
@@ -2777,35 +2787,43 @@ mod tests {
                     Value::Map(vec![
                         (
                             Value::BulkString("name".to_string().into_bytes().into()),
-                            Value::BulkString("group1".to_string().into_bytes().into()),
+                            Value::BulkString(group_name.as_bytes().to_vec().into()),
                         ),
                         (
                             Value::BulkString("consumers".to_string().into_bytes().into()),
-                            Value::Array(vec![
-                                Value::Map(vec![
-                                    (
-                                        Value::BulkString("name".to_string().into_bytes().into()),
-                                        Value::BulkString(
-                                            "consumer1".to_string().into_bytes().into(),
+                            Value::Array(if with_consumers {
+                                vec![
+                                    Value::Map(vec![
+                                        (
+                                            Value::BulkString(
+                                                "name".to_string().into_bytes().into(),
+                                            ),
+                                            Value::BulkString(
+                                                "consumer1".to_string().into_bytes().into(),
+                                            ),
                                         ),
-                                    ),
-                                    (
+                                        (
+                                            Value::BulkString(
+                                                "pending".to_string().into_bytes().into(),
+                                            ),
+                                            Value::Array(vec![Value::Array(vec![
+                                                Value::BulkString(
+                                                    "1-0".to_string().into_bytes().into(),
+                                                ),
+                                                Value::Int(1),
+                                            ])]),
+                                        ),
+                                    ]),
+                                    Value::Map(vec![(
                                         Value::BulkString(
                                             "pending".to_string().into_bytes().into(),
                                         ),
-                                        Value::Array(vec![Value::Array(vec![
-                                            Value::BulkString(
-                                                "1-0".to_string().into_bytes().into(),
-                                            ),
-                                            Value::Int(1),
-                                        ])]),
-                                    ),
-                                ]),
-                                Value::Map(vec![(
-                                    Value::BulkString("pending".to_string().into_bytes().into()),
-                                    Value::Array(vec![]),
-                                )]),
-                            ]),
+                                        Value::Array(vec![]),
+                                    )]),
+                                ]
+                            } else {
+                                vec![]
+                            }),
                         ),
                     ]),
                     Value::Map(vec![(
