@@ -1018,6 +1018,7 @@ mod cluster_client_tests {
             assert!(start.elapsed() < REQUEST_TIMEOUT, "{:?}", start.elapsed());
             let result = entries(result);
             assert_eq!(result.len(), 3);
+            assert!(matches!(result.get(&slow), Some(Value::ServerError(_))));
             for (address, value) in result {
                 match value {
                     Value::ServerError(error) if address == slow => {
