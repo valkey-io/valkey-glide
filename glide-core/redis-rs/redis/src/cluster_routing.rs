@@ -1744,6 +1744,14 @@ mod tests_routing {
     }
 
     #[test]
+    fn allows_partial_results_only_with_a_per_node_response_policy() {
+        use MultipleNodeRoutingInfo::{AllMasters, AllNodes};
+        assert!(AllMasters.allows_partial_results(Some(ResponsePolicy::Special)));
+        assert!(AllNodes.allows_partial_results(None));
+        assert!(!AllNodes.allows_partial_results(Some(ResponsePolicy::AllSucceeded)));
+    }
+
+    #[test]
     fn test_routing_info_rdma_routes_by_its_key() {
         let mut plain = cmd("GET");
         plain.arg("foo");
