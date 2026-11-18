@@ -38,11 +38,9 @@ runs:
               git clone https://github.com/valkey-io/valkey.git
               cd valkey/src
               git checkout $ENGINE_VERSION
-              SOURCES_VERSION=`grep ' VALKEY_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]'` || :
-              if [[ -z $SOURCES_VERSION ]]; then
-                  SOURCES_VERSION=`grep ' REDIS_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]'`
-              fi
-              echo "SOURCES_VERSION=$SOURCES_VERSION" >> "$GITHUB_OUTPUT"
+
+              # Use commit SHA to cache Valkey source.
+              echo "SOURCES_SHA=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
         - name: Identify the runner image
           id: runner-image
@@ -82,7 +80,7 @@ runs:
                   valkey/src/valkey-cli
                   valkey/src/redis-server
                   valkey/src/redis-cli
-              key: valkey-${{ steps.prepare-sources.outputs.SOURCES_VERSION }}-${{ inputs.target }}-${{ steps.runner-image.outputs.IMAGE_ID }}
+              key: valkey-${{ steps.prepare-sources.outputs.SOURCES_SHA }}-${{ inputs.target }}-${{ steps.runner-image.outputs.IMAGE_ID }}
 
         # Manual install, because makefile target rebuilds everything, we want to avoid that
         - name: Install cached engine
