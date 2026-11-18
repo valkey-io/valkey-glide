@@ -3,6 +3,7 @@ name: Python - Windows wheel builds
 on:
     pull_request:
         paths:
+            - .cargo/config.toml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
@@ -10,6 +11,8 @@ on:
             - ffi/**
             - glide-core/**
             - glide-logger/**
+            - glide-telemetry/**
+            - glide-rdma/**
             - python/**
     workflow_dispatch:
 
