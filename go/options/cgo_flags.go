@@ -5,7 +5,7 @@ package options
 // #cgo LDFLAGS: -lglide_ffi
 // #cgo !windows LDFLAGS: -lm
 // #cgo darwin LDFLAGS: -framework Security
-// #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
+// #cgo darwin LDFLAGS: -framework CoreFoundation
 // #cgo linux,amd64,!musl LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-gnu
 // #cgo linux,amd64,musl LDFLAGS: -L${SRCDIR}/../rustbin/x86_64-unknown-linux-musl
 // #cgo linux,arm64,!musl LDFLAGS: -L${SRCDIR}/../rustbin/aarch64-unknown-linux-gnu
