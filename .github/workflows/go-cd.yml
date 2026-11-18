@@ -361,11 +361,11 @@ jobs:
                           unexpected_paths+=("$path")
                           ;;
                       esac
-                    done < <(git -C "$GITHUB_WORKSPACE" diff --name-only HEAD)
+                    done < <(git -C "$GITHUB_WORKSPACE" diff --name-only HEAD; git -C "$GITHUB_WORKSPACE" ls-files --others --exclude-standard)
                     if (( ${#unexpected_paths[@]} > 0 )); then
-                      echo "Unexpected tracked changes in Go benchmark module test:"
-                      echo "Tracked status (first 200 entries):"
-                      git -C "$GITHUB_WORKSPACE" status --short --untracked-files=no | sed -n '1,200p'
+                      echo "Unexpected worktree changes in Go benchmark module test:"
+                      echo "Worktree status (first 200 entries):"
+                      git -C "$GITHUB_WORKSPACE" status --short --untracked-files=all | sed -n '1,200p'
                       echo "Unexpected paths (first 200 entries):"
                       printf '  %s\n' "${unexpected_paths[@]}" | sed -n '1,200p'
                       exit 1
@@ -383,5 +383,5 @@ jobs:
                   fi
                   go mod tidy
                   validate_benchmark_changes
-                  go run . -minimal -clients glide -concurrentTasks 10 -port ${{ env.PORT }}
+                  go run . -minimal -clients glide -concurrentTasks 10 -port ${{ env.PORT }} -resultsFile "$RUNNER_TEMP/go-release-benchmark-results.json"
                   validate_benchmark_changes

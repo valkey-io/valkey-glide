@@ -7,6 +7,8 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/python-windows.yml
+            - .github/actions/ensure-clean-tree/action.yml
+            - .github/scripts/validate-python-windows-changes.sh
             - ffi/**
             - glide-core/**
             - glide-logger/**
@@ -129,6 +131,11 @@ jobs:
               env:
                   TARGET_PYTHON: ${{ steps.target_python.outputs.python-path }}
 
+            - name: Ensure worktree is clean before package preparation
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Python Windows dependencies and protobuf generation
+
             - name: Prepare Python packages
               shell: pwsh
               run: |
@@ -240,6 +247,10 @@ jobs:
 
                   & "$env:RUNNER_TEMP\smoke-async\Scripts\python.exe" -m pip install "pytest<9.1"
                   & "$env:RUNNER_TEMP\smoke-async\Scripts\python.exe" -m pytest --noconftest -o "addopts=" python\tests\test_windows_wheels.py python\tests\async_tests\test_pipe_reader.py
+
+            - name: Validate Windows packaging worktree changes
+              shell: bash
+              run: bash .github/scripts/validate-python-windows-changes.sh
 
             - name: Upload Python Async client wheel
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

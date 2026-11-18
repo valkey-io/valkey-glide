@@ -21,6 +21,8 @@ class ValidateGoRcChangesTests(unittest.TestCase):
         self.write(".gitignore", "ignored/\n")
         self.write("go/go.mod", "module example\n")
         self.write("go/go.sum", "original\n")
+        self.write("go/benchmarks/go.mod", "module example/benchmarks\n")
+        self.write("go/benchmarks/go.sum", "original\n")
         self.write("go/integTest/import_test.go", f'import "{IMPORT}"\n')
         self.write("go/integTest/other_test.go", "package test\n")
         self.write("utils/cluster_manager.py", "# original\n")
@@ -88,6 +90,15 @@ class ValidateGoRcChangesTests(unittest.TestCase):
     def test_undeclared_go_file_is_rejected(self):
         self.write("go/integTest/other_test.go", "changed\n")
         self.assertIn("go/integTest/other_test.go", self.run_script(expected=1))
+
+    def test_benchmark_rc_module_changes_pass_but_other_benchmark_edits_fail(self):
+        # rc-test.sh also switches the benchmark module to the published RC.
+        self.write("go/benchmarks/go.mod", "module example/benchmarks-rc\n")
+        self.write("go/benchmarks/go.sum", "updated\n")
+        self.git("add", "go/benchmarks/go.mod")
+        self.run_script()
+        self.write("go/benchmarks/unexpected.go", "package benchmarks\n")
+        self.assertIn("?? go/benchmarks/unexpected.go", self.run_script(expected=1))
 
     def test_new_go_file_is_rejected(self):
         self.write("go/integTest/new_test.go", IMPORT)

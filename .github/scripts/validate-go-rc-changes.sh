@@ -17,7 +17,7 @@ rc_major="${rc_major%%.*}"
 unexpected_paths=()
 while IFS= read -r path; do
     case "$path" in
-        go/go.mod|go/go.sum)
+        go/go.mod|go/go.sum|go/benchmarks/go.mod|go/benchmarks/go.sum)
             ;;
         go/integTest/*.go)
             if ! grep -Fxq "$path" "$RUNNER_TEMP/go-rc-import-paths"; then

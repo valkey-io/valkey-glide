@@ -412,7 +412,7 @@ jobs:
                   jar -cvf jedis-shared-bundle.jar ./*
                   ls -ltr
                   cd -
-                  cp "$jedis_shared_folder/jedis-shared-bundle.jar" jedis-shared-bundle-no-classifier.jar
+                  cp "$jedis_shared_folder/jedis-shared-bundle.jar" "$BUNDLE_DIR/jedis-shared-bundle-no-classifier.jar"
 
             - name: Build jedis-compatibility (no classifier, no natives)
               working-directory: java
@@ -495,7 +495,7 @@ jobs:
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: jedis-compat-shared-no-classifier
-                  path: java/jedis-shared-bundle-no-classifier.jar
+                  path: ${{ runner.temp }}/bundles/jedis-shared-bundle-no-classifier.jar
 
             - name: Upload jedis no-classifier artifact
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

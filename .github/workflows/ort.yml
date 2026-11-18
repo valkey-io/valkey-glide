@@ -48,6 +48,9 @@ jobs:
                     needs.changes.outputs.code != 'false'))
 
         continue-on-error: true
+        outputs:
+            clean_tree_outcome: ${{ steps.clean-tree.outcome }}
+            attribution_scope_outcome: ${{ steps.attribution-scope.outcome }}
         env:
             PYTHON_ASYNC_ATTRIBUTIONS: "python/glide-async/THIRD_PARTY_LICENSES_PYTHON_ASYNC"
             PYTHON_SYNC_ATTRIBUTIONS: "python/glide-sync/THIRD_PARTY_LICENSES_PYTHON_SYNC"
@@ -271,6 +274,7 @@ jobs:
                   fi
 
             - name: Ensure ORT analysis leaves the worktree clean
+              id: clean-tree
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: ORT analysis, package builds, and source generation
@@ -297,6 +301,7 @@ jobs:
                   fi
 
             - name: Validate attribution changes stay within declared scope
+              id: attribution-scope
               shell: bash
               run: |
                   set -euo pipefail
@@ -312,7 +317,10 @@ jobs:
                   unexpected_paths=()
                   changed_paths_file="$(mktemp)"
                   trap 'rm -f "$changed_paths_file"' EXIT
-                  git diff --name-only -z --no-renames --ita-visible-in-index HEAD -- > "$changed_paths_file"
+                  {
+                    git diff --name-only -z --no-renames --ita-visible-in-index HEAD --
+                    git ls-files --others --exclude-standard -z
+                  } > "$changed_paths_file"
 
                   while IFS= read -r -d '' path; do
                     allowed=false
@@ -328,9 +336,9 @@ jobs:
                   done < "$changed_paths_file"
 
                   if (( ${#unexpected_paths[@]} > 0 )); then
-                    echo "::error::ORT attribution generation changed tracked paths outside its declared scope"
-                    echo "::group::Tracked status (first 200 entries)"
-                    git status --short --untracked-files=no | sed -n '1,200p'
+                    echo "::error::ORT attribution generation changed paths outside its declared scope"
+                    echo "::group::Worktree status (first 200 entries)"
+                    git status --short --untracked-files=all | sed -n '1,200p'
                     echo "::endgroup::"
                     echo "::group::Unexpected paths (first 200 entries)"
                     printf 'Unexpected path: %q\n' "${unexpected_paths[@]}" | sed -n '1,200p'
@@ -395,3 +403,20 @@ jobs:
                       echo "::warning file=$FILE::WARNING! The attribution file '$FILE' differs in this PR."
                     fi
                   done
+
+    enforce-clean-tree:
+        name: Enforce ORT worktree checks
+        needs: run-ort
+        if: ${{ always() && needs.run-ort.result != 'skipped' }}
+        runs-on: ubuntu-24.04
+        steps:
+            # Analysis/tool failures remain non-blocking. Worktree violations do not.
+            - name: Enforce worktree and attribution scope outcomes
+              env:
+                  CLEAN_TREE_OUTCOME: ${{ needs.run-ort.outputs.clean_tree_outcome }}
+                  ATTRIBUTION_SCOPE_OUTCOME: ${{ needs.run-ort.outputs.attribution_scope_outcome }}
+              run: |
+                  if [[ "$CLEAN_TREE_OUTCOME" == failure || "$ATTRIBUTION_SCOPE_OUTCOME" == failure ]]; then
+                    echo "::error::ORT changed files outside its declared attribution scope."
+                    exit 1
+                  fi

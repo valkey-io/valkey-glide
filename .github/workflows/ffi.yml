@@ -21,6 +21,7 @@ on:
 
             # GitHub workflows
             - .github/workflows/ffi.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-engine/action.yml
             - .github/actions/install-libfabric/action.yml
             - .github/actions/install-protoc/action.yml
@@ -43,6 +44,7 @@ on:
 
             # GitHub workflows
             - .github/workflows/ffi.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-engine/action.yml
             - .github/actions/install-libfabric/action.yml
             - .github/actions/install-protoc/action.yml
@@ -106,6 +108,11 @@ jobs:
             - name: Run glide-ffi MIRI tests
               working-directory: ./ffi/miri-tests
               run: cargo miri test --locked
+
+            - name: Ensure FFI tests leave the worktree clean
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: FFI, RDMA, and Miri tests
 
     lint:
         runs-on: ubuntu-24.04

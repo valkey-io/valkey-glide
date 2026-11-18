@@ -442,6 +442,49 @@ jobs:
                   sed -i 's/"version": "0\.0\.0"/"version": "'"${NAPI_RS_VERSION_FROM_TAG}"'"/' package.json
                   echo "Base package version is now: $(jq -r .version package.json)"
 
+            - name: Validate npm package assembly changes
+              shell: bash
+              run: |
+                  unexpected_paths=()
+                  while IFS= read -r -d '' path; do
+                      case "$path" in
+                          # The base package is assembled from scratch in this directory.
+                          node/npm/glide/*)
+                              ;;
+                          node/npm/darwin-arm64/package.json|\
+                          node/npm/darwin-arm64/README.md|\
+                          node/npm/darwin-arm64/LICENSE|\
+                          node/npm/darwin-x64/package.json|\
+                          node/npm/darwin-x64/README.md|\
+                          node/npm/darwin-x64/LICENSE|\
+                          node/npm/linux-arm64-gnu/package.json|\
+                          node/npm/linux-arm64-gnu/README.md|\
+                          node/npm/linux-arm64-gnu/LICENSE|\
+                          node/npm/linux-arm64-musl/package.json|\
+                          node/npm/linux-arm64-musl/README.md|\
+                          node/npm/linux-arm64-musl/LICENSE|\
+                          node/npm/linux-x64-gnu/package.json|\
+                          node/npm/linux-x64-gnu/README.md|\
+                          node/npm/linux-x64-gnu/LICENSE|\
+                          node/npm/linux-x64-musl/package.json|\
+                          node/npm/linux-x64-musl/README.md|\
+                          node/npm/linux-x64-musl/LICENSE|\
+                          node/npm/win32-x64-msvc/package.json|\
+                          node/npm/win32-x64-msvc/README.md|\
+                          node/npm/win32-x64-msvc/LICENSE)
+                              ;;
+                          *)
+                              unexpected_paths+=("$path")
+                              ;;
+                      esac
+                  done < <(git diff --name-only --no-renames -z HEAD; git ls-files --others --exclude-standard -z)
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                      echo "::error::npm package assembly changed files outside its generated packages."
+                      git status --short --untracked-files=all | sed -n '1,200p'
+                      printf 'Unexpected path: %q\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                      exit 1
+                  fi
+
             # Run napi prepublish explicitly from node/ before npm publish.
             # This must run from the project root (node/) — not from node/npm/glide/ —
             # because napi v3 enforces a workspace boundary check that requires a
@@ -629,7 +672,7 @@ jobs:
                   npm run build:utils
                   npm test
 
-            - name: Validate release-candidate tracked changes
+            - name: Validate release-candidate worktree changes
               shell: bash
               run: |
                   unexpected=0
@@ -642,13 +685,13 @@ jobs:
                               unexpected=1
                               ;;
                       esac
-                  done < <(git diff --name-only --diff-filter=ACDMRTUXB -z HEAD)
+                  done < <(git diff --name-only --no-renames -z HEAD; git ls-files --others --exclude-standard -z)
 
                   if [[ "$unexpected" -ne 0 ]]; then
-                      echo "::group::Tracked repository status (first 200 entries)"
-                      git status --short --untracked-files=no | sed -n '1,200p'
+                      echo "::group::Worktree status (first 200 entries)"
+                      git status --short --untracked-files=all | sed -n '1,200p'
                       echo "::endgroup::"
-                      echo "::error::npm release-candidate smoke tests changed tracked paths outside their package manifest and lockfile. Reproduce the smoke test locally and commit any required source or metadata updates separately."
+                      echo "::error::npm release-candidate smoke tests changed paths outside their package manifest and lockfile. Reproduce the smoke test locally and commit any required source or metadata updates separately."
                       exit 1
                   fi
 

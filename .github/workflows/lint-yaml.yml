@@ -14,7 +14,11 @@ on:
             - "node/pm-and-types-tests/*/.yarnrc.yml"
             - .github/actions/ensure-clean-tree/action.yml
             - .github/scripts/validate-go-rc-changes.sh
+            - .github/scripts/test_release_worktree_checks.py
+            - .github/scripts/test_ensure_clean_tree.py
             - .github/scripts/test_validate_go_rc_changes.py
+            - .github/scripts/validate-python-windows-changes.sh
+            - .github/scripts/test_validate_python_windows_changes.py
     pull_request:
         paths:
             - ".github/**/*.yml"
@@ -22,7 +26,11 @@ on:
             - "node/pm-and-types-tests/*/.yarnrc.yml"
             - .github/actions/ensure-clean-tree/action.yml
             - .github/scripts/validate-go-rc-changes.sh
+            - .github/scripts/test_release_worktree_checks.py
+            - .github/scripts/test_ensure_clean_tree.py
             - .github/scripts/test_validate_go_rc_changes.py
+            - .github/scripts/validate-python-windows-changes.sh
+            - .github/scripts/test_validate_python_windows_changes.py
     workflow_dispatch:
 
 jobs:
@@ -61,8 +69,17 @@ jobs:
                   print(f"OK: all {len(config.get('updates', []))} entries have cooldown.default-days == 7")
                   EOF
 
+            - name: Test release worktree checks
+              run: python3 .github/scripts/test_release_worktree_checks.py
+
+            - name: Test clean-tree guard
+              run: python3 .github/scripts/test_ensure_clean_tree.py
+
             - name: Test Go RC change validation
               run: python3 .github/scripts/test_validate_go_rc_changes.py
+
+            - name: Test Windows packaging change validation
+              run: python3 .github/scripts/test_validate_python_windows_changes.py
 
             - name: Validate engine runner classes
               run: python3 .github/scripts/validate_engine_runners.py

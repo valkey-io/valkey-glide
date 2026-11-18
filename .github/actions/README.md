@@ -346,10 +346,11 @@ jobs:
           submodules: recursive
 
       - name: Build
+        working-directory: glide-core
         run: cargo build --release --locked
 
       - name: Ensure build leaves the worktree clean
-        uses: ./valkey-glide/.github/actions/ensure-clean-tree
+        uses: ./.github/actions/ensure-clean-tree
         with:
           context: Cargo release build
 ```
