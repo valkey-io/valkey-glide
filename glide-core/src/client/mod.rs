@@ -1540,6 +1540,9 @@ impl Client {
         }
 
         let permit = admission.reserve(self)?;
+        // After the intercept, which answers GLIDE's own pubsub commands, and
+        // before the tracking, so a rejected command leaves no state.
+        self.reject_write_in_read_only(cmd)?;
         // The request-timeout lookup in `dispatch` refuses only blocking and WAIT
         // commands, none of which are tracked.
         self.track_command(cmd, routing.as_ref());
@@ -6085,6 +6088,16 @@ mod tests {
             rt.block_on(client.send_pipeline(&batch, None, true, None, Default::default()))
         };
         result.expect_err("read-only mode rejects the batch");
+        rt.block_on(client.reset_connection_state(0)).unwrap();
+    }
+
+    /// A rejected read-only `MONITOR` never started monitoring, so the pool's
+    /// release reset must succeed instead of discarding the connection.
+    #[test]
+    fn rejected_read_only_monitor_keeps_connection_resettable() {
+        let (_server, rt, mut client) = start_read_only_client();
+        rt.block_on(client.send_command(&mut redis::cmd("MONITOR"), None))
+            .expect_err("read-only mode rejects MONITOR");
         rt.block_on(client.reset_connection_state(0)).unwrap();
     }
 
