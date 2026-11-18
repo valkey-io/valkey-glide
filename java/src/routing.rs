@@ -3,7 +3,7 @@
 use redis::cluster_routing::RoutingInfo;
 use redis::cluster_routing::{MultipleNodeRoutingInfo, Route, SingleNodeRoutingInfo, SlotAddr};
 use redis::cluster_routing::{ResponsePolicy, Routable};
-use redis::{Cmd, ErrorKind, RedisError, RedisResult};
+use redis::{Cmd, RedisError, RedisResult};
 
 pub use glide_core::command_request::Routes;
 use glide_core::command_request::{
@@ -164,7 +164,7 @@ pub(crate) fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<
                 Ok(slot) if slot < redis::cluster_topology::SLOT_SIZE => slot,
                 _ => {
                     return Err(RedisError::from((
-                        ErrorKind::ClientError,
+                        redis::ErrorKind::ClientError,
                         "Invalid slot ID",
                         format!(
                             "Invalid slot ID: {}. Slot ID must be between 0 and 16383",

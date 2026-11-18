@@ -11118,6 +11118,21 @@ class TestClusterRoutes:
     ):
         await self.cluster_route_custom_command_slot_route(glide_client, False)
 
+        for invalid_slot in [16384, 70000, -1]:
+            route = SlotIdRoute(SlotType.PRIMARY, invalid_slot)
+            with pytest.raises(RequestError):
+                await glide_client.custom_command(["PING"], route)
+
+            for is_atomic in [False, True]:
+                batch = ClusterBatch(is_atomic=is_atomic)
+                batch.ping()
+                with pytest.raises(RequestError):
+                    await glide_client.exec(
+                        batch,
+                        options=ClusterBatchOptions(route=route),
+                        raise_on_error=True,
+                    )
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_info_random_route(self, glide_client: GlideClusterClient):

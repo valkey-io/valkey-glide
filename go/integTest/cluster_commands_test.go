@@ -2985,6 +2985,29 @@ func (suite *GlideTestSuite) TestBatchWithSingleNodeRoute() {
 	}
 }
 
+func (suite *GlideTestSuite) TestSlotIdRouteRejectsOutOfRangeSlot() {
+	client := suite.defaultClusterClient()
+	opts := pipeline.NewClusterBatchOptions()
+
+	for _, invalidSlot := range []int32{16384, 70000, -1} {
+		route := config.NewSlotIdRoute(config.SlotTypePrimary, invalidSlot)
+		_, err := client.CustomCommandWithRoute(context.Background(), []string{"PING"}, route)
+		assert.Error(suite.T(), err, "CustomCommandWithRoute should reject slot %d", invalidSlot)
+
+		for _, isAtomic := range []bool{true, false} {
+			batch := pipeline.NewClusterBatch(isAtomic).
+				InfoWithOptions(options.InfoOptions{Sections: []constants.Section{"replication"}})
+			_, err = client.ExecWithOptions(
+				context.Background(),
+				*batch,
+				true,
+				*opts.WithRoute(route),
+			)
+			assert.Error(suite.T(), err, "ExecWithOptions should reject slot %d (isAtomic = %v)", invalidSlot, isAtomic)
+		}
+	}
+}
+
 func (suite *GlideTestSuite) TestClusterScanEarlyTermination() {
 	client := suite.defaultClusterClient()
 	t := suite.T()

@@ -47,6 +47,8 @@
 * Python: correct the `FtHybridOptions.params` documentation: parameters apply to the VSIM arm's vector and to FILTER and APPLY expressions, not to the SEARCH arm ([#7867](https://github.com/valkey-io/valkey-glide/pull/7867))
 * Core: With `maxDecompressedSize` set and `raiseOnError` false, batches return a size-limit error for each oversized reply and preserve the other replies ([#7601](https://github.com/valkey-io/valkey-glide/issues/7601))
 
+* Core, Java, Node: reject out-of-range slot IDs in slot ID routes ([#7716](https://github.com/valkey-io/valkey-glide/pull/7716))
+
 ### Breaking Changes
 
 * FFI: `create_client_from_uri` takes `client_id` and `credential_provider` arguments, so URI-based bindings can supply a custom IAM credential provider ([#7847](https://github.com/valkey-io/valkey-glide/pull/7847))
