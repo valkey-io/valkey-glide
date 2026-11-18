@@ -1739,9 +1739,36 @@ mod tests {
         let lookup = cache.get_cached_mget(&cmd).unwrap();
         assert_eq!(lookup.missing_count(), 2);
 
-        // An invalidation for the untracked key while the request is in flight is harmless:
-        // nothing is pending for it and nothing gets inserted for it afterwards.
-        cache.invalidate_server_assisted(b"yyy:b");
+        // Inspect the pending fills while the request is in flight, before anything can
+        // cancel them: only the tracked key has one.
+        // (Copied out first so a failed assertion does not poison the registry lock.)
+        let pending_fills: Vec<Vec<u8>> = cache
+            .core()
+            .active_fills
+            .fills
+            .lock()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        assert_eq!(
+            pending_fills,
+            vec![b"xxx:a".to_vec()],
+            "only the tracked miss registers a fill, the untracked key must not"
+        );
+        let fill_tokens: Vec<_> = lookup
+            .missing_keys
+            .iter()
+            .map(|(_, key, fill)| (key.as_slice(), fill.is_some()))
+            .collect();
+        assert_eq!(
+            fill_tokens,
+            vec![(&b"xxx:a"[..], true), (&b"yyy:b"[..], false)],
+            "the lookup carries a fill token for the tracked key only"
+        );
+
+        // No invalidation in between: a fill registered for the untracked key would still be
+        // active here and would store its value.
         cache
             .complete_cached_mget(
                 lookup,
