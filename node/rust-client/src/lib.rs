@@ -260,17 +260,40 @@ fn get_worker_pool_state() -> &'static PLMutex2<WorkerPoolState> {
     })
 }
 
+/// RAII guard that releases a reference to the worker pool when dropped.
+/// Ensures that `release_worker_pool` is always called on every exit path from
+/// a worker task, including early returns, panics, and task cancellation.
+#[derive(Debug)]
+struct WorkerPoolGuard {
+    active: bool,
+}
+
+impl WorkerPoolGuard {
+    fn new() -> Self {
+        Self { active: true }
+    }
+}
+
+impl Drop for WorkerPoolGuard {
+    fn drop(&mut self) {
+        if self.active {
+            release_worker_pool();
+        }
+    }
+}
+
 /// Acquire a reference to the worker pool, incrementing the client count.
 /// Creates the pool if it doesn't exist.
-/// Returns a clone of the LocalPoolHandle.
-fn acquire_worker_pool() -> LocalPoolHandle {
+/// Returns a clone of the LocalPoolHandle and an RAII guard that releases the pool slot when dropped.
+fn acquire_worker_pool() -> (LocalPoolHandle, WorkerPoolGuard) {
     let mut state = get_worker_pool_state().lock();
     state.client_count += 1;
     if state.pool.is_none() {
         let num_workers = num_cpus::get();
         state.pool = Some(LocalPoolHandle::new(num_workers));
     }
-    state.pool.as_ref().unwrap().clone()
+    let handle = state.pool.as_ref().unwrap().clone();
+    (handle, WorkerPoolGuard::new())
 }
 
 /// Release a reference to the worker pool, decrementing the client count.
@@ -997,7 +1020,7 @@ pub(crate) async fn create_handle_for_client(
     let wake_tsfn_worker = Arc::downgrade(&wake_tsfn);
 
     // Acquire a worker-pool slot (released when the handle's message loop exits).
-    let worker_pool = acquire_worker_pool();
+    let (worker_pool, pool_guard) = acquire_worker_pool();
 
     let response_buffer_push = Arc::clone(&response_buffer);
     let wake_tsfn_push = Arc::downgrade(&wake_tsfn);
@@ -1006,6 +1029,7 @@ pub(crate) async fn create_handle_for_client(
     let (handle_tx, handle_rx) = tokio::sync::oneshot::channel::<GlideClientHandle>();
 
     worker_pool.spawn_pinned(move || async move {
+        let _pool_guard = pool_guard;
         // Clone command_tx for the handle; drop the original so the channel
         // closes when the handle is dropped, letting the message loop exit.
         let command_tx_for_handle = command_tx.clone();
@@ -1083,7 +1107,6 @@ pub(crate) async fn create_handle_for_client(
         }
 
         // Message loop has exited (channel closed by handle.close()).
-        release_worker_pool();
     });
 
     handle_rx
@@ -1570,7 +1593,7 @@ pub fn create_direct_client<'a>(
 
     // Acquire a reference to the worker pool (increments client count).
     // The pool will be released when the GlideClientHandle is dropped.
-    let worker_pool = acquire_worker_pool();
+    let (worker_pool, pool_guard) = acquire_worker_pool();
 
     // Create push notification channel for pub/sub
     let (push_sender, mut push_receiver) = mpsc::unbounded_channel::<PushInfo>();
@@ -1584,6 +1607,7 @@ pub fn create_direct_client<'a>(
     // is running, which would cause them to buffer silently with no wake_callback
     // fired, resulting in PubSub tests timing out.
     worker_pool.spawn_pinned(move || async move {
+        let _pool_guard = pool_guard;
         // Create the client on this worker thread
         let client = match Client::new(connection_request, Some(push_sender)).await {
             Ok(c) => c,
@@ -1595,8 +1619,6 @@ pub fn create_direct_client<'a>(
                     client_creation_status(&err),
                     format!("Failed to create client: {err}"),
                 ));
-                // Release pool reference since client creation failed
-                release_worker_pool();
                 return;
             }
         };
@@ -1697,7 +1719,6 @@ pub fn create_direct_client<'a>(
         }
 
         // Message loop has exited (channel closed by handle.close()).
-        release_worker_pool();
     });
 
     Ok(promise)
@@ -4006,5 +4027,23 @@ mod tests {
         ] {
             assert!(!handle_disconnection_push(&push(kind)));
         }
+    }
+
+    #[test]
+    fn worker_pool_guard_releases_client_count_on_panic() {
+        let initial_count = get_worker_pool_state().lock().client_count;
+
+        let result = std::panic::catch_unwind(|| {
+            let (_pool, pool_guard) = acquire_worker_pool();
+            assert_eq!(
+                get_worker_pool_state().lock().client_count,
+                initial_count + 1
+            );
+            let _guard = pool_guard;
+            panic!("injected task panic to verify worker pool guard drop unwind");
+        });
+
+        assert!(result.is_err());
+        assert_eq!(get_worker_pool_state().lock().client_count, initial_count);
     }
 }
