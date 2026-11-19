@@ -4,7 +4,7 @@
 
 ### Fixes
 
-* Core/Java: Bound `cluster_scan` by the client's `request_timeout`, as every other command path already is. A primary that stopped answering while still in the slot map left `scan()` pending indefinitely with no error raised to the caller. Each scan iteration is now bounded, and outside Go the cursor survives a timeout so callers can resume; the Go client releases the cursor after every call. In Java, a scan that hits the bound raises `TimeoutException` rather than `RequestException`, as does a script that runs past the request timeout. A password update that times out reports a timeout error in every client, rather than a generic request error. ([#6824](https://github.com/valkey-io/valkey-glide/issues/6824))
+* Core, Java: bound cluster_scan by the client's request timeout ([#6892](https://github.com/valkey-io/valkey-glide/pull/6892))
 * Core: keep timeout watchdog pending counts isolated from retired workers and losing singleton initialization candidates ([#7762](https://github.com/valkey-io/valkey-glide/pull/7762))
 * Core: prevent missed refresh completion notifications ([#7766](https://github.com/valkey-io/valkey-glide/pull/7766))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
