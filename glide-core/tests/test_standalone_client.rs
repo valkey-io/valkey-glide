@@ -896,6 +896,8 @@ mod standalone_client_tests {
                 "Lazy client (on dedicated server) should not connect before the first command. Before: {clients_before_lazy_init}, After: {clients_after_lazy_init}. protocol={protocol:?}"
             );
 
+            assert!(lazy_glide_client_enum.is_lazy());
+
             // 7. Send the first command using the lazy client (which is a GlideClient)
             glide_logger::log_info(
                 "TestStandaloneLazy",
@@ -904,6 +906,7 @@ mod standalone_client_tests {
                 ),
             );
             assert_connected(&mut lazy_glide_client_enum).await;
+            assert!(!lazy_glide_client_enum.is_lazy());
 
             // 8. Assert that a new connection was made by the lazy client on the dedicated server
             let clients_after_first_command = get_connected_clients(monitoring_client).await; // Pass &mut StandaloneClient

@@ -2163,19 +2163,32 @@ impl ClientAdapter {
                 std::ptr::null_mut()
             }
             ClientType::SyncClient => {
-                // Enter background runtime context inside the future so tokio::spawn
-                // calls within the command (e.g. reconnection, lazy subscribe) land
-                // on the background runtime where TCP I/O is registered.
-                // Note: block_on overrides any context entered before it, so the
-                // guard must be held inside the future being polled.
-                let bg = self
-                    .background_runtime
-                    .as_ref()
-                    .map(|rt| rt.handle().clone());
-                let result = self.runtime.block_on(async {
-                    let _guard = bg.as_ref().map(|h| h.enter());
-                    request_future.await
-                });
+                // A lazy client connects inside this command, so keep that off the caller's stack.
+                let result = if self.core.client.is_lazy()
+                    && let Some(bg) = self.background_runtime.as_ref()
+                {
+                    block_on_worker(bg, request_future).unwrap_or_else(|err| {
+                        Err(RedisError::from((
+                            ErrorKind::ClientError,
+                            "Command task on the runtime worker failed",
+                            err,
+                        )))
+                    })
+                } else {
+                    // Enter background runtime context inside the future so tokio::spawn
+                    // calls within the command (e.g. reconnection, lazy subscribe) land
+                    // on the background runtime where TCP I/O is registered.
+                    // Note: block_on overrides any context entered before it, so the
+                    // guard must be held inside the future being polled.
+                    let bg = self
+                        .background_runtime
+                        .as_ref()
+                        .map(|rt| rt.handle().clone());
+                    self.runtime.block_on(async {
+                        let _guard = bg.as_ref().map(|h| h.enter());
+                        request_future.await
+                    })
+                };
                 Self::handle_result(result, None, None, request_id, response_buf, false)
             }
         }
