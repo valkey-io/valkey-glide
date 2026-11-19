@@ -1140,4 +1140,68 @@ mod cluster_client_tests {
             wait_for_pauses_to_end(&mut pauser, &routes).await;
         });
     }
+
+    #[rstest]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_partial_results_rejected_hello_keeps_the_stored_credentials() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: false,
+                request_timeout: Some(1000),
+                ..Default::default()
+            })
+            .await;
+            let mut killer = create_cluster_client(
+                test_basics.cluster.as_ref(),
+                TestConfiguration {
+                    shared_server: false,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let all_nodes = |name: &[u8]| {
+                RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    redis::cluster_routing::ResponsePolicy::for_command(name),
+                ))
+            };
+
+            let mut hello = redis::cmd("HELLO");
+            hello.arg("3").arg("AUTH").arg("nosuchuser").arg("badpass");
+            hello.set_allow_partial_results(true);
+            let rejected = test_basics
+                .client
+                .send_command(&mut hello, Some(all_nodes(b"HELLO")))
+                .await;
+            assert!(
+                matches!(&rejected, Ok(Value::Map(entries))
+                    if entries.iter().all(|(_, v)| matches!(v, Value::ServerError(_)))),
+                "{rejected:?}"
+            );
+
+            // Drop every connection of the client under test, as a network blip
+            // or a failover would; it reconnects with its stored credentials.
+            let mut kill = redis::cmd("CLIENT");
+            kill.arg("KILL")
+                .arg("USER")
+                .arg("default")
+                .arg("SKIPME")
+                .arg("yes");
+            killer
+                .send_command(&mut kill, Some(all_nodes(b"CLIENT KILL")))
+                .await
+                .unwrap();
+
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            let mut set = redis::cmd("SET");
+            set.arg("partial-hello-key").arg("v");
+            while let Err(error) = test_basics.client.send_command(&mut set, None).await {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the client never reconnected: {error:?}"
+                );
+            }
+        });
+    }
 }

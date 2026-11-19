@@ -1500,6 +1500,15 @@ impl Client {
         let expected_type = expected_type_for_cmd(&cmd);
         let value = convert_to_expected_type(processed_value, expected_type)?;
 
+        // A partial result is `Ok` even when nodes failed, where the plain call
+        // fails, so it must not update the client's state below.
+        if cmd.allow_partial_results()
+            && matches!(&value, Value::Map(entries)
+                if entries.iter().any(|(_, v)| matches!(v, Value::ServerError(_))))
+        {
+            return Ok(value);
+        }
+
         if self_clone.is_client_set_name_command(&cmd) {
             self_clone.handle_client_set_name_command(&cmd).await?;
         }
