@@ -509,6 +509,36 @@ class CoreCommands(Protocol):
         """
         return cast(bool, self._execute_command(RequestType.DelIfEq, [key, value]))
 
+    def delex(self, key: TEncodable, condition: ValueComparison) -> bool:
+        """
+        Deletes `key` if its value meets `condition`.
+
+        Since: Valkey 9.2.0.
+
+        See [valkey.io](https://valkey.io/commands/delex) for more details.
+
+        Args:
+            key (TEncodable): The key to delete.
+            condition (ValueComparison): The comparison condition. The key is only deleted if its
+                current value meets `condition`.
+
+        Returns:
+            bool: True if `key` was deleted. False if `key` did not exist or `condition` was not met.
+
+        Examples:
+            >>> client.set("key", "value")
+            >>> client.delex("key", OnlyIfEqual("wrong_value"))
+                False
+            >>> client.delex("key", OnlyIfNotEqual("value"))
+                False
+            >>> client.delex("key", OnlyIfEqual("value"))
+                True
+        """
+        return cast(
+            bool,
+            self._execute_command(RequestType.DelEx, [key, *condition._to_args()]),
+        )
+
     def strlen(self, key: TEncodable) -> int:
         """
         Get the length of the string value stored at `key`.
