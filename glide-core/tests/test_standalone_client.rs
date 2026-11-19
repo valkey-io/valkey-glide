@@ -624,16 +624,18 @@ mod standalone_client_tests {
         });
     }
 
-    // `Client::new` trims the client AZ for every caller: bindings and the Rust client alike.
-    // Only the 1a replica is in the client's zone, so every strategy sends it all reads.
+    // Both entry points trim the client AZ: `Client::new` for bindings and the Rust client,
+    // `StandaloneClient::create_client` for direct callers. Only the 1a replica is in the
+    // client's zone, so every strategy sends it all reads.
     #[rstest]
     #[case(glide_core::client::ReadFrom::AZAffinity as fn(String) -> glide_core::client::ReadFrom)]
     #[case(glide_core::client::ReadFrom::AZAffinityReplicasAndPrimary)]
     #[case(glide_core::client::ReadFrom::AZAffinityAllNodes)]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_client_new_routes_padded_client_az_to_matching_replica(
+    fn test_padded_client_az_routes_to_matching_replica(
         #[case] read_from: fn(String) -> glide_core::client::ReadFrom,
+        #[values(true, false)] via_client_new: bool,
     ) {
         let servers = create_primary_mock_with_replicas_az(
             3,
@@ -652,9 +654,18 @@ mod standalone_client_tests {
         request.read_from = Some(read_from(" us-east-1a ".to_string()));
 
         block_on_all(async {
-            let mut client = GlideClient::new(request, None).await.unwrap();
-            for _ in 0..3 {
-                client.send_command(&mut cmd, None).await.unwrap();
+            if via_client_new {
+                let mut client = GlideClient::new(request, None).await.unwrap();
+                for _ in 0..3 {
+                    client.send_command(&mut cmd, None).await.unwrap();
+                }
+            } else {
+                let mut client = StandaloneClient::create_client(request, None, None, None)
+                    .await
+                    .unwrap();
+                for _ in 0..3 {
+                    client.send_command(&cmd).await.unwrap();
+                }
             }
         });
 

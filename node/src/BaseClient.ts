@@ -10100,8 +10100,8 @@ export class BaseClient {
 
         // Normalize clientAz: trim surrounding whitespace and treat a blank value as
         // absent, so a whitespace-only value (e.g. "   ") fails the check below with a
-        // ConfigurationError. The core also trims the client AZ and rejects a blank one.
-        // This mirrors Java's ConnectionManager.resolveClientAz.
+        // ConfigurationError. The core also trims the client AZ and treats a blank one as
+        // missing. This mirrors Java's ConnectionManager.resolveClientAz.
         const trimmedClientAz = options.clientAz?.trim();
         const clientAz =
             trimmedClientAz === undefined || trimmedClientAz === ""

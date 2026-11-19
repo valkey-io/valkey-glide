@@ -294,29 +294,42 @@ pub enum ReadFrom {
 
 impl ReadFrom {
     /// Trims surrounding whitespace from the client availability zone, which must match a
-    /// node's `availability-zone` exactly. An AZ-affinity strategy whose zone is missing or
-    /// empty after trimming is rejected, because it has no zone to route by.
+    /// node's `availability-zone` exactly. A zone that is empty after trimming counts as
+    /// missing: `AZAffinityAllNodes` is rejected, while `AZAffinity` and
+    /// `AZAffinityReplicasAndPrimary` log a warning and fall back to `ReadFrom::PreferReplica`.
+    /// Idempotent, so every entry point can apply it.
     pub(crate) fn with_trimmed_client_az(self) -> Result<Self, String> {
-        let (client_az, with_az, strategy): (String, fn(String) -> Self, &str) = match self {
-            ReadFrom::AZAffinity(az) => (az, ReadFrom::AZAffinity, "AZAffinity"),
-            ReadFrom::AZAffinityReplicasAndPrimary(az) => (
-                az,
-                ReadFrom::AZAffinityReplicasAndPrimary,
-                "AZAffinityReplicasAndPrimary",
-            ),
-            ReadFrom::AZAffinityAllNodes(az) => {
-                (az, ReadFrom::AZAffinityAllNodes, "AZAffinityAllNodes")
-            }
-            other => return Ok(other),
+        let trimmed = |az: &str| {
+            Some(az.trim())
+                .filter(|az| !az.is_empty())
+                .map(str::to_owned)
         };
-        let trimmed = client_az.trim();
-        if trimmed.is_empty() {
-            return Err(format!(
-                "client_az must be set when read_from is {strategy}"
-            ));
-        }
-        Ok(with_az(trimmed.to_owned()))
+        Ok(match self {
+            ReadFrom::AZAffinityAllNodes(az) => {
+                ReadFrom::AZAffinityAllNodes(trimmed(&az).ok_or_else(|| {
+                    "client_az must be set when read_from is AZAffinityAllNodes".to_string()
+                })?)
+            }
+            ReadFrom::AZAffinity(az) => {
+                trimmed(&az).map_or_else(|| prefer_replica_without_az(&az), ReadFrom::AZAffinity)
+            }
+            ReadFrom::AZAffinityReplicasAndPrimary(az) => trimmed(&az).map_or_else(
+                || prefer_replica_without_az(&az),
+                ReadFrom::AZAffinityReplicasAndPrimary,
+            ),
+            other => other,
+        })
     }
+}
+
+fn prefer_replica_without_az(client_az: &str) -> ReadFrom {
+    log_warn(
+        "types",
+        format!(
+            "Failed to convert availability zone string: {client_az:?}. Falling back to `ReadFrom::PreferReplica`"
+        ),
+    );
+    ReadFrom::PreferReplica
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]

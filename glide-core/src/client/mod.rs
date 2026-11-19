@@ -3401,8 +3401,9 @@ impl Client {
         mut request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
-        // The one place the client AZ is checked: bindings reach it through the protobuf
-        // conversion, and the Rust client builds `ConnectionRequest` directly.
+        // Every binding reaches this through the protobuf conversion, and the Rust client
+        // builds `ConnectionRequest` directly. `StandaloneClient::create_client` repeats it
+        // for direct callers.
         request.read_from = request
             .read_from
             .map(ReadFrom::with_trimmed_client_az)
@@ -4477,7 +4478,7 @@ mod tests {
     use redis::Cmd;
 
     use crate::client::types::{
-        ConnectionRequest, ConnectionRetryStrategy, NodeAddress, OTelMetadata, TlsMode,
+        ConnectionRequest, ConnectionRetryStrategy, NodeAddress, OTelMetadata, ReadFrom, TlsMode,
     };
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, RequestTimeoutOption, TimeUnit,
@@ -4865,33 +4866,46 @@ mod tests {
     }
 
     #[rstest::rstest]
-    #[case(crate::connection_request::ReadFrom::AZAffinity, "AZAffinity")]
-    #[case(
-        crate::connection_request::ReadFrom::AZAffinityReplicasAndPrimary,
-        "AZAffinityReplicasAndPrimary"
-    )]
-    #[case(
-        crate::connection_request::ReadFrom::AZAffinityAllNodes,
-        "AZAffinityAllNodes"
-    )]
     #[tokio::test]
     #[cfg(feature = "proto")]
-    async fn test_new_rejects_az_affinity_without_client_az(
-        #[case] read_from: crate::connection_request::ReadFrom,
-        #[case] strategy: &str,
+    async fn test_new_rejects_az_affinity_all_nodes_without_client_az(
         #[values("", " \t\n ")] client_az: &str,
     ) {
-        let request = lazy_request_with_read_from(read_from, client_az);
+        let request = lazy_request_with_read_from(
+            crate::connection_request::ReadFrom::AZAffinityAllNodes,
+            client_az,
+        );
         let error = match Client::new(request, None).await {
-            Ok(_) => panic!("{strategy} with client_az {client_az:?} should be rejected"),
+            Ok(_) => panic!("client_az {client_az:?} should be rejected"),
             Err(error) => error,
         };
 
         assert!(error.is_configuration(), "{error:?}");
         assert_eq!(
             error.to_string(),
-            format!("configuration error: client_az must be set when read_from is {strategy}")
+            "configuration error: client_az must be set when read_from is AZAffinityAllNodes"
         );
+    }
+
+    #[rstest::rstest]
+    #[tokio::test]
+    #[cfg(feature = "proto")]
+    async fn test_new_falls_back_to_prefer_replica_without_client_az(
+        #[values(
+            crate::connection_request::ReadFrom::AZAffinity,
+            crate::connection_request::ReadFrom::AZAffinityReplicasAndPrimary
+        )]
+        read_from: crate::connection_request::ReadFrom,
+        #[values("", " \t\n ")] client_az: &str,
+    ) {
+        let client = Client::new(lazy_request_with_read_from(read_from, client_az), None)
+            .await
+            .expect("the strategy falls back instead of failing");
+
+        let ClientWrapper::Lazy(lazy) = &*client.internal_client.read().await else {
+            panic!("a lazy client keeps its configuration until the first command");
+        };
+        assert_eq!(lazy.config.read_from, Some(ReadFrom::PreferReplica));
     }
 
     #[rstest::rstest]

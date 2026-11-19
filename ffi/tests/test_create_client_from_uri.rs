@@ -842,10 +842,10 @@ fn test_create_client_from_uri_valid_formats(#[case] uri_format: &str) {
 #[rstest]
 #[case("PreferReplica", "")]
 // #[case("LowestLatency")] // TODO: Not yet implemented in glide-core
-// The core rejects the AZ-affinity strategies without a client AZ.
-#[case("AZAffinity", r#", "client_az": "us-east-1a""#)]
-#[case("AZAffinityReplicasAndPrimary", r#", "client_az": "us-east-1a""#)]
+#[case("AZAffinity", "")]
+#[case("AZAffinityReplicasAndPrimary", "")]
 #[case("AllNodes", "")]
+// The core rejects AZAffinityAllNodes without a client AZ.
 #[case("AZAffinityAllNodes", r#", "client_az": "us-east-1a""#)]
 fn test_create_client_from_uri_all_read_from_values(
     #[case] read_from: &str,

@@ -731,14 +731,19 @@ public class ConnectionManager {
 
     /**
      * Rejects a strategy whose {@link glide.api.models.configuration.ReadFrom#requiresClientAz()} is
-     * true, the AZ-affinity strategies, when it has no {@code clientAZ}. The core rejects the same
-     * configuration; checking here first keeps the error a {@code ConfigurationError}.
+     * true, today only {@code AZ_AFFINITY_ALL_NODES}, when it has no {@code clientAZ}.
+     *
+     * <p>{@code AZ_AFFINITY_ALL_NODES} has thrown since it was added, so no client depends on it
+     * working without an AZ. {@code AZ_AFFINITY} and {@code AZ_AFFINITY_REPLICAS_AND_PRIMARY} are
+     * accepted without one: the core logs a warning and downgrades them to {@code PreferReplica}, as
+     * in 2.5.2 and earlier, and rejecting them would break existing clients.
      *
      * <p>Called synchronously from {@code BaseClient.createClient} and from {@code ClientPool.create}
      * ahead of its connectivity probe, so callers see a direct throw rather than an {@code
      * ExecutionException} or a probe failure.
      *
-     * @throws ConfigurationError if an AZ-affinity strategy is selected without a {@code clientAZ}.
+     * @throws ConfigurationError if {@code AZ_AFFINITY_ALL_NODES} is selected without a {@code
+     *     clientAZ}.
      */
     public static void validateClientAz(BaseClientConfiguration configuration) {
         glide.api.models.configuration.ReadFrom readFrom = configuration.getReadFrom();
@@ -751,9 +756,9 @@ public class ConnectionManager {
      * The {@code clientAZ} as it should reach the core: trimmed, or null when absent or blank.
      *
      * <p>The core also trims the client AZ before matching it exactly against each node's {@code
-     * availability-zone}, and rejects a blank one. Trimming here as well lets {@link
+     * availability-zone}, and treats a blank one as missing. Trimming here as well lets {@link
      * #validateClientAz} treat a whitespace-only value (easily produced by {@code getenv} or a file
-     * read) as missing and throw a {@code ConfigurationError} before any connection is attempted.
+     * read) as missing too.
      *
      * <p>The shared request builder normalizes through here so no caller can forward a raw value.
      */
