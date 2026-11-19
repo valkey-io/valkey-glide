@@ -1043,8 +1043,8 @@ mod cluster_client_tests {
             };
             let test_basics = setup_test_basics_internal(config.clone()).await;
             let mut client = test_basics.client;
-            // Connected before blocking, since busy servers refuse handshakes. They serve
-            // nobody until `busy-reply-threshold` (5s), hence the longer timeout.
+            // Connect before blocking: a busy server completes no handshake, and it answers
+            // `SCRIPT KILL` only after `busy-reply-threshold` (5 s), hence the 10 s timeout.
             let addresses = test_basics.cluster.as_ref().unwrap().get_server_addresses();
             let kill_config = TestConfiguration {
                 request_timeout: Some(10_000),

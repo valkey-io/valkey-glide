@@ -2100,8 +2100,8 @@ impl Client {
         self.reconcile_iam_before_dispatch().await?;
         let client = self.get_or_initialize_client().await?;
 
-        // The SCANs underneath carry no response timeout of their own, and try_scan
-        // retries without limit, so this is the only bound on the call.
+        // The SCANs have no response timeout and try_scan retries without limit, so
+        // this is the only bound on the call.
         run_with_timeout(Some(self.request_timeout), async move {
             match client {
                 ClientWrapper::Standalone(_) => {
@@ -2109,16 +2109,15 @@ impl Client {
                 }
                 ClientWrapper::Cluster { mut client, .. } => {
                     let (cursor, keys) = client
-                        .cluster_scan(scan_state_cursor_clone, cluster_scan_args_clone) // Use clones
+                        .cluster_scan(scan_state_cursor_clone, cluster_scan_args_clone)
                         .await?;
                     let cluster_cursor_id = if cursor.is_finished() {
-                        Value::BulkString(FINISHED_SCAN_CURSOR.into()) // Use constant
+                        Value::BulkString(FINISHED_SCAN_CURSOR.into())
                     } else {
                         Value::BulkString(insert_cluster_scan_cursor(cursor).into())
                     };
                     Ok(Value::Array(vec![cluster_cursor_id, Value::Array(keys)]))
                 }
-                // Lazy case is now handled by the initial check
                 ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
             }
         })

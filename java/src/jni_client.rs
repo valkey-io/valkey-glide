@@ -510,9 +510,8 @@ fn process_callback_job_with_env(
     }
 }
 
-/// Wraps `err` as a `ClientError`, except a timeout, which must pass through as it is:
-/// `is_timeout` reads the inner representation, so a rebuilt timeout reaches Java as
-/// `RequestException`. Other errors stay wrapped because a `Disconnect` closes the Java client.
+/// Wraps `err` as a `ClientError`, so a connection error doesn't close the Java client.
+/// A timeout passes through unchanged, since rebuilding it would lose `is_timeout`.
 pub(crate) fn client_error_unless_timeout(err: ServerError, context: &'static str) -> ServerError {
     if err.is_timeout() {
         err
