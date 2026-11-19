@@ -868,6 +868,11 @@ struct WatchdogShared {
     /// and never sleeps past it. A registration whose deadline is earlier lowers it and unparks
     /// the thread, so a new short deadline is never served late, while registrations with later
     /// deadlines (the common case) neither write it nor wake the thread.
+    ///
+    /// The low bit tells who wrote the value. The thread stores odd values (a promise: it will
+    /// look by then). Registrants lower it to even values (a request whose unpark may still be
+    /// on its way: the registrant can be descheduled between its `fetch_min` and its unpark).
+    /// A registrant may rely only on an odd value; on an even one it unparks the thread itself.
     next_look: AtomicU64,
     /// Set when the last handle is dropped, or by the thread itself on exit.
     shutdown: AtomicBool,
@@ -881,6 +886,11 @@ struct WatchdogShared {
     /// deadline stops right after its drain (`HOOK_HOLDING`) until the test sets `HOOK_RELEASED`.
     #[cfg(test)]
     hold_after_drain: AtomicU8,
+    /// Test hook: when `HOOK_ARMED`, the first registrant that lowers `next_look` stops right
+    /// before its unpark (`HOOK_HOLDING`), as if descheduled there, until the test sets
+    /// `HOOK_RELEASED`.
+    #[cfg(test)]
+    hold_before_unpark: AtomicU8,
 }
 
 #[cfg(test)]
@@ -894,6 +904,28 @@ impl WatchdogShared {
     fn unpark(&self) {
         if let Some(t) = self.thread.get() {
             t.unpark();
+        }
+    }
+
+    /// See `hold_before_unpark`.
+    #[cfg(test)]
+    fn test_hold_before_unpark(&self) {
+        let hook = &self.hold_before_unpark;
+        if hook
+            .compare_exchange(
+                HOOK_ARMED,
+                HOOK_HOLDING,
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            )
+            .is_ok()
+        {
+            let held = Instant::now();
+            while hook.load(Ordering::Acquire) != HOOK_RELEASED
+                && held.elapsed() < Duration::from_secs(5)
+            {
+                std::thread::yield_now();
+            }
         }
     }
 }
@@ -1114,6 +1146,8 @@ impl TimeoutWatchdog {
             panic_in_drain: AtomicBool::new(false),
             #[cfg(test)]
             hold_after_drain: AtomicU8::new(0),
+            #[cfg(test)]
+            hold_before_unpark: AtomicU8::new(0),
         });
         let (pending, writer) = pending_snapshot::new();
         let watchdog = Self {
@@ -1197,18 +1231,30 @@ impl TimeoutWatchdog {
         // Why this cannot miss: the thread stores `next_look` before it takes each shard lock to
         // drain. If its drain of our shard came after our push, it sees the entry. Otherwise
         // its store happens-before our load (store, its unlock, our lock), so we read that value
-        // or a later one. A later value is either the thread's own next store (followed by
-        // another drain) or a lower value from another registrant that unparked the thread.
-        // Unpark tokens are sticky, so an unpark before the thread parks is not lost either.
+        // or a later one. A later odd value is the thread's own next store (followed by another
+        // drain). A later even value comes from another registrant, which may not have unparked
+        // the thread yet (it can be descheduled right after its `fetch_min`), so we unpark the
+        // thread ourselves instead of relying on it. Unpark tokens are sticky, so an unpark
+        // before the thread parks is not lost either.
         let need_by = if first_in_shard {
             deadline.min(submitted_at + DRAIN_INTERVAL)
         } else {
             deadline
         };
-        let at = self.nanos_since_epoch(need_by);
-        if at < self.shared.next_look.load(Ordering::Relaxed)
-            && at < self.shared.next_look.fetch_min(at, Ordering::Relaxed)
-        {
+        // Registrants write even values (see `WatchdogShared::next_look`).
+        let at = self.nanos_since_epoch(need_by) & !1;
+        let mut seen = self.shared.next_look.load(Ordering::Relaxed);
+        if at < seen {
+            seen = self.shared.next_look.fetch_min(at, Ordering::Relaxed);
+            if at < seen {
+                #[cfg(test)]
+                self.shared.test_hold_before_unpark();
+                self.shared.unpark();
+                return rx;
+            }
+        }
+        if seen & 1 == 0 {
+            // Another registrant's request: its unpark may still be on its way.
             self.shared.unpark();
         }
         rx
@@ -1246,9 +1292,12 @@ impl TimeoutWatchdog {
             if busy {
                 look = min_opt(look, Some(elapsed + DRAIN_INTERVAL));
             }
-            shared
-                .next_look
-                .store(look.map_or(u64::MAX, duration_nanos), Ordering::Relaxed);
+            // Odd: the thread's own promise (see `WatchdogShared::next_look`). Rounding up by
+            // 1 ns only makes registrants wake the thread slightly more eagerly.
+            shared.next_look.store(
+                look.map_or(u64::MAX, |d| duration_nanos(d) | 1),
+                Ordering::Relaxed,
+            );
 
             // Drain new registrations; entries whose command already completed are dropped
             // here without being indexed or counted.
@@ -1820,6 +1869,74 @@ mod tests {
         assert!(
             late <= N / 50,
             "{late} of {N} registrations served more than 1 tick + 5 ms late"
+        );
+    }
+
+    /// Waits until `w`'s thread is parked with nothing outstanding: `next_look` is `u64::MAX`
+    /// and it no longer wakes up.
+    fn wait_until_parked(w: &TimeoutWatchdog) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let before = w.shared.wakeups.load(Ordering::Relaxed);
+            std::thread::sleep(Duration::from_millis(20));
+            if w.shared.next_look.load(Ordering::Relaxed) == u64::MAX
+                && w.shared.wakeups.load(Ordering::Relaxed) == before
+            {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "watchdog thread never parked idle"
+            );
+        }
+    }
+
+    /// A registrant must not rely on a wake-up another registrant has not sent yet.
+    ///
+    /// The thread is parked with nothing outstanding. A lowers `next_look` and is then held
+    /// right before its unpark (as if descheduled there). B registers a short deadline whose
+    /// look is later than A's, so B sees A's lower value. If B trusted it and skipped its own
+    /// unpark, the parked thread would serve B only once A runs again (here: never, until the
+    /// test releases A).
+    #[test]
+    fn registration_does_not_rely_on_a_pending_unpark_of_another_registrant() {
+        let watchdog = TimeoutWatchdog::start();
+        wait_until_parked(&watchdog);
+        let hook = &watchdog.shared.hold_before_unpark;
+        hook.store(HOOK_ARMED, Ordering::Release);
+        let w = watchdog.clone();
+        let a = std::thread::spawn(move || w.register(Duration::from_secs(30), Instant::now()));
+        let held = Instant::now();
+        while hook.load(Ordering::Acquire) != HOOK_HOLDING {
+            assert!(
+                held.elapsed() < Duration::from_secs(2),
+                "registrant A never reached the hook"
+            );
+            std::thread::yield_now();
+        }
+        let lowered = watchdog.shared.next_look.load(Ordering::Relaxed);
+        assert_eq!(lowered & 1, 0, "A's request must be even, got {lowered}");
+
+        let timeout = Duration::from_millis(20);
+        let start = Instant::now();
+        let mut b = watchdog.register(timeout, start);
+        let served = loop {
+            match b.try_recv() {
+                Ok(()) => break Some(start.elapsed()),
+                Err(TryRecvError::Closed) => panic!("watchdog died"),
+                Err(TryRecvError::Empty) if start.elapsed() > Duration::from_secs(1) => {
+                    break None;
+                }
+                Err(TryRecvError::Empty) => std::thread::sleep(Duration::from_micros(200)),
+            }
+        };
+        hook.store(HOOK_RELEASED, Ordering::Release);
+        drop(a.join().unwrap());
+        let served = served.expect("B was served only after A's unpark (lost wake-up)");
+        assert!(served >= timeout, "early: {served:?}");
+        assert!(
+            served < timeout + WATCHDOG_TICK + Duration::from_millis(50),
+            "B served {served:?} after registering"
         );
     }
 
