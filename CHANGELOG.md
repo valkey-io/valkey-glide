@@ -2,11 +2,27 @@
 
 ## Pending 2.7
 
+### Features
+
+* Python: Add CPython 3.15 wheels for the async and sync clients ([#7321](https://github.com/valkey-io/valkey-glide/issues/7321))
+
 ### Fixes
 
+* Core: keep timeout watchdog pending counts isolated from retired workers and losing singleton initialization candidates ([#7762](https://github.com/valkey-io/valkey-glide/pull/7762))
+* Core: prevent missed refresh completion notifications ([#7766](https://github.com/valkey-io/valkey-glide/pull/7766))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
 * Core/FFI: create clients on a runtime worker so the connect does not use the caller's stack ([#7644](https://github.com/valkey-io/valkey-glide/pull/7644))
 * Go: strip LLVM bitcode from the prebuilt `libglide_ffi.a` so Go 1.26.11+ / 1.27.4+ no longer reject it with `disallowed LTO section` ([#7739](https://github.com/valkey-io/valkey-glide/pull/7739))
+* Rust: `telemetry::init` rejects a configuration with no exporter ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
+* Rust: `telemetry::init` runs the HTTP and gRPC exporters on GLIDE's runtime ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
+
+### Breaking Changes
+
+* Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
+
+### Breaking Changes
+
+* Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 
 ## 2.6
 
@@ -34,6 +50,7 @@
 
 * Core, Go, Java, Node, Python: A `ClientPool` call no longer gives up when another thread holds the pool lock; it waits for the lock instead. Go and Python pool metrics read from inside a client callback no longer come back as zeros, Java's `acquire` no longer backs off and retries while an idle client exists, Go, Python and Java `close()` have finished tearing the pool down when they return, and a command's activity refresh is no longer skipped, so the abandon monitor no longer sees a stale timer for a client in use ([#7507](https://github.com/valkey-io/valkey-glide/issues/7507))
 * Core, Go, Java, Node, Python: Releasing a scope has finished when the release call returns, also when another thread holds the scope pool lock at that moment; before, the release was deferred to a background task and the next acquire could find the connection still borrowed ([#7514](https://github.com/valkey-io/valkey-glide/issues/7514))
+* Rust: Remove `chrono` dependency for [RUSTSEC-2026-0543](https://rustsec.org/advisories/RUSTSEC-2026-0543) ([#7750](https://github.com/valkey-io/valkey-glide/pull/7750)).
 * Java: Jedis compatibility `JedisPool` (4.x and 5.x) now restores its configured database before lending a connection, so a borrower no longer inherits a previous borrower's `select` ([#7604](https://github.com/valkey-io/valkey-glide/issues/7604))
 * Java: Publish the classifier-less `valkey-glide-jedis-compat-shared` JAR. The `valkey-glide-jedis-compatibility` and `valkey-glide-jedis-4-compatibility` POMs depend on it, and since 2.6.0-rc1 Maven failed to resolve them with `Could not find artifact io.valkey:valkey-glide-jedis-compat-shared` ([#7603](https://github.com/valkey-io/valkey-glide/issues/7603))
 * Node: Populate actual `lib-ver` instead of `unknown` in `CLIENT INFO` responses ([#7616](https://github.com/valkey-io/valkey-glide/pull/7616))

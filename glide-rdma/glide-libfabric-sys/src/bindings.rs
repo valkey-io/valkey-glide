@@ -40,7 +40,7 @@ pub const FI_EINTR: u32 = 4;
 pub const FI_EIO: u32 = 5;
 pub const FI_E2BIG: u32 = 7;
 pub const FI_EBADF: u32 = 9;
-pub const FI_EAGAIN: u32 = 35;
+pub const FI_EAGAIN: u32 = 11;
 pub const FI_ENOMEM: u32 = 12;
 pub const FI_EACCES: u32 = 13;
 pub const FI_EFAULT: u32 = 14;
@@ -49,32 +49,34 @@ pub const FI_ENODEV: u32 = 19;
 pub const FI_EINVAL: u32 = 22;
 pub const FI_EMFILE: u32 = 24;
 pub const FI_ENOSPC: u32 = 28;
-pub const FI_ENOSYS: u32 = 78;
-pub const FI_EWOULDBLOCK: u32 = 35;
-pub const FI_ENOMSG: u32 = 91;
-pub const FI_ENODATA: u32 = 96;
-pub const FI_EPROTO: u32 = 100;
-pub const FI_EOVERFLOW: u32 = 84;
-pub const FI_EMSGSIZE: u32 = 40;
-pub const FI_ENOPROTOOPT: u32 = 42;
-pub const FI_EOPNOTSUPP: u32 = 102;
-pub const FI_EADDRINUSE: u32 = 48;
-pub const FI_EADDRNOTAVAIL: u32 = 49;
-pub const FI_ENETDOWN: u32 = 50;
-pub const FI_ENETUNREACH: u32 = 51;
-pub const FI_ECONNABORTED: u32 = 53;
-pub const FI_ECONNRESET: u32 = 54;
-pub const FI_ENOBUFS: u32 = 55;
-pub const FI_EISCONN: u32 = 56;
-pub const FI_ENOTCONN: u32 = 57;
-pub const FI_ESHUTDOWN: u32 = 58;
-pub const FI_ETIMEDOUT: u32 = 60;
-pub const FI_ECONNREFUSED: u32 = 61;
-pub const FI_EHOSTDOWN: u32 = 64;
-pub const FI_EHOSTUNREACH: u32 = 65;
-pub const FI_EALREADY: u32 = 37;
-pub const FI_EINPROGRESS: u32 = 36;
-pub const FI_ECANCELED: u32 = 89;
+pub const FI_ENOSYS: u32 = 38;
+pub const FI_EWOULDBLOCK: u32 = 11;
+pub const FI_ENOMSG: u32 = 42;
+pub const FI_ENODATA: u32 = 61;
+pub const FI_EPROTO: u32 = 71;
+pub const FI_EOVERFLOW: u32 = 75;
+pub const FI_EMSGSIZE: u32 = 90;
+pub const FI_ENOPROTOOPT: u32 = 92;
+pub const FI_EOPNOTSUPP: u32 = 95;
+pub const FI_EADDRINUSE: u32 = 98;
+pub const FI_EADDRNOTAVAIL: u32 = 99;
+pub const FI_ENETDOWN: u32 = 100;
+pub const FI_ENETUNREACH: u32 = 101;
+pub const FI_ECONNABORTED: u32 = 103;
+pub const FI_ECONNRESET: u32 = 104;
+pub const FI_ENOBUFS: u32 = 105;
+pub const FI_EISCONN: u32 = 106;
+pub const FI_ENOTCONN: u32 = 107;
+pub const FI_ESHUTDOWN: u32 = 108;
+pub const FI_ETIMEDOUT: u32 = 110;
+pub const FI_ECONNREFUSED: u32 = 111;
+pub const FI_EHOSTDOWN: u32 = 112;
+pub const FI_EHOSTUNREACH: u32 = 113;
+pub const FI_EALREADY: u32 = 114;
+pub const FI_EINPROGRESS: u32 = 115;
+pub const FI_EREMOTEIO: u32 = 121;
+pub const FI_ECANCELED: u32 = 125;
+pub const FI_EKEYREJECTED: u32 = 129;
 pub const FI_ERRNO_OFFSET: u32 = 256;
 pub const FI_MAJOR_VERSION: u32 = 2;
 pub const FI_MINOR_VERSION: u32 = 4;
@@ -195,22 +197,39 @@ pub const FI_PROV_SPECIFIC_EFA: u32 = 251265024;
 pub const FI_PROV_SPECIFIC_TCP: u32 = 130744320;
 pub const FI_LOG_PROV_FILTERED: u32 = 1;
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct _opaque_pthread_cond_t {
-    pub __sig: ::std::os::raw::c_long,
-    pub __opaque: [::std::os::raw::c_char; 40usize],
+#[derive(Copy, Clone)]
+pub union __atomic_wide_counter {
+    pub __value64: ::std::os::raw::c_ulonglong,
+    pub __value32: __atomic_wide_counter__bindgen_ty_1,
+}
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct __atomic_wide_counter__bindgen_ty_1 {
+    pub __low: ::std::os::raw::c_uint,
+    pub __high: ::std::os::raw::c_uint,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of _opaque_pthread_cond_t"][::std::mem::size_of::<_opaque_pthread_cond_t>() - 48usize];
-    ["Alignment of _opaque_pthread_cond_t"]
-        [::std::mem::align_of::<_opaque_pthread_cond_t>() - 8usize];
-    ["Offset of field: _opaque_pthread_cond_t::__sig"]
-        [::std::mem::offset_of!(_opaque_pthread_cond_t, __sig) - 0usize];
-    ["Offset of field: _opaque_pthread_cond_t::__opaque"]
-        [::std::mem::offset_of!(_opaque_pthread_cond_t, __opaque) - 8usize];
+    ["Size of __atomic_wide_counter__bindgen_ty_1"]
+        [::std::mem::size_of::<__atomic_wide_counter__bindgen_ty_1>() - 8usize];
+    ["Alignment of __atomic_wide_counter__bindgen_ty_1"]
+        [::std::mem::align_of::<__atomic_wide_counter__bindgen_ty_1>() - 4usize];
+    ["Offset of field: __atomic_wide_counter__bindgen_ty_1::__low"]
+        [::std::mem::offset_of!(__atomic_wide_counter__bindgen_ty_1, __low) - 0usize];
+    ["Offset of field: __atomic_wide_counter__bindgen_ty_1::__high"]
+        [::std::mem::offset_of!(__atomic_wide_counter__bindgen_ty_1, __high) - 4usize];
 };
-impl Default for _opaque_pthread_cond_t {
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of __atomic_wide_counter"][::std::mem::size_of::<__atomic_wide_counter>() - 8usize];
+    ["Alignment of __atomic_wide_counter"]
+        [::std::mem::align_of::<__atomic_wide_counter>() - 8usize];
+    ["Offset of field: __atomic_wide_counter::__value64"]
+        [::std::mem::offset_of!(__atomic_wide_counter, __value64) - 0usize];
+    ["Offset of field: __atomic_wide_counter::__value32"]
+        [::std::mem::offset_of!(__atomic_wide_counter, __value32) - 0usize];
+};
+impl Default for __atomic_wide_counter {
     fn default() -> Self {
         let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
         unsafe {
@@ -221,21 +240,21 @@ impl Default for _opaque_pthread_cond_t {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct _opaque_pthread_mutex_t {
-    pub __sig: ::std::os::raw::c_long,
-    pub __opaque: [::std::os::raw::c_char; 56usize],
+pub struct __pthread_internal_list {
+    pub __prev: *mut __pthread_internal_list,
+    pub __next: *mut __pthread_internal_list,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of _opaque_pthread_mutex_t"][::std::mem::size_of::<_opaque_pthread_mutex_t>() - 64usize];
-    ["Alignment of _opaque_pthread_mutex_t"]
-        [::std::mem::align_of::<_opaque_pthread_mutex_t>() - 8usize];
-    ["Offset of field: _opaque_pthread_mutex_t::__sig"]
-        [::std::mem::offset_of!(_opaque_pthread_mutex_t, __sig) - 0usize];
-    ["Offset of field: _opaque_pthread_mutex_t::__opaque"]
-        [::std::mem::offset_of!(_opaque_pthread_mutex_t, __opaque) - 8usize];
+    ["Size of __pthread_internal_list"][::std::mem::size_of::<__pthread_internal_list>() - 16usize];
+    ["Alignment of __pthread_internal_list"]
+        [::std::mem::align_of::<__pthread_internal_list>() - 8usize];
+    ["Offset of field: __pthread_internal_list::__prev"]
+        [::std::mem::offset_of!(__pthread_internal_list, __prev) - 0usize];
+    ["Offset of field: __pthread_internal_list::__next"]
+        [::std::mem::offset_of!(__pthread_internal_list, __next) - 8usize];
 };
-impl Default for _opaque_pthread_mutex_t {
+impl Default for __pthread_internal_list {
     fn default() -> Self {
         let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
         unsafe {
@@ -244,8 +263,88 @@ impl Default for _opaque_pthread_mutex_t {
         }
     }
 }
-pub type __darwin_pthread_cond_t = _opaque_pthread_cond_t;
-pub type __darwin_pthread_mutex_t = _opaque_pthread_mutex_t;
+pub type __pthread_list_t = __pthread_internal_list;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct __pthread_mutex_s {
+    pub __lock: ::std::os::raw::c_int,
+    pub __count: ::std::os::raw::c_uint,
+    pub __owner: ::std::os::raw::c_int,
+    pub __nusers: ::std::os::raw::c_uint,
+    pub __kind: ::std::os::raw::c_int,
+    pub __spins: ::std::os::raw::c_short,
+    pub __elision: ::std::os::raw::c_short,
+    pub __list: __pthread_list_t,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of __pthread_mutex_s"][::std::mem::size_of::<__pthread_mutex_s>() - 40usize];
+    ["Alignment of __pthread_mutex_s"][::std::mem::align_of::<__pthread_mutex_s>() - 8usize];
+    ["Offset of field: __pthread_mutex_s::__lock"]
+        [::std::mem::offset_of!(__pthread_mutex_s, __lock) - 0usize];
+    ["Offset of field: __pthread_mutex_s::__count"]
+        [::std::mem::offset_of!(__pthread_mutex_s, __count) - 4usize];
+    ["Offset of field: __pthread_mutex_s::__owner"]
+        [::std::mem::offset_of!(__pthread_mutex_s, __owner) - 8usize];
+    ["Offset of field: __pthread_mutex_s::__nusers"]
+        [::std::mem::offset_of!(__pthread_mutex_s, __nusers) - 12usize];
+    ["Offset of field: __pthread_mutex_s::__kind"]
+        [::std::mem::offset_of!(__pthread_mutex_s, __kind) - 16usize];
+    ["Offset of field: __pthread_mutex_s::__spins"]
+        [::std::mem::offset_of!(__pthread_mutex_s, __spins) - 20usize];
+    ["Offset of field: __pthread_mutex_s::__elision"]
+        [::std::mem::offset_of!(__pthread_mutex_s, __elision) - 22usize];
+    ["Offset of field: __pthread_mutex_s::__list"]
+        [::std::mem::offset_of!(__pthread_mutex_s, __list) - 24usize];
+};
+impl Default for __pthread_mutex_s {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct __pthread_cond_s {
+    pub __wseq: __atomic_wide_counter,
+    pub __g1_start: __atomic_wide_counter,
+    pub __g_refs: [::std::os::raw::c_uint; 2usize],
+    pub __g_size: [::std::os::raw::c_uint; 2usize],
+    pub __g1_orig_size: ::std::os::raw::c_uint,
+    pub __wrefs: ::std::os::raw::c_uint,
+    pub __g_signals: [::std::os::raw::c_uint; 2usize],
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of __pthread_cond_s"][::std::mem::size_of::<__pthread_cond_s>() - 48usize];
+    ["Alignment of __pthread_cond_s"][::std::mem::align_of::<__pthread_cond_s>() - 8usize];
+    ["Offset of field: __pthread_cond_s::__wseq"]
+        [::std::mem::offset_of!(__pthread_cond_s, __wseq) - 0usize];
+    ["Offset of field: __pthread_cond_s::__g1_start"]
+        [::std::mem::offset_of!(__pthread_cond_s, __g1_start) - 8usize];
+    ["Offset of field: __pthread_cond_s::__g_refs"]
+        [::std::mem::offset_of!(__pthread_cond_s, __g_refs) - 16usize];
+    ["Offset of field: __pthread_cond_s::__g_size"]
+        [::std::mem::offset_of!(__pthread_cond_s, __g_size) - 24usize];
+    ["Offset of field: __pthread_cond_s::__g1_orig_size"]
+        [::std::mem::offset_of!(__pthread_cond_s, __g1_orig_size) - 32usize];
+    ["Offset of field: __pthread_cond_s::__wrefs"]
+        [::std::mem::offset_of!(__pthread_cond_s, __wrefs) - 36usize];
+    ["Offset of field: __pthread_cond_s::__g_signals"]
+        [::std::mem::offset_of!(__pthread_cond_s, __g_signals) - 40usize];
+};
+impl Default for __pthread_cond_s {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
 pub const FI_EOTHER: _bindgen_ty_1 = 256;
 pub const FI_ETOOSMALL: _bindgen_ty_1 = 257;
 pub const FI_EOPBADSTATE: _bindgen_ty_1 = 258;
@@ -265,7 +364,7 @@ pub const FI_EFIREWALLADDR: _bindgen_ty_1 = 271;
 pub const FI_ERRNO_MAX: _bindgen_ty_1 = 272;
 pub type _bindgen_ty_1 = ::std::os::raw::c_uint;
 unsafe extern "C" {
-    #[link_name = "\u{1}_glide_fi_strerror"]
+    #[link_name = "\u{1}glide_fi_strerror"]
     pub fn fi_strerror(errnum: ::std::os::raw::c_int) -> *const ::std::os::raw::c_char;
 }
 pub const FI_NAME_MAX: _bindgen_ty_2 = 64;
@@ -273,7 +372,7 @@ pub const FI_ATOMIC_OP_LAST: _bindgen_ty_2 = 19;
 pub const FI_DATATYPE_LAST: _bindgen_ty_2 = 14;
 pub type _bindgen_ty_2 = ::std::os::raw::c_uint;
 unsafe extern "C" {
-    #[link_name = "\u{1}_glide_fi_version"]
+    #[link_name = "\u{1}glide_fi_version"]
     pub fn fi_version() -> u32;
 }
 pub type fid_t = *mut fid;
@@ -978,7 +1077,7 @@ impl Default for fid {
     }
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_glide_fi_getinfo"]
+    #[link_name = "\u{1}glide_fi_getinfo"]
     pub fn fi_getinfo(
         version: u32,
         node: *const ::std::os::raw::c_char,
@@ -989,11 +1088,11 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_glide_fi_freeinfo"]
+    #[link_name = "\u{1}glide_fi_freeinfo"]
     pub fn fi_freeinfo(info: *mut fi_info);
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_glide_fi_dupinfo"]
+    #[link_name = "\u{1}glide_fi_dupinfo"]
     pub fn fi_dupinfo(info: *const fi_info) -> *mut fi_info;
 }
 #[repr(C)]
@@ -1100,7 +1199,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_glide_fi_fabric"]
+    #[link_name = "\u{1}glide_fi_fabric"]
     pub fn fi_fabric(
         attr: *mut fi_fabric_attr,
         fabric: *mut *mut fid_fabric,
@@ -1108,7 +1207,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_glide_fi_open"]
+    #[link_name = "\u{1}glide_fi_open"]
     pub fn fi_open(
         version: u32,
         name: *const ::std::os::raw::c_char,
@@ -1654,14 +1753,14 @@ impl Default for fi_eq_attr {
         }
     }
 }
-pub const FI_NOTIFY: _bindgen_ty_10 = 0;
-pub const FI_CONNREQ: _bindgen_ty_10 = 1;
-pub const FI_CONNECTED: _bindgen_ty_10 = 2;
-pub const FI_SHUTDOWN: _bindgen_ty_10 = 3;
-pub const FI_MR_COMPLETE: _bindgen_ty_10 = 4;
-pub const FI_AV_COMPLETE: _bindgen_ty_10 = 5;
-pub const FI_JOIN_COMPLETE: _bindgen_ty_10 = 6;
-pub type _bindgen_ty_10 = ::std::os::raw::c_uint;
+pub const FI_NOTIFY: _bindgen_ty_19 = 0;
+pub const FI_CONNREQ: _bindgen_ty_19 = 1;
+pub const FI_CONNECTED: _bindgen_ty_19 = 2;
+pub const FI_SHUTDOWN: _bindgen_ty_19 = 3;
+pub const FI_MR_COMPLETE: _bindgen_ty_19 = 4;
+pub const FI_AV_COMPLETE: _bindgen_ty_19 = 5;
+pub const FI_JOIN_COMPLETE: _bindgen_ty_19 = 6;
+pub type _bindgen_ty_19 = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct fi_eq_entry {
@@ -2976,35 +3075,35 @@ impl Default for fi_msg {
         }
     }
 }
-pub const FI_OPT_ENDPOINT: _bindgen_ty_11 = 0;
-pub type _bindgen_ty_11 = ::std::os::raw::c_uint;
-pub const FI_OPT_MIN_MULTI_RECV: _bindgen_ty_12 = 0;
-pub const FI_OPT_CM_DATA_SIZE: _bindgen_ty_12 = 1;
-pub const FI_OPT_BUFFERED_MIN: _bindgen_ty_12 = 2;
-pub const FI_OPT_BUFFERED_LIMIT: _bindgen_ty_12 = 3;
-pub const FI_OPT_SEND_BUF_SIZE: _bindgen_ty_12 = 4;
-pub const FI_OPT_RECV_BUF_SIZE: _bindgen_ty_12 = 5;
-pub const FI_OPT_TX_SIZE: _bindgen_ty_12 = 6;
-pub const FI_OPT_RX_SIZE: _bindgen_ty_12 = 7;
-pub const FI_OPT_FI_HMEM_P2P: _bindgen_ty_12 = 8;
-pub const FI_OPT_XPU_TRIGGER: _bindgen_ty_12 = 9;
-pub const FI_OPT_CUDA_API_PERMITTED: _bindgen_ty_12 = 10;
-pub const FI_OPT_SHARED_MEMORY_PERMITTED: _bindgen_ty_12 = 11;
-pub const FI_OPT_MAX_MSG_SIZE: _bindgen_ty_12 = 12;
-pub const FI_OPT_MAX_TAGGED_SIZE: _bindgen_ty_12 = 13;
-pub const FI_OPT_MAX_RMA_SIZE: _bindgen_ty_12 = 14;
-pub const FI_OPT_MAX_ATOMIC_SIZE: _bindgen_ty_12 = 15;
-pub const FI_OPT_INJECT_MSG_SIZE: _bindgen_ty_12 = 16;
-pub const FI_OPT_INJECT_TAGGED_SIZE: _bindgen_ty_12 = 17;
-pub const FI_OPT_INJECT_RMA_SIZE: _bindgen_ty_12 = 18;
-pub const FI_OPT_INJECT_ATOMIC_SIZE: _bindgen_ty_12 = 19;
-pub const FI_OPT_FIREWALL_ADDR: _bindgen_ty_12 = 20;
-pub type _bindgen_ty_12 = ::std::os::raw::c_uint;
-pub const FI_HMEM_P2P_ENABLED: _bindgen_ty_13 = 0;
-pub const FI_HMEM_P2P_REQUIRED: _bindgen_ty_13 = 1;
-pub const FI_HMEM_P2P_PREFERRED: _bindgen_ty_13 = 2;
-pub const FI_HMEM_P2P_DISABLED: _bindgen_ty_13 = 3;
-pub type _bindgen_ty_13 = ::std::os::raw::c_uint;
+pub const FI_OPT_ENDPOINT: _bindgen_ty_20 = 0;
+pub type _bindgen_ty_20 = ::std::os::raw::c_uint;
+pub const FI_OPT_MIN_MULTI_RECV: _bindgen_ty_21 = 0;
+pub const FI_OPT_CM_DATA_SIZE: _bindgen_ty_21 = 1;
+pub const FI_OPT_BUFFERED_MIN: _bindgen_ty_21 = 2;
+pub const FI_OPT_BUFFERED_LIMIT: _bindgen_ty_21 = 3;
+pub const FI_OPT_SEND_BUF_SIZE: _bindgen_ty_21 = 4;
+pub const FI_OPT_RECV_BUF_SIZE: _bindgen_ty_21 = 5;
+pub const FI_OPT_TX_SIZE: _bindgen_ty_21 = 6;
+pub const FI_OPT_RX_SIZE: _bindgen_ty_21 = 7;
+pub const FI_OPT_FI_HMEM_P2P: _bindgen_ty_21 = 8;
+pub const FI_OPT_XPU_TRIGGER: _bindgen_ty_21 = 9;
+pub const FI_OPT_CUDA_API_PERMITTED: _bindgen_ty_21 = 10;
+pub const FI_OPT_SHARED_MEMORY_PERMITTED: _bindgen_ty_21 = 11;
+pub const FI_OPT_MAX_MSG_SIZE: _bindgen_ty_21 = 12;
+pub const FI_OPT_MAX_TAGGED_SIZE: _bindgen_ty_21 = 13;
+pub const FI_OPT_MAX_RMA_SIZE: _bindgen_ty_21 = 14;
+pub const FI_OPT_MAX_ATOMIC_SIZE: _bindgen_ty_21 = 15;
+pub const FI_OPT_INJECT_MSG_SIZE: _bindgen_ty_21 = 16;
+pub const FI_OPT_INJECT_TAGGED_SIZE: _bindgen_ty_21 = 17;
+pub const FI_OPT_INJECT_RMA_SIZE: _bindgen_ty_21 = 18;
+pub const FI_OPT_INJECT_ATOMIC_SIZE: _bindgen_ty_21 = 19;
+pub const FI_OPT_FIREWALL_ADDR: _bindgen_ty_21 = 20;
+pub type _bindgen_ty_21 = ::std::os::raw::c_uint;
+pub const FI_HMEM_P2P_ENABLED: _bindgen_ty_22 = 0;
+pub const FI_HMEM_P2P_REQUIRED: _bindgen_ty_22 = 1;
+pub const FI_HMEM_P2P_PREFERRED: _bindgen_ty_22 = 2;
+pub const FI_HMEM_P2P_DISABLED: _bindgen_ty_22 = 3;
+pub type _bindgen_ty_22 = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct fi_ops_ep {
@@ -4233,7 +4332,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_glide_fi_param_get"]
+    #[link_name = "\u{1}glide_fi_param_get"]
     pub fn fi_param_get(
         provider: *mut fi_provider,
         param_name: *const ::std::os::raw::c_char,
@@ -4282,16 +4381,16 @@ unsafe extern "C" {
         ...
     );
 }
-pub const FI_OPT_EFA_RNR_RETRY: _bindgen_ty_14 = -251265024;
-pub const FI_OPT_EFA_EMULATED_READ: _bindgen_ty_14 = -251265023;
-pub const FI_OPT_EFA_EMULATED_WRITE: _bindgen_ty_14 = -251265022;
-pub const FI_OPT_EFA_EMULATED_ATOMICS: _bindgen_ty_14 = -251265021;
-pub const FI_OPT_EFA_USE_DEVICE_RDMA: _bindgen_ty_14 = -251265020;
-pub const FI_OPT_EFA_SENDRECV_IN_ORDER_ALIGNED_128_BYTES: _bindgen_ty_14 = -251265019;
-pub const FI_OPT_EFA_WRITE_IN_ORDER_ALIGNED_128_BYTES: _bindgen_ty_14 = -251265018;
-pub const FI_OPT_EFA_HOMOGENEOUS_PEERS: _bindgen_ty_14 = -251265017;
-pub const FI_OPT_EFA_USE_UNSOLICITED_WRITE_RECV: _bindgen_ty_14 = -251265016;
-pub type _bindgen_ty_14 = ::std::os::raw::c_int;
+pub const FI_OPT_EFA_RNR_RETRY: _bindgen_ty_23 = -251265024;
+pub const FI_OPT_EFA_EMULATED_READ: _bindgen_ty_23 = -251265023;
+pub const FI_OPT_EFA_EMULATED_WRITE: _bindgen_ty_23 = -251265022;
+pub const FI_OPT_EFA_EMULATED_ATOMICS: _bindgen_ty_23 = -251265021;
+pub const FI_OPT_EFA_USE_DEVICE_RDMA: _bindgen_ty_23 = -251265020;
+pub const FI_OPT_EFA_SENDRECV_IN_ORDER_ALIGNED_128_BYTES: _bindgen_ty_23 = -251265019;
+pub const FI_OPT_EFA_WRITE_IN_ORDER_ALIGNED_128_BYTES: _bindgen_ty_23 = -251265018;
+pub const FI_OPT_EFA_HOMOGENEOUS_PEERS: _bindgen_ty_23 = -251265017;
+pub const FI_OPT_EFA_USE_UNSOLICITED_WRITE_RECV: _bindgen_ty_23 = -251265016;
+pub type _bindgen_ty_23 = ::std::os::raw::c_int;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct fi_fid_export {
@@ -4476,18 +4575,18 @@ impl Default for fid_logging {
         }
     }
 }
-pub const FI_VAR_UNEXP_MSG_CNT: _bindgen_ty_15 = 0;
-pub const FI_VAR_UNEXP_MSG_QUEUE: _bindgen_ty_15 = 1;
-pub const FI_VAR_MSG_QUEUE_CNT: _bindgen_ty_15 = 2;
-pub const FI_VAR_CONNECTION_CNT: _bindgen_ty_15 = 3;
-pub const FI_VAR_CONN_REQUEST: _bindgen_ty_15 = 4;
-pub const FI_VAR_CONN_ACCEPT: _bindgen_ty_15 = 5;
-pub const FI_VAR_CONN_REJECT: _bindgen_ty_15 = 6;
-pub const FI_VAR_OFI_MEM: _bindgen_ty_15 = 7;
-pub type _bindgen_ty_15 = ::std::os::raw::c_uint;
-pub const FI_EVENT_UNEXP_MSG_RECVD: _bindgen_ty_16 = 0;
-pub const FI_EVENT_UNEXP_MSG_MATCHED: _bindgen_ty_16 = 1;
-pub type _bindgen_ty_16 = ::std::os::raw::c_uint;
+pub const FI_VAR_UNEXP_MSG_CNT: _bindgen_ty_24 = 0;
+pub const FI_VAR_UNEXP_MSG_QUEUE: _bindgen_ty_24 = 1;
+pub const FI_VAR_MSG_QUEUE_CNT: _bindgen_ty_24 = 2;
+pub const FI_VAR_CONNECTION_CNT: _bindgen_ty_24 = 3;
+pub const FI_VAR_CONN_REQUEST: _bindgen_ty_24 = 4;
+pub const FI_VAR_CONN_ACCEPT: _bindgen_ty_24 = 5;
+pub const FI_VAR_CONN_REJECT: _bindgen_ty_24 = 6;
+pub const FI_VAR_OFI_MEM: _bindgen_ty_24 = 7;
+pub type _bindgen_ty_24 = ::std::os::raw::c_uint;
+pub const FI_EVENT_UNEXP_MSG_RECVD: _bindgen_ty_25 = 0;
+pub const FI_EVENT_UNEXP_MSG_MATCHED: _bindgen_ty_25 = 1;
+pub type _bindgen_ty_25 = ::std::os::raw::c_uint;
 pub const fi_profile_type_fi_primitive_type: fi_profile_type = 0;
 pub const fi_profile_type_fi_defined_type: fi_profile_type = 1;
 pub type fi_profile_type = ::std::os::raw::c_uint;
@@ -5322,7 +5421,7 @@ impl Default for fi_deferred_work {
     }
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_param_get_str"]
+    #[link_name = "\u{1}wrap_fi_param_get_str"]
     pub fn fi_param_get_str(
         provider: *mut fi_provider,
         param_name: *const ::std::os::raw::c_char,
@@ -5330,7 +5429,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_param_get_int"]
+    #[link_name = "\u{1}wrap_fi_param_get_int"]
     pub fn fi_param_get_int(
         provider: *mut fi_provider,
         param_name: *const ::std::os::raw::c_char,
@@ -5338,7 +5437,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_param_get_bool"]
+    #[link_name = "\u{1}wrap_fi_param_get_bool"]
     pub fn fi_param_get_bool(
         provider: *mut fi_provider,
         param_name: *const ::std::os::raw::c_char,
@@ -5346,7 +5445,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_param_get_size_t"]
+    #[link_name = "\u{1}wrap_fi_param_get_size_t"]
     pub fn fi_param_get_size_t(
         provider: *mut fi_provider,
         param_name: *const ::std::os::raw::c_char,
@@ -5354,15 +5453,15 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_allocinfo"]
+    #[link_name = "\u{1}wrap_fi_allocinfo"]
     pub fn fi_allocinfo() -> *mut fi_info;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_close"]
+    #[link_name = "\u{1}wrap_fi_close"]
     pub fn fi_close(fid: *mut fid) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_control"]
+    #[link_name = "\u{1}wrap_fi_control"]
     pub fn fi_control(
         fid: *mut fid,
         command: ::std::os::raw::c_int,
@@ -5370,11 +5469,11 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_alias"]
+    #[link_name = "\u{1}wrap_fi_alias"]
     pub fn fi_alias(fid: *mut fid, alias_fid: *mut *mut fid, flags: u64) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_get_val"]
+    #[link_name = "\u{1}wrap_fi_get_val"]
     pub fn fi_get_val(
         fid: *mut fid,
         name: ::std::os::raw::c_int,
@@ -5382,7 +5481,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_set_val"]
+    #[link_name = "\u{1}wrap_fi_set_val"]
     pub fn fi_set_val(
         fid: *mut fid,
         name: ::std::os::raw::c_int,
@@ -5390,7 +5489,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_open_ops"]
+    #[link_name = "\u{1}wrap_fi_open_ops"]
     pub fn fi_open_ops(
         fid: *mut fid,
         name: *const ::std::os::raw::c_char,
@@ -5400,7 +5499,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_set_ops"]
+    #[link_name = "\u{1}wrap_fi_set_ops"]
     pub fn fi_set_ops(
         fid: *mut fid,
         name: *const ::std::os::raw::c_char,
@@ -5410,7 +5509,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_passive_ep"]
+    #[link_name = "\u{1}wrap_fi_passive_ep"]
     pub fn fi_passive_ep(
         fabric: *mut fid_fabric,
         info: *mut fi_info,
@@ -5419,7 +5518,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_endpoint"]
+    #[link_name = "\u{1}wrap_fi_endpoint"]
     pub fn fi_endpoint(
         domain: *mut fid_domain,
         info: *mut fi_info,
@@ -5428,7 +5527,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_endpoint2"]
+    #[link_name = "\u{1}wrap_fi_endpoint2"]
     pub fn fi_endpoint2(
         domain: *mut fid_domain,
         info: *mut fi_info,
@@ -5438,7 +5537,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_scalable_ep"]
+    #[link_name = "\u{1}wrap_fi_scalable_ep"]
     pub fn fi_scalable_ep(
         domain: *mut fid_domain,
         info: *mut fi_info,
@@ -5447,15 +5546,15 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_ep_bind"]
+    #[link_name = "\u{1}wrap_fi_ep_bind"]
     pub fn fi_ep_bind(ep: *mut fid_ep, bfid: *mut fid, flags: u64) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_pep_bind"]
+    #[link_name = "\u{1}wrap_fi_pep_bind"]
     pub fn fi_pep_bind(pep: *mut fid_pep, bfid: *mut fid, flags: u64) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_scalable_ep_bind"]
+    #[link_name = "\u{1}wrap_fi_scalable_ep_bind"]
     pub fn fi_scalable_ep_bind(
         sep: *mut fid_ep,
         bfid: *mut fid,
@@ -5463,15 +5562,15 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_enable"]
+    #[link_name = "\u{1}wrap_fi_enable"]
     pub fn fi_enable(ep: *mut fid_ep) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cancel"]
+    #[link_name = "\u{1}wrap_fi_cancel"]
     pub fn fi_cancel(fid: fid_t, context: *mut ::std::os::raw::c_void) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_setopt"]
+    #[link_name = "\u{1}wrap_fi_setopt"]
     pub fn fi_setopt(
         fid: fid_t,
         level: ::std::os::raw::c_int,
@@ -5481,7 +5580,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_getopt"]
+    #[link_name = "\u{1}wrap_fi_getopt"]
     pub fn fi_getopt(
         fid: fid_t,
         level: ::std::os::raw::c_int,
@@ -5491,7 +5590,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_ep_alias"]
+    #[link_name = "\u{1}wrap_fi_ep_alias"]
     pub fn fi_ep_alias(
         ep: *mut fid_ep,
         alias_ep: *mut *mut fid_ep,
@@ -5499,7 +5598,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_tx_context"]
+    #[link_name = "\u{1}wrap_fi_tx_context"]
     pub fn fi_tx_context(
         ep: *mut fid_ep,
         idx: ::std::os::raw::c_int,
@@ -5509,7 +5608,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_rx_context"]
+    #[link_name = "\u{1}wrap_fi_rx_context"]
     pub fn fi_rx_context(
         ep: *mut fid_ep,
         idx: ::std::os::raw::c_int,
@@ -5519,7 +5618,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_stx_context"]
+    #[link_name = "\u{1}wrap_fi_stx_context"]
     pub fn fi_stx_context(
         domain: *mut fid_domain,
         attr: *mut fi_tx_attr,
@@ -5528,7 +5627,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_srx_context"]
+    #[link_name = "\u{1}wrap_fi_srx_context"]
     pub fn fi_srx_context(
         domain: *mut fid_domain,
         attr: *mut fi_rx_attr,
@@ -5537,7 +5636,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_recv"]
+    #[link_name = "\u{1}wrap_fi_recv"]
     pub fn fi_recv(
         ep: *mut fid_ep,
         buf: *mut ::std::os::raw::c_void,
@@ -5548,7 +5647,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_recvv"]
+    #[link_name = "\u{1}wrap_fi_recvv"]
     pub fn fi_recvv(
         ep: *mut fid_ep,
         iov: *const iovec,
@@ -5559,11 +5658,11 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_recvmsg"]
+    #[link_name = "\u{1}wrap_fi_recvmsg"]
     pub fn fi_recvmsg(ep: *mut fid_ep, msg: *const fi_msg, flags: u64) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_send"]
+    #[link_name = "\u{1}wrap_fi_send"]
     pub fn fi_send(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -5574,7 +5673,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_sendv"]
+    #[link_name = "\u{1}wrap_fi_sendv"]
     pub fn fi_sendv(
         ep: *mut fid_ep,
         iov: *const iovec,
@@ -5585,11 +5684,11 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_sendmsg"]
+    #[link_name = "\u{1}wrap_fi_sendmsg"]
     pub fn fi_sendmsg(ep: *mut fid_ep, msg: *const fi_msg, flags: u64) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_inject"]
+    #[link_name = "\u{1}wrap_fi_inject"]
     pub fn fi_inject(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -5598,7 +5697,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_senddata"]
+    #[link_name = "\u{1}wrap_fi_senddata"]
     pub fn fi_senddata(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -5610,7 +5709,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_injectdata"]
+    #[link_name = "\u{1}wrap_fi_injectdata"]
     pub fn fi_injectdata(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -5620,7 +5719,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_atomic"]
+    #[link_name = "\u{1}wrap_fi_atomic"]
     pub fn fi_atomic(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -5635,7 +5734,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_atomicv"]
+    #[link_name = "\u{1}wrap_fi_atomicv"]
     pub fn fi_atomicv(
         ep: *mut fid_ep,
         iov: *const fi_ioc,
@@ -5650,11 +5749,11 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_atomicmsg"]
+    #[link_name = "\u{1}wrap_fi_atomicmsg"]
     pub fn fi_atomicmsg(ep: *mut fid_ep, msg: *const fi_msg_atomic, flags: u64) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_inject_atomic"]
+    #[link_name = "\u{1}wrap_fi_inject_atomic"]
     pub fn fi_inject_atomic(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -5667,7 +5766,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_fetch_atomic"]
+    #[link_name = "\u{1}wrap_fi_fetch_atomic"]
     pub fn fi_fetch_atomic(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -5684,7 +5783,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_fetch_atomicv"]
+    #[link_name = "\u{1}wrap_fi_fetch_atomicv"]
     pub fn fi_fetch_atomicv(
         ep: *mut fid_ep,
         iov: *const fi_ioc,
@@ -5702,7 +5801,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_fetch_atomicmsg"]
+    #[link_name = "\u{1}wrap_fi_fetch_atomicmsg"]
     pub fn fi_fetch_atomicmsg(
         ep: *mut fid_ep,
         msg: *const fi_msg_atomic,
@@ -5713,7 +5812,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_compare_atomic"]
+    #[link_name = "\u{1}wrap_fi_compare_atomic"]
     pub fn fi_compare_atomic(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -5732,7 +5831,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_compare_atomicv"]
+    #[link_name = "\u{1}wrap_fi_compare_atomicv"]
     pub fn fi_compare_atomicv(
         ep: *mut fid_ep,
         iov: *const fi_ioc,
@@ -5753,7 +5852,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_compare_atomicmsg"]
+    #[link_name = "\u{1}wrap_fi_compare_atomicmsg"]
     pub fn fi_compare_atomicmsg(
         ep: *mut fid_ep,
         msg: *const fi_msg_atomic,
@@ -5767,7 +5866,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_atomicvalid"]
+    #[link_name = "\u{1}wrap_fi_atomicvalid"]
     pub fn fi_atomicvalid(
         ep: *mut fid_ep,
         datatype: fi_datatype,
@@ -5776,7 +5875,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_fetch_atomicvalid"]
+    #[link_name = "\u{1}wrap_fi_fetch_atomicvalid"]
     pub fn fi_fetch_atomicvalid(
         ep: *mut fid_ep,
         datatype: fi_datatype,
@@ -5785,7 +5884,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_compare_atomicvalid"]
+    #[link_name = "\u{1}wrap_fi_compare_atomicvalid"]
     pub fn fi_compare_atomicvalid(
         ep: *mut fid_ep,
         datatype: fi_datatype,
@@ -5794,7 +5893,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_query_atomic"]
+    #[link_name = "\u{1}wrap_fi_query_atomic"]
     pub fn fi_query_atomic(
         domain: *mut fid_domain,
         datatype: fi_datatype,
@@ -5804,7 +5903,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_domain"]
+    #[link_name = "\u{1}wrap_fi_domain"]
     pub fn fi_domain(
         fabric: *mut fid_fabric,
         info: *mut fi_info,
@@ -5813,7 +5912,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_domain2"]
+    #[link_name = "\u{1}wrap_fi_domain2"]
     pub fn fi_domain2(
         fabric: *mut fid_fabric,
         info: *mut fi_info,
@@ -5823,7 +5922,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_domain_bind"]
+    #[link_name = "\u{1}wrap_fi_domain_bind"]
     pub fn fi_domain_bind(
         domain: *mut fid_domain,
         fid: *mut fid,
@@ -5831,7 +5930,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cq_open"]
+    #[link_name = "\u{1}wrap_fi_cq_open"]
     pub fn fi_cq_open(
         domain: *mut fid_domain,
         attr: *mut fi_cq_attr,
@@ -5840,7 +5939,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cntr_open"]
+    #[link_name = "\u{1}wrap_fi_cntr_open"]
     pub fn fi_cntr_open(
         domain: *mut fid_domain,
         attr: *mut fi_cntr_attr,
@@ -5849,7 +5948,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_mr_reg"]
+    #[link_name = "\u{1}wrap_fi_mr_reg"]
     pub fn fi_mr_reg(
         domain: *mut fid_domain,
         buf: *const ::std::os::raw::c_void,
@@ -5863,7 +5962,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_mr_regv"]
+    #[link_name = "\u{1}wrap_fi_mr_regv"]
     pub fn fi_mr_regv(
         domain: *mut fid_domain,
         iov: *const iovec,
@@ -5877,7 +5976,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_mr_regattr"]
+    #[link_name = "\u{1}wrap_fi_mr_regattr"]
     pub fn fi_mr_regattr(
         domain: *mut fid_domain,
         attr: *const fi_mr_attr,
@@ -5886,15 +5985,15 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_mr_desc"]
+    #[link_name = "\u{1}wrap_fi_mr_desc"]
     pub fn fi_mr_desc(mr: *mut fid_mr) -> *mut ::std::os::raw::c_void;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_mr_key"]
+    #[link_name = "\u{1}wrap_fi_mr_key"]
     pub fn fi_mr_key(mr: *mut fid_mr) -> u64;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_mr_raw_attr"]
+    #[link_name = "\u{1}wrap_fi_mr_raw_attr"]
     pub fn fi_mr_raw_attr(
         mr: *mut fid_mr,
         base_addr: *mut u64,
@@ -5904,7 +6003,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_mr_map_raw"]
+    #[link_name = "\u{1}wrap_fi_mr_map_raw"]
     pub fn fi_mr_map_raw(
         domain: *mut fid_domain,
         base_addr: u64,
@@ -5915,15 +6014,15 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_mr_unmap_key"]
+    #[link_name = "\u{1}wrap_fi_mr_unmap_key"]
     pub fn fi_mr_unmap_key(domain: *mut fid_domain, key: u64) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_mr_bind"]
+    #[link_name = "\u{1}wrap_fi_mr_bind"]
     pub fn fi_mr_bind(mr: *mut fid_mr, bfid: *mut fid, flags: u64) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_mr_refresh"]
+    #[link_name = "\u{1}wrap_fi_mr_refresh"]
     pub fn fi_mr_refresh(
         mr: *mut fid_mr,
         iov: *const iovec,
@@ -5932,11 +6031,11 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_mr_enable"]
+    #[link_name = "\u{1}wrap_fi_mr_enable"]
     pub fn fi_mr_enable(mr: *mut fid_mr) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_open"]
+    #[link_name = "\u{1}wrap_fi_av_open"]
     pub fn fi_av_open(
         domain: *mut fid_domain,
         attr: *mut fi_av_attr,
@@ -5945,7 +6044,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_insert"]
+    #[link_name = "\u{1}wrap_fi_av_insert"]
     pub fn fi_av_insert(
         av: *mut fid_av,
         addr: *const ::std::os::raw::c_void,
@@ -5956,7 +6055,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_insertsvc"]
+    #[link_name = "\u{1}wrap_fi_av_insertsvc"]
     pub fn fi_av_insertsvc(
         av: *mut fid_av,
         node: *const ::std::os::raw::c_char,
@@ -5967,7 +6066,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_insertsym"]
+    #[link_name = "\u{1}wrap_fi_av_insertsym"]
     pub fn fi_av_insertsym(
         av: *mut fid_av,
         node: *const ::std::os::raw::c_char,
@@ -5980,7 +6079,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_remove"]
+    #[link_name = "\u{1}wrap_fi_av_remove"]
     pub fn fi_av_remove(
         av: *mut fid_av,
         fi_addr: *mut fi_addr_t,
@@ -5989,7 +6088,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_lookup"]
+    #[link_name = "\u{1}wrap_fi_av_lookup"]
     pub fn fi_av_lookup(
         av: *mut fid_av,
         fi_addr: fi_addr_t,
@@ -5998,7 +6097,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_straddr"]
+    #[link_name = "\u{1}wrap_fi_av_straddr"]
     pub fn fi_av_straddr(
         av: *mut fid_av,
         addr: *const ::std::os::raw::c_void,
@@ -6007,7 +6106,7 @@ unsafe extern "C" {
     ) -> *const ::std::os::raw::c_char;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_insert_auth_key"]
+    #[link_name = "\u{1}wrap_fi_av_insert_auth_key"]
     pub fn fi_av_insert_auth_key(
         av: *mut fid_av,
         auth_key: *const ::std::os::raw::c_void,
@@ -6017,7 +6116,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_lookup_auth_key"]
+    #[link_name = "\u{1}wrap_fi_av_lookup_auth_key"]
     pub fn fi_av_lookup_auth_key(
         av: *mut fid_av,
         addr: fi_addr_t,
@@ -6026,7 +6125,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_set_user_id"]
+    #[link_name = "\u{1}wrap_fi_av_set_user_id"]
     pub fn fi_av_set_user_id(
         av: *mut fid_av,
         fi_addr: fi_addr_t,
@@ -6035,7 +6134,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_rx_addr"]
+    #[link_name = "\u{1}wrap_fi_rx_addr"]
     pub fn fi_rx_addr(
         fi_addr: fi_addr_t,
         rx_index: ::std::os::raw::c_int,
@@ -6043,11 +6142,11 @@ unsafe extern "C" {
     ) -> fi_addr_t;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_group_addr"]
+    #[link_name = "\u{1}wrap_fi_group_addr"]
     pub fn fi_group_addr(fi_addr: fi_addr_t, group_id: u32) -> fi_addr_t;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_setname"]
+    #[link_name = "\u{1}wrap_fi_setname"]
     pub fn fi_setname(
         fid: fid_t,
         addr: *mut ::std::os::raw::c_void,
@@ -6055,7 +6154,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_getname"]
+    #[link_name = "\u{1}wrap_fi_getname"]
     pub fn fi_getname(
         fid: fid_t,
         addr: *mut ::std::os::raw::c_void,
@@ -6063,7 +6162,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_getpeer"]
+    #[link_name = "\u{1}wrap_fi_getpeer"]
     pub fn fi_getpeer(
         ep: *mut fid_ep,
         addr: *mut ::std::os::raw::c_void,
@@ -6071,11 +6170,11 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_listen"]
+    #[link_name = "\u{1}wrap_fi_listen"]
     pub fn fi_listen(pep: *mut fid_pep) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_connect"]
+    #[link_name = "\u{1}wrap_fi_connect"]
     pub fn fi_connect(
         ep: *mut fid_ep,
         addr: *const ::std::os::raw::c_void,
@@ -6084,7 +6183,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_accept"]
+    #[link_name = "\u{1}wrap_fi_accept"]
     pub fn fi_accept(
         ep: *mut fid_ep,
         param: *const ::std::os::raw::c_void,
@@ -6092,7 +6191,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_reject"]
+    #[link_name = "\u{1}wrap_fi_reject"]
     pub fn fi_reject(
         pep: *mut fid_pep,
         handle: fid_t,
@@ -6101,11 +6200,11 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_shutdown"]
+    #[link_name = "\u{1}wrap_fi_shutdown"]
     pub fn fi_shutdown(ep: *mut fid_ep, flags: u64) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_join"]
+    #[link_name = "\u{1}wrap_fi_join"]
     pub fn fi_join(
         ep: *mut fid_ep,
         addr: *const ::std::os::raw::c_void,
@@ -6115,11 +6214,11 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_mc_addr"]
+    #[link_name = "\u{1}wrap_fi_mc_addr"]
     pub fn fi_mc_addr(mc: *mut fid_mc) -> fi_addr_t;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_set"]
+    #[link_name = "\u{1}wrap_fi_av_set"]
     pub fn fi_av_set(
         av: *mut fid_av,
         attr: *mut fi_av_set_attr,
@@ -6128,35 +6227,35 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_set_union"]
+    #[link_name = "\u{1}wrap_fi_av_set_union"]
     pub fn fi_av_set_union(dst: *mut fid_av_set, src: *const fid_av_set) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_set_intersect"]
+    #[link_name = "\u{1}wrap_fi_av_set_intersect"]
     pub fn fi_av_set_intersect(
         dst: *mut fid_av_set,
         src: *const fid_av_set,
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_set_diff"]
+    #[link_name = "\u{1}wrap_fi_av_set_diff"]
     pub fn fi_av_set_diff(dst: *mut fid_av_set, src: *const fid_av_set) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_set_insert"]
+    #[link_name = "\u{1}wrap_fi_av_set_insert"]
     pub fn fi_av_set_insert(set: *mut fid_av_set, addr: fi_addr_t) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_set_remove"]
+    #[link_name = "\u{1}wrap_fi_av_set_remove"]
     pub fn fi_av_set_remove(set: *mut fid_av_set, addr: fi_addr_t) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_av_set_addr"]
+    #[link_name = "\u{1}wrap_fi_av_set_addr"]
     pub fn fi_av_set_addr(set: *mut fid_av_set, coll_addr: *mut fi_addr_t)
     -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_join_collective"]
+    #[link_name = "\u{1}wrap_fi_join_collective"]
     pub fn fi_join_collective(
         ep: *mut fid_ep,
         coll_addr: fi_addr_t,
@@ -6167,7 +6266,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_barrier"]
+    #[link_name = "\u{1}wrap_fi_barrier"]
     pub fn fi_barrier(
         ep: *mut fid_ep,
         coll_addr: fi_addr_t,
@@ -6175,7 +6274,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_barrier2"]
+    #[link_name = "\u{1}wrap_fi_barrier2"]
     pub fn fi_barrier2(
         ep: *mut fid_ep,
         coll_addr: fi_addr_t,
@@ -6184,7 +6283,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_broadcast"]
+    #[link_name = "\u{1}wrap_fi_broadcast"]
     pub fn fi_broadcast(
         ep: *mut fid_ep,
         buf: *mut ::std::os::raw::c_void,
@@ -6198,7 +6297,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_alltoall"]
+    #[link_name = "\u{1}wrap_fi_alltoall"]
     pub fn fi_alltoall(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -6213,7 +6312,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_allreduce"]
+    #[link_name = "\u{1}wrap_fi_allreduce"]
     pub fn fi_allreduce(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -6229,7 +6328,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_allgather"]
+    #[link_name = "\u{1}wrap_fi_allgather"]
     pub fn fi_allgather(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -6244,7 +6343,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_reduce_scatter"]
+    #[link_name = "\u{1}wrap_fi_reduce_scatter"]
     pub fn fi_reduce_scatter(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -6260,7 +6359,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_reduce"]
+    #[link_name = "\u{1}wrap_fi_reduce"]
     pub fn fi_reduce(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -6277,7 +6376,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_scatter"]
+    #[link_name = "\u{1}wrap_fi_scatter"]
     pub fn fi_scatter(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -6293,7 +6392,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_gather"]
+    #[link_name = "\u{1}wrap_fi_gather"]
     pub fn fi_gather(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -6309,7 +6408,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_query_collective"]
+    #[link_name = "\u{1}wrap_fi_query_collective"]
     pub fn fi_query_collective(
         domain: *mut fid_domain,
         coll: fi_collective_op,
@@ -6318,7 +6417,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_trywait"]
+    #[link_name = "\u{1}wrap_fi_trywait"]
     pub fn fi_trywait(
         fabric: *mut fid_fabric,
         fids: *mut *mut fid,
@@ -6326,7 +6425,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_eq_open"]
+    #[link_name = "\u{1}wrap_fi_eq_open"]
     pub fn fi_eq_open(
         fabric: *mut fid_fabric,
         attr: *mut fi_eq_attr,
@@ -6335,7 +6434,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_eq_read"]
+    #[link_name = "\u{1}wrap_fi_eq_read"]
     pub fn fi_eq_read(
         eq: *mut fid_eq,
         event: *mut u32,
@@ -6345,11 +6444,11 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_eq_readerr"]
+    #[link_name = "\u{1}wrap_fi_eq_readerr"]
     pub fn fi_eq_readerr(eq: *mut fid_eq, buf: *mut fi_eq_err_entry, flags: u64) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_eq_write"]
+    #[link_name = "\u{1}wrap_fi_eq_write"]
     pub fn fi_eq_write(
         eq: *mut fid_eq,
         event: u32,
@@ -6359,7 +6458,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_eq_sread"]
+    #[link_name = "\u{1}wrap_fi_eq_sread"]
     pub fn fi_eq_sread(
         eq: *mut fid_eq,
         event: *mut u32,
@@ -6370,7 +6469,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_eq_strerror"]
+    #[link_name = "\u{1}wrap_fi_eq_strerror"]
     pub fn fi_eq_strerror(
         eq: *mut fid_eq,
         prov_errno: ::std::os::raw::c_int,
@@ -6380,11 +6479,11 @@ unsafe extern "C" {
     ) -> *const ::std::os::raw::c_char;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cq_read"]
+    #[link_name = "\u{1}wrap_fi_cq_read"]
     pub fn fi_cq_read(cq: *mut fid_cq, buf: *mut ::std::os::raw::c_void, count: usize) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cq_readfrom"]
+    #[link_name = "\u{1}wrap_fi_cq_readfrom"]
     pub fn fi_cq_readfrom(
         cq: *mut fid_cq,
         buf: *mut ::std::os::raw::c_void,
@@ -6393,11 +6492,11 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cq_readerr"]
+    #[link_name = "\u{1}wrap_fi_cq_readerr"]
     pub fn fi_cq_readerr(cq: *mut fid_cq, buf: *mut fi_cq_err_entry, flags: u64) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cq_sread"]
+    #[link_name = "\u{1}wrap_fi_cq_sread"]
     pub fn fi_cq_sread(
         cq: *mut fid_cq,
         buf: *mut ::std::os::raw::c_void,
@@ -6407,7 +6506,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cq_sreadfrom"]
+    #[link_name = "\u{1}wrap_fi_cq_sreadfrom"]
     pub fn fi_cq_sreadfrom(
         cq: *mut fid_cq,
         buf: *mut ::std::os::raw::c_void,
@@ -6418,11 +6517,11 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cq_signal"]
+    #[link_name = "\u{1}wrap_fi_cq_signal"]
     pub fn fi_cq_signal(cq: *mut fid_cq) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cq_strerror"]
+    #[link_name = "\u{1}wrap_fi_cq_strerror"]
     pub fn fi_cq_strerror(
         cq: *mut fid_cq,
         prov_errno: ::std::os::raw::c_int,
@@ -6432,31 +6531,31 @@ unsafe extern "C" {
     ) -> *const ::std::os::raw::c_char;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cntr_read"]
+    #[link_name = "\u{1}wrap_fi_cntr_read"]
     pub fn fi_cntr_read(cntr: *mut fid_cntr) -> u64;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cntr_readerr"]
+    #[link_name = "\u{1}wrap_fi_cntr_readerr"]
     pub fn fi_cntr_readerr(cntr: *mut fid_cntr) -> u64;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cntr_add"]
+    #[link_name = "\u{1}wrap_fi_cntr_add"]
     pub fn fi_cntr_add(cntr: *mut fid_cntr, value: u64) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cntr_adderr"]
+    #[link_name = "\u{1}wrap_fi_cntr_adderr"]
     pub fn fi_cntr_adderr(cntr: *mut fid_cntr, value: u64) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cntr_set"]
+    #[link_name = "\u{1}wrap_fi_cntr_set"]
     pub fn fi_cntr_set(cntr: *mut fid_cntr, value: u64) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cntr_seterr"]
+    #[link_name = "\u{1}wrap_fi_cntr_seterr"]
     pub fn fi_cntr_seterr(cntr: *mut fid_cntr, value: u64) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_cntr_wait"]
+    #[link_name = "\u{1}wrap_fi_cntr_wait"]
     pub fn fi_cntr_wait(
         cntr: *mut fid_cntr,
         threshold: u64,
@@ -6464,7 +6563,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_export_fid"]
+    #[link_name = "\u{1}wrap_fi_export_fid"]
     pub fn fi_export_fid(
         fid: *mut fid,
         flags: u64,
@@ -6473,11 +6572,11 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_import_fid"]
+    #[link_name = "\u{1}wrap_fi_import_fid"]
     pub fn fi_import_fid(fid: *mut fid, expfid: *mut fid, flags: u64) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_import"]
+    #[link_name = "\u{1}wrap_fi_import"]
     pub fn fi_import(
         version: u32,
         name: *const ::std::os::raw::c_char,
@@ -6489,7 +6588,7 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_import_log"]
+    #[link_name = "\u{1}wrap_fi_import_log"]
     pub fn fi_import_log(
         version: u32,
         flags: u64,
@@ -6497,11 +6596,11 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_profile_reset"]
+    #[link_name = "\u{1}wrap_fi_profile_reset"]
     pub fn fi_profile_reset(prof_fid: *mut fid_profile, flags: u64);
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_profile_query_vars"]
+    #[link_name = "\u{1}wrap_fi_profile_query_vars"]
     pub fn fi_profile_query_vars(
         prof_fid: *mut fid_profile,
         varlist: *mut fi_profile_desc,
@@ -6509,7 +6608,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_profile_query_events"]
+    #[link_name = "\u{1}wrap_fi_profile_query_events"]
     pub fn fi_profile_query_events(
         prof_fid: *mut fid_profile,
         eventlist: *mut fi_profile_desc,
@@ -6517,11 +6616,11 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_profile_read_u64"]
+    #[link_name = "\u{1}wrap_fi_profile_read_u64"]
     pub fn fi_profile_read_u64(prof_fid: *mut fid_profile, var_id: u32, data: *mut u64) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_profile_register_callback"]
+    #[link_name = "\u{1}wrap_fi_profile_register_callback"]
     pub fn fi_profile_register_callback(
         prof_fid: *mut fid_profile,
         event_id: u32,
@@ -6538,15 +6637,15 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_profile_start_reads"]
+    #[link_name = "\u{1}wrap_fi_profile_start_reads"]
     pub fn fi_profile_start_reads(prof_fid: *mut fid_profile, flags: u64);
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_profile_end_reads"]
+    #[link_name = "\u{1}wrap_fi_profile_end_reads"]
     pub fn fi_profile_end_reads(prof_fid: *mut fid_profile, flags: u64);
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_profile_open"]
+    #[link_name = "\u{1}wrap_fi_profile_open"]
     pub fn fi_profile_open(
         fid: *mut fid,
         flags: u64,
@@ -6555,11 +6654,11 @@ unsafe extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_profile_close"]
+    #[link_name = "\u{1}wrap_fi_profile_close"]
     pub fn fi_profile_close(prof_fid: *mut fid_profile) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_read"]
+    #[link_name = "\u{1}wrap_fi_read"]
     pub fn fi_read(
         ep: *mut fid_ep,
         buf: *mut ::std::os::raw::c_void,
@@ -6572,7 +6671,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_readv"]
+    #[link_name = "\u{1}wrap_fi_readv"]
     pub fn fi_readv(
         ep: *mut fid_ep,
         iov: *const iovec,
@@ -6585,11 +6684,11 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_readmsg"]
+    #[link_name = "\u{1}wrap_fi_readmsg"]
     pub fn fi_readmsg(ep: *mut fid_ep, msg: *const fi_msg_rma, flags: u64) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_write"]
+    #[link_name = "\u{1}wrap_fi_write"]
     pub fn fi_write(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -6602,7 +6701,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_writev"]
+    #[link_name = "\u{1}wrap_fi_writev"]
     pub fn fi_writev(
         ep: *mut fid_ep,
         iov: *const iovec,
@@ -6615,11 +6714,11 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_writemsg"]
+    #[link_name = "\u{1}wrap_fi_writemsg"]
     pub fn fi_writemsg(ep: *mut fid_ep, msg: *const fi_msg_rma, flags: u64) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_inject_write"]
+    #[link_name = "\u{1}wrap_fi_inject_write"]
     pub fn fi_inject_write(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -6630,7 +6729,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_writedata"]
+    #[link_name = "\u{1}wrap_fi_writedata"]
     pub fn fi_writedata(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -6644,7 +6743,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_inject_writedata"]
+    #[link_name = "\u{1}wrap_fi_inject_writedata"]
     pub fn fi_inject_writedata(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -6656,7 +6755,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_trecv"]
+    #[link_name = "\u{1}wrap_fi_trecv"]
     pub fn fi_trecv(
         ep: *mut fid_ep,
         buf: *mut ::std::os::raw::c_void,
@@ -6669,7 +6768,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_trecvv"]
+    #[link_name = "\u{1}wrap_fi_trecvv"]
     pub fn fi_trecvv(
         ep: *mut fid_ep,
         iov: *const iovec,
@@ -6682,11 +6781,11 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_trecvmsg"]
+    #[link_name = "\u{1}wrap_fi_trecvmsg"]
     pub fn fi_trecvmsg(ep: *mut fid_ep, msg: *const fi_msg_tagged, flags: u64) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_tsend"]
+    #[link_name = "\u{1}wrap_fi_tsend"]
     pub fn fi_tsend(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -6698,7 +6797,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_tsendv"]
+    #[link_name = "\u{1}wrap_fi_tsendv"]
     pub fn fi_tsendv(
         ep: *mut fid_ep,
         iov: *const iovec,
@@ -6710,11 +6809,11 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_tsendmsg"]
+    #[link_name = "\u{1}wrap_fi_tsendmsg"]
     pub fn fi_tsendmsg(ep: *mut fid_ep, msg: *const fi_msg_tagged, flags: u64) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_tinject"]
+    #[link_name = "\u{1}wrap_fi_tinject"]
     pub fn fi_tinject(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -6724,7 +6823,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_tsenddata"]
+    #[link_name = "\u{1}wrap_fi_tsenddata"]
     pub fn fi_tsenddata(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
@@ -6737,7 +6836,7 @@ unsafe extern "C" {
     ) -> isize;
 }
 unsafe extern "C" {
-    #[link_name = "\u{1}_wrap_fi_tinjectdata"]
+    #[link_name = "\u{1}wrap_fi_tinjectdata"]
     pub fn fi_tinjectdata(
         ep: *mut fid_ep,
         buf: *const ::std::os::raw::c_void,
