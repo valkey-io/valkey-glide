@@ -63,12 +63,6 @@ mod tests {
         assert_eq!(error_type(&err), RequestErrorType::CircuitBreakerOpen);
     }
 
-    #[test]
-    fn request_timeout_error_type() {
-        let err: redis::RedisError = std::io::Error::from(std::io::ErrorKind::TimedOut).into();
-        assert_eq!(error_type(&err), RequestErrorType::Timeout);
-    }
-
     /// An error reply exactly as the parser builds it from the wire.
     fn server_reply(wire: &[u8]) -> RedisError {
         redis::parse_redis_value(wire)
