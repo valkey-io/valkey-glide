@@ -13,6 +13,7 @@ pub mod scope;
 mod socket_listener;
 #[cfg(all(feature = "socket-layer", not(windows)))]
 pub use socket_listener::*;
+pub mod worker_pool;
 #[cfg(all(feature = "socket-layer", windows))]
 mod windows_socket_layer {
     /// Maximum number of arguments sent inline instead of by pointer.
