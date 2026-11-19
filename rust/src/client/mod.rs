@@ -424,9 +424,8 @@ impl GlideClusterClient {
     /// across all shards using an opaque cursor.
     ///
     /// Each iteration is bounded by the client's request timeout. After a timeout,
-    /// the cursor passed to that call is still valid, so the scan can resume by
-    /// retrying with it. If the same iteration keeps timing out, use a smaller
-    /// `count` or a longer request timeout.
+    /// retry with the same cursor to resume. If an iteration keeps timing out, use a
+    /// smaller `count` or a longer request timeout.
     pub async fn cluster_scan(
         &self,
         cursor: &ClusterScanCursor,

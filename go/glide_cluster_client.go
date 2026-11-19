@@ -723,8 +723,8 @@ func (client *ClusterClient) clusterScan(
 //
 // Each iteration is bounded by the client's request timeout. If iterations keep timing out,
 // use [ClusterClient.ScanWithOptions] with a smaller count, or a longer request timeout.
-// Each call releases the cursor passed to it, so a scan cannot resume after an error,
-// including a timeout: start a new scan with [models.NewClusterScanCursor].
+// Each call releases its cursor, so after an error, including a timeout, the scan must
+// start again from [models.NewClusterScanCursor].
 //
 // See [valkey.io] for details.
 //
@@ -769,8 +769,8 @@ func (client *ClusterClient) Scan(
 //
 // Each iteration is bounded by the client's request timeout. If iterations keep timing out,
 // use a smaller count or a longer request timeout.
-// Each call releases the cursor passed to it, so a scan cannot resume after an error,
-// including a timeout: start a new scan with [models.NewClusterScanCursor].
+// Each call releases its cursor, so after an error, including a timeout, the scan must
+// start again from [models.NewClusterScanCursor].
 //
 // See [valkey.io] for details.
 //
