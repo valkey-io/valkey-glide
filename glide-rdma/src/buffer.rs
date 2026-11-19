@@ -4,7 +4,8 @@
 //!
 //! A buffer is always in exactly one of two states, each with its own type:
 //!
-//! - [`RdmaBuffer`]: no active transfer, Rust may read and write it.
+//! - [`RdmaBuffer`]: no active transfer. Rust may read and write it if it is
+//!   [`Host`] memory; see [`crate::MemoryKind`].
 //! - [`LentBuffer`]: a transfer command has been built for the memory and the
 //!   server has not replied yet. Nothing can reach the bytes.
 //!
@@ -22,19 +23,24 @@
 //! runtime.
 
 use std::fmt;
+use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::ptr::{self, NonNull};
 
-use crate::command::{self, RdmaCommand, ReadReceipt, SetChecksum, TransferReply};
+use crate::command::{self, RdmaCommand, ReadReceipt, TransferReply};
 use crate::endpoint::{Registration, RevokeHandle};
 use crate::error::RdmaError;
 use crate::fabric::RdmaFabric;
+use crate::memory::{Host, MemoryKind};
 use crate::progress::ProgressGuard;
 use crate::region_ref::RegionRef;
 
 /// Memory handed over by the caller, kept at one fixed address until it is freed.
 ///
 /// Every access goes through `bytes`, the one pointer taken when this is created.
+/// For device memory that pointer is only ever handed to libfabric: `bytes` and
+/// `bytes_mut`, which form a slice of it, are reached only for [`Host`] memory,
+/// through [`RdmaBuffer<Host>`] and the checksum of a host set.
 pub(crate) struct HostMemory {
     /// This is dropped to free the memory at the end.
     owner: NonNull<dyn Send>,
@@ -114,11 +120,14 @@ impl Drop for HostMemory {
     }
 }
 
-/// Host memory registered with a [`RdmaFabric`] and not lent to any transfer.
+/// Memory registered with a [`RdmaFabric`] and not lent to any transfer.
+///
+/// `M` says what kind of memory it is; see [`MemoryKind`]. Host memory is the
+/// default, so `RdmaBuffer` alone means `RdmaBuffer<Host>`.
 ///
 /// Registration is expensive, so one buffer is meant to serve many transfers in turn:
 /// lend it, get it back once the server replies, and lend it again.
-pub struct RdmaBuffer {
+pub struct RdmaBuffer<M: MemoryKind = Host> {
     /// Taken by `Drop`, which hands it to the fabric's closing thread.
     registration: ManuallyDrop<Registration>,
     region_ref: RegionRef,
@@ -126,12 +135,13 @@ pub struct RdmaBuffer {
     host: ManuallyDrop<HostMemory>,
     /// Held so the domain outlives the registration.
     fabric: RdmaFabric,
+    kind: PhantomData<M>,
 }
 
 // A failed lend or reclaim returns the buffer inside the `Err` so the caller never
 // loses memory it registered. That makes the `Err` large, but only on a rare path.
 #[allow(clippy::result_large_err)]
-impl RdmaBuffer {
+impl<M: MemoryKind> RdmaBuffer<M> {
     pub(crate) fn new(
         registration: Registration,
         region_ref: RegionRef,
@@ -143,6 +153,7 @@ impl RdmaBuffer {
             region_ref,
             host: ManuallyDrop::new(host),
             fabric,
+            kind: PhantomData,
         }
     }
 
@@ -177,7 +188,7 @@ impl RdmaBuffer {
         key: &[u8],
         at: usize,
         length: usize,
-    ) -> Result<(RdmaCommand, LentBuffer), (Self, RdmaError)> {
+    ) -> Result<(RdmaCommand, LentBuffer<M>), (Self, RdmaError)> {
         self.lend(at, length, |_, window| command::get(key, length, window))
     }
 
@@ -185,7 +196,8 @@ impl RdmaBuffer {
     /// to read those bytes and store them.
     ///
     /// `checksum` decides whether the command carries a CRC-32c of the window for
-    /// the server to check before it stores the bytes; see [`SetChecksum`].
+    /// the server to check before it stores the bytes; see [`crate::SetChecksum`] for host
+    /// memory and [`crate::DeviceSetChecksum`] for device memory.
     ///
     /// Returns the command to send and the loan to hold until the server replies.
     ///
@@ -198,14 +210,11 @@ impl RdmaBuffer {
         key: &[u8],
         at: usize,
         length: usize,
-        checksum: SetChecksum,
-    ) -> Result<(RdmaCommand, LentBuffer), (Self, RdmaError)> {
-        self.lend(at, length, |bytes, window| {
-            let checksum = match checksum {
-                SetChecksum::Skip => None,
-                SetChecksum::Compute => Some(crate::checksum(bytes)),
-                SetChecksum::Known(checksum) => Some(checksum),
-            };
+        checksum: M::SetChecksum,
+    ) -> Result<(RdmaCommand, LentBuffer<M>), (Self, RdmaError)> {
+        self.lend(at, length, |host, window| {
+            // Host memory reads its window here, device memory never does.
+            let checksum = M::set_checksum(checksum, || &host.bytes()[at..at + length]);
             command::set(key, length, checksum, window)
         })
     }
@@ -214,8 +223,8 @@ impl RdmaBuffer {
         self,
         at: usize,
         length: usize,
-        build: impl FnOnce(&[u8], &RegionRef) -> RdmaCommand,
-    ) -> Result<(RdmaCommand, LentBuffer), (Self, RdmaError)> {
+        build: impl FnOnce(&HostMemory, &RegionRef) -> RdmaCommand,
+    ) -> Result<(RdmaCommand, LentBuffer<M>), (Self, RdmaError)> {
         if let Err(error) = self.registration.check_open() {
             return Err((self, error));
         }
@@ -228,7 +237,7 @@ impl RdmaBuffer {
             return Err((self, error));
         };
         // `window` succeeded, so the range is in bounds.
-        let command = build(&self.as_host()[at..at + length], &window);
+        let command = build(&self.host, &window);
         let progress = self.fabric.drive_progress();
         let loan = LentBuffer {
             buffer: ManuallyDrop::new(self),
@@ -289,7 +298,9 @@ impl RdmaBuffer {
     pub fn revoker(&self) -> RdmaRevoker {
         RdmaRevoker(self.registration.handle())
     }
+}
 
+impl RdmaBuffer<Host> {
     /// The registered bytes.
     pub fn as_host(&self) -> &[u8] {
         self.host.bytes()
@@ -309,7 +320,7 @@ impl RdmaBuffer {
     }
 }
 
-impl RdmaBuffer {
+impl<M: MemoryKind> RdmaBuffer<M> {
     /// Take the buffer apart without running its `Drop`.
     fn into_parts(self) -> (Registration, HostMemory, RdmaFabric) {
         let this = ManuallyDrop::new(self);
@@ -324,7 +335,7 @@ impl RdmaBuffer {
     }
 }
 
-impl Drop for RdmaBuffer {
+impl<M: MemoryKind> Drop for RdmaBuffer<M> {
     /// Free the memory only after the region over it is closed. If the region cannot
     /// be closed, the server may still reach the memory, so it is leaked instead.
     ///
@@ -351,7 +362,7 @@ impl Drop for RdmaBuffer {
     }
 }
 
-impl fmt::Debug for RdmaBuffer {
+impl<M: MemoryKind> fmt::Debug for RdmaBuffer<M> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("RdmaBuffer")
@@ -398,9 +409,9 @@ impl fmt::Debug for RdmaBuffer {
 /// On tcp, the fabric's progress thread keeps polling for as long as a loan exists,
 /// because that provider moves no bytes unless the client polls.
 #[derive(Debug)]
-pub struct LentBuffer {
+pub struct LentBuffer<M: MemoryKind = Host> {
     /// Never exposed; `reclaim`, `recall`, and `Drop` each take it apart.
-    buffer: ManuallyDrop<RdmaBuffer>,
+    buffer: ManuallyDrop<RdmaBuffer<M>>,
     window_length: usize,
     /// Declared last so the region is revoked before progress polling stops.
     _progress: Option<ProgressGuard>,
@@ -408,7 +419,7 @@ pub struct LentBuffer {
 
 // As for `RdmaBuffer`: the buffer rides in the `Err` so it is never lost.
 #[allow(clippy::result_large_err)]
-impl LentBuffer {
+impl<M: MemoryKind> LentBuffer<M> {
     /// End the loan with the server's reply to the transfer command.
     ///
     /// # Safety
@@ -423,10 +434,12 @@ impl LentBuffer {
     /// window held. The bytes past the window may have overwritten other parts of the
     /// buffer. The buffer is still handed back, because a reply means the server is
     /// done with the memory; see [`TransferReply`].
+    // The same shape as before `M` was added; naming it would only hide the buffer.
+    #[allow(clippy::type_complexity)]
     pub unsafe fn reclaim(
         self,
         reply: TransferReply,
-    ) -> Result<(RdmaBuffer, Option<ReadReceipt>), (RdmaBuffer, RdmaError)> {
+    ) -> Result<(RdmaBuffer<M>, Option<ReadReceipt>), (RdmaBuffer<M>, RdmaError)> {
         let (buffer, window_length, _progress) = self.dismantle();
         match reply {
             TransferReply::Read(receipt) if receipt.bytes_written > window_length => {
@@ -472,7 +485,7 @@ impl LentBuffer {
     ///
     /// The command this loan was lent for must not have been sent. Once it has, only
     /// the server's reply says it is done with the window.
-    pub unsafe fn cancel_unsent(self) -> RdmaBuffer {
+    pub unsafe fn cancel_unsent(self) -> RdmaBuffer<M> {
         let (buffer, _, _progress) = self.dismantle();
         buffer
     }
@@ -494,7 +507,7 @@ impl LentBuffer {
     }
 
     /// Take the loan apart without running its `Drop`.
-    fn dismantle(self) -> (RdmaBuffer, usize, Option<ProgressGuard>) {
+    fn dismantle(self) -> (RdmaBuffer<M>, usize, Option<ProgressGuard>) {
         let mut this = ManuallyDrop::new(self);
         // SAFETY: `this` is never dropped, so each field is moved out exactly once.
         unsafe {
@@ -507,7 +520,7 @@ impl LentBuffer {
     }
 }
 
-impl Drop for LentBuffer {
+impl<M: MemoryKind> Drop for LentBuffer<M> {
     /// Revoke the region, then free or park the memory as [`LentBuffer::recall`]
     /// does. A failed revoke is not returned; the memory is leaked, and the failure
     /// is logged and counted in [`RdmaFabric::leaked_bytes`].
@@ -560,6 +573,7 @@ mod tests {
     use crate::error::RdmaError;
     use crate::fabric::RdmaFabric;
     use crate::fabric::tests::fabric_whose_close_stops_writes;
+    use crate::memory::{Device, DeviceSetChecksum, MemoryKind};
     use crate::region_ref::RegionRef;
     use std::ptr::{self, NonNull};
     use std::sync::Arc;
@@ -567,10 +581,121 @@ mod tests {
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
-    impl RdmaBuffer {
+    impl<M: MemoryKind> RdmaBuffer<M> {
         /// Where this buffer lives, as a transfer command names it.
         pub(crate) fn region_ref(&self) -> &RegionRef {
             &self.region_ref
+        }
+    }
+
+    /// Host memory registered as device memory, with a flag set once the fabric
+    /// lets go of it.
+    fn device_buffer(
+        fabric: &RdmaFabric,
+        memory: &mut Box<[u8]>,
+    ) -> (RdmaBuffer<Device>, Arc<AtomicBool>) {
+        struct Owner(Arc<AtomicBool>);
+        impl Drop for Owner {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::Release);
+            }
+        }
+        let released = Arc::new(AtomicBool::new(false));
+        // SAFETY: each test keeps `memory` alive until `released` is set.
+        let buffer = unsafe {
+            fabric.register_system_as_device(NonNull::from(&mut **memory), Owner(released.clone()))
+        }
+        .expect("registers as a device");
+        (buffer, released)
+    }
+
+    #[test]
+    fn a_device_set_sends_only_the_checksum_it_was_given() {
+        let fabric = fabric();
+        let mut memory: Box<[u8]> = vec![7u8; 4096].into_boxed_slice();
+        let (buffer, _) = device_buffer(&fabric, &mut memory);
+
+        let (command, loan) = buffer
+            .lend_for_set(b"key", 1024, 256, DeviceSetChecksum::Known(0x1234))
+            .expect("lends");
+        assert_eq!(arguments(&command)[..4], ["key", "256", "CRC", "4660"]);
+        // SAFETY: no command was sent.
+        let buffer = unsafe { loan.cancel_unsent() };
+
+        let (command, loan) = buffer
+            .lend_for_set(b"key", 0, 64, DeviceSetChecksum::Skip)
+            .expect("lends");
+        assert!(!arguments(&command).iter().any(|argument| argument == "CRC"));
+        // SAFETY: as above.
+        drop(unsafe { loan.cancel_unsent() });
+    }
+
+    #[test]
+    fn a_device_get_hands_the_servers_checksum_back_unchecked() {
+        let fabric = fabric();
+        let wrong = ReadReceipt {
+            bytes_written: 16,
+            checksum: 0xdead_beef,
+        };
+
+        let mut memory: Box<[u8]> = vec![1u8; 4096].into_boxed_slice();
+        let (device, _) = device_buffer(&fabric, &mut memory);
+        let (_, loan) = device.lend_for_get(b"key", 0, 64).expect("lends");
+        // SAFETY: no command was sent, so nothing writes the window.
+        let (_device, receipt) =
+            unsafe { loan.reclaim(TransferReply::Read(wrong)) }.expect("reclaims");
+        assert_eq!(
+            receipt,
+            Some(wrong),
+            "the server's checksum comes back to the caller"
+        );
+    }
+
+    #[test]
+    fn device_memory_needs_a_fabric_opened_for_it() {
+        let fabric = fabric();
+        let mut memory: Box<[u8]> = vec![0u8; 64].into_boxed_slice();
+        let released = Arc::new(AtomicBool::new(false));
+        struct Owner(Arc<AtomicBool>);
+        impl Drop for Owner {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::Release);
+            }
+        }
+        // SAFETY: `memory` outlives the call, and nothing is registered.
+        let error = unsafe {
+            fabric.register_device_raw(
+                NonNull::from(&mut *memory),
+                crate::DeviceRuntime::Cuda,
+                Owner(released.clone()),
+            )
+        }
+        .unwrap_err();
+        assert!(
+            matches!(&error, RdmaError::Configuration(message) if message.contains("enable device memory")),
+            "{error:?}"
+        );
+        assert!(
+            released.load(Ordering::Acquire),
+            "a failed registration drops the owner"
+        );
+    }
+
+    /// The provider is asked for `FI_HMEM`. tcp without a GPU runtime does not offer
+    /// it, so the open fails there, naming what is missing; where it does open, it
+    /// opens with it.
+    #[test]
+    fn opening_with_device_memory_asks_the_provider_for_it() {
+        match RdmaFabric::open(&FabricConfig::new(Provider::Tcp).with_device_memory()) {
+            Ok(fabric) => assert!(fabric.offers_device_memory()),
+            Err(error) => assert!(
+                matches!(
+                    &error,
+                    RdmaError::Configuration(message)
+                        if message.contains("tcp provider does not offer FI_HMEM")
+                ),
+                "{error:?}"
+            ),
         }
     }
 

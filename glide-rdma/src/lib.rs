@@ -9,7 +9,9 @@
 //! carries only a byte count and a checksum.
 //!
 //! `RdmaBuffer` and `LentBuffer` loans bytes to the server for the duration of
-//! a transfer. The memory can be accessed again only after the loan ends.
+//! a transfer. The memory can be accessed again only after the loan ends. The
+//! memory is host memory or, through `RdmaFabric::register_device_raw`, device
+//! memory such as CUDA memory, which the crate never reads; see `MemoryKind`.
 
 #[cfg(feature = "libfabric")]
 mod buffer;
@@ -26,6 +28,8 @@ mod fabric;
 #[cfg(feature = "libfabric")]
 mod libfabric_dl;
 #[cfg(feature = "libfabric")]
+mod memory;
+#[cfg(feature = "libfabric")]
 mod progress;
 mod region_ref;
 mod session;
@@ -40,6 +44,8 @@ pub use error::RdmaError;
 pub use fabric::{RdmaFabric, RdmaSession};
 #[cfg(feature = "libfabric")]
 pub use libfabric_dl::{ensure_loaded, header_api_version};
+#[cfg(feature = "libfabric")]
+pub use memory::{Device, DeviceRuntime, DeviceSetChecksum, Host, MemoryKind};
 #[cfg(feature = "libfabric")]
 pub use progress::ProgressGuard;
 pub use region_ref::{InvalidHex, decode_hex, encode_hex};
