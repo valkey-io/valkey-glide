@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import yaml
+import yaml  # type: ignore[import-untyped,import-not-found]
 
 REPO = Path(__file__).resolve().parents[4]
 WORKFLOW = yaml.safe_load((REPO / ".github/workflows/glide-rdma-efa.yml").read_text())

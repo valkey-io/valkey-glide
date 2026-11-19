@@ -10,6 +10,7 @@ from pathlib import Path
 SPEC = importlib.util.spec_from_file_location(
     "orchestrate", Path(__file__).resolve().parents[1] / "bin/orchestrate.py"
 )
+assert SPEC is not None and SPEC.loader is not None
 module = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(module)
 
