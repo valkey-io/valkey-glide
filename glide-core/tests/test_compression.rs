@@ -1069,9 +1069,9 @@ mod compression_tests {
         assert_from_command_name("SETBIT", RequestType::SetBit);
 
         // Test case insensitivity
-        assert_from_command_name("set", RequestType::Set);  // Lower case
-        assert_from_command_name("sEt", RequestType::Set);  // Mixed case
-        assert_from_command_name("Set", RequestType::Set);  // Capital case
+        assert_from_command_name("set", RequestType::Set); // Lower case
+        assert_from_command_name("sEt", RequestType::Set); // Mixed case
+        assert_from_command_name("Set", RequestType::Set); // Capital case
 
         // Test unknown commands return None
         assert!(RequestType::from_command_name("").is_none());

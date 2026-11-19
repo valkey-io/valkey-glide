@@ -2443,9 +2443,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             key_type: &Some(ExpectedReturnType::SimpleString),
             value_type: &None,
         }),
-        b"HINCRBYFLOAT"
-        | b"INCRBYFLOAT"
-        | b"ZINCRBY" => Some(ExpectedReturnType::Double),
+        b"HINCRBYFLOAT" | b"INCRBYFLOAT" | b"ZINCRBY" => Some(ExpectedReturnType::Double),
         b"COPY"
         | b"DELEX"
         | b"DELIFEQ"

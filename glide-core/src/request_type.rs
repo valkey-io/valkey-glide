@@ -454,7 +454,6 @@ fn get_two_word_command(first: &str, second: &str) -> Cmd {
 
 #[cfg(feature = "proto")]
 impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
-
     #[rustfmt::skip] // Prevents line wrapping for readability.
     fn from(value: ::protobuf::EnumOrUnknown<ProtobufRequestType>) -> Self {
         match value.enum_value_or(ProtobufRequestType::InvalidRequest) {
