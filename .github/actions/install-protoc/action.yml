@@ -10,7 +10,37 @@ inputs:
 runs:
     using: "composite"
     steps:
+        # setup-protoc queries the GitHub releases API, which occasionally returns a transient
+        # "Server Error". Retry a couple of times before failing the job.
         - name: Install protoc (protobuf)
+          id: protoc-attempt-1
+          continue-on-error: true
+          uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
+          with:
+              version: "25.1"
+              repo-token: ${{ inputs.github-token }}
+
+        - name: Wait before retrying protoc install
+          if: steps.protoc-attempt-1.outcome == 'failure'
+          shell: sh
+          run: sleep 20
+
+        - name: Install protoc (protobuf) - retry 1
+          id: protoc-attempt-2
+          if: steps.protoc-attempt-1.outcome == 'failure'
+          continue-on-error: true
+          uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
+          with:
+              version: "25.1"
+              repo-token: ${{ inputs.github-token }}
+
+        - name: Wait before retrying protoc install
+          if: steps.protoc-attempt-2.outcome == 'failure'
+          shell: sh
+          run: sleep 45
+
+        - name: Install protoc (protobuf) - retry 2
+          if: steps.protoc-attempt-2.outcome == 'failure'
           uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
           with:
               version: "25.1"
