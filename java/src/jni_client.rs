@@ -84,6 +84,25 @@ static RUNTIME: std::sync::OnceLock<Runtime> = std::sync::OnceLock::new();
 // The connection's internal reader task must run concurrently with command sends.
 const DEFAULT_RUNTIME_WORKER_THREADS: usize = 1;
 const DEFAULT_CALLBACK_WORKER_THREADS: usize = 2;
+/// Maximum worker threads supported by Tokio multi_thread runtime builder.
+const MAX_RUNTIME_WORKER_THREADS: usize = 32_768;
+
+/// Resolves the worker thread and max blocking thread counts from an optional environment variable string.
+/// Returns `(worker_threads, max_blocking_threads)`.
+///
+/// Ensures:
+/// - Missing or unparsable values fall back to `DEFAULT_RUNTIME_WORKER_THREADS`.
+/// - `0` is raised to `1` (matching FFI / Python async semantics and preventing Tokio build panic).
+/// - Values are clamped to `MAX_RUNTIME_WORKER_THREADS` to avoid Tokio runtime builder panic.
+/// - `max_blocking_threads` uses `saturating_mul(2)` to prevent integer overflow panic on large values.
+pub(crate) fn resolve_runtime_threads(threads_env: Option<&str>) -> (usize, usize) {
+    let worker_threads = threads_env
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(DEFAULT_RUNTIME_WORKER_THREADS)
+        .clamp(1, MAX_RUNTIME_WORKER_THREADS);
+    let max_blocking_threads = worker_threads.saturating_mul(2).max(1);
+    (worker_threads, max_blocking_threads)
+}
 
 // =========================
 // Native buffer registry
@@ -131,17 +150,13 @@ fn take_timed_out_callback(callback_id: jlong) -> bool {
 /// Initialize or return the shared Tokio runtime.
 pub(crate) fn get_runtime() -> &'static Runtime {
     RUNTIME.get_or_init(|| {
-        let worker_threads = if let Ok(threads_str) = std::env::var("GLIDE_TOKIO_WORKER_THREADS") {
-            threads_str
-                .parse::<usize>()
-                .unwrap_or(DEFAULT_RUNTIME_WORKER_THREADS)
-        } else {
-            DEFAULT_RUNTIME_WORKER_THREADS
-        };
+        let env_threads = std::env::var("GLIDE_TOKIO_WORKER_THREADS").ok();
+        let (worker_threads, max_blocking_threads) =
+            resolve_runtime_threads(env_threads.as_deref());
 
         tokio::runtime::Builder::new_multi_thread()
             .worker_threads(worker_threads)
-            .max_blocking_threads(worker_threads * 2)
+            .max_blocking_threads(max_blocking_threads)
             .enable_all()
             .thread_name("glide-worker")
             .thread_stack_size(2 * 1024 * 1024)
@@ -1064,7 +1079,9 @@ pub fn complete_error_sync(
 
 #[cfg(test)]
 mod tests {
+    use super::MAX_RUNTIME_WORKER_THREADS;
     use super::generate_safe_handle;
+    use super::resolve_runtime_threads;
     use super::serialize_array_to_bytes;
     use redis::{Value, parse_redis_value};
 
@@ -1131,6 +1148,35 @@ mod tests {
         assert_eq!(
             i32::from_be_bytes(bytes[null_offset + 1..null_offset + 5].try_into().unwrap()),
             -1
+        );
+    }
+
+    #[test]
+    fn resolve_runtime_threads_handles_defaults_clamping_and_overflow() {
+        // Missing env var falls back to default (1)
+        assert_eq!(resolve_runtime_threads(None), (1, 2));
+
+        // Invalid strings fall back to default
+        assert_eq!(resolve_runtime_threads(Some("")), (1, 2));
+        assert_eq!(resolve_runtime_threads(Some("abc")), (1, 2));
+        assert_eq!(resolve_runtime_threads(Some("-1")), (1, 2));
+
+        // 0 is raised to 1 (prevents Tokio builder panic)
+        assert_eq!(resolve_runtime_threads(Some("0")), (1, 2));
+
+        // Explicit positive values are honored
+        assert_eq!(resolve_runtime_threads(Some("1")), (1, 2));
+        assert_eq!(resolve_runtime_threads(Some("4")), (4, 8));
+        assert_eq!(resolve_runtime_threads(Some("16")), (16, 32));
+
+        // Huge values near or at usize::MAX are clamped without overflow panic
+        assert_eq!(
+            resolve_runtime_threads(Some(&usize::MAX.to_string())),
+            (MAX_RUNTIME_WORKER_THREADS, MAX_RUNTIME_WORKER_THREADS * 2)
+        );
+        assert_eq!(
+            resolve_runtime_threads(Some("100000")),
+            (MAX_RUNTIME_WORKER_THREADS, MAX_RUNTIME_WORKER_THREADS * 2)
         );
     }
 }
