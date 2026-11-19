@@ -2802,8 +2802,10 @@ mod tests {
 
     /// `caller_enforces_deadline = true` must not arm the per-request receive timer: the
     /// request stays pending past `timeout` (the caller's own deadline drops it), while the
-    /// default path still fails with the timer's `Elapsed` error.
-    #[tokio::test]
+    /// default path still fails with the timer's `Elapsed` error. The clock is paused (it
+    /// jumps to the next timer when the runtime idles), so a stalled host cannot let the outer
+    /// `timeout * 4` expire before an armed receive timer would.
+    #[tokio::test(start_paused = true)]
     async fn test_caller_enforced_deadline_skips_receive_timer() {
         let (sink_tx, _sink_rx) = futures_mpsc::channel::<Vec<u8>>(100);
         // Kept alive and never written: the server never answers.
