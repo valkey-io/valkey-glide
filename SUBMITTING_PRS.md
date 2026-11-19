@@ -115,16 +115,7 @@ Always link your PR to the related issue by pasting the issue URL in the "Issue 
 
 ### Complete the PR Checklist
 
-Before submitting, work through the checklist in the PR template:
-
-- [ ] This Pull Request is related to one issue.
-- [ ] Commit message has a detailed description of what changed and why.
-- [ ] PR title follows `type(scope): description` with a lowercase type; it becomes the release notes entry.
-- [ ] Tests are added or updated.
-- [ ] CHANGELOG.md and documentation files are updated.
-- [ ] Linters have been run (`make *-lint` targets) and Prettier has been run (`make prettier-fix`).
-- [ ] Destination branch is correct — `main` or `release`.
-- [ ] Create merge commit if merging release branch into main, squash otherwise.
+Before submitting, work through the [checklist in the PR template](.github/pull_request_template.md#checklist).
 
 ## Merge Strategies
 

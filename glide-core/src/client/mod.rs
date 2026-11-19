@@ -2004,6 +2004,15 @@ impl Client {
         Ok(())
     }
 
+    /// True until a lazy client connects, and also whenever its lock cannot be read right away.
+    /// The sync FFI runs a command on a worker while this is true.
+    pub fn is_lazy(&self) -> bool {
+        self.internal_client
+            .try_read()
+            .map(|client| matches!(&*client, ClientWrapper::Lazy(_)))
+            .unwrap_or(true)
+    }
+
     /// Returns the cache hit rate (hits / total requests).
     /// Returns an error if caching is not enabled or metrics are disabled.
     pub fn cache_hit_rate(&self) -> RedisResult<Value> {
@@ -5300,6 +5309,14 @@ mod tests {
             let result = get_request_timeout(&cmd, Duration::from_millis(250)).unwrap();
             assert_eq!(result, Some(Duration::from_millis(250)), "{name}");
         }
+    }
+
+    #[test]
+    fn test_is_lazy_until_connected_and_while_the_lock_is_held() {
+        let client = create_test_client();
+        assert!(client.is_lazy());
+        let _write = client.internal_client.try_write().unwrap();
+        assert!(client.is_lazy());
     }
 
     #[test]

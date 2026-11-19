@@ -14,6 +14,8 @@ import threading
 from dataclasses import dataclass
 from typing import Optional
 
+import anyio
+import sniffio
 from glide_shared.config import (
     BaseClientConfiguration,
     GlideClusterClientConfiguration,
@@ -218,7 +220,7 @@ class AsyncClientPool:
                 )
 
             # Yield to event loop — allows pipe reader to process release responses
-            await asyncio.sleep(min(backoff, remaining))
+            await anyio.sleep(min(backoff, remaining))
             backoff = min(backoff * 2, 0.05)  # Cap at 50ms
 
     def release(self, client_id: int) -> None:
@@ -233,11 +235,13 @@ class AsyncClientPool:
         """Get/create a client wrapper with pipe registration."""
         cached = self._client_cache.get(client_id)
         if cached is not None:
+            _bind_to_running_loop(cached)
             return cached
 
         with self._cache_lock:
             cached = self._client_cache.get(client_id)
             if cached is not None:
+                _bind_to_running_loop(cached)
                 return cached
 
             adapter_ptr = self._lib.glide_pool_get_client_ptr(client_id)
@@ -259,7 +263,6 @@ class AsyncClientPool:
             client._pubsub_callback_ref = None
             client._callback_id_gen = __import__("itertools").count(1)
             client._lock = threading.Lock()
-            client._is_asyncio = True
             client._core_client = self._ffi.cast("void*", adapter_ptr)
             client._conn_req_bytes = self._conn_req_bytes
             client._create_pid = os.getpid()
@@ -268,13 +271,12 @@ class AsyncClientPool:
             # (set in create_client_internal via the pre-assigned ID).
             # Register so the pipe reader routes responses here.
             client._pipe_client_id = client_id
-            try:
-                client._loop = asyncio.get_running_loop()
-            except RuntimeError:
-                client._loop = None
+            client._loop = None
+            client._trio_token = None
+            client._is_asyncio = True
 
             _client_registry[client_id] = client
-            client._setup_pipe()
+            _bind_to_running_loop(client)
 
             self._client_cache[client_id] = client
             return client
@@ -332,6 +334,33 @@ class AsyncClientPool:
         pass
 
 
+def _bind_to_running_loop(client: BaseClient) -> None:
+    """Bind a pooled client to the running event loop, registering the pipe reader.
+
+    A cached client can outlive the run it was bound to, so re-bind on a new run.
+    """
+    try:
+        is_asyncio = sniffio.current_async_library() == "asyncio"
+    except sniffio.AsyncLibraryNotFoundError:
+        is_asyncio = True
+    if is_asyncio:
+        loop = asyncio.get_running_loop()
+        if client._is_asyncio and client._loop is loop:
+            return
+        client._loop = loop
+    else:
+        import trio
+
+        if (
+            not client._is_asyncio
+            and client._trio_token is trio.lowlevel.current_trio_token()
+        ):
+            return
+        client._loop = None
+    client._is_asyncio = is_asyncio
+    client._setup_pipe()
+
+
 class _AsyncBorrowContext:
     __slots__ = ("_pool", "_timeout", "_client_id")
 
@@ -348,5 +377,5 @@ class _AsyncBorrowContext:
         self._pool.release(self._client_id)
         # Yield to event loop so the async release (state reset) can
         # complete via the pipe reader before the next acquire attempt.
-        await asyncio.sleep(0)
+        await anyio.sleep(0)
         return False

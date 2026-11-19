@@ -21,10 +21,10 @@ Usage:
         result = await scope.exec()
 """
 
-import asyncio
 import struct
 from typing import Optional
 
+import anyio
 from glide_shared._glide_ffi import _GlideFFI
 
 
@@ -32,8 +32,8 @@ class AsyncIsolatedScope:
     """
     Async wrapper around a dedicated scoped connection.
 
-    Commands are dispatched to a thread pool executor (since the underlying
-    FFI call blocks on Tokio), keeping the asyncio event loop free.
+    Commands run in a worker thread (since the underlying FFI call blocks
+    on Tokio), keeping the event loop free.
 
     Thread Safety: A single AsyncIsolatedScope should only be used from one
     coroutine at a time. Multiple coroutines should each acquire their own scope.
@@ -51,7 +51,6 @@ class AsyncIsolatedScope:
         "_lib",
         "_released",
         "_response_parser",
-        "_executor",
     )
 
     def __init__(
@@ -60,7 +59,6 @@ class AsyncIsolatedScope:
         client_id: int,
         ffi_instance: _GlideFFI,
         response_parser,
-        executor=None,
     ):
         self._scope_id = scope_id
         self._client_id = client_id
@@ -68,7 +66,6 @@ class AsyncIsolatedScope:
         self._lib = ffi_instance.lib
         self._released = False
         self._response_parser = response_parser
-        self._executor = executor  # ThreadPoolExecutor or None (uses default)
 
     @property
     def scope_id(self) -> int:
@@ -152,28 +149,29 @@ class AsyncIsolatedScope:
             parts.append(arg_bytes)
         payload = b"".join(parts)
 
-        # Execute in thread pool to avoid blocking the event loop
-        loop = asyncio.get_running_loop()
-        result_ptr = await loop.run_in_executor(
-            self._executor, self._execute_sync, payload
+        # Execute in a worker thread to avoid blocking the event loop. Abandon on
+        # cancel so a cancelled blocking command returns at once; close() ends it.
+        return await anyio.to_thread.run_sync(
+            self._execute_sync, payload, abandon_on_cancel=True
         )
 
-        if result_ptr == self._ffi.NULL:
-            raise RuntimeError(f"Scope execute failed: invalid scope {self._scope_id}")
+    def _execute_sync(self, payload: bytes) -> Optional[str]:
+        """Synchronous FFI call (runs in a worker thread).
 
-        try:
-            return self._parse_result(result_ptr)
-        finally:
-            self._lib.free_command_result(result_ptr)
-
-    def _execute_sync(self, payload: bytes):
-        """Synchronous FFI call (runs in executor thread)."""
+        Parses and frees the result here so an abandoned call still frees it.
+        """
         buf = self._ffi.from_buffer(payload)
-        return self._lib.glide_scope_execute(
+        result_ptr = self._lib.glide_scope_execute(
             self._scope_id,
             self._ffi.cast("const uint8_t*", buf),
             len(payload),
         )
+        if result_ptr == self._ffi.NULL:
+            raise RuntimeError(f"Scope execute failed: invalid scope {self._scope_id}")
+        try:
+            return self._parse_result(result_ptr)
+        finally:
+            self._lib.free_command_result(result_ptr)
 
     def _parse_result(self, result_ptr) -> Optional[str]:
         """Parse a CommandResult pointer into a Python value."""
