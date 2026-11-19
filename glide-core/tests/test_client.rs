@@ -4329,6 +4329,62 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// A server-wide `CLIENT PAUSE` of the shared server for the watchdog tests below. Ended
+    /// with [`ServerPause::end`]; dropped without it (a failed assertion), it blocks until the
+    /// pause is over, so the shared server is never left paused for the next test.
+    struct ServerPause {
+        until: Option<std::time::Instant>,
+    }
+
+    impl ServerPause {
+        /// Waits until the pause is over.
+        async fn end(mut self) {
+            if let Some(until) = self.until.take() {
+                tokio::time::sleep_until(tokio::time::Instant::from_std(until)).await;
+            }
+        }
+    }
+
+    impl Drop for ServerPause {
+        fn drop(&mut self) {
+            if let Some(until) = self.until.take() {
+                std::thread::sleep(until.saturating_duration_since(std::time::Instant::now()));
+            }
+        }
+    }
+
+    /// Pauses every primary of `server` (where an unrouted `CLIENT PAUSE` goes in cluster mode)
+    /// for `ms`, through a separate client whose request timeout is far above the tested ones,
+    /// and fails the test unless every primary acknowledges it.
+    async fn pause_server(server: &BackingServer, ms: u64) -> ServerPause {
+        let mut setup = create_client(
+            server,
+            TestConfiguration {
+                request_timeout: Some(5000),
+                shared_server: true,
+                ..Default::default()
+            },
+        )
+        .await;
+        // A primary pauses before it acknowledges; allow a margin for its clock.
+        let pause_end = || {
+            std::time::Instant::now()
+                + std::time::Duration::from_millis(ms)
+                + std::time::Duration::from_millis(100)
+        };
+        // Armed before the send: if the acknowledgement fails or is partial (the `expect`
+        // below), some primaries may still have paused, and the guard waits that out too.
+        let mut pause = ServerPause {
+            until: Some(pause_end()),
+        };
+        setup
+            .send_command(redis::cmd("CLIENT").arg("PAUSE").arg(ms), None)
+            .await
+            .expect("every primary must acknowledge CLIENT PAUSE");
+        pause.until = Some(pause_end());
+        pause
+    }
+
     /// With the standalone per-request tokio receive timer removed, every timed-out command
     /// must still come back as a real timeout (`is_timeout()`), never early. Many concurrent
     /// commands make any lost or late watchdog firing observable. The cluster arm keeps its
@@ -4348,11 +4404,11 @@ pub(crate) mod shared_client_tests {
                 },
             )
             .await;
-            let mut c = test_basics.client.clone();
-            // Routed to every node in cluster mode, so all keys below are stalled.
-            let _ = c
-                .send_command(redis::cmd("CLIENT").arg("PAUSE").arg("1500"), None)
-                .await;
+            // Every primary is paused, so all keys below are stalled.
+            let pause = pause_server(&test_basics.server, 1500).await;
+            // Far below the 1.5 s pause: a late or lost watchdog firing shows up here, while
+            // 64 concurrent requests on a loaded CI host still have ample slack.
+            let upper = std::time::Duration::from_millis(REQUEST_TIMEOUT_MS + 500);
             let mut handles = Vec::new();
             for i in 0..64 {
                 let mut c = test_basics.client.clone();
@@ -4372,8 +4428,9 @@ pub(crate) mod shared_client_tests {
                     elapsed >= std::time::Duration::from_millis(REQUEST_TIMEOUT_MS),
                     "timed out early: {elapsed:?} < {REQUEST_TIMEOUT_MS}ms"
                 );
+                assert!(elapsed < upper, "timed out late: {elapsed:?} >= {upper:?}");
             }
-            tokio::time::sleep(std::time::Duration::from_millis(1600)).await;
+            pause.end().await;
         });
     }
 
@@ -4401,10 +4458,7 @@ pub(crate) mod shared_client_tests {
                 },
             )
             .await;
-            let _ = test_basics
-                .client
-                .send_command(redis::cmd("CLIENT").arg("PAUSE").arg("2000"), None)
-                .await;
+            let pause = pause_server(&test_basics.server, 2000).await;
             let timeout = std::time::Duration::from_millis(REQUEST_TIMEOUT_MS);
             let bound = timeout + glide_core::timeout_watchdog::WATCHDOG_TICK + JITTER_ALLOWANCE;
             for i in 0..5 {
@@ -4422,7 +4476,7 @@ pub(crate) mod shared_client_tests {
                     "timed out late: {elapsed:?} > {bound:?} (timeout + 1 tick + jitter allowance)"
                 );
             }
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            pause.end().await;
         });
     }
 
@@ -4485,12 +4539,9 @@ pub(crate) mod shared_client_tests {
             // The global watchdog is shared by the whole test binary: keep it stopped only for
             // this one request. (Non-serial tests running meanwhile still get their timeouts,
             // from the same fallbacks.)
+            let pause = pause_server(&test_basics.server, 2000).await;
             let revive = ReviveWatchdog;
             glide_core::timeout_watchdog::TimeoutWatchdog::stop_global_for_test();
-            let _ = test_basics
-                .client
-                .send_command(redis::cmd("CLIENT").arg("PAUSE").arg("2000"), None)
-                .await;
             let timeout = std::time::Duration::from_millis(REQUEST_TIMEOUT_MS);
             let start = std::time::Instant::now();
             let result = test_basics
@@ -4507,7 +4558,7 @@ pub(crate) mod shared_client_tests {
                 elapsed < timeout + std::time::Duration::from_millis(500),
                 "fallback did not bound the request: {elapsed:?}"
             );
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            pause.end().await;
         });
     }
 
@@ -4531,10 +4582,7 @@ pub(crate) mod shared_client_tests {
             )
             .await;
             let idle = test_basics.client.available_inflight_count();
-            let _ = test_basics
-                .client
-                .send_command(redis::cmd("CLIENT").arg("PAUSE").arg("2000"), None)
-                .await;
+            let pause = pause_server(&test_basics.server, 2000).await;
             let start = std::time::Instant::now();
             let err = test_basics
                 .client
@@ -4544,15 +4592,23 @@ pub(crate) mod shared_client_tests {
             assert!(err.is_timeout(), "expected a timeout, got: {err:?}");
             // The per-node timer releases the slot about one timeout after the send; allow
             // generous slack, but far less than the 2 s pause.
+            let release_bound = std::time::Duration::from_millis(1000);
             while test_basics.client.available_inflight_count() != idle {
                 assert!(
-                    start.elapsed() < std::time::Duration::from_millis(1000),
+                    start.elapsed() < release_bound,
                     "in-flight slot still held after {:?}: the sub-request has no timer",
                     start.elapsed()
                 );
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
             }
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            // Also when the first sample was already idle: a release seen only after a stall
+            // past the bound could be the server's answer at the end of the pause.
+            let released_by = start.elapsed();
+            assert!(
+                released_by < release_bound,
+                "in-flight slot release observed only after {released_by:?}"
+            );
+            pause.end().await;
         });
     }
 
