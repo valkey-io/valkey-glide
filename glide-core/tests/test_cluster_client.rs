@@ -949,6 +949,31 @@ mod cluster_client_tests {
         });
     }
 
+    /// `INFO SERVER` with partial results.
+    fn partial_info() -> redis::Cmd {
+        let mut cmd = redis::cmd("INFO");
+        cmd.arg("SERVER").set_allow_partial_results(true);
+        cmd
+    }
+
+    /// Waits for the `CLIENT PAUSE` on each route to end (`CLIENT UNPAUSE` would
+    /// wait for it too).
+    async fn wait_for_pauses_to_end(pauser: &mut Client, routes: &[RoutingInfo]) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        for route in routes {
+            while pauser
+                .send_command(&mut redis::cmd("PING"), Some(route.clone()))
+                .await
+                .is_err()
+            {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "{route:?} did not recover"
+                );
+            }
+        }
+    }
+
     #[rstest]
     #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
     fn test_partial_results_keep_replies_when_a_primary_is_slow() {
@@ -971,11 +996,6 @@ mod cluster_client_tests {
                 },
             )
             .await;
-            let partial_info = || {
-                let mut cmd = redis::cmd("INFO");
-                cmd.arg("SERVER").set_allow_partial_results(true);
-                cmd
-            };
             let entries = |value: Value| match value {
                 Value::Map(entries) => entries
                     .into_iter()
@@ -1033,18 +1053,7 @@ mod cluster_client_tests {
                 }
             }
 
-            // CLIENT UNPAUSE would wait for the pause too; wait for it to end.
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
-            while pauser
-                .send_command(&mut redis::cmd("PING"), Some(route.clone()))
-                .await
-                .is_err()
-            {
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "{slow} did not recover"
-                );
-            }
+            wait_for_pauses_to_end(&mut pauser, &[route]).await;
         });
     }
 
@@ -1082,11 +1091,6 @@ mod cluster_client_tests {
                 },
             )
             .await;
-            let partial_info = || {
-                let mut cmd = redis::cmd("INFO");
-                cmd.arg("SERVER").set_allow_partial_results(true);
-                cmd
-            };
             let Value::Map(healthy) = client
                 .send_command(&mut partial_info(), None)
                 .await
@@ -1133,17 +1137,7 @@ mod cluster_client_tests {
                 "a result in which no node answered must count as the plain timeout"
             );
 
-            // CLIENT UNPAUSE would wait for the pause too; wait for it to end.
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
-            for route in &routes {
-                while pauser
-                    .send_command(&mut redis::cmd("PING"), Some(route.clone()))
-                    .await
-                    .is_err()
-                {
-                    assert!(std::time::Instant::now() < deadline);
-                }
-            }
+            wait_for_pauses_to_end(&mut pauser, &routes).await;
         });
     }
 }
