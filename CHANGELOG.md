@@ -4,6 +4,7 @@
 
 ### Features
 
+* Rust: Add `HGETDEL` and `DELIFEQ` commands ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145), [#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Python: Add CPython 3.15 wheels for the async and sync clients ([#7321](https://github.com/valkey-io/valkey-glide/issues/7321))
 
 ### Fixes
