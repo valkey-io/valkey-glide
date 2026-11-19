@@ -877,7 +877,8 @@ struct WatchdogShared {
     /// Set when the last handle is dropped, or by the thread itself on exit.
     shutdown: AtomicBool,
     thread: OnceLock<std::thread::Thread>,
-    /// Loop iterations of the watchdog thread (one per wake-up). Written only by that thread.
+    /// Loop iterations of the watchdog thread: one per wake-up, plus the rare round that goes on
+    /// without parking. Written only by that thread.
     wakeups: AtomicU64,
     /// Test hook: panic in the middle of a drain, with drained entries still in hand.
     #[cfg(test)]
@@ -1272,6 +1273,12 @@ impl TimeoutWatchdog {
         // Whether the previous drain found registrations: traffic is flowing, so come back
         // within DRAIN_INTERVAL to recycle the slots of completed requests.
         let mut busy = false;
+        // Entries still to inspect in the current sweep pass. While non-zero (a large resident
+        // set, inspected SWEEP_BUDGET entries at a time) the thread comes back every
+        // SWEEP_INTERVAL to continue the pass, even when traffic has stopped, so cancelled
+        // entries do not stay resident until the next registration or a far deadline. Never
+        // more than `wheel.count`: entries that fire mid-pass leave without being inspected.
+        let mut sweep_left = 0usize;
 
         loop {
             if shared.shutdown.load(Ordering::SeqCst) {
@@ -1281,16 +1288,34 @@ impl TimeoutWatchdog {
 
             // Fire what is already due before draining, so a large registration burst does not
             // delay due timeouts by the time the drain takes.
-            let now = Instant::now();
-            let _fired = wheel.fire_due(now);
+            let woke_at = Instant::now();
+            let _fired = wheel.fire_due(woke_at);
+            // Sweep steps are timed from wake-ups, not from the end of an iteration's work, so
+            // a step SWEEP_INTERVAL after the last one is due at the matching DRAIN_INTERVAL
+            // wake-up under traffic instead of costing another short park.
+            let sweep_due = woke_at.duration_since(last_sweep) >= SWEEP_INTERVAL;
 
             // Publish the latest time we will look at the inboxes next, BEFORE draining them
             // (see `register()`). We never sleep past it; registrants with an earlier deadline
             // lower it and wake us.
-            let elapsed = now.saturating_duration_since(wheel.epoch);
+            let elapsed = woke_at.saturating_duration_since(wheel.epoch);
             let mut look = wheel.next_boundary();
             if busy {
                 look = min_opt(look, Some(elapsed + DRAIN_INTERVAL));
+            }
+            // Whether the look below is earlier only because of an unfinished sweep pass.
+            let mut look_for_sweep = false;
+            if sweep_left > 0 {
+                // An unfinished pass: its next step. If that step is due, this iteration runs
+                // it, and the step after it is one SWEEP_INTERVAL from now; promising the due
+                // (past) step instead would skip the park and cost a second iteration.
+                let step = if sweep_due {
+                    elapsed + SWEEP_INTERVAL
+                } else {
+                    next_sweep(last_sweep, wheel.epoch)
+                };
+                look_for_sweep = look.is_none_or(|l| step < l);
+                look = min_opt(look, Some(step));
             }
             // Odd: the thread's own promise (see `WatchdogShared::next_look`). Rounding up by
             // 1 ns only makes registrants wake the thread slightly more eagerly.
@@ -1355,10 +1380,17 @@ impl TimeoutWatchdog {
             wheel.fire_due(now);
 
             // Periodic cleanup of entries whose receivers were dropped (command completed),
-            // bounded per pass by SWEEP_BUDGET.
-            if now.duration_since(last_sweep) >= SWEEP_INTERVAL {
-                wheel.sweep_cancelled(SWEEP_BUDGET);
-                last_sweep = now;
+            // bounded per step by SWEEP_BUDGET.
+            if sweep_due {
+                if sweep_left == 0 {
+                    // A new pass covers the entries resident now.
+                    sweep_left = wheel.count;
+                }
+                let inspected = wheel.sweep_cancelled(SWEEP_BUDGET);
+                // The entries the pass has not inspected yet are all still in the wheel; the
+                // cap drops those that fired meanwhile (and ends the pass on an empty wheel).
+                sweep_left = sweep_left.saturating_sub(inspected).min(wheel.count);
+                last_sweep = woke_at;
             }
 
             // Hand retired slots back to the shards that allocated them.
@@ -1367,12 +1399,25 @@ impl TimeoutWatchdog {
             // Only this worker can publish to this instance's snapshot.
             pending.publish(wheel.count);
 
+            // The pass ended in this step, but the look promised its next step. Sleeping to
+            // that promise would wake us only to start a new pass over the same resident
+            // entries, and so on for as long as they stay. Go round instead, to publish a look
+            // without it before draining again (we never sleep past a published look).
+            if look_for_sweep && sweep_left == 0 {
+                continue;
+            }
+
             // Sleep to the earliest of: the published look (never later), the next due bucket
             // (drained entries may have added an earlier one), and, while traffic flows, one
-            // DRAIN_INTERVAL from now.
+            // DRAIN_INTERVAL from now; and, while a sweep pass is unfinished, its next step
+            // (one SWEEP_INTERVAL after this wake-up if this iteration ran a step, which is
+            // what the look promised).
             let mut wake = min_opt(look, wheel.next_boundary());
             if busy {
                 wake = min_opt(wake, Some(elapsed + DRAIN_INTERVAL));
+            }
+            if sweep_left > 0 {
+                wake = min_opt(wake, Some(next_sweep(last_sweep, wheel.epoch)));
             }
             match wake {
                 Some(at) => {
@@ -1396,6 +1441,11 @@ fn min_opt(a: Option<Duration>, b: Option<Duration>) -> Option<Duration> {
         (a, None) => a,
         (None, b) => b,
     }
+}
+
+/// Offset from `epoch` of the next sweep step after one at `last_sweep`.
+fn next_sweep(last_sweep: Instant, epoch: Instant) -> Duration {
+    last_sweep.saturating_duration_since(epoch) + SWEEP_INTERVAL
 }
 
 fn duration_nanos(d: Duration) -> u64 {
@@ -2568,6 +2618,99 @@ mod tests {
             );
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
+    }
+
+    /// A resident set larger than one sweep pass's budget, cancelled after traffic stopped, is
+    /// swept out completely after a single later registration: the thread keeps coming back
+    /// every SWEEP_INTERVAL until the pass is done, instead of going back to sleeping towards
+    /// the 60 s deadlines after the one or two passes that registration's wake-ups allow.
+    #[test]
+    fn unfinished_sweep_pass_is_continued_after_traffic_stops() {
+        const N: usize = 5 * SWEEP_BUDGET;
+        let watchdog = TimeoutWatchdog::start();
+        // About 10 entries per tick bucket, so a pass takes several budgeted steps (the sweep
+        // inspects whole buckets, so a few huge buckets would be covered in one or two steps).
+        let t0 = Instant::now();
+        let live: Vec<_> = (0..N as u64)
+            .map(|i| {
+                watchdog.register(Duration::from_secs(60) + Duration::from_micros(i * 100), t0)
+            })
+            .collect();
+        wait_for_pending(&watchdog, N);
+        wait_until_idle(&watchdog);
+        drop(live);
+        let before = watchdog.shared.wakeups.load(Ordering::Relaxed);
+        // Nothing wakes a sleeping thread for cancellations; one registration does.
+        drop(watchdog.register(Duration::from_secs(60), Instant::now()));
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while watchdog.pending.load() != 0 {
+            assert!(
+                Instant::now() < deadline,
+                "{} cancelled entries still resident",
+                watchdog.pending.load()
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        // Once the pass is done the thread sleeps again: nothing is outstanding.
+        wait_until_parked(&watchdog);
+        // One loop iteration per step: the pass takes N / SWEEP_BUDGET (5) steps, the first at
+        // the registration's wake-up and the second at its follow-up drain, plus one iteration
+        // at the end of the pass to withdraw the promised next step: 6 (measured: 6). Promising
+        // a step that is already due skips the park and costs a second iteration for every
+        // later step (measured: 9).
+        let wakeups = watchdog.shared.wakeups.load(Ordering::Relaxed) - before;
+        eprintln!("wake-ups for a {N}-entry sweep pass: {wakeups}");
+        assert!(
+            wakeups <= 7,
+            "{wakeups} wake-ups for a sweep pass of 5 steps"
+        );
+    }
+
+    /// Entries that fire during a sweep pass leave the wheel without being inspected, so they
+    /// must not keep the pass going: once only one long deadline is left, the thread sleeps
+    /// towards it, instead of waking every SWEEP_INTERVAL to inspect that one entry once per
+    /// fired entry the pass had counted.
+    #[test]
+    fn entries_that_fire_mid_pass_do_not_prolong_the_sweep_pass() {
+        const N: usize = 20 * SWEEP_BUDGET;
+        let watchdog = TimeoutWatchdog::start();
+        let t0 = Instant::now();
+        let _blpop = watchdog.register(Duration::from_secs(30), t0);
+        // Live entries spread over 100 tick buckets, firing 300-400 ms after t0. A pass that
+        // starts while they are resident takes about 17 steps (170 ms), so the last of them
+        // fire while it is unfinished (the sweep inspects whole buckets: a few huge buckets
+        // would be covered in one or two steps).
+        let mut short: Vec<_> = (0..N as u64)
+            .map(|i| {
+                let spread = Duration::from_millis(100) * i as u32 / N as u32;
+                watchdog.register(Duration::from_millis(300) + spread, t0)
+            })
+            .collect();
+        // The last registration has the latest deadline: once it fired, so did the others.
+        wait_for_signal(short.pop().unwrap());
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while watchdog.pending.load() != 1 {
+            assert!(
+                Instant::now() < deadline,
+                "{} entries still pending",
+                watchdog.pending.load()
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        // Let the thread finish the pass's last step(s) and publish a look towards the 30 s
+        // deadline; without the cap it never does, and the measurement below shows it.
+        let far = watchdog.nanos_since_epoch(Instant::now() + Duration::from_secs(20));
+        let settle = Instant::now() + Duration::from_millis(500);
+        while watchdog.shared.next_look.load(Ordering::Relaxed) < far && Instant::now() < settle {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let wakeups = wakeups_during(&watchdog, Duration::ZERO, Duration::from_millis(300));
+        eprintln!("wake-ups in 300 ms after a mid-pass firing, one 30 s deadline left: {wakeups}");
+        assert!(
+            wakeups <= 3,
+            "{wakeups} wake-ups in 300 ms with only a 30 s deadline outstanding"
+        );
+        drop(short);
     }
 
     fn wait_for_pending(watchdog: &TimeoutWatchdog, expected: usize) {
