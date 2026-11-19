@@ -22,6 +22,7 @@ class OrchestrationTests(unittest.TestCase):
             "RDMA_VPC_ID": "vpc-test",
             "RDMA_SUBNETS": "subnet-a,subnet-b",
             "RDMA_TEMPLATE_URL": "https://templates.s3.us-east-1.amazonaws.com/efa/sha.yaml",
+            "RDMA_INSTANCE_PROFILE_ARN": "arn:aws:iam::123456789012:instance-profile/hosts",
         }
         self.calls = []
 
@@ -95,6 +96,7 @@ class OrchestrationTests(unittest.TestCase):
             ("RDMA_SUBNETS", ""),
             ("RDMA_VPC_ID", ""),
             ("RDMA_TEMPLATE_URL", ""),
+            ("RDMA_INSTANCE_PROFILE_ARN", ""),
             ("KEEP_HOSTS", "yes"),
         ):
             with self.subTest(key=key):

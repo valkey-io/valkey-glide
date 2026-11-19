@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "bin/rdma-pair.sh"
+PROFILE = "arn:aws:iam::123456789012:instance-profile/hosts"
 
 
 class PairTemplateTests(unittest.TestCase):
@@ -35,6 +36,7 @@ class PairTemplateTests(unittest.TestCase):
             RDMA_STACK="rdma-ci-test",
         )
         self.env.pop("RDMA_TEMPLATE_URL", None)
+        self.env["RDMA_INSTANCE_PROFILE_ARN"] = PROFILE
 
     def execute(self, action):
         return subprocess.run(
@@ -64,6 +66,34 @@ class PairTemplateTests(unittest.TestCase):
         create = next(call for call in calls if call[1] == "create-change-set")
         self.assertEqual(create[create.index("--template-url") + 1], url)
         self.assertNotIn("--template-body", create)
+
+    def test_stack_is_created_without_iam_capabilities(self):
+        self.env["RDMA_TEMPLATE_URL"] = (
+            "https://templates.s3.us-east-1.amazonaws.com/k.yaml"
+        )
+        result = self.execute("plan")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = [
+            json.loads(line) for line in (self.root / "calls").read_text().splitlines()
+        ]
+        create = next(call for call in calls if call[1] == "create-change-set")
+        self.assertNotIn("--capabilities", create)
+        self.assertIn(
+            f"ParameterKey=InstanceProfileArn,ParameterValue={PROFILE}", create
+        )
+
+    def test_plan_without_instance_profile_creates_no_change_set(self):
+        self.env["RDMA_TEMPLATE_URL"] = (
+            "https://templates.s3.us-east-1.amazonaws.com/k.yaml"
+        )
+        self.env.pop("RDMA_INSTANCE_PROFILE_ARN")
+        result = self.execute("plan")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("RDMA_INSTANCE_PROFILE_ARN", result.stderr)
+        calls = [
+            json.loads(line) for line in (self.root / "calls").read_text().splitlines()
+        ]
+        self.assertFalse([call for call in calls if call[1] != "describe-stacks"])
 
     def test_plan_without_template_fails_before_aws(self):
         result = self.execute("plan")

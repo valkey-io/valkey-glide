@@ -18,6 +18,8 @@
 #   RDMA_STACK    stack name, default rdma-pair
 #   RDMA_OWNER    Owner tag and parameter, default the local user name
 #   RDMA_VPC_ID   VpcId parameter when not given on the command line
+#   RDMA_INSTANCE_PROFILE_ARN  InstanceProfileArn parameter when not given on
+#                 the command line; the stack is created without IAM capabilities
 #   RDMA_SUBNETS  comma-separated SubnetId candidates; apply tries them in
 #                 order when a create fails on InsufficientInstanceCapacity
 set -euo pipefail
@@ -107,10 +109,14 @@ complete_params() {
   local type=$1 kv; shift
   for kv in "$@"; do echo "$kv"; done
   if [ "$type" = UPDATE ]; then
-    for kv in Owner VpcId SubnetId; do has_param "$kv" "$@" || echo "$kv=@previous"; done
+    for kv in Owner VpcId SubnetId InstanceProfileArn; do has_param "$kv" "$@" || echo "$kv=@previous"; done
     return 0
   fi
   has_param Owner "$@" || echo "Owner=$RDMA_OWNER"
+  if ! has_param InstanceProfileArn "$@"; then
+    [ -n "${RDMA_INSTANCE_PROFILE_ARN:-}" ] || { echo "InstanceProfileArn=<arn> or RDMA_INSTANCE_PROFILE_ARN is required" >&2; exit 2; }
+    echo "InstanceProfileArn=$RDMA_INSTANCE_PROFILE_ARN"
+  fi
   if ! has_param VpcId "$@"; then
     [ -n "${RDMA_VPC_ID:-}" ] || { echo "VpcId=<vpc-id> or RDMA_VPC_ID is required" >&2; exit 2; }
     echo "VpcId=$RDMA_VPC_ID"
@@ -170,7 +176,7 @@ plan() {
   [ "$type" = CREATE ] && on_failure=(--on-stack-failure DO_NOTHING)
   aws cloudformation create-change-set --stack-name "$STACK" --change-set-name "$CHANGE_SET" \
     --change-set-type "$type" --template-url "$RDMA_TEMPLATE_URL" \
-    --capabilities CAPABILITY_IAM --tags "Key=Owner,Value=$RDMA_OWNER" Key=Purpose,Value=rdma-test \
+    --tags "Key=Owner,Value=$RDMA_OWNER" Key=Purpose,Value=rdma-test \
     ${on_failure[@]+"${on_failure[@]}"} \
     --parameters "${params[@]}" >/dev/null || exit 1
   aws cloudformation wait change-set-create-complete --stack-name "$STACK" --change-set-name "$CHANGE_SET" || true

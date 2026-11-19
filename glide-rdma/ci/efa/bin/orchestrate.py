@@ -40,7 +40,12 @@ def configuration(environ):
     match = re.fullmatch(r"GlideRdmaEfa:([0-9a-f-]{36})", build_id)
     if not match:
         raise ValueError("Expected CODEBUILD_BUILD_ID for GlideRdmaEfa")
-    for key in ("RDMA_VPC_ID", "RDMA_SUBNETS", "RDMA_TEMPLATE_URL"):
+    for key in (
+        "RDMA_VPC_ID",
+        "RDMA_SUBNETS",
+        "RDMA_TEMPLATE_URL",
+        "RDMA_INSTANCE_PROFILE_ARN",
+    ):
         if not env.get(key, "").strip():
             raise ValueError(f"{key} is required")
     keep = env.get("KEEP_HOSTS", "false")

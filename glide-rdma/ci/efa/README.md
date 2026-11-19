@@ -6,7 +6,8 @@ GitHub starts and monitors the `GlideRdmaEfa` CodeBuild project through the
 `CODEBUILD_RESOLVED_SOURCE_VERSION` and runs the RDMA transfer tests.
 
 - `.github/buildspec/rdma-efa.yml` documents the CodeBuild runtime and inputs.
-- `bin/rdma-pair.sh` manages the host stack using `RDMA_TEMPLATE_URL`.
+- `bin/rdma-pair.sh` manages the host stack using `RDMA_TEMPLATE_URL` and
+  `RDMA_INSTANCE_PROFILE_ARN`; it creates the stack without IAM capabilities.
 - `bin/run-on.sh` sends the `host/` steps to the pair over SSM.
 - `tests/` exercises orchestration and GitHub dispatch without AWS access.
 

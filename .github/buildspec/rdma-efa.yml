@@ -8,6 +8,7 @@ version: 0.2
 #   RDMA_VPC_ID        - VPC for the EFA hosts
 #   RDMA_SUBNETS       - comma-separated candidate subnets, tried on capacity failure
 #   RDMA_TEMPLATE_URL  - S3 HTTPS URL of the infrastructure-owned pair template
+#   RDMA_INSTANCE_PROFILE_ARN - instance profile the hosts run as
 #   AWS_REGION        - us-east-1
 # CodeBuild supplies CODEBUILD_BUILD_ID and CODEBUILD_RESOLVED_SOURCE_VERSION.
 # Optional KEEP_HOSTS=true retains the pair on failure only (default false).
