@@ -904,6 +904,7 @@ impl std::error::Error for PoolError {}
 pub struct ConnectionState {
     pub watch_active: bool,
     pub multi_active: bool,
+    pub multi_error: bool,
     pub tracking_enabled: bool,
     /// The database the connection is actually on. Survives borrows (never reset to 0
     /// on acquire/release); updated as `SELECT` runs and after release cleanup.
@@ -951,6 +952,7 @@ impl ConnectionState {
     pub fn is_clean_for(&self, parent_db: u32) -> bool {
         !self.watch_active
             && !self.multi_active
+            && !self.multi_error
             && !self.tracking_enabled
             && self.selected_db == parent_db
             && !self.client_name_changed
@@ -990,10 +992,14 @@ pub fn update_state_for_command(state: &mut ConnectionState, cmd: &str, args: &[
     match cmd.to_uppercase().as_str() {
         "WATCH" => state.watch_active = true,
         "UNWATCH" => state.watch_active = false,
-        "MULTI" => state.multi_active = true,
+        "MULTI" => {
+            state.multi_active = true;
+            state.multi_error = false;
+        }
         "EXEC" | "DISCARD" => {
             state.watch_active = false;
             state.multi_active = false;
+            state.multi_error = false;
         }
         "SELECT" => {
             if let Some(b) = args.first() {

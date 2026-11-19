@@ -1812,6 +1812,21 @@ impl Client {
         last_auth_generation: &mut AuthGeneration,
         defer_reauth: bool,
     ) -> RedisResult<Value> {
+        if self.shared.read_only {
+            let is_allowed = match Routable::command(cmd) {
+                Some(cmd_bytes) => {
+                    crate::scope::is_allowed_readonly_scope_command(cmd_bytes.as_slice())
+                }
+                None => false,
+            };
+            if !is_allowed {
+                return Err(RedisError::from((
+                    ErrorKind::ReadOnly,
+                    "write commands are not allowed in read-only mode",
+                )));
+            }
+        }
+
         // Re-authenticate when the credential rotated (generation advanced since
         // this connection last applied one). `defer_reauth` skips it where AUTH
         // can't run — an open transaction (queued, corrupting the EXEC reply) or
@@ -1989,6 +2004,12 @@ impl Client {
     /// Used by scope connections to determine whether slot validation is needed.
     pub fn is_cluster_mode(&self) -> bool {
         self.shared.is_cluster
+    }
+
+    /// Returns true if this client was configured in read-only mode.
+    /// Used by scope connections to reject write commands.
+    pub fn is_read_only(&self) -> bool {
+        self.shared.read_only
     }
 
     /// Returns the cache hit rate (hits / total requests).

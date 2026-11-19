@@ -36,7 +36,19 @@ use crate::pool::{
     ScopeMutex, ScopedConnection, get_client_scope_pools, get_scope_registry, slot_for_key,
     update_state_for_command,
 };
+use redis::cluster_routing::Routable;
 use redis::{Cmd, RedisError, RedisResult, Value};
+
+/// Returns `true` if the command is permitted on a read-only client scope.
+///
+/// Permits all read-only commands recognized by [`is_readonly_cmd`], as well as
+/// transaction and optimistic locking control commands (`MULTI`, `EXEC`,
+/// `DISCARD`, `WATCH`, `UNWATCH`) whose read/write eligibility is governed by
+/// the commands enclosed within them.
+pub fn is_allowed_readonly_scope_command(cmd: &[u8]) -> bool {
+    redis::cluster_routing::is_readonly_cmd(cmd)
+        || matches!(cmd, b"MULTI" | b"EXEC" | b"DISCARD" | b"WATCH" | b"UNWATCH")
+}
 
 #[cfg(feature = "proto")]
 use crate::client::SlotAddressError;
@@ -249,6 +261,13 @@ pub async fn execute_scope_command(
         }
     };
 
+    // Build redis command
+    let mut cmd = Cmd::new();
+    cmd.arg(cmd_name.as_bytes());
+    for arg in args {
+        cmd.arg(arg.as_slice());
+    }
+
     let mut conn = entry.lock().await;
 
     // State tracking (for conditional cleanup on release)
@@ -258,6 +277,58 @@ pub async fn execute_scope_command(
     // would attempt AUTH while the server is still in the old mode.
     let multi_active_before_command = conn.state.multi_active;
     let subscribed_before_command = conn.state.has_subscriptions();
+
+    // If a queued command was rejected locally inside an open MULTI, EXEC must fail
+    // with EXECABORT rather than committing the partial queue on the server.
+    if multi_active_before_command && conn.state.multi_error && cmd_name.eq_ignore_ascii_case("EXEC") {
+        let discard_res = tokio::time::timeout(
+            std::time::Duration::from_millis(1000),
+            conn.connection.send_packed_command(&redis::cmd("DISCARD")),
+        )
+        .await;
+
+        match discard_res {
+            Ok(Ok(_)) => {
+                conn.state.multi_active = false;
+                conn.state.multi_error = false;
+                conn.state.watch_active = false;
+            }
+            _ => {
+                // A timeout or failed DISCARD leaves the connection possibly still in MULTI
+                // or hung; poison it so release drops the physical connection instead of
+                // returning it to the idle pool.
+                conn.state.must_discard = true;
+            }
+        }
+
+        return Err(RedisError::from((
+            redis::ErrorKind::ExecAbortError,
+            "EXECABORT",
+            "EXECABORT Transaction discarded because of previous errors.".to_string(),
+        )));
+    }
+
+    // Read-only client check: standalone clients configured with read_only = true
+    // reject write commands on their normal command path; scopes borrowed from them
+    // must enforce the same restriction before dispatch.
+    if let Some(c) = client
+        && c.is_read_only()
+    {
+        let is_allowed = match Routable::command(&cmd) {
+            Some(cmd_bytes) => is_allowed_readonly_scope_command(cmd_bytes.as_slice()),
+            None => false,
+        };
+        if !is_allowed {
+            if multi_active_before_command {
+                conn.state.multi_error = true;
+            }
+            return Err(RedisError::from((
+                redis::ErrorKind::ReadOnly,
+                "write commands are not allowed in read-only mode",
+            )));
+        }
+    }
+
     update_state_for_command(&mut conn.state, cmd_name, &arg_refs);
 
     // Cluster mode: validate slot consistency (skip in standalone — no slots).
@@ -302,13 +373,6 @@ pub async fn execute_scope_command(
                 }
             }
         }
-    }
-
-    // Build redis command
-    let mut cmd = Cmd::new();
-    cmd.arg(cmd_name.as_bytes());
-    for arg in args {
-        cmd.arg(arg.as_slice());
     }
 
     // Presume a blocking command's connection unsafe until we know the outcome;
@@ -4490,5 +4554,196 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(unix_socket_scope_addr(&tcp, TlsMode::NoTls).unwrap(), None);
+    }
+
+    // ── Read-only standalone client scope guard (#7760) ──────────────────────
+
+    async fn lazy_readonly_parent() -> Client {
+        let request = ClientRequest {
+            addresses: vec![ClientAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+                unix_socket_path: None,
+            }],
+            lazy_connect: true,
+            read_only: true,
+            ..Default::default()
+        };
+
+        Client::new(request, None)
+            .await
+            .expect("lazy client construction does not touch the network")
+    }
+
+    #[test]
+    fn test_is_allowed_readonly_scope_command_classification() {
+        use super::is_allowed_readonly_scope_command;
+        // Allowed read commands
+        assert!(is_allowed_readonly_scope_command(b"GET"));
+        assert!(is_allowed_readonly_scope_command(b"MGET"));
+        assert!(is_allowed_readonly_scope_command(b"HGET"));
+        assert!(is_allowed_readonly_scope_command(b"PING"));
+        assert!(is_allowed_readonly_scope_command(b"SELECT"));
+        assert!(is_allowed_readonly_scope_command(b"CLIENT GETNAME"));
+        assert!(is_allowed_readonly_scope_command(b"CONFIG GET"));
+        // Allowed transaction commands
+        assert!(is_allowed_readonly_scope_command(b"MULTI"));
+        assert!(is_allowed_readonly_scope_command(b"EXEC"));
+        assert!(is_allowed_readonly_scope_command(b"DISCARD"));
+        assert!(is_allowed_readonly_scope_command(b"WATCH"));
+        assert!(is_allowed_readonly_scope_command(b"UNWATCH"));
+        // Rejected write commands
+        assert!(!is_allowed_readonly_scope_command(b"SET"));
+        assert!(!is_allowed_readonly_scope_command(b"HSET"));
+        assert!(!is_allowed_readonly_scope_command(b"DEL"));
+        assert!(!is_allowed_readonly_scope_command(b"INCR"));
+        assert!(!is_allowed_readonly_scope_command(b"LPUSH"));
+    }
+
+    #[tokio::test]
+    async fn read_only_standalone_scope_rejects_write_commands() {
+        let (_pool, scope_id, shutdown_sender, server) = borrowed_silent_scope().await;
+        let readonly_parent = lazy_readonly_parent().await;
+
+        let write_commands: [(&str, &[&[u8]]); 5] = [
+            ("SET", &[b"key", b"val"]),
+            ("HSET", &[b"hash", b"k", b"v"]),
+            ("DEL", &[b"key"]),
+            ("INCR", &[b"key"]),
+            ("LPUSH", &[b"list", b"val"]),
+        ];
+
+        for (cmd_name, args) in write_commands {
+            let arg_vecs: Vec<Vec<u8>> = args.iter().map(|a| a.to_vec()).collect();
+            let result =
+                execute_scope_command(scope_id, cmd_name, &arg_vecs, Some(&readonly_parent)).await;
+            assert!(
+                result.is_err(),
+                "Write command {cmd_name} must be rejected on read-only scope"
+            );
+            let err = result.unwrap_err();
+            assert_eq!(
+                err.kind(),
+                redis::ErrorKind::ReadOnly,
+                "Expected ReadOnly error kind for {cmd_name}, got: {err:?}"
+            );
+            assert!(
+                err.to_string()
+                    .contains("write commands are not allowed in read-only mode"),
+                "Expected read-only mode error message for {cmd_name}, got: {err}"
+            );
+        }
+
+        // Cleanup
+        shutdown_sender.send(()).expect("stop mock server");
+        server.join().expect("mock server exits cleanly");
+    }
+
+    #[tokio::test]
+    async fn read_only_standalone_scope_permits_reads_and_transactions() {
+        let (port, shutdown_tx, server_thread) = endpoint_answering_n_more_commands(2);
+
+        let request_bytes = request_bytes("", port);
+        let client_id = crate::pool::allocate_client_id();
+        let pool = ScopePool::new(ScopePoolConfig::default(), request_bytes.clone(), client_id);
+        pool.total_count.store(1, Ordering::Release);
+        let pool = Arc::new(ScopeMutex::new(pool));
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await
+        .expect("seat connection");
+
+        let registry = crate::pool::get_scope_registry();
+        let scope_id =
+            reused_scope_id(
+                pool.lock()
+                    .try_acquire(registry, ScopeTarget::Standalone, 0, None),
+            );
+
+        let readonly_parent = lazy_readonly_parent().await;
+
+        // PING must succeed through the scope of a read-only parent
+        let ping_res = execute_scope_command(scope_id, "PING", &[], Some(&readonly_parent)).await;
+        assert!(
+            ping_res.is_ok(),
+            "PING must be permitted on read-only scope: {ping_res:?}"
+        );
+
+        // MULTI must succeed through the scope of a read-only parent
+        let multi_res = execute_scope_command(scope_id, "MULTI", &[], Some(&readonly_parent)).await;
+        assert!(
+            multi_res.is_ok(),
+            "MULTI must be permitted on read-only scope: {multi_res:?}"
+        );
+
+        let _ = shutdown_tx.send(());
+        let _ = server_thread.join();
+    }
+
+    #[tokio::test]
+    async fn read_only_standalone_scope_multi_write_aborts_exec() {
+        // Mock server answers MULTI and DISCARD (sent when EXEC aborts)
+        let (port, shutdown_tx, server_thread) = endpoint_answering_n_more_commands(2);
+
+        let request_bytes = request_bytes("", port);
+        let client_id = crate::pool::allocate_client_id();
+        let pool = ScopePool::new(ScopePoolConfig::default(), request_bytes.clone(), client_id);
+        pool.total_count.store(1, Ordering::Release);
+        let pool = Arc::new(ScopeMutex::new(pool));
+        let reservation = reservation_for(&pool).await;
+        create_scope_connection(
+            pool.clone(),
+            None,
+            &request_bytes,
+            ScopeTarget::Standalone,
+            reservation,
+        )
+        .await
+        .expect("seat connection");
+
+        let registry = crate::pool::get_scope_registry();
+        let scope_id = reused_scope_id(
+            pool.lock()
+                .try_acquire(registry, ScopeTarget::Standalone, 0, None),
+        );
+
+        let readonly_parent = lazy_readonly_parent().await;
+
+        // Open transaction
+        let multi_res = execute_scope_command(scope_id, "MULTI", &[], Some(&readonly_parent)).await;
+        assert!(multi_res.is_ok(), "MULTI must succeed");
+
+        // Queued write is rejected locally with ReadOnly
+        let write_res = execute_scope_command(
+            scope_id,
+            "SET",
+            &[b"key".to_vec(), b"val".to_vec()],
+            Some(&readonly_parent),
+        )
+        .await;
+        assert!(write_res.is_err(), "write must be rejected inside MULTI");
+        assert_eq!(
+            write_res.unwrap_err().kind(),
+            redis::ErrorKind::ReadOnly,
+            "must fail with ReadOnly"
+        );
+
+        // Subsequent EXEC must fail with ExecAbortError and discard transaction on server
+        let exec_res = execute_scope_command(scope_id, "EXEC", &[], Some(&readonly_parent)).await;
+        assert!(exec_res.is_err(), "EXEC must fail after rejected queued write");
+        assert_eq!(
+            exec_res.unwrap_err().kind(),
+            redis::ErrorKind::ExecAbortError,
+            "EXEC must fail with ExecAbortError"
+        );
+
+        let _ = shutdown_tx.send(());
+        let _ = server_thread.join();
     }
 }
