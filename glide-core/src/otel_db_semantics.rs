@@ -27,13 +27,20 @@ enum MaskingPattern {
 
 /// Returns the masking pattern for a given command.
 ///
-/// The default is [`MaskingPattern::MaskAll`] to prevent accidental credential leakage
-/// from commands not explicitly listed here (e.g., `CONFIG SET requirepass`,
-/// `ACL SETUSER`, `MIGRATE`, `HELLO` with AUTH).
+/// The default is [`MaskingPattern::MaskAll`] to prevent accidental
+/// credential leakage from commands not explicitly listed here.
 fn masking_pattern(cmd_name: &str) -> MaskingPattern {
     match cmd_name.to_ascii_uppercase().as_str() {
         // -- MaskAll: all arguments are sensitive --
-        "AUTH" | "ECHO" | "HELLO" => MaskingPattern::MaskAll,
+        "ACL"
+        | "AUTH"
+        | "CLIENT"
+        | "CLUSTER"
+        | "CONFIG"
+        | "DEBUG"
+        | "ECHO"
+        | "HELLO"
+        | "MIGRATE" => MaskingPattern::MaskAll,
 
         // -- ShowFirst(1): only key/channel visible --
         // Note: ZADD has optional flags (NX|XX|GT|LT|CH|INCR) before score/member pairs,
@@ -61,9 +68,6 @@ fn masking_pattern(cmd_name: &str) -> MaskingPattern {
         "HSET" | "HMSET" => MaskingPattern::ShowFirstThenInterleave(1),
 
         // -- ShowAll: all arguments are non-sensitive (keys, patterns, indices, etc.) --
-        // Note: commands with subcommands that may carry credentials (CONFIG, ACL,
-        // CLIENT, DEBUG, HELLO, MIGRATE, CLUSTER) are intentionally omitted here
-        // so they fall through to the MaskAll default.
         //
         // String
         "DECR" | "DECRBY" | "GET" | "GETBIT" | "GETDEL" | "GETEX" | "GETRANGE"
@@ -111,9 +115,7 @@ fn masking_pattern(cmd_name: &str) -> MaskingPattern {
         // Scripting (structural)
         | "SCRIPT" | "FUNCTION" => MaskingPattern::ShowAll,
 
-        // Default: mask everything for safety. Any unlisted command (including
-        // credential-bearing ones like CONFIG SET requirepass, ACL SETUSER,
-        // MIGRATE with auth password) will have all arguments masked.
+        // Default: mask everything for safety.
         _ => MaskingPattern::MaskAll,
     }
 }
@@ -272,9 +274,9 @@ mod tests {
     // --- serialize_query_text ---
     //
     // Table-driven tests: each entry is a realistic query an application would
-    // issue, paired with the expected sanitized db.query.text output.
-    // This serves as both the masking_pattern mapping test and the
-    // serialize_query_text integration test.
+    // issue, paired with the expected sanitized db.query.text output. There is
+    // one representative case per masking pattern; the command-to-pattern
+    // mapping is covered by the masking_pattern tests below.
 
     fn make_cmd(name: &str, args: &[&str]) -> Cmd {
         let mut cmd = redis::cmd(name);
@@ -288,13 +290,8 @@ mod tests {
     const QUERY_TEXT_CASES: &[(&str, &[&str], &str)] = &[
         // -- No args --
         ("PING", &[], "PING"),
-        // -- MaskAll: all arguments are sensitive --
-        // AUTH <password>
-        ("AUTH", &["s3cret!"], "AUTH ?"),
-        // AUTH <username> <password>  (ACL-based auth)
+        // -- MaskAll: all arguments masked --
         ("AUTH", &["admin", "s3cret!"], "AUTH ? ?"),
-        // ECHO <message>
-        ("ECHO", &["sensitive-payload"], "ECHO ?"),
         // -- ShowFirst(1): first argument visible, remaining args masked --
         (
             "APPEND",
@@ -314,66 +311,23 @@ mod tests {
             "LINSERT playlist BEFORE track:5 ?",
         ),
         // -- InterleavedKeyValue: keys visible, values masked --
-        // MSET key value [key value ...]
-        ("MSET", &["config:retries", "5"], "MSET config:retries ?"),
         (
             "MSET",
-            &[
-                "user:1:name",
-                "Alice",
-                "user:2:name",
-                "Bob",
-                "user:3:name",
-                "Carol",
-            ],
-            "MSET user:1:name ? user:2:name ? user:3:name ?",
+            &["user:1:name", "Alice", "user:2:name", "Bob"],
+            "MSET user:1:name ? user:2:name ?",
         ),
-        // MSETNX key value [key value ...]
+        // -- ShowFirstThenInterleave(1): first argument visible, then field/value pairs --
         (
-            "MSETNX",
-            &["lock:a", "owner1", "lock:b", "owner2"],
-            "MSETNX lock:a ? lock:b ?",
+            "HMSET",
+            &["product:500", "price", "29.99", "stock", "150"],
+            "HMSET product:500 price ? stock ?",
         ),
-        // -- ShowAll: all arguments are non-sensitive --
-        // GET key
-        ("GET", &["session:abc"], "GET session:abc"),
-        // DEL key [key ...]
+        // -- ShowAll: all arguments visible --
         (
-            "DEL",
-            &["temp:1", "temp:2", "temp:3"],
-            "DEL temp:1 temp:2 temp:3",
+            "BITCOUNT",
+            &["flags:user:42", "0", "-1"],
+            "BITCOUNT flags:user:42 0 -1",
         ),
-        // HGET key field
-        ("HGET", &["user:1001", "email"], "HGET user:1001 email"),
-        // KEYS pattern
-        ("KEYS", &["user:*"], "KEYS user:*"),
-        // SINTERCARD numkeys key [key ...] [LIMIT limit]
-        (
-            "SINTERCARD",
-            &["2", "set:a", "set:b", "LIMIT", "10"],
-            "SINTERCARD 2 set:a set:b LIMIT 10",
-        ),
-        // SCAN cursor [MATCH pattern] [COUNT count]
-        (
-            "SCAN",
-            &["0", "MATCH", "user:*", "COUNT", "100"],
-            "SCAN 0 MATCH user:* COUNT 100",
-        ),
-        // -- MaskAll by default: unknown/credential-bearing commands --
-        // Unknown command defaults to MaskAll for safety
-        ("CUSTOMCMD", &["arg1", "arg2"], "CUSTOMCMD ? ?"),
-        // CONFIG SET requirepass — password must not leak
-        ("CONFIG", &["SET", "requirepass", "s3cret"], "CONFIG ? ? ?"),
-        // ACL SETUSER — tokens must not leak
-        ("ACL", &["SETUSER", "admin", ">password"], "ACL ? ? ?"),
-        // MIGRATE — contains auth password argument
-        (
-            "MIGRATE",
-            &["host", "6379", "key", "0", "5000", "AUTH", "s3cret"],
-            "MIGRATE ? ? ? ? ? ? ?",
-        ),
-        // HELLO with AUTH — password must not leak
-        ("HELLO", &["3", "AUTH", "user", "pass"], "HELLO ? ? ? ?"),
     ];
 
     #[test]
@@ -385,11 +339,27 @@ mod tests {
         }
     }
 
+    // --- masking_pattern ---
+
     #[test]
     fn test_masking_pattern_case_insensitive() {
         assert_masking_pattern("set", MaskingPattern::ShowFirst(1)); // Lower case
         assert_masking_pattern("sEt", MaskingPattern::ShowFirst(1)); // Mixed case
         assert_masking_pattern("Set", MaskingPattern::ShowFirst(1)); // Capital case
+    }
+
+    #[rstest]
+    #[case("ACL")]
+    #[case("AUTH")]
+    #[case("CLIENT")]
+    #[case("CLUSTER")]
+    #[case("CONFIG")]
+    #[case("DEBUG")]
+    #[case("ECHO")]
+    #[case("HELLO")]
+    #[case("MIGRATE")]
+    fn test_masking_pattern_mask_all(#[case] cmd_name: &str) {
+        assert_masking_pattern(cmd_name, MaskingPattern::MaskAll);
     }
 
     #[rstest]
@@ -427,6 +397,189 @@ mod tests {
     #[case("LINSERT")]
     fn test_masking_pattern_show_first_3(#[case] cmd_name: &str) {
         assert_masking_pattern(cmd_name, MaskingPattern::ShowFirst(3));
+    }
+
+    #[rstest]
+    #[case("MSET")]
+    #[case("MSETNX")]
+    fn test_masking_pattern_interleaved_key_value(#[case] cmd_name: &str) {
+        assert_masking_pattern(cmd_name, MaskingPattern::InterleavedKeyValue);
+    }
+
+    #[rstest]
+    #[case("HMSET")]
+    #[case("HSET")]
+    fn test_masking_pattern_show_first_then_interleave_1(#[case] cmd_name: &str) {
+        assert_masking_pattern(cmd_name, MaskingPattern::ShowFirstThenInterleave(1));
+    }
+
+    #[rstest]
+    #[case("BITCOUNT")]
+    #[case("BITFIELD")]
+    #[case("BITFIELD_RO")]
+    #[case("BITOP")]
+    #[case("BITPOS")]
+    #[case("COMMAND")]
+    #[case("COPY")]
+    #[case("DBSIZE")]
+    #[case("DECR")]
+    #[case("DECRBY")]
+    #[case("DEL")]
+    #[case("DISCARD")]
+    #[case("DUMP")]
+    #[case("EXEC")]
+    #[case("EXISTS")]
+    #[case("EXPIRE")]
+    #[case("EXPIREAT")]
+    #[case("EXPIRETIME")]
+    #[case("FLUSHALL")]
+    #[case("FLUSHDB")]
+    #[case("FUNCTION")]
+    #[case("GEODIST")]
+    #[case("GEOHASH")]
+    #[case("GEOPOS")]
+    #[case("GEORADIUS")]
+    #[case("GEORADIUSBYMEMBER")]
+    #[case("GEORADIUSBYMEMBER_RO")]
+    #[case("GEORADIUS_RO")]
+    #[case("GEOSEARCH")]
+    #[case("GEOSEARCHSTORE")]
+    #[case("GET")]
+    #[case("GETBIT")]
+    #[case("GETDEL")]
+    #[case("GETEX")]
+    #[case("GETRANGE")]
+    #[case("HDEL")]
+    #[case("HEXISTS")]
+    #[case("HGET")]
+    #[case("HGETALL")]
+    #[case("HGETDEL")]
+    #[case("HINCRBY")]
+    #[case("HINCRBYFLOAT")]
+    #[case("HKEYS")]
+    #[case("HLEN")]
+    #[case("HMGET")]
+    #[case("HRANDFIELD")]
+    #[case("HSCAN")]
+    #[case("HSTRLEN")]
+    #[case("HVALS")]
+    #[case("INCR")]
+    #[case("INCRBY")]
+    #[case("INCRBYFLOAT")]
+    #[case("INFO")]
+    #[case("KEYS")]
+    #[case("LINDEX")]
+    #[case("LLEN")]
+    #[case("LMOVE")]
+    #[case("LMPOP")]
+    #[case("LOLWUT")]
+    #[case("LPOP")]
+    #[case("LRANGE")]
+    #[case("LREM")]
+    #[case("LTRIM")]
+    #[case("MGET")]
+    #[case("MOVE")]
+    #[case("MULTI")]
+    #[case("OBJECT")]
+    #[case("PERSIST")]
+    #[case("PEXPIRE")]
+    #[case("PEXPIREAT")]
+    #[case("PEXPIRETIME")]
+    #[case("PFCOUNT")]
+    #[case("PFMERGE")]
+    #[case("PING")]
+    #[case("PTTL")]
+    #[case("PUBSUB")]
+    #[case("RANDOMKEY")]
+    #[case("RENAME")]
+    #[case("RENAMENX")]
+    #[case("RESET")]
+    #[case("RPOP")]
+    #[case("RPOPLPUSH")]
+    #[case("SCAN")]
+    #[case("SCARD")]
+    #[case("SCRIPT")]
+    #[case("SDIFF")]
+    #[case("SDIFFSTORE")]
+    #[case("SELECT")]
+    #[case("SINTER")]
+    #[case("SINTERCARD")]
+    #[case("SINTERSTORE")]
+    #[case("SISMEMBER")]
+    #[case("SLOWLOG")]
+    #[case("SMEMBERS")]
+    #[case("SMISMEMBER")]
+    #[case("SMOVE")]
+    #[case("SORT")]
+    #[case("SORT_RO")]
+    #[case("SPOP")]
+    #[case("SRANDMEMBER")]
+    #[case("SREM")]
+    #[case("SSCAN")]
+    #[case("STRLEN")]
+    #[case("SUBSTR")]
+    #[case("SUNION")]
+    #[case("SUNIONSTORE")]
+    #[case("SWAPDB")]
+    #[case("TIME")]
+    #[case("TOUCH")]
+    #[case("TTL")]
+    #[case("TYPE")]
+    #[case("UNLINK")]
+    #[case("UNWATCH")]
+    #[case("WAIT")]
+    #[case("WAITAOF")]
+    #[case("WATCH")]
+    #[case("XACK")]
+    #[case("XCLAIM")]
+    #[case("XDEL")]
+    #[case("XGROUP")]
+    #[case("XINFO")]
+    #[case("XLEN")]
+    #[case("XPENDING")]
+    #[case("XRANGE")]
+    #[case("XREAD")]
+    #[case("XREADGROUP")]
+    #[case("XREVRANGE")]
+    #[case("XTRIM")]
+    #[case("ZCARD")]
+    #[case("ZCOUNT")]
+    #[case("ZDIFF")]
+    #[case("ZDIFFSTORE")]
+    #[case("ZINCRBY")]
+    #[case("ZINTER")]
+    #[case("ZINTERCARD")]
+    #[case("ZINTERSTORE")]
+    #[case("ZLEXCOUNT")]
+    #[case("ZMPOP")]
+    #[case("ZMSCORE")]
+    #[case("ZPOPMAX")]
+    #[case("ZPOPMIN")]
+    #[case("ZRANDMEMBER")]
+    #[case("ZRANGE")]
+    #[case("ZRANGEBYLEX")]
+    #[case("ZRANGEBYSCORE")]
+    #[case("ZRANGESTORE")]
+    #[case("ZRANK")]
+    #[case("ZREM")]
+    #[case("ZREMRANGEBYLEX")]
+    #[case("ZREMRANGEBYRANK")]
+    #[case("ZREMRANGEBYSCORE")]
+    #[case("ZREVRANGE")]
+    #[case("ZREVRANGEBYLEX")]
+    #[case("ZREVRANGEBYSCORE")]
+    #[case("ZREVRANK")]
+    #[case("ZSCAN")]
+    #[case("ZSCORE")]
+    #[case("ZUNION")]
+    #[case("ZUNIONSTORE")]
+    fn test_masking_pattern_show_all(#[case] cmd_name: &str) {
+        assert_masking_pattern(cmd_name, MaskingPattern::ShowAll);
+    }
+
+    #[test]
+    fn test_masking_pattern_mask_all_default() {
+        assert_masking_pattern("UNKNOWN_COMMAND", MaskingPattern::MaskAll);
     }
 
     fn assert_masking_pattern(cmd_name: &str, expected: MaskingPattern) {
