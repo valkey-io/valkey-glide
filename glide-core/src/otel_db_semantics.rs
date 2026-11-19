@@ -7,6 +7,7 @@ use std::borrow::Borrow;
 
 /// Defines how command arguments are masked in `db.query.text` to prevent
 /// sensitive values from leaking into telemetry.
+#[derive(Debug, PartialEq)]
 enum MaskingPattern {
     /// Show all arguments. Used for read commands (GET, DEL, KEYS, etc.).
     ShowAll,
@@ -43,7 +44,12 @@ fn masking_pattern(cmd_name: &str) -> MaskingPattern {
         }
 
         // -- ShowFirst(2): key + TTL/field visible, value masked --
-        "SETEX" | "PSETEX" | "HSETNX" | "LSET" | "LPOS" => MaskingPattern::ShowFirst(2),
+        "DELEX"
+        | "HSETNX"
+        | "LPOS"
+        | "LSET"
+        | "PSETEX"
+        | "SETEX" => MaskingPattern::ShowFirst(2),
 
         // LINSERT key BEFORE|AFTER pivot element — key, keyword, pivot are non-sensitive
         "LINSERT" => MaskingPattern::ShowFirst(3),
@@ -261,6 +267,7 @@ pub fn set_db_batch_attributes<T: Borrow<Cmd>>(span: &GlideSpan, cmds: &[T], cli
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     // --- serialize_query_text ---
     //
@@ -288,151 +295,23 @@ mod tests {
         ("AUTH", &["admin", "s3cret!"], "AUTH ? ?"),
         // ECHO <message>
         ("ECHO", &["sensitive-payload"], "ECHO ?"),
-        // -- ShowFirst(1): key visible, value and remaining options masked --
-        // SET key value
-        (
-            "SET",
-            &["user:1001", r#"{"name":"Alice"}"#],
-            "SET user:1001 ?",
-        ),
-        // SET key value EX seconds NX
-        (
-            "SET",
-            &["session:abc", "token123", "EX", "3600", "NX"],
-            "SET session:abc ? ? ? ?",
-        ),
-        // SETNX key value
-        (
-            "SETNX",
-            &["lock:resource", "owner-id"],
-            "SETNX lock:resource ?",
-        ),
-        // SETEX key seconds value — TTL is non-sensitive
-        (
-            "SETEX",
-            &["cache:page:home", "300", "<html>..."],
-            "SETEX cache:page:home 300 ?",
-        ),
-        // PSETEX key milliseconds value — TTL is non-sensitive
-        (
-            "PSETEX",
-            &["ratelimit:user:42", "1500", "1"],
-            "PSETEX ratelimit:user:42 1500 ?",
-        ),
-        // APPEND key value
+        // -- ShowFirst(1): first argument visible, remaining args masked --
         (
             "APPEND",
             &["audit:log", "2026-02-24 action=login"],
             "APPEND audit:log ?",
         ),
-        // GETSET key value
+        // -- ShowFirst(2): first two arguments visible, remaining args masked --
         (
-            "GETSET",
-            &["counter:visits", "0"],
-            "GETSET counter:visits ?",
+            "DELEX",
+            &["lock:resource", "IFEQ", "owner-id"],
+            "DELEX lock:resource IFEQ ?",
         ),
-        // LPUSH key element [element ...]
-        (
-            "LPUSH",
-            &["queue:jobs", "job1", "job2", "job3"],
-            "LPUSH queue:jobs ? ? ?",
-        ),
-        // LPUSHX key element
-        (
-            "LPUSHX",
-            &["queue:existing", "new-item"],
-            "LPUSHX queue:existing ?",
-        ),
-        // RPUSH key element
-        (
-            "RPUSH",
-            &["notifications:user:5", r#"{"type":"mention"}"#],
-            "RPUSH notifications:user:5 ?",
-        ),
-        // RPUSHX key element
-        (
-            "RPUSHX",
-            &["pending:emails", "msg-body"],
-            "RPUSHX pending:emails ?",
-        ),
-        // SADD key member [member ...]
-        (
-            "SADD",
-            &["tags:article:99", "rust", "async", "valkey"],
-            "SADD tags:article:99 ? ? ?",
-        ),
-        // PFADD key element [element ...]
-        (
-            "PFADD",
-            &["unique:visitors", "user1", "user2", "user3"],
-            "PFADD unique:visitors ? ? ?",
-        ),
-        // PUBLISH channel message
-        (
-            "PUBLISH",
-            &["chat:room:1", "Hello everyone!"],
-            "PUBLISH chat:room:1 ?",
-        ),
-        // SPUBLISH shardchannel message
-        (
-            "SPUBLISH",
-            &["orders:shard1", r#"{"orderId":42}"#],
-            "SPUBLISH orders:shard1 ?",
-        ),
-        // ZADD key score member [score member ...]
-        (
-            "ZADD",
-            &["leaderboard", "9500", "player:42"],
-            "ZADD leaderboard ? ?",
-        ),
-        // XADD key * field value [field value ...]
-        (
-            "XADD",
-            &["stream:events", "*", "action", "login", "user", "alice"],
-            "XADD stream:events ? ? ? ? ?",
-        ),
-        // -- ShowFirstThenInterleave(1): key visible, then field/value pairs --
-        // HSET key field value
-        (
-            "HSET",
-            &["user:1001", "email", "alice@example.com"],
-            "HSET user:1001 email ?",
-        ),
-        // HSET key field value field value (multiple field-value pairs)
-        (
-            "HSET",
-            &["user:1001", "email", "a@b.com", "name", "Alice"],
-            "HSET user:1001 email ? name ?",
-        ),
-        // HMSET key field value [field value ...]
-        (
-            "HMSET",
-            &["product:500", "price", "29.99", "stock", "150"],
-            "HMSET product:500 price ? stock ?",
-        ),
-        // HSETNX key field value
-        (
-            "HSETNX",
-            &["user:1001", "created_at", "2026-01-01"],
-            "HSETNX user:1001 created_at ?",
-        ),
-        // LSET key index value
-        (
-            "LSET",
-            &["queue:jobs", "0", "updated-payload"],
-            "LSET queue:jobs 0 ?",
-        ),
-        // LINSERT key BEFORE|AFTER pivot element
+        // -- ShowFirst(3): first three arguments visible, remaining args masked --
         (
             "LINSERT",
             &["playlist", "BEFORE", "track:5", "track:new"],
             "LINSERT playlist BEFORE track:5 ?",
-        ),
-        // LPOS key element [RANK rank] [COUNT count]
-        (
-            "LPOS",
-            &["queue:jobs", "target-item", "RANK", "1", "COUNT", "2"],
-            "LPOS queue:jobs target-item ? ? ? ?",
         ),
         // -- InterleavedKeyValue: keys visible, values masked --
         // MSET key value [key value ...]
@@ -508,11 +387,54 @@ mod tests {
 
     #[test]
     fn test_masking_pattern_case_insensitive() {
-        // to_ascii_uppercase() is applied internally, one case is sufficient
-        assert!(matches!(
-            masking_pattern("set"),
-            MaskingPattern::ShowFirst(1)
-        ));
+        assert_masking_pattern("set", MaskingPattern::ShowFirst(1)); // Lower case
+        assert_masking_pattern("sEt", MaskingPattern::ShowFirst(1)); // Mixed case
+        assert_masking_pattern("Set", MaskingPattern::ShowFirst(1)); // Capital case
+    }
+
+    #[rstest]
+    #[case("APPEND")]
+    #[case("DELIFEQ")]
+    #[case("GETSET")]
+    #[case("LPUSH")]
+    #[case("LPUSHX")]
+    #[case("PFADD")]
+    #[case("PUBLISH")]
+    #[case("RPUSH")]
+    #[case("RPUSHX")]
+    #[case("SADD")]
+    #[case("SET")]
+    #[case("SETNX")]
+    #[case("SPUBLISH")]
+    #[case("XADD")]
+    #[case("ZADD")]
+    fn test_masking_pattern_show_first_1(#[case] cmd_name: &str) {
+        assert_masking_pattern(cmd_name, MaskingPattern::ShowFirst(1));
+    }
+
+    #[rstest]
+    #[case("DELEX")]
+    #[case("HSETNX")]
+    #[case("LPOS")]
+    #[case("LSET")]
+    #[case("PSETEX")]
+    #[case("SETEX")]
+    fn test_masking_pattern_show_first_2(#[case] cmd_name: &str) {
+        assert_masking_pattern(cmd_name, MaskingPattern::ShowFirst(2));
+    }
+
+    #[rstest]
+    #[case("LINSERT")]
+    fn test_masking_pattern_show_first_3(#[case] cmd_name: &str) {
+        assert_masking_pattern(cmd_name, MaskingPattern::ShowFirst(3));
+    }
+
+    fn assert_masking_pattern(cmd_name: &str, expected: MaskingPattern) {
+        assert_eq!(
+            masking_pattern(cmd_name),
+            expected,
+            "masking_pattern({cmd_name:?})"
+        );
     }
 
     // --- batch (pipeline) db.query.text ---

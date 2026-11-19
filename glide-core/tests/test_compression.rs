@@ -883,6 +883,7 @@ mod compression_tests {
     fn test_compression_incompatibility_reason() {
         // Test string manipulation commands
         assert_compression_incompatible(RequestType::Append, &["key", "value"]);
+        assert_compression_incompatible(RequestType::DelEx, &["key", "IFEQ", "value"]);
         assert_compression_incompatible(RequestType::DelIfEq, &["key", "value"]);
         assert_compression_incompatible(RequestType::GetRange, &["key", "0", "-1"]);
         assert_compression_incompatible(RequestType::LCS, &["key", "key2"]);
@@ -943,6 +944,11 @@ mod compression_tests {
         // Test incompatible commands return errors
         assert_process_args_incompatible(RequestType::Append, &["key", "value"], Some(&manager));
         assert_process_args_incompatible(RequestType::BitCount, &["key"], Some(&manager));
+        assert_process_args_incompatible(
+            RequestType::DelEx,
+            &["key", "IFEQ", "value"],
+            Some(&manager),
+        );
         assert_process_args_incompatible(RequestType::Incr, &["key"], Some(&manager));
         assert_process_args_incompatible(
             RequestType::Set,
@@ -991,6 +997,7 @@ mod compression_tests {
         assert_eq!(RequestType::BitPos.command_name(), Some("BITPOS"));
         assert_eq!(RequestType::Decr.command_name(), Some("DECR"));
         assert_eq!(RequestType::DecrBy.command_name(), Some("DECRBY"));
+        assert_eq!(RequestType::DelEx.command_name(), Some("DELEX"));
         assert_eq!(RequestType::DelIfEq.command_name(), Some("DELIFEQ"));
         assert_eq!(RequestType::GetBit.command_name(), Some("GETBIT"));
         assert_eq!(RequestType::GetRange.command_name(), Some("GETRANGE"));
@@ -1037,6 +1044,7 @@ mod compression_tests {
 
         // Test incompatible commands - string manipulation
         assert_from_command_name("APPEND", RequestType::Append);
+        assert_from_command_name("DELEX", RequestType::DelEx);
         assert_from_command_name("DELIFEQ", RequestType::DelIfEq);
         assert_from_command_name("GETRANGE", RequestType::GetRange);
         assert_from_command_name("LCS", RequestType::LCS);
@@ -1061,10 +1069,9 @@ mod compression_tests {
         assert_from_command_name("SETBIT", RequestType::SetBit);
 
         // Test case insensitivity
-        assert_from_command_name("append", RequestType::Append);
-        assert_from_command_name("sEt", RequestType::Set);
-        assert_from_command_name("Set", RequestType::Set);
-        assert_from_command_name("set", RequestType::Set);
+        assert_from_command_name("set", RequestType::Set);  // Lower case
+        assert_from_command_name("sEt", RequestType::Set);  // Mixed case
+        assert_from_command_name("Set", RequestType::Set);  // Capital case
 
         // Test unknown commands return None
         assert!(RequestType::from_command_name("").is_none());

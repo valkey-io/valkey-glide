@@ -289,6 +289,10 @@ class CoreCommands(Protocol):
         """
         Set the value of a key with the given options.
 
+        Since:
+            - Valkey 8.1.0 with `OnlyIfEqual`
+            - Valkey 9.2.0 with `OnlyIfNotEqual`
+
         See [valkey.io](https://valkey.io/commands/set/) for more details.
 
         Args:
