@@ -217,7 +217,9 @@ public class TimeoutTests {
     /**
      * Test 5: A script that runs past the request timeout raises TimeoutException.
      *
-     * <p>The script bridge wraps errors as ClientError, which must not swallow the timeout type.
+     * <p>The script bridge wraps errors as ClientError, which must not swallow the timeout type. A
+     * request timeout of 0 turns off the Java-side timer, so only the core's default timeout can
+     * fire.
      */
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
@@ -225,11 +227,10 @@ public class TimeoutTests {
     public void script_exceeding_timeout_throws_timeout_exception(boolean clusterMode) {
         BaseClient client =
                 clusterMode
-                        ? GlideClusterClient.createClient(
-                                        commonClusterClientConfig().requestTimeout(500).build())
+                        ? GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(0).build())
                                 .get()
-                        : GlideClient.createClient(commonClientConfig().requestTimeout(500).build()).get();
-        // Spins for 1.5s, well past the 500ms request timeout.
+                        : GlideClient.createClient(commonClientConfig().requestTimeout(0).build()).get();
+        // Spins for 1.5s, well past the core's 250ms default request timeout.
         String code =
                 "local s = redis.call('TIME') local start = s[1] * 1000000 + s[2] "
                         + "while true do local t = redis.call('TIME') "
