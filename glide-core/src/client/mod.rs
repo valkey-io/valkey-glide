@@ -1487,8 +1487,8 @@ impl Client {
     /// Record what an admitted command may change on the connection, for the
     /// re-AUTH defer and the release reset.
     fn track_command(&self, cmd: &Cmd, routing: Option<&RoutingInfo>) {
-        // Read-only standalone rejects MULTI/WATCH/EXEC/DISCARD locally, so they
-        // never reach the server (a pipeline can send them; `send_pipeline` tracks).
+        // Read-only standalone rejects MULTI/WATCH/EXEC/DISCARD locally, in
+        // pipelines too, so they never reach the server.
         if self.is_cluster || !self.read_only {
             self.track_transaction_state(cmd);
         }
@@ -1540,6 +1540,9 @@ impl Client {
         }
 
         let permit = admission.reserve(self)?;
+        // After the intercept, which answers GLIDE's own pubsub commands, and
+        // before the tracking, so a rejected command leaves no state.
+        self.reject_write_in_read_only(cmd)?;
         // The request-timeout lookup in `dispatch` refuses only blocking and WAIT
         // commands, none of which are tracked.
         self.track_command(cmd, routing.as_ref());
@@ -1991,6 +1994,16 @@ impl Client {
         self.shared.is_cluster
     }
 
+    /// Errors when this is a read-only standalone client and `cmd` can write.
+    /// Runs before `Client`'s pre-dispatch tracking, and on paths that bypass
+    /// `StandaloneClient`, such as isolated scopes.
+    pub(crate) fn reject_write_in_read_only(&self, cmd: &Cmd) -> RedisResult<()> {
+        if self.shared.read_only && !self.shared.is_cluster {
+            standalone_client::reject_write_command(&cmd.command().unwrap_or_default())?;
+        }
+        Ok(())
+    }
+
     /// True until a lazy client connects, and also whenever its lock cannot be read right away.
     /// The sync FFI runs a command on a worker while this is true.
     pub fn is_lazy(&self) -> bool {
@@ -2215,6 +2228,10 @@ impl Client {
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             crate::rdma::refuse_direct_in_batch(pipeline)?;
+            // Before the tracking below, so a rejected batch leaves no state.
+            for cmd in pipeline.cmd_iter() {
+                self.reject_write_in_read_only(cmd)?;
+            }
             self.reconcile_iam_before_dispatch().await?;
             // Capture the batch's last SELECT now; apply it after dispatch if the
             // reply shows the server took it, and flag a possible db change (see
@@ -2318,6 +2335,10 @@ impl Client {
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             crate::rdma::refuse_direct_in_batch(pipeline)?;
+            // Before the tracking below, so a rejected batch leaves no state.
+            for cmd in pipeline.cmd_iter() {
+                self.reject_write_in_read_only(cmd)?;
+            }
             self.reconcile_iam_before_dispatch().await?;
             // A raw MULTI stays open after a non-atomic pipeline returns, so track
             // it pre-dispatch for `prepare_for_borrow`'s defer. The SELECT drift is
@@ -3784,7 +3805,7 @@ impl Client {
     ///
     /// Fails without sending anything when the borrow left state no command undoes
     /// (`unresettable`), or when a read-only standalone client, which rejects
-    /// DISCARD/UNWATCH locally, sent MULTI or WATCH through a pipeline. Does not
+    /// DISCARD/UNWATCH locally, has MULTI or WATCH tracked as sent. Does not
     /// UNSUBSCRIBE: callers must not subscribe on a pooled client (use the parent
     /// client's pub/sub API, which keeps dedicated connections).
     pub async fn reset_connection_state(&mut self, configured_db: u32) -> RedisResult<()> {
@@ -6010,6 +6031,91 @@ mod tests {
         bracketed.cmd("MULTI").cmd("INCR").arg("a").cmd("EXEC");
         let _ = rt.block_on(client.send_pipeline(&bracketed, None, false, None, strategy));
         assert!(!client.shared.multi_active.load(Ordering::Acquire));
+    }
+
+    /// A read-only standalone client on its own server (the server stops on drop).
+    fn start_read_only_client() -> (
+        crate::pool::scope_pool_tests::TestServer,
+        tokio::runtime::Runtime,
+        Client,
+    ) {
+        use crate::pool::scope_pool_tests::{TestServer, wait_for_server_ready};
+        let server = TestServer::start();
+        let rt = borrow_test_runtime();
+        rt.block_on(wait_for_server_ready(server.port));
+        let request = ConnectionRequest {
+            read_only: true,
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: server.port,
+                unix_socket_path: None,
+            }],
+            ..Default::default()
+        };
+        let client = rt.block_on(Client::new(request, None)).unwrap();
+        (server, rt, client)
+    }
+
+    /// Pool-manage `client` after an IAM token rotation and run the borrow-time
+    /// re-AUTH. `Ok` means it was deferred; the test server has no password, so an
+    /// attempted AUTH errors.
+    fn borrow_after_iam_rotation(
+        rt: &tokio::runtime::Runtime,
+        client: Client,
+    ) -> redis::RedisResult<()> {
+        let mut client = rt.block_on(async move {
+            let manager = test_iam_manager().await;
+            let client = attach_iam(client, manager.clone(), manager.token_generation());
+            manager.refresh_token().await.unwrap();
+            client
+        });
+        client.mark_pool_managed();
+        rt.block_on(client.prepare_for_borrow())
+    }
+
+    /// A rejected read-only `[MULTI, SET]` pipeline never opened a transaction, so
+    /// it must not defer the pooled client's re-AUTH.
+    #[test]
+    fn rejected_read_only_multi_pipeline_does_not_defer_reauth() {
+        let (_server, rt, mut client) = start_read_only_client();
+        let mut pipeline = redis::pipe();
+        pipeline.cmd("MULTI").cmd("SET").arg("k").arg("v");
+        rt.block_on(client.send_pipeline(&pipeline, None, true, None, Default::default()))
+            .expect_err("read-only mode rejects the batch");
+        assert!(borrow_after_iam_rotation(&rt, client).is_err());
+    }
+
+    /// A rejected read-only `[SUBSCRIBE, SET]` batch never subscribed, so the
+    /// pool's release reset must succeed instead of discarding the connection.
+    #[rstest::rstest]
+    fn rejected_read_only_subscribe_batch_keeps_connection_resettable(
+        #[values(false, true)] atomic: bool,
+    ) {
+        let (_server, rt, mut client) = start_read_only_client();
+        let mut batch = redis::pipe();
+        batch
+            .cmd("SUBSCRIBE")
+            .arg("ch")
+            .cmd("SET")
+            .arg("k")
+            .arg("v");
+        let result = if atomic {
+            rt.block_on(client.send_transaction(&batch, None, None, true))
+        } else {
+            rt.block_on(client.send_pipeline(&batch, None, true, None, Default::default()))
+        };
+        result.expect_err("read-only mode rejects the batch");
+        rt.block_on(client.reset_connection_state(0)).unwrap();
+    }
+
+    /// A rejected read-only `MONITOR` never started monitoring, so the pool's
+    /// release reset must succeed instead of discarding the connection.
+    #[test]
+    fn rejected_read_only_monitor_keeps_connection_resettable() {
+        let (_server, rt, mut client) = start_read_only_client();
+        rt.block_on(client.send_command(&mut redis::cmd("MONITOR"), None))
+            .expect_err("read-only mode rejects MONITOR");
+        rt.block_on(client.reset_connection_state(0)).unwrap();
     }
 
     #[test]

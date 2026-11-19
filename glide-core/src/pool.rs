@@ -2238,7 +2238,7 @@ mod client_pool_marking_tests {
 }
 
 #[cfg(test)]
-mod scope_pool_tests {
+pub(crate) mod scope_pool_tests {
     use super::{
         Arc, AtomicU32, DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig,
         ScopeReservation, ScopeTarget, saturating_dec,
@@ -2306,13 +2306,13 @@ mod scope_pool_tests {
     }
 
     /// A real Valkey server child process bound to an ephemeral port, killed on drop.
-    struct TestServer {
+    pub(crate) struct TestServer {
         child: Child,
-        port: u16,
+        pub(crate) port: u16,
     }
 
     impl TestServer {
-        fn start() -> Self {
+        pub(crate) fn start() -> Self {
             let port = get_available_port();
             // Use `redis-server` to match the integration harness
             // (tests/utilities/mod.rs): it's present on every CI engine version,
@@ -2434,7 +2434,7 @@ mod scope_pool_tests {
         }
     }
 
-    async fn wait_for_server_ready(port: u16) {
+    pub(crate) async fn wait_for_server_ready(port: u16) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
             if let Ok(client) = redis::Client::open(format!("redis://127.0.0.1:{port}")) {
@@ -4358,11 +4358,11 @@ mod scope_pool_tests {
         }
     }
 
-    /// Read-only mode rejects DISCARD/UNWATCH locally, but a pipeline still reaches
-    /// the server, so a raw MULTI or WATCH there stays open; release must discard
-    /// the client. A-B: re-idled with the transaction or watch open.
+    /// Read-only mode rejects a pipeline holding MULTI or WATCH before it reaches the
+    /// server, so release must re-idle the client. A-B: discarded when the rejected
+    /// batch was still tracked as sent.
     #[tokio::test]
-    async fn release_discards_a_read_only_client_left_in_multi() {
+    async fn release_reuses_a_read_only_client_after_a_rejected_multi_pipeline() {
         for command in ["MULTI", "WATCH"] {
             let server = TestServer::start();
             wait_for_server_ready(server.port).await;
@@ -4387,12 +4387,12 @@ mod scope_pool_tests {
                     redis::PipelineRetryStrategy::default(),
                 )
                 .await
-                .expect("reaches the server through a pipeline");
+                .expect_err("read-only mode rejects the batch");
 
             super::release_client_async(pool_arc.clone(), client_id).await;
             let mut pool = pool_arc.lock();
-            assert_eq!(pool.idle_count(), 0, "{command}: must not be re-idled");
-            assert_eq!(pool.drain_discarded_ids(), vec![client_id], "{command}");
+            assert_eq!(pool.idle_count(), 1, "{command}: must be re-idled");
+            assert!(pool.drain_discarded_ids().is_empty(), "{command}");
         }
     }
 

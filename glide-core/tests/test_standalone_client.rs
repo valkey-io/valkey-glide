@@ -1712,4 +1712,111 @@ mod standalone_client_tests {
             );
         });
     }
+
+    /// A read-only `Client` on the shared primary, plus a normal client to check
+    /// what reached the server.
+    async fn read_only_batch_clients() -> (GlideClient, StandaloneClient) {
+        let config = TestConfiguration {
+            shared_server: true,
+            ..Default::default()
+        };
+        let checker = setup_test_basics_internal(&config).await.client;
+        let mut request = create_connection_request(&[get_shared_server_address(false)], &config);
+        request.cluster_mode_enabled = false;
+        request.read_only = Some(true);
+        let client = GlideClient::new(request.into(), None).await.unwrap();
+        (client, checker)
+    }
+
+    async fn send_batch(
+        client: &mut GlideClient,
+        pipe: &redis::Pipeline,
+        atomic: bool,
+        raise_on_error: bool,
+    ) -> redis::RedisResult<Value> {
+        if atomic {
+            client
+                .send_transaction(pipe, None, None, raise_on_error)
+                .await
+        } else {
+            client
+                .send_pipeline(pipe, None, raise_on_error, None, Default::default())
+                .await
+        }
+    }
+
+    async fn key_exists(checker: &mut StandaloneClient, key: &str) -> bool {
+        let reply = checker
+            .send_command(redis::cmd("EXISTS").arg(key))
+            .await
+            .unwrap();
+        i64::from_owned_redis_value(reply).unwrap() == 1
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_rejects_batch_with_write(
+        #[values(false, true)] atomic: bool,
+        #[values(0, 1, 2)] write_index: usize,
+        #[values(false, true)] raise_on_error: bool,
+    ) {
+        block_on_all(async move {
+            let (mut client, mut checker) = read_only_batch_clients().await;
+            let key = generate_random_string(10);
+            let mut pipe = redis::pipe();
+            if atomic {
+                pipe.atomic();
+            }
+            for i in 0..3 {
+                if i == write_index {
+                    pipe.cmd("set").arg(&key).arg("value");
+                } else {
+                    pipe.cmd("GET").arg(&key);
+                }
+            }
+
+            let err = send_batch(&mut client, &pipe, atomic, raise_on_error)
+                .await
+                .expect_err("a batch with a write should be rejected in read-only mode");
+            let single_err = client
+                .send_command(redis::cmd("SET").arg(&key).arg("value"), None)
+                .await
+                .expect_err("a single write should be rejected in read-only mode");
+            assert_eq!(err.kind(), redis::ErrorKind::ReadOnly, "got: {err}");
+            assert_eq!(err.to_string(), single_err.to_string());
+            assert!(
+                !key_exists(&mut checker, &key).await,
+                "the rejected batch must not write {key}"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_runs_read_only_batch(#[values(false, true)] atomic: bool) {
+        block_on_all(async move {
+            let (mut client, mut checker) = read_only_batch_clients().await;
+            let key = generate_random_string(10);
+            checker
+                .send_command(redis::cmd("SET").arg(&key).arg("value"))
+                .await
+                .unwrap();
+            let mut pipe = redis::pipe();
+            if atomic {
+                pipe.atomic();
+            }
+            pipe.cmd("GET").arg(&key).cmd("EXISTS").arg(&key);
+
+            let reply = send_batch(&mut client, &pipe, atomic, true).await.unwrap();
+            assert_eq!(
+                reply,
+                Value::Array(vec![
+                    Value::BulkString(b"value".to_vec().into()),
+                    Value::Int(1)
+                ])
+            );
+        });
+    }
 }
