@@ -962,10 +962,7 @@ mod cluster_client_tests {
             })
             .await;
 
-            block_all_primaries(test_basics.client.clone());
-
-            // Let the scripts take hold before scanning.
-            tokio::time::sleep(Duration::from_millis(200)).await;
+            block_all_primaries(&mut test_basics.client).await;
 
             let cursor = redis::ScanStateRC::new();
             let args = redis::ClusterScanArgs::builder().build();
@@ -984,22 +981,25 @@ mod cluster_client_tests {
         });
     }
 
-    /// The script keeps running after the command times out, until a `SCRIPT KILL`
-    /// arrives on another connection.
-    fn block_all_primaries(mut client: Client) {
-        tokio::spawn(async move {
-            let mut cmd = redis::cmd("EVAL");
-            cmd.arg("while (true) do redis.call('ping') end").arg("0");
-            let _ = client
-                .send_command(
-                    &mut cmd,
-                    Some(RoutingInfo::MultiNode((
-                        MultipleNodeRoutingInfo::AllMasters,
-                        None,
-                    ))),
-                )
-                .await;
-        });
+    /// Returns once the script has timed out, so every primary is running it. The
+    /// script keeps running until a `SCRIPT KILL` arrives on another connection.
+    async fn block_all_primaries(client: &mut Client) {
+        let mut cmd = redis::cmd("EVAL");
+        cmd.arg("while (true) do redis.call('ping') end").arg("0");
+        let err = client
+            .send_command(
+                &mut cmd,
+                Some(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllMasters,
+                    None,
+                ))),
+            )
+            .await
+            .expect_err("the script never returns");
+        assert!(
+            err.is_timeout(),
+            "expected the script to time out, got: {err}"
+        );
     }
 
     async fn scan_page(
@@ -1073,8 +1073,7 @@ mod cluster_client_tests {
                 .unwrap()
                 .expect("scan finished after one page");
 
-            block_all_primaries(client.clone());
-            tokio::time::sleep(Duration::from_millis(200)).await;
+            block_all_primaries(&mut client).await;
             let err = scan_page(&mut client, &cursor, &mut seen)
                 .await
                 .expect_err("cluster_scan should fail while every primary is blocked");
