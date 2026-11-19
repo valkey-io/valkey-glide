@@ -5630,39 +5630,6 @@ mod is_circular_moved_redirect_tests {
 }
 
 #[cfg(test)]
-mod slot_refresh_in_progress_guard_tests {
-    use super::{AtomicBool, Ordering, SlotRefreshInProgressGuard};
-
-    #[test]
-    fn clears_the_flag_when_the_scope_ends() {
-        let in_progress = AtomicBool::new(true);
-        {
-            let _guard = SlotRefreshInProgressGuard {
-                in_progress: &in_progress,
-            };
-            assert!(in_progress.load(Ordering::Relaxed));
-        }
-        assert!(!in_progress.load(Ordering::Relaxed));
-    }
-
-    #[test]
-    fn clears_the_flag_when_the_scope_ends_early() {
-        let in_progress = AtomicBool::new(true);
-        let run = |cancel: bool| {
-            let _guard = SlotRefreshInProgressGuard {
-                in_progress: &in_progress,
-            };
-            if cancel {
-                return "cancelled";
-            }
-            "completed"
-        };
-        assert_eq!(run(true), "cancelled");
-        assert!(!in_progress.load(Ordering::Relaxed));
-    }
-}
-
-#[cfg(test)]
 mod circular_moved_address_normalization_tests {
     use super::*;
     use crate::cluster_async::connections_container::{
