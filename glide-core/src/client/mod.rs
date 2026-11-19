@@ -6471,22 +6471,35 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn test_await_until_deadline_times_out_at_the_original_deadline() {
         // Dead-watchdog fallback: a never-answered request must fail as a real timeout
         // (is_timeout()), at the request's deadline — not a full timeout after the fallback starts.
-        let start = std::time::Instant::now();
-        let deadline = start + Duration::from_millis(60);
+        // The clock is paused (it only moves when the runtime idles), so a stalled test host
+        // cannot move the measured times.
+        let start = tokio::time::Instant::now();
+        let deadline = (start + Duration::from_millis(60)).into_std();
         tokio::time::sleep(Duration::from_millis(40)).await;
-        let result: redis::RedisResult<()> =
-            super::await_until_deadline(futures::future::pending(), deadline).await;
+        let fallback = super::await_until_deadline(
+            futures::future::pending::<redis::RedisResult<()>>(),
+            deadline,
+        );
+        tokio::pin!(fallback);
+        assert!(
+            tokio::time::timeout_at(start + Duration::from_millis(59), &mut fallback)
+                .await
+                .is_err(),
+            "must still be pending just before the original deadline"
+        );
+        let result = fallback.await;
         let elapsed = start.elapsed();
         let err = result.expect_err("a pending request must time out");
         assert!(err.is_timeout(), "expected a timeout, got: {err:?}");
-        assert!(elapsed >= Duration::from_millis(60), "early: {elapsed:?}");
+        // At the original deadline (the timer wheel rounds up to its 1 ms resolution), not
+        // 60 ms after the fallback started.
         assert!(
-            elapsed < Duration::from_millis(100),
-            "the deadline must not restart: {elapsed:?}"
+            elapsed >= Duration::from_millis(60) && elapsed < Duration::from_millis(62),
+            "expected expiry at the original 60 ms deadline, got {elapsed:?}"
         );
 
         let ok: redis::RedisResult<i32> = super::await_until_deadline(
