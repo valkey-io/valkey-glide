@@ -731,19 +731,14 @@ public class ConnectionManager {
 
     /**
      * Rejects a strategy whose {@link glide.api.models.configuration.ReadFrom#requiresClientAz()} is
-     * true, today only {@code AZ_AFFINITY_ALL_NODES}, when it has no {@code clientAZ}.
-     *
-     * <p>{@code AZ_AFFINITY_ALL_NODES} has thrown since it was added, so no client depends on it
-     * working without an AZ. {@code AZ_AFFINITY} and {@code AZ_AFFINITY_REPLICAS_AND_PRIMARY} are
-     * accepted without one: the core logs a warning and downgrades them to {@code PreferReplica}, as
-     * in 2.5.2 and earlier, and rejecting them would break existing clients.
+     * true, the AZ-affinity strategies, when it has no {@code clientAZ}. The core rejects the same
+     * configuration; checking here first keeps the error a {@code ConfigurationError}.
      *
      * <p>Called synchronously from {@code BaseClient.createClient} and from {@code ClientPool.create}
      * ahead of its connectivity probe, so callers see a direct throw rather than an {@code
      * ExecutionException} or a probe failure.
      *
-     * @throws ConfigurationError if {@code AZ_AFFINITY_ALL_NODES} is selected without a {@code
-     *     clientAZ}.
+     * @throws ConfigurationError if an AZ-affinity strategy is selected without a {@code clientAZ}.
      */
     public static void validateClientAz(BaseClientConfiguration configuration) {
         glide.api.models.configuration.ReadFrom readFrom = configuration.getReadFrom();

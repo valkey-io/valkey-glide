@@ -624,12 +624,17 @@ mod standalone_client_tests {
         });
     }
 
-    // Callers that build the core `ConnectionRequest` directly, such as the Rust client, skip
-    // the protobuf conversion, so `Client::new` has to trim the client AZ as well.
+    // `Client::new` trims the client AZ for every caller: bindings and the Rust client alike.
+    // Only the 1a replica is in the client's zone, so every strategy sends it all reads.
     #[rstest]
+    #[case(glide_core::client::ReadFrom::AZAffinity as fn(String) -> glide_core::client::ReadFrom)]
+    #[case(glide_core::client::ReadFrom::AZAffinityReplicasAndPrimary)]
+    #[case(glide_core::client::ReadFrom::AZAffinityAllNodes)]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_client_new_routes_padded_client_az_to_matching_replica() {
+    fn test_client_new_routes_padded_client_az_to_matching_replica(
+        #[case] read_from: fn(String) -> glide_core::client::ReadFrom,
+    ) {
         let servers = create_primary_mock_with_replicas_az(
             3,
             Some("us-east-1b"),
@@ -644,9 +649,7 @@ mod standalone_client_tests {
         }
         let mut request: glide_core::client::ConnectionRequest =
             create_connection_request(&get_mock_addresses(&servers), &Default::default()).into();
-        request.read_from = Some(glide_core::client::ReadFrom::AZAffinity(
-            " us-east-1a ".to_string(),
-        ));
+        request.read_from = Some(read_from(" us-east-1a ".to_string()));
 
         block_on_all(async {
             let mut client = GlideClient::new(request, None).await.unwrap();
