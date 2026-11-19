@@ -2368,7 +2368,7 @@ mod tests {
         let rx1 = watchdog.register(timeout, Instant::now());
         let rx2 = watchdog.register(timeout, Instant::now());
 
-        // Poll until the watchdog thread drains the channel and publishes our
+        // Poll until the watchdog thread drains the inboxes and publishes our
         // two entries, or until a deadline expires. A fixed sleep is not
         // reliable under concurrent test load.
         let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
@@ -2461,6 +2461,29 @@ mod tests {
         }
     }
 
+    /// Waits until `watchdog` is idle: its `next_look` is parked far out (only distant
+    /// deadlines outstanding) and it has stopped waking up. A busy worker wakes again within
+    /// DRAIN_INTERVAL and republishes its count, which could hide a competing publication.
+    fn wait_until_idle(watchdog: &TimeoutWatchdog) {
+        let far = watchdog.nanos_since_epoch(Instant::now() + Duration::from_secs(30));
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while watchdog.shared.next_look.load(Ordering::Relaxed) < far {
+            assert!(
+                Instant::now() < deadline,
+                "watchdog never parked its next look"
+            );
+            std::thread::yield_now();
+        }
+        loop {
+            let before = watchdog.shared.wakeups.load(Ordering::Relaxed);
+            std::thread::sleep(DRAIN_INTERVAL * 3);
+            if watchdog.shared.wakeups.load(Ordering::Relaxed) == before {
+                return;
+            }
+            assert!(Instant::now() < deadline, "watchdog kept waking up");
+        }
+    }
+
     fn wait_for_signal(mut signal: TimeoutReceiver) {
         let deadline = Instant::now() + Duration::from_secs(2);
         loop {
@@ -2502,6 +2525,8 @@ mod tests {
         let mut first = replacement.register(Duration::from_secs(60), Instant::now());
         let mut second = replacement.register(Duration::from_secs(60), Instant::now());
         wait_for_pending(&replacement, 2);
+        // The replacement must not republish 2 after the retired worker's publication.
+        wait_until_idle(&replacement);
 
         // Force a publication by the retired worker AFTER the replacement's 2.
         // Joining ensures its final zero publication has completed before asserting.
@@ -2520,6 +2545,8 @@ mod tests {
         let mut first = elected.register(Duration::from_secs(60), Instant::now());
         let mut second = elected.register(Duration::from_secs(60), Instant::now());
         wait_for_pending(&elected, 2);
+        // The elected worker must not republish 2 after the loser's publication.
+        wait_until_idle(&elected);
 
         // Model a candidate losing the CAS and being dropped before its spawned
         // worker is first scheduled. Whatever the worker publishes on its way out
