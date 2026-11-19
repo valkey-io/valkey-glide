@@ -3744,8 +3744,6 @@ mod cluster_async {
             .await
         });
         assert!(timed_out.is_err(), "the scan should still be refreshing");
-        // Past the refresh's retry backoff, when the cancelled refresh is dropped.
-        runtime.block_on(async { tokio::time::sleep(Duration::from_secs(1)).await });
 
         calls.store(0, Ordering::SeqCst);
         phase.store(2, Ordering::SeqCst);
