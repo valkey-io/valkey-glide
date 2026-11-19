@@ -1736,9 +1736,8 @@ mod tests {
         }
     }
 
-    /// Wake-ups of `w`'s thread during `window`, after letting it settle for `settle`.
-    fn wakeups_during(w: &TimeoutWatchdog, settle: Duration, window: Duration) -> u64 {
-        std::thread::sleep(settle);
+    /// Wake-ups of `w`'s thread during `window`.
+    fn wakeups_during(w: &TimeoutWatchdog, window: Duration) -> u64 {
         let before = w.shared.wakeups.load(Ordering::Relaxed);
         std::thread::sleep(window);
         w.shared.wakeups.load(Ordering::Relaxed) - before
@@ -1750,11 +1749,9 @@ mod tests {
     fn long_outstanding_deadline_alone_does_not_wake_every_tick() {
         let watchdog = TimeoutWatchdog::start();
         let _blpop = watchdog.register(Duration::from_secs(30), Instant::now());
-        let wakeups = wakeups_during(
-            &watchdog,
-            Duration::from_millis(50),
-            Duration::from_millis(300),
-        );
+        // Measure only once the thread has drained the deadline and sleeps towards it.
+        wait_until_idle_towards(&watchdog, Duration::from_secs(20));
+        let wakeups = wakeups_during(&watchdog, Duration::from_millis(300));
         eprintln!("wake-ups in 300 ms with one 30 s deadline outstanding: {wakeups}");
         assert!(
             wakeups <= 3,
@@ -1779,8 +1776,8 @@ mod tests {
         let _long = watchdog.register(Duration::from_secs(30), Instant::now());
         let mut lateness = Vec::new();
         for ms in [1u64, 2, 3, 5, 8, 13].repeat(4) {
-            // Let the thread go back to sleeping towards the 30 s deadline.
-            std::thread::sleep(DRAIN_INTERVAL * 3);
+            // Wait until the thread is back to sleeping towards the 30 s deadline.
+            wait_until_idle_towards(&watchdog, Duration::from_secs(20));
             let timeout = Duration::from_millis(ms);
             let start = Instant::now();
             let late = lateness_of(watchdog.register(timeout, start), start, timeout);
@@ -2040,7 +2037,7 @@ mod tests {
     #[test]
     fn isolated_request_costs_few_wakeups() {
         let watchdog = TimeoutWatchdog::start();
-        std::thread::sleep(Duration::from_millis(30));
+        wait_until_parked(&watchdog);
         let before = watchdog.shared.wakeups.load(Ordering::Relaxed);
         let rx = watchdog.register(Duration::from_millis(250), Instant::now());
         std::thread::sleep(Duration::from_millis(1));
@@ -2104,11 +2101,9 @@ mod tests {
                 drop(rx);
             }
         });
-        let wakeups = wakeups_during(
-            &watchdog,
-            Duration::from_millis(50),
-            Duration::from_millis(300),
-        );
+        // Let the traffic reach its steady state (no worker state to wait for: it never idles).
+        std::thread::sleep(Duration::from_millis(50));
+        let wakeups = wakeups_during(&watchdog, Duration::from_millis(300));
         stop.store(true, Ordering::Relaxed);
         traffic.join().unwrap();
         eprintln!("wake-ups in 300 ms of steady completed traffic: {wakeups}");
@@ -2201,37 +2196,32 @@ mod tests {
         let watchdog = TimeoutWatchdog::start();
         // Let the thread go fully idle: no deadlines -> parked without a timeout, which it
         // publishes as next_look = u64::MAX. Confirm it really parked (no further wake-ups).
-        let parked = |w: &TimeoutWatchdog| {
-            let before = w.shared.wakeups.load(Ordering::Relaxed);
-            std::thread::sleep(Duration::from_millis(20));
-            w.shared.next_look.load(Ordering::Relaxed) == u64::MAX
-                && w.shared.wakeups.load(Ordering::Relaxed) == before
-        };
-        let deadline = Instant::now() + Duration::from_secs(2);
-        while !parked(&watchdog) {
-            assert!(
-                Instant::now() < deadline,
-                "watchdog thread never parked idle"
-            );
-        }
+        wait_until_parked(&watchdog);
         let start = Instant::now();
         let rx = watchdog.register(Duration::from_millis(10), start);
         let r = tokio::time::timeout(Duration::from_millis(500), rx).await;
-        assert!(r.is_ok(), "parked watchdog must be unparked by register()");
+        assert_eq!(
+            r,
+            Ok(Ok(())),
+            "parked watchdog must be unparked by register() and fire"
+        );
         assert!(start.elapsed() >= Duration::from_millis(10));
     }
 
-    #[tokio::test]
-    async fn register_after_thread_exit_resolves_err_without_queueing() {
+    #[test]
+    fn register_after_thread_exit_resolves_err_without_queueing() {
         // Panic/exit path: once the thread has done its final drain, a registration must resolve
         // to Err immediately and must not leave an entry nobody will ever drain.
-        let watchdog = TimeoutWatchdog::start();
+        let (watchdog, shared, writer) = TimeoutWatchdog::prepare();
+        let worker = std::thread::spawn(move || TimeoutWatchdog::run_worker(shared, writer));
+        let _ = watchdog.shared.thread.set(worker.thread().clone());
         watchdog.shared.shutdown.store(true, Ordering::SeqCst);
         watchdog.shared.unpark();
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        // The thread has really exited (final drain done) before anything registers.
+        join_worker(worker);
         for _ in 0..100 {
             let rx = watchdog.register(Duration::from_secs(60), Instant::now());
-            assert_eq!(rx.await, Err(RecvError));
+            assert_eq!(futures::executor::block_on(rx), Err(RecvError));
         }
         assert!(
             watchdog
@@ -2254,13 +2244,28 @@ mod tests {
         assert_eq!(r.expect("must resolve promptly"), Err(RecvError));
     }
 
-    #[tokio::test]
-    async fn try_recv_reports_fired() {
+    #[test]
+    fn try_recv_reports_fired() {
         let watchdog = TimeoutWatchdog::start();
-        let mut rx = watchdog.register(Duration::from_millis(5), Instant::now());
-        assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
-        tokio::time::sleep(Duration::from_millis(60)).await;
-        assert_eq!(rx.try_recv(), Ok(()));
+        // Pending: a deadline no scheduling delay of this test can reach.
+        let mut pending = watchdog.register(Duration::from_secs(60), Instant::now());
+        assert_eq!(pending.try_recv(), Err(TryRecvError::Empty));
+        // Fired: poll until the watchdog fires it (bounded), never seeing it closed.
+        let start = Instant::now();
+        let mut rx = watchdog.register(Duration::from_millis(5), start);
+        loop {
+            match rx.try_recv() {
+                Ok(()) => break,
+                Err(TryRecvError::Closed) => panic!("watchdog died"),
+                Err(TryRecvError::Empty) => {
+                    assert!(start.elapsed() < Duration::from_secs(2), "never fired");
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            }
+        }
+        assert!(start.elapsed() >= Duration::from_millis(5));
+        assert_eq!(rx.try_recv(), Ok(()), "a fired receiver stays fired");
+        assert_eq!(pending.try_recv(), Err(TryRecvError::Empty));
     }
 
     #[test]
@@ -2513,13 +2518,17 @@ mod tests {
         }
         let pooled = pooled_now();
         assert!(pooled > 0, "retired slots must be pooled, got {pooled}");
-        // A reused slot starts PENDING: it must neither be pre-fired nor fire early.
-        for _ in 0..pooled.min(20) {
+        // A reused slot starts PENDING: it must neither be pre-fired nor fire early. Check the
+        // reset state with a deadline nothing can reach first, then let a reused slot fire.
+        for _ in 0..(pooled.min(20) / 2).max(1) {
+            let mut idle = watchdog.register(Duration::from_secs(60), Instant::now());
+            assert_eq!(idle.try_recv(), Err(TryRecvError::Empty));
             let start = Instant::now();
-            let mut rx = watchdog.register(Duration::from_millis(5), start);
-            assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
-            rx.await.unwrap();
+            let rx = watchdog.register(Duration::from_millis(5), start);
+            let fired = tokio::time::timeout(Duration::from_secs(2), rx).await;
+            assert_eq!(fired, Ok(Ok(())), "a reused slot must fire");
             assert!(start.elapsed() >= Duration::from_millis(5));
+            assert_eq!(idle.try_recv(), Err(TryRecvError::Empty));
         }
     }
 
@@ -2704,7 +2713,7 @@ mod tests {
         while watchdog.shared.next_look.load(Ordering::Relaxed) < far && Instant::now() < settle {
             std::thread::sleep(Duration::from_millis(5));
         }
-        let wakeups = wakeups_during(&watchdog, Duration::ZERO, Duration::from_millis(300));
+        let wakeups = wakeups_during(&watchdog, Duration::from_millis(300));
         eprintln!("wake-ups in 300 ms after a mid-pass firing, one 30 s deadline left: {wakeups}");
         assert!(
             wakeups <= 3,
@@ -2728,7 +2737,12 @@ mod tests {
     /// deadlines outstanding) and it has stopped waking up. A busy worker wakes again within
     /// DRAIN_INTERVAL and republishes its count, which could hide a competing publication.
     fn wait_until_idle(watchdog: &TimeoutWatchdog) {
-        let far = watchdog.nanos_since_epoch(Instant::now() + Duration::from_secs(30));
+        wait_until_idle_towards(watchdog, Duration::from_secs(30));
+    }
+
+    /// [`wait_until_idle`] with "far" meaning at least `beyond` from now.
+    fn wait_until_idle_towards(watchdog: &TimeoutWatchdog, beyond: Duration) {
+        let far = watchdog.nanos_since_epoch(Instant::now() + beyond);
         let deadline = Instant::now() + Duration::from_secs(2);
         while watchdog.shared.next_look.load(Ordering::Relaxed) < far {
             assert!(
