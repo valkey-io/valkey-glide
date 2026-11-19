@@ -170,7 +170,9 @@ public class ConnectionManagerTest {
     void createClient_throwsSynchronouslyForAzStrategyWithoutClientAz(ReadFrom readFrom) {
         assertThrows(
                 ConfigurationError.class,
-                () -> GlideClient.createClient(GlideClientConfiguration.builder().readFrom(readFrom).build()));
+                () ->
+                        GlideClient.createClient(
+                                GlideClientConfiguration.builder().readFrom(readFrom).build()));
         assertThrows(
                 ConfigurationError.class,
                 () ->
@@ -189,8 +191,7 @@ public class ConnectionManagerTest {
         // in the probe's catch (Exception) and is relabelled "Pool connectivity probe failed".
         ClientPoolConfig poolConfig =
                 ClientPoolConfig.builder()
-                        .clientConfig(
-                                GlideClientConfiguration.builder().readFrom(readFrom).build())
+                        .clientConfig(GlideClientConfiguration.builder().readFrom(readFrom).build())
                         .build();
 
         ConfigurationError error =
