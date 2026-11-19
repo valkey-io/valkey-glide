@@ -329,6 +329,47 @@ matrix_test!(hpersist, c, {
 });
 
 // ---------------------------------------------------------------------------
+// HGETDEL (Valkey 9.1+).
+// ---------------------------------------------------------------------------
+
+matrix_test!(hget_del, c, {
+    skip_if_version_below!(c, 9, 1, 0);
+
+    let k = common::key("h_getdel");
+    let _: usize = c
+        .hset_multiple(&k, &[("f1", "v1"), ("f2", "v2"), ("f3", "v3")])
+        .await
+        .unwrap();
+
+    // Returns values in request order, `None` for missing fields, and deletes them.
+    let vals: Vec<Option<String>> = c.hget_del(&k, &["f1", "missing", "f2"]).await.unwrap();
+    assert_eq!(
+        vals,
+        vec![Some("v1".to_string()), None, Some("v2".to_string())]
+    );
+    assert_eq!(c.hlen(&k).await.unwrap(), 1);
+    assert!(!c.hexists(&k, "f1").await.unwrap());
+
+    // The key is deleted once its last field is removed.
+    let vals: Vec<Option<String>> = c.hget_del(&k, "f3").await.unwrap();
+    assert_eq!(vals, vec![Some("v3".to_string())]);
+    assert!(!c.exists(&k).await.unwrap());
+
+    // A missing key returns `None` for every field.
+    let vals: Vec<Option<String>> = c.hget_del(&k, &["f1", "f2"]).await.unwrap();
+    assert_eq!(vals, vec![None, None]);
+});
+
+matrix_test!(hget_del_wrong_type_errors, c, {
+    skip_if_version_below!(c, 9, 1, 0);
+
+    let k = common::key("h_getdel_wt");
+    let _: usize = c.rpush(&k, &["x"]).await.unwrap();
+    let err = c.hget_del(&k, "f").await.unwrap_err();
+    assert!(matches!(err, GlideError::Request(_)));
+});
+
+// ---------------------------------------------------------------------------
 // HGETEX / HSETEX (Valkey/Redis 9.0+).
 // ---------------------------------------------------------------------------
 

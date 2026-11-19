@@ -327,3 +327,30 @@ matrix_test!(lcs_len, c, {
     let _: () = c.set(&k2, "mynewtext").await.unwrap();
     assert_eq!(c.lcs_len(&k1, &k2).await.unwrap(), 6);
 });
+
+matrix_test!(del_if_eq, c, {
+    skip_if_version_below!(c, 9, 0, 0);
+
+    let k = common::key("delifeq");
+    let _: () = c.set(&k, "v").await.unwrap();
+
+    // Value mismatch does not delete.
+    assert!(!c.del_if_eq(&k, "other").await.unwrap());
+    assert!(c.exists(&k).await.unwrap());
+
+    // Value match deletes.
+    assert!(c.del_if_eq(&k, "v").await.unwrap());
+    assert!(!c.exists(&k).await.unwrap());
+
+    // Missing key returns false.
+    assert!(!c.del_if_eq(&k, "v").await.unwrap());
+});
+
+matrix_test!(del_if_eq_wrong_type_errors, c, {
+    skip_if_version_below!(c, 9, 0, 0);
+
+    let k = common::key("delifeq_wt");
+    let _: usize = c.rpush(&k, &["a"]).await.unwrap();
+    let err = c.del_if_eq(&k, "a").await.unwrap_err();
+    assert!(matches!(err, glide::GlideError::Request(_)));
+});
