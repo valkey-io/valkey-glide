@@ -1204,4 +1204,62 @@ mod cluster_client_tests {
             }
         });
     }
+
+    #[rstest]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_partial_results_blocking_command_timeout_makes_the_borrow_unresettable() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: false,
+                ..Default::default()
+            })
+            .await;
+            let mut pauser = create_cluster_client(
+                test_basics.cluster.as_ref(),
+                TestConfiguration {
+                    shared_server: false,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let all_primaries = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, None));
+            let Value::Map(healthy) = test_basics
+                .client
+                .send_command(&mut redis::cmd("PING"), Some(all_primaries.clone()))
+                .await
+                .unwrap()
+            else {
+                panic!("expected a map");
+            };
+            let slow: String = redis::from_owned_redis_value(healthy[0].0.clone()).unwrap();
+            let (host, port) = slow.rsplit_once(':').unwrap();
+            let route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                host: host.to_string(),
+                port: port.parse().unwrap(),
+            });
+            let mut pause = redis::cmd("CLIENT");
+            pause.arg("PAUSE").arg(3000).arg("ALL");
+            pauser
+                .send_command(&mut pause, Some(route.clone()))
+                .await
+                .unwrap();
+
+            // WAIT blocks for up to 100 ms; the paused primary never answers in time.
+            let mut wait = redis::cmd("WAIT");
+            wait.arg(0).arg(100).set_allow_partial_results(true);
+            let result = test_basics
+                .client
+                .send_command(&mut wait, Some(all_primaries))
+                .await;
+            assert!(
+                matches!(&result, Ok(Value::Map(entries)) if entries.iter().any(|(_, v)|
+                    matches!(v, Value::ServerError(e) if e.err_code() == redis::TIMEOUT_ERROR_CODE))),
+                "{result:?}"
+            );
+            assert!(test_basics.client.reset_connection_state(0).await.is_err());
+
+            wait_for_pauses_to_end(&mut pauser, &[route]).await;
+        });
+    }
 }
