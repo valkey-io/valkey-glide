@@ -200,9 +200,8 @@ public class ConnectionManagerTest {
     }
 
     /**
-     * A padded AZ is <em>normalized</em>. Forwarding it raw would engage the strategy and then match
-     * no node, because the core compares AZs with exact equality, and {@code getenv} easily returns
-     * {@code "us-east-1a\n"}.
+     * A padded AZ such as {@code "us-east-1a\n"}, which {@code getenv} easily returns, is
+     * <em>normalized</em> before it is forwarded.
      */
     @ParameterizedTest
     @MethodSource("azStrategies")
