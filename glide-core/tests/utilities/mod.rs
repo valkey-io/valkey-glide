@@ -939,11 +939,21 @@ pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration
     let mut connection_request = create_connection_request(&[connection_addr], configuration);
     connection_request.cluster_mode_enabled = false;
     connection_request.protocol = configuration.protocol.into();
-    let (push_sender, push_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let client =
-        StandaloneClient::create_client(connection_request.into(), Some(push_sender), None, None)
-            .await
-            .unwrap();
+    // A freshly started server may not yet report its primary role, which makes client
+    // creation fail with "No primary node found". Retry until the server is ready.
+    let (client, push_receiver) = retry(|| async {
+        let (push_sender, push_receiver) = tokio::sync::mpsc::unbounded_channel();
+        StandaloneClient::create_client(
+            connection_request.clone().into(),
+            Some(push_sender),
+            None,
+            None,
+        )
+        .await
+        .ok()
+        .map(|client| (client, push_receiver))
+    })
+    .await;
 
     TestBasics {
         server,
