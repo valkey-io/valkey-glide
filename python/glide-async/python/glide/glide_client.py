@@ -304,10 +304,22 @@ _response_thread_pool = None
 if _FREE_THREADED:
     from concurrent.futures import ThreadPoolExecutor
 
-    _response_thread_pool = ThreadPoolExecutor(
-        max_workers=min(os.cpu_count() or 4, 8),
-        thread_name_prefix="glide-resp-parser",
-    )
+    def _new_response_thread_pool() -> ThreadPoolExecutor:
+        return ThreadPoolExecutor(
+            max_workers=min(os.cpu_count() or 4, 8),
+            thread_name_prefix="glide-resp-parser",
+        )
+
+    _response_thread_pool = _new_response_thread_pool()
+
+    def _reset_response_thread_pool_after_fork() -> None:
+        # The child has none of the pool's worker threads, so work submitted to the
+        # inherited executor would never run. The old executor is left to the GC.
+        global _response_thread_pool
+        _response_thread_pool = _new_response_thread_pool()
+
+    if hasattr(os, "register_at_fork"):
+        os.register_at_fork(after_in_child=_reset_response_thread_pool_after_fork)
 
 
 def _free_orphaned_frame(request_id, response_ptr, arena_or_err):
