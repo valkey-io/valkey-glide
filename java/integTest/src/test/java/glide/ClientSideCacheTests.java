@@ -7,6 +7,7 @@ import static glide.TestUtilities.getRandomString;
 import static glide.TestUtilities.waitFor;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Named.named;
@@ -16,6 +17,8 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.configuration.ClientSideCache;
 import glide.api.models.configuration.EvictionPolicy;
+import glide.api.models.configuration.ProtocolVersion;
+import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,6 +27,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -718,5 +722,67 @@ public class ClientSideCacheTests {
         } else {
             ((GlideClusterClient) client).flushall().get();
         }
+    }
+
+    // ==================== Tracking prefix ====================
+    // The prefix rules and the cache behaviour are owned and tested by the GLIDE core. Java only
+    // checks that the public API reaches the core and that a core error reaches the caller.
+
+    /** A cache scoped to "xxx:" is registered with the server and only stores keys under it. */
+    @Test
+    @SneakyThrows
+    public void trackingPrefix_smoke() {
+        ClientSideCache cache =
+                ClientSideCache.builder()
+                        .maxCacheKb(1024L)
+                        .entryTtlMs(0L)
+                        .enableMetrics(true)
+                        .serverAssisted(true)
+                        .trackingPrefix("xxx:")
+                        .build();
+        try (GlideClient client =
+                GlideClient.createClient(
+                                commonClientConfig().protocol(ProtocolVersion.RESP3).clientSideCache(cache).build())
+                        .get()) {
+            Object[] prefixes = (Object[]) client.clientTrackingInfo().get().get("prefixes");
+            assertEquals(1, prefixes.length);
+            assertEquals("xxx:", prefixes[0].toString());
+
+            String suffix = getRandomString(8);
+            String tracked = "xxx:" + suffix;
+            String untracked = "zzz:" + suffix;
+            assertEquals(OK, client.set(tracked, "tracked").get());
+            assertEquals(OK, client.set(untracked, "untracked").get());
+
+            assertEquals("tracked", client.get(tracked).get());
+            assertEquals("untracked", client.get(untracked).get());
+            assertEquals(
+                    1L, client.getCacheEntryCount().get(), "only the key under the prefix is cached");
+        }
+    }
+
+    /**
+     * Java does not validate the prefix rules: the core rejects a prefix without server-assisted
+     * caching and its error reaches the caller of {@code createClient}.
+     */
+    @Test
+    public void trackingPrefix_core_validation_error_reaches_the_caller() {
+        ClientSideCache notServerAssisted =
+                ClientSideCache.builder().maxCacheKb(1024L).trackingPrefix("xxx:").build();
+
+        ExecutionException error =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                GlideClient.createClient(
+                                                commonClientConfig()
+                                                        .protocol(ProtocolVersion.RESP3)
+                                                        .clientSideCache(notServerAssisted)
+                                                        .build())
+                                        .get());
+        assertInstanceOf(ClosingException.class, error.getCause());
+        assertTrue(
+                error.getCause().getMessage().contains("tracking_prefix requires server_assisted"),
+                error.getCause().getMessage());
     }
 }

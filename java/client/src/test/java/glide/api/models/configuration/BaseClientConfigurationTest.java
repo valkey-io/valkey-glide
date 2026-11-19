@@ -1,12 +1,15 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import glide.api.models.GlideString;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -275,6 +278,54 @@ public class BaseClientConfigurationTest {
 
         ClientSideCache cacheDefault = ClientSideCache.builder().maxCacheKb(1024).build();
         assertFalse(cacheDefault.isServerAssisted());
+    }
+
+    /** Without a trackingPrefix call the prefix stays null. */
+    @Test
+    void testTrackingPrefixDefaultsToNull() {
+        assertNull(ClientSideCache.builder().maxCacheKb(1024).build().getTrackingPrefix());
+        assertNull(ClientSideCache.create(1024, 0).getTrackingPrefix());
+    }
+
+    /** A String prefix is stored as its UTF-8 bytes. */
+    @Test
+    void testTrackingPrefixStringIsEncodedAsUtf8() {
+        ClientSideCache cache =
+                ClientSideCache.builder()
+                        .maxCacheKb(1024)
+                        .serverAssisted(true)
+                        .trackingPrefix("ñ:")
+                        .build();
+        assertArrayEquals("ñ:".getBytes(StandardCharsets.UTF_8), cache.getTrackingPrefix().getBytes());
+    }
+
+    /** A GlideString prefix keeps its raw bytes, valid UTF-8 or not. */
+    @Test
+    void testTrackingPrefixGlideStringKeepsRawBytes() {
+        byte[] rawPrefix = {(byte) 0xff, 'k', ':'};
+        ClientSideCache cache =
+                ClientSideCache.builder()
+                        .maxCacheKb(1024)
+                        .serverAssisted(true)
+                        .trackingPrefix(GlideString.gs(rawPrefix))
+                        .build();
+        assertArrayEquals(rawPrefix, cache.getTrackingPrefix().getBytes());
+    }
+
+    /**
+     * The prefix rules belong to the GLIDE core, which rejects them at client creation. The builder
+     * keeps whatever it is given.
+     */
+    @Test
+    void testTrackingPrefixRulesAreNotValidatedByTheBuilder() {
+        ClientSideCache emptyPrefix =
+                ClientSideCache.builder().maxCacheKb(1024).serverAssisted(true).trackingPrefix("").build();
+        assertEquals(0, emptyPrefix.getTrackingPrefix().getBytes().length);
+
+        ClientSideCache notServerAssisted =
+                ClientSideCache.builder().maxCacheKb(1024).trackingPrefix("xxx:").build();
+        assertFalse(notServerAssisted.isServerAssisted());
+        assertEquals(GlideString.gs("xxx:"), notServerAssisted.getTrackingPrefix());
     }
 
     @Test

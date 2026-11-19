@@ -1595,6 +1595,7 @@ mod tests {
             max_memory_bytes: 10_000,
             ttl: None,
             enable_metrics: true,
+            tracking_prefix: None,
         });
         let (command_tx, mut command_rx) = mpsc::unbounded_channel();
         let (mut response_tx, response_rx) = futures_mpsc::channel(2);

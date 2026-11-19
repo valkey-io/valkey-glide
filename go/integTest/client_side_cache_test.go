@@ -841,3 +841,68 @@ func (suite *GlideTestSuite) TestClientSideCache_ServerAssisted_Invalidation() {
 		}, "Cache was not invalidated after key was modified by another client")
 	})
 }
+
+// ==================== Tracking prefix ====================
+//
+// The prefix rules and the cache behaviour under a prefix are owned and tested by the Rust core. The Go
+// suite only checks what Go owns: that a core configuration error reaches the caller of the public API,
+// and one end-to-end smoke test. Serialization of the prefix is covered by the config unit tests.
+
+// A configuration that the core rejects (a prefix without server-assisted caching) is not validated by Go:
+// the request crosses FFI and the core's error is returned to the caller as a ConnectionError.
+func (suite *GlideTestSuite) TestClientSideCache_TrackingPrefix_CoreValidationErrorReachesCaller() {
+	cache, err := config.NewClientSideCache(defaultTestCacheKb, defaultTestTtlMs)
+	require.NoError(suite.T(), err)
+	cache.WithTrackingPrefix("xxx:")
+
+	client, err := glide.NewClient(suite.defaultClientConfig().WithClientSideCache(cache))
+	if client != nil {
+		client.Close()
+	}
+	require.Error(suite.T(), err)
+	var connErr *glide.ConnectionError
+	require.ErrorAs(suite.T(), err, &connErr)
+	assert.Contains(suite.T(), err.Error(), "tracking_prefix requires server_assisted")
+}
+
+// Smoke test of the public API: a client created with WithTrackingPrefix registers the prefix with the
+// server, caches a key under the prefix and does not cache a key outside it.
+func (suite *GlideTestSuite) TestClientSideCache_TrackingPrefix_Smoke() {
+	cache, err := config.NewClientSideCache(1024, 0)
+	require.NoError(suite.T(), err)
+	cache.WithServerAssisted(true).WithTrackingPrefix("xxx:")
+	cached, err := suite.client(suite.defaultClientConfig().WithClientSideCache(cache))
+	require.NoError(suite.T(), err)
+	writer := suite.defaultClient()
+
+	ctx := context.Background()
+	info, err := cached.ClientTrackingInfo(ctx)
+	require.NoError(suite.T(), err)
+	assert.Contains(suite.T(), info.Flags, "bcast")
+	assert.Equal(suite.T(), []string{"xxx:"}, info.Prefixes)
+
+	suffix := uuid.New().String()
+	tracked := "xxx:" + suffix
+	untracked := "zzz:" + suffix
+	result, err := writer.Set(ctx, tracked, "t1")
+	suite.verifyOK(result, err)
+	result, err = writer.Set(ctx, untracked, "u1")
+	suite.verifyOK(result, err)
+
+	// The invalidation of the SET above may arrive after the first read, so read until the entry stays.
+	suite.waitFor(func() bool {
+		value, err := cached.Get(ctx, tracked)
+		if err != nil || value.Value() != "t1" {
+			return false
+		}
+		count, err := cached.GetCacheEntryCount(ctx)
+		return err == nil && count == 1
+	}, "the key under the prefix was not cached")
+
+	value, err := cached.Get(ctx, untracked)
+	require.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "u1", value.Value())
+	count, err := cached.GetCacheEntryCount(ctx)
+	require.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(1), count, "a key outside the prefix must not be cached")
+}

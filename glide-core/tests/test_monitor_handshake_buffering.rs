@@ -45,6 +45,7 @@ mod test_monitor_handshake_buffering {
             lib_ver: None,
             cache: None,
             server_assisted_cache: false,
+            tracking_prefix: None,
         }
     }
 

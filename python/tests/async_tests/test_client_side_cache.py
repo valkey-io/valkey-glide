@@ -1,12 +1,19 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 import anyio
 import pytest
-from glide_shared import RequestError
+from glide_shared import ConfigurationError, RequestError
 from glide_shared.cache import ClientSideCache, EvictionPolicy
 from glide_shared.config import ProtocolVersion
 
 from tests.async_tests.conftest import create_client
-from tests.utils.utils import build_client_side_cache, get_random_string, wait_for
+from tests.utils.utils import (
+    assert_cache_bypassed,
+    assert_client_tracking_info,
+    build_client_side_cache,
+    get_random_string,
+    read_until_cached,
+    wait_for,
+)
 
 
 @pytest.mark.anyio
@@ -589,3 +596,51 @@ class TestClientSideCache:
 
         await client_a.close()
         await client_b.close()
+
+    # ==================== Tracking prefix ====================
+    # The prefix rules and the cache behaviour belong to the core and are tested there.
+    # The Python-specific type, encoding and protobuf checks are shared by both
+    # clients and live in tests/test_config.py. Only the client path is checked here.
+
+    async def test_tracking_prefix_smoke(self, request):
+        """A prefixed cache is registered with the server and only caches its keys."""
+        cache = build_client_side_cache(
+            entry_ttl_ms=0,
+            enable_metrics=True,
+            server_assisted=True,
+            tracking_prefix="xxx:",
+        )
+        client = await create_client(
+            request,
+            cluster_mode=False,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+
+        info = await client.client_tracking_info()
+        assert_client_tracking_info(info, on=True, prefix="xxx:")
+
+        suffix = get_random_string(8)
+        tracked, untracked = f"xxx:{suffix}", f"zzz:{suffix}"
+        assert await client.set(tracked, "t") == "OK"
+        assert await client.set(untracked, "u") == "OK"
+
+        await read_until_cached(client, lambda: client.get(tracked), b"t")
+        await assert_cache_bypassed(client, lambda: client.get(untracked), b"u")
+        assert client.get_cache_entry_count() == 1
+
+        await client.close()
+
+    async def test_tracking_prefix_core_error_reaches_the_user(self, request):
+        """Python does not validate the prefix rules itself: an invalid prefix is sent
+        to the core, whose error is raised when the client is created."""
+        cache = build_client_side_cache(server_assisted=True, tracking_prefix="")
+        with pytest.raises(
+            ConfigurationError, match="tracking_prefix must not be empty"
+        ):
+            await create_client(
+                request,
+                cluster_mode=False,
+                protocol=ProtocolVersion.RESP3,
+                cache=cache,
+            )

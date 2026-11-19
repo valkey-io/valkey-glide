@@ -21,6 +21,7 @@ pub struct RedisConnectionInfo {
     pub lib_name: Option<String>,
     pub lib_ver: Option<String>,
     pub server_assisted_cache: bool,
+    pub tracking_prefix: Option<Vec<u8>>,
     pub cache: Option<std::sync::Arc<dyn std::any::Any + Send + Sync>>,
 }
 

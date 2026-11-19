@@ -24,6 +24,7 @@ mod test_monitor {
             lib_ver: None,
             cache: None,
             server_assisted_cache: false,
+            tracking_prefix: None,
         }
     }
 
