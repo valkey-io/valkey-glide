@@ -550,8 +550,48 @@ func (suite *GlideTestSuite) verifyOK(result string, err error) {
 	assert.Equal(suite.T(), glide.OK, result)
 }
 
+// compareServerVersions compares two dot-separated version strings component by component,
+// treating each component as an integer where possible (falling back to a string comparison for
+// non-numeric components). Returns a negative number if left < right, zero if equal, and a
+// positive number if left > right.
+func compareServerVersions(left, right string) int {
+	leftParts := strings.Split(left, ".")
+	rightParts := strings.Split(right, ".")
+
+	maxLen := len(leftParts)
+	if len(rightParts) > maxLen {
+		maxLen = len(rightParts)
+	}
+
+	for i := 0; i < maxLen; i++ {
+		leftPart := ""
+		if i < len(leftParts) {
+			leftPart = leftParts[i]
+		}
+		rightPart := ""
+		if i < len(rightParts) {
+			rightPart = rightParts[i]
+		}
+
+		leftNum, leftErr := strconv.Atoi(leftPart)
+		rightNum, rightErr := strconv.Atoi(rightPart)
+		if leftErr == nil && rightErr == nil {
+			if leftNum != rightNum {
+				return leftNum - rightNum
+			}
+			continue
+		}
+
+		if cmp := strings.Compare(leftPart, rightPart); cmp != 0 {
+			return cmp
+		}
+	}
+
+	return 0
+}
+
 func (suite *GlideTestSuite) SkipIfServerVersionLowerThan(version string, t *testing.T) {
-	if suite.serverVersion < version {
+	if compareServerVersions(suite.serverVersion, version) < 0 {
 		t.Skipf("This feature is added in version %s", version)
 	}
 }
@@ -560,6 +600,22 @@ func (suite *GlideTestSuite) SkipIfServerVersionLowerThan(version string, t *tes
 var bgsaveResponses = []string{
 	"Background saving started",
 	"Background saving scheduled",
+}
+
+// Expected valid responses for the "rdb_*_bgsave_type" INFO persistence fields.
+// Since Valkey 9.2.0.
+var bgsaveTypes = []string{"fork", "forkless", "none"}
+
+// One field from each default INFO section.
+var infoDefaultFields = []string{
+	"redis_version",               // server
+	"connected_clients",           // clients
+	"used_memory",                 // memory
+	"rdb_changes_since_last_save", // persistence
+	"total_commands_processed",    // stats
+	"role",                        // replication
+	"used_cpu_sys",                // cpu
+	"cluster_enabled",             // cluster
 }
 
 // Expected valid responses for BGREWRITEAOF.

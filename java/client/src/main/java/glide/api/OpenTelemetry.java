@@ -376,6 +376,7 @@ public class OpenTelemetry {
 
         String tracesEndpoint = null;
         int tracesSamplePercentage = -1;
+        // TODO #7706: Remove once glide-telemetry rejects a config with no exporter.
         if (config.getTraces() == null && config.getMetrics() == null) {
             Logger.log(
                     Logger.Level.INFO, "GlideOpenTelemetry", "Error: Both traces and metrics are null");

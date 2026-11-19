@@ -6,6 +6,8 @@ This document describes how to set up your development environment to build and 
 
 The Valkey GLIDE Java wrapper consists of both Java and Rust code. Rust bindings for the Java Native Interface are implemented using [jni-rs](https://github.com/jni-rs/jni-rs), and the Java JAR is built using [Gradle](https://github.com/gradle/gradle). The Java and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
 
+<!-- The build/test/lint commands below are intentionally mirrored in java/AGENTS.md (agent quick-reference). Keep both in sync when they change. -->
+
 ### Build from source
 
 **Note:** See the [Troubleshooting](#troubleshooting) section below for possible solutions to problems.
@@ -320,11 +322,7 @@ dependencies {
 
 ### Test
 
-To run all tests, use the following command:
-
-```bash
-./gradlew test
-```
+There is no single aggregate `test` task; run the unit and integration suites separately (`:client:test` and `:integTest:test` below).
 
 To run the unit tests, use the following command:
 
@@ -354,7 +352,7 @@ By default, it starts servers without TLS; to activate TLS add `-Dtls=true` to t
 To run a single test, use the following command:
 
 ```bash
-./gradlew :integTest:test --tests '*.functionLoad_and_functionList' --rerun
+./gradlew :integTest:test --tests '*.set_and_get_without_options' --rerun
 ```
 
 To run one class, use the following command:
@@ -398,6 +396,8 @@ export AWS_SESSION_TOKEN=test_session_token
 ```
 
 If any of these environment variables are not set, IAM authentication tests will be skipped.
+
+**Note:** IAM auth requires TLS, so these tests connect over TLS to the TLS test servers the `integTest` task always starts, trusting the harness CA (`utils/tls_crts/ca.crt`). No extra setup or `-Dtls=true` is needed.
 
 **Note:** The credential values shown above (`test_access_key`, etc.) are arbitrary placeholder strings. The AWS SDK uses them to generate an authentication token, but the local test server doesn't validate the token. These tests verify that the IAM authentication flow works correctly (token generation, connection establishment, and token refresh), not that the credentials are valid.
 
@@ -492,11 +492,6 @@ Refer to [closed-PRs](https://github.com/valkey-io/valkey-glide/pulls?q=is%3Apr+
 ### JNI naming and signatures
 
 The Java client now uses JNI (Java Native Interface) for direct communication with the Rust core library. Native methods are declared in `GlideNativeBridge.java` and implemented in the Rust `lib.rs` file. The JNI layer handles marshalling data between Java and Rust, including command serialization, response parsing, and callback management.
-
-### Module Information
-
-- The [module-info.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/main/java/module-info.java) (glide.api) contains a list of all of the directories the user can access.
-- Ensure to update the exports list if there are more directories the user will need to access.
 
 ### Recommended extensions for VS Code
 

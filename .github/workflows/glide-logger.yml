@@ -14,37 +14,45 @@ on:
 
             # Rust dependencies
             - deny.toml
+            - .cargo/config.toml
 
             # GitHub workflows
             - .github/workflows/glide-logger.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/lint-rust/action.yml
+
+            # Exclusions
+            - "!**/*.md"
     pull_request:
         paths:
             - glide-logger/**
 
             # Rust dependencies
             - deny.toml
+            - .cargo/config.toml
 
             # GitHub workflows
             - .github/workflows/glide-logger.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/lint-rust/action.yml
+
+            # Exclusions
+            - "!**/*.md"
     workflow_dispatch:
     workflow_call:
 
 concurrency:
-    group: glide-logger-${{ github.head_ref || github.ref }}
+    group: glide-logger-${{ github.head_ref || github.ref }}-${{ github.workflow }}
     cancel-in-progress: true
 
 env:
     CARGO_TERM_COLOR: always
 
 jobs:
-    test:
-        runs-on: ubuntu-latest
+    tests:
+        runs-on: ubuntu-24.04
         timeout-minutes: 15
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -64,17 +72,17 @@ jobs:
 
               # `--test-threads=1`: Tests install a global logger and share a
               # single `glide-logs` directory, so they cannot run in parallel.
-              run: cargo test --all-features -- --test-threads=1
+              run: cargo test --locked --all-features -- --test-threads=1
 
     lint:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
 
-            - uses: ./.github/workflows/lint-rust
+            - uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: glide-logger
                   github-token: ${{ secrets.GITHUB_TOKEN }}

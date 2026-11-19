@@ -86,18 +86,18 @@ class _GlideFFI:
 
             typedef struct CommandResponse {
                 int response_type;
-                long int_value;
+                int64_t int_value;
                 double float_value;
                 bool bool_value;
                 char* string_value;
-                long string_value_len;
+                int64_t string_value_len;
                 struct CommandResponse* array_value;
-                long array_value_len;
+                int64_t array_value_len;
                 struct CommandResponse* map_key;
                 struct CommandResponse* map_value;
                 struct CommandResponse* sets_value;
-                long sets_value_len;
-                void* user_data;
+                int64_t sets_value_len;
+                void* arena_ptr;
             } CommandResponse;
 
             typedef struct {
@@ -223,6 +223,20 @@ class _GlideFFI:
                 size_t* resolved_host_len
             );
 
+            typedef uint8_t (*CredentialProviderCallback)(
+                uintptr_t client_id,
+                uint8_t* access_key_id_buf,
+                size_t access_key_id_buf_len,
+                size_t* access_key_id_len,
+                uint8_t* secret_access_key_buf,
+                size_t secret_access_key_buf_len,
+                size_t* secret_access_key_len,
+                uint8_t* session_token_buf,
+                size_t session_token_buf_len,
+                size_t* session_token_len,
+                int64_t* expires_at_epoch_millis
+            );
+
             typedef struct {
                 int _type;
                 union {
@@ -237,6 +251,7 @@ class _GlideFFI:
             typedef struct {
                 const void* conn_ptr;
                 const char* connection_error_message;
+                int connection_error_type;
             } ConnectionResponse;
 
             const ConnectionResponse* create_client(
@@ -247,9 +262,19 @@ class _GlideFFI:
                 AddressResolverCallback address_resolver,
                 uintptr_t client_id
             );
+            const ConnectionResponse* create_client_with_credential_provider(
+                const uint8_t* connection_request_bytes,
+                size_t connection_request_len,
+                const ClientType* client_type,
+                PubSubCallback pubsub_callback,
+                AddressResolverCallback address_resolver,
+                uintptr_t client_id,
+                CredentialProviderCallback credential_provider
+            );
             void close_client(const void* client_adapter_ptr);
             void init_async_pipe(int pipe_write_fd);
             void reinit_async_pipe(int pipe_write_fd);
+            uint64_t glide_allocate_client_id(void);
 
             void free_pipe_error_string(char* ptr);
             void free_pubsub_pointer_payload(uint8_t* ptr, size_t len);
@@ -381,16 +406,16 @@ class _GlideFFI:
 
             // ============== STATISTICS ==============
             typedef struct {
-                unsigned long total_connections;
-                unsigned long total_clients;
-                unsigned long total_values_compressed;
-                unsigned long total_values_decompressed;
-                unsigned long total_original_bytes;
-                unsigned long total_bytes_compressed;
-                unsigned long total_bytes_decompressed;
-                unsigned long compression_skipped_count;
-                unsigned long subscription_out_of_sync_count;
-                unsigned long subscription_last_sync_timestamp;
+                uint64_t total_connections;
+                uint64_t total_clients;
+                uint64_t total_values_compressed;
+                uint64_t total_values_decompressed;
+                uint64_t total_original_bytes;
+                uint64_t total_bytes_compressed;
+                uint64_t total_bytes_decompressed;
+                uint64_t compression_skipped_count;
+                uint64_t subscription_out_of_sync_count;
+                uint64_t subscription_last_sync_timestamp;
             } Statistics;
 
             Statistics get_statistics();
@@ -416,6 +441,70 @@ class _GlideFFI:
 
             void close_monitor_client(const void* client_ptr);
 
+            // ============== RDMA ==============
+            typedef struct RdmaRegion RdmaRegion;
+            typedef struct RdmaMemoryHold RdmaMemoryHold;
+
+            typedef struct {
+                const char* error_message;
+                RdmaRegion* region;
+            } RdmaRegistration;
+
+            typedef struct {
+                const char* error_message;
+                int error_type;
+                bool found;
+                size_t bytes_written;
+                bool has_checksum;
+                uint32_t checksum;
+                bool region_closed;
+            } RdmaResult;
+
+            bool rdma_available(void);
+            bool rdma_usable(void);
+
+            bool rdma_checksum(const uint8_t* data, size_t length, uint32_t* out);
+
+            RdmaRegistration* register_rdma_region(
+                const void* client_adapter_ptr,
+                uint8_t* memory,
+                size_t length
+            );
+
+            RdmaResult* rdma_get(
+                const void* client_adapter_ptr,
+                const uint8_t* key,
+                size_t key_len,
+                RdmaRegion* region,
+                size_t offset,
+                size_t length
+            );
+
+            typedef enum {
+                RDMA_SET_CHECKSUM_SKIP = 0,
+                RDMA_SET_CHECKSUM_COMPUTE = 1,
+                RDMA_SET_CHECKSUM_KNOWN = 2
+            } RdmaSetChecksumMode;
+
+            RdmaResult* rdma_set(
+                const void* client_adapter_ptr,
+                const uint8_t* key,
+                size_t key_len,
+                RdmaRegion* region,
+                size_t offset,
+                size_t length,
+                RdmaSetChecksumMode checksum_mode,
+                uint32_t checksum
+            );
+
+            char* rdma_close_regions(const void* client_adapter_ptr);
+
+            RdmaMemoryHold* free_rdma_region(RdmaRegion* region);
+            bool rdma_memory_released(const RdmaMemoryHold* hold);
+            void free_rdma_memory_hold(RdmaMemoryHold* hold);
+            void free_rdma_registration(RdmaRegistration* registration);
+            void free_rdma_result(RdmaResult* result);
+
             // ============== UTILITY FUNCTIONS ==============
             void free_c_string(char* s);
             unsigned long get_min_compressed_size();
@@ -437,12 +526,17 @@ class _GlideFFI:
             int32_t glide_pool_destroy(uint64_t pool_id);
             size_t glide_pool_get_client_ptr(uint64_t client_id);
             int32_t glide_pool_set_pipe_client_id(uint64_t client_id, uint64_t pipe_client_id);
-            int32_t glide_pool_metrics(
-                uint64_t pool_id,
-                uint32_t* idle_out,
-                uint32_t* active_out,
-                uint32_t* total_out
-            );
+            typedef enum {
+                Read = 0,
+                UnknownPool = 1
+            } PoolMetricsStatus;
+            typedef struct {
+                PoolMetricsStatus status;
+                uint32_t idle;
+                uint32_t active;
+                uint32_t total;
+            } PoolMetrics;
+            PoolMetrics glide_pool_metrics(uint64_t pool_id);
 
             // ============== ISOLATED EXECUTION SCOPES ==============
             CommandResult* glide_scope_acquire_blocking(

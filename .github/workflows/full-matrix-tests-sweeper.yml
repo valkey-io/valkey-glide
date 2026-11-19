@@ -14,7 +14,7 @@ permissions:
 
 jobs:
     trigger-full-matrix-tests:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         if: github.repository_owner == 'valkey-io'
 
         steps:

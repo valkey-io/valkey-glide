@@ -9,6 +9,7 @@ use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
 use crate::value::to_glide_error;
+use crate::write::ToSingleValkeyArg;
 use crate::write::ToValkeyArgs;
 use crate::write::ValkeyWrite;
 use async_trait::async_trait;
@@ -38,6 +39,8 @@ impl ToValkeyArgs for StreamTrimmingMode {
         });
     }
 }
+
+impl ToSingleValkeyArg for StreamTrimmingMode {}
 
 /// A stream trim strategy.
 ///
@@ -225,6 +228,8 @@ impl ToValkeyArgs for StreamReadOptions {
 }
 
 /// Options for `XREADGROUP`.
+///
+/// Mirrors Python `StreamReadGroupOptions`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StreamReadGroupOptions {
     /// Block for up to this many milliseconds waiting for entries (`BLOCK`).
@@ -1183,6 +1188,12 @@ mod tests {
     use crate::test_utils::assert_args_empty;
 
     #[test]
+    fn trimming_mode_args() {
+        assert_args(StreamTrimmingMode::Exact, &["="]);
+        assert_args(StreamTrimmingMode::Approx, &["~"]);
+    }
+
+    #[test]
     fn trim_strategy_args() {
         assert_args(
             StreamTrimStrategy::maxlen(StreamTrimmingMode::Exact, 100),
@@ -1320,13 +1331,13 @@ mod tests {
             (bulk("1-0"), array(vec![array(vec![bulk("f"), bulk("a")])])),
             (bulk("2-0"), array(vec![array(vec![bulk("f"), bulk("b")])])),
         ]);
-        let reply = StreamRangeReply::from_owned_valkey_value(range).unwrap();
+        let reply = decode::<StreamRangeReply>(range).unwrap();
         assert_eq!(
             reply.ids,
             vec![entry("1-0", "f", "a"), entry("2-0", "f", "b")]
         );
         assert!(
-            StreamRangeReply::from_owned_valkey_value(ValkeyValue::Nil)
+            decode::<StreamRangeReply>(ValkeyValue::Nil)
                 .unwrap()
                 .ids
                 .is_empty()
@@ -1337,13 +1348,13 @@ mod tests {
             bulk("1-0"),
             array(vec![bulk("f"), bulk("a")]),
         ])]);
-        assert!(StreamRangeReply::from_owned_valkey_value(raw).is_err());
+        assert!(decode::<StreamRangeReply>(raw).is_err());
 
         // A field that is not a `[field, value]` pair.
         let unpaired = ValkeyValue::Map(vec![(bulk("1-0"), array(vec![bulk("f")]))]);
-        assert!(StreamRangeReply::from_owned_valkey_value(unpaired).is_err());
+        assert!(decode::<StreamRangeReply>(unpaired).is_err());
 
-        let claim = StreamClaimReply::from_owned_valkey_value(ValkeyValue::Map(vec![(
+        let claim = decode::<StreamClaimReply>(ValkeyValue::Map(vec![(
             bulk("1-0"),
             array(vec![array(vec![bulk("f"), bulk("a")])]),
         )]))
@@ -1365,14 +1376,13 @@ mod tests {
             array(vec![array(vec![bulk("f"), bulk("a")])]),
         )]);
         let reply =
-            StreamReadReply::from_owned_valkey_value(ValkeyValue::Map(vec![(bulk("s"), entries)]))
-                .unwrap();
+            decode::<StreamReadReply>(ValkeyValue::Map(vec![(bulk("s"), entries)])).unwrap();
         assert_eq!(reply.keys.len(), 1);
         assert_eq!(reply.keys[0].key, "s");
         assert_eq!(reply.keys[0].ids, vec![entry("1-0", "f", "a")]);
 
         assert!(
-            Option::<StreamReadReply>::from_owned_valkey_value(ValkeyValue::Nil)
+            decode::<Option<StreamReadReply>>(ValkeyValue::Nil)
                 .unwrap()
                 .is_none()
         );
@@ -1388,7 +1398,7 @@ mod tests {
             )]),
             array(vec![bulk("0-1")]),
         ]);
-        let reply = StreamAutoClaimReply::from_owned_valkey_value(full).unwrap();
+        let reply = decode::<StreamAutoClaimReply>(full).unwrap();
         assert_eq!(reply.next_stream_id, "2-0");
         assert_eq!(reply.claimed, vec![entry("1-0", "f", "a")]);
         assert_eq!(reply.deleted_ids, vec!["0-1"]);
@@ -1399,7 +1409,7 @@ mod tests {
             bulk("0-0"),
             array(vec![bulk("1-0"), ValkeyValue::Nil]),
         ]);
-        let reply = StreamAutoClaimReply::from_owned_valkey_value(justid).unwrap();
+        let reply = decode::<StreamAutoClaimReply>(justid).unwrap();
         assert_eq!(reply.next_stream_id, "0-0");
         assert_eq!(reply.claimed.len(), 1);
         assert_eq!(reply.claimed[0].id, "1-0");
@@ -1407,12 +1417,12 @@ mod tests {
         assert!(reply.deleted_ids.is_empty());
         assert!(reply.invalid_entries);
 
-        assert!(StreamAutoClaimReply::from_owned_valkey_value(array(vec![bulk("0-0")])).is_err());
+        assert!(decode::<StreamAutoClaimReply>(array(vec![bulk("0-0")])).is_err());
     }
 
     #[test]
     fn pending_count_reply_decoding() {
-        let reply = StreamPendingCountReply::from_owned_valkey_value(array(vec![array(vec![
+        let reply = decode::<StreamPendingCountReply>(array(vec![array(vec![
             bulk("1-0"),
             bulk("c1"),
             ValkeyValue::Int(100),
@@ -1431,7 +1441,7 @@ mod tests {
         );
 
         assert!(
-            StreamPendingCountReply::from_owned_valkey_value(array(vec![]))
+            decode::<StreamPendingCountReply>(array(vec![]))
                 .unwrap()
                 .ids
                 .is_empty()
@@ -1446,7 +1456,7 @@ mod tests {
             ValkeyValue::Nil,
             ValkeyValue::Nil,
         ]);
-        let reply = StreamPendingReply::from_owned_valkey_value(empty).unwrap();
+        let reply = decode::<StreamPendingReply>(empty).unwrap();
         assert!(matches!(reply, StreamPendingReply::Empty));
         assert_eq!(reply.count(), 0);
 
@@ -1456,7 +1466,7 @@ mod tests {
             bulk("3-0"),
             array(vec![array(vec![bulk("c1"), bulk("3")])]),
         ]);
-        let reply = StreamPendingReply::from_owned_valkey_value(data).unwrap();
+        let reply = decode::<StreamPendingReply>(data).unwrap();
         assert_eq!(reply.count(), 3);
         let StreamPendingReply::Data(data) = reply else {
             panic!("expected pending data");
@@ -1477,7 +1487,7 @@ mod tests {
             ValkeyValue::Nil,
             ValkeyValue::Nil,
         ]);
-        assert!(StreamPendingReply::from_owned_valkey_value(missing_ids).is_err());
+        assert!(decode::<StreamPendingReply>(missing_ids).is_err());
     }
 
     #[test]
@@ -1495,7 +1505,7 @@ mod tests {
             (bulk("last-entry"), ValkeyValue::Nil),
             (bulk("entries-added"), ValkeyValue::Int(2)),
         ]);
-        let reply = StreamInfoStreamReply::from_owned_valkey_value(info).unwrap();
+        let reply = decode::<StreamInfoStreamReply>(info).unwrap();
         assert_eq!(
             (reply.length, reply.radix_tree_keys, reply.groups),
             (2, 1, 1)
@@ -1512,7 +1522,7 @@ mod tests {
                 array(vec![bulk("f"), bulk("a"), bulk("g")]),
             ]),
         )]);
-        assert!(StreamInfoStreamReply::from_owned_valkey_value(odd).is_err());
+        assert!(decode::<StreamInfoStreamReply>(odd).is_err());
     }
 
     #[test]
@@ -1526,7 +1536,7 @@ mod tests {
             (bulk("entries-read"), ValkeyValue::Int(3)),
             (bulk("lag"), ValkeyValue::Nil),
         ])]);
-        let reply = StreamInfoGroupsReply::from_owned_valkey_value(groups).unwrap();
+        let reply = decode::<StreamInfoGroupsReply>(groups).unwrap();
         let group = &reply.groups[0];
         assert_eq!(
             (group.name.as_str(), group.consumers, group.pending),
@@ -1541,11 +1551,15 @@ mod tests {
             (bulk("idle"), ValkeyValue::Int(42)),
             (bulk("inactive"), ValkeyValue::Int(42)),
         ])]);
-        let reply = StreamInfoConsumersReply::from_owned_valkey_value(consumers).unwrap();
+        let reply = decode::<StreamInfoConsumersReply>(consumers).unwrap();
         let consumer = &reply.consumers[0];
         assert_eq!(
             (consumer.name.as_str(), consumer.pending, consumer.idle),
             ("c1", 1, 42)
         );
+    }
+
+    fn decode<T: FromValkeyValue>(value: ValkeyValue) -> ValkeyResult<T> {
+        T::from_owned_valkey_value(value)
     }
 }

@@ -5,9 +5,17 @@
  * Parameterized over cluster/standalone for parity with Java/Python/Go.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
-import { ClientPool, GlideClient, GlideClientConfiguration } from "..";
+import { afterAll, beforeAll, describe, expect, it, jest } from "@jest/globals";
+import {
+    ClientPool,
+    ClosingError,
+    ConfigurationError,
+    GlideClient,
+    GlideClientConfiguration,
+    ServiceType,
+} from "..";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
+import { connection_request } from "../build-ts/ProtobufMessage";
 import {
     getClientConfigurationOption,
     getServerVersion,
@@ -73,7 +81,7 @@ describe("ClientPool", () => {
                 };
                 await expect(
                     ClientPool.create(badConfig, { maxSize: 1, minIdle: 1 }),
-                ).rejects.toThrow();
+                ).rejects.toThrow(ClosingError);
             },
             TIMEOUT,
         );
@@ -87,7 +95,70 @@ describe("ClientPool", () => {
                         minIdle: 1,
                         clusterMode: true,
                     }),
-                ).rejects.toThrow();
+                ).rejects.toThrow(ClosingError);
+            },
+            TIMEOUT,
+        );
+
+        it(
+            "create with failed authentication rejects with ClosingError",
+            async () => {
+                const error = await ClientPool.create(
+                    {
+                        ...standaloneConfig,
+                        credentials: {
+                            username: `no-such-user-${Date.now()}`,
+                            password: "wrong-password",
+                        },
+                    },
+                    { maxSize: 1, minIdle: 1 },
+                ).then(
+                    (pool) => {
+                        pool.close();
+                        throw new Error("Expected pool creation to fail");
+                    },
+                    (error: Error) => error,
+                );
+                expect(error).toBeInstanceOf(ClosingError);
+                expect(error.message).toContain("WRONGPASS");
+            },
+            TIMEOUT,
+        );
+
+        it(
+            "create rejects with ConfigurationError when the core refuses the connection request",
+            async () => {
+                // The TypeScript layer validates libName itself, so change the
+                // encoded request to reach the core's own validation.
+                const serializeConfig =
+                    GlideClient.serializeConfig.bind(GlideClient);
+                const spy = jest
+                    .spyOn(GlideClient, "serializeConfig")
+                    .mockImplementation((options) => {
+                        const serialized = serializeConfig(options);
+                        const request =
+                            connection_request.ConnectionRequest.decode(
+                                serialized.bytes,
+                            );
+                        request.libName = "lib name with spaces";
+                        return {
+                            ...serialized,
+                            bytes: connection_request.ConnectionRequest.encode(
+                                request,
+                            ).finish(),
+                        };
+                    });
+
+                try {
+                    await expect(
+                        ClientPool.create(standaloneConfig, {
+                            maxSize: 1,
+                            minIdle: 1,
+                        }),
+                    ).rejects.toThrow(ConfigurationError);
+                } finally {
+                    spy.mockRestore();
+                }
             },
             TIMEOUT,
         );
@@ -466,6 +537,55 @@ describe("ClientPool", () => {
         );
 
         it(
+            "does not exceed maxSize when a borrow burst races warmup",
+            async () => {
+                const maxSize = 4;
+                const pool = await ClientPool.create(standaloneConfig, {
+                    maxSize,
+                    minIdle: maxSize,
+                    acquireTimeoutS: 10,
+                });
+
+                // Deliberately no waitForIdle: warmup connects asynchronously and
+                // racing that window is the point. An acquirer arriving before the
+                // warmup connections were counted used to read room below maxSize
+                // and spawn a redundant on-demand client, leaving surplus idle
+                // connections the pool never reclaimed.
+                try {
+                    const errors: Error[] = [];
+                    await Promise.all(
+                        Array.from({ length: 16 }, () =>
+                            (async () => {
+                                for (let i = 0; i < 5; i++) {
+                                    await pool.borrow(async (client) => {
+                                        await (client as GlideClient).ping();
+                                    });
+                                }
+                            })().catch((e: Error) => errors.push(e)),
+                        ),
+                    );
+                    expect(errors).toHaveLength(0);
+
+                    // Quiesce so totalCount is settled, not mid-release.
+                    const deadline = Date.now() + 5000;
+
+                    while (
+                        pool.idleCount !== pool.totalCount &&
+                        Date.now() < deadline
+                    ) {
+                        await new Promise((r) => setTimeout(r, 50));
+                    }
+
+                    expect(pool.totalCount).toBeLessThanOrEqual(maxSize);
+                    expect(pool.idleCount).toBeLessThanOrEqual(maxSize);
+                } finally {
+                    pool.close();
+                }
+            },
+            TIMEOUT,
+        );
+
+        it(
             "ordinary-client close does not evict pooled clients",
             async () => {
                 // On Node the collision damages registry-mediated paths: acquire()
@@ -507,6 +627,39 @@ describe("ClientPool", () => {
                 pool.close();
             },
             TIMEOUT,
+        );
+    });
+});
+
+describe("Pool credential provider guard", () => {
+    const config = (provider: unknown) =>
+        ({
+            addresses: [{ host: "invalid.example", port: 1 }],
+            credentials: {
+                username: "iam-user",
+                iamConfig: {
+                    clusterName: "cluster",
+                    service: ServiceType.Elasticache,
+                    region: "us-east-1",
+                    credentialProvider: provider,
+                },
+            },
+        }) as unknown as GlideClientConfiguration;
+
+    it("rejects a custom provider before native pool creation", async () => {
+        await expect(
+            ClientPool.create(
+                config(() => ({
+                    accessKeyId: "access",
+                    secretAccessKey: "secret",
+                })),
+            ),
+        ).rejects.toThrow("cannot use a custom IAM credentials provider");
+    });
+
+    it("rejects a malformed provider before native pool creation", async () => {
+        await expect(ClientPool.create(config("invalid"))).rejects.toThrow(
+            "credentialProvider must be a function",
         );
     });
 });

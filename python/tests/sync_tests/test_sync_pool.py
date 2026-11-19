@@ -14,8 +14,15 @@ import uuid
 
 import pytest
 from glide_shared.config import (
+    AwsCredentials,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
+    IamAuthConfig,
+    NodeAddress,
+    RdmaConfiguration,
+    RdmaProvider,
+    ServerCredentials,
+    ServiceType,
 )
 from glide_shared.routes import AllNodes
 from glide_sync.client_pool import ClientPool, PoolConfig
@@ -193,6 +200,32 @@ class TestClientPool:
             # Second acquire should time out
             with pytest.raises(TimeoutError):
                 p.acquire(timeout=0.5)
+
+            p.release(client_id)
+        finally:
+            p.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_pool_acquire_timeout_zero_fails_immediately(self, cluster_mode):
+        """acquire(timeout=0) must fail immediately on an exhausted pool.
+
+        A falsy-check (`timeout or default`) would replace 0 with the pool's
+        acquire_timeout_s and block for that long instead.
+        """
+        config = _get_pool_client_config(cluster_mode)
+        # A long default makes the difference between "0" and "fell back to the default" obvious.
+        p = ClientPool.create(
+            config, PoolConfig(max_size=1, min_idle=1, acquire_timeout_s=30.0)
+        )
+        _wait_for_pool_ready(p, 1)
+
+        try:
+            client_id = p.acquire()
+
+            start = time.monotonic()
+            with pytest.raises(TimeoutError):
+                p.acquire(timeout=0)
+            assert time.monotonic() - start < 5.0
 
             p.release(client_id)
         finally:
@@ -489,6 +522,44 @@ class TestPoolPubsubRejection:
             ),
         )
         with pytest.raises(ValueError, match="pubsub"):
+            ClientPool(config, PoolConfig(max_size=2, min_idle=1))
+
+    def test_pool_rejects_custom_credential_provider_before_native_call(
+        self, monkeypatch
+    ):
+        """Custom providers are direct-client-only in this release."""
+        import glide_sync.client_pool as pool_module
+
+        monkeypatch.setattr(pool_module, "_GlideFFI", None)
+        config = GlideClientConfiguration(
+            addresses=[NodeAddress()],
+            credentials=ServerCredentials(
+                username="user",
+                iam_config=IamAuthConfig(
+                    cluster_name="cluster",
+                    service=ServiceType.ELASTICACHE,
+                    region="us-east-1",
+                    credential_provider=lambda: AwsCredentials("access", "secret"),
+                ),
+            ),
+        )
+        with pytest.raises(ValueError, match="cannot use a custom IAM"):
+            ClientPool(config, PoolConfig(max_size=1, min_idle=0))
+
+
+class TestPoolRdmaRejection:
+    """Pool creation should reject configs with RDMA."""
+
+    @pytest.mark.parametrize(
+        "config_class", [GlideClientConfiguration, GlideClusterClientConfiguration]
+    )
+    def test_pool_rejects_rdma_config(self, config_class):
+        """Refused before any client is created, so no server is needed."""
+        config = config_class(
+            addresses=[_get_standalone_address()],
+            rdma=RdmaConfiguration(provider=RdmaProvider.Tcp()),
+        )
+        with pytest.raises(ValueError, match="RDMA"):
             ClientPool(config, PoolConfig(max_size=2, min_idle=1))
 
 

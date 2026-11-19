@@ -239,16 +239,24 @@ pub(crate) struct RefreshTaskState {
     pub handle: JoinHandle<()>,
     // Current status of the refresh task.
     pub status: RefreshTaskStatus,
+    // Whether the task holds the existing connection and may keep it if it passes a health check.
+    pub may_keep_existing_conn: bool,
 }
 
 impl RefreshTaskState {
     // Creates a new `RefreshTaskState` with a `Reconnecting` status.
-    pub fn new(handle: JoinHandle<()>, notifier: RefreshTaskNotifier, identity: Arc<()>) -> Self {
+    pub fn new(
+        handle: JoinHandle<()>,
+        notifier: RefreshTaskNotifier,
+        identity: Arc<()>,
+        may_keep_existing_conn: bool,
+    ) -> Self {
         debug!("RefreshTaskState: Creating a new instance with a Reconnecting state.");
         RefreshTaskState {
             identity,
             handle,
             status: RefreshTaskStatus::with_notifier(notifier),
+            may_keep_existing_conn,
         }
     }
 
@@ -658,23 +666,27 @@ where
     // - The reconnect task is in `ReconnectingTooLong` state, with a debug log for clarity.
     pub(crate) fn notifier_for_route(&self, route: &Route) -> Option<Arc<Notify>> {
         let address = self.address_for_route(route)?;
+        self.notifier_for_address(&address)
+    }
 
+    // Returns the notifier of the refresh task in progress for `address`, if any.
+    pub(crate) fn notifier_for_address(&self, address: &str) -> Option<Arc<Notify>> {
         if let Some(task_state) = self
             .refresh_conn_state
             .refresh_address_in_progress
-            .get(&address)
+            .get(address)
         {
             match &task_state.status {
                 RefreshTaskStatus::Reconnecting(notifier) => {
                     debug!(
-                        "notifier_for_route: Found reconnect notifier for address: {}",
+                        "notifier_for_address: Found reconnect notifier for address: {}",
                         address
                     );
                     Some(notifier.get_notifier())
                 }
                 RefreshTaskStatus::ReconnectingTooLong => {
                     debug!(
-                        "notifier_for_route: Address {} is in ReconnectingTooLong state. No notifier will be returned.",
+                        "notifier_for_address: Address {} is in ReconnectingTooLong state. No notifier will be returned.",
                         address
                     );
                     None
@@ -682,7 +694,7 @@ where
             }
         } else {
             debug!(
-                "notifier_for_route: No refresh task exists for address: {}. No notifier will be returned.",
+                "notifier_for_address: No refresh task exists for address: {}. No notifier will be returned.",
                 address
             );
             None
@@ -828,6 +840,7 @@ mod tests {
             tokio::spawn(async {}),
             RefreshTaskNotifier::new(),
             old_token.clone(),
+            true,
         );
         let mut states = HashMap::new();
         states.insert(address.clone(), old_state);
@@ -840,6 +853,7 @@ mod tests {
                 tokio::spawn(async {}),
                 RefreshTaskNotifier::new(),
                 new_token.clone(),
+                true,
             ),
         );
 

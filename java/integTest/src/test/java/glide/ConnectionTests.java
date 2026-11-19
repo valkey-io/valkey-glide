@@ -2,11 +2,11 @@
 package glide;
 
 import static glide.TestConfiguration.CLUSTER_HOSTS;
+import static glide.TestConfiguration.CLUSTER_TLS_HOSTS;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
+import static glide.TestConfiguration.STANDALONE_TLS_HOSTS;
 import static glide.TestUtilities.*;
-import static glide.TestUtilities.IAM_TEST_CLUSTER_NAME;
-import static glide.TestUtilities.IAM_TEST_REGION_US_EAST_1;
 import static glide.TestUtilities.IAM_USERNAME;
 import static glide.TestUtilities.createTestIamConfig;
 import static glide.api.BaseClient.OK;
@@ -1375,11 +1375,12 @@ public class ConnectionTests {
         GlideCredentialProvider provider =
                 () -> {
                     invocations.incrementAndGet();
-                    return AwsCredentials.builder()
-                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
-                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
-                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
-                            .build();
+                    return CompletableFuture.completedFuture(
+                            AwsCredentials.builder()
+                                    .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                                    .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                                    .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                                    .build());
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1392,7 +1393,7 @@ public class ConnectionTests {
         ServerCredentials credentials =
                 ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
         try (GlideClient client =
-                GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get()) {
+                GlideClient.createClient(iamClientConfig().credentials(credentials).build()).get()) {
             TestUtilities.assertConnected(client);
             int afterConnect = invocations.get();
             assertTrue(afterConnect > 0, "Provider not invoked on initial connect");
@@ -1412,11 +1413,12 @@ public class ConnectionTests {
         GlideCredentialProvider provider =
                 () -> {
                     invocations.incrementAndGet();
-                    return AwsCredentials.builder()
-                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
-                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
-                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
-                            .build();
+                    return CompletableFuture.completedFuture(
+                            AwsCredentials.builder()
+                                    .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                                    .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                                    // Intentionally omit the optional session token.
+                                    .build());
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1429,7 +1431,7 @@ public class ConnectionTests {
         ServerCredentials credentials =
                 ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
         try (GlideClient client =
-                GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get()) {
+                GlideClient.createClient(iamClientConfig().credentials(credentials).build()).get()) {
             TestUtilities.assertConnected(client);
             assertEquals("OK", client.set("iam_custom_provider_key", "iam_custom_provider_value").get());
             assertEquals("iam_custom_provider_value", client.get("iam_custom_provider_key").get());
@@ -1449,7 +1451,10 @@ public class ConnectionTests {
         // A provider that always throws should cause client creation to fail.
         GlideCredentialProvider throwingProvider =
                 () -> {
-                    throw new RuntimeException("injected test error from credentials provider");
+                    CompletableFuture<AwsCredentials> future = new CompletableFuture<>();
+                    future.completeExceptionally(
+                            new RuntimeException("injected test error from credentials provider"));
+                    return future;
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1464,8 +1469,7 @@ public class ConnectionTests {
                 assertThrows(
                         ExecutionException.class,
                         () ->
-                                GlideClient.createClient(commonClientConfig().credentials(credentials).build())
-                                        .get());
+                                GlideClient.createClient(iamClientConfig().credentials(credentials).build()).get());
         // Verify the injected error message propagates through the exception chain.
         String fullMessage = getFullExceptionMessage(exception);
         assertTrue(
@@ -1482,12 +1486,13 @@ public class ConnectionTests {
         GlideCredentialProvider provider =
                 () -> {
                     invocations.incrementAndGet();
-                    return AwsCredentials.builder()
-                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
-                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
-                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
-                            .expiresAt(Instant.now().plusSeconds(3600))
-                            .build();
+                    return CompletableFuture.completedFuture(
+                            AwsCredentials.builder()
+                                    .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                                    .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                                    .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                                    .expiresAt(Instant.now().plusSeconds(3600))
+                                    .build());
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1499,7 +1504,7 @@ public class ConnectionTests {
         ServerCredentials credentials =
                 ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
         try (GlideClient client =
-                GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get()) {
+                GlideClient.createClient(iamClientConfig().credentials(credentials).build()).get()) {
             TestUtilities.assertConnected(client);
             assertEquals("OK", client.set("iam_expires_at_key", "iam_expires_at_value").get());
             assertEquals("iam_expires_at_value", client.get("iam_expires_at_key").get());
@@ -1516,11 +1521,12 @@ public class ConnectionTests {
         GlideCredentialProvider provider =
                 () -> {
                     invocations.incrementAndGet();
-                    return AwsCredentials.builder()
-                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
-                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
-                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
-                            .build();
+                    return CompletableFuture.completedFuture(
+                            AwsCredentials.builder()
+                                    .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                                    .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                                    .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                                    .build());
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1532,7 +1538,7 @@ public class ConnectionTests {
         ServerCredentials credentials =
                 ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
         try (GlideClient client =
-                GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get()) {
+                GlideClient.createClient(iamClientConfig().credentials(credentials).build()).get()) {
             TestUtilities.assertConnected(client);
             int afterConnect = invocations.get();
             assertTrue(afterConnect > 0, "Provider not invoked on initial connect");
@@ -1579,11 +1585,12 @@ public class ConnectionTests {
         GlideCredentialProvider provider =
                 () -> {
                     invocations.incrementAndGet();
-                    return AwsCredentials.builder()
-                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
-                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
-                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
-                            .build();
+                    return CompletableFuture.completedFuture(
+                            AwsCredentials.builder()
+                                    .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                                    .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                                    .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                                    .build());
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1596,8 +1603,7 @@ public class ConnectionTests {
         ServerCredentials credentials =
                 ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
         try (GlideClusterClient client =
-                GlideClusterClient.createClient(
-                                commonClusterClientConfig().credentials(credentials).build())
+                GlideClusterClient.createClient(iamClusterClientConfig().credentials(credentials).build())
                         .get()) {
             TestUtilities.assertConnected(client);
             int afterConnect = invocations.get();
@@ -1618,11 +1624,13 @@ public class ConnectionTests {
         GlideCredentialProvider provider =
                 () -> {
                     invocations.incrementAndGet();
-                    return AwsCredentials.builder()
-                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
-                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
-                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
-                            .build();
+                    return CompletableFuture.supplyAsync(
+                            () ->
+                                    AwsCredentials.builder()
+                                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                                            .build());
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1635,8 +1643,7 @@ public class ConnectionTests {
         ServerCredentials credentials =
                 ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
         try (GlideClusterClient client =
-                GlideClusterClient.createClient(
-                                commonClusterClientConfig().credentials(credentials).build())
+                GlideClusterClient.createClient(iamClusterClientConfig().credentials(credentials).build())
                         .get()) {
             TestUtilities.assertConnected(client);
             assertEquals("OK", client.set("iam_custom_provider_key", "iam_custom_provider_value").get());
@@ -1657,11 +1664,12 @@ public class ConnectionTests {
         GlideCredentialProvider provider =
                 () -> {
                     invocations.incrementAndGet();
-                    return AwsCredentials.builder()
-                            .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
-                            .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
-                            .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
-                            .build();
+                    return CompletableFuture.completedFuture(
+                            AwsCredentials.builder()
+                                    .accessKeyId(System.getenv("AWS_ACCESS_KEY_ID"))
+                                    .secretAccessKey(System.getenv("AWS_SECRET_ACCESS_KEY"))
+                                    .sessionToken(System.getenv("AWS_SESSION_TOKEN"))
+                                    .build());
                 };
         IamAuthConfig iamConfig =
                 IamAuthConfig.builder()
@@ -1673,8 +1681,7 @@ public class ConnectionTests {
         ServerCredentials credentials =
                 ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
         try (GlideClusterClient client =
-                GlideClusterClient.createClient(
-                                commonClusterClientConfig().credentials(credentials).build())
+                GlideClusterClient.createClient(iamClusterClientConfig().credentials(credentials).build())
                         .get()) {
             TestUtilities.assertConnected(client);
             int afterConnect = invocations.get();
@@ -1685,12 +1692,52 @@ public class ConnectionTests {
         }
     }
 
+    /**
+     * Config for IAM tests: IAM auth is only valid over TLS, so these point at the TLS servers the
+     * harness always starts and trust its self-signed CA. Plaintext hosts fail at client creation.
+     */
+    private static GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?> iamClientConfig() {
+        TlsAdvancedConfiguration tlsConfig =
+                TlsAdvancedConfiguration.builder().rootCertificates(getCaCertificate()).build();
+        GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?> builder =
+                GlideClientConfiguration.builder();
+        for (String host : STANDALONE_TLS_HOSTS) {
+            String[] parts = host.split(":");
+            builder.address(
+                    NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+        }
+        builder.useTLS(true);
+        builder.advancedConfiguration(
+                AdvancedGlideClientConfiguration.builder().tlsAdvancedConfiguration(tlsConfig).build());
+        return builder;
+    }
+
+    /** Cluster counterpart of {@link #iamClientConfig()}. */
+    private static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>
+            iamClusterClientConfig() {
+        TlsAdvancedConfiguration tlsConfig =
+                TlsAdvancedConfiguration.builder().rootCertificates(getCaCertificate()).build();
+        GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?> builder =
+                GlideClusterClientConfiguration.builder();
+        for (String host : CLUSTER_TLS_HOSTS) {
+            String[] parts = host.split(":");
+            builder.address(
+                    NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+        }
+        builder.useTLS(true);
+        builder.advancedConfiguration(
+                AdvancedGlideClusterClientConfiguration.builder()
+                        .tlsAdvancedConfiguration(tlsConfig)
+                        .build());
+        return builder;
+    }
+
     @SneakyThrows
     private GlideClient createStandaloneClientWithIam(int refreshIntervalSeconds) {
         IamAuthConfig iamConfig = createTestIamConfig(refreshIntervalSeconds);
         ServerCredentials credentials =
                 ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
-        return GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get();
+        return GlideClient.createClient(iamClientConfig().credentials(credentials).build()).get();
     }
 
     @SneakyThrows
@@ -1699,7 +1746,7 @@ public class ConnectionTests {
         ServerCredentials credentials =
                 ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
         return GlideClusterClient.createClient(
-                        commonClusterClientConfig().credentials(credentials).build())
+                        iamClusterClientConfig().credentials(credentials).build())
                 .get();
     }
 

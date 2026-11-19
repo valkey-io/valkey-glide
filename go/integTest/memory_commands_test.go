@@ -306,13 +306,21 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) 
 
 	assert.Greater(t, result.AllocatorActive, int64(0))
 	assert.Greater(t, result.AllocatorAllocated, int64(0))
-	assert.GreaterOrEqual(t, result.AllocatorFragmentationBytes, int64(0))
+	// Before 8.0 this is allocator.active - allocator.allocated. Without jemalloc (macOS),
+	// active is the RAM in use, which can be less than what was allocated, so it can go negative.
+	assert.IsType(t, int64(0), result.AllocatorFragmentationBytes)
+	if suite.serverVersion < "8.0.0" {
+		assert.Equal(t, result.AllocatorActive-result.AllocatorAllocated, result.AllocatorFragmentationBytes)
+	} else {
+		assert.GreaterOrEqual(t, result.AllocatorFragmentationBytes, int64(0))
+	}
 	assert.Greater(t, result.AllocatorResident, int64(0))
 	assert.IsType(t, int64(0), result.AllocatorRssBytes)
 	assert.GreaterOrEqual(t, result.AofBuffer, int64(0))
 	assert.GreaterOrEqual(t, result.ClientsNormal, int64(0))
 	assert.GreaterOrEqual(t, result.ClientsSlaves, int64(0))
-	assert.GreaterOrEqual(t, result.DatasetBytes, int64(0))
+	// dataset.bytes can be negative depending on engine memory accounting, so only check its type.
+	assert.IsType(t, int64(0), result.DatasetBytes)
 	assert.IsType(t, int64(0), result.FragmentationBytes)
 	assert.GreaterOrEqual(t, result.KeysBytesPerKey, int64(0))
 	assert.GreaterOrEqual(t, result.KeysCount, int64(0))
@@ -332,6 +340,7 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) 
 	assert.GreaterOrEqual(t, result.RssOverheadRatio, float64(0))
 
 	// Optional Redis 7.0+ fields
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "7.0.0" {
 		assert.False(t, result.ClusterLinks.IsNil())
 		assert.False(t, result.FunctionsCaches.IsNil())
@@ -341,6 +350,7 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) 
 	}
 
 	// Optional Valkey 8.0+ fields
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion >= "8.0.0" {
 		assert.False(t, result.AllocatorMuzzy.IsNil())
 		assert.False(t, result.OverheadDbHashtableLut.IsNil())

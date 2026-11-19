@@ -3,11 +3,14 @@
 
 from __future__ import annotations
 
+import gc
 import math
 import os
 import platform
+import re
 import sys
 import time
+import warnings
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union, cast, get_type_hints
 
@@ -19,6 +22,7 @@ else:
 import anyio
 import pytest
 from glide import GlideClient, GlideClusterClient, Script, TGlideClient
+from glide.glide_client import _client_registry
 from glide_shared import ClosingError, RequestError
 from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
@@ -53,6 +57,7 @@ from glide_shared.commands.core_options import (
     InsertPosition,
     MigrateOptions,
     OnlyIfEqual,
+    OnlyIfNotEqual,
     UpdateOptions,
 )
 from glide_shared.commands.latency import LatencyEntry
@@ -120,6 +125,8 @@ from tests.utils.utils import (
     BGREWRITEAOF_RESPONSES,
     BGSAVE_NOT_CANCELLED_RESPONSE,
     BGSAVE_RESPONSES,
+    BGSAVE_TYPES,
+    INFO_DEFAULT_FIELDS,
     PRIMARY_SLOT_ROUTE,
     assert_client_tracking_info,
     assert_connected,
@@ -138,13 +145,17 @@ from tests.utils.utils import (
     flatten_cluster_response_lists,
     generate_lua_lib_code,
     get_first_result,
+    get_info,
     get_random_string,
     get_unix_seconds,
     get_version,
-    parse_info_response,
+    low_busy_reply_threshold,
+    parse_int,
     round_values,
     trigger_latency_spike,
+    wait_for,
     wait_for_save_not_in_progress,
+    wait_for_server_blocked,
 )
 
 
@@ -178,6 +189,46 @@ class TestGlideClients:
 
         assert client._is_closed
 
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("resource_warning_filter", ["always", "error"])
+    async def test_unreferenced_client_releases_connection(
+        self, request, cluster_mode, protocol, resource_warning_filter
+    ):
+        """A client dropped without close() is collected and its connection closed,
+        whether its ResourceWarning is reported or raised."""
+        observer = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol
+        )
+        client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            client_name="gc_dropped",
+        )
+
+        async def dropped_client_gone() -> bool:
+            client_list = await observer.custom_command(["CLIENT", "LIST"])
+            assert isinstance(client_list, bytes)
+            return b"name=gc_dropped" not in client_list
+
+        assert not await dropped_client_gone()
+        pipe_client_id = client._pipe_client_id
+        # Under "error" the warning raises inside the finalizer and reaches
+        # sys.unraisablehook, so only the closed connection proves it still ran.
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter(resource_warning_filter, ResourceWarning)
+            del client
+            gc.collect()
+        if resource_warning_filter == "always":
+            assert any(issubclass(w.category, ResourceWarning) for w in caught)
+        assert pipe_client_id not in _client_registry
+        await wait_for(
+            dropped_client_gone,
+            "the dropped client's connection was not closed",
+        )
+        await observer.close()
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_send_and_receive_large_values(self, request, cluster_mode, protocol):
@@ -188,7 +239,7 @@ class TestGlideClients:
             return
 
         glide_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
         length = 2**25  # 33mb
         key = "0" * length
@@ -475,20 +526,23 @@ class TestGlideClients:
             protocol=protocol,
             request_timeout=20000,  # 20 seconds timeout
         )
+        probe = await create_client(
+            request, cluster_mode, protocol=protocol, request_timeout=100
+        )
+        nodes = pytest.valkey_cluster.nodes_addr if cluster_mode else None  # type: ignore
 
         async def run_debug_sleep():
             """
             Run a long-running DEBUG SLEEP command.
             """
-            command = ["DEBUG", "sleep", "7"]
+            command = ["DEBUG", "sleep", "3"]
             if isinstance(client, GlideClusterClient):
                 await client.custom_command(command, AllNodes())
             else:
                 await client.custom_command(command)
 
         async def fail_to_connect_to_client():
-            # try to connect with a small timeout connection
-            await anyio.sleep(1)
+            await wait_for_server_blocked(probe, nodes)
             with pytest.raises(ClosingError) as e:
                 await create_client(
                     request,
@@ -497,13 +551,12 @@ class TestGlideClients:
                     connection_timeout=100,  # 100 ms
                     reconnect_strategy=BackoffStrategy(
                         1, 100, 2
-                    ),  # needs to be configured so that we wont be connected within 7 seconds bc of default retries
+                    ),  # needs to be configured so that we wont be connected within 3 seconds bc of default retries
                 )
             assert "timed out" in str(e).lower() or "timeout" in str(e).lower()
 
         async def connect_to_client():
-            # Create a second client with a connection timeout of 7 seconds
-            await anyio.sleep(1)
+            await wait_for_server_blocked(probe, nodes)
             timeout_client = await create_client(
                 request,
                 cluster_mode,
@@ -523,6 +576,7 @@ class TestGlideClients:
         async with anyio.create_task_group() as tg:
             tg.start_soon(run_debug_sleep)
             tg.start_soon(connect_to_client)
+        await probe.close()
 
         # Clean up the main client
         await client.close()
@@ -734,6 +788,40 @@ class TestCommands:
         assert await glide_client.get(key_mv_key) == b"value2"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize(
+        "view_fn",
+        [
+            lambda b: memoryview(b).cast("H"),
+            lambda b: memoryview(b).cast("I"),
+            lambda b: memoryview(b).cast("Q"),
+            lambda b: memoryview(b).cast("B", (2, len(b) // 2)),
+        ],
+        ids=["cast-H", "cast-I", "cast-Q", "2-D"],
+    )
+    async def test_memoryview_args_sent_by_byte_length(
+        self, glide_client: TGlideClient, view_fn
+    ):
+        """Test that set() and custom_command() accept memoryview values and keys
+        whose len() is smaller than nbytes (wider item formats and 2-D views)."""
+        data = os.urandom(64)
+        view = view_fn(data)
+        assert len(view) < view.nbytes == len(data)
+
+        key = get_random_string(10)
+        assert await glide_client.set(key, view) == OK
+        assert await glide_client.get(key) == data
+
+        custom_key = get_random_string(10)
+        await glide_client.custom_command(["SET", custom_key, view])
+        assert await glide_client.get(custom_key) == data
+
+        key_bytes = b"mv_key_" + os.urandom(8)
+        key_bytes += b"\x00" * (-len(key_bytes) % 8)  # whole uint64 elements
+        assert await glide_client.set(view_fn(key_bytes), b"value") == OK
+        assert await glide_client.get(key_bytes) == b"value"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
     async def test_use_resp3_protocol(self, glide_client: TGlideClient):
         result = cast(Dict[bytes, bytes], await glide_client.custom_command(["HELLO"]))
@@ -802,27 +890,49 @@ class TestCommands:
         assert await glide_client.get(key) == value.encode()
         # Tests for ONLY_IF_EQUAL below in test_set_only_if_equal()
 
+    @pytest.mark.skip_if_version_below("8.1.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.skip_if_version_below("8.1.0")
     async def test_set_only_if_equal(self, glide_client: TGlideClient):
         key = get_random_string(10)
-        value = get_random_string(10)
-        value2 = get_random_string(10)
-        wrong_comparison_value = get_random_string(10)
-        while wrong_comparison_value == value:
-            wrong_comparison_value = get_random_string(10)
+        assert await glide_client.set(key, "value") == OK
 
-        await glide_client.set(key, value)
+        # Value not equal
+        cond = OnlyIfEqual("other")
+        assert await glide_client.set(key, "other", conditional_set=cond) is None
+        assert await glide_client.get(key) == b"value"
 
-        res = await glide_client.set(
-            key, "foobar", conditional_set=OnlyIfEqual(wrong_comparison_value)
-        )
-        assert res is None
-        assert await glide_client.get(key) == value.encode()
-        res = await glide_client.set(key, value2, conditional_set=OnlyIfEqual(value))
-        assert res == OK
-        assert await glide_client.get(key) == value2.encode()
+        # Value equal
+        cond = OnlyIfEqual("value")
+        assert await glide_client.set(key, "other", conditional_set=cond) == OK
+        assert await glide_client.get(key) == b"other"
+
+        # Non-existent key
+        missing = get_random_string(10)
+        assert await glide_client.set(missing, "value", conditional_set=cond) is None
+        assert await glide_client.exists([missing]) == 0
+
+    @pytest.mark.skip_if_version_below("9.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_set_only_if_not_equal(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        assert await glide_client.set(key, "value") == OK
+
+        # Value equal
+        cond = OnlyIfNotEqual("value")
+        assert await glide_client.set(key, "other", conditional_set=cond) is None
+        assert await glide_client.get(key) == b"value"
+
+        # Value not equal
+        cond = OnlyIfNotEqual("other")
+        assert await glide_client.set(key, "other", conditional_set=cond) == OK
+        assert await glide_client.get(key) == b"other"
+
+        # Non-existent key
+        missing = get_random_string(10)
+        assert await glide_client.set(missing, "value", conditional_set=cond) == OK
+        assert await glide_client.get(missing) == b"value"
 
     @pytest.mark.skip_if_version_below("6.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -939,16 +1049,45 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_info_default(self, glide_client: TGlideClient):
-        cluster_mode = isinstance(glide_client, GlideClusterClient)
-        info_result = await glide_client.info()
-        if cluster_mode:
+        infos = await get_info(glide_client)
+
+        # Verify that there is one response for each node.
+        if isinstance(glide_client, GlideClusterClient):
             cluster_nodes = await glide_client.custom_command(["CLUSTER", "NODES"])
             assert isinstance(cluster_nodes, (bytes, list))
             cluster_nodes = get_first_result(cluster_nodes)
-            expected_num_of_results = cluster_nodes.count(b"master")
-            assert len(info_result) == expected_num_of_results
-        info_result = get_first_result(info_result)
-        assert b"# Memory" in info_result
+            assert len(infos) == cluster_nodes.count(b"master")
+
+        # Default fields
+        for info in infos:
+            for field in INFO_DEFAULT_FIELDS:
+                assert field in info
+
+        # Valkey 9.2+ fields
+        # ------------------
+
+        if await check_if_server_version_lt(glide_client, "9.2.0"):
+            return
+
+        # Persistence fields
+        for persistence in await get_info(glide_client, [InfoSection.PERSISTENCE]):
+            assert persistence.get("rdb_current_bgsave_type") in BGSAVE_TYPES
+            assert persistence.get("rdb_last_bgsave_type") in BGSAVE_TYPES
+
+            remaining_name = "forkless_estimated_seconds_remaining"
+            remaining_value = parse_int(persistence.get(remaining_name), remaining_name)
+            assert remaining_value >= -1
+
+        # Cluster info fields
+        if isinstance(glide_client, GlideClusterClient):
+            for cluster_info in await get_info(
+                glide_client, [InfoSection.CLUSTER_INFO]
+            ):
+                fallbacks_name = "cluster_io_main_thread_fallbacks"
+                fallbacks_value = parse_int(
+                    cluster_info.get(fallbacks_name), fallbacks_name
+                )
+                assert fallbacks_value >= 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1096,9 +1235,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_config_rewrite(self, glide_client: TGlideClient):
-        info_server = parse_info_response(
-            get_first_result(await glide_client.info([InfoSection.SERVER]))
-        )
+        info_server = (await get_info(glide_client, [InfoSection.SERVER]))[0]
         if len(info_server["config_file"]) > 0:
             assert await glide_client.config_rewrite() == OK
         else:
@@ -2270,6 +2407,17 @@ class TestCommands:
         assert await glide_client.sismember(key, member)
         assert not await glide_client.sismember(key, get_random_string(5))
         assert not await glide_client.sismember("non_existing_key", member)
+
+    @pytest.mark.skip_if_version_below("9.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_sismember_if_exists(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        member = get_random_string(5)
+        assert await glide_client.sadd(key, [member]) == 1
+        assert await glide_client.sismember_if_exists(key, member) == 1
+        assert await glide_client.sismember_if_exists(key, get_random_string(5)) == 0
+        assert await glide_client.sismember_if_exists("non_existing_key", member) == -1
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3663,6 +3811,30 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zadd_bytes_like_members(self, glide_client: TGlideClient):
+        """zadd must store bytes and memoryview members verbatim, not as their Python repr."""
+        key = get_random_string(10)
+        member_bytes = b"\x00\xffab"
+        member_other = b"\x01\xfecd"
+        member_mv = memoryview(b"\x02\xfdef")
+        members_scores: Mapping[TEncodable, float] = {
+            member_bytes: 1.0,
+            member_other: 2.0,
+            member_mv: 3.0,
+        }
+        assert await glide_client.zadd(key, members_scores) == 3
+
+        assert await glide_client.zrange(key, RangeByIndex(0, -1)) == [
+            b"\x00\xffab",
+            b"\x01\xfecd",
+            b"\x02\xfdef",
+        ]
+        assert await glide_client.zscore(key, b"\x00\xffab") == 1.0
+        assert await glide_client.zscore(key, b"\x01\xfecd") == 2.0
+        assert await glide_client.zscore(key, b"\x02\xfdef") == 3.0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zadd_nx_xx(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
@@ -4329,6 +4501,10 @@ class TestCommands:
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await glide_client.zadd(key, members_scores=members_scores) == 3
+        # count=0 must be sent as `ZPOPMIN key 0` and pop nothing. If it were dropped (truthiness check),
+        # the server would run `ZPOPMIN key` and silently remove "a".
+        assert await glide_client.zpopmin(key, 0) == {}
+        assert await glide_client.zcard(key) == 3
         assert await glide_client.zpopmin(key) == {b"a": 1.0}
 
         zpopmin_map = await glide_client.zpopmin(key, 3)
@@ -4389,6 +4565,10 @@ class TestCommands:
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await glide_client.zadd(key, members_scores) == 3
+        # count=0 must be sent as `ZPOPMAX key 0` and pop nothing. If it were dropped (truthiness check),
+        # the server would run `ZPOPMAX key` and silently remove "c".
+        assert await glide_client.zpopmax(key, 0) == {}
+        assert await glide_client.zcard(key) == 3
         assert await glide_client.zpopmax(key) == {b"c": 3.0}
 
         zpopmax_map = await glide_client.zpopmax(key, 3)
@@ -5717,6 +5897,27 @@ class TestCommands:
         assert await glide_client.append(key, value) == 10
         assert await glide_client.get(key) == (value * 2).encode()
 
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_delifeq(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        wrong_value = get_random_string(10)
+
+        # key does not exist yet
+        assert await glide_client.delifeq(key, value) is False
+
+        assert await glide_client.set(key, value) == OK
+
+        # value does not match
+        assert await glide_client.delifeq(key, wrong_value) is False
+        assert await glide_client.get(key) == value.encode()
+
+        # value matches, key is deleted
+        assert await glide_client.delifeq(key, value) is True
+        assert await glide_client.get(key) is None
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xadd_xtrim_xlen(self, glide_client: TGlideClient):
@@ -5763,7 +5964,7 @@ class TestCommands:
             await glide_client.xadd(
                 key,
                 [(field, "foo4"), (field2, "bar4")],
-                StreamAddOptions(trim=TrimByMinId(exact=True, threshold=id.decode())),
+                StreamAddOptions(trim=TrimByMinId(exact=True, threshold=id)),
             )
             is not None
         )
@@ -5828,6 +6029,50 @@ class TestCommands:
         assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
             await glide_client.xdel(string_key, [stream_id3])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xtrim_minid_bytes_like_threshold(self, glide_client: TGlideClient):
+        """TrimByMinId must accept the bytes stream ID returned by xadd."""
+        key = get_random_string(10)
+        ids = [await glide_client.xadd(key, [("f", str(i))]) for i in range(3)]
+        last_id = ids[-1]
+        assert isinstance(last_id, bytes)
+
+        assert await glide_client.xtrim(key, TrimByMinId(True, last_id)) == 2
+        assert await glide_client.xlen(key) == 1
+
+        for i in range(2):
+            await glide_client.xadd(key, [("f", str(i))])
+        newest = await glide_client.xrevrange(key, MaxId(), MinId(), count=1)
+        assert newest is not None
+        newest_id = next(iter(newest))
+        assert (
+            await glide_client.xtrim(key, TrimByMinId(True, memoryview(newest_id))) == 2
+        )
+        assert await glide_client.xlen(key) == 1
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xrange_exclusive_bound_bytes_like(self, glide_client: TGlideClient):
+        """ExclusiveIdBound must accept bytes, bytearray and memoryview IDs."""
+        key = get_random_string(10)
+        for stream_id in ["0-1", "0-2", "0-3"]:
+            assert (
+                await glide_client.xadd(
+                    key, [("f", "v")], StreamAddOptions(id=stream_id)
+                )
+                == stream_id.encode()
+            )
+
+        for start in [b"0-1", bytearray(b"0-1"), memoryview(b"0-1")]:
+            result = await glide_client.xrange(key, ExclusiveIdBound(start), MaxId())
+            assert result is not None
+            assert list(result) == [b"0-2", b"0-3"]
+
+            result = await glide_client.xrevrange(key, MaxId(), ExclusiveIdBound(start))
+            assert result is not None
+            assert list(result) == [b"0-3", b"0-2"]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -8942,7 +9187,7 @@ class TestCommands:
     ):
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
-        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, True)
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 3, True)
 
         # load the library
         assert await glide_client.function_load(code, replace=True) == lib_name.encode()
@@ -8960,12 +9205,19 @@ class TestCommands:
             await test_client.fcall_ro(func_name, arguments=[])
 
         async def wait_and_function_stats():
-            # it can take a few seconds for FCALL to register as running
-            await anyio.sleep(3)
-            result = await test_client2.function_stats()
+            result: Any = None
+
+            async def fcall_is_running() -> bool:
+                nonlocal result
+                result = await test_client2.function_stats()
+                return any(
+                    res and res.get(b"running_script") for res in result.values()
+                )
+
+            await wait_for(fcall_is_running, "FCALL never registered as running")
             running_scripts = False
             for res in result.values():
-                if res.get(b"running_script"):
+                if res and res.get(b"running_script"):
                     if running_scripts:
                         raise Exception("Already running script on a different node")
                     running_scripts = True
@@ -8979,9 +9231,10 @@ class TestCommands:
 
             assert running_scripts
 
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(endless_fcall_route_call)
-            tg.start_soon(wait_and_function_stats)
+        async with low_busy_reply_threshold(glide_client):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(endless_fcall_route_call)
+                tg.start_soon(wait_and_function_stats)
 
         await test_client.close()
         await test_client2.close()
@@ -9059,7 +9312,7 @@ class TestCommands:
     ):
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
-        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, True)
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 3, True)
 
         # nothing to kill
         with pytest.raises(RequestError) as e:
@@ -9081,25 +9334,18 @@ class TestCommands:
             assert "Script killed by user" in str(e)
 
         async def wait_and_function_kill():
-            # it can take a few seconds for FCALL to register as running
-            await anyio.sleep(3)
-            timeout = 0
-            while timeout <= 5:
-                # keep trying to kill until we get an "OK"
+            async def kill_succeeded() -> bool:
                 try:
-                    result = await glide_client.function_kill()
-                    #  we expect to get success
-                    assert result == "OK"
-                    break
+                    return await glide_client.function_kill() == "OK"
                 except RequestError:
-                    # a RequestError may occur if the function is not yet running
-                    # sleep and try again
-                    timeout += 0.5
-                    await anyio.sleep(0.5)
+                    return False
 
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(endless_fcall_route_call)
-            tg.start_soon(wait_and_function_kill)
+            await wait_for(kill_succeeded, "FUNCTION KILL never returned OK")
+
+        async with low_busy_reply_threshold(glide_client):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(endless_fcall_route_call)
+                tg.start_soon(wait_and_function_kill)
 
         # no functions running so we get notbusy error again
         with pytest.raises(RequestError) as e:
@@ -9115,7 +9361,7 @@ class TestCommands:
     ):
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
-        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, False)
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 3, False)
 
         # load the library on all primaries
         assert await glide_client.function_load(code, replace=True) == lib_name.encode()
@@ -9132,26 +9378,21 @@ class TestCommands:
             await test_client.fcall(func_name, keys=[lib_name])
 
         async def wait_and_function_kill():
-            # it can take a few seconds for FCALL to register as running
-            await anyio.sleep(3)
-            timeout = 0
-            foundUnkillable = False
-            while timeout <= 5:
-                # keep trying to kill until we get a unkillable return error
+            async def kill_reports_unkillable() -> bool:
                 try:
                     await glide_client.function_kill()
                 except RequestError as e:
-                    if "UNKILLABLE" in str(e):
-                        foundUnkillable = True
-                        break
-                timeout += 0.5
-                await anyio.sleep(0.5)
-            # expect an unkillable error
-            assert foundUnkillable
+                    return "UNKILLABLE" in str(e)
+                return False
 
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(endless_fcall_route_call)
-            tg.start_soon(wait_and_function_kill)
+            await wait_for(
+                kill_reports_unkillable, "FUNCTION KILL never reported UNKILLABLE"
+            )
+
+        async with low_busy_reply_threshold(glide_client):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(endless_fcall_route_call)
+                tg.start_soon(wait_and_function_kill)
 
         await test_client.close()
 
@@ -11287,7 +11528,7 @@ async def script_kill_tests(
     assert "No scripts in execution right now" in str(e)
 
     # Create a long-running script
-    long_script = Script(create_long_running_lua_script(10))
+    long_script = Script(create_long_running_lua_script(3))
 
     async def run_long_script():
         with pytest.raises(RequestError) as e:
@@ -11298,10 +11539,7 @@ async def script_kill_tests(
         assert "Script killed by user" in str(e)
 
     async def wait_and_kill_script():
-        await anyio.sleep(3)  # Give some time for the script to start
-        timeout = 0
-        while timeout <= 5:
-            # keep trying to kill until we get an "OK"
+        async def kill_succeeded() -> bool:
             try:
                 if route is not None:
                     result = await cast(GlideClusterClient, glide_client).script_kill(
@@ -11309,19 +11547,17 @@ async def script_kill_tests(
                     )
                 else:
                     result = await glide_client.script_kill()
-                #  we expect to get success
-                assert result == "OK"
-                break
             except RequestError:
-                # a RequestError may occur if the script is not yet running
-                # sleep and try again
-                timeout += 0.5
-                await anyio.sleep(0.5)
+                return False
+            return result == "OK"
+
+        await wait_for(kill_succeeded, "SCRIPT KILL never returned OK")
 
     # Run the long script and kill it
-    async with anyio.create_task_group() as tg:
-        tg.start_soon(run_long_script)
-        tg.start_soon(wait_and_kill_script)
+    async with low_busy_reply_threshold(glide_client):
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(run_long_script)
+            tg.start_soon(wait_and_kill_script)
 
     # Verify that script_kill raises an error when no script is running
     with pytest.raises(RequestError) as e:
@@ -11570,7 +11806,7 @@ class TestScripts:
         writing_script = Script("""
             redis.call('SET', KEYS[1], 'value')
             local start = redis.call('TIME')[1]
-            while redis.call('TIME')[1] - start < 15 do
+            while redis.call('TIME')[1] - start < 3 do
                 redis.call('SET', KEYS[1], 'value')
             end
         """)
@@ -11579,23 +11815,22 @@ class TestScripts:
             await test_client.invoke_script(writing_script, keys=[get_random_string(5)])
 
         async def attempt_kill_writing_script():
-            await anyio.sleep(3)  # Give some time for the script to start
-            foundUnkillable = False
-            while True:
+            async def kill_reports_unkillable() -> bool:
                 try:
                     await test_client2.script_kill()
                 except RequestError as e:
-                    if "UNKILLABLE" in str(e):
-                        foundUnkillable = True
-                        break
-                    await anyio.sleep(0.5)
+                    return "UNKILLABLE" in str(e)
+                return False
 
-            assert foundUnkillable
+            await wait_for(
+                kill_reports_unkillable, "SCRIPT KILL never reported UNKILLABLE"
+            )
 
         # Run the writing script and attempt to kill it
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(run_writing_script)
-            tg.start_soon(attempt_kill_writing_script)
+        async with low_busy_reply_threshold(glide_client):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(run_writing_script)
+                tg.start_soon(attempt_kill_writing_script)
 
         await test_client.close()
         await test_client2.close()
@@ -11653,7 +11888,32 @@ class TestScripts:
         with pytest.raises(RequestError) as exc_info:
             await glide_client.invoke_script(script_2)
 
-        assert "NOSCRIPT" in str(exc_info.value).upper()
+        assert re.match(r"^NOSCRIPT No matching script\.", str(exc_info.value))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_noscript_error_keeps_the_server_text(
+        self, glide_client: TGlideClient
+    ):
+        no_script = r"^NOSCRIPT No matching script\.( Please use EVAL\.)?$"
+        eval_sha: List[TEncodable] = ["EVALSHA", "f" * 40, "0"]
+
+        with pytest.raises(RequestError, match=no_script):
+            await glide_client.custom_command(eval_sha)
+
+        batch = (
+            ClusterBatch(is_atomic=False)
+            if isinstance(glide_client, GlideClusterClient)
+            else Batch(is_atomic=False)
+        )
+        batch.custom_command(eval_sha)
+        result = await glide_client.exec(batch, raise_on_error=False)
+        assert result is not None
+        assert isinstance(result[0], RequestError)
+        assert re.match(no_script, str(result[0]))
+
+        with pytest.raises(RequestError, match=no_script):
+            await glide_client.exec(batch, raise_on_error=True)
 
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -12049,6 +12309,70 @@ class TestScripts:
 
         ttl_results = await glide_client.httl(multi_key, list(multi_fields.keys()))
         assert all(0 < ttl <= 20 for ttl in ttl_results)
+
+    @pytest.mark.skip_if_version_below("9.1.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hsetex_with_key_conditional_change(self, glide_client: TGlideClient):
+        key = f"test_hsetex_key_conditional_{get_random_string(10)}"
+        field_value_map = {"field1": "value1"}
+
+        # NX: key does not exist, so the hash is created
+        result = await glide_client.hsetex(
+            key,
+            field_value_map,
+            key_conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+        )
+        assert result == 1
+        assert await glide_client.hget(key, "field1") == b"value1"
+
+        # NX: key now exists, so a second NX call should not modify the hash
+        result = await glide_client.hsetex(
+            key,
+            {"field1": "should_not_be_set"},
+            key_conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+        )
+        assert result == 0
+        assert await glide_client.hget(key, "field1") == b"value1"
+
+        # XX: key exists, so the field is updated
+        result = await glide_client.hsetex(
+            key,
+            {"field1": "updated_value1"},
+            key_conditional_change=ConditionalChange.ONLY_IF_EXISTS,
+        )
+        assert result == 1
+        assert await glide_client.hget(key, "field1") == b"updated_value1"
+
+        # XX: key does not exist, so the hash is not created
+        missing_key = f"test_hsetex_key_conditional_missing_{get_random_string(10)}"
+        result = await glide_client.hsetex(
+            missing_key,
+            field_value_map,
+            key_conditional_change=ConditionalChange.ONLY_IF_EXISTS,
+        )
+        assert result == 0
+        assert await glide_client.exists([missing_key]) == 0
+
+    @pytest.mark.skip_if_version_below("9.1.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hsetex_with_all(self, glide_client: TGlideClient):
+        field_value_map = {"field1": "value1"}
+
+        # Key conditional change can be combined with field conditional change and expiry
+        combined_key = f"test_hsetex_key_and_field_conditional_{get_random_string(10)}"
+        result = await glide_client.hsetex(
+            combined_key,
+            field_value_map,
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+            expiry=ExpirySet(ExpiryType.SEC, 60),
+            key_conditional_change=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+        )
+        assert result == 1
+        ttl_result = await glide_client.httl(combined_key, ["field1"])
+        assert len(ttl_result) == 1
+        assert 0 < ttl_result[0] <= 60
 
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])

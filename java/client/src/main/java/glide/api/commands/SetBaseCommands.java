@@ -13,8 +13,14 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://valkey.io/commands/?group=set">Set Commands</a>
  */
 public interface SetBaseCommands {
-    /** Valkey API keyword used to limit calculation of intersection of sorted sets. */
-    String SET_LIMIT_VALKEY_API = "LIMIT";
+    /**
+     * Valkey API keyword used to limit calculation of intersection of sorted sets.
+     *
+     * @deprecated Valkey API keyword constants are internal and will be removed in a future major
+     *     release.
+     */
+    // TODO #7401: Move to glide.internal.ValkeyKeywords.
+    @Deprecated String SET_LIMIT_VALKEY_API = "LIMIT";
 
     /**
      * Adds specified members to the set stored at <code>key</code>. Specified members that are
@@ -261,6 +267,64 @@ public interface SetBaseCommands {
     CompletableFuture<Boolean> sismember(GlideString key, GlideString member);
 
     /**
+     * Returns if <code>member</code> is a member of the set stored at <code>key</code>, or <code>-1
+     * </code> if <code>key</code> does not exist.
+     *
+     * @since Valkey 9.2.0.
+     * @see <a href="https://valkey.io/commands/sismember/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param member The member to check for existence in the set.
+     * @return A status code indicating membership:
+     *     <ul>
+     *       <li><code>1</code> if the member exists in the set.
+     *       <li><code>0</code> if <code>key</code> exists but the member does not exist in the set.
+     *       <li><code>-1</code> if <code>key</code> does not exist.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Long payload1 = client.sismemberIfExists("mySet", "member1").get();
+     * assert payload1 == 1L; // Indicates that "member1" exists in the set "mySet".
+     *
+     * Long payload2 = client.sismemberIfExists("mySet", "nonExistingMember").get();
+     * assert payload2 == 0L; // Indicates that "mySet" exists but "nonExistingMember" does not exist in it.
+     *
+     * Long payload3 = client.sismemberIfExists("nonExistingSet", "member1").get();
+     * assert payload3 == -1L; // Indicates that "nonExistingSet" does not exist.
+     * }</pre>
+     */
+    CompletableFuture<Long> sismemberIfExists(String key, String member);
+
+    /**
+     * Returns if <code>member</code> is a member of the set stored at <code>key</code>, or <code>-1
+     * </code> if <code>key</code> does not exist.
+     *
+     * @since Valkey 9.2.0.
+     * @see <a href="https://valkey.io/commands/sismember/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param member The member to check for existence in the set.
+     * @return A status code indicating membership:
+     *     <ul>
+     *       <li><code>1</code> if the member exists in the set.
+     *       <li><code>0</code> if <code>key</code> exists but the member does not exist in the set.
+     *       <li><code>-1</code> if <code>key</code> does not exist.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Long payload1 = client.sismemberIfExists(gs("mySet"), gs("member1")).get();
+     * assert payload1 == 1L; // Indicates that "member1" exists in the set "mySet".
+     *
+     * Long payload2 = client.sismemberIfExists(gs("mySet"), gs("nonExistingMember")).get();
+     * assert payload2 == 0L; // Indicates that "mySet" exists but "nonExistingMember" does not exist in it.
+     *
+     * Long payload3 = client.sismemberIfExists(gs("nonExistingSet"), gs("member1")).get();
+     * assert payload3 == -1L; // Indicates that "nonExistingSet" does not exist.
+     * }</pre>
+     */
+    CompletableFuture<Long> sismemberIfExists(GlideString key, GlideString member);
+
+    /**
      * Computes the difference between the first set and all the successive sets in <code>keys</code>.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
@@ -369,7 +433,7 @@ public interface SetBaseCommands {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
@@ -389,7 +453,7 @@ public interface SetBaseCommands {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
@@ -409,7 +473,7 @@ public interface SetBaseCommands {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
@@ -435,7 +499,7 @@ public interface SetBaseCommands {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.

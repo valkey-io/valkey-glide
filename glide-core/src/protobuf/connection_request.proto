@@ -4,6 +4,9 @@ package connection_request;
 message NodeAddress {
     string host = 1;
     uint32 port = 2;
+    // Absolute Unix domain socket path to use instead of `host` and `port`, which must be unset.
+    // Standalone only, and not with TLS, `DiscoverAll` or TCP addresses.
+    optional string unix_socket_path = 3;
 }
 
 enum ReadFrom {
@@ -82,6 +85,30 @@ message CompressionConfig {
     optional uint64 max_decompressed_size = 5;
 }
 
+message EfaDirectProvider {
+}
+
+// Software-emulated transfers over TCP. For development and tests only: honored by a
+// core built with the `rdma-tcp-dev` feature and refused by every other build.
+message TcpProvider {
+    // Source address to bind to. TCP binds an IP, unlike efa-direct.
+    optional string bind = 1;
+}
+
+// Direct memory access (RDMA-over-fabric) support.
+message RdmaConfig {
+    oneof provider {
+        EfaDirectProvider efa_direct = 1;
+        TcpProvider tcp = 2;
+    }
+    // Fabric domain to pin to when a host has more than one card.
+    // Unset takes the first the provider returns.
+    optional string interface = 3;
+    // Open the fabric able to register device memory, such as CUDA memory, as well
+    // as host memory. The provider must offer FI_HMEM.
+    optional bool device_memory = 4;
+}
+
 message PubSubChannelsOrPatterns
 {
     repeated bytes channels_or_patterns = 1;
@@ -107,6 +134,8 @@ enum EvictionPolicy {
 }
 
 // IMPORTANT - if you add fields here, you probably need to add them also in client/mod.rs:`sanitized_request_string`.
+// IMPORTANT - if the new field contains sensitive data (credentials, tokens, keys), make sure
+//             sanitized_request_string() in client/mod.rs redacts or omits it from logs.
 message ConnectionRequest {
     repeated NodeAddress addresses = 1;
     TlsMode tls_mode = 2;
@@ -149,6 +178,14 @@ message ConnectionRequest {
     optional string client_key_path = 32;
     optional ClientCertReloadConfig cert_reload = 33;
     optional uint32 recovery_requests_queue_size = 34;
+    // Registry key for a custom AWS credentials provider. When set, the Rust
+    // core looks up the provider in the credential_provider_registry by this
+    // key and uses it to obtain credentials for IAM token signing instead of
+    // the default AWS credential chain. Used by Node.js (NAPI registry pattern)
+    // and the socket-listener path. Go and Python pass the callback directly
+    // to create_client and do not set this field.
+    optional string credential_provider_key = 35;
+    optional RdmaConfig rdma_config = 36;
 }
 
 // Configuration for automatic reloading of the mTLS client certificate and key

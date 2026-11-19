@@ -10,11 +10,13 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
+import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.pool.ClientPool;
 import glide.api.models.pool.ClientPoolConfig;
+import glide.internal.GlideNativeBridge;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
@@ -22,6 +24,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -61,8 +64,8 @@ public class ClientPoolIntegrationTest {
         return clusterMode ? "{pool-test}-" + prefix + "-" + id : prefix + "-" + id;
     }
 
-    private ClientPoolConfig poolConfig(boolean clusterMode) {
-        assumeMode(clusterMode);
+    /** Build the standalone or cluster client config shared by every pool/client in this suite. */
+    private BaseClientConfiguration clientConfig(boolean clusterMode) {
         if (clusterMode) {
             GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?> builder =
                     GlideClusterClientConfiguration.builder();
@@ -71,28 +74,37 @@ public class ClientPoolIntegrationTest {
                 builder.address(
                         NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
             }
-            builder.requestTimeout(5000);
-            return ClientPoolConfig.builder()
-                    .maxSize(3)
-                    .minIdle(1)
-                    .acquireTimeout(Duration.ofSeconds(10))
-                    .clientConfig(builder.build())
-                    .build();
-        } else {
-            String[] parts = STANDALONE_HOSTS[0].split(":");
-            String host = parts[0];
-            int port = Integer.parseInt(parts[1]);
-            return ClientPoolConfig.builder()
-                    .maxSize(3)
-                    .minIdle(1)
-                    .acquireTimeout(Duration.ofSeconds(10))
-                    .clientConfig(
-                            GlideClientConfiguration.builder()
-                                    .address(NodeAddress.builder().host(host).port(port).build())
-                                    .requestTimeout(5000)
-                                    .build())
-                    .build();
+            return builder.requestTimeout(5000).build();
         }
+        String[] parts = STANDALONE_HOSTS[0].split(":");
+        return GlideClientConfiguration.builder()
+                .address(NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build())
+                .requestTimeout(5000)
+                .build();
+    }
+
+    private ClientPoolConfig poolConfig(boolean clusterMode) {
+        assumeMode(clusterMode);
+        return ClientPoolConfig.builder()
+                .maxSize(3)
+                .minIdle(1)
+                .acquireTimeout(Duration.ofSeconds(10))
+                .clientConfig(clientConfig(clusterMode))
+                .build();
+    }
+
+    /**
+     * Pool config with {@code maxSize == minIdle}, so every connection the pool will ever hold is
+     * created during warmup and a concurrent borrow burst races the whole warmup window.
+     */
+    private ClientPoolConfig warmupBurstPoolConfig(boolean clusterMode, int size) {
+        assumeMode(clusterMode);
+        return ClientPoolConfig.builder()
+                .maxSize(size)
+                .minIdle(size)
+                .acquireTimeout(Duration.ofSeconds(20))
+                .clientConfig(clientConfig(clusterMode))
+                .build();
     }
 
     /** Create a standalone or cluster client outside of any pool. */
@@ -131,6 +143,18 @@ public class ClientPoolIntegrationTest {
         while (pool.getIdleCount() < minIdle && System.currentTimeMillis() < deadline) {
             Thread.sleep(50);
         }
+    }
+
+    /** Poll until the pool's active count equals expected, or the timeout elapses. */
+    private static int waitForActiveCount(ClientPool pool, int expected, long timeoutMs)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+        int active = pool.getActiveCount();
+        while (active != expected && deadline - System.nanoTime() > 0) {
+            Thread.sleep(50);
+            active = pool.getActiveCount();
+        }
+        return active;
     }
 
     private ClientPoolConfig clientInfoPoolConfig(
@@ -404,7 +428,7 @@ public class ClientPoolIntegrationTest {
         // After acquire: idle decreases, active increases.
         pool.release(clientId);
 
-        // Poll until async release completes (DISCARD + SELECT reset)
+        // Poll until async release completes
         waitForPoolReady(pool, 1, 5000);
 
         assertTrue(pool.getIdleCount() >= 1, "After release, idle should be >= 1");
@@ -465,6 +489,142 @@ public class ClientPoolIntegrationTest {
 
         pool.close();
         System.out.println("testPoolConcurrentAccess PASSED (cluster=" + clusterMode + ")");
+    }
+
+    /**
+     * A borrow burst racing pool warmup must not push the pool past {@code maxSize}. Covers the JNI
+     * warmup wiring ({@code jni_pool.rs}), which reserves the warmup slots up front so a concurrent
+     * acquire cannot create a client against a slot a warmup task already owns.
+     *
+     * <p>The race is narrow, so two things force it: threads park on a start gate until the pool
+     * exists (no thread-spawn latency), and each holds its client through round 0 — {@code
+     * should_create()} only fires on an empty idle list, so one holder per slot drains idle as fast
+     * as warmup fills it. Repeated over fresh pools because {@link ClientPool#create}'s probe
+     * sometimes closes the window first.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testPoolDoesNotExceedMaxSizeUnderWarmupBurst(boolean clusterMode) throws Exception {
+        assumeMode(clusterMode);
+
+        final int maxSize = 64;
+        // One holder per slot: enough to drain the idle list, few enough that every holder is
+        // eventually served even when the pool holds exactly maxSize clients.
+        final int numThreads = maxSize;
+        final int rounds = 3;
+        final int attempts = 12;
+
+        for (int attempt = 0; attempt < attempts; attempt++) {
+            final int attemptIdx = attempt;
+            final AtomicReference<ClientPool> poolRef = new AtomicReference<>();
+            CountDownLatch startGate = new CountDownLatch(1);
+            CountDownLatch allHolding = new CountDownLatch(numThreads);
+            CountDownLatch releaseGate = new CountDownLatch(1);
+            CountDownLatch done = new CountDownLatch(numThreads);
+            AtomicInteger errorCount = new AtomicInteger(0);
+
+            for (int t = 0; t < numThreads; t++) {
+                final int threadIdx = t;
+                new Thread(
+                                () -> {
+                                    boolean holding = false;
+                                    try {
+                                        assertTrue(startGate.await(30, TimeUnit.SECONDS), "start gate");
+                                        ClientPool p = poolRef.get();
+                                        for (int round = 0; round < rounds; round++) {
+                                            try (glide.api.models.pool.PooledGlideClient client =
+                                                    p.acquire().get(30, TimeUnit.SECONDS)) {
+                                                String key =
+                                                        testKey(clusterMode, "warmup-burst-" + threadIdx + "-" + round);
+                                                client.set(key, "val-" + threadIdx).get(5, TimeUnit.SECONDS);
+                                                client.get(key).get(5, TimeUnit.SECONDS);
+                                                client.del(new String[] {key}).get(5, TimeUnit.SECONDS);
+                                                if (round == 0) {
+                                                    // Keep the slot borrowed until every holder has one, so the
+                                                    // idle list stays empty for the whole warmup window.
+                                                    holding = true;
+                                                    allHolding.countDown();
+                                                    assertTrue(releaseGate.await(60, TimeUnit.SECONDS), "release gate");
+                                                }
+                                            }
+                                        }
+                                    } catch (Throwable e) {
+                                        System.err.println(
+                                                "Warmup burst attempt "
+                                                        + attemptIdx
+                                                        + " thread "
+                                                        + threadIdx
+                                                        + " error: "
+                                                        + e);
+                                        errorCount.incrementAndGet();
+                                    } finally {
+                                        if (!holding) {
+                                            // Never reached the hold, so release the main thread's wait.
+                                            allHolding.countDown();
+                                        }
+                                        done.countDown();
+                                    }
+                                })
+                        .start();
+            }
+
+            ClientPool pool = ClientPool.create(warmupBurstPoolConfig(clusterMode, maxSize));
+            try {
+                poolRef.set(pool);
+                startGate.countDown();
+
+                assertTrue(
+                        allHolding.await(90, TimeUnit.SECONDS),
+                        "All burst threads should borrow a slot in attempt " + attempt);
+                releaseGate.countDown();
+                assertTrue(
+                        done.await(120, TimeUnit.SECONDS),
+                        "All burst threads should finish in attempt " + attempt);
+                assertEquals(0, errorCount.get(), "Burst threads hit errors in attempt " + attempt);
+
+                // Read the bound only once the pool has quiesced: a borrow still mid-release leaves
+                // idle lagging total, which would read as a spurious pass.
+                boolean settled = false;
+                long deadline = System.currentTimeMillis() + 15000;
+                while (System.currentTimeMillis() < deadline) {
+                    int[] m = pool.getMetrics();
+                    if (m != null && m[2] > 0 && m[1] == 0 && m[0] == m[2]) {
+                        settled = true;
+                        break;
+                    }
+                    Thread.sleep(50);
+                }
+                assertTrue(
+                        settled, "attempt " + attempt + ": pool metrics did not settle before the deadline");
+
+                int total = pool.getTotalCount();
+                int idle = pool.getIdleCount();
+
+                assertTrue(total > 0, "attempt " + attempt + ": pool counters never settled");
+                assertTrue(
+                        total <= maxSize,
+                        "attempt "
+                                + attempt
+                                + ": pool created more connections than maxSize: total="
+                                + total
+                                + ", maxSize="
+                                + maxSize);
+                assertTrue(
+                        idle <= maxSize,
+                        "attempt "
+                                + attempt
+                                + ": idle exceeded maxSize: idle="
+                                + idle
+                                + ", maxSize="
+                                + maxSize);
+            } finally {
+                releaseGate.countDown();
+                pool.close();
+            }
+        }
+
+        System.out.println(
+                "testPoolDoesNotExceedMaxSizeUnderWarmupBurst PASSED (cluster=" + clusterMode + ")");
     }
 
     @ParameterizedTest
@@ -780,18 +940,24 @@ public class ClientPoolIntegrationTest {
             // should see the BLPOP client as "blocking" and leave it alone.
             Thread.sleep(1500);
 
-            // Stop contention threads and wait for all releases.
             stopFlag.set(1);
             assertTrue(contentionDone.await(10, TimeUnit.SECONDS), "Contention threads should stop");
 
-            // Core assertion: the BLPOP client must still be in the pool's active set.
-            int active = pool.getActiveCount();
+            // Releases run asynchronously, so the count can lag close(). Poll instead of reading once.
+            // Give up at half the abandon timeout, before the monitor could drop a leaked client.
+            int active = waitForActiveCount(pool, 1, cfg.getAbandonTimeout().toMillis() / 2);
+
+            // Only the BLPOP holder should still be borrowed. The count alone cannot tell the holder
+            // from a pending release, so the membership check below proves the holder survived.
             assertEquals(
                     1, active, "Pool should have exactly 1 active client (the BLPOP holder); got " + active);
 
-            // Unblock the BLPOP by pushing the sentinel value.
+            // BLPOP returns, and refreshes the holder's activity, only after this LPUSH,
+            // so this timestamp bounds the holder's idle time.
+            long unblockNanos;
             try (glide.api.models.pool.PooledGlideClient helper =
                     pool.acquire().get(10, TimeUnit.SECONDS)) {
+                unblockNanos = System.nanoTime();
                 helper
                         .unwrap()
                         .customCommand(new String[] {"LPUSH", blpopKey, blpopValue})
@@ -804,6 +970,24 @@ public class ClientPoolIntegrationTest {
             assertEquals(2, blpopResult.length, "BLPOP result should have [key, value]");
             assertEquals(blpopKey, blpopResult[0].toString(), "BLPOP key mismatch");
             assertEquals(blpopValue, blpopResult[1].toString(), "BLPOP value mismatch");
+
+            // A discarded client keeps its handle until the next acquire drains it, so drain first.
+            pool.acquire().get(10, TimeUnit.SECONDS).close();
+            boolean holderRegistered = GlideNativeBridge.isConnected(blpopClientId);
+            long idleBoundMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - unblockNanos);
+            // Once BLPOP returns the holder is idle, and the monitor may rightly reclaim it after the
+            // abandon timeout. Inside that bound, a missing handle means it was reclaimed mid-BLPOP.
+            assumeTrue(
+                    idleBoundMs < cfg.getAbandonTimeout().toMillis(),
+                    "Membership check skipped: "
+                            + idleBoundMs
+                            + " ms since unblock exceeds the abandon timeout");
+            assertTrue(
+                    holderRegistered, "BLPOP holder should still be in the pool after the abandon window");
+            assertEquals(
+                    "PONG",
+                    blpopClient.ping().get(5, TimeUnit.SECONDS),
+                    "BLPOP holder should still be usable after the abandon window");
 
             System.out.println("testAbandonMonitorDoesNotReclaimBlockingClient PASSED");
         } finally {

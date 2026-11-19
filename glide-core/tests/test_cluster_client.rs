@@ -6,7 +6,9 @@ mod utilities;
 #[cfg(test)]
 mod cluster_client_tests {
     use std::collections::HashMap;
+    #[cfg(unix)]
     use std::sync::Arc;
+    #[cfg(unix)]
     use std::time::Duration;
 
     use crate::constants::{IP_ADDRESS_V4, IP_ADDRESS_V6};
@@ -562,6 +564,8 @@ mod cluster_client_tests {
                 "Lazy client (on dedicated cluster A) should not establish new connections before the first command. Before: {clients_before_lazy_init}, After: {clients_after_lazy_init}. protocol={protocol:?}"
             );
 
+            assert!(lazy_glide_client.is_lazy());
+
             // 7. Send the first command using the lazy client to Cluster A.
             glide_logger::log_info(
                 "TestClusterLazy",
@@ -582,6 +586,7 @@ mod cluster_client_tests {
                 ping_response.unwrap(),
                 redis::Value::SimpleString("PONG".to_string())
             );
+            assert!(!lazy_glide_client.is_lazy());
 
             // 8. Assert that new connections were made on Cluster A by the lazy client.
             let clients_after_first_command =

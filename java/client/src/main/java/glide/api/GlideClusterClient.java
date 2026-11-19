@@ -91,6 +91,8 @@ import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAM
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
+import static glide.internal.ValkeyKeywords.CANCEL;
+import static glide.internal.ValkeyKeywords.SCHEDULE;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
@@ -879,16 +881,14 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<String>> bgsaveSchedule() {
         return commandManager.submitNewCommand(
-                BgSave,
-                new String[] {SCHEDULE_VALKEY_API},
-                response -> ClusterValue.of(handleMapResponse(response)));
+                BgSave, new String[] {SCHEDULE}, response -> ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
     public CompletableFuture<ClusterValue<String>> bgsaveSchedule(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 BgSave,
-                new String[] {SCHEDULE_VALKEY_API},
+                new String[] {SCHEDULE},
                 route,
                 response ->
                         route instanceof SingleNodeRoute
@@ -899,16 +899,14 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<String>> bgsaveCancel() {
         return commandManager.submitNewCommand(
-                BgSave,
-                new String[] {CANCEL_VALKEY_API},
-                response -> ClusterValue.of(handleMapResponse(response)));
+                BgSave, new String[] {CANCEL}, response -> ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
     public CompletableFuture<ClusterValue<String>> bgsaveCancel(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 BgSave,
-                new String[] {CANCEL_VALKEY_API},
+                new String[] {CANCEL},
                 route,
                 response ->
                         route instanceof SingleNodeRoute

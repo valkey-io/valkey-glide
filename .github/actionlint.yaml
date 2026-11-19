@@ -1,0 +1,5 @@
+# Configuration for actionlint (https://github.com/rhysd/actionlint).
+self-hosted-runner:
+    # Custom labels used by GLIDE's self-hosted runners.
+    labels:
+        - persistent

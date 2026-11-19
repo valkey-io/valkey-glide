@@ -191,10 +191,11 @@ pub trait ScriptingCommands: CommandExecutor {
         let cmd = cmd("FUNCTION")
             .with_arg("RESTORE")
             .with_arg(payload)
-            .with_arg(policy.as_arg());
+            .with_arg(policy);
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
+    // TODO #7362: Return per-node replies for cluster clients.
     /// Get information about the function engine and running function
     /// (`FUNCTION STATS`). Returns the raw structured reply.
     async fn function_stats(&self) -> ValkeyResult<ValkeyValue> {

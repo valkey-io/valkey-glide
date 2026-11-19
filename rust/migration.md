@@ -139,12 +139,10 @@ URL/host-port can't express (explicit database, credentials, protocol, TLS, …)
 build the configuration with `new(...)` and the `with_*` setters, which is
 GLIDE's connection-description type.
 
-### `ValueComparison` supports only `IFEQ`
+### `ValueComparison` has no digest comparisons
 
 Valkey has no `DIGEST` command, so redis-rs's `IFDEQ` and `IFDNE` digest
-comparisons (and `digest`) are not available. `IFNE` requires Valkey 9.2 and is
-not supported yet.
-<!-- TODO #7237: Update once `IFNE` is supported. -->
+comparisons (and `digest`) are not available.
 
 ### `StreamAddOptions` supports only `NOMKSTREAM` and trimming
 

@@ -3,8 +3,10 @@
 package glide
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log"
 	"reflect"
 	"strings"
 	"sync"
@@ -255,4 +257,110 @@ func TestDuplicateSuccessCallbackIsDropped(t *testing.T) {
 
 	// The second callback is a no-op instead of a second send or a panic.
 	deliverSuccess(requestID, nil)
+}
+
+func TestHandlePubSubCallbackCopiesBeforeReturnAndCapturesHandler(t *testing.T) {
+	const callbackID = uintptr(0xA11CE)
+	const providerResolverID = uintptr(0xB0B)
+	if callbackID == providerResolverID {
+		t.Fatal("test requires distinct callback and provider/resolver IDs")
+	}
+	client := &baseClient{
+		pending:        make(map[uintptr]struct{}),
+		mu:             &sync.Mutex{},
+		messageHandler: NewMessageHandler(nil, nil),
+		resolverID:     providerResolverID,
+	}
+	registerClient(client, callbackID)
+
+	message := []byte("message")
+	channel := []byte("channel")
+	pattern := []byte("pattern")
+	if !handlePubSubCallback(
+		callbackID,
+		unsafe.Pointer(&message[0]),
+		int64(len(message)),
+		unsafe.Pointer(&channel[0]),
+		int64(len(channel)),
+		unsafe.Pointer(&pattern[0]),
+		int64(len(pattern)),
+	) {
+		t.Fatal("valid callback payload was rejected")
+	}
+
+	// Rust may release its borrowed buffers and Close may unregister the client
+	// as soon as the callback returns. Accepted delivery must use only copied
+	// bytes and the already-captured handler.
+	clear(message)
+	clear(channel)
+	clear(pattern)
+	unregisterClient(callbackID)
+
+	select {
+	case received := <-client.messageHandler.GetQueue().WaitForMessage():
+		if received.Message != "message" || received.Channel != "channel" {
+			t.Fatalf("unexpected PubSub message: %#v", received)
+		}
+		if received.Pattern.IsNil() || received.Pattern.Value() != "pattern" {
+			t.Fatalf("unexpected PubSub pattern: %#v", received.Pattern)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("valid PubSub callback was not delivered")
+	}
+}
+
+func TestHandlePubSubCallbackRejectsInvalidPointersAndLengths(t *testing.T) {
+	payload := []byte("payload")
+	payloadPointer := unsafe.Pointer(&payload[0])
+	validLength := int64(len(payload))
+	overGoStringNCapacity := maxGoStringNLength + 1
+
+	tests := map[string]struct {
+		message, channel, pattern          unsafe.Pointer
+		messageLen, channelLen, patternLen int64
+	}{
+		"zero callback":     {payloadPointer, payloadPointer, nil, validLength, validLength, 0},
+		"nil message":       {nil, payloadPointer, nil, validLength, validLength, 0},
+		"nil channel":       {payloadPointer, nil, nil, validLength, validLength, 0},
+		"nil pattern":       {payloadPointer, payloadPointer, nil, validLength, validLength, 1},
+		"negative message":  {payloadPointer, payloadPointer, nil, -1, validLength, 0},
+		"negative channel":  {payloadPointer, payloadPointer, nil, validLength, -1, 0},
+		"negative pattern":  {payloadPointer, payloadPointer, nil, validLength, validLength, -1},
+		"oversized message": {payloadPointer, payloadPointer, nil, overGoStringNCapacity, validLength, 0},
+		"oversized channel": {payloadPointer, payloadPointer, nil, validLength, overGoStringNCapacity, 0},
+		"oversized pattern": {payloadPointer, payloadPointer, payloadPointer, validLength, validLength, overGoStringNCapacity},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			var output bytes.Buffer
+			originalOutput := log.Writer()
+			originalFlags := log.Flags()
+			log.SetOutput(&output)
+			log.SetFlags(0)
+			t.Cleanup(func() {
+				log.SetOutput(originalOutput)
+				log.SetFlags(originalFlags)
+			})
+
+			callbackID := uintptr(1)
+			if name == "zero callback" {
+				callbackID = 0
+			}
+			if handlePubSubCallback(
+				callbackID,
+				test.message,
+				test.messageLen,
+				test.channel,
+				test.channelLen,
+				test.pattern,
+				test.patternLen,
+			) {
+				t.Fatal("invalid callback payload was accepted")
+			}
+			if output.String() != "invalid PubSub callback payload\n" {
+				t.Fatalf("unexpected invalid-payload log: %q", output.String())
+			}
+		})
+	}
 }

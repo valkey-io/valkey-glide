@@ -9,6 +9,8 @@ The Valkey GLIDE Go wrapper consists of both Go and Rust code. The Go and Rust c
 1. Using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
 2. Using shared C objects. [cgo](https://pkg.go.dev/cmd/cgo) is used to interact with the C objects from Go code.
 
+<!-- The build/test/lint commands below are intentionally mirrored in go/AGENTS.md (agent quick-reference). Keep both in sync when they change. -->
+
 ### Build from source
 
 #### Prerequisites
@@ -202,6 +204,7 @@ make long-timeout-test
 #### Running Specific Tests
 
 For all of the above tests, we can specify individual tests, or tests matching a pattern, using the `test-filter=<regex>` parameter to specify a filter pattern to use.
+`pubsub-test` ignores `test-filter` and always runs the `TestPubSub` tests.
 
 ```bash
 # Run with a specific prefix (ex. run all tests that start with TestSet)
@@ -221,7 +224,8 @@ make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:
 ```
 
 The integration suite therefore runs in one of two modes: plaintext by default, or TLS when you pass `tls=true`.
-CI runs the full suite in plaintext and the TLS-designated tests (those with `Tls` in the method name) with `make tls-test tls=true`, so a break in either mode shows up.
+CI runs the full suite in plaintext and the TLS-designated tests (those with `Tls` in the method name) with `make tls-test`, so a break in either mode shows up.
+`tls-test` always runs over TLS and fails if no TLS-designated test passed, so a filter that matches nothing cannot pass silently.
 TLS-only tests skip themselves in a plaintext run, and the plaintext-only tests skip in a TLS run.
 
 Running the TLS suite against your own `standalone-endpoints` or `cluster-endpoints` is not supported for servers whose certificates are not signed by a platform certificate authority.
@@ -238,19 +242,30 @@ Under TLS they attach the fixture CA only when the suite starts its own servers;
 
 #### IAM Authentication Tests
 
-To run [IAM authentication tests](integTest/auth_test.go) locally with mock credentials:
+All seven direct-client IAM integration methods listed below configure IAM authentication with
+`WithCredentialProvider`. Their providers use hard-coded local placeholder credential data (including deliberately
+invalid data or errors for validation cases), so the tests do not require AWS environment variables or external AWS
+resources. Without endpoint options, they use the local Valkey servers started and stopped by the integration suite.
+
+Run them from the `go/` directory:
 
 ```bash
-# Run from the `go/` directory
-AWS_ACCESS_KEY_ID=test_access_key \
-AWS_SECRET_ACCESS_KEY=test_secret_key \
-AWS_SESSION_TOKEN=test_session_token \
-make integ-test test-filter=TestIamAuthentication
+make integ-test tls=true test-filter="TestTlsIam\(Authentication\|CustomCredentialProvider\)"
 ```
 
-If any of these environment variables are not set, IAM authentication tests will be skipped.
+IAM auth requires TLS, so these tests only run under a TLS run (`tls=true`); a plaintext run skips them.
 
-**Note:** The credential values shown above (`test_access_key`, etc.) are arbitrary placeholder strings. The AWS SDK uses them to generate an authentication token, but the local test server doesn't validate the token. These tests verify that the IAM authentication flow works correctly (token generation, connection establishment, and token refresh), not that the credentials are valid.
+The regex matches exactly these seven direct-client custom-provider methods:
+
+- `TestTlsIamAuthenticationWithMockCredentials`
+- `TestTlsIamAuthenticationAutomaticTokenRefresh`
+- `TestTlsIamAuthenticationWithMockCredentialsStandalone`
+- `TestTlsIamAuthenticationAutomaticTokenRefreshStandalone`
+- `TestTlsIamCustomCredentialProviderFailure`
+- `TestTlsIamCustomCredentialProviderRejectsWhitespaceRequiredValues`
+- `TestTlsIamCustomCredentialProviderNegotiatesLargeSessionToken`
+
+This filter excludes pool behavior. These integration methods do not test default-chain IAM credential behavior.
 
 #### DNS Tests
 
@@ -309,6 +324,7 @@ If `-vss-test` is not passed, the FT example functions return immediately withou
 #### Test Reports and Results
 
 Alongside terminal output, test reports are generated in `reports` folder.
+Each integration pass writes its own `reports/<name>.log` and `reports/<name>.html` (for example `integ-tests`, `tls-integ-tests`, `modules-integ-tests`), so several passes can run in one `make` call without overwriting each other.
 
 An example of what the report looks like when an error occurs:
 

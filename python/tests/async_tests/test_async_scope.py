@@ -54,6 +54,15 @@ class TestAsyncIsolatedScopeBasic:
             assert result == "PONG" or result == "OK"
         assert scope.is_released
 
+    async def test_scope_noscript_error_keeps_the_server_text(self, client):
+        """A NOSCRIPT reply keeps the server's text after the scope's own prefix."""
+        async with await client.scoped_connection() as scope:
+            with pytest.raises(
+                RuntimeError,
+                match=r"^Scope command error: NOSCRIPT No matching script\.( Please use EVAL\.)?$",
+            ):
+                await scope.execute_command("EVALSHA", "f" * 40, "0")
+
     async def test_scope_get_set(self, client):
         """SET and GET on a scoped connection."""
         key = f"async-scope-test-{uuid.uuid4().hex[:8]}"
@@ -168,19 +177,21 @@ class TestAsyncIsolatedScopePoolReuse:
     """Scope pool connection reuse tests."""
 
     async def test_lifo_reuse(self, client):
-        """Scopes are reused (same scope_id returned after release)."""
+        """A released connection is reused, under a fresh scope_id."""
         scope1 = await client.scoped_connection()
         id1 = scope1.scope_id
-        await scope1.ping()
+        conn1 = await scope1.execute_command("CLIENT", "ID")
         await scope1.close()
 
         await asyncio.sleep(0.1)
 
         scope2 = await client.scoped_connection()
         id2 = scope2.scope_id
+        conn2 = await scope2.execute_command("CLIENT", "ID")
         await scope2.close()
 
-        assert id1 == id2
+        assert conn1 == conn2
+        assert id1 != id2
 
     async def test_multiple_concurrent_scopes(self, client):
         """Multiple scopes can be held simultaneously."""

@@ -19,6 +19,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const customCredentialProviderPoolError = "pool clients cannot use a custom IAM credentials provider; " +
+	"configure IAM without a credential provider to use the default AWS credential chain"
+
+var errCustomCredentialProviderPool = errors.New(customCredentialProviderPoolError)
+
 // PoolConfig holds configuration for a client-instance pool.
 type PoolConfig struct {
 	// Maximum number of clients in the pool. Default: 10.
@@ -107,6 +112,10 @@ func NewClientPool(clientConfig *config.ClientConfiguration, poolConfig PoolConf
 		poolConfig.AbandonTimeout = 5 * time.Minute
 	} else if poolConfig.AbandonTimeout < 0 {
 		poolConfig.AbandonTimeout = 0 // negative → disabled (FFI interprets 0ms as disabled)
+	}
+
+	if clientConfig.GetCredentialProvider() != nil {
+		return nil, errCustomCredentialProviderPool
 	}
 
 	// Reject pubsub subscriptions — pool state reset doesn't UNSUBSCRIBE
@@ -280,25 +289,23 @@ func (p *ClientPool) GetClient(clientID int64) (*PooledClient, error) {
 	return pooled, nil
 }
 
+func (p *ClientPool) metrics() C.PoolMetrics {
+	return C.glide_pool_metrics(C.uint64_t(p.poolID))
+}
+
 // IdleCount returns the number of idle clients in the pool.
 func (p *ClientPool) IdleCount() int {
-	var idle C.uint32_t
-	C.glide_pool_metrics(C.uint64_t(p.poolID), &idle, nil, nil)
-	return int(idle)
+	return int(p.metrics().idle)
 }
 
 // ActiveCount returns the number of currently borrowed clients.
 func (p *ClientPool) ActiveCount() int {
-	var active C.uint32_t
-	C.glide_pool_metrics(C.uint64_t(p.poolID), nil, &active, nil)
-	return int(active)
+	return int(p.metrics().active)
 }
 
 // TotalCount returns the total number of clients (idle + active + creating).
 func (p *ClientPool) TotalCount() int {
-	var total C.uint32_t
-	C.glide_pool_metrics(C.uint64_t(p.poolID), nil, nil, &total)
-	return int(total)
+	return int(p.metrics().total)
 }
 
 // Close destroys the pool and all pooled clients.
@@ -338,6 +345,10 @@ func NewClusterClientPool(clientConfig *config.ClusterClientConfiguration, poolC
 		poolConfig.AbandonTimeout = 5 * time.Minute
 	} else if poolConfig.AbandonTimeout < 0 {
 		poolConfig.AbandonTimeout = 0 // negative → disabled (FFI interprets 0ms as disabled)
+	}
+
+	if clientConfig.GetCredentialProvider() != nil {
+		return nil, errCustomCredentialProviderPool
 	}
 
 	// Reject pubsub subscriptions — pool state reset doesn't UNSUBSCRIBE

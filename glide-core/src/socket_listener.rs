@@ -321,6 +321,7 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClientUsageError> {
         }
     };
 
+    // TODO #7666: Remove this check once `Client::send_command` rejects empty commands.
     if cmd.args_iter().next().is_none() {
         return Err(ClientUsageError::User(
             "Received command without a command name or arguments".into(),
@@ -370,34 +371,6 @@ async fn send_command(
 }
 
 /// Process a command for compression by extracting arguments and applying compression
-/// Process batch response for decompression
-///
-/// This function processes the response from a batch operation (pipeline or transaction)
-/// and decompresses individual response values using magic header detection.
-///
-/// # Arguments
-/// * `response` - The batch response value (typically an array)
-/// * `client` - The client instance containing the compression manager
-///
-/// # Returns
-/// * `Ok(Value)` - The processed response with decompressed values
-/// * `Err(CompressionError)` - If critical decompression errors occur
-fn process_batch_response_for_decompression(
-    response: redis::Value,
-    client: &Client,
-) -> Result<redis::Value, crate::compression::CompressionError> {
-    // Get compression manager from client
-    let compression_manager = client.compression_manager();
-    let compression_manager_ref = compression_manager.as_deref();
-
-    // If no compression manager, return response as-is
-    let Some(manager) = compression_manager_ref else {
-        return Ok(response);
-    };
-
-    crate::compression::decompress_batch_response(response, manager)
-}
-
 fn process_command_for_compression(
     cmd: &mut Cmd,
     client: &Client,
@@ -433,42 +406,38 @@ fn process_command_for_compression(
     let command_name = &all_args[0];
     let command_str = String::from_utf8_lossy(command_name).to_uppercase();
     let request_type = match command_str.as_str() {
-        "SET" => crate::request_type::RequestType::Set,
+        // Commands that support compression
+        "GETSET" => crate::request_type::RequestType::GetSet,
         "MSET" => crate::request_type::RequestType::MSet,
         "MSETNX" => crate::request_type::RequestType::MSetNX,
-        "SETEX" => crate::request_type::RequestType::SetEx,
         "PSETEX" => crate::request_type::RequestType::PSetEx,
+        "SET" => crate::request_type::RequestType::Set,
+        "SETEX" => crate::request_type::RequestType::SetEx,
         "SETNX" => crate::request_type::RequestType::SetNX,
         // Incompatible commands - string manipulation
         "APPEND" => crate::request_type::RequestType::Append,
+        "DELIFEQ" => crate::request_type::RequestType::DelIfEq,
         "GETRANGE" => crate::request_type::RequestType::GetRange,
+        "LCS" => crate::request_type::RequestType::LCS,
         "SETRANGE" => crate::request_type::RequestType::SetRange,
         "STRLEN" => crate::request_type::RequestType::Strlen,
-        "LCS" => crate::request_type::RequestType::LCS,
         "SUBSTR" => crate::request_type::RequestType::Substr,
-        "DELIFEQ" => crate::request_type::RequestType::DelIfEq,
         // Incompatible commands - numeric operations
+        "DECR" => crate::request_type::RequestType::Decr,
+        "DECRBY" => crate::request_type::RequestType::DecrBy,
         "INCR" => crate::request_type::RequestType::Incr,
         "INCRBY" => crate::request_type::RequestType::IncrBy,
         "INCRBYFLOAT" => crate::request_type::RequestType::IncrByFloat,
-        "DECR" => crate::request_type::RequestType::Decr,
-        "DECRBY" => crate::request_type::RequestType::DecrBy,
         // Incompatible commands - bit operations
-        "GETBIT" => crate::request_type::RequestType::GetBit,
-        "SETBIT" => crate::request_type::RequestType::SetBit,
         "BITCOUNT" => crate::request_type::RequestType::BitCount,
-        "BITPOS" => crate::request_type::RequestType::BitPos,
         "BITFIELD" => crate::request_type::RequestType::BitField,
         "BITFIELD_RO" => crate::request_type::RequestType::BitFieldReadOnly,
         "BITOP" => crate::request_type::RequestType::BitOp,
+        "BITPOS" => crate::request_type::RequestType::BitPos,
+        "GETBIT" => crate::request_type::RequestType::GetBit,
+        "SETBIT" => crate::request_type::RequestType::SetBit,
         _ => return Ok(()), // Unknown command, no compression processing needed
     };
-
-    // Check if the command is incompatible with compression - this should error out
-    crate::compression::validate_command_compression_compatibility(
-        request_type,
-        compression_manager_ref,
-    )?;
 
     // Get arguments excluding the command name
     let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
@@ -590,7 +559,7 @@ async fn send_batch(
         pipeline.add_command(redis_cmd);
     }
 
-    let res = match request.is_atomic {
+    let res: ClientUsageResult<Value> = match request.is_atomic {
         true => client
             .send_transaction(
                 &pipeline,
@@ -615,23 +584,12 @@ async fn send_batch(
             .map_err(|err| err.into()),
     };
 
-    // Process response for decompression if needed
-    match res {
-        Ok(value) => {
-            match process_batch_response_for_decompression(value.clone(), client) {
-                Ok(processed_value) => Ok(processed_value),
-                Err(e) => {
-                    // Log decompression error but return original response
-                    log_warn(
-                        "batch_response_decompression",
-                        format!("Failed to decompress batch response: {}", e),
-                    );
-                    Ok(value)
-                }
-            }
-        }
-        Err(e) => Err(e),
-    }
+    let decompressed = crate::compression::try_decompress_batch_response(
+        res?,
+        client.compression_manager().as_deref(),
+    )
+    .map_err(RedisError::from)?;
+    Ok(decompressed)
 }
 
 fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageResult<SlotAddr> {
@@ -686,6 +644,8 @@ fn get_route(
         ))),
         Value::SlotIdRoute(slot_id_route) => Ok(Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
+                // TODO #7681: Use a checked conversion (`u16::try_from`) and reject out-of-range
+                // slots.
                 slot_id_route.slot_id as u16,
                 get_slot_addr(&slot_id_route.slot_type)?,
             )),
@@ -900,32 +860,96 @@ pub fn close_socket(socket_path: &String) {
     let _ = std::fs::remove_file(socket_path);
 }
 
+struct CredentialProviderClaim {
+    key: String,
+    provider: Option<crate::iam::CredentialsProvider>,
+}
+
+impl CredentialProviderClaim {
+    fn commit(&mut self) {
+        self.provider = None;
+    }
+}
+
+impl Drop for CredentialProviderClaim {
+    fn drop(&mut self) {
+        let Some(provider) = self.provider.take() else {
+            return;
+        };
+        if crate::credential_provider_registry::register_if_absent(self.key.clone(), provider)
+            .is_err()
+        {
+            log_warn(
+                "credential_provider",
+                format!(
+                    "Did not restore credential_provider_key '{}' because a newer provider is registered",
+                    self.key
+                ),
+            );
+        }
+    }
+}
+
+fn take_credential_provider(
+    key: Option<String>,
+    request: &mut crate::client::ConnectionRequest,
+) -> Result<Option<CredentialProviderClaim>, ClientCreationError> {
+    if key.as_deref().is_some_and(|value| value.trim().is_empty()) {
+        return Err(ClientCreationError::ConfigurationError(
+            "credential_provider_key must not be empty or whitespace".to_string(),
+        ));
+    }
+    let Some(key) = key else {
+        return Ok(None);
+    };
+    let iam = request.authentication_info.as_mut()
+        .and_then(|auth| auth.iam_config.as_mut())
+        .ok_or_else(|| ClientCreationError::ConfigurationError(
+            "credential_provider_key was set but the connection request contains no IAM configuration".to_string(),
+        ))?;
+    let provider = crate::credential_provider_registry::remove(&key).ok_or_else(|| {
+        ClientCreationError::ConfigurationError(format!(
+            "credential_provider_key '{key}' was not found in the registry; it may have already been consumed"
+        ))
+    })?;
+    iam.credentials_provider = Some(provider.clone());
+    Ok(Some(CredentialProviderClaim {
+        key,
+        provider: Some(provider),
+    }))
+}
+
 async fn create_client(
     writer: &Rc<Writer>,
     request: ConnectionRequest,
     push_tx: Option<mpsc::UnboundedSender<PushInfo>>,
 ) -> Result<Client, ClientCreationError> {
-    // Extract the address resolver key before converting (protobuf field won't survive into())
+    // Extract protobuf-only registry keys before converting the request.
     let resolver_key = request
         .address_resolver_key
         .as_ref()
-        .filter(|k| !k.is_empty())
-        .map(|k| k.to_string());
-
+        .filter(|key| !key.is_empty())
+        .map(ToString::to_string);
+    let credential_provider_key = request
+        .credential_provider_key
+        .as_ref()
+        .map(ToString::to_string);
     let mut conn_request: crate::client::ConnectionRequest = request.into();
+    let mut provider_claim = take_credential_provider(credential_provider_key, &mut conn_request)?;
 
-    // Look up the address resolver from the global registry using the key
-    // provided in the connection request.
+    // Preserve ordinary address-resolver behavior from main.
     if let Some(key) = resolver_key
         && let Some(resolver) = crate::address_resolver_registry::remove(&key)
     {
         conn_request.address_resolver = Some(resolver);
     }
 
-    let client = match Client::new(conn_request, push_tx).await {
-        Ok(client) => client,
-        Err(err) => return Err(ClientCreationError::ConnectionError(err)),
-    };
+    let client = Client::new(conn_request, push_tx)
+        .await
+        .map_err(ClientCreationError::ConnectionError)?;
+    if let Some(claim) = provider_claim.as_mut() {
+        claim.commit();
+    }
     write_result(Ok(Value::Okay), 0, writer, None).await?;
     Ok(client)
 }
@@ -1037,6 +1061,7 @@ async fn listen_on_client_stream(socket: UnixStream) {
             return;
         }
         Err(e @ ClientCreationError::UnhandledError(_))
+        | Err(e @ ClientCreationError::ConfigurationError(_))
         | Err(e @ ClientCreationError::IO(_))
         | Err(e @ ClientCreationError::ConnectionError(_)) => {
             let err_message = e.to_string();
@@ -1096,6 +1121,9 @@ enum ClientCreationError {
     /// An error was returned during the client creation process.
     #[error("Unhandled error: {0}")]
     UnhandledError(String),
+    /// The request and its registered custom provider are inconsistent.
+    #[error("Configuration error: {0}")]
+    ConfigurationError(String),
     /// Socket listener was closed before receiving the server address.
     #[error("Closing error: {0:?}")]
     SocketListenerClosed(ClosingReason),

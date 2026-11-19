@@ -25,6 +25,8 @@ type SetCommands interface {
 
 	SIsMember(ctx context.Context, key string, member string) (bool, error)
 
+	SIsMemberIfExists(ctx context.Context, key string, member string) (int64, error)
+
 	SDiff(ctx context.Context, keys []string) (map[string]struct{}, error)
 
 	SDiffStore(ctx context.Context, destination string, keys []string) (int64, error)

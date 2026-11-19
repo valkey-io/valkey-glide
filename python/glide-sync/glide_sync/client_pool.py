@@ -120,6 +120,15 @@ class ClientPool:
         client_config: BaseClientConfiguration,
         pool_config: Optional[PoolConfig] = None,
     ):
+        # Custom providers are direct-client-only; pools may use the default AWS chain.
+        credentials = getattr(client_config, "credentials", None)
+        iam_config = getattr(credentials, "iam_config", None)
+        if iam_config is not None and iam_config.credential_provider is not None:
+            raise ValueError(
+                "Pool clients cannot use a custom IAM credentials provider. "
+                "Configure IAM without a credential_provider to use the default AWS credential chain."
+            )
+
         # Reject pubsub subscriptions — pool state reset doesn't UNSUBSCRIBE
         if (
             hasattr(client_config, "pubsub_subscriptions")
@@ -128,6 +137,13 @@ class ClientPool:
             raise ValueError(
                 "Pool clients cannot have pubsub subscriptions configured. "
                 "Use the main client's pubsub API for subscriptions."
+            )
+
+        # TODO: support RDMA in pools.
+        if getattr(client_config, "rdma", None) is not None:
+            raise ValueError(
+                "Pool clients cannot have RDMA configured. "
+                "Use a client outside a pool for RDMA transfers."
             )
 
         ffi_instance = _GlideFFI()
@@ -271,14 +287,12 @@ class ClientPool:
             return client
 
     def metrics(self) -> dict:
-        """Get pool metrics: idle, active, total counts."""
-        idle = self._ffi.new("uint32_t*")
-        active = self._ffi.new("uint32_t*")
-        total = self._ffi.new("uint32_t*")
-        result = self._lib.glide_pool_metrics(self._pool_id, idle, active, total)
-        if result != 0:
-            return {"idle": 0, "active": 0, "total": 0}
-        return {"idle": idle[0], "active": active[0], "total": total[0]}
+        """Get pool metrics: idle, active, total counts.
+
+        Zeros when the pool was destroyed.
+        """
+        m = self._lib.glide_pool_metrics(self._pool_id)
+        return {"idle": m.idle, "active": m.active, "total": m.total}
 
     @property
     def idle_count(self) -> int:

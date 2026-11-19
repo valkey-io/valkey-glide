@@ -16,7 +16,7 @@ use ::tokio::{
 };
 use arc_swap::ArcSwap;
 use futures_util::{
-    future::{Future, FutureExt},
+    future::{AbortHandle, Abortable, Future, FutureExt},
     ready,
     sink::Sink,
     stream::{self, Stream, StreamExt, TryStreamExt as _},
@@ -273,6 +273,8 @@ pub(crate) struct Pipeline<SinkItem> {
     /// response reading, so a response-only signal would freeze. See
     /// [`Self::send_recv`].
     progress: Arc<AtomicU64>,
+    /// Aborts the driver task that owns the socket. See [`Pipeline::kill`].
+    abort_handle: AbortHandle,
 }
 
 impl<SinkItem> Debug for Pipeline<SinkItem>
@@ -441,6 +443,8 @@ where
                         // If we receive a `ServerError` here, it means the error occurred between `MULTI` and `EXEC`.
                         // After `EXEC`, the response is always a single array of results, so any error at this stage must have happened before `EXEC` was sent.
                         // As a result, the entire transaction will be discarded (and can be retried).
+
+                        // TODO #7654: Return an `ExecAbortError` with this error in its message.
                         if first_err.is_none() {
                             *first_err = Some(err.into());
                         }
@@ -659,6 +663,9 @@ where
                     fenced_result: None,
                 };
 
+                // TODO #7666: Stop a request that never gets a reply (e.g. an empty command)
+                // from shifting every later reply, e.g. by closing the connection when a request
+                // times out.
                 self_.in_flight.push_back(entry);
                 Ok(())
             }
@@ -786,16 +793,18 @@ where
             cache,
             progress.clone(),
         );
+        let (abort_handle, abort_registration) = AbortHandle::new_pair();
         let f = stream::poll_fn(move |cx| receiver.poll_recv(cx))
             .map(Ok)
-            .forward(sink)
-            .map(|_| ());
+            .forward(sink);
+        let f = Abortable::new(f, abort_registration).map(|_| ());
         (
             Pipeline {
                 sender,
                 push_manager,
                 is_stream_closed,
                 progress,
+                abort_handle,
             },
             f,
         )
@@ -964,6 +973,18 @@ where
     pub fn is_closed(&self) -> bool {
         self.is_stream_closed.load(Ordering::Relaxed)
     }
+
+    /// Tears the connection down immediately by aborting the driver task.
+    ///
+    /// Dropping all `Pipeline` clones is not enough to close the socket: the driver's
+    /// `poll_close` waits for every in-flight request to be answered first, so a blocking
+    /// command (`XREADGROUP ... BLOCK`, `BLPOP`, ...) keeps the socket open until the server
+    /// replies. Aborting the driver drops the sink and the underlying stream, which closes
+    /// the socket and fails every pending request with a `FatalReceiveError`.
+    pub fn kill(&self) {
+        self.is_stream_closed.store(true, Ordering::Relaxed);
+        self.abort_handle.abort();
+    }
 }
 
 /// A connection object which can be cloned, allowing requests to be be sent concurrently
@@ -1081,6 +1102,14 @@ impl MultiplexedConnection {
     /// Sets the time that the multiplexer will wait for responses on operations before failing.
     pub fn set_response_timeout(&mut self, timeout: std::time::Duration) {
         self.response_timeout = timeout;
+    }
+
+    /// Closes the socket immediately, without waiting for in-flight requests to complete.
+    ///
+    /// Pending requests fail with `FatalReceiveError`; later requests fail with `FatalSendError`.
+    /// The server sees the TCP close and discards any command that is blocked on this connection.
+    pub fn kill(&self) {
+        self.pipeline.kill();
     }
 
     /// Sends an already encoded (packed) command into the TCP socket and

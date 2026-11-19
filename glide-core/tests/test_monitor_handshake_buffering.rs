@@ -224,6 +224,7 @@ mod test_monitor_handshake_buffering {
         let node_addr = NodeAddress {
             host: server.addr.ip().to_string(),
             port: server.addr.port(),
+            unix_socket_path: None,
         };
         let (on_line, lines) = make_collector();
         let monitor = MonitorClient::new(&node_addr, monitor_conn_info(), TlsMode::NoTls, on_line)
@@ -324,6 +325,7 @@ mod test_monitor_handshake_buffering {
         let node_addr = NodeAddress {
             host: server.addr.ip().to_string(),
             port: server.addr.port(),
+            unix_socket_path: None,
         };
         let (on_line, lines) = make_collector();
         let monitor = MonitorClient::new(&node_addr, monitor_conn_info(), TlsMode::NoTls, on_line)

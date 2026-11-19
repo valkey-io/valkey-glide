@@ -21,6 +21,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
+	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
 const (
@@ -185,23 +186,75 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfEquals() {
 	suite.SkipIfServerVersionLowerThan("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.New().String()
-		suite.verifyOK(client.Set(context.Background(), key, initialValue))
+		suite.verifyOK(client.Set(context.Background(), key, "value"))
 
-		// successful set
-		opts := options.NewSetOptions().SetOnlyIfEquals(initialValue)
-		result, err := client.SetWithOptions(context.Background(), key, anotherValue, *opts)
+		// Value not equal
+		opts := options.NewSetOptions().SetOnlyIfEquals("other")
+		result, err := client.SetWithOptions(context.Background(), key, "other", *opts)
+		suite.NoError(err)
+		assert.True(suite.T(), result.IsNil())
+
+		result, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "value", result.Value())
+
+		// Value equal
+		opts = options.NewSetOptions().SetOnlyIfEquals("value")
+		result, err = client.SetWithOptions(context.Background(), key, "other", *opts)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "OK", result.Value())
 
 		result, err = client.Get(context.Background(), key)
 		suite.NoError(err)
-		assert.Equal(suite.T(), anotherValue, result.Value())
+		assert.Equal(suite.T(), "other", result.Value())
 
-		// unsuccessful set
-		opts = options.NewSetOptions().SetOnlyIfEquals(initialValue)
-		result, err = client.SetWithOptions(context.Background(), key, initialValue, *opts)
+		// Non-existent key
+		missing := uuid.New().String()
+		result, err = client.SetWithOptions(context.Background(), missing, "value", *opts)
 		suite.NoError(err)
 		assert.True(suite.T(), result.IsNil())
+
+		exists, err := client.Exists(context.Background(), []string{missing})
+		suite.NoError(err)
+		assert.Equal(suite.T(), int64(0), exists)
+	})
+}
+
+func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfNotEquals() {
+	suite.SkipIfServerVersionLowerThan("9.2.0", suite.T())
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.New().String()
+		suite.verifyOK(client.Set(context.Background(), key, "value"))
+
+		// Value equal
+		opts := options.NewSetOptions().SetOnlyIfNotEquals("value")
+		result, err := client.SetWithOptions(context.Background(), key, "other", *opts)
+		suite.NoError(err)
+		assert.True(suite.T(), result.IsNil())
+
+		result, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "value", result.Value())
+
+		// Value not equal
+		opts = options.NewSetOptions().SetOnlyIfNotEquals("other")
+		result, err = client.SetWithOptions(context.Background(), key, "other", *opts)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "OK", result.Value())
+
+		result, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "other", result.Value())
+
+		// Non-existent key
+		missing := uuid.New().String()
+		result, err = client.SetWithOptions(context.Background(), missing, "value", *opts)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "OK", result.Value())
+
+		result, err = client.Get(context.Background(), missing)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "value", result.Value())
 	})
 }
 
@@ -571,6 +624,36 @@ func (suite *GlideTestSuite) TestAppend_existingAndNonExistingKeys() {
 		res1, err = client.Get(context.Background(), key)
 		suite.NoError(err)
 		assert.Equal(suite.T(), value1+value2, res1.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestDelIfEq() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.New().String()
+		value := uuid.New().String()
+		wrongValue := uuid.New().String()
+
+		res, err := client.DelIfEq(context.Background(), key, value)
+		suite.NoError(err)
+		assert.False(suite.T(), res)
+
+		suite.verifyOK(client.Set(context.Background(), key, value))
+
+		res, err = client.DelIfEq(context.Background(), key, wrongValue)
+		suite.NoError(err)
+		assert.False(suite.T(), res)
+		res1, err := client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), value, res1.Value())
+
+		res, err = client.DelIfEq(context.Background(), key, value)
+		suite.NoError(err)
+		assert.True(suite.T(), res)
+		res1, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.True(suite.T(), res1.IsNil())
 	})
 }
 
@@ -1263,6 +1346,7 @@ func (suite *GlideTestSuite) TestHScan() {
 		assert.Empty(t, result.Data)
 
 		// Negative cursor check.
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "8.0.0" {
 			_, err = client.HScan(context.Background(), key1, models.NewCursorFromString("-1"))
 			assert.NotEmpty(t, err)
@@ -1368,6 +1452,7 @@ func (suite *GlideTestSuite) TestHScan() {
 		assert.True(t, resCursorInt >= 0)
 		assert.True(t, len(result.Data) >= 0)
 
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "8.0.0" {
 			opts = options.NewHashScanOptions().SetNoValues(true)
 			result, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
@@ -1513,6 +1598,74 @@ func (suite *GlideTestSuite) TestHSetEx_WithExpiration() {
 		assert.NoError(suite.T(), err)
 		assert.True(suite.T(), ttls2[0] > 0 && ttls2[0] <= 30)
 		assert.True(suite.T(), ttls2[1] > 0 && ttls2[1] <= 30)
+	})
+}
+
+func (suite *GlideTestSuite) TestHSetEx_WithKeyConditionalSet() {
+	suite.SkipIfServerVersionLowerThan("9.1.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		ctx := context.Background()
+		key := "test_hsetex_key_conditional_" + uuid.NewString()
+		fields := map[string]string{"field1": "value1"}
+
+		// NX: key does not exist, so the hash is created
+		nxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfDoesNotExist)
+		result, err := client.HSetEx(ctx, key, fields, nxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+		value, err := client.HGet(ctx, key, "field1")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "value1", value.Value())
+
+		// NX: key now exists, so a second NX call should not modify the hash
+		result, err = client.HSetEx(ctx, key, map[string]string{"field1": "should_not_be_set"}, nxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+		value, err = client.HGet(ctx, key, "field1")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "value1", value.Value())
+
+		// XX: key exists, so the field is updated
+		xxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfExists)
+		result, err = client.HSetEx(ctx, key, map[string]string{"field1": "updated_value1"}, xxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+		value, err = client.HGet(ctx, key, "field1")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "updated_value1", value.Value())
+
+		// XX: key does not exist, so the hash is not created
+		missingKey := "test_hsetex_key_conditional_missing_" + uuid.NewString()
+		result, err = client.HSetEx(ctx, missingKey, fields, xxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+		exists, err := client.Exists(ctx, []string{missingKey})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), exists)
+	})
+}
+
+func (suite *GlideTestSuite) TestHSetEx_WithAll() {
+	suite.SkipIfServerVersionLowerThan("9.1.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		ctx := context.Background()
+		fields := map[string]string{"field1": "value1"}
+
+		// Key conditional change can be combined with field conditional change and expiry
+		combinedKey := "test_hsetex_key_and_field_conditional_" + uuid.NewString()
+		combinedOptions := options.NewHSetExOptions().
+			SetConditionalSet(constants.OnlyIfDoesNotExist).
+			SetFieldConditionalSet(constants.HashFieldsDoNotExist).
+			SetExpiry(options.NewExpiryIn(60 * time.Second))
+		result, err := client.HSetEx(ctx, combinedKey, fields, combinedOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+		ttls, err := client.HTtl(ctx, combinedKey, []string{"field1"})
+		assert.NoError(suite.T(), err)
+		assert.Len(suite.T(), ttls, 1)
+		assert.True(suite.T(), ttls[0] > 0 && ttls[0] <= 60)
 	})
 }
 
@@ -2453,40 +2606,47 @@ func (suite *GlideTestSuite) TestSCard_WithNotExistingKey() {
 func (suite *GlideTestSuite) TestSIsMember() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.NewString()
-		members := []string{"member1", "member2", "member3"}
+		member := uuid.NewString()
 
-		res1, err := client.SAdd(context.Background(), key, members)
+		res1, err := client.SAdd(context.Background(), key, []string{member})
 		suite.NoError(err)
-		assert.Equal(suite.T(), int64(3), res1)
+		assert.Equal(suite.T(), int64(1), res1)
 
-		res2, err := client.SIsMember(context.Background(), key, "member2")
+		res2, err := client.SIsMember(context.Background(), key, member)
 		suite.NoError(err)
 		assert.True(suite.T(), res2)
+
+		res3, err := client.SIsMember(context.Background(), key, uuid.NewString())
+		suite.NoError(err)
+		assert.False(suite.T(), res3)
+
+		res4, err := client.SIsMember(context.Background(), uuid.NewString(), member)
+		suite.NoError(err)
+		assert.False(suite.T(), res4)
 	})
 }
 
-func (suite *GlideTestSuite) TestSIsMember_WithNotExistingKey() {
+func (suite *GlideTestSuite) TestSIsMemberIfExists() {
+	suite.SkipIfServerVersionLowerThan("9.2.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.NewString()
+		member := uuid.NewString()
 
-		res, err := client.SIsMember(context.Background(), key, "member2")
+		res1, err := client.SAdd(context.Background(), key, []string{member})
 		suite.NoError(err)
-		assert.False(suite.T(), res)
-	})
-}
+		assert.Equal(suite.T(), int64(1), res1)
 
-func (suite *GlideTestSuite) TestSIsMember_WithNotExistingMember() {
-	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
-		key := uuid.NewString()
-		members := []string{"member1", "member2", "member3"}
-
-		res1, err := client.SAdd(context.Background(), key, members)
+		res2, err := client.SIsMemberIfExists(context.Background(), key, member)
 		suite.NoError(err)
-		assert.Equal(suite.T(), int64(3), res1)
+		assert.Equal(suite.T(), int64(1), res2)
 
-		res2, err := client.SIsMember(context.Background(), key, "nonExistingMember")
+		res3, err := client.SIsMemberIfExists(context.Background(), key, uuid.NewString())
 		suite.NoError(err)
-		assert.False(suite.T(), res2)
+		assert.Equal(suite.T(), int64(0), res3)
+
+		res4, err := client.SIsMemberIfExists(context.Background(), uuid.NewString(), member)
+		suite.NoError(err)
+		assert.Equal(suite.T(), int64(-1), res4)
 	})
 }
 
@@ -3174,6 +3334,7 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.Empty(t, result.Data)
 
 		// negative cursor
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion < "8.0.0" {
 			result, err = client.SScan(context.Background(), key1, models.NewCursorFromString("-1"))
 			assert.NoError(t, err)
@@ -3609,6 +3770,7 @@ func (suite *GlideTestSuite) TestLPushX() {
 }
 
 func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion < "7.0.0" {
 		suite.T().Skip("This feature is added in version 7")
 	}
@@ -3661,6 +3823,7 @@ func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
 }
 
 func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion < "7.0.0" {
 		suite.T().Skip("This feature is added in version 7")
 	}
@@ -3715,6 +3878,7 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 }
 
 func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion < "7.0.0" {
 		suite.T().Skip("This feature is added in version 7")
 	}
@@ -3830,6 +3994,7 @@ func (suite *GlideTestSuite) TestLSet() {
 }
 
 func (suite *GlideTestSuite) TestLMove() {
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion < "6.2.0" {
 		suite.T().Skip("This feature is added in version 6.2.0")
 	}
@@ -4935,6 +5100,7 @@ func (suite *GlideTestSuite) TestSortReadyOnlyWithOptions_DescendingOrder() {
 }
 
 func (suite *GlideTestSuite) TestBLMove() {
+	// TODO #5368: Compare versions semantically, not as strings.
 	if suite.serverVersion < "6.2.0" {
 		suite.T().Skip("This feature is added in version 6.2.0")
 	}
@@ -5300,6 +5466,7 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		xautoclaim, err := client.XAutoClaimWithOptions(context.Background(), key, group, consumer, 0, "0-0", *opts)
 		assert.NoError(suite.T(), err)
 		var deletedEntries []string
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "7.0.0" {
 			deletedEntries = []string{}
 		}
@@ -5749,6 +5916,7 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		assert.Nil(suite.T(), xreadgroup)
 
 		// Reset the last delivered ID for the consumer group to "1-1"
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion < "7.0.0" {
 			suite.verifyOK(client.XGroupSetId(context.Background(), key, group, "1-1"))
 		} else {
@@ -6492,6 +6660,7 @@ func (suite *GlideTestSuite) TestZRank() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), int64(1), res.Value())
 
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "7.2.0" {
 			res2, err := client.ZRankWithScore(context.Background(), key, "one")
 			suite.NoError(err)
@@ -6524,6 +6693,7 @@ func (suite *GlideTestSuite) TestZRevRank() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), int64(1), res.Value())
 
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "7.2.0" {
 			res2, err := client.ZRevRankWithScore(context.Background(), key, "one")
 			suite.NoError(err)
@@ -6841,6 +7011,7 @@ func (suite *GlideTestSuite) TestZScan() {
 		assert.Empty(suite.T(), result.Data)
 
 		// Negative cursor
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "8.0.0" {
 			_, err = client.ZScan(context.Background(), key1, models.NewCursorFromString("-1"))
 			suite.Error(err)
@@ -6929,6 +7100,7 @@ func (suite *GlideTestSuite) TestZScan() {
 		assert.GreaterOrEqual(suite.T(), len(result.Data), 0)
 
 		// Test NoScores option for Redis 8.0.0+
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "8.0.0" {
 			// Use a fresh key for NoScores test to avoid interference from previous entries
 			noScoresKey := uuid.New().String()
@@ -7536,8 +7708,9 @@ func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
 		suite.NoError(err)
 		suite.False(destroyed)
 
-		// ENTRIESREAD option was added in valkey 7.0.0
+		// ENTRIESREAD option was added in Valkey 7.0.0
 		opts = options.NewXGroupCreateOptions().SetEntriesRead(100)
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "7.0.0" {
 			suite.verifyOK(client.XGroupCreateWithOptions(context.Background(), key, group, id, *opts))
 		} else {
@@ -8363,6 +8536,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), infoFull.Length)
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "7.0.0" {
 			assert.Equal(suite.T(), "1-0", infoFull.RecordedFirstEntryId.Value())
 		} else {
@@ -8375,6 +8549,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		// first group
 		assert.Equal(suite.T(), len(infoFull.Groups), 1)
 		groupItem := infoFull.Groups[0]
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "7.0.0" {
 			assert.Equal(suite.T(), groupItem.EntriesRead.Value(), int64(1))
 			assert.Equal(suite.T(), groupItem.Lag.Value(), int64(1))
@@ -8391,6 +8566,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		assert.Equal(suite.T(), len(cns.Pending), int(1))
 		assert.Equal(suite.T(), cns.Pending[0].Id, "1-0")
 		assert.Equal(suite.T(), cns.Pending[0].DeliveredCount, int64(1))
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "7.2.0" {
 			assert.False(suite.T(), cns.ActiveTime.IsNil())
 		} else {
@@ -8469,6 +8645,7 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		assert.Equal(suite.T(), consumer1, info[0].Name)
 		assert.Equal(suite.T(), int64(1), info[0].Pending)
 		assert.Greater(suite.T(), info[0].Idle, int64(0))
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion > "7.2.0" {
 			assert.False(suite.T(), info[0].Inactive.IsNil())
 			assert.Greater(suite.T(), info[0].Inactive.Value(), int64(0))
@@ -8575,6 +8752,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		// one empty group exists
 		xinfo, err := client.XInfoGroups(context.Background(), key)
 		suite.NoError(err)
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion < "7.0.0" {
 			suite.Equal([]models.XInfoGroupInfo{
 				{
@@ -8627,6 +8805,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		// same as previous check, bug lag = 3, there are 3 messages unread
 		xinfo, err = client.XInfoGroups(context.Background(), key)
 		suite.NoError(err)
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion < "7.0.0" {
 			suite.Equal([]models.XInfoGroupInfo{
 				{
@@ -8708,6 +8887,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		// after reading, `lag` is reset, and `pending`, consumer count and last ID are set
 		xinfo, err = client.XInfoGroups(context.Background(), key)
 		assert.NoError(suite.T(), err)
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion < "7.0.0" {
 			assert.Equal(suite.T(), []models.XInfoGroupInfo{
 				{
@@ -8739,6 +8919,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		// once message ack'ed, pending counter decreased
 		xinfo, err = client.XInfoGroups(context.Background(), key)
 		assert.NoError(suite.T(), err)
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion < "7.0.0" {
 			assert.Equal(suite.T(), []models.XInfoGroupInfo{
 				{
@@ -9687,6 +9868,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NotNil(suite.T(), streamId3)
 
 		// Exclusive ranges are added in 6.2.0
+		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "6.2.0" {
 			// get the newest stream entry
 			xrangeResult, err = client.XRangeWithOptions(
@@ -11941,6 +12123,64 @@ func (suite *GlideTestSuite) TestScriptFlush() {
 		assert.Equal(suite.T(), []bool{false}, result)
 
 		script.Close()
+	})
+}
+
+// noScriptPattern matches the server's NOSCRIPT reply: Valkey 8.0+ sends the first sentence only,
+// Valkey 7.2 and Redis OSS also append "Please use EVAL.".
+const noScriptPattern = `^NOSCRIPT No matching script\.( Please use EVAL\.)?$`
+
+func (suite *GlideTestSuite) TestNoScriptErrorKeepsServerText() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		ctx := context.Background()
+		t := suite.T()
+		unknownHash := strings.Repeat("f", 40)
+		evalSha := []string{"EVALSHA", unknownHash, "0"}
+
+		var err, batchExecErr, batchErr error
+		var batchResults []any
+		switch c := client.(type) {
+		case *glide.Client:
+			_, err = c.CustomCommand(ctx, evalSha)
+			batchResults, batchExecErr = c.Exec(ctx, *pipeline.NewStandaloneBatch(false).CustomCommand(evalSha), false)
+			_, batchErr = c.Exec(ctx, *pipeline.NewStandaloneBatch(false).CustomCommand(evalSha), true)
+		case *glide.ClusterClient:
+			_, err = c.CustomCommand(ctx, evalSha)
+			batchResults, batchExecErr = c.Exec(ctx, *pipeline.NewClusterBatch(false).CustomCommand(evalSha), false)
+			_, batchErr = c.Exec(ctx, *pipeline.NewClusterBatch(false).CustomCommand(evalSha), true)
+		default:
+			suite.Failf("unexpected client type", "%T", client)
+			return
+		}
+
+		if suite.Error(err) {
+			assert.Regexp(t, noScriptPattern, err.Error())
+		}
+
+		suite.NoError(batchExecErr)
+		if suite.Len(batchResults, 1) {
+			resultErr, ok := batchResults[0].(error)
+			if suite.True(ok, "expected an error in the batch result, got %#v", batchResults[0]) {
+				assert.Regexp(t, noScriptPattern, resultErr.Error())
+			}
+		}
+
+		if suite.Error(batchErr) {
+			assert.Regexp(t, noScriptPattern, batchErr.Error())
+		}
+
+		// InvokeScript reloads the script while it is open; once closed, the server's NOSCRIPT reaches the caller.
+		script := options.NewScript(fmt.Sprintf("return '%s'", uuid.NewString()))
+		_, err = client.InvokeScript(ctx, *script)
+		suite.NoError(err)
+		script.Close()
+		_, err = client.ScriptFlush(ctx)
+		suite.NoError(err)
+
+		_, err = client.InvokeScript(ctx, *script)
+		if suite.Error(err) {
+			assert.Regexp(t, noScriptPattern, err.Error())
+		}
 	})
 }
 

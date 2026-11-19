@@ -11,15 +11,6 @@ import lombok.RequiredArgsConstructor;
  * They provide fine-grained control over field creation and updates in hash field expiration
  * commands.
  *
- * @example
- *     <pre>{@code
- * // Only set fields if all of them already exist
- * FieldConditionalChange condition = FieldConditionalChange.ONLY_IF_ALL_EXIST;
- *
- * // Only set fields if none of them already exist
- * FieldConditionalChange condition = FieldConditionalChange.ONLY_IF_NONE_EXIST;
- * }</pre>
- *
  * @since Valkey 9.0.0
  * @see <a href="https://valkey.io/commands/hsetex/">HSETEX Command Documentation</a>
  */
@@ -31,15 +22,6 @@ public enum FieldConditionalChange {
      *
      * <p>When this option is used, the HSETEX command will only update existing fields and will not
      * create new fields. If any of the specified fields do not exist, the entire operation fails.
-     *
-     * @example
-     *     <pre>{@code
-     * // This will only succeed if both "field1" and "field2" already exist in the hash
-     * HSetExOptions options = HSetExOptions.builder()
-     *     .fieldConditionalChange(FieldConditionalChange.ONLY_IF_ALL_EXIST)
-     *     .expiry(ExpirySet.Seconds(60L))
-     *     .build();
-     * }</pre>
      */
     ONLY_IF_ALL_EXIST("FXX"),
 
@@ -49,15 +31,6 @@ public enum FieldConditionalChange {
      *
      * <p>When this option is used, the HSETEX command will only create new fields and will not update
      * existing fields. If any of the specified fields already exist, the entire operation fails.
-     *
-     * @example
-     *     <pre>{@code
-     * // This will only succeed if neither "field1" nor "field2" exist in the hash
-     * HSetExOptions options = HSetExOptions.builder()
-     *     .fieldConditionalChange(FieldConditionalChange.ONLY_IF_NONE_EXIST)
-     *     .expiry(ExpirySet.Seconds(60L))
-     *     .build();
-     * }</pre>
      */
     ONLY_IF_NONE_EXIST("FNX");
 

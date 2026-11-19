@@ -9,9 +9,9 @@ import static glide.TestConfiguration.TLS;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -37,6 +37,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.api.models.configuration.ServiceType;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
+import glide.api.models.exceptions.RequestException;
 import glide.cluster.ValkeyCluster;
 import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
@@ -54,6 +55,7 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -80,6 +82,26 @@ public class TestUtilities {
     public static final Set<String> BGSAVE_RESPONSES =
             new java.util.HashSet<>(
                     Arrays.asList("Background saving started", "Background saving scheduled"));
+
+    /** One field from each default INFO section. */
+    public static final List<String> INFO_DEFAULT_FIELDS =
+            Arrays.asList(
+                    "redis_version", // server
+                    "connected_clients", // clients
+                    "used_memory", // memory
+                    "rdb_changes_since_last_save", // persistence
+                    "total_commands_processed", // stats
+                    "role", // replication
+                    "used_cpu_sys", // cpu
+                    "cluster_enabled"); // cluster
+
+    /**
+     * Expected server responses for the "rdb_*_bgsave_type" INFO persistence fields.
+     *
+     * <p>Since Valkey 9.2.0.
+     */
+    public static final Set<String> BGSAVE_TYPES =
+            new java.util.HashSet<>(Arrays.asList("fork", "forkless", "none"));
 
     /** Expected server error response for BGSAVE CANCEL when no save is in progress. */
     public static final String BGSAVE_NOT_CANCELLED_RESPONSE =
@@ -218,19 +240,53 @@ public class TestUtilities {
     }
 
     /**
-     * Transforms server info string into a Map, using lines with ":" to create key-value pairs,
-     * replacing duplicates with the last encountered value.
+     * Returns the fields and values from the given INFO sections.
+     *
+     * <p>For cluster clients, the command is sent to all primary nodes.
+     *
+     * @param client A client that is connected to the server.
+     * @param sections The INFO sections to request. Defaults to the default sections.
+     * @return One map per node reply, from each INFO field name to its value.
      */
-    public static Map<String, String> parseInfoResponseToMap(String serverInfo) {
-        return Arrays.stream(serverInfo.split("\n"))
-                .filter(line -> line.contains(":"))
-                .map(line -> line.split(":", 2))
-                .collect(
-                        Collectors.toMap(
-                                parts -> parts[0].trim(),
-                                parts -> parts[1].trim(),
-                                (existingValue, newValue) -> newValue,
-                                LinkedHashMap::new));
+    @SneakyThrows
+    public static List<Map<String, String>> getInfo(BaseClient client, Section... sections) {
+        Collection<String> replies;
+        if (client instanceof GlideClusterClient) {
+            GlideClusterClient clusterClient = (GlideClusterClient) client;
+            ClusterValue<String> info =
+                    sections.length == 0 ? clusterClient.info().get() : clusterClient.info(sections).get();
+            replies = info.getMultiValue().values();
+        } else {
+            GlideClient glideClient = (GlideClient) client;
+            replies =
+                    Collections.singletonList(
+                            sections.length == 0 ? glideClient.info().get() : glideClient.info(sections).get());
+        }
+
+        List<Map<String, String>> infos = new ArrayList<>();
+        for (String reply : replies) {
+            Map<String, String> fields = new LinkedHashMap<>();
+            for (String line : reply.split("\n")) {
+                String[] parts = line.split(":", 2);
+                if (parts.length == 2) {
+                    fields.put(parts[0].trim(), parts[1].trim());
+                }
+            }
+            infos.add(fields);
+        }
+        return infos;
+    }
+
+    /**
+     * Asserts that value is an integer and returns it.
+     *
+     * @param value The value to parse.
+     * @param name The name that identifies the value in the failure message.
+     * @return The integer value.
+     */
+    public static long parseLong(String value, String name) {
+        return assertDoesNotThrow(
+                () -> Long.parseLong(value), name + " is not an integer: \"" + value + "\"");
     }
 
     // copied from glide.utils.ArrayTransformUtils.concatenateArrays, because it is not exported
@@ -587,19 +643,25 @@ public class TestUtilities {
     }
 
     /**
-     * Create a lua lib with a function which runs an endless loop up to timeout sec.<br>
-     * Execution takes at least 5 sec regardless of the timeout configured.
+     * Lua expression for the server clock in seconds with microsecond precision. {@code TIME} returns
+     * whole seconds and microseconds separately; using only the seconds makes a loop of {@code N}
+     * seconds off by up to a second in either direction.
      */
+    private static final String LUA_NOW_SECONDS =
+            "(function() local t = redis.pcall('time') return tonumber(t[1]) + tonumber(t[2]) / 1e6"
+                    + " end)()";
+
+    /** Create a lua lib with a function which runs a busy loop for {@code timeout} seconds. */
     public static String createLuaLibWithLongRunningFunction(
             String libName, String funcName, int timeout, boolean readOnly) {
         String code =
                 "#!lua name=$libName\n"
                         + "local function $libName_$funcName(keys, args)\n"
-                        + "  local started = tonumber(redis.pcall('time')[1])\n"
+                        + "  local started = $now\n"
                         // fun fact - redis does no writes if 'no-writes' flag is set
                         + "  redis.pcall('set', keys[1], 42)\n"
                         + "  while (true) do\n"
-                        + "    local now = tonumber(redis.pcall('time')[1])\n"
+                        + "    local now = $now\n"
                         + "    if now > started + $timeout then\n"
                         + "      return 'Timed out $timeout sec'\n"
                         + "    end\n"
@@ -612,30 +674,28 @@ public class TestUtilities {
                         + (readOnly ? "flags={ 'no-writes' }\n" : "")
                         + "}";
         return code.replace("$timeout", Integer.toString(timeout))
+                .replace("$now", LUA_NOW_SECONDS)
                 .replace("$funcName", funcName)
                 .replace("$libName", libName);
     }
 
-    /**
-     * Create a lua script which runs an endless loop up to timeout sec.<br>
-     * Execution takes at least 5 sec regardless of the timeout configured.
-     */
+    /** Create a lua script which runs a busy loop for {@code timeout} seconds. */
     public static String createLongRunningLuaScript(int timeout, boolean readOnly) {
         String script =
                 readOnly
-                        ? "  local started = tonumber(redis.pcall('time')[1])\n"
+                        ? "  local started = $now\n"
                                 + "  while (true) do\n"
-                                + "    local now = tonumber(redis.pcall('time')[1])\n"
+                                + "    local now = $now\n"
                                 + "    if now > started + $timeout then\n"
                                 + "      return 'Timed out $timeout sec'\n"
                                 + "    end\n"
                                 + "  end\n"
                         : "redis.call('SET', KEYS[1], 'value')\n"
-                                + "  local start = redis.call('time')[1]\n"
-                                + "  while redis.call('time')[1] - start < $timeout do\n"
+                                + "  local start = $now\n"
+                                + "  while $now - start < $timeout do\n"
                                 + "      redis.call('SET', KEYS[1], 'value')\n"
                                 + "   end\n";
-        return script.replace("$timeout", Integer.toString(timeout));
+        return script.replace("$timeout", Integer.toString(timeout)).replace("$now", LUA_NOW_SECONDS);
     }
 
     /**
@@ -660,6 +720,45 @@ public class TestUtilities {
     }
 
     /**
+     * Starts a write script or function and polls {@code kill} until the server reports it as
+     * unkillable.
+     *
+     * <p>A {@code NOTBUSY} reply does not say whether the script has not started yet or has already
+     * finished, so a finished invocation is started again. The script is waited out before returning,
+     * even when the poll fails: the server rejects commands such as the {@code CONFIG SET} that
+     * restores {@code lua-time-limit} while it is busy.
+     *
+     * @param kill Issues {@code SCRIPT KILL} or {@code FUNCTION KILL}.
+     * @param invoke Starts the write script or function without awaiting it.
+     */
+    @SneakyThrows
+    public static void killUntilUnkillable(
+            Supplier<CompletableFuture<?>> kill, Supplier<CompletableFuture<Object>> invoke) {
+        CompletableFuture<Object>[] running = new CompletableFuture[] {invoke.get()};
+        try {
+            waitFor(
+                    () -> {
+                        if (running[0].isDone()) {
+                            running[0] = invoke.get();
+                        }
+                        try {
+                            kill.get().get();
+                            return false;
+                        } catch (ExecutionException e) {
+                            return e.getCause() instanceof RequestException
+                                    && e.getMessage().toLowerCase().contains("unkillable");
+                        }
+                    },
+                    "Expected an 'unkillable' error for the write script");
+        } finally {
+            try {
+                running[0].get();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /**
      * This method returns the server version using a glide client.
      *
      * @param client Glide client to be used for running the info command.
@@ -667,14 +766,7 @@ public class TestUtilities {
      */
     @SneakyThrows
     public static String getServerVersion(@NonNull final BaseClient client) {
-        String infoResponse =
-                client instanceof GlideClient
-                        ? ((GlideClient) client).info(new Section[] {Section.SERVER}).get()
-                        : ((GlideClusterClient) client)
-                                .info(new Section[] {Section.SERVER}, RANDOM)
-                                .get()
-                                .getSingleValue();
-        Map<String, String> infoResponseMap = parseInfoResponseToMap(infoResponse);
+        Map<String, String> infoResponseMap = getInfo(client, Section.SERVER).get(0);
         if (infoResponseMap.containsKey(VALKEY_VERSION_KEY)) {
             return infoResponseMap.get(VALKEY_VERSION_KEY);
         } else if (infoResponseMap.containsKey(REDIS_VERSION_KEY)) {
@@ -1077,7 +1169,18 @@ public class TestUtilities {
 
         assertTrue((Long) stats.get("allocator.active") > 0);
         assertTrue((Long) stats.get("allocator.allocated") > 0);
-        assertTrue((Long) stats.get("allocator-fragmentation.bytes") >= 0);
+        // Before 8.0 this is allocator.active - allocator.allocated. Without jemalloc (macOS),
+        // active is the RAM in use, which can be less than what was allocated, so it can go
+        // negative.
+        Long allocatorFragBytes = (Long) stats.get("allocator-fragmentation.bytes");
+        assertNotNull(allocatorFragBytes);
+        if (SERVER_VERSION.isLowerThan("8.0.0")) {
+            assertEquals(
+                    (Long) stats.get("allocator.active") - (Long) stats.get("allocator.allocated"),
+                    allocatorFragBytes);
+        } else {
+            assertTrue(allocatorFragBytes >= 0);
+        }
         assertTrue((Long) stats.get("allocator.resident") > 0);
         assertInstanceOf(Long.class, stats.get("allocator-rss.bytes"));
         assertTrue((Long) stats.get("aof.buffer") >= 0);

@@ -48,8 +48,8 @@ pub trait GenericCommands: CommandExecutor {
     ) -> ValkeyResult<Vec<Bytes>> {
         let cmd = cmd("SORT")
             .with_arg(key)
-            .with_arg(limit.map(|l| ("LIMIT", l.offset, l.count)))
-            .with_arg(order.map(|o| o.as_arg()))
+            .with_arg(limit)
+            .with_arg(order)
             .with_arg(alpha.then_some("ALPHA"));
         match self.execute_command(cmd, None).await? {
             ValkeyValue::Array(items) => items
@@ -96,8 +96,8 @@ pub trait GenericCommands: CommandExecutor {
     ) -> ValkeyResult<i64> {
         let cmd = cmd("SORT")
             .with_arg(key)
-            .with_arg(limit.map(|l| ("LIMIT", l.offset, l.count)))
-            .with_arg(order.map(|o| o.as_arg()))
+            .with_arg(limit)
+            .with_arg(order)
             .with_arg(alpha.then_some("ALPHA"))
             .with_arg("STORE")
             .with_arg(destination);
@@ -114,8 +114,8 @@ pub trait GenericCommands: CommandExecutor {
     ) -> ValkeyResult<Vec<Bytes>> {
         let cmd = cmd("SORT_RO")
             .with_arg(key)
-            .with_arg(limit.map(|l| ("LIMIT", l.offset, l.count)))
-            .with_arg(order.map(|o| o.as_arg()))
+            .with_arg(limit)
+            .with_arg(order)
             .with_arg(alpha.then_some("ALPHA"));
         match self.execute_command(cmd, None).await? {
             ValkeyValue::Array(items) => items

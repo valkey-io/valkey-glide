@@ -12,8 +12,8 @@
  *   3. Wraps the handle in a `GlideClient` / `GlideClusterClient` for callers.
  *
  * Pool clients are created without a pub/sub push channel (pub/sub is not
- * supported on pooled connections).  State reset (DISCARD + UNWATCH + SELECT)
- * on release is performed by `release_client_async` inside Rust.
+ * supported on pooled connections).  On release, `release_client_async` inside
+ * Rust resets only the state the borrow changed (MULTI, WATCH, database).
  *
  * Scope commands (WATCH/MULTI/EXEC via IsolatedScope) go through the Rust
  * glide-core::scope module for per-connection state tracking and slot pinning.
@@ -31,6 +31,7 @@
 import type { BaseClient, BaseClientConfiguration } from "./BaseClient";
 import { GlideClient } from "./GlideClient";
 import type { GlideClientConfiguration } from "./GlideClient";
+import { toClientCreationError } from "./Errors";
 import { GlideClusterClient } from "./GlideClusterClient";
 import type { GlideClusterClientConfiguration } from "./GlideClusterClient";
 import { clearScopeConnectionRequest } from "./ScopeInternal";
@@ -132,6 +133,24 @@ export class ClientPool {
         const abandonTimeoutMs = poolConfig?.abandonTimeoutMs ?? 300_000;
         const isCluster = poolConfig?.clusterMode ?? false;
 
+        const credentialProvider =
+            clientConfig.credentials && "iamConfig" in clientConfig.credentials
+                ? clientConfig.credentials.iamConfig.credentialProvider
+                : undefined;
+
+        if (credentialProvider !== undefined) {
+            if (typeof credentialProvider !== "function") {
+                throw new TypeError(
+                    "credentialProvider must be a function when provided; custom providers are unsupported by ClientPool.",
+                );
+            }
+
+            throw new Error(
+                "Pool clients cannot use a custom IAM credentials provider. " +
+                    "Configure IAM without a credentialProvider to use the default AWS credential chain.",
+            );
+        }
+
         // Reject pubsub subscriptions.
         const cfg = clientConfig as
             GlideClientConfiguration | GlideClusterClientConfiguration;
@@ -176,7 +195,7 @@ export class ClientPool {
                 removeAddressResolver(resolverKey);
             }
 
-            throw e;
+            throw toClientCreationError(e);
         }
 
         return new ClientPool(
@@ -247,8 +266,8 @@ export class ClientPool {
     /**
      * Release a client back to the pool.
      *
-     * State reset (DISCARD + UNWATCH + SELECT) is performed in Rust before
-     * returning the connection to idle.  The handle is stopped without
+     * Rust resets only the state the borrow changed (MULTI, WATCH, database)
+     * before returning the connection to idle.  The handle is stopped without
      * unregistering the client from the scope registry (so the next acquire
      * can reuse the same underlying connection).
      */

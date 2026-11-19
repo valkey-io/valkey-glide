@@ -1,6 +1,6 @@
 [package]
 name = "valkey-glide"
-version = "0.9.0"
+version = "0.10.0"
 
 # About
 description = "Valkey GLIDE — native Rust client for Valkey and Redis OSS, built on glide-core."
@@ -25,14 +25,15 @@ path = "src/lib.rs"
 [dependencies]
 
 # GLIDE dependencies
-glide-logger = { path = "../glide-logger", version = "0.1" }
-glide-core-engine = { path = "../glide-core/redis-rs/redis", version = "0.1", features = ["aio", "tokio-comp", "cluster", "cluster-async"] }
-glide-core = { path = "../glide-core", version = "0.1" }
+glide-logger = { path = "../glide-logger", version = "0.1.1" }
+glide-core-engine = { path = "../glide-core/redis-rs/redis", version = "0.2.0", features = ["aio", "tokio-comp", "cluster", "cluster-async"] }
+glide-core = { path = "../glide-core", version = "0.3.0" }
 
 # External dependencies
 async-trait = "0.1"
 bytes = "1"
 futures = "0.3"
+# TODO #7664: Align with redis-rs (0.5), here and in glide-core's fork, so `glide::BigInt` matches.
 num-bigint = "0.4"
 ryu = "1"
 sealed = "0.7"
@@ -49,6 +50,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 url = "2"
 
+# TODO #7663: Add optional `rust_decimal` and `bigdecimal` features, off by default as in redis-rs.
 [features]
 default = ["sync"]
 # Blocking client layer (mirrors Python glide-sync).

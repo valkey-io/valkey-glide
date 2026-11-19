@@ -51,6 +51,8 @@ import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
+import static glide.internal.ValkeyKeywords.CANCEL;
+import static glide.internal.ValkeyKeywords.SCHEDULE;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
@@ -473,13 +475,13 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<String> bgsaveSchedule() {
         return commandManager.submitNewCommand(
-                BgSave, new String[] {SCHEDULE_VALKEY_API}, this::handleStringResponse);
+                BgSave, new String[] {SCHEDULE}, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> bgsaveCancel() {
         return commandManager.submitNewCommand(
-                BgSave, new String[] {CANCEL_VALKEY_API}, this::handleStringResponse);
+                BgSave, new String[] {CANCEL}, this::handleStringResponse);
     }
 
     @Override
@@ -527,6 +529,7 @@ public class GlideClient extends BaseClient
     public CompletableFuture<String> lolwut(int version) {
         return commandManager.submitNewCommand(
                 Lolwut,
+                // TODO #7401: Use glide.internal.ValkeyKeywords.
                 new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                 this::handleStringResponse);
     }
@@ -818,6 +821,8 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<Object[]> scan(
             @NonNull GlideString cursor, @NonNull ScanOptions options) {
+        // TODO #7447: Use `options.toGlideStringArgs()`, so a binary match pattern is not converted
+        // lossily.
         GlideString[] arguments = new ArgsBuilder().add(cursor).add(options.toArgs()).toArray();
         return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponseBinary);
     }

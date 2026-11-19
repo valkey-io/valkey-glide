@@ -5,7 +5,18 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Union
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Set,
+    Tuple,
+    Union,
+)
 
 from glide_shared.cache import ClientSideCache
 from glide_shared.commands.core_options import PubSubMsg
@@ -28,6 +39,9 @@ from glide_shared.protobuf.connection_request_pb2 import (
 from glide_shared.protobuf.connection_request_pb2 import (
     ProtocolVersion as SentProtocolVersion,
 )
+from glide_shared.protobuf.connection_request_pb2 import (
+    RdmaConfig as ProtobufRdmaConfig,
+)
 from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
 from glide_shared.protobuf.connection_request_pb2 import (
     TlsMode,
@@ -44,16 +58,30 @@ MAX_UINT32 = 2**32 - 1
 
 class NodeAddress:
     """
-    Represents the address and port of a node in the cluster.
+    Represents the address of a node, either a TCP host and port or a Unix domain socket.
 
     Attributes:
-        host (str, optional): The server host. Defaults to "localhost".
-        port (int, optional): The server port. Defaults to 6379.
+        host (str): The server host. Defaults to "localhost".
+        port (int): The server port. Defaults to 6379.
+        unix_socket_path (Optional[StrPath]): Absolute path of the server's Unix domain socket.
+            When set, ``host`` and ``port`` are ignored. Standalone clients only, without TLS.
+            For example::
+
+                NodeAddress(unix_socket_path="/run/valkey/valkey.sock")
     """
 
-    def __init__(self, host: str = "localhost", port: int = 6379):
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = 6379,
+        *,
+        unix_socket_path: Optional[StrPath] = None,
+    ):
         self.host = host
         self.port = port
+        self.unix_socket_path = (
+            None if unix_socket_path is None else os.fspath(unix_socket_path)
+        )
 
 
 class AddressResolver(Protocol):
@@ -221,8 +249,9 @@ class CompressionConfiguration:
 
     WARNING: This feature is experimental and not recommended for production use.
 
-    Compression is NOT compatible with commands that manipulate string data on the server side:
-    - APPEND, GETRANGE, SETRANGE, STRLEN, LCS
+    Compression is NOT compatible with commands that manipulate or compare string data on the server side:
+    - APPEND, GETRANGE, SETRANGE, STRLEN, LCS, SUBSTR
+    - DELIFEQ and SET with IFEQ or IFNE
     - INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY
     - GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP
 
@@ -302,6 +331,149 @@ class CompressionConfiguration:
         return config
 
 
+class RdmaProvider:
+    """
+    The fabric providers that can carry RDMA transfers.
+    Pass one to ``RdmaConfiguration``.
+    """
+
+    @dataclass(frozen=True)
+    class EfaDirect:
+        """
+        AWS Elastic Fabric Adapter, the provider RDMA is built for.
+        Needs EFA hardware and libfabric on both the client and the server.
+        """
+
+    @dataclass(frozen=True)
+    class Tcp:
+        """
+        Software-emulated RDMA transfers over TCP, for development and tests.
+
+        Needs no hardware and offers no performance benefit over a normal ``GET`` or
+        ``SET``: it exists so the RDMA path can be exercised on an ordinary machine.
+        Only a client built with the ``rdma-tcp-dev`` feature (``dev.py build --rdma``
+        in debug mode) honors it; release wheels refuse it when the client is created.
+
+        Attributes:
+            bind (Optional[str]): Source address to bind to. TCP binds an IP address
+                where ``RdmaProvider.EfaDirect`` has none, so this has no counterpart there. If
+                not set, the provider chooses.
+        """
+
+        bind: Optional[str] = None
+
+
+class RdmaSetChecksum:
+    """
+    Whether ``rdma_set`` asks the server to check the bytes it read against a
+    CRC-32c before storing them. With a checksum, the server refuses to store
+    bytes whose CRC-32c differs, and the write raises ``RdmaError``.
+    """
+
+    @dataclass(frozen=True)
+    class Skip:
+        """Send no checksum. The server stores whatever it read."""
+
+    @dataclass(frozen=True)
+    class Compute:
+        """
+        Compute the CRC-32c of the window before sending. This reads every byte
+        of the window once.
+        """
+
+    @dataclass(frozen=True)
+    class Known:
+        """
+        Send a CRC-32c the caller already has for the window's bytes, for
+        example from ``GlideClient.rdma_checksum``, so the window is not read
+        again.
+
+        Attributes:
+            value (int): The CRC-32c, an unsigned 32-bit integer.
+        """
+
+        value: int
+
+
+@dataclass
+class RdmaConfiguration:
+    """
+    The configuration for enabling remote direct memory access (RDMA) transfers.
+
+    RDMA moves values straight between server memory and host memory the caller
+    registered instead of through the RESP reply. Only the synchronous client
+    supports it and only on a machine with libfabric installed — check
+    :meth:`BaseClient.rdma_usable` first. Leaving this unset means that
+    no fabric is opened and libfabric is never loaded.
+
+    Creating a client fails if RDMA is combined with enabled compression,
+    ``lazy_connect``, read-only mode, or static node discovery.
+
+    Attributes:
+        provider (Union[RdmaProvider.EfaDirect, RdmaProvider.Tcp]): The fabric
+            provider to open, ``RdmaProvider.EfaDirect()`` or ``RdmaProvider.Tcp()``.
+        interface (Optional[str]): Fabric domain to pin to when a host has more
+            than one card. If not set, the first domain the provider returns is
+            used.
+
+    Example::
+
+        config = GlideClientConfiguration(
+            addresses=[NodeAddress("localhost", 6379)],
+            rdma=RdmaConfiguration(provider=RdmaProvider.EfaDirect()),
+        )
+    """
+
+    provider: Union["RdmaProvider.EfaDirect", "RdmaProvider.Tcp"]
+    interface: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Validate the RDMA configuration parameters."""
+        if not isinstance(self.provider, (RdmaProvider.EfaDirect, RdmaProvider.Tcp)):
+            raise ConfigurationError(
+                "provider must be RdmaProvider.EfaDirect() or RdmaProvider.Tcp(), got "
+                f"{type(self.provider).__name__}"
+            )
+
+        if (
+            isinstance(self.provider, RdmaProvider.Tcp)
+            and self.provider.bind is not None
+        ):
+            if not self.provider.bind:
+                raise ConfigurationError("bind must not be empty if set")
+
+        if self.interface is not None and not self.interface:
+            raise ConfigurationError("interface must not be empty if set")
+
+    def _to_protobuf(self) -> ProtobufRdmaConfig:
+        """
+        Converts the RDMA configuration to protobuf format.
+
+        Returns:
+            ProtobufRdmaConfig: The protobuf RDMA configuration.
+
+        Raises:
+            ConfigurationError: If any configuration parameter is invalid.
+        """
+        # Re-validate, in case the fields were reassigned after __post_init__.
+        self.__post_init__()
+
+        config = ProtobufRdmaConfig()
+        if isinstance(self.provider, RdmaProvider.Tcp):
+            # Reached through the field so the oneof is marked set even when
+            # there is no bind address to carry.
+            config.tcp.SetInParent()
+            if self.provider.bind is not None:
+                config.tcp.bind = self.provider.bind
+        else:
+            config.efa_direct.SetInParent()
+
+        if self.interface is not None:
+            config.interface = self.interface
+
+        return config
+
+
 class BackoffStrategy:
     """
     Represents the strategy used to determine how and when to reconnect, in case of connection failures.
@@ -347,16 +519,93 @@ class ServiceType(Enum):
     """Amazon MemoryDB service."""
 
 
-class IamAuthConfig:
+class AwsCredentials:
+    """AWS credentials used to sign IAM authentication tokens.
+
+    ``access_key_id`` and ``secret_access_key`` must be nonblank strings.
+    ``expires_at_epoch_millis``, when supplied, must be an integer that fits in
+    a signed 64-bit value. Values less than or equal to 0 mean no expiry.
+
+    Attributes:
+        access_key_id (str): The AWS access key ID.
+        secret_access_key (str): The AWS secret access key.
+        session_token (Optional[str]): An optional AWS session token.
+        expires_at_epoch_millis (Optional[int]): Optional expiration time as Unix
+            epoch milliseconds. A nonpositive value is treated as no expiration
+            by the core.
     """
-    Configuration settings for IAM authentication.
+
+    def __init__(
+        self,
+        access_key_id: str,
+        secret_access_key: str,
+        session_token: Optional[str] = None,
+        expires_at_epoch_millis: Optional[int] = None,
+    ):
+        if not isinstance(access_key_id, str) or not access_key_id.strip():
+            raise ValueError("access_key_id must be a nonblank string")
+        if not isinstance(secret_access_key, str) or not secret_access_key.strip():
+            raise ValueError("secret_access_key must be a nonblank string")
+        if session_token is not None and not isinstance(session_token, str):
+            raise ValueError("session_token must be a string or None")
+        if expires_at_epoch_millis is not None and (
+            not isinstance(expires_at_epoch_millis, int)
+            or isinstance(expires_at_epoch_millis, bool)
+            or expires_at_epoch_millis < -(2**63)
+            or expires_at_epoch_millis > 2**63 - 1
+        ):
+            raise ValueError("expires_at_epoch_millis must be a signed 64-bit integer")
+
+        self.access_key_id = access_key_id
+        self.secret_access_key = secret_access_key
+        self.session_token = session_token
+        self.expires_at_epoch_millis = expires_at_epoch_millis
+
+
+#: A thread-safe callable that returns AWS credentials for IAM token signing.
+#:
+#: Direct async clients accept synchronous and asynchronous providers. Direct
+#: sync clients accept synchronous providers only. The native core admits one
+#: logical fetch at a time per direct client/provider; separate providers have
+#: independent admission. A provider may still be called twice sequentially
+#: within one fetch when a field does not fit in the initial native buffers, so
+#: each invocation must return a complete, coherent set of credentials.
+#: Providers should return promptly and cooperate with any application
+#: cancellation mechanism. The Python async bridge times out after 9 seconds,
+#: before the Rust core's 10-second outer deadline. These deadlines bound how
+#: long the client waits, but cannot forcibly stop synchronous user code; a
+#: timed-out synchronous provider may finish on a detached background worker
+#: after the request fails or the client closes. Close does not wait for or
+#: retain ownership of that worker. Until the actual invocation returns, later
+#: fetches for that direct provider fail immediately rather than queueing or
+#: starting additional callback workers.
+GlideCredentialProvider = Union[
+    Callable[[], AwsCredentials], Callable[[], Awaitable[AwsCredentials]]
+]
+
+
+def _is_async_callable(provider: object) -> bool:
+    """Return whether a function or callable object's ``__call__`` is async."""
+    import inspect
+
+    return inspect.iscoroutinefunction(provider) or inspect.iscoroutinefunction(
+        getattr(provider, "__call__", None)
+    )
+
+
+class IamAuthConfig:
+    """Configuration settings for IAM authentication.
 
     Attributes:
         cluster_name (str): The name of the ElastiCache/MemoryDB cluster.
-        service (ServiceType): The type of service being used (ElastiCache or MemoryDB).
-        region (str): The AWS region where the ElastiCache/MemoryDB cluster is located.
-        refresh_interval_seconds (Optional[int]): Optional refresh interval in seconds for renewing IAM authentication tokens.
-            If not provided, the core will use a default value of 300 seconds (5 min).
+        service (ServiceType): The service type (ElastiCache or MemoryDB).
+        region (str): The AWS region containing the cluster.
+        refresh_interval_seconds (Optional[int]): Optional token refresh interval.
+            If omitted, the core uses 300 seconds (5 minutes).
+        credential_provider (Optional[GlideCredentialProvider]): Optional custom
+            AWS credential source. Direct clients use it instead of the default
+            AWS credential chain. Python client pools do not support custom
+            providers.
     """
 
     def __init__(
@@ -365,11 +614,19 @@ class IamAuthConfig:
         service: ServiceType,
         region: str,
         refresh_interval_seconds: Optional[int] = None,
+        credential_provider: Optional[GlideCredentialProvider] = None,
     ):
+        if credential_provider is not None and not callable(credential_provider):
+            raise ValueError("credential_provider must be callable")
+
         self.cluster_name = cluster_name
         self.service = service
         self.region = region
         self.refresh_interval_seconds = refresh_interval_seconds
+        self.credential_provider = credential_provider
+        self._credential_provider_is_async = (
+            credential_provider is not None and _is_async_callable(credential_provider)
+        )
 
 
 class ServerCredentials:
@@ -597,6 +854,7 @@ class TlsAdvancedConfiguration:
         client_key_path: Optional[StrPath] = None,
         cert_reload_interval_seconds: Optional[int] = None,
     ):
+        # TODO #7707: Document that root certificates or IAM authentication with use_insecure_tls is rejected.
         self.use_insecure_tls = use_insecure_tls
         self.root_pem_cacerts = root_pem_cacerts
         self.client_cert_pem = client_cert_pem
@@ -953,6 +1211,12 @@ class BaseClientConfiguration:
             the default library name or a configured ``lib_name``. Every character in a non-empty value must be
             printable ASCII from ``!`` (U+0021) through ``~`` (U+007E), inclusive, excluding ``(`` and ``)``.
             An empty value is treated as unset.
+        rdma (Optional[RdmaConfiguration]): Configuration for remote direct memory access (RDMA) transfers.
+            ⚠️ WARNING: This feature is experimental and its API may change in a future release.
+            When set, the client opens a fabric endpoint, so ``rdma_get`` and ``rdma_set`` can move
+            values directly between server memory and memory the caller registered. Only the synchronous
+            client compiled with the RDMA feature supports this. Transfers always run against a primary,
+            so a ``ReadFrom`` that prefers a replica does not apply to them. If not set, RDMA is disabled.
     """
 
     def __init__(
@@ -976,6 +1240,7 @@ class BaseClientConfiguration:
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
         lib_name: Optional[str] = None,
         client_info_tag: Optional[str] = None,
+        rdma: Optional[RdmaConfiguration] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -993,6 +1258,7 @@ class BaseClientConfiguration:
         self.advanced_config = advanced_config
         self.lazy_connect = lazy_connect
         self.compression = compression
+        self.rdma = rdma
         self.client_side_cache = client_side_cache
         self.address_resolver = address_resolver
         self.client_circuit_breaker = client_circuit_breaker
@@ -1027,12 +1293,26 @@ class BaseClientConfiguration:
                 "client_az must be set when read_from is set to AZ_AFFINITY_ALL_NODES"
             )
 
+    def _validate_unix_socket_addresses(self, cluster_mode: bool) -> None:
+        """Reject common Unix domain socket misconfigurations; the core checks the rest."""
+        if all(address.unix_socket_path is None for address in self.addresses):
+            return
+        if cluster_mode:
+            raise ConfigurationError(
+                "Unix domain socket addresses are not supported in cluster mode"
+            )
+        if self.use_tls:
+            raise ConfigurationError("TLS is not supported over Unix domain sockets")
+
     def _set_addresses_in_request(self, request: ConnectionRequest) -> None:
-        """Set addresses in the protobuf request."""
+        """Set addresses in the protobuf request. An empty socket path is still sent so the core rejects it."""
         for address in self.addresses:
             address_info = request.addresses.add()
-            address_info.host = address.host
-            address_info.port = address.port
+            if address.unix_socket_path is not None:
+                address_info.unix_socket_path = address.unix_socket_path
+            else:
+                address_info.host = address.host
+                address_info.port = address.port
 
     def _set_reconnect_strategy_in_request(self, request: ConnectionRequest) -> None:
         """Set reconnect strategy in the protobuf request."""
@@ -1118,7 +1398,7 @@ class BaseClientConfiguration:
         Generates a Protobuf ConnectionRequest using the values from this ClientConfiguration.
 
         Args:
-            cluster_mode (bool, optional): The cluster mode of the client. Defaults to False.
+            cluster_mode (bool): The cluster mode of the client. Defaults to False.
 
         Returns:
             ConnectionRequest: Protobuf ConnectionRequest.
@@ -1126,6 +1406,7 @@ class BaseClientConfiguration:
         request = ConnectionRequest()
 
         # Set basic configuration
+        self._validate_unix_socket_addresses(cluster_mode)
         self._set_addresses_in_request(request)
         request.tls_mode = TlsMode.SecureTls if self.use_tls else TlsMode.NoTls
         request.read_from = self.read_from.value
@@ -1168,6 +1449,8 @@ class BaseClientConfiguration:
             request.lazy_connect = self.lazy_connect
         if self.compression is not None:
             request.compression_config.CopyFrom(self.compression._to_protobuf())
+        if self.rdma is not None:
+            request.rdma_config.CopyFrom(self.rdma._to_protobuf())
         return request
 
     def _get_pubsub_callback_and_context(
@@ -1346,6 +1629,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
         lib_name: Optional[str] = None,
         client_info_tag: Optional[str] = None,
+        rdma: Optional[RdmaConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -1364,6 +1648,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
             compression=compression,
+            rdma=rdma,
             client_side_cache=client_side_cache,
             address_resolver=address_resolver,
             client_circuit_breaker=client_circuit_breaker,
@@ -1385,6 +1670,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         request.node_discovery_mode = self.node_discovery_mode.value
 
         if self.pubsub_subscriptions:
+            # TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
             if self.protocol == ProtocolVersion.RESP2:
                 raise ConfigurationError(
                     "PubSub subscriptions require RESP3 protocol, but RESP2 was configured."
@@ -1467,6 +1753,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
     Attributes:
         addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
             The list can be partial, as the client will attempt to map out the cluster and find all nodes.
+            Unix domain socket addresses are not supported in cluster mode.
             For example::
 
                 [
@@ -1560,7 +1847,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         Pattern = 1
         """ Use channel name patterns """
         Sharded = 2
-        """ Use sharded pubsub. Available since Valkey version 7.0. """
+        """ Use sharded pubsub. Available since Valkey 7.0.0. """
 
     @dataclass
     class PubSubSubscriptions:
@@ -1616,6 +1903,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
         lib_name: Optional[str] = None,
         client_info_tag: Optional[str] = None,
+        rdma: Optional[RdmaConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -1634,6 +1922,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
             compression=compression,
+            rdma=rdma,
             client_side_cache=client_side_cache,
             address_resolver=address_resolver,
             client_circuit_breaker=client_circuit_breaker,
@@ -1655,6 +1944,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             request.periodic_checks_disabled.SetInParent()
 
         if self.pubsub_subscriptions:
+            # TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
             if self.protocol == ProtocolVersion.RESP2:
                 raise ConfigurationError(
                     "PubSub subscriptions require RESP3 protocol, but RESP2 was configured."
