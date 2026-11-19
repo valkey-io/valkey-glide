@@ -884,6 +884,48 @@ def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
         return None
 
 
+# Real seconds to wait per server for CLUSTER SLOTS to list all nodes (replicas appear only after initial sync).
+TOPOLOGY_WAIT_SECONDS = 120
+
+
+def _topology_failure_diagnostics(
+    servers: List[Server],
+    cluster_folder: str,
+    use_tls: bool,
+    tls_cert_file: Optional[str],
+    tls_key_file: Optional[str],
+    tls_ca_cert_file: Optional[str],
+    cluster_slots_output: Optional[str],
+) -> str:
+    """Collect CLUSTER NODES and INFO replication from every server to explain a topology wait timeout."""
+
+    def run(server: Server, *command: str) -> str:
+        args = [
+            get_cli_command(),
+            "-h",
+            server.host,
+            "-p",
+            str(server.port),
+            *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+            *command,
+        ]
+        try:
+            return str(redis_cli_run_command(args))
+        except Exception as e:  # diagnostics must never mask the original timeout
+            return f"<failed: {e}>"
+
+    seen = set(CLUSTER_SLOTS_NODE_ID_REGEX.findall(cluster_slots_output or ""))
+    lines = []
+    for server in servers:
+        nodes = run(server, "cluster", "nodes")
+        known = {line.split(" ")[0] for line in nodes.splitlines() if line.strip()}
+        if known:
+            lines.append(f"Node IDs missing from CLUSTER SLOTS (per {server} CLUSTER NODES): {sorted(known - seen)}")
+        lines.append(f"--- {server} CLUSTER NODES:\n{nodes}")
+        lines.append(f"--- {server} INFO replication:\n{run(server, 'info', 'replication')}")
+    return "\n".join(lines)
+
+
 def wait_for_all_topology_views(
     servers: List[Server],
     cluster_folder: str,
@@ -916,18 +958,29 @@ def wait_for_all_topology_views(
 
         logging.debug(f"Executing: {cluster_slots_cmd_args}")
 
-        for _ in range(81):
+        deadline = time.monotonic() + TOPOLOGY_WAIT_SECONDS
+        while True:
             cluster_slots_output = redis_cli_run_command(cluster_slots_cmd_args)
             if cluster_slots_output is not None and (
                 len(set(CLUSTER_SLOTS_NODE_ID_REGEX.findall(cluster_slots_output))) == len(servers)
             ):
                 break
+            if time.monotonic() >= deadline:
+                diagnostics = _topology_failure_diagnostics(
+                    servers,
+                    cluster_folder,
+                    use_tls,
+                    tls_cert_file,
+                    tls_key_file,
+                    tls_ca_cert_file,
+                    cluster_slots_output,
+                )
+                raise Exception(
+                    f"Timeout exceeded trying to wait for server {server} to know all hosts "
+                    f"({TOPOLOGY_WAIT_SECONDS}s).\n"
+                    f"Current CLUSTER SLOTS output:\n{cluster_slots_output}\n{diagnostics}"
+                )
             time.sleep(1)
-        else:
-            raise Exception(
-                f"Timeout exceeded trying to wait for server {server} to know all hosts.\n"
-                f"Current CLUSTER SLOTS output:\n{cluster_slots_output}"
-            )
 
         # [2] Determine if server is primary
         # ----------------------------------
