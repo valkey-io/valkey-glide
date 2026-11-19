@@ -594,6 +594,22 @@ public class JedisTest {
     }
 
     @Test
+    void hgetdel_in_transaction() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0"),
+                "HGETDEL command requires Valkey 9.1.0 or higher");
+
+        String hashKey = UUID.randomUUID().toString();
+        jedis.hset(hashKey, "f1", "v1");
+
+        Transaction transaction = jedis.multi();
+        redis.clients.jedis.Response<List<String>> values = transaction.hgetdel(hashKey, "f1", "nope");
+        transaction.exec();
+
+        assertEquals(java.util.Arrays.asList("v1", null), values.get());
+    }
+
+    @Test
     void getex_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
@@ -2557,9 +2573,10 @@ public class JedisTest {
     }
 
     @Test
-    @Disabled("HGETDEL command is currently unsupported")
-    // Keep this disabled until https://github.com/valkey-io/valkey-glide/issues/5069 is completed
     void hgetdel_command() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0"),
+                "HGETDEL command requires Valkey 9.1.0 or higher");
 
         String key = UUID.randomUUID().toString();
         String field1 = "field1";
@@ -2960,9 +2977,10 @@ public class JedisTest {
     }
 
     @Test
-    @Disabled("HGETDEL command is currently unsupported")
-    // Keep this disabled until https://github.com/valkey-io/valkey-glide/issues/5069 is completed
     void hash_commands_binary_hgetdel() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0"),
+                "HGETDEL command requires Valkey 9.1.0 or higher");
 
         byte[] key = (UUID.randomUUID().toString()).getBytes();
         byte[] field1 = "field1".getBytes();

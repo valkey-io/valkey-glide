@@ -517,6 +517,27 @@ public class Transaction implements Closeable {
                 });
     }
 
+    public Response<List<String>> hgetdel(String key, String... fields) {
+        return appendCommand(
+                new Builder<List<String>>() {
+                    @Override
+                    public List<String> build(Object data) {
+                        if (data instanceof Object[]) {
+                            List<String> list = new ArrayList<>();
+                            for (Object o : (Object[]) data) {
+                                list.add(o != null ? o.toString() : null);
+                            }
+                            return list;
+                        }
+                        return BuilderFactory.STRING_LIST.build(data);
+                    }
+                },
+                () -> {
+                    batch.hgetdel(key, fields);
+                    return null;
+                });
+    }
+
     public Response<Map<String, String>> hgetAll(String key) {
         return appendCommand(
                 BuilderFactory.STRING_MAP,

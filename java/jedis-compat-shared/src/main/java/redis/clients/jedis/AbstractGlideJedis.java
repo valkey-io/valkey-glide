@@ -5575,35 +5575,41 @@ public abstract class AbstractGlideJedis extends JedisCommon {
 
     /**
      * Retrieves the values associated with the specified fields in the hash stored at the given key
-     * and then deletes those fields from the hash. Note: This command requires Valkey 7.9+ and may
-     * not be available in all Valkey versions.
+     * and then deletes those fields from the hash. If the last field is removed, the key is deleted.
+     * Note: This command requires Valkey 9.1+.
      *
      * @param key the key of the hash
      * @param fields the fields whose values are to be retrieved and then deleted
-     * @return a list of values associated with the specified fields before they were deleted
+     * @return a list of values associated with the specified fields before they were deleted, in
+     *     request order; null for fields that did not exist
      */
     public List<String> hgetdel(String key, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HGETDEL");
-            args.add(key);
-            args.addAll(Arrays.asList(fields));
+        return executeCommandWithGlide(
+                "HGETDEL", () -> Arrays.asList(glideClient.hgetdel(key, fields).get()));
+    }
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            if (result instanceof Object[]) {
-                Object[] resultArray = (Object[]) result;
-                List<String> stringResult = new ArrayList<>();
-                for (Object obj : resultArray) {
-                    stringResult.add(obj != null ? obj.toString() : null);
-                }
-                return stringResult;
-            }
-            return Arrays.asList(result != null ? result.toString() : null);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HGETDEL operation failed", e);
-        }
+    /**
+     * Retrieves the values associated with the specified fields in the hash stored at the given key
+     * and then deletes those fields from the hash (binary version). If the last field is removed, the
+     * key is deleted. Note: This command requires Valkey 9.1+.
+     *
+     * @param key the key of the hash
+     * @param fields the fields whose values are to be retrieved and then deleted
+     * @return a list of values associated with the specified fields before they were deleted, in
+     *     request order; null for fields that did not exist
+     */
+    public List<byte[]> hgetdel(final byte[] key, final byte[]... fields) {
+        return executeCommandWithGlide(
+                "HGETDEL",
+                () -> {
+                    GlideString[] result =
+                            glideClient.hgetdel(GlideString.of(key), convertToGlideStringArray(fields)).get();
+                    List<byte[]> byteResult = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        byteResult.add(gs != null ? gs.getBytes() : null);
+                    }
+                    return byteResult;
+                });
     }
 
     /**
@@ -5748,41 +5754,6 @@ public abstract class AbstractGlideJedis extends JedisCommon {
             return Arrays.asList(result != null ? result.toString().getBytes() : null);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("HGETEX operation failed", e);
-        }
-    }
-
-    /**
-     * Retrieves the values associated with the specified fields in the hash stored at the given key
-     * and then deletes those fields from the hash (binary version). Note: This command requires
-     * Valkey 7.9+ and may not be available in all Valkey versions.
-     *
-     * @param key the key of the hash
-     * @param fields the fields whose values are to be retrieved and then deleted
-     * @return a list of values associated with the specified fields before they were deleted
-     */
-    public List<byte[]> hgetdel(byte[] key, byte[]... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HGETDEL");
-            args.add(new String(key));
-            for (byte[] field : fields) {
-                args.add(new String(field));
-            }
-
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            if (result instanceof Object[]) {
-                Object[] resultArray = (Object[]) result;
-                List<byte[]> byteResult = new ArrayList<>();
-                for (Object obj : resultArray) {
-                    byteResult.add(obj != null ? obj.toString().getBytes() : null);
-                }
-                return byteResult;
-            }
-            return Arrays.asList(result != null ? result.toString().getBytes() : null);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HGETDEL operation failed", e);
         }
     }
 
