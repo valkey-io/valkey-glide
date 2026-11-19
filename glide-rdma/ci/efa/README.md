@@ -12,12 +12,8 @@ GitHub starts and monitors the `GlideRdmaEfa` CodeBuild project through the
 - `tests/` exercises orchestration and GitHub dispatch without AWS access.
 
 CodeBuild owns teardown. `KEEP_HOSTS=true` retains hosts only on failure.
-Cancelling GitHub monitoring leaves CodeBuild running. Hard CodeBuild stops can
-skip teardown; host lifetime limits and manual stack cleanup are managed by the
-infrastructure configuration.
-
-CloudFormation templates, AWS setup, and operational runbooks belong in the
-CodeBuild infrastructure repository.
+Cancelling GitHub monitoring leaves CodeBuild running. A hard CodeBuild stop can
+skip teardown and leave the stack behind.
 
 Run local tests with PyYAML installed:
 
