@@ -8,6 +8,7 @@
 
 ### Fixes
 
+* Core: Cmd::arg_idx now runs in O(1) constant time to prevent quadratic client routing latency on multi-slot MSET/MGET ([#7780](https://github.com/valkey-io/valkey-glide/issues/7780))
 * Core: keep timeout watchdog pending counts isolated from retired workers and losing singleton initialization candidates ([#7762](https://github.com/valkey-io/valkey-glide/pull/7762))
 * Core: prevent missed refresh completion notifications ([#7766](https://github.com/valkey-io/valkey-glide/pull/7766))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
