@@ -141,6 +141,9 @@ EXCLUDED_TESTS = {
         # Only the sync client registers an os.register_at_fork hook.
         "test_sync_fork_after_failed_create_does_not_reconnect",
         "spy",
+        # Pins FFI caller-thread resolver dispatch; the async client resolves
+        # over socket IPC, so it has no caller thread to check.
+        "test_address_resolver_runs_on_the_calling_thread_in_a_forked_child",
         # RDMA is sync-only, and async clients refuse it at creation
         "test_pool_rejects_rdma_config",
         # `closed` exists so RDMA callers can tell whether a region can be
