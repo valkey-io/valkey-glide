@@ -4395,6 +4395,289 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// A server-wide `CLIENT PAUSE` of the shared server for the watchdog tests below. Ended
+    /// with [`ServerPause::end`]; dropped without it (a failed assertion), it blocks until the
+    /// pause is over, so the shared server is never left paused for the next test.
+    struct ServerPause {
+        until: Option<std::time::Instant>,
+    }
+
+    impl ServerPause {
+        /// Waits until the pause is over.
+        async fn end(mut self) {
+            if let Some(until) = self.until.take() {
+                tokio::time::sleep_until(tokio::time::Instant::from_std(until)).await;
+            }
+        }
+    }
+
+    impl Drop for ServerPause {
+        fn drop(&mut self) {
+            if let Some(until) = self.until.take() {
+                std::thread::sleep(until.saturating_duration_since(std::time::Instant::now()));
+            }
+        }
+    }
+
+    /// Pauses every primary of `server` (where an unrouted `CLIENT PAUSE` goes in cluster mode)
+    /// for `ms`, through a separate client whose request timeout is far above the tested ones,
+    /// and fails the test unless every primary acknowledges it.
+    async fn pause_server(server: &BackingServer, ms: u64) -> ServerPause {
+        let mut setup = create_client(
+            server,
+            TestConfiguration {
+                request_timeout: Some(5000),
+                shared_server: true,
+                ..Default::default()
+            },
+        )
+        .await;
+        // A primary pauses before it acknowledges; allow a margin for its clock.
+        let pause_end = || {
+            std::time::Instant::now()
+                + std::time::Duration::from_millis(ms)
+                + std::time::Duration::from_millis(100)
+        };
+        // Armed before the send: if the acknowledgement fails or is partial (the `expect`
+        // below), some primaries may still have paused, and the guard waits that out too.
+        let mut pause = ServerPause {
+            until: Some(pause_end()),
+        };
+        setup
+            .send_command(redis::cmd("CLIENT").arg("PAUSE").arg(ms), None)
+            .await
+            .expect("every primary must acknowledge CLIENT PAUSE");
+        pause.until = Some(pause_end());
+        pause
+    }
+
+    /// With the standalone per-request tokio receive timer removed, every timed-out command
+    /// must still come back as a real timeout (`is_timeout()`), never early. Many concurrent
+    /// commands make any lost or late watchdog firing observable. The cluster arm keeps its
+    /// per-node timer and must still report `is_timeout()` too.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_watchdog_timeout_concurrent_all_are_timeouts(#[values(false, true)] use_cluster: bool) {
+        const REQUEST_TIMEOUT_MS: u64 = 50;
+        block_on_all(async move {
+            let test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    request_timeout: Some(REQUEST_TIMEOUT_MS as u32),
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            // Every primary is paused, so all keys below are stalled.
+            let pause = pause_server(&test_basics.server, 1500).await;
+            // Far below the 1.5 s pause: a late or lost watchdog firing shows up here, while
+            // 64 concurrent requests on a loaded CI host still have ample slack.
+            let upper = std::time::Duration::from_millis(REQUEST_TIMEOUT_MS + 500);
+            let mut handles = Vec::new();
+            for i in 0..64 {
+                let mut c = test_basics.client.clone();
+                handles.push(tokio::spawn(async move {
+                    let start = std::time::Instant::now();
+                    let r = c
+                        .send_command(redis::cmd("GET").arg(format!("wd_conc_{i}")), None)
+                        .await;
+                    (r, start.elapsed())
+                }));
+            }
+            for h in handles {
+                let (r, elapsed) = h.await.expect("task");
+                let err = r.expect_err("must time out");
+                assert!(err.is_timeout(), "expected a timeout, got: {err:?}");
+                assert!(
+                    elapsed >= std::time::Duration::from_millis(REQUEST_TIMEOUT_MS),
+                    "timed out early: {elapsed:?} < {REQUEST_TIMEOUT_MS}ms"
+                );
+                assert!(elapsed < upper, "timed out late: {elapsed:?} >= {upper:?}");
+            }
+            pause.end().await;
+        });
+    }
+
+    /// End-to-end timeout timing: a request times out no earlier than its timeout, and not
+    /// grossly late. The upper bound is timeout + one tick + a 50 ms allowance for scheduling
+    /// on loaded CI hosts, so this cannot check the one-tick bound itself (the watchdog's
+    /// deterministic bucket-rounding unit test does). In the cluster arm the per-node
+    /// connection timer of the same duration races the watchdog, so that arm bounds whichever
+    /// fires first.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_watchdog_timeout_is_never_early_and_not_grossly_late(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        const REQUEST_TIMEOUT_MS: u64 = 100;
+        const JITTER_ALLOWANCE: std::time::Duration = std::time::Duration::from_millis(50);
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    request_timeout: Some(REQUEST_TIMEOUT_MS as u32),
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let pause = pause_server(&test_basics.server, 2000).await;
+            let timeout = std::time::Duration::from_millis(REQUEST_TIMEOUT_MS);
+            let bound = timeout + glide_core::timeout_watchdog::WATCHDOG_TICK + JITTER_ALLOWANCE;
+            for i in 0..5 {
+                let start = std::time::Instant::now();
+                let result = test_basics
+                    .client
+                    .send_command(redis::cmd("GET").arg(format!("wd_tick_{i}")), None)
+                    .await;
+                let elapsed = start.elapsed();
+                let err = result.expect_err("must time out");
+                assert!(err.is_timeout(), "expected a timeout, got: {err:?}");
+                assert!(elapsed >= timeout, "timed out early: {elapsed:?}");
+                assert!(
+                    elapsed <= bound,
+                    "timed out late: {elapsed:?} > {bound:?} (timeout + 1 tick + jitter allowance)"
+                );
+            }
+            pause.end().await;
+        });
+    }
+
+    /// Only standalone requests rely on the watchdog alone (no connection receive timer). A
+    /// cluster sub-request outlives the caller's future inside the cluster event loop, so it
+    /// must keep its per-node timer.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_request_deadline_enforced_by_caller_only_for_standalone(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        block_on_all(async move {
+            let test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    request_timeout: Some(250),
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            assert_eq!(
+                test_basics
+                    .client
+                    .request_deadline_enforced_by_caller()
+                    .await,
+                !use_cluster,
+                "use_cluster={use_cluster}"
+            );
+        });
+    }
+
+    /// Dead-watchdog fallback through `dispatch`: with the global watchdog's thread gone, a
+    /// request to a stalled server must still fail as a timeout at its deadline. Standalone
+    /// requests arm no connection timer, so `dispatch` must bound them itself; cluster requests
+    /// fall back to their per-node timer.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_dead_watchdog_fallback_still_times_out(#[values(false, true)] use_cluster: bool) {
+        /// Installs a live global watchdog again however the test ends.
+        struct ReviveWatchdog;
+        impl Drop for ReviveWatchdog {
+            fn drop(&mut self) {
+                glide_core::timeout_watchdog::TimeoutWatchdog::restart_global_for_test();
+            }
+        }
+        const REQUEST_TIMEOUT_MS: u64 = 100;
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    request_timeout: Some(REQUEST_TIMEOUT_MS as u32),
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            // The global watchdog is shared by the whole test binary: keep it stopped only for
+            // this one request. (Non-serial tests running meanwhile still get their timeouts,
+            // from the same fallbacks.)
+            let pause = pause_server(&test_basics.server, 2000).await;
+            let revive = ReviveWatchdog;
+            glide_core::timeout_watchdog::TimeoutWatchdog::stop_global_for_test();
+            let timeout = std::time::Duration::from_millis(REQUEST_TIMEOUT_MS);
+            let start = std::time::Instant::now();
+            let result = test_basics
+                .client
+                .send_command(redis::cmd("GET").arg("wd_dead_fallback"), None)
+                .await;
+            let elapsed = start.elapsed();
+            drop(revive);
+            let err = result.expect_err("must time out while the server is paused");
+            assert!(err.is_timeout(), "expected a timeout, got: {err:?}");
+            assert!(elapsed >= timeout, "timed out early: {elapsed:?}");
+            // Without a fallback the request would wait for the 2 s pause to end.
+            assert!(
+                elapsed < timeout + std::time::Duration::from_millis(500),
+                "fallback did not bound the request: {elapsed:?}"
+            );
+            pause.end().await;
+        });
+    }
+
+    /// The cluster arm of `dispatch` must not tell the connection to skip its receive timer:
+    /// after the watchdog times the caller out, the sub-request stays queued in the cluster
+    /// event loop (holding its in-flight slot) until that timer fires. Without the timer it
+    /// would hold the slot until the server answered, here when the 2 s pause ends.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_sub_request_keeps_its_timer_after_watchdog_timeout() {
+        const REQUEST_TIMEOUT_MS: u64 = 100;
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                true,
+                TestConfiguration {
+                    request_timeout: Some(REQUEST_TIMEOUT_MS as u32),
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let idle = test_basics.client.available_inflight_count();
+            let pause = pause_server(&test_basics.server, 2000).await;
+            let start = std::time::Instant::now();
+            let err = test_basics
+                .client
+                .send_command(redis::cmd("GET").arg("wd_cluster_slot"), None)
+                .await
+                .expect_err("must time out while the server is paused");
+            assert!(err.is_timeout(), "expected a timeout, got: {err:?}");
+            // The per-node timer releases the slot about one timeout after the send; allow
+            // generous slack, but far less than the 2 s pause.
+            let release_bound = std::time::Duration::from_millis(1000);
+            while test_basics.client.available_inflight_count() != idle {
+                assert!(
+                    start.elapsed() < release_bound,
+                    "in-flight slot still held after {:?}: the sub-request has no timer",
+                    start.elapsed()
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            // Also when the first sample was already idle: a release seen only after a stall
+            // past the bound could be the server's answer at the end of the pause.
+            let released_by = start.elapsed();
+            assert!(
+                released_by < release_bound,
+                "in-flight slot release observed only after {released_by:?}"
+            );
+            pause.end().await;
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]

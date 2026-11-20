@@ -476,6 +476,17 @@ pub enum ClientWrapper {
     Lazy(Box<LazyClient>),
 }
 
+impl ClientWrapper {
+    /// Whether `Client::dispatch` enforces a request's deadline itself (with the timeout
+    /// watchdog) and so tells the connection to skip its own receive timer
+    /// (`Cmd::deadline_enforced_by_caller`). True only for standalone clients: a cluster
+    /// sub-request outlives the caller's future inside the cluster event loop, so it keeps its
+    /// per-node timer.
+    fn request_deadline_enforced_by_caller(&self) -> bool {
+        matches!(self, ClientWrapper::Standalone(_))
+    }
+}
+
 /// A client wrapper that defers connection until the first command is executed.
 #[derive(Clone)]
 pub struct LazyClient {
@@ -719,6 +730,21 @@ async fn run_with_timeout<T>(
             }
         },
         None => future.await,
+    }
+}
+
+/// Fallback when the timeout watchdog is gone for a request whose connection
+/// arms no receive timer of its own (`Cmd::deadline_enforced_by_caller`): bound
+/// `future` by the request's original `deadline` (not a fresh full timeout), and
+/// fail with the same `io::ErrorKind::TimedOut` (`is_timeout()`) error the
+/// connection's own timer produced.
+async fn await_until_deadline<T>(
+    future: impl futures::Future<Output = RedisResult<T>>,
+    deadline: Instant,
+) -> RedisResult<T> {
+    match tokio::time::timeout_at(deadline.into(), future).await {
+        Ok(result) => result,
+        Err(_) => Err(io::Error::from(io::ErrorKind::TimedOut).into()),
     }
 }
 
@@ -1616,6 +1642,11 @@ impl Client {
                         as usize,
                 );
 
+                // Standalone: the watchdog below owns this command's deadline, so tell the
+                // multiplexed connection not to arm a second, per-request tokio timer.
+                let caller_deadline = client.request_deadline_enforced_by_caller();
+                let mut owned_cmd = owned_cmd;
+                owned_cmd.set_deadline_enforced_by_caller(caller_deadline);
                 // Wrap Cmd in Arc so the timeout arm can still read watchdog fields after execute takes ownership
                 let owned_cmd = Arc::new(owned_cmd);
 
@@ -1653,7 +1684,13 @@ impl Client {
                             Err(_) => {
                                 // Watchdog thread died — fall through to let the
                                 // command complete via Tokio's timer as fallback.
-                                execute.await
+                                if caller_deadline {
+                                    // The connection skipped its per-request timer for
+                                    // this command; enforce the original deadline here.
+                                    await_until_deadline(execute, cmd_start + duration).await
+                                } else {
+                                    execute.await
+                                }
                             }
                             Ok(()) => {
                                 // Build diagnostic event on the consumer side (rare timeout path)
@@ -4325,6 +4362,17 @@ impl GlideClientForTests for ClusterConnection<GlideConnection> {
 }
 
 impl Client {
+    /// Whether requests with a request timeout sent through this client rely on the timeout
+    /// watchdog alone, with no connection-level receive timer (the decision `dispatch` makes
+    /// for the client's current connection).
+    #[cfg(feature = "test-util")]
+    pub async fn request_deadline_enforced_by_caller(&self) -> bool {
+        self.internal_client
+            .read()
+            .await
+            .request_deadline_enforced_by_caller()
+    }
+
     /// Create a Client wrapping an existing internal_client Arc and synchronizer.
     /// Used in tests to build a Client that shares state with an existing connection.
     #[cfg(feature = "test-util")]
@@ -6544,6 +6592,45 @@ mod tests {
             assert!(!is_blocking_command(&cmd), "{name}");
             assert!(!is_blocking_command_name(name.as_bytes(), &[]), "{name}");
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_await_until_deadline_times_out_at_the_original_deadline() {
+        // Dead-watchdog fallback: a never-answered request must fail as a real timeout
+        // (is_timeout()), at the request's deadline — not a full timeout after the fallback starts.
+        // The clock is paused (it only moves when the runtime idles), so a stalled test host
+        // cannot move the measured times.
+        let start = tokio::time::Instant::now();
+        let deadline = (start + Duration::from_millis(60)).into_std();
+        tokio::time::sleep(Duration::from_millis(40)).await;
+        let fallback = super::await_until_deadline(
+            futures::future::pending::<redis::RedisResult<()>>(),
+            deadline,
+        );
+        tokio::pin!(fallback);
+        assert!(
+            tokio::time::timeout_at(start + Duration::from_millis(59), &mut fallback)
+                .await
+                .is_err(),
+            "must still be pending just before the original deadline"
+        );
+        let result = fallback.await;
+        let elapsed = start.elapsed();
+        let err = result.expect_err("a pending request must time out");
+        assert!(err.is_timeout(), "expected a timeout, got: {err:?}");
+        // At the original deadline (the timer wheel rounds up to its 1 ms resolution), not
+        // 60 ms after the fallback started.
+        assert!(
+            elapsed >= Duration::from_millis(60) && elapsed < Duration::from_millis(62),
+            "expected expiry at the original 60 ms deadline, got {elapsed:?}"
+        );
+
+        let ok: redis::RedisResult<i32> = super::await_until_deadline(
+            async { Ok(7) },
+            std::time::Instant::now() + Duration::from_secs(5),
+        )
+        .await;
+        assert_eq!(ok.unwrap(), 7);
     }
 
     #[test]
