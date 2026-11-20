@@ -918,6 +918,11 @@ implement_commands! {
         build_cmd!("HLEN", key)
     }
 
+    /// `HGETDEL`.
+    fn hget_del<K: ToSingleValkeyArg, F: ToValkeyArgs>(key: K, fields: F) -> (Vec<Option<String>>) {
+        build_cmd!("HGETDEL", key, "FIELDS", fields.num_of_args(), fields)
+    }
+
     // TODO #7641: Return `Vec<Option<String>>` instead of `Vec<String>`.
     /// `HGETEX`.
     fn hget_ex<K: ToSingleValkeyArg, F: ToValkeyArgs>(key: K, fields: F, expire_at: Expiry) -> (Vec<String>) {

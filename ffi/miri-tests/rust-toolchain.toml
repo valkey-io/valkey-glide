@@ -1,6 +1,4 @@
 # MIRI currently only runs on nightly builds, so we set the toolchain here
 [toolchain]
-# TODO #7759: Update to a nightly with rustc 1.94.1 or later,
-# so the AWS SDK crates can be updated to drop pin-utils (RUSTSEC-2026-0441).
-channel = "nightly-2025-07-10"
+channel = "nightly-2026-11-15"
 components = [ "miri" ]

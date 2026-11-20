@@ -2238,7 +2238,7 @@ mod client_pool_marking_tests {
 }
 
 #[cfg(test)]
-mod scope_pool_tests {
+pub(crate) mod scope_pool_tests {
     use super::{
         Arc, AtomicU32, DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig,
         ScopeReservation, ScopeTarget, saturating_dec,
@@ -2306,13 +2306,13 @@ mod scope_pool_tests {
     }
 
     /// A real Valkey server child process bound to an ephemeral port, killed on drop.
-    struct TestServer {
+    pub(crate) struct TestServer {
         child: Child,
-        port: u16,
+        pub(crate) port: u16,
     }
 
     impl TestServer {
-        fn start() -> Self {
+        pub(crate) fn start() -> Self {
             let port = get_available_port();
             // Use `redis-server` to match the integration harness
             // (tests/utilities/mod.rs): it's present on every CI engine version,
@@ -2434,7 +2434,7 @@ mod scope_pool_tests {
         }
     }
 
-    async fn wait_for_server_ready(port: u16) {
+    pub(crate) async fn wait_for_server_ready(port: u16) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
             if let Ok(client) = redis::Client::open(format!("redis://127.0.0.1:{port}")) {
@@ -3713,11 +3713,11 @@ mod scope_pool_tests {
     }
 
     /// `reset_connection_state` must restore the configured db when a SELECT may
-    /// have landed untracked — not only when `current_database` shows drift. An
-    /// earlier batch SELECT that the server applied, followed by a rejected one,
-    /// leaves the connection on the new db while `current_database` still reads the
-    /// configured value; the `db_maybe_dirty` flag is what makes release fail safe
-    /// here. A-B: without the flag (drift-only check) this leaks the wrong db.
+    /// have landed untracked — not only when `current_database` shows drift. With
+    /// `raise_on_error=true`, a batch SELECT that the server applied, followed by a
+    /// rejected one, fails the batch and leaves the connection on the new db while
+    /// `current_database` still reads the configured value; the `db_maybe_dirty`
+    /// flag is what makes release fail safe here. A-B: without the flag (drift-only check) this leaks the wrong db.
     #[tokio::test]
     async fn release_restores_db_when_current_database_underreports() {
         use redis::FromRedisValue as _;
@@ -3736,13 +3736,13 @@ mod scope_pool_tests {
                 .expect("client connects to the test server")
         };
 
-        // SELECT 3 applies; SELECT 99 is rejected. `last_select_db` sees only the
-        // last (99 → ServerError → not recorded), so current_database stays 0 while
-        // the connection is really on db 3.
+        // SELECT 3 applies; SELECT 99 is rejected, so with raise_on_error the batch
+        // fails and no change is recorded: current_database stays 0 while the
+        // connection is really on db 3.
         let mut pipe = redis::pipe();
         pipe.cmd("SELECT").arg(3).cmd("SELECT").arg(99);
         let _ = client
-            .send_pipeline(&pipe, None, false, None, Default::default())
+            .send_pipeline(&pipe, None, true, None, Default::default())
             .await;
         assert_eq!(
             client.current_database(),
@@ -4358,11 +4358,11 @@ mod scope_pool_tests {
         }
     }
 
-    /// Read-only mode rejects DISCARD/UNWATCH locally, but a pipeline still reaches
-    /// the server, so a raw MULTI or WATCH there stays open; release must discard
-    /// the client. A-B: re-idled with the transaction or watch open.
+    /// Read-only mode rejects a pipeline holding MULTI or WATCH before it reaches the
+    /// server, so release must re-idle the client. A-B: discarded when the rejected
+    /// batch was still tracked as sent.
     #[tokio::test]
-    async fn release_discards_a_read_only_client_left_in_multi() {
+    async fn release_reuses_a_read_only_client_after_a_rejected_multi_pipeline() {
         for command in ["MULTI", "WATCH"] {
             let server = TestServer::start();
             wait_for_server_ready(server.port).await;
@@ -4387,12 +4387,12 @@ mod scope_pool_tests {
                     redis::PipelineRetryStrategy::default(),
                 )
                 .await
-                .expect("reaches the server through a pipeline");
+                .expect_err("read-only mode rejects the batch");
 
             super::release_client_async(pool_arc.clone(), client_id).await;
             let mut pool = pool_arc.lock();
-            assert_eq!(pool.idle_count(), 0, "{command}: must not be re-idled");
-            assert_eq!(pool.drain_discarded_ids(), vec![client_id], "{command}");
+            assert_eq!(pool.idle_count(), 1, "{command}: must be re-idled");
+            assert!(pool.drain_discarded_ids().is_empty(), "{command}");
         }
     }
 
