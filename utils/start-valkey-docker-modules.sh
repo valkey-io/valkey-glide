@@ -36,6 +36,17 @@
 #                       stripping, confirmed empirically against both a
 #                       local build and this image). SCRATCH_DIR (below)
 #                       controls where the generated .conf files are staged.
+#   SEARCH_MODULE_PATH  Path, inside the container, to the search module
+#                       .so passed to loadmodule (default
+#                       /usr/lib/valkey/libsearch.so, the bundle's built-in
+#                       module -- CI never overrides this).
+#   SEARCH_MODULE_HOST_PATH  Path, on the host, to a search module .so to
+#                       bind-mount read-only over SEARCH_MODULE_PATH inside
+#                       every container. Empty by default (CI never sets
+#                       this), in which case no mount is added and the
+#                       bundle's built-in module loads exactly as before.
+#                       Set this to test a host-built module instead of the
+#                       one baked into IMAGE.
 #   SCRATCH_DIR         Directory for generated .conf files. MUST be under
 #                       $HOME on macOS Docker Desktop (shares /Users by
 #                       default, not /tmp -- a bind-mounted file staged
@@ -55,6 +66,16 @@ set -euo pipefail
 CLUSTER_PORT_START="${CLUSTER_PORT_START:-8001}"
 STANDALONE_PORT="${STANDALONE_PORT:-6389}"
 SEARCH_MODULE_ARGS="${SEARCH_MODULE_ARGS:-}"
+SEARCH_MODULE_PATH="${SEARCH_MODULE_PATH:-/usr/lib/valkey/libsearch.so}"
+SEARCH_MODULE_HOST_PATH="${SEARCH_MODULE_HOST_PATH:-}"
+MODULE_MOUNT_ARGS=()
+if [ -n "$SEARCH_MODULE_HOST_PATH" ]; then
+    if [ ! -f "$SEARCH_MODULE_HOST_PATH" ]; then
+        echo "ERROR: SEARCH_MODULE_HOST_PATH '${SEARCH_MODULE_HOST_PATH}' is not a file. Docker's -v would silently create a directory there instead of mounting it, so the search module would fail to load with no clear error." >&2
+        exit 1
+    fi
+    MODULE_MOUNT_ARGS=(-v "${SEARCH_MODULE_HOST_PATH}:${SEARCH_MODULE_PATH}:ro")
+fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRATCH_DIR="${SCRATCH_DIR:-${REPO_ROOT}/.module-ci-local-scratch}"
 mkdir -p "$SCRATCH_DIR"
@@ -144,7 +165,7 @@ gen_conf() {
         if [ -n "$extra_lines" ]; then
             echo "$extra_lines"
         fi
-        echo "loadmodule /usr/lib/valkey/libsearch.so ${SEARCH_MODULE_ARGS}"
+        echo "loadmodule ${SEARCH_MODULE_PATH} ${SEARCH_MODULE_ARGS}"
     } > "$conf_path"
 }
 
@@ -154,6 +175,7 @@ STANDALONE_CONF="${SCRATCH_DIR}/standalone.conf"
 gen_conf "$STANDALONE_PORT" "" "$STANDALONE_CONF"
 docker run -d --name valkey-modules-standalone --network host \
     -v "${STANDALONE_CONF}:/tmp/valkey.conf" \
+    ${MODULE_MOUNT_ARGS[@]+"${MODULE_MOUNT_ARGS[@]}"} \
     "$IMAGE" valkey-server /tmp/valkey.conf
 
 READY=false
@@ -193,6 +215,7 @@ appendonly no
 ${EXTRA_ARGS}" "$NODE_CONF"
     docker run -d --name "valkey-modules-cluster-${port}" --network host \
         -v "${NODE_CONF}:/tmp/valkey.conf" \
+        ${MODULE_MOUNT_ARGS[@]+"${MODULE_MOUNT_ARGS[@]}"} \
         "$IMAGE" valkey-server /tmp/valkey.conf
 done
 
