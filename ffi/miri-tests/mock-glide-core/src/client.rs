@@ -115,6 +115,10 @@ impl Client {
         todo!()
     }
 
+    pub fn is_lazy(&self) -> bool {
+        false
+    }
+
     /// Mock compression_manager method for Miri tests
     pub fn compression_manager(
         &self,

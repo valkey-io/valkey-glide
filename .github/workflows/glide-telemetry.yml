@@ -15,6 +15,7 @@ on:
             # Rust dependencies
             - glide-logger/**
             - deny.toml
+            - .cargo/config.toml
 
             # GitHub workflows
             - .github/workflows/glide-telemetry.yml
@@ -31,6 +32,7 @@ on:
             # Rust dependencies
             - glide-logger/**
             - deny.toml
+            - .cargo/config.toml
 
             # GitHub workflows
             - .github/workflows/glide-telemetry.yml

@@ -11,6 +11,8 @@ use redis::cluster_routing::{
 };
 use redis::{Cmd, cluster_topology::get_slot};
 
+// TODO #7678: Replace with redis-rs's `SlotAddr` (`Primary`, `ReplicaOptional`, `ReplicaRequired`),
+// with a `Master` alias.
 /// Whether a slot-based route targets the primary or a replica.
 ///
 /// Mirrors Python `SlotType`.
@@ -32,6 +34,8 @@ impl SlotType {
     }
 }
 
+// TODO #7678: Replace with redis-rs's routing types (`RoutingInfo`, `SingleNodeRoutingInfo`,
+// `MultipleNodeRoutingInfo`, `Route`), with a validated `Slot` instead of a `u16` slot ID.
 /// Describes where a command should be routed in cluster mode.
 ///
 /// Mirrors the Python route classes: `AllNodes`, `AllPrimaries`, `RandomNode`,
@@ -116,6 +120,8 @@ impl Route {
     }
 }
 
+// TODO #7678: Update for the redis-rs routing types, and add `Slot::new` tests for out-of-range
+// values.
 #[cfg(test)]
 mod tests {
     //! Pure-logic routing tests: every [`Route`] variant is lowered into the
