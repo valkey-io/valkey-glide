@@ -69,6 +69,7 @@ pub struct FabricConfig {
     provider: Provider,
     interface: Option<String>,
     bind: Option<String>,
+    device_memory: bool,
 }
 
 impl FabricConfig {
@@ -78,6 +79,7 @@ impl FabricConfig {
             provider,
             interface: None,
             bind: None,
+            device_memory: false,
         }
     }
 
@@ -95,6 +97,16 @@ impl FabricConfig {
         self
     }
 
+    /// Open the endpoint able to register device memory, such as CUDA memory, as
+    /// well as host memory; see `RdmaFabric::register_device_raw`.
+    ///
+    /// The provider must offer `FI_HMEM`, as efa-direct does on a host whose libfabric
+    /// was built with the device's runtime. Opening fails otherwise.
+    pub fn with_device_memory(mut self) -> Self {
+        self.device_memory = true;
+        self
+    }
+
     /// The provider to open.
     pub fn provider(&self) -> Provider {
         self.provider
@@ -108,6 +120,21 @@ impl FabricConfig {
     /// The source address to bind to.
     pub fn bind(&self) -> Option<&str> {
         self.bind.as_deref()
+    }
+
+    /// Whether the endpoint can register device memory.
+    pub fn device_memory(&self) -> bool {
+        self.device_memory
+    }
+
+    /// This configuration without device memory, to tell whether that is what a
+    /// provider lacks.
+    #[cfg(feature = "libfabric")]
+    pub(crate) fn without_device_memory(&self) -> Self {
+        Self {
+            device_memory: false,
+            ..self.clone()
+        }
     }
 }
 

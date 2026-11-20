@@ -1,0 +1,53 @@
+# Shared base: the other valkey-glide-* repos `_extends` this file.
+#
+# Sections come from the PR title's conventional-commit type. Matching is
+# case-sensitive, so pr-title.yml must keep requiring lowercase types.
+categories:
+    - type: pre-exclude
+      when:
+          # `skip-changelog` is the only manual label; Dependabot adds `dependencies`.
+          - labels: [skip-changelog, dependencies]
+          # User docs ship from valkey-glide-docs, so `docs` is internal.
+          # `breaking: false` keeps e.g. `chore!:` in Breaking Changes.
+          - conventional:
+                types: [docs, ci, build, test, chore, refactor, style]
+                breaking: false
+          # CI-only and ORT attribution PRs.
+          - paths: [".github/**", "**/THIRD_PARTY_LICENSES*"]
+            paths-mode: only
+    - title: "Breaking Changes"
+      exclusive: true
+      when: { conventional: { breaking: true } }
+    - title: "Features"
+      when: { conventional: { type: feat } }
+    - title: "Bug Fixes"
+      when: { conventional: { type: fix } }
+    - title: "Performance"
+      when: { conventional: { type: perf } }
+    # Catch-all for unmapped titles.
+    - title: "Other Changes"
+
+# Raw title, so entries group by type then scope.
+sort-by: title
+sort-direction: ascending
+
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+# Drafts are per release branch; draft-release.yml passes version and baseline.
+filter-by-commitish: true
+change-template: "* $TITLE ([#$NUMBER]($URL)) $AUTHORS"
+# No `*`: the replacers add bold markup before escaping runs.
+change-title-escapes: '\<&'
+replacers:
+    # `fix(java): x` -> `**java**: x`, then `fix: x` -> `x`.
+    - target: change-title
+      search: '/^\w+\(([^)]+)\)!?: /'
+      replace: "**$1**: "
+    - target: change-title
+      search: '/^\w+!?: /'
+      replace: ""
+# `|+` keeps the blank line before draft-release.yml's footer.
+template: |+
+    $CHANGES
+
+
