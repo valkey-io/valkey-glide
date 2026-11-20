@@ -213,18 +213,7 @@ impl StandaloneClient {
         // `Client::new` already did this; it is repeated for direct callers of `create_client`.
         connection_request.read_from = connection_request
             .read_from
-            .map(ClientReadFrom::with_trimmed_client_az)
-            .transpose()
-            .map_err(|message| {
-                StandaloneClientConnectionError::FailedConnection(vec![(
-                    None,
-                    RedisError::from((
-                        redis::ErrorKind::InvalidClientConfig,
-                        "Invalid read_from",
-                        message,
-                    )),
-                )])
-            })?;
+            .map(ClientReadFrom::with_trimmed_client_az);
 
         super::validate_unix_socket_addresses(&connection_request).map_err(|message| {
             StandaloneClientConnectionError::FailedConnection(vec![(

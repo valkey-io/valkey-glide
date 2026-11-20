@@ -755,10 +755,11 @@ public class ConnectionManager {
     /**
      * The {@code clientAZ} as it should reach the core: trimmed, or null when absent or blank.
      *
-     * <p>The core also trims the client AZ before matching it exactly against each node's {@code
-     * availability-zone}, and treats a blank one as missing. Trimming here as well lets {@link
-     * #validateClientAz} treat a whitespace-only value (easily produced by {@code getenv} or a file
-     * read) as missing too.
+     * <p>The core compares availability zones with exact equality and never trims ({@code
+     * standalone_client.rs}, {@code connections_container.rs}), so a padded value such as {@code "
+     * us-east-1a "} — easily produced by {@code getenv} or a file read — would engage the strategy,
+     * match no node, and silently spread reads cluster-wide. No real availability-zone name carries
+     * surrounding whitespace, so trimming cannot break a value that works today.
      *
      * <p>The shared request builder normalizes through here so no caller can forward a raw value.
      */

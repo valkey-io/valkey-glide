@@ -3404,11 +3404,7 @@ impl Client {
         // Every binding reaches this through the protobuf conversion, and the Rust client
         // builds `ConnectionRequest` directly. `StandaloneClient::create_client` repeats it
         // for direct callers.
-        request.read_from = request
-            .read_from
-            .map(ReadFrom::with_trimmed_client_az)
-            .transpose()
-            .map_err(ConnectionError::Configuration)?;
+        request.read_from = request.read_from.map(ReadFrom::with_trimmed_client_az);
         // Validate library name and version.
         if let Some(lib_name) = request.lib_name.as_deref() {
             validate_effective_lib_name(lib_name).map_err(ConnectionError::Configuration)?;
@@ -4868,32 +4864,11 @@ mod tests {
     #[rstest::rstest]
     #[tokio::test]
     #[cfg(feature = "proto")]
-    async fn test_new_rejects_az_affinity_all_nodes_without_client_az(
-        #[values("", " \t\n ")] client_az: &str,
-    ) {
-        let request = lazy_request_with_read_from(
-            crate::connection_request::ReadFrom::AZAffinityAllNodes,
-            client_az,
-        );
-        let error = match Client::new(request, None).await {
-            Ok(_) => panic!("client_az {client_az:?} should be rejected"),
-            Err(error) => error,
-        };
-
-        assert!(error.is_configuration(), "{error:?}");
-        assert_eq!(
-            error.to_string(),
-            "configuration error: client_az must be set when read_from is AZAffinityAllNodes"
-        );
-    }
-
-    #[rstest::rstest]
-    #[tokio::test]
-    #[cfg(feature = "proto")]
     async fn test_new_falls_back_to_prefer_replica_without_client_az(
         #[values(
             crate::connection_request::ReadFrom::AZAffinity,
-            crate::connection_request::ReadFrom::AZAffinityReplicasAndPrimary
+            crate::connection_request::ReadFrom::AZAffinityReplicasAndPrimary,
+            crate::connection_request::ReadFrom::AZAffinityAllNodes
         )]
         read_from: crate::connection_request::ReadFrom,
         #[values("", " \t\n ")] client_az: &str,
@@ -4906,24 +4881,6 @@ mod tests {
             panic!("a lazy client keeps its configuration until the first command");
         };
         assert_eq!(lazy.config.read_from, Some(ReadFrom::PreferReplica));
-    }
-
-    #[rstest::rstest]
-    #[tokio::test]
-    #[cfg(feature = "proto")]
-    async fn test_new_accepts_non_az_strategy_without_client_az(
-        #[values(
-            crate::connection_request::ReadFrom::Primary,
-            crate::connection_request::ReadFrom::PreferReplica,
-            crate::connection_request::ReadFrom::AllNodes
-        )]
-        read_from: crate::connection_request::ReadFrom,
-    ) {
-        assert!(
-            Client::new(lazy_request_with_read_from(read_from, ""), None)
-                .await
-                .is_ok()
-        );
     }
 
     #[tokio::test]

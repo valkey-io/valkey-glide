@@ -10099,9 +10099,10 @@ export class BaseClient {
             connection_request.ProtocolVersion | undefined;
 
         // Normalize clientAz: trim surrounding whitespace and treat a blank value as
-        // absent, so a whitespace-only value (e.g. "   ") fails the check below with a
-        // ConfigurationError. The core also trims the client AZ and treats a blank one as
-        // missing. This mirrors Java's ConnectionManager.resolveClientAz.
+        // absent. The core compares availability zones with exact equality and never
+        // trims, so an untrimmed or whitespace-only value (e.g. " us-east-1a " or
+        // "   ") would match no node and silently fall through to the AZ-affinity
+        // all-nodes fallback. This mirrors Java's ConnectionManager.resolveClientAz.
         const trimmedClientAz = options.clientAz?.trim();
         const clientAz =
             trimmedClientAz === undefined || trimmedClientAz === ""

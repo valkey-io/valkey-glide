@@ -840,21 +840,16 @@ fn test_create_client_from_uri_valid_formats(#[case] uri_format: &str) {
 }
 
 #[rstest]
-#[case("PreferReplica", "")]
+#[case("PreferReplica")]
 // #[case("LowestLatency")] // TODO: Not yet implemented in glide-core
-#[case("AZAffinity", "")]
-#[case("AZAffinityReplicasAndPrimary", "")]
-#[case("AllNodes", "")]
-// The core rejects AZAffinityAllNodes without a client AZ.
-#[case("AZAffinityAllNodes", r#", "client_az": "us-east-1a""#)]
-fn test_create_client_from_uri_all_read_from_values(
-    #[case] read_from: &str,
-    #[case] extra_options: &str,
-) {
+#[case("AZAffinity")]
+#[case("AZAffinityReplicasAndPrimary")]
+#[case("AllNodes")]
+#[case("AZAffinityAllNodes")]
+fn test_create_client_from_uri_all_read_from_values(#[case] read_from: &str) {
     let server = Server::new();
     let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
-    let options =
-        CString::new(format!(r#"{{"read_from": "{read_from}"{extra_options}}}"#)).unwrap();
+    let options = CString::new(format!(r#"{{"read_from": "{}"}}"#, read_from)).unwrap();
 
     let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
 
