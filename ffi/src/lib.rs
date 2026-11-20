@@ -404,6 +404,17 @@ type NonNullAddressResolverCallback = unsafe extern "C-unwind" fn(
 
 /// Nullable address resolver callback. C represents this as the same typed
 /// function pointer, where `NULL` selects the built-in resolver.
+///
+/// # Threads
+/// While an FFI call blocks its caller on the client's work, the callback runs on that caller's
+/// thread. That covers creating the client, a lazy client's first command, and every resolution
+/// made while a synchronous command waits, such as for a redirect or a topology refresh. With no
+/// caller blocked, for example during a periodic topology check between commands or a command
+/// of an asynchronous client, it runs on a GLIDE runtime thread.
+///
+/// The callback must not call back into GLIDE. On a blocked caller's thread, creating a client
+/// or running a synchronous command from inside it fails with an error. It should also return
+/// quickly, since the client waits for it.
 pub type AddressResolverCallback = Option<
     unsafe extern "C-unwind" fn(
         client_id: usize,
@@ -420,6 +431,8 @@ pub type AddressResolverCallback = Option<
 struct FFIAddressResolver {
     callback: NonNullAddressResolverCallback,
     client_id: usize,
+    /// Hands the callback to an FFI caller blocked on this client, when there is one.
+    dispatch: Arc<CallerDispatch>,
 }
 
 // SAFETY: The callback is a C function pointer that is safe to send across threads.
@@ -434,39 +447,48 @@ impl std::fmt::Debug for FFIAddressResolver {
 
 impl redis::AddressResolver for FFIAddressResolver {
     fn resolve(&self, host: &str, port: u16) -> (String, u16) {
-        // Provide a buffer for the resolved host (1024 bytes should be more than enough for a hostname)
-        let mut resolved_host_buf = vec![0u8; 1024];
-        let mut resolved_host_len: usize = 0;
+        let (callback, client_id, host) = (self.callback, self.client_id, host.to_owned());
+        self.dispatch
+            .run(move || resolve_with_callback(callback, client_id, &host, port))
+    }
+}
 
-        let resolved_port = unsafe {
-            (self.callback)(
-                self.client_id,
-                host.as_ptr(),
-                host.len(),
-                port,
-                resolved_host_buf.as_mut_ptr(),
-                resolved_host_buf.len(),
-                &mut resolved_host_len,
-            )
-        };
+/// Calls the foreign resolver on this thread; [`FFIAddressResolver::resolve`] picks the thread.
+fn resolve_with_callback(
+    callback: NonNullAddressResolverCallback,
+    client_id: usize,
+    host: &str,
+    port: u16,
+) -> (String, u16) {
+    // Provide a buffer for the resolved host (1024 bytes should be more than enough for a hostname)
+    let mut resolved_host_buf = vec![0u8; 1024];
+    let mut resolved_host_len: usize = 0;
 
-        // If the callback returned port 0 or didn't write a host, fall back to original
-        if resolved_port == 0
-            || resolved_host_len == 0
-            || resolved_host_len > resolved_host_buf.len()
-        {
-            return (host.to_string(), port);
-        }
+    let resolved_port = unsafe {
+        (callback)(
+            client_id,
+            host.as_ptr(),
+            host.len(),
+            port,
+            resolved_host_buf.as_mut_ptr(),
+            resolved_host_buf.len(),
+            &mut resolved_host_len,
+        )
+    };
 
-        match std::str::from_utf8(&resolved_host_buf[..resolved_host_len]) {
-            Ok(resolved_host) => (resolved_host.to_string(), resolved_port),
-            Err(_) => {
-                glide_logger::log_error_lazy!(
-                    "address_resolver",
-                    "Address resolver returned invalid UTF-8 for host, using original address"
-                );
-                (host.to_string(), port)
-            }
+    // If the callback returned port 0 or didn't write a host, fall back to original
+    if resolved_port == 0 || resolved_host_len == 0 || resolved_host_len > resolved_host_buf.len() {
+        return (host.to_string(), port);
+    }
+
+    match std::str::from_utf8(&resolved_host_buf[..resolved_host_len]) {
+        Ok(resolved_host) => (resolved_host.to_string(), resolved_port),
+        Err(_) => {
+            glide_logger::log_error_lazy!(
+                "address_resolver",
+                "Address resolver returned invalid UTF-8 for host, using original address"
+            );
+            (host.to_string(), port)
         }
     }
 }
@@ -2033,6 +2055,9 @@ pub struct ClientAdapter {
     background_runtime: ManuallyDrop<Option<Runtime>>,
     core: Arc<CommandExecutionCore>,
     pubsub_callback: Arc<std::sync::RwLock<PubSubCallback>>,
+    /// Set when the client has an address resolver, which then runs on the thread blocked in a
+    /// sync command; see [`CallerDispatch`].
+    caller_dispatch: Option<Arc<CallerDispatch>>,
 }
 
 impl Drop for ClientAdapter {
@@ -2163,35 +2188,59 @@ impl ClientAdapter {
                 std::ptr::null_mut()
             }
             ClientType::SyncClient => {
-                // A lazy client connects inside this command, so keep that off the caller's stack.
-                let result = if self.core.client.is_lazy()
-                    && let Some(bg) = self.background_runtime.as_ref()
-                {
-                    block_on_worker(bg, request_future).unwrap_or_else(|err| {
-                        Err(RedisError::from((
-                            ErrorKind::ClientError,
-                            "Command task on the runtime worker failed",
-                            err,
-                        )))
-                    })
-                } else {
-                    // Enter background runtime context inside the future so tokio::spawn
-                    // calls within the command (e.g. reconnection, lazy subscribe) land
-                    // on the background runtime where TCP I/O is registered.
-                    // Note: block_on overrides any context entered before it, so the
-                    // guard must be held inside the future being polled.
-                    let bg = self
-                        .background_runtime
-                        .as_ref()
-                        .map(|rt| rt.handle().clone());
-                    self.runtime.block_on(async {
-                        let _guard = bg.as_ref().map(|h| h.enter());
-                        request_future.await
-                    })
-                };
+                let result = self.block_on_sync(request_future).and_then(|result| result);
                 Self::handle_result(result, None, None, request_id, response_buf, false)
             }
         }
+    }
+
+    /// Blocks the calling thread until `future` finishes. Sync clients only.
+    ///
+    /// A lazy client connects inside its first command, so until it has connected the future
+    /// runs on the background worker, off the caller's stack. Otherwise the caller polls it.
+    /// Either way, a client with an address resolver runs the resolver on the caller meanwhile.
+    fn block_on_sync<F>(&self, future: F) -> RedisResult<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        if CallerDispatch::is_pumping() {
+            return Err(reentrant_call_error());
+        }
+        let dispatch = self.caller_dispatch.as_deref();
+        if self.core.client.is_lazy()
+            && let Some(bg) = self.background_runtime.as_ref()
+        {
+            return block_on_worker(bg, dispatch, future).map_err(|err| {
+                RedisError::from((
+                    ErrorKind::ClientError,
+                    "Command task on the runtime worker failed",
+                    err,
+                ))
+            });
+        }
+        // Enter background runtime context inside the future so tokio::spawn
+        // calls within the command (e.g. reconnection, lazy subscribe) land
+        // on the background runtime where TCP I/O is registered.
+        // Note: block_on overrides any context entered before it, so the
+        // guard must be held inside the future being polled.
+        let bg = self
+            .background_runtime
+            .as_ref()
+            .map(|rt| rt.handle().clone());
+        Ok(match dispatch {
+            None => self.runtime.block_on(async {
+                let _guard = bg.as_ref().map(|h| h.enter());
+                future.await
+            }),
+            Some(dispatch) => {
+                let caller = dispatch.register();
+                self.runtime.block_on(async {
+                    let _guard = bg.as_ref().map(|h| h.enter());
+                    caller.pump(future).await
+                })
+            }
+        })
     }
 
     /// Handles the result of a command and returns a `CommandResult`.
@@ -2668,8 +2717,13 @@ fn worker_runtime(name: &str, worker_threads: Option<usize>) -> std::io::Result<
 /// Foreign callers choose the calling thread, and its stack can be too small for a connect:
 /// musl gives non-main threads 128 KiB, while a TLS cluster connect needs more. Runtimes built
 /// by [`worker_runtime`] give their workers [`RUNTIME_THREAD_STACK_SIZE`]. A panic in `future`
-/// resumes on the caller, as if the caller had polled it.
-fn block_on_worker<F>(rt: &Runtime, future: F) -> Result<F::Output, String>
+/// resumes on the caller, as if the caller had polled it. With a `dispatch`, the caller runs the
+/// callbacks the worker hands it while it waits.
+fn block_on_worker<F>(
+    rt: &Runtime,
+    dispatch: Option<&CallerDispatch>,
+    future: F,
+) -> Result<F::Output, String>
 where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
@@ -2678,11 +2732,150 @@ where
         rt.handle().runtime_flavor() != tokio::runtime::RuntimeFlavor::CurrentThread,
         "block_on_worker needs worker threads; current_thread polls on the caller"
     );
-    match rt.block_on(rt.spawn(future)) {
+    let joined = match dispatch {
+        None => rt.block_on(rt.spawn(future)),
+        Some(dispatch) => {
+            // Registered before the spawn, so the worker never misses the caller.
+            let caller = dispatch.register();
+            rt.block_on(caller.pump(rt.spawn(future)))
+        }
+    };
+    match joined {
         Ok(output) => Ok(output),
         Err(err) if err.is_panic() => std::panic::resume_unwind(err.into_panic()),
         Err(err) => Err(err.to_string()),
     }
+}
+
+thread_local! {
+    /// Set while this thread is blocked in an FFI call and runs the callbacks handed to it.
+    static PUMPING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// A foreign callback a runtime thread hands to the FFI caller blocked on its work.
+type CallerJob = Box<dyn FnOnce() + Send>;
+
+/// Runs a client's foreign callbacks on the thread that called into the FFI.
+///
+/// While an FFI call blocks its caller on the client's work (creation, a sync command), the
+/// caller registers here and runs the callbacks the client's runtime threads hand it, until the
+/// work finishes. Some bindings can only run their code on that thread: PHP runs PHP code only
+/// on the request thread. With no caller blocked, a callback runs where it is raised.
+///
+/// There is one per client and nothing process-wide, so a forked child that creates a client
+/// starts with a fresh one.
+#[derive(Default)]
+struct CallerDispatch {
+    queue: std::sync::Mutex<CallerQueue>,
+    /// Wakes a blocked caller when a callback is queued for it.
+    queued: tokio::sync::Notify,
+}
+
+#[derive(Default)]
+struct CallerQueue {
+    /// Callers blocked on the client and running its callbacks.
+    callers: usize,
+    jobs: std::collections::VecDeque<CallerJob>,
+}
+
+impl CallerDispatch {
+    /// Whether this thread is blocked in an FFI call. A call made on it now comes from one of the
+    /// callbacks it runs, and would wait on the call that runs that callback.
+    fn is_pumping() -> bool {
+        PUMPING.get()
+    }
+
+    /// Runs `f` on a caller blocked on the client if there is one, otherwise here, and returns
+    /// its result.
+    fn run<R, F>(&self, f: F) -> R
+    where
+        R: Send + 'static,
+        F: FnOnce() -> R + Send + 'static,
+    {
+        if Self::is_pumping() {
+            // The caller is polling the work itself.
+            return f();
+        }
+        let (reply_tx, reply_rx) = std::sync::mpsc::sync_channel(1);
+        {
+            let mut queue = self.lock();
+            if queue.callers == 0 {
+                drop(queue);
+                return f();
+            }
+            queue.jobs.push_back(Box::new(move || {
+                let _ = reply_tx.send(f());
+            }));
+        }
+        self.queued.notify_one();
+        // A caller leaving runs what is still queued, so every queued job runs.
+        reply_rx
+            .recv()
+            .expect("the caller running this callback unwound")
+    }
+
+    /// Registers the calling thread as blocked on the client until the returned guard drops.
+    fn register(&self) -> BlockedCaller<'_> {
+        self.lock().callers += 1;
+        BlockedCaller {
+            dispatch: self,
+            was_pumping: PUMPING.replace(true),
+        }
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, CallerQueue> {
+        self.queue
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn run_queued(&self) {
+        let jobs = std::mem::take(&mut self.lock().jobs);
+        jobs.into_iter().for_each(|job| job());
+    }
+}
+
+/// A caller registered with a [`CallerDispatch`]. Dropping it unregisters the caller and runs
+/// the callbacks still queued, so none waits for a caller that has left.
+struct BlockedCaller<'a> {
+    dispatch: &'a CallerDispatch,
+    was_pumping: bool,
+}
+
+impl BlockedCaller<'_> {
+    /// Awaits `future`, running the callbacks handed to this caller meanwhile.
+    async fn pump<F: Future>(&self, future: F) -> F::Output {
+        let mut future = std::pin::pin!(future);
+        let mut queued = std::pin::pin!(self.dispatch.queued.notified());
+        std::future::poll_fn(|cx| {
+            while queued.as_mut().poll(cx).is_ready() {
+                self.dispatch.run_queued();
+                queued.set(self.dispatch.queued.notified());
+            }
+            future.as_mut().poll(cx)
+        })
+        .await
+    }
+}
+
+impl Drop for BlockedCaller<'_> {
+    fn drop(&mut self) {
+        let jobs = {
+            let mut queue = self.dispatch.lock();
+            queue.callers -= 1;
+            std::mem::take(&mut queue.jobs)
+        };
+        // Still marked as pumping, so a callback run here cannot call back in either.
+        jobs.into_iter().for_each(|job| job());
+        PUMPING.set(self.was_pumping);
+    }
+}
+
+/// Why an FFI call made from inside a callback that a blocked caller runs fails.
+const REENTRANT_CALL: &str = "GLIDE cannot be called from inside an address resolver callback";
+
+fn reentrant_call_error() -> RedisError {
+    RedisError::from((ErrorKind::ClientError, REENTRANT_CALL))
 }
 
 #[cfg(all(test, not(miri)))]
@@ -2696,15 +2889,86 @@ mod tests_block_on_worker {
     #[test]
     fn runs_the_future_off_the_calling_thread() {
         let caller = std::thread::current().id();
-        let polled_on = block_on_worker(&runtime(), async { std::thread::current().id() });
+        let polled_on = block_on_worker(&runtime(), None, async { std::thread::current().id() });
         assert_ne!(polled_on.unwrap(), caller);
+    }
+
+    /// Raises a callback on a new thread, and returns the thread it was raised on and the thread
+    /// it ran on.
+    fn raise_on_another_thread(
+        dispatch: &CallerDispatch,
+    ) -> (std::thread::ThreadId, std::thread::ThreadId) {
+        std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let ran_on = dispatch.run(|| std::thread::current().id());
+                    (std::thread::current().id(), ran_on)
+                })
+                .join()
+                .unwrap()
+        })
+    }
+
+    #[test]
+    fn a_callback_raised_after_its_caller_left_runs_where_it_is_raised() {
+        let dispatch = CallerDispatch::default();
+        drop(dispatch.register());
+        let (raised_on, ran_on) = raise_on_another_thread(&dispatch);
+        assert_eq!(ran_on, raised_on);
+    }
+
+    #[test]
+    fn a_callback_raised_on_the_blocked_caller_runs_inline() {
+        let dispatch = CallerDispatch::default();
+        let _caller = dispatch.register();
+        assert_eq!(
+            dispatch.run(|| std::thread::current().id()),
+            std::thread::current().id()
+        );
+    }
+
+    #[test]
+    fn a_callback_queued_as_its_caller_leaves_runs_on_that_caller() {
+        let dispatch = CallerDispatch::default();
+        let caller = dispatch.register();
+        let ran_on = std::thread::scope(|scope| {
+            let raiser = scope.spawn(|| dispatch.run(|| std::thread::current().id()));
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while dispatch.lock().jobs.is_empty() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the callback was never queued"
+                );
+                std::thread::yield_now();
+            }
+            drop(caller);
+            raiser.join().unwrap()
+        });
+        assert_eq!(ran_on, std::thread::current().id());
+    }
+
+    #[test]
+    fn creating_a_client_from_a_callback_on_the_blocked_caller_fails() {
+        let dispatch = Arc::new(CallerDispatch::default());
+        let in_task = dispatch.clone();
+        let error = block_on_worker(&runtime(), Some(&dispatch), async move {
+            in_task.run(|| {
+                create_client_internal(&[], ClientType::SyncClient, None, None, None, 0)
+                    .err()
+                    .map(|error| error.message)
+            })
+        })
+        .unwrap();
+        assert_eq!(error.as_deref(), Some(REENTRANT_CALL));
     }
 
     #[test]
     fn a_panic_resumes_on_the_caller_with_its_payload() {
         let rt = runtime();
         let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            block_on_worker(&rt, async { std::panic::panic_any("connect panicked") })
+            block_on_worker(&rt, None, async {
+                std::panic::panic_any("connect panicked")
+            })
         }))
         .unwrap_err();
         assert_eq!(payload.downcast_ref::<&str>(), Some(&"connect panicked"));
@@ -2719,6 +2983,10 @@ fn create_client_internal(
     credential_provider: Option<NonNullCredentialProviderCallback>,
     client_id: usize,
 ) -> Result<*const ClientAdapter, CreateClientError> {
+    // Checked before any runtime is built: dropping one here would panic.
+    if CallerDispatch::is_pumping() {
+        return Err(REENTRANT_CALL.to_string().into());
+    }
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
     if request.credential_provider_key.is_some() {
@@ -2776,6 +3044,7 @@ fn create_client_internal(
 
     // Always create push channels to support dynamic pubsub
     let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
+    let caller_dispatch = address_resolver.map(|_| Arc::new(CallerDispatch::default()));
 
     let client = {
         // Create the client on the background runtime so all TCP I/O and spawned
@@ -2798,10 +3067,11 @@ fn create_client_internal(
         }
 
         // Set the address resolver if provided
-        if let Some(resolver_callback) = address_resolver {
+        if let (Some(resolver_callback), Some(dispatch)) = (address_resolver, &caller_dispatch) {
             connection_request.address_resolver = Some(Arc::new(FFIAddressResolver {
                 callback: resolver_callback,
                 client_id,
+                dispatch: dispatch.clone(),
             }));
         }
 
@@ -2821,6 +3091,7 @@ fn create_client_internal(
 
         block_on_worker(
             create_rt,
+            caller_dispatch.as_deref(),
             GlideClient::new(connection_request, Some(push_tx)),
         )
         .map_err(CreateClientError::from)
@@ -2862,6 +3133,7 @@ fn create_client_internal(
         background_runtime: ManuallyDrop::new(background_runtime),
         core,
         pubsub_callback: pubsub_callback_store.clone(),
+        caller_dispatch,
     });
     let client_adapter_ptr = Arc::as_ptr(&client_adapter).addr();
 
@@ -7928,7 +8200,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         }
     });
 
-    let monitor_client = match block_on_worker(&runtime, async move {
+    let monitor_client = match block_on_worker(&runtime, None, async move {
         MonitorClient::new(&address, redis_conn_info, tls_mode, on_line).await
     })
     .and_then(|client| client.map_err(|err| err.to_string()))
