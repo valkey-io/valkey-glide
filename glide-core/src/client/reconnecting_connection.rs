@@ -488,7 +488,8 @@ impl ReconnectingConnection {
         };
         log_debug("reconnect", "starting");
 
-        let connection_clone = self.clone();
+        let connection_options = self.connection_options.clone();
+        let connection_weak = Arc::downgrade(&self.inner);
 
         if reason.eq(&ReconnectReason::ConnectionDropped) {
             // Attempting to reconnect a connection that was dropped (for any reason) - update the telemetry by reducing
@@ -498,36 +499,23 @@ impl ReconnectingConnection {
 
         // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
         // background, regardless of whether the calling task is dropped or not.
+        // Weak: exit once every owner drops the connection, so a task alone never
+        // keeps an unowned connection redialling (#7809).
         task::spawn(async move {
-            let has_iam = connection_clone.inner.backend.iam_token_handle.is_some();
-            let has_cert_reload = connection_clone
-                .inner
-                .backend
-                .cert_material_handle
-                .is_some();
-
-            // For connections without dynamic credentials, clone the client once
-            // before the loop to preserve the original reconnection behavior
-            // (password/TLS material is fixed at reconnect start). For IAM or
-            // cert-reload connections, the client is cloned inside the loop so each
-            // retry picks up the freshest token / certificate written into the
-            // stored client below.
-            let static_client = if !has_iam && !has_cert_reload {
-                Some({
-                    let guard = connection_clone.inner.backend.get_backend_client();
-                    guard.clone()
-                })
-            } else {
-                None
-            };
-
-            let infinite_backoff_dur_iterator = connection_clone
-                .connection_options
+            let infinite_backoff_dur_iterator = connection_options
                 .connection_retry_strategy
                 .unwrap()
                 .get_infinite_backoff_dur_iterator();
             for sleep_duration in infinite_backoff_dur_iterator {
-                if connection_clone.is_dropped() {
+                let Some(conn) = connection_weak.upgrade() else {
+                    log_debug(
+                        "ReconnectingConnection",
+                        "reconnect stopped: connection no longer owned",
+                    );
+                    return;
+                };
+
+                if conn.backend.client_dropped_flagged.load(Ordering::Relaxed) {
                     log_debug(
                         "ReconnectingConnection",
                         "reconnect stopped after client was dropped",
@@ -536,18 +524,28 @@ impl ReconnectingConnection {
                     return;
                 }
 
+                let has_iam = conn.backend.iam_token_handle.is_some();
+                let has_cert_reload = conn.backend.cert_material_handle.is_some();
+
+                // Re-read per attempt, not clone-once: the stored client can be
+                // updated between attempts (credentials, protocol, db), and each
+                // retry should use its current state.
+                let static_client = if !has_iam && !has_cert_reload {
+                    Some({
+                        let guard = conn.backend.get_backend_client();
+                        guard.clone()
+                    })
+                } else {
+                    None
+                };
+
                 // If IAM authentication is configured, ensure the connection uses a
                 // valid token before attempting to reconnect.  If the cached token has
                 // expired, a fresh one is generated on demand via SigV4 signing.
-                if let Some(handle) = &connection_clone.inner.backend.iam_token_handle
+                if let Some(handle) = &conn.backend.iam_token_handle
                     && let Some(valid_token) = handle.get_valid_token_inner().await
                 {
-                    let mut client = connection_clone
-                        .inner
-                        .backend
-                        .connection_info
-                        .write()
-                        .expect(WRITE_LOCK_ERR);
+                    let mut client = conn.backend.connection_info.write().expect(WRITE_LOCK_ERR);
                     client.update_password(Some(valid_token));
                     log_debug(
                         "reconnect",
@@ -558,14 +556,9 @@ impl ReconnectingConnection {
                 // If mTLS certificate reload is configured, apply the freshest
                 // (last-known-good) client certificate/key before reconnecting so
                 // a rotated certificate is adopted on the next connection attempt.
-                if let Some(handle) = &connection_clone.inner.backend.cert_material_handle {
+                if let Some(handle) = &conn.backend.cert_material_handle {
                     let params = handle.current_params().await;
-                    let mut client = connection_clone
-                        .inner
-                        .backend
-                        .connection_info
-                        .write()
-                        .expect(WRITE_LOCK_ERR);
+                    let mut client = conn.backend.connection_info.write().expect(WRITE_LOCK_ERR);
                     client.update_tls_params(Some(params));
                     log_debug(
                         "reconnect",
@@ -578,13 +571,11 @@ impl ReconnectingConnection {
                 } else {
                     // IAM / cert-reload path: re-read from backend to pick up the
                     // token and/or TLS params update applied above.
-                    let guard = connection_clone.inner.backend.get_backend_client();
+                    let guard = conn.backend.get_backend_client();
                     guard.clone()
                 };
 
-                match get_multiplexed_connection(&client, &connection_clone.connection_options)
-                    .await
-                {
+                match get_multiplexed_connection(&client, &connection_options).await {
                     Ok(mut connection) => {
                         if connection
                             .send_packed_command(&redis::cmd("PING"))
@@ -595,13 +586,9 @@ impl ReconnectingConnection {
                             continue;
                         }
                         {
-                            let mut guard = connection_clone.inner.state.lock().unwrap();
+                            let mut guard = conn.state.lock().unwrap();
                             log_debug("reconnect", "completed successfully");
-                            connection_clone
-                                .inner
-                                .backend
-                                .connection_available_signal
-                                .set();
+                            conn.backend.connection_available_signal.set();
                             *guard = ConnectionState::Connected(connection);
                         }
 
