@@ -24,7 +24,20 @@ import org.junit.jupiter.api.Timeout;
 
 @Timeout(5)
 public class IamTokenCallbackTest {
+    /**
+     * Short deadline used only by cases that deliberately exercise the timeout path (a future that
+     * never completes or a method body that blocks), where the test asserts the deadline fires.
+     */
     private static final long SHORT_TIMEOUT_MILLIS = 50;
+
+    /**
+     * Generous deadline for cases whose provider is expected to run to completion (already-completed
+     * futures, bodies that throw immediately, or deterministic marshalling errors). The outcome of
+     * these cases does not depend on the deadline value, so a large bound removes CI scheduling
+     * jitter as a source of flakiness without changing what the test validates. A genuine native
+     * hang is still caught deterministically by the class-level {@code @Timeout(5)}.
+     */
+    private static final long COMPLETION_TIMEOUT_MILLIS = 2000;
 
     @BeforeAll
     static void loadNativeLibrary() {
@@ -45,7 +58,7 @@ public class IamTokenCallbackTest {
         GlideCredentialProvider provider =
                 () -> CompletableFuture.completedFuture(credentials("completed-access-key"));
 
-        assertEquals("completed-access-key", invokeOnce(provider, SHORT_TIMEOUT_MILLIS));
+        assertEquals("completed-access-key", invokeOnce(provider, COMPLETION_TIMEOUT_MILLIS));
     }
 
     @Test
@@ -59,7 +72,7 @@ public class IamTokenCallbackTest {
                                         .sessionToken(new String(new char[8192]).replace('\0', 't'))
                                         .build());
 
-        assertEquals("large-token-access-key", invokeOnce(provider, SHORT_TIMEOUT_MILLIS));
+        assertEquals("large-token-access-key", invokeOnce(provider, COMPLETION_TIMEOUT_MILLIS));
     }
 
     @Test
@@ -70,7 +83,8 @@ public class IamTokenCallbackTest {
                 };
 
         RuntimeException error =
-                assertThrows(RuntimeException.class, () -> invokeOnce(provider, SHORT_TIMEOUT_MILLIS));
+                assertThrows(
+                        RuntimeException.class, () -> invokeOnce(provider, COMPLETION_TIMEOUT_MILLIS));
 
         assertTrue(error.getMessage().contains("method body failure"), error.getMessage());
     }
@@ -83,7 +97,8 @@ public class IamTokenCallbackTest {
                         "provider failure", new IllegalArgumentException("root provider cause")));
 
         RuntimeException error =
-                assertThrows(RuntimeException.class, () -> invokeOnce(() -> failed, SHORT_TIMEOUT_MILLIS));
+                assertThrows(
+                        RuntimeException.class, () -> invokeOnce(() -> failed, COMPLETION_TIMEOUT_MILLIS));
 
         assertTrue(error.getMessage().contains("provider failure"), error.getMessage());
         assertTrue(error.getMessage().contains("root provider cause"), error.getMessage());
@@ -182,7 +197,7 @@ public class IamTokenCallbackTest {
                         CompletableFuture.completedFuture(
                                 credentials(Boolean.toString(Thread.currentThread().isDaemon())));
 
-        assertEquals("true", invokeOnce(provider, SHORT_TIMEOUT_MILLIS));
+        assertEquals("true", invokeOnce(provider, COMPLETION_TIMEOUT_MILLIS));
     }
 
     @Test
@@ -323,7 +338,7 @@ public class IamTokenCallbackTest {
                                         .expiresAt(Instant.EPOCH.minusMillis(1))
                                         .build());
 
-        assertEquals("nonpositive-expiry-access-key", invokeOnce(provider, SHORT_TIMEOUT_MILLIS));
+        assertEquals("nonpositive-expiry-access-key", invokeOnce(provider, COMPLETION_TIMEOUT_MILLIS));
     }
 
     @Test
@@ -338,7 +353,8 @@ public class IamTokenCallbackTest {
                                         .build());
 
         RuntimeException error =
-                assertThrows(RuntimeException.class, () -> invokeOnce(provider, SHORT_TIMEOUT_MILLIS));
+                assertThrows(
+                        RuntimeException.class, () -> invokeOnce(provider, COMPLETION_TIMEOUT_MILLIS));
 
         assertTrue(error.getMessage().contains("expiresAt cannot be represented"), error.getMessage());
     }
