@@ -1254,7 +1254,7 @@ class BaseClientConfiguration:
         self.client_info_tag = client_info_tag
         self.protocol = protocol
         self.inflight_requests_limit = inflight_requests_limit
-        self.client_az = client_az
+        self.client_az = client_az.strip() if client_az and client_az.strip() else None
         self.advanced_config = advanced_config
         self.lazy_connect = lazy_connect
         self.compression = compression
@@ -1278,17 +1278,20 @@ class BaseClientConfiguration:
                 "lib_name must contain only printable ASCII characters from '!' through '~', excluding '(' and ')'"
             )
 
-        if read_from == ReadFrom.AZ_AFFINITY and not client_az:
+        if read_from == ReadFrom.AZ_AFFINITY and not self.client_az:
             raise ValueError(
                 "client_az must be set when read_from is set to AZ_AFFINITY"
             )
 
-        if read_from == ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY and not client_az:
+        if (
+            read_from == ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY
+            and not self.client_az
+        ):
             raise ValueError(
                 "client_az must be set when read_from is set to AZ_AFFINITY_REPLICAS_AND_PRIMARY"
             )
 
-        if read_from == ReadFrom.AZ_AFFINITY_ALL_NODES and not client_az:
+        if read_from == ReadFrom.AZ_AFFINITY_ALL_NODES and not self.client_az:
             raise ValueError(
                 "client_az must be set when read_from is set to AZ_AFFINITY_ALL_NODES"
             )
@@ -1439,8 +1442,8 @@ class BaseClientConfiguration:
             request.client_circuit_breaker.consecutive_successes = (
                 cb.consecutive_successes
             )
-        if self.client_az:
-            request.client_az = self.client_az
+        if self.client_az and self.client_az.strip():
+            request.client_az = self.client_az.strip()
         if self.database_id is not None:
             request.database_id = self.database_id
         if self.advanced_config:

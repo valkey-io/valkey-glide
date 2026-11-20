@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
@@ -727,7 +728,7 @@ func (config *ClientConfiguration) WithClientName(clientName string) *ClientConf
 
 // WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
 func (config *ClientConfiguration) WithClientAZ(clientAZ string) *ClientConfiguration {
-	config.clientAZ = clientAZ
+	config.clientAZ = strings.TrimSpace(clientAZ)
 	return config
 }
 
@@ -1025,7 +1026,7 @@ func (config *ClusterClientConfiguration) WithClientName(clientName string) *Clu
 
 // WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
 func (config *ClusterClientConfiguration) WithClientAZ(clientAZ string) *ClusterClientConfiguration {
-	config.clientAZ = clientAZ
+	config.clientAZ = strings.TrimSpace(clientAZ)
 	return config
 }
 

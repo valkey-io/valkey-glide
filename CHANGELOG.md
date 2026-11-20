@@ -21,6 +21,7 @@
 
 ### Breaking Changes
 
+* Python, Go: reject whitespace-only client_az for AZ affinity strategies ([#7436](https://github.com/valkey-io/valkey-glide/pull/7436))
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 
 ### Breaking Changes
