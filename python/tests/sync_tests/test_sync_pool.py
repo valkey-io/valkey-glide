@@ -697,7 +697,8 @@ class TestPoolFork:
             borrow.__enter__()
 
             def child():
-                borrow.__exit__(ValueError, ValueError("user error"), None)
+                suppressed = borrow.__exit__(ValueError, ValueError("user error"), None)
+                assert suppressed is False
 
             _run_in_forked_child(child)
             borrow.__exit__(None, None, None)
@@ -729,7 +730,7 @@ class TestPoolFork:
             with client.scoped_connection(timeout=5, routing_key="fork-scope") as scope:
 
                 def child():
-                    with pytest.raises(Exception):
+                    with pytest.raises(RuntimeError, match="invalid scope"):
                         scope.get("fork-scope")
 
                 _run_in_forked_child(child, timeout_s=10)
