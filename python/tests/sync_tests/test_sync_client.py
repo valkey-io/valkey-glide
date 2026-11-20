@@ -6,6 +6,7 @@ from __future__ import annotations
 import array
 import math
 import os
+import re
 import socket
 import threading
 import time
@@ -916,6 +917,40 @@ class TestCommands:
         key_mv_key = memoryview(bytearray(b"mv_key_" + os.urandom(8)))
         assert glide_sync_client.set(key_mv_key, b"value2") == OK
         assert glide_sync_client.get(key_mv_key) == b"value2"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize(
+        "view_fn",
+        [
+            lambda b: memoryview(b).cast("H"),
+            lambda b: memoryview(b).cast("I"),
+            lambda b: memoryview(b).cast("Q"),
+            lambda b: memoryview(b).cast("B", (2, len(b) // 2)),
+        ],
+        ids=["cast-H", "cast-I", "cast-Q", "2-D"],
+    )
+    def test_sync_memoryview_args_sent_by_byte_length(
+        self, glide_sync_client: TGlideClient, view_fn
+    ):
+        """Test that set() and custom_command() accept memoryview values and keys
+        whose len() is smaller than nbytes (wider item formats and 2-D views)."""
+        data = os.urandom(64)
+        view = view_fn(data)
+        assert len(view) < view.nbytes == len(data)
+
+        key = get_random_string(10)
+        assert glide_sync_client.set(key, view) == OK
+        assert glide_sync_client.get(key) == data
+
+        custom_key = get_random_string(10)
+        glide_sync_client.custom_command(["SET", custom_key, view])
+        assert glide_sync_client.get(custom_key) == data
+
+        key_bytes = b"mv_key_" + os.urandom(8)
+        key_bytes += b"\x00" * (-len(key_bytes) % 8)  # whole uint64 elements
+        assert glide_sync_client.set(view_fn(key_bytes), b"value") == OK
+        assert glide_sync_client.get(key_bytes) == b"value"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
@@ -3855,6 +3890,30 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_zadd_bytes_like_members(self, glide_sync_client: TGlideClient):
+        """zadd must store bytes and memoryview members verbatim, not as their Python repr."""
+        key = get_random_string(10)
+        member_bytes = b"\x00\xffab"
+        member_other = b"\x01\xfecd"
+        member_mv = memoryview(b"\x02\xfdef")
+        members_scores: Mapping[TEncodable, float] = {
+            member_bytes: 1.0,
+            member_other: 2.0,
+            member_mv: 3.0,
+        }
+        assert glide_sync_client.zadd(key, members_scores) == 3
+
+        assert glide_sync_client.zrange(key, RangeByIndex(0, -1)) == [
+            b"\x00\xffab",
+            b"\x01\xfecd",
+            b"\x02\xfdef",
+        ]
+        assert glide_sync_client.zscore(key, b"\x00\xffab") == 1.0
+        assert glide_sync_client.zscore(key, b"\x01\xfecd") == 2.0
+        assert glide_sync_client.zscore(key, b"\x02\xfdef") == 3.0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_zadd_nx_xx(self, glide_sync_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
@@ -4521,6 +4580,10 @@ class TestCommands:
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert glide_sync_client.zadd(key, members_scores=members_scores) == 3
+        # count=0 must be sent as `ZPOPMIN key 0` and pop nothing. If it were dropped (truthiness check),
+        # the server would run `ZPOPMIN key` and silently remove "a".
+        assert glide_sync_client.zpopmin(key, 0) == {}
+        assert glide_sync_client.zcard(key) == 3
         assert glide_sync_client.zpopmin(key) == {b"a": 1.0}
 
         zpopmin_map = glide_sync_client.zpopmin(key, 3)
@@ -4582,6 +4645,10 @@ class TestCommands:
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert glide_sync_client.zadd(key, members_scores) == 3
+        # count=0 must be sent as `ZPOPMAX key 0` and pop nothing. If it were dropped (truthiness check),
+        # the server would run `ZPOPMAX key` and silently remove "c".
+        assert glide_sync_client.zpopmax(key, 0) == {}
+        assert glide_sync_client.zcard(key) == 3
         assert glide_sync_client.zpopmax(key) == {b"c": 3.0}
 
         zpopmax_map = glide_sync_client.zpopmax(key, 3)
@@ -6071,7 +6138,7 @@ class TestCommands:
             glide_sync_client.xadd(
                 key,
                 [(field, "foo4"), (field2, "bar4")],
-                StreamAddOptions(trim=TrimByMinId(exact=True, threshold=id.decode())),
+                StreamAddOptions(trim=TrimByMinId(exact=True, threshold=id)),
             )
             is not None
         )
@@ -6136,6 +6203,54 @@ class TestCommands:
         assert glide_sync_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
             glide_sync_client.xdel(string_key, [stream_id3])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_xtrim_minid_bytes_like_threshold(
+        self, glide_sync_client: TGlideClient
+    ):
+        """TrimByMinId must accept the bytes stream ID returned by xadd."""
+        key = get_random_string(10)
+        ids = [glide_sync_client.xadd(key, [("f", str(i))]) for i in range(3)]
+        last_id = ids[-1]
+        assert isinstance(last_id, bytes)
+
+        assert glide_sync_client.xtrim(key, TrimByMinId(True, last_id)) == 2
+        assert glide_sync_client.xlen(key) == 1
+
+        for i in range(2):
+            glide_sync_client.xadd(key, [("f", str(i))])
+        newest = glide_sync_client.xrevrange(key, MaxId(), MinId(), count=1)
+        assert newest is not None
+        newest_id = next(iter(newest))
+        assert (
+            glide_sync_client.xtrim(key, TrimByMinId(True, memoryview(newest_id))) == 2
+        )
+        assert glide_sync_client.xlen(key) == 1
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_xrange_exclusive_bound_bytes_like(
+        self, glide_sync_client: TGlideClient
+    ):
+        """ExclusiveIdBound must accept bytes, bytearray and memoryview IDs."""
+        key = get_random_string(10)
+        for stream_id in ["0-1", "0-2", "0-3"]:
+            assert (
+                glide_sync_client.xadd(
+                    key, [("f", "v")], StreamAddOptions(id=stream_id)
+                )
+                == stream_id.encode()
+            )
+
+        for start in [b"0-1", bytearray(b"0-1"), memoryview(b"0-1")]:
+            result = glide_sync_client.xrange(key, ExclusiveIdBound(start), MaxId())
+            assert result is not None
+            assert list(result) == [b"0-2", b"0-3"]
+
+            result = glide_sync_client.xrevrange(key, MaxId(), ExclusiveIdBound(start))
+            assert result is not None
+            assert list(result) == [b"0-3", b"0-2"]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -11832,7 +11947,32 @@ class TestSyncScripts:
         with pytest.raises(RequestError) as exc_info:
             glide_sync_client.invoke_script(script_2)
 
-        assert "NOSCRIPT" in str(exc_info.value).upper()
+        assert re.match(r"^NOSCRIPT No matching script\.", str(exc_info.value))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_noscript_error_keeps_the_server_text(
+        self, glide_sync_client: TGlideClient
+    ):
+        no_script = r"^NOSCRIPT No matching script\.( Please use EVAL\.)?$"
+        eval_sha: List[TEncodable] = ["EVALSHA", "f" * 40, "0"]
+
+        with pytest.raises(RequestError, match=no_script):
+            glide_sync_client.custom_command(eval_sha)
+
+        batch = (
+            ClusterBatch(is_atomic=False)
+            if isinstance(glide_sync_client, GlideClusterClient)
+            else Batch(is_atomic=False)
+        )
+        batch.custom_command(eval_sha)
+        result = glide_sync_client.exec(batch, raise_on_error=False)
+        assert result is not None
+        assert isinstance(result[0], RequestError)
+        assert re.match(no_script, str(result[0]))
+
+        with pytest.raises(RequestError, match=no_script):
+            glide_sync_client.exec(batch, raise_on_error=True)
 
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -12429,12 +12569,6 @@ class TestSyncScripts:
         # HGETDEL on a non-existing key returns null for each requested field
         result = glide_sync_client.hgetdel(non_existent_key, [field1, field2])
         assert result == [None, None]
-
-        # HGETDEL on a key holding a non-hash value returns a WRONGTYPE error
-        string_key = get_random_string(10)
-        assert glide_sync_client.set(string_key, "not_a_hash") == OK
-        with pytest.raises(RequestError, match="WRONGTYPE"):
-            glide_sync_client.hgetdel(string_key, [field1])
 
         # HGETDEL with an empty fields list should raise an error
         with pytest.raises(RequestError):

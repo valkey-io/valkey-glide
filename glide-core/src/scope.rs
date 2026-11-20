@@ -249,6 +249,17 @@ pub async fn execute_scope_command(
         }
     };
 
+    // Build redis command
+    let mut cmd = Cmd::new();
+    cmd.arg(cmd_name.as_bytes());
+    for arg in args {
+        cmd.arg(arg.as_slice());
+    }
+    // Before any state tracking, so a rejected command leaves the scope untouched.
+    if let Some(c) = client {
+        c.reject_write_in_read_only(&cmd)?;
+    }
+
     let mut conn = entry.lock().await;
 
     // State tracking (for conditional cleanup on release)
@@ -302,13 +313,6 @@ pub async fn execute_scope_command(
                 }
             }
         }
-    }
-
-    // Build redis command
-    let mut cmd = Cmd::new();
-    cmd.arg(cmd_name.as_bytes());
-    for arg in args {
-        cmd.arg(arg.as_slice());
     }
 
     // Presume a blocking command's connection unsafe until we know the outcome;
@@ -365,7 +369,7 @@ pub async fn execute_scope_command(
 
 /// Whether a failed blocking command may have left a server-side waiter armed or the
 /// connection in an unknown state.
-fn is_poisoning_error(e: &RedisError) -> bool {
+pub(crate) fn is_poisoning_error(e: &RedisError) -> bool {
     e.is_io_error() || e.is_connection_dropped() || e.kind() == redis::ErrorKind::ProtocolDesync
 }
 
@@ -745,6 +749,7 @@ async fn build_scope_connection(
     // the parent authenticates as an IAM identity, reject a no-TLS scope before any
     // connect or token fetch, so a misconfigured scope fails closed instead of
     // leaking the token in a cleartext AUTH on the first command / reconnect.
+    // TODO #7707: Also reject IAM authentication with `TlsMode::InsecureTls`.
     if tls_mode == crate::connection_request::TlsMode::NoTls
         && client.and_then(|c| c.iam_token_manager()).is_some()
     {
@@ -3991,6 +3996,8 @@ mod tests {
 
     /// A scope off an IAM parent whose request disables TLS must fail with
     /// `IamRequiresTls` before obtaining or sending the token.
+    // TODO #7707: Add a test that a scoped connection with `TlsMode::InsecureTls` is rejected
+    // when its client uses IAM authentication.
     #[tokio::test]
     async fn scope_rejects_iam_over_plaintext() {
         let parent = lazy_iam_parent().await;

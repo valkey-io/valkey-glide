@@ -4,10 +4,10 @@
 //!
 //! Most run against a mock server, which can answer the `BLOB.*` commands with
 //! anything, including nothing. A few run against real servers without the
-//! module. Requires the `rdma` feature. Needs libfabric since these tests open a
-//! fabric, but over the `tcp` provider rather than a real card.
+//! module. Requires the `rdma-tcp-dev` feature. Needs libfabric since these tests
+//! open a fabric, but over the `tcp` provider rather than a real card.
 
-#![cfg(feature = "rdma")]
+#![cfg(feature = "rdma-tcp-dev")]
 
 mod constants;
 mod utilities;
@@ -614,6 +614,25 @@ mod dma_tests {
         assert!(
             released.load(std::sync::atomic::Ordering::SeqCst),
             "and the owner is dropped"
+        );
+        unsafe { free_foreign_memory(memory) };
+    }
+
+    /// A client whose RDMA configuration did not ask for device memory refuses a
+    /// device region by naming the setting, and drops the owner at once.
+    #[tokio::test]
+    async fn a_client_without_device_memory_refuses_a_device_region() {
+        let mock = ServerMock::new(primary_responses());
+        let client = rdma_client_against(&mock).await;
+        let (memory, owner, released) = foreign_memory();
+        let refused = unsafe {
+            client.register_rdma_device_region_raw(memory, glide_rdma::DeviceRuntime::Cuda, owner)
+        }
+        .expect_err("the fabric was opened without device memory");
+        assert!(refused.to_string().contains("device memory"), "{refused}");
+        assert!(
+            released.load(std::sync::atomic::Ordering::SeqCst),
+            "a refused registration drops the owner"
         );
         unsafe { free_foreign_memory(memory) };
     }

@@ -148,7 +148,8 @@ fn create_pool_client(
         None, // no address resolver (uses the one in ConnectionRequest if any)
         None, // custom credential providers are rejected by glide_pool_create
         client_id,
-    )?;
+    )
+    .map_err(|err| err.message)?;
 
     // Extract the Client from the adapter for pool bookkeeping
     let adapter = unsafe {
@@ -1535,7 +1536,8 @@ mod pool_destroy_tests {
             test_on_borrow: false,
             connection_request: bytes.clone(),
             is_async: false,
-            configured_database_id: 0,
+            // Not the client's db, so the reset has a SELECT to send.
+            configured_database_id: 1,
             abandon_timeout: Duration::ZERO,
         })
         .unwrap();
