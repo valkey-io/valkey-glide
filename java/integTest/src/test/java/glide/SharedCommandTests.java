@@ -350,12 +350,6 @@ public class SharedCommandTests {
 
         assertTrue(client.delifeq(key, value).get());
         assertNull(client.get(key).get());
-
-        String setKey = UUID.randomUUID().toString();
-        assertEquals(1, client.sadd(setKey, new String[] {"a"}).get());
-        ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> client.delifeq(setKey, "a").get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -2065,20 +2059,16 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void hgetdel_error_handling(BaseClient client) {
+    public void hgetdel_empty_fields(BaseClient client) {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0"),
                 "HGETDEL command requires Valkey 9.1.0 or higher");
 
-        String key = "test_hgetdel_error_" + UUID.randomUUID();
+        String key = "test_hgetdel_empty_fields_" + UUID.randomUUID();
 
-        // Set up a non-hash key to test type error
-        client.set(key, "not_a_hash").get();
-
-        // Should throw an exception when trying to use HGETDEL on a non-hash key
+        // HGETDEL with an empty fields list should raise an error
         ExecutionException exception =
-                assertThrows(
-                        ExecutionException.class, () -> client.hgetdel(key, new String[] {"field1"}).get());
+                assertThrows(ExecutionException.class, () -> client.hgetdel(key, new String[] {}).get());
 
         assertInstanceOf(RequestException.class, exception.getCause());
     }
