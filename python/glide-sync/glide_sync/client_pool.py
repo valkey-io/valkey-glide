@@ -215,6 +215,7 @@ class ClientPool:
         Raises:
             TimeoutError: If no client available within timeout.
             RuntimeError: If pool is closed or invalid.
+            ClosingError: If the pool was created before a fork().
         """
         self._check_same_process()
         if self._closed:
@@ -323,9 +324,7 @@ class ClientPool:
         """Destroy the pool. All idle clients are closed."""
         if not self._closed:
             self._closed = True
-            # The parent owns the native pool; a child's copy has nothing to destroy.
-            if self._create_pid == os.getpid():
-                self._lib.glide_pool_destroy(self._pool_id)
+            self._lib.glide_pool_destroy(self._pool_id)
             self._client_cache.clear()
 
     def __enter__(self):

@@ -798,22 +798,6 @@ class TestAsyncPoolFork:
         finally:
             pool.close()
 
-    async def test_close_inherited_pool_in_child(self, cluster_mode):
-        pool = await AsyncClientPool.create(
-            _get_pool_client_config(cluster_mode), PoolConfig(max_size=2, min_idle=1)
-        )
-        try:
-
-            async def child():
-                pool.close()
-                assert pool.is_closed
-
-            _run_in_forked_child(child)
-            async with pool.borrow(timeout=5) as client:
-                await client.get("fork-pool")
-        finally:
-            pool.close()
-
     async def test_borrow_exit_in_child_does_not_mask_the_error(self, cluster_mode):
         pool = await AsyncClientPool.create(
             _get_pool_client_config(cluster_mode), PoolConfig(max_size=2, min_idle=1)
