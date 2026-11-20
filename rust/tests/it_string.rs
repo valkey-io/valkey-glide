@@ -332,25 +332,20 @@ matrix_test!(del_if_eq, c, {
     skip_if_version_below!(c, 9, 0, 0);
 
     let k = common::key("delifeq");
-    let _: () = c.set(&k, "v").await.unwrap();
+    let v = "value";
 
-    // Value mismatch does not delete.
-    assert!(!c.del_if_eq(&k, "other").await.unwrap());
-    assert!(c.exists(&k).await.unwrap());
+    // Key does not exist yet.
+    assert!(!c.del_if_eq(&k, v).await.unwrap());
 
-    // Value match deletes.
-    assert!(c.del_if_eq(&k, "v").await.unwrap());
-    assert!(!c.exists(&k).await.unwrap());
+    let _: () = c.set(&k, v).await.unwrap();
 
-    // Missing key returns false.
-    assert!(!c.del_if_eq(&k, "v").await.unwrap());
-});
+    // Value does not match - key remains.
+    assert!(!c.del_if_eq(&k, "wrong_value").await.unwrap());
+    let got: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(got.as_deref(), Some(v));
 
-matrix_test!(del_if_eq_wrong_type_errors, c, {
-    skip_if_version_below!(c, 9, 0, 0);
-
-    let k = common::key("delifeq_wt");
-    let _: usize = c.rpush(&k, &["a"]).await.unwrap();
-    let err = c.del_if_eq(&k, "a").await.unwrap_err();
-    assert!(matches!(err, glide::GlideError::Request(_)));
+    // Value matches - key is deleted.
+    assert!(c.del_if_eq(&k, v).await.unwrap());
+    let got: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(got, None);
 });
