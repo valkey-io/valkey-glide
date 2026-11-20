@@ -18,6 +18,7 @@
 * Core: deliver reconnect errors to cluster callers instead of dropping them ([#7737](https://github.com/valkey-io/valkey-glide/pull/7737))
 * Core/FFI: run a lazy sync client's first connect on the runtime worker ([#7671](https://github.com/valkey-io/valkey-glide/pull/7671))
 * Go: strip LLVM bitcode from the prebuilt `libglide_ffi.a` so Go 1.26.11+ / 1.27.4+ no longer reject it with `disallowed LTO section` ([#7739](https://github.com/valkey-io/valkey-glide/pull/7739))
+* Go: link CoreFoundation on macOS arm64 so programs that do not import `crypto/x509` link with Go 1.27 ([#7784](https://github.com/valkey-io/valkey-glide/issues/7784))
 * Python: `AsyncClientPool` borrowing and async `IsolatedScope` commands work under trio ([#7513](https://github.com/valkey-io/valkey-glide/issues/7513), [#7651](https://github.com/valkey-io/valkey-glide/issues/7651))
 * Rust: `telemetry::init` rejects a configuration with no exporter ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Rust: `telemetry::init` runs the HTTP and gRPC exporters on GLIDE's runtime ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
