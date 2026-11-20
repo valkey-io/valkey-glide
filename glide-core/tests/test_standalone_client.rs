@@ -624,6 +624,58 @@ mod standalone_client_tests {
         });
     }
 
+    // Both entry points trim the client AZ: `Client::new` for bindings and the Rust client,
+    // `StandaloneClient::create_client` for direct callers. Only the 1a replica is in the
+    // client's zone, so every strategy sends it all reads.
+    #[rstest]
+    #[case(glide_core::client::ReadFrom::AZAffinity as fn(String) -> glide_core::client::ReadFrom)]
+    #[case(glide_core::client::ReadFrom::AZAffinityReplicasAndPrimary)]
+    #[case(glide_core::client::ReadFrom::AZAffinityAllNodes)]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_padded_client_az_routes_to_matching_replica(
+        #[case] read_from: fn(String) -> glide_core::client::ReadFrom,
+        #[values(true, false)] via_client_new: bool,
+    ) {
+        let servers = create_primary_mock_with_replicas_az(
+            3,
+            Some("us-east-1b"),
+            &["us-east-1a", "us-east-1b", "us-east-1b"],
+        );
+        let mut cmd = redis::cmd("GET");
+        cmd.arg("foo");
+        for server in servers.iter() {
+            for _ in 0..3 {
+                server.add_response(&cmd, "$-1\r\n".to_string());
+            }
+        }
+        let mut request: glide_core::client::ConnectionRequest =
+            create_connection_request(&get_mock_addresses(&servers), &Default::default()).into();
+        request.read_from = Some(read_from(" us-east-1a ".to_string()));
+
+        block_on_all(async {
+            if via_client_new {
+                let mut client = GlideClient::new(request, None).await.unwrap();
+                for _ in 0..3 {
+                    client.send_command(&mut cmd, None).await.unwrap();
+                }
+            } else {
+                let mut client = StandaloneClient::create_client(request, None, None, None)
+                    .await
+                    .unwrap();
+                for _ in 0..3 {
+                    client.send_command(&cmd).await.unwrap();
+                }
+            }
+        });
+
+        let reads: Vec<_> = servers
+            .iter()
+            .map(|server| server.get_number_of_received_commands())
+            .collect();
+        assert_eq!(reads, vec![0, 3, 0, 0], "reads per [primary, replicas...]");
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]

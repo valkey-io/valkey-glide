@@ -292,6 +292,34 @@ pub enum ReadFrom {
     AZAffinityAllNodes(String),
 }
 
+impl ReadFrom {
+    /// Trims surrounding whitespace from the client availability zone, which must match a
+    /// node's `availability-zone` exactly. A zone that is empty after trimming counts as
+    /// missing: this logs a warning and falls back to `ReadFrom::PreferReplica`. Idempotent,
+    /// so every entry point can apply it.
+    pub(crate) fn with_trimmed_client_az(self) -> Self {
+        let (client_az, with_az): (String, fn(String) -> Self) = match self {
+            ReadFrom::AZAffinity(az) => (az, ReadFrom::AZAffinity),
+            ReadFrom::AZAffinityReplicasAndPrimary(az) => {
+                (az, ReadFrom::AZAffinityReplicasAndPrimary)
+            }
+            ReadFrom::AZAffinityAllNodes(az) => (az, ReadFrom::AZAffinityAllNodes),
+            other => return other,
+        };
+        let trimmed = client_az.trim();
+        if trimmed.is_empty() {
+            log_warn(
+                "types",
+                format!(
+                    "Failed to convert availability zone string: {client_az:?}. Falling back to `ReadFrom::PreferReplica`"
+                ),
+            );
+            return ReadFrom::PreferReplica;
+        }
+        with_az(trimmed.to_owned())
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]
 #[repr(C)]
 pub enum TlsMode {
@@ -395,48 +423,13 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             protobuf::ReadFrom::PreferReplica => ReadFrom::PreferReplica,
             protobuf::ReadFrom::LowestLatency => todo!(),
             protobuf::ReadFrom::AllNodes => ReadFrom::AllNodes,
-            protobuf::ReadFrom::AZAffinity => {
-                if let Some(client_az) = chars_to_string_option(&value.client_az) {
-                    ReadFrom::AZAffinity(client_az)
-                } else {
-                    log_warn(
-                        "types",
-                        format!(
-                            "Failed to convert availability zone string: '{:?}'. Falling back to `ReadFrom::PreferReplica`",
-                            value.client_az
-                        ),
-                    );
-                    ReadFrom::PreferReplica
-                }
-            }
+            protobuf::ReadFrom::AZAffinity => ReadFrom::AZAffinity(value.client_az.to_string()),
             protobuf::ReadFrom::AZAffinityReplicasAndPrimary => {
-                if let Some(client_az) = chars_to_string_option(&value.client_az) {
-                    ReadFrom::AZAffinityReplicasAndPrimary(client_az)
-                } else {
-                    log_warn(
-                        "types",
-                        format!(
-                            "Failed to convert availability zone string: '{:?}'. Falling back to `ReadFrom::PreferReplica`",
-                            value.client_az
-                        ),
-                    );
-                    ReadFrom::PreferReplica
-                }
-            },
+                ReadFrom::AZAffinityReplicasAndPrimary(value.client_az.to_string())
+            }
             protobuf::ReadFrom::AZAffinityAllNodes => {
-                if let Some(client_az) = chars_to_string_option(&value.client_az) {
-                    ReadFrom::AZAffinityAllNodes(client_az)
-                } else {
-                    log_warn(
-                        "types",
-                        format!(
-                            "Failed to convert availability zone string: '{:?}'. Falling back to `ReadFrom::PreferReplica`",
-                            value.client_az
-                        ),
-                    );
-                    ReadFrom::PreferReplica
-                }
-            },
+                ReadFrom::AZAffinityAllNodes(value.client_az.to_string())
+            }
         });
 
         let client_name = chars_to_string_option(&value.client_name);
