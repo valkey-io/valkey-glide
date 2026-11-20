@@ -11,12 +11,16 @@
 //! The inherited value is leaked, never dropped: its locks and threads are in
 //! an undefined state.
 
+use std::marker::PhantomData;
 use std::ptr;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 /// A lazily initialized global that is rebuilt after `fork()`.
 pub struct ForkSlot<T> {
     held: AtomicPtr<Held<T>>,
+    // `AtomicPtr` is `Send + Sync` for any pointee. This keeps `ForkSlot` from
+    // sharing a `T` across threads when `T` itself could not be.
+    _marker: PhantomData<T>,
 }
 
 struct Held<T> {
@@ -28,6 +32,7 @@ impl<T> ForkSlot<T> {
     pub const fn new() -> Self {
         Self {
             held: AtomicPtr::new(ptr::null_mut()),
+            _marker: PhantomData,
         }
     }
 
@@ -119,18 +124,26 @@ fn force_pid_epoch() -> bool {
 
 #[cfg(target_os = "linux")]
 fn wipe_on_fork_cell() -> Option<&'static std::sync::atomic::AtomicU64> {
-    use std::sync::atomic::{AtomicBool, AtomicU64};
+    use std::sync::atomic::AtomicU64;
 
+    // Null until decided. The first caller's outcome is final for the process,
+    // so no caller switches between the page and the pid after using the other.
     static CELL: AtomicPtr<AtomicU64> = AtomicPtr::new(ptr::null_mut());
-    static UNAVAILABLE: AtomicBool = AtomicBool::new(false);
+    // Never a page address.
+    let unavailable = ptr::dangling_mut::<AtomicU64>();
 
-    let cell = CELL.load(Ordering::Acquire);
-    if !cell.is_null() {
-        // Safety: a published page is never unmapped.
-        return Some(unsafe { &*cell });
-    }
-    if UNAVAILABLE.load(Ordering::Relaxed) {
-        return None;
+    let decided = |decision: *mut AtomicU64| {
+        if decision == unavailable {
+            None
+        } else {
+            // Safety: a published page is never unmapped.
+            Some(unsafe { &*decision })
+        }
+    };
+
+    let decision = CELL.load(Ordering::Acquire);
+    if !decision.is_null() {
+        return decided(decision);
     }
     unsafe {
         let len = libc::sysconf(libc::_SC_PAGESIZE) as usize;
@@ -143,20 +156,23 @@ fn wipe_on_fork_cell() -> Option<&'static std::sync::atomic::AtomicU64> {
             0,
         );
         // Kernels before 4.14, or a sandbox that denies it, fail here.
-        if page == libc::MAP_FAILED || libc::madvise(page, len, libc::MADV_WIPEONFORK) != 0 {
-            if page != libc::MAP_FAILED {
-                libc::munmap(page, len);
-            }
-            UNAVAILABLE.store(true, Ordering::Relaxed);
-            return None;
-        }
-        // A new anonymous page is all zeros.
-        let page: *mut AtomicU64 = page.cast();
-        match CELL.compare_exchange(ptr::null_mut(), page, Ordering::AcqRel, Ordering::Acquire) {
-            Ok(_) => Some(&*page),
+        let ours =
+            if page != libc::MAP_FAILED && libc::madvise(page, len, libc::MADV_WIPEONFORK) == 0 {
+                // A new anonymous page is all zeros.
+                page.cast::<AtomicU64>()
+            } else {
+                if page != libc::MAP_FAILED {
+                    libc::munmap(page, len);
+                }
+                unavailable
+            };
+        match CELL.compare_exchange(ptr::null_mut(), ours, Ordering::AcqRel, Ordering::Acquire) {
+            Ok(_) => decided(ours),
             Err(winner) => {
-                libc::munmap(page.cast(), len);
-                Some(&*winner)
+                if ours != unavailable {
+                    libc::munmap(ours.cast(), len);
+                }
+                decided(winner)
             }
         }
     }
@@ -276,20 +292,23 @@ mod tests {
     }
 
     /// macOS, and Linux where `madvise` fails, tell a child apart by process id.
+    /// The flag is process-wide, so it is only flipped inside a throwaway child.
     #[cfg(target_os = "linux")]
     #[test]
     #[serial]
     fn pid_epoch_path_builds_a_fresh_value_in_a_child() {
         static PID_SLOT: ForkSlot<usize> = ForkSlot::new();
-        FORCE_PID_EPOCH.store(true, Ordering::Relaxed);
-        let parent = PID_SLOT.get_or_init(build) as *const usize as usize;
-        assert_eq!(current_epoch(), std::process::id() as u64);
-        assert_in_forked_child(move || {
-            let in_child = PID_SLOT.get_or_init(build) as *const usize as usize;
-            in_child != parent && ptr::eq(PID_SLOT.get_or_init(build), PID_SLOT.get_or_init(build))
+        assert_in_forked_child(|| {
+            FORCE_PID_EPOCH.store(true, Ordering::Relaxed);
+            let parent = PID_SLOT.get_or_init(build) as *const usize as usize;
+            assert_eq!(current_epoch(), std::process::id() as u64);
+            assert_in_forked_child(move || {
+                let in_child = PID_SLOT.get_or_init(build) as *const usize as usize;
+                in_child != parent
+                    && ptr::eq(PID_SLOT.get_or_init(build), PID_SLOT.get_or_init(build))
+            });
+            true
         });
-        assert_eq!(PID_SLOT.get_or_init(build) as *const usize as usize, parent);
-        FORCE_PID_EPOCH.store(false, Ordering::Relaxed);
     }
 
     #[test]

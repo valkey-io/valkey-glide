@@ -12,6 +12,7 @@ cluster deployments behave identically.
 import asyncio
 import multiprocessing
 import os
+import queue
 import uuid
 
 import anyio
@@ -737,6 +738,9 @@ def _run_in_forked_child(child, timeout_s: float = 30.0) -> None:
             asyncio.run(child())
         except BaseException as e:  # noqa: BLE001
             errors.put(f"{type(e).__name__}: {e}")
+            # The queue's feeder thread must flush before the hard exit.
+            errors.close()
+            errors.join_thread()
             os._exit(1)
 
     process = ctx.Process(target=_target)
@@ -746,7 +750,12 @@ def _run_in_forked_child(child, timeout_s: float = 30.0) -> None:
         process.kill()
         process.join()
         pytest.fail("forked child hung")
-    detail = errors.get(timeout=1) if process.exitcode else ""
+    detail = ""
+    if process.exitcode:
+        try:
+            detail = errors.get(timeout=1)
+        except queue.Empty:
+            detail = "(child exited without a diagnostic)"
     assert process.exitcode == 0, f"forked child failed: {detail}"
 
 
@@ -814,7 +823,10 @@ class TestAsyncPoolFork:
             await borrow.__aenter__()
 
             async def child():
-                await borrow.__aexit__(ValueError, ValueError("user error"), None)
+                suppressed = await borrow.__aexit__(
+                    ValueError, ValueError("user error"), None
+                )
+                assert suppressed is False
 
             _run_in_forked_child(child)
             await borrow.__aexit__(None, None, None)
@@ -869,7 +881,7 @@ class TestAsyncPoolFork:
             ) as scope:
 
                 async def child():
-                    with pytest.raises(Exception):
+                    with pytest.raises(RuntimeError, match="invalid scope"):
                         await scope.get("fork-scope")
 
                 _run_in_forked_child(child, timeout_s=10)
