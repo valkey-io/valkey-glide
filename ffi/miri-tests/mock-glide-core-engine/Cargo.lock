@@ -469,7 +469,6 @@ name = "glide-telemetry"
 version = "0.1.2"
 dependencies = [
  "glide-logger",
- "lazy_static",
  "once_cell",
  "opentelemetry",
  "opentelemetry-otlp",
