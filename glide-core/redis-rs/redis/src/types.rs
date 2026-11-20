@@ -450,11 +450,9 @@ impl From<tokio::time::error::Elapsed> for RedisError {
 /// [`RedisError::command_not_sent`] rather than this description.
 pub const SERVER_ERROR_DESCRIPTION: &str = "An error was signalled by the server:";
 
-/// A [`ServerError`] can also hold a client-side error, such as a failed node's
-/// entry in a partial-results reply, whose code is its [`ErrorKind`] name
-/// (`IoError`, for example). Only [`TIMEOUT_ERROR_CODE`] gets its kind back; any
-/// other such code becomes an [`ErrorKind::ExtensionError`] whose
-/// `is_server_reply()` is true, so neither tells that the server never answered.
+/// Only [`TIMEOUT_ERROR_CODE`] restores a client-side error's kind. Any other
+/// client-side error held in a [`ServerError`] (code `IoError`, for example)
+/// becomes an [`ErrorKind::ExtensionError`] whose `is_server_reply()` is true.
 impl From<ServerError> for RedisError {
     fn from(value: ServerError) -> Self {
         // TODO - Consider changing RedisError to explicitly represent whether an error came from the server or not. Today it is only implied.

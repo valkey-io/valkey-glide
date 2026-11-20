@@ -842,25 +842,21 @@ pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
     }
 }
 
-/// A partial-results fan-out stops waiting for nodes this long before
-/// `request_timeout`, and the timeout watchdog of such a request fires this long
-/// after it. The gap lets the reply reach the caller before the watchdog fails
-/// the whole request; if the runtime is too busy to use it, the request fails
-/// with a timeout, as it does without partial results. The margin is at least
-/// 2 ms (at most a quarter of the timeout), since a smaller gap is within timer
-/// jitter.
+/// A partial-results fan-out stops waiting this long before `request_timeout`
+/// and its watchdog fires this long after, so the reply reaches the caller
+/// before the watchdog fails the request (if the runtime is too busy, it still
+/// times out as a plain call would). At least 2 ms (at most a quarter of the
+/// timeout), since a smaller gap is within timer jitter.
 fn partial_results_margin(request_timeout: Duration) -> Duration {
     (request_timeout / 10)
         .max(Duration::from_millis(2).min(request_timeout / 4))
         .min(Duration::from_millis(100))
 }
 
-/// Reads a partial result, which holds each failed node's error as a value, for
-/// the timeout metric and the circuit breaker. Returns whether a node timed out,
-/// and, when no node answered, the error the breaker should see in place of the
-/// plain call's: a node's I/O or dropped-connection error if there is one, else
-/// a timeout if a node timed out. Other node errors, such as error replies, are
-/// not counted, as for a plain call.
+/// Returns whether any node in a partial result timed out and, when no node
+/// answered, the error the circuit breaker counts instead of the plain call's:
+/// the first connection error, else a timeout. Error replies are not counted,
+/// as for a plain call.
 fn partial_results_failure(entries: &[(Value, Value)]) -> (bool, Option<RedisError>) {
     let mut answered = false;
     let mut timed_out = false;
@@ -1676,9 +1672,7 @@ impl Client {
         let mut partial_results = false;
         if cmd.allow_partial_results() && matches!(client, ClientWrapper::Cluster { .. }) {
             // A fan-out resolved here is passed on, so it is not resolved twice.
-            if routing.is_none() {
-                routing = RoutingInfo::for_routable(cmd).filter(fans_out);
-            }
+            routing = routing.or_else(|| RoutingInfo::for_routable(cmd).filter(fans_out));
             partial_results = routing.as_ref().is_some_and(fans_out);
         }
 

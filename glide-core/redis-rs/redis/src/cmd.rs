@@ -62,12 +62,9 @@ pub struct Cmd {
     /// response_timeout for this specific command. Used to propagate the
     /// caller's request_timeout into the multiplexed connection layer.
     response_timeout: Option<std::time::Duration>,
-    /// When true, a multi-node command whose reply is a map keyed by node
-    /// address returns an entry for every target node, holding either that
-    /// node's reply or its error, instead of failing on the first error.
+    /// See [`Cmd::set_allow_partial_results`].
     allow_partial_results: bool,
-    /// The time at which a partial-results fan-out stops waiting for nodes and
-    /// reports the unanswered ones as timed out.
+    /// See [`Cmd::set_fan_out_deadline`].
     fan_out_deadline: Option<std::time::Instant>,
     /// Inflight slot tracker. When set, the slot is released when the last
     /// clone of this Cmd (or its Arc) is dropped. Used to decouple user-facing
