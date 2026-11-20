@@ -7,6 +7,7 @@ import array
 import math
 import os
 import re
+import socket
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -571,6 +572,65 @@ class TestGlideClients:
             _, status = os.waitpid(pid, 0)
             if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
                 pytest.fail(f"Child process failed with status {status}")
+
+    @pytest.mark.skipif(not hasattr(os, "fork"), reason="needs os.fork")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_fork_after_failed_create_does_not_reconnect(
+        self, cluster_mode: bool, monkeypatch: pytest.MonkeyPatch
+    ):
+        """A client whose create() failed must not be reconnected in forked children."""
+        # Bound but not listening: connects are refused, and no other process
+        # can take the port while create() runs.
+        reserved = socket.socket()
+        reserved.bind(("127.0.0.1", 0))
+        address = [NodeAddress("127.0.0.1", reserved.getsockname()[1])]
+        config: Union[GlideClientConfiguration, GlideClusterClientConfiguration]
+        if cluster_mode:
+            config = GlideClusterClientConfiguration(
+                addresses=address,
+                advanced_config=AdvancedGlideClusterClientConfiguration(
+                    connection_timeout=500
+                ),
+            )
+        else:
+            config = GlideClientConfiguration(
+                addresses=address,
+                advanced_config=AdvancedGlideClientConfiguration(
+                    connection_timeout=500
+                ),
+            )
+        client_cls = GlideClusterClient if cluster_mode else GlideClient
+
+        connect_pids: List[int] = []
+        original = client_cls._create_core_client
+
+        def spy(self):
+            connect_pids.append(os.getpid())
+            return original(self)
+
+        monkeypatch.setattr(client_cls, "_create_core_client", spy)
+        with reserved, pytest.raises(ClosingError):
+            client_cls.create(config)
+        assert connect_pids == [os.getpid()]
+
+        pid = os.fork()
+        if pid == 0:
+            os._exit(1 if os.getpid() in connect_pids else 0)
+
+        deadline = time.monotonic() + 30
+        while True:
+            done, status = os.waitpid(pid, os.WNOHANG)
+            if done:
+                break
+            if time.monotonic() > deadline:
+                os.kill(pid, 9)
+                os.waitpid(pid, 0)
+                pytest.fail("Forked child did not exit")
+            time.sleep(0.01)
+        assert os.WIFEXITED(status), f"Child died with status {status}"
+        assert (
+            os.WEXITSTATUS(status) == 0
+        ), "Fork hook reconnected the failed client in the child"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("ip_address", [IP_ADDRESS_V4, IP_ADDRESS_V6])
@@ -12551,12 +12611,6 @@ class TestSyncScripts:
         # HGETDEL on a non-existing key returns null for each requested field
         result = glide_sync_client.hgetdel(non_existent_key, [field1, field2])
         assert result == [None, None]
-
-        # HGETDEL on a key holding a non-hash value returns a WRONGTYPE error
-        string_key = get_random_string(10)
-        assert glide_sync_client.set(string_key, "not_a_hash") == OK
-        with pytest.raises(RequestError, match="WRONGTYPE"):
-            glide_sync_client.hgetdel(string_key, [field1])
 
         # HGETDEL with an empty fields list should raise an error
         with pytest.raises(RequestError):

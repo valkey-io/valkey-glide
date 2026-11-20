@@ -9722,6 +9722,8 @@ export class BaseClient {
         return this.createWritePromise(createAppend(key, value));
     }
 
+    // TODO #7238: Add DELEX command support.
+
     /**
      * Deletes `key` if its value meets `condition`.
      *
