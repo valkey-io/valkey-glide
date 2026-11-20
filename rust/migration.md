@@ -185,6 +185,29 @@ let options = StreamReadGroupOptions {
 let entries = client.xreadgroup("grp", "c1", &[("s", ">")], Some(options)).await?;
 ```
 
+### Reply normalization across RESP2 and RESP3
+
+Valkey returns structurally different wire replies over RESP2 and RESP3 for
+several commands. For example, over RESP2, `HGETALL` and `ZRANGE ... WITHSCORES`
+return flat arrays (`[field1, value1, field2, value2, ...]`), whereas over RESP3
+they reply with maps or arrays of pairs.
+
+In `redis-rs`, RESP2 replies are returned without conversion. Consequently,
+`redis-rs` code that decodes flat replies on RESP2 (e.g. `let v: Vec<String> = con.hgetall("h").await?;`)
+compiles against the GLIDE Rust client, but fails at runtime on both protocols
+with `Response type not string compatible`.
+
+`glide-core` normalizes these replies into a single consistent structure across
+both RESP2 and RESP3. Callers should decode into the normalized types:
+
+| Command | `redis-rs` (RESP2) Shape | GLIDE Normalized Shape (RESP2 & RESP3) | Recommended Rust Type |
+| :--- | :--- | :--- | :--- |
+| `HGETALL` | Flat `Array [k1, v1, k2, v2]` | `Map {k1: v1, k2: v2}` | `HashMap<String, String>` |
+| `ZRANGE ... WITHSCORES` (and `ZDIFF`, `ZINTER`, `ZUNION`) | Flat `Array [m1, s1, m2, s2]` | `Map {m1: s1, m2: s2}` | `Vec<(String, f64)>` or `HashMap<String, f64>` |
+| `ZPOPMIN`, `ZPOPMAX` | Flat `Array [m1, s1, ...]` | `Map {m1: s1, ...}` | `Vec<(String, f64)>` |
+| `ZRANDMEMBER ... WITHSCORES` | Flat `Array [m1, s1, ...]` | Array of pairs `[[m1, s1], ...]` | `Vec<(String, f64)>` |
+| `HRANDFIELD ... WITHVALUES` | Flat `Array [f1, v1, ...]` | Array of pairs `[[f1, v1], ...]` | `Vec<(String, String)>` |
+
 ### A few typed returns differ
 
 `zpopmin`, `zpopmax`, `zrevrange_withscores`, `zrevrangebyscore_withscores`, and
