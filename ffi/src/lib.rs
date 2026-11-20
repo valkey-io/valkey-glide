@@ -2793,7 +2793,7 @@ impl CallerDispatch {
         F: FnOnce() -> R + Send + 'static,
     {
         if Self::is_pumping() {
-            // The caller is polling the work itself.
+            // This thread is a blocked caller, polling the work itself.
             return f();
         }
         let (reply_tx, reply_rx) = std::sync::mpsc::sync_channel(1);
@@ -2871,7 +2871,7 @@ impl Drop for BlockedCaller<'_> {
     }
 }
 
-/// Why an FFI call made from inside a callback that a blocked caller runs fails.
+/// The error for an FFI call made from inside a callback that a blocked caller is running.
 const REENTRANT_CALL: &str = "GLIDE cannot be called from inside an address resolver callback";
 
 fn reentrant_call_error() -> RedisError {
