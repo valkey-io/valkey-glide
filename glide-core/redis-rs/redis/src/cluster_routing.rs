@@ -119,6 +119,16 @@ pub enum MultipleNodeRoutingInfo {
     MultiSlot((Vec<(Route, Vec<usize>)>, MultiSlotArgPattern)),
 }
 
+impl MultipleNodeRoutingInfo {
+    /// Whether [`crate::Cmd::set_allow_partial_results`] applies to a command
+    /// sent to these nodes with `response_policy`: all nodes or all primaries,
+    /// with the `Special` response policy or none.
+    pub fn allows_partial_results(&self, response_policy: Option<ResponsePolicy>) -> bool {
+        matches!(self, Self::AllNodes | Self::AllMasters)
+            && matches!(response_policy, None | Some(ResponsePolicy::Special))
+    }
+}
+
 /// Takes a routable and an iterator of indices, which is assued to be created from`MultipleNodeRoutingInfo::MultiSlot`,
 /// and returns a command with the arguments matching the indices.
 pub fn command_for_multi_slot_indices<'a, 'b>(
@@ -1733,6 +1743,14 @@ mod tests_routing {
             }
             other => panic!("expected a single specific node, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn allows_partial_results_only_with_a_per_node_response_policy() {
+        use MultipleNodeRoutingInfo::{AllMasters, AllNodes};
+        assert!(AllMasters.allows_partial_results(Some(ResponsePolicy::Special)));
+        assert!(AllNodes.allows_partial_results(None));
+        assert!(!AllNodes.allows_partial_results(Some(ResponsePolicy::AllSucceeded)));
     }
 
     #[test]

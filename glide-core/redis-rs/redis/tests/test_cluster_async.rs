@@ -5167,6 +5167,157 @@ mod cluster_async {
         );
     }
 
+    // Routes INFO to all primaries of a mock cluster answered by `handler`.
+    fn info_to_all_primaries(
+        name: &'static str,
+        partial: bool,
+        handler: impl Fn(&[u8], u16) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
+    ) -> RedisResult<Value> {
+        let mut info = cmd("INFO");
+        info.set_allow_partial_results(partial);
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(0),
+            name,
+            handler,
+        );
+        runtime.block_on(connection.route_command(
+            &info,
+            RoutingInfo::MultiNode((
+                MultipleNodeRoutingInfo::AllMasters,
+                Some(redis::cluster_routing::ResponsePolicy::Special),
+            )),
+        ))
+    }
+
+    fn info_reply(port: u16) -> Value {
+        Value::BulkString(format!("info: {port}").into_bytes().into())
+    }
+
+    // 6379 replies and 6381 times out.
+    fn info_with_one_timed_out_primary(name: &'static str, partial: bool) -> RedisResult<Value> {
+        info_to_all_primaries(name, partial, move |received_cmd, port| {
+            respond_startup_with_replica_using_config(name, received_cmd, None)?;
+            if port == 6381 {
+                return Err(Err(
+                    std::io::Error::from(std::io::ErrorKind::TimedOut).into()
+                ));
+            }
+            Err(Ok(info_reply(port)))
+        })
+    }
+
+    // 6379 replies and 6380 refuses every command, so the client never gets a
+    // connection to it.
+    fn info_with_one_unconnected_primary(name: &'static str, partial: bool) -> RedisResult<Value> {
+        info_to_all_primaries(name, partial, move |received_cmd, port| {
+            if port == 6380 {
+                return Err(Err(std::io::Error::from(
+                    std::io::ErrorKind::ConnectionRefused,
+                )
+                .into()));
+            }
+            respond_startup_two_nodes(name, received_cmd)?;
+            Err(Ok(info_reply(port)))
+        })
+    }
+
+    fn sorted_map(value: Value) -> Vec<(String, Value)> {
+        let Value::Map(pairs) = value else {
+            panic!("expected a map, got {value:?}");
+        };
+        let mut pairs: Vec<_> = pairs
+            .into_iter()
+            .map(|(k, v)| (String::from_owned_redis_value(k).unwrap(), v))
+            .collect();
+        pairs.sort_by(|a, b| a.0.cmp(&b.0));
+        pairs
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_keep_replies_and_report_timeout() {
+        let name = "test_async_cluster_partial_results_keep_replies_and_report_timeout";
+        let pairs = sorted_map(info_with_one_timed_out_primary(name, true).unwrap());
+
+        assert_eq!(pairs.len(), 2, "{pairs:?}");
+        assert_eq!(pairs[0], (format!("{name}:6379"), info_reply(6379)));
+        assert_eq!(pairs[1].0, format!("{name}:6381"));
+        let Value::ServerError(err) = &pairs[1].1 else {
+            panic!("expected an error for 6381, got {:?}", pairs[1].1);
+        };
+        assert_eq!(err.err_code(), redis::TIMEOUT_ERROR_CODE);
+        let err: RedisError = err.clone().into();
+        assert!(err.is_timeout(), "{err:?}");
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_without_partial_results_fails_on_node_timeout() {
+        let name = "test_async_cluster_without_partial_results_fails_on_node_timeout";
+        let err = info_with_one_timed_out_primary(name, false).unwrap_err();
+        assert!(err.is_timeout(), "{err:?}");
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_report_unconnected_primary() {
+        let name = "test_async_cluster_partial_results_report_unconnected_primary";
+        let pairs = sorted_map(info_with_one_unconnected_primary(name, true).unwrap());
+
+        assert_eq!(pairs.len(), 2, "{pairs:?}");
+        assert_eq!(pairs[0], (format!("{name}:6379"), info_reply(6379)));
+        assert_eq!(pairs[1].0, format!("{name}:6380"));
+        let Value::ServerError(err) = &pairs[1].1 else {
+            panic!("expected an error for 6380, got {:?}", pairs[1].1);
+        };
+        let err: RedisError = err.clone().into();
+        assert!(
+            err.to_string().contains("ConnectionNotFoundForRoute"),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_without_partial_results_skips_unconnected_primary() {
+        let name = "test_async_cluster_without_partial_results_skips_unconnected_primary";
+        let pairs = sorted_map(info_with_one_unconnected_primary(name, false).unwrap());
+        assert_eq!(pairs, vec![(format!("{name}:6379"), info_reply(6379))]);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_return_map_when_all_nodes_fail() {
+        let name = "test_async_cluster_partial_results_return_map_when_all_nodes_fail";
+        let value = info_to_all_primaries(name, true, move |received_cmd, port| {
+            respond_startup_with_replica_using_config(name, received_cmd, None)?;
+            Err(Err(RedisError::from((
+                ErrorKind::ResponseError,
+                "An error was signalled by the server:",
+                format!("boom {port}"),
+            ))))
+        })
+        .unwrap();
+
+        let pairs = sorted_map(value);
+        assert_eq!(pairs.len(), 2, "{pairs:?}");
+        for (address, value) in pairs {
+            let Value::ServerError(err) = value else {
+                panic!("expected an error for {address}, got {value:?}");
+            };
+            let port = address.rsplit(':').next().unwrap();
+            assert!(
+                err.details().unwrap().contains(&format!("boom {port}")),
+                "{err:?}"
+            );
+        }
+    }
+
     #[test]
     #[serial_test::parallel(otel)]
     fn test_async_cluster_fan_out_and_combine_arrays_of_values() {
