@@ -406,11 +406,13 @@ type NonNullAddressResolverCallback = unsafe extern "C-unwind" fn(
 /// function pointer, where `NULL` selects the built-in resolver.
 ///
 /// # Threads
-/// While an FFI call blocks its caller on the client's work, the callback runs on that caller's
-/// thread. That covers creating the client, a lazy client's first command, and every resolution
-/// made while a synchronous command waits, such as for a redirect or a topology refresh. With no
-/// caller blocked, for example during a periodic topology check between commands or a command
-/// of an asynchronous client, it runs on a GLIDE runtime thread.
+/// While an FFI call blocks its caller on the client's work, the callback runs on the thread of
+/// a caller blocked on the client. That covers creating the client, a lazy client's first
+/// command, and every resolution made while a synchronous command waits, such as for a redirect
+/// or a topology refresh. When several threads are blocked on one client, it runs on one of
+/// them, not necessarily the one whose call needed it. With no caller blocked, for example during
+/// a periodic topology check between commands or a command of an asynchronous client, it runs on
+/// a GLIDE runtime thread.
 ///
 /// The callback must not call back into GLIDE. On a blocked caller's thread, creating a client
 /// or running a synchronous command from inside it fails with an error. It should also return
@@ -427,12 +429,11 @@ pub type AddressResolverCallback = Option<
     ) -> u16,
 >;
 
-/// A wrapper around an FFI address resolver callback that implements the `AddressResolver` trait.
+/// A wrapper around an FFI address resolver callback.
+#[derive(Clone, Copy)]
 struct FFIAddressResolver {
     callback: NonNullAddressResolverCallback,
     client_id: usize,
-    /// Hands the callback to an FFI caller blocked on this client, when there is one.
-    dispatch: Arc<CallerDispatch>,
 }
 
 // SAFETY: The callback is a C function pointer that is safe to send across threads.
@@ -445,50 +446,62 @@ impl std::fmt::Debug for FFIAddressResolver {
     }
 }
 
-impl redis::AddressResolver for FFIAddressResolver {
-    fn resolve(&self, host: &str, port: u16) -> (String, u16) {
-        let (callback, client_id, host) = (self.callback, self.client_id, host.to_owned());
-        self.dispatch
-            .run(move || resolve_with_callback(callback, client_id, &host, port))
+/// The client's [`redis::AddressResolver`]: runs the callback on an FFI caller blocked on the
+/// client when there is one; see [`CallerDispatch`].
+struct DispatchedResolver {
+    resolver: FFIAddressResolver,
+    dispatch: Arc<CallerDispatch>,
+}
+
+impl std::fmt::Debug for DispatchedResolver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.resolver.fmt(f)
     }
 }
 
-/// Calls the foreign resolver on this thread. [`FFIAddressResolver`] picks the thread.
-fn resolve_with_callback(
-    callback: NonNullAddressResolverCallback,
-    client_id: usize,
-    host: &str,
-    port: u16,
-) -> (String, u16) {
-    // Provide a buffer for the resolved host (1024 bytes should be more than enough for a hostname)
-    let mut resolved_host_buf = vec![0u8; 1024];
-    let mut resolved_host_len: usize = 0;
-
-    let resolved_port = unsafe {
-        (callback)(
-            client_id,
-            host.as_ptr(),
-            host.len(),
-            port,
-            resolved_host_buf.as_mut_ptr(),
-            resolved_host_buf.len(),
-            &mut resolved_host_len,
-        )
-    };
-
-    // If the callback returned port 0 or didn't write a host, fall back to original
-    if resolved_port == 0 || resolved_host_len == 0 || resolved_host_len > resolved_host_buf.len() {
-        return (host.to_string(), port);
+impl redis::AddressResolver for DispatchedResolver {
+    fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+        let (resolver, host) = (self.resolver, host.to_owned());
+        self.dispatch.run(move || resolver.resolve(&host, port))
     }
+}
 
-    match std::str::from_utf8(&resolved_host_buf[..resolved_host_len]) {
-        Ok(resolved_host) => (resolved_host.to_string(), resolved_port),
-        Err(_) => {
-            glide_logger::log_error_lazy!(
-                "address_resolver",
-                "Address resolver returned invalid UTF-8 for host, using original address"
-            );
-            (host.to_string(), port)
+impl FFIAddressResolver {
+    /// Calls the foreign resolver on this thread.
+    fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+        // Provide a buffer for the resolved host (1024 bytes should be more than enough for a hostname)
+        let mut resolved_host_buf = vec![0u8; 1024];
+        let mut resolved_host_len: usize = 0;
+
+        let resolved_port = unsafe {
+            (self.callback)(
+                self.client_id,
+                host.as_ptr(),
+                host.len(),
+                port,
+                resolved_host_buf.as_mut_ptr(),
+                resolved_host_buf.len(),
+                &mut resolved_host_len,
+            )
+        };
+
+        // If the callback returned port 0 or didn't write a host, fall back to original
+        if resolved_port == 0
+            || resolved_host_len == 0
+            || resolved_host_len > resolved_host_buf.len()
+        {
+            return (host.to_string(), port);
+        }
+
+        match std::str::from_utf8(&resolved_host_buf[..resolved_host_len]) {
+            Ok(resolved_host) => (resolved_host.to_string(), resolved_port),
+            Err(_) => {
+                glide_logger::log_error_lazy!(
+                    "address_resolver",
+                    "Address resolver returned invalid UTF-8 for host, using original address"
+                );
+                (host.to_string(), port)
+            }
         }
     }
 }
@@ -2819,7 +2832,9 @@ impl CallerDispatch {
         self.lock().callers += 1;
         BlockedCaller {
             dispatch: self,
-            was_pumping: PUMPING.replace(true),
+            _pumping: PumpingMark {
+                was_pumping: PUMPING.replace(true),
+            },
         }
     }
 
@@ -2839,7 +2854,19 @@ impl CallerDispatch {
 /// the callbacks still queued, so none waits for a caller that has left.
 struct BlockedCaller<'a> {
     dispatch: &'a CallerDispatch,
+    /// Dropped after the queue is drained, so the drain still counts as pumping.
+    _pumping: PumpingMark,
+}
+
+/// Restores [`PUMPING`] when dropped, also when a callback unwinds.
+struct PumpingMark {
     was_pumping: bool,
+}
+
+impl Drop for PumpingMark {
+    fn drop(&mut self) {
+        PUMPING.set(self.was_pumping);
+    }
 }
 
 impl BlockedCaller<'_> {
@@ -2867,7 +2894,6 @@ impl Drop for BlockedCaller<'_> {
         };
         // Still marked as pumping, so a callback run here cannot call back in either.
         jobs.into_iter().for_each(|job| job());
-        PUMPING.set(self.was_pumping);
     }
 }
 
@@ -2927,24 +2953,43 @@ mod tests_block_on_worker {
         );
     }
 
+    /// Waits until another thread has queued a callback on `dispatch`.
+    fn wait_until_queued(dispatch: &CallerDispatch) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while dispatch.lock().jobs.is_empty() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the callback was never queued"
+            );
+            std::thread::yield_now();
+        }
+    }
+
     #[test]
     fn a_callback_queued_as_its_caller_leaves_runs_on_that_caller() {
         let dispatch = CallerDispatch::default();
         let caller = dispatch.register();
         let ran_on = std::thread::scope(|scope| {
             let raiser = scope.spawn(|| dispatch.run(|| std::thread::current().id()));
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-            while dispatch.lock().jobs.is_empty() {
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "the callback was never queued"
-                );
-                std::thread::yield_now();
-            }
+            wait_until_queued(&dispatch);
             drop(caller);
             raiser.join().unwrap()
         });
         assert_eq!(ran_on, std::thread::current().id());
+    }
+
+    #[test]
+    fn a_caller_whose_last_callback_unwinds_stops_pumping() {
+        let dispatch = CallerDispatch::default();
+        let caller = dispatch.register();
+        std::thread::scope(|scope| {
+            let raiser = scope.spawn(|| dispatch.run(|| panic!("the resolver panicked")));
+            wait_until_queued(&dispatch);
+            let left = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || drop(caller)));
+            assert!(left.is_err(), "the callback did not run as the caller left");
+            assert!(!CallerDispatch::is_pumping());
+            assert!(raiser.join().is_err(), "the raiser missed the unwind");
+        });
     }
 
     #[test]
@@ -2960,6 +3005,108 @@ mod tests_block_on_worker {
         })
         .unwrap();
         assert_eq!(error.as_deref(), Some(REENTRANT_CALL));
+    }
+
+    /// A lazy sync client: creating it connects nowhere.
+    #[cfg(feature = "pool-support")]
+    fn lazy_sync_client() -> *const c_void {
+        let mut request = connection_request::ConnectionRequest::new();
+        request.lazy_connect = true;
+        let mut address = connection_request::NodeAddress::new();
+        address.host = "127.0.0.1".into();
+        address.port = 1;
+        request.addresses.push(address);
+        let bytes = request.write_to_bytes().unwrap();
+        create_client_internal(&bytes, ClientType::SyncClient, None, None, None, 0)
+            .unwrap_or_else(|error| panic!("{}", error.message))
+            .cast()
+    }
+
+    #[cfg(feature = "pool-support")]
+    unsafe fn blocking_command(client: *const c_void) -> *mut CommandResult {
+        let args = [b"key".as_slice(), b"0".as_slice()];
+        let ptrs = args.map(|arg| arg.as_ptr() as usize);
+        let lens = args.map(|arg| arg.len() as c_ulong);
+        unsafe {
+            command(
+                client,
+                0,
+                RequestType::BLPop,
+                2,
+                ptrs.as_ptr(),
+                lens.as_ptr(),
+                std::ptr::null(),
+                0,
+                0,
+            )
+        }
+    }
+
+    #[cfg(feature = "pool-support")]
+    unsafe fn script(client: *const c_void) -> *mut CommandResult {
+        let hash = c"0000000000000000000000000000000000000000";
+        unsafe {
+            invoke_script(
+                client,
+                0,
+                hash.as_ptr(),
+                0,
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+                0,
+            )
+        }
+    }
+
+    #[cfg(feature = "pool-support")]
+    unsafe fn empty_batch(client: *const c_void) -> *mut CommandResult {
+        let info = BatchInfo {
+            cmd_count: 0,
+            cmds: std::ptr::NonNull::dangling().as_ptr(),
+            is_atomic: false,
+        };
+        unsafe { batch(client, 0, &info, false, std::ptr::null(), 0) }
+    }
+
+    /// A pooled client marks a blocking call in flight before dispatching it. A call rejected
+    /// on the blocked caller must clear that mark, or the pool discards the client on release.
+    #[cfg(feature = "pool-support")]
+    #[rstest::rstest]
+    #[case::command(blocking_command)]
+    #[case::script(script)]
+    #[case::batch(empty_batch)]
+    fn a_rejected_call_clears_its_pooled_blocking_mark(
+        #[case] call: unsafe fn(*const c_void) -> *mut CommandResult,
+    ) {
+        let client = lazy_sync_client();
+        let client_id = client as u64;
+        crate::pool_ffi::get_pool_adapter_map().insert(client as usize, (u64::MAX, client_id));
+        let blocking = Arc::new(AtomicU32::new(0));
+        glide_core::pool::register_blocking_flag(client_id, blocking.clone());
+
+        let dispatch = CallerDispatch::default();
+        let caller = dispatch.register();
+        let result = unsafe { call(client) };
+        drop(caller);
+
+        let error = unsafe {
+            assert!(!result.is_null() && !(*result).command_error.is_null());
+            let message = CStr::from_ptr((*(*result).command_error).command_error_message)
+                .to_string_lossy()
+                .into_owned();
+            free_command_result(result);
+            message
+        };
+        glide_core::pool::unregister_blocking_flag(client_id);
+        crate::pool_ffi::get_pool_adapter_map().remove(&(client as usize));
+        unsafe { close_client(client) };
+        assert!(error.contains(REENTRANT_CALL), "unexpected error: {error}");
+        assert_eq!(blocking.load(Ordering::Acquire), 0);
     }
 
     #[test]
@@ -3068,9 +3215,11 @@ fn create_client_internal(
 
         // Set the address resolver if provided
         if let (Some(resolver_callback), Some(dispatch)) = (address_resolver, &caller_dispatch) {
-            connection_request.address_resolver = Some(Arc::new(FFIAddressResolver {
-                callback: resolver_callback,
-                client_id,
+            connection_request.address_resolver = Some(Arc::new(DispatchedResolver {
+                resolver: FFIAddressResolver {
+                    callback: resolver_callback,
+                    client_id,
+                },
                 dispatch: dispatch.clone(),
             }));
         }
@@ -5624,17 +5773,18 @@ unsafe fn execute_command(
         });
     #[cfg(not(feature = "pool-support"))]
     let blocking_flag: Option<(u64, u64, std::sync::Arc<std::sync::atomic::AtomicU32>)> = None;
+    // Armed now and moved into the future, so the counter is decremented on every exit path,
+    // including a future dropped before its first poll (a call the client rejects).
+    #[cfg(feature = "pool-support")]
+    let unmark_guard = blocking_flag
+        .as_ref()
+        .map(|(_, _, arc)| UnmarkOnDrop(Some(arc.clone())));
 
     client_adapter.execute_request_with_buffer(
         request_id,
         async move {
-            // Guard arms immediately on task entry — flag was already set true before request.
-            // This ensures the flag is cleared on every exit path including task abort.
-            // UnmarkOnDrop(None) is a no-op for the non-blocking case.
             #[cfg(feature = "pool-support")]
-            let _unmark_guard = blocking_flag
-                .as_ref()
-                .map(|(_, _, arc)| UnmarkOnDrop(Some(arc.clone())));
+            let _unmark_guard = unmark_guard;
             // No pool support — blocking flag guard not needed (blocking_flag is always None).
             let result = client.send_command(&mut cmd, routing_info).await;
             // Refresh activity BEFORE the UnmarkOnDrop guard fires so the abandon
@@ -6451,13 +6601,15 @@ pub unsafe extern "C-unwind" fn invoke_script(
     if let Some(ref arc) = script_blocking_arc {
         arc.fetch_add(1, std::sync::atomic::Ordering::Release);
     }
+    // RAII guard: ensures is_blocking counter is decremented on every exit path: routing
+    // errors (get_route ?), normal completion, cancellation, or a future dropped before its
+    // first poll. Armed with the increment and moved into the future.
+    #[cfg(feature = "pool-support")]
+    let unmark_guard = UnmarkOnDrop(script_blocking_arc.clone());
 
     client_adapter.execute_request(request_id, async move {
-        // RAII guard: ensures is_blocking counter is decremented on every exit path —
-        // routing errors (get_route ?), normal completion, or cancellation.
-        // Guard arms immediately on task entry — counter was already incremented before spawn.
         #[cfg(feature = "pool-support")]
-        let _unmark_guard = UnmarkOnDrop(script_blocking_arc.clone());
+        let _unmark_guard = unmark_guard;
 
         let routing_info = get_route(route, None)?;
         let result = client
@@ -6636,13 +6788,15 @@ pub unsafe extern "C" fn batch(
     if let Some(ref arc) = batch_blocking_arc {
         arc.fetch_add(1, std::sync::atomic::Ordering::Release);
     }
+    // RAII guard: ensures is_blocking counter is decremented on every exit path: normal
+    // completion, decompression error, cancellation, or a future dropped before its first
+    // poll. Armed with the increment and moved into the future.
+    #[cfg(feature = "pool-support")]
+    let unmark_guard = UnmarkOnDrop(batch_blocking_arc.clone());
 
     client_adapter.execute_request(callback_index, async move {
-        // RAII guard: ensures is_blocking counter is decremented on every exit path —
-        // normal completion, decompression error, or cancellation.
-        // Guard arms immediately on task entry — counter was already incremented before spawn.
         #[cfg(feature = "pool-support")]
-        let _unmark_guard = UnmarkOnDrop(batch_blocking_arc.clone());
+        let _unmark_guard = unmark_guard;
 
         let result = if pipeline.is_atomic() {
             client

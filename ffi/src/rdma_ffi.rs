@@ -377,25 +377,25 @@ fn require_sync_client(adapter: &ClientAdapter) -> Result<(), String> {
     }
 }
 
-/// Run a transfer to completion, blocking the calling thread as a sync command
-/// does. Returns the buffer, or `None` if it was recalled, along with the
-/// transfer's result.
+/// Run a transfer to completion on the calling thread. Returns the buffer, or
+/// `None` if it was recalled, along with the transfer's result.
 #[cfg(feature = "rdma")]
 fn block_on_transfer<T, M: glide_rdma::MemoryKind>(
     adapter: &ClientAdapter,
-    future: impl Future<Output = glide_core::client::RdmaOutcome<T, M>> + Send + 'static,
+    future: impl Future<Output = glide_core::client::RdmaOutcome<T, M>>,
 ) -> (
     Option<glide_rdma::RdmaBuffer<M>>,
     Result<T, redis::RedisError>,
-)
-where
-    T: Send + 'static,
-{
-    // A transfer that never ran or did not finish took its buffer with it.
-    match adapter
-        .block_on_sync(future)
-        .unwrap_or_else(glide_core::client::RdmaOutcome::Recalled)
-    {
+) {
+    let background = adapter
+        .background_runtime
+        .as_ref()
+        .map(|runtime| runtime.handle().clone());
+    let outcome = adapter.runtime.block_on(async {
+        let _guard = background.as_ref().map(|handle| handle.enter());
+        future.await
+    });
+    match outcome {
         glide_core::client::RdmaOutcome::Settled { buffer, result } => (Some(buffer), result),
         glide_core::client::RdmaOutcome::Recalled(err) => (None, Err(err)),
     }
@@ -738,18 +738,17 @@ unsafe fn get(
         };
 
         let mut client = adapter.core.client.clone();
-        let key = key.to_vec();
         let (buffer, outcome) = match buffer {
             RegionBuffer::Host(buffer) => {
-                let (buffer, outcome) = block_on_transfer(&adapter, async move {
-                    client.rdma_get(&key, buffer, offset, length).await
-                });
+                let (buffer, outcome) =
+                    block_on_transfer(&adapter, client.rdma_get(key, buffer, offset, length));
                 (buffer.map(RegionBuffer::Host), outcome)
             }
             RegionBuffer::Device(buffer) => {
-                let (buffer, outcome) = block_on_transfer(&adapter, async move {
-                    client.rdma_get_device(&key, buffer, offset, length).await
-                });
+                let (buffer, outcome) = block_on_transfer(
+                    &adapter,
+                    client.rdma_get_device(key, buffer, offset, length),
+                );
                 (buffer.map(RegionBuffer::Device), outcome)
             }
         };
@@ -854,15 +853,12 @@ unsafe fn set(
         };
 
         let mut client = adapter.core.client.clone();
-        let key = key.to_vec();
         let (buffer, outcome) = match buffer {
             RegionBuffer::Host(buffer) => {
-                let checksum = checksum_mode.with(checksum);
-                let (buffer, outcome) = block_on_transfer(&adapter, async move {
-                    client
-                        .rdma_set(&key, buffer, offset, length, checksum)
-                        .await
-                });
+                let (buffer, outcome) = block_on_transfer(
+                    &adapter,
+                    client.rdma_set(key, buffer, offset, length, checksum_mode.with(checksum)),
+                );
                 (buffer.map(RegionBuffer::Host), outcome)
             }
             RegionBuffer::Device(buffer) => {
@@ -877,11 +873,10 @@ unsafe fn set(
                         ),
                     );
                 };
-                let (buffer, outcome) = block_on_transfer(&adapter, async move {
-                    client
-                        .rdma_set_device(&key, buffer, offset, length, device_checksum)
-                        .await
-                });
+                let (buffer, outcome) = block_on_transfer(
+                    &adapter,
+                    client.rdma_set_device(key, buffer, offset, length, device_checksum),
+                );
                 (buffer.map(RegionBuffer::Device), outcome)
             }
         };
