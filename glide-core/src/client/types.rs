@@ -303,16 +303,17 @@ pub enum TlsMode {
 
 #[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]
 /// Controls how the client discovers node roles and topology in standalone mode.
+#[repr(u32)]
 pub enum NodeDiscoveryMode {
     /// Default: verify node roles via INFO REPLICATION, use only provided addresses.
     #[default]
-    Standard,
+    Standard = 0,
     /// Skip role detection entirely. Trust provided addresses as-is; first address is primary.
     /// Suitable for proxies (e.g., Envoy) or known-static topologies.
     /// Note: Do not set `client_name` when using this mode with a proxy.
-    Static,
+    Static = 1,
     /// Discover full topology (primary + all replicas) from any starting node.
-    DiscoverAll,
+    DiscoverAll = 2,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
