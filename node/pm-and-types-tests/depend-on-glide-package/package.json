@@ -13,10 +13,10 @@
         "build": "tsc"
     },
     "dependencies": {
-        "@types/pg": "^8.11.11",
-        "@valkey/valkey-glide": "2.5.0",
+        "@types/pg": "^8.23.1",
+        "@valkey/valkey-glide": "2.5.3",
         "decimal.js": "^10.5.0",
-        "pg": "^8.14.1",
+        "pg": "^8.23.1",
         "winston": "^3.17.0"
     },
     "devDependencies": {
