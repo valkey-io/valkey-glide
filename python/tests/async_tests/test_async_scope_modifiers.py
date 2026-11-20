@@ -21,6 +21,8 @@ import uuid
 
 import pytest
 from glide import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
     CompressionBackend,
     CompressionConfiguration,
     GlideClient,
@@ -72,7 +74,16 @@ def _make_key(cluster_mode: bool, prefix: str) -> str:
 
 async def _create_client(cluster_mode: bool, **extra_config):  # type: ignore[return]
     """Create a GlideClient or GlideClusterClient based on mode."""
+    # connection_timeout lives on the advanced config, not on the top-level
+    # client configuration. Pop it here and route it into the correct advanced
+    # config class per mode so callers can request a generous connection
+    # timeout (avoids "connection attempt timed out" flakes under CI load).
+    connection_timeout = extra_config.pop("connection_timeout", None)
     if cluster_mode:
+        if connection_timeout is not None:
+            extra_config["advanced_config"] = AdvancedGlideClusterClientConfiguration(
+                connection_timeout=connection_timeout
+            )
         cluster_cfg = GlideClusterClientConfiguration(
             addresses=require_cluster_addresses(),
             **extra_config,
@@ -80,6 +91,10 @@ async def _create_client(cluster_mode: bool, **extra_config):  # type: ignore[re
         return await GlideClusterClient.create(cluster_cfg)
     else:
         _skip_standalone_if_unavailable()
+        if connection_timeout is not None:
+            extra_config["advanced_config"] = AdvancedGlideClientConfiguration(
+                connection_timeout=connection_timeout
+            )
         standalone_cfg = GlideClientConfiguration(
             addresses=[_get_standalone_address()],
             **extra_config,
@@ -106,6 +121,10 @@ class TestAsyncScopeCompression:
         return await _create_client(
             cluster_mode,
             request_timeout=5000,
+            # Use a generous connection timeout so slow connection establishment
+            # under CI load does not flake with "connection attempt timed out"
+            # (the default is ~250ms).
+            connection_timeout=2000,
             compression=CompressionConfiguration(
                 enabled=True,
                 backend=CompressionBackend.ZSTD,
@@ -116,7 +135,9 @@ class TestAsyncScopeCompression:
 
     async def _get_raw_client(self, cluster_mode: bool):
         """Create a client WITHOUT compression (for verification)."""
-        return await _create_client(cluster_mode, request_timeout=5000)
+        return await _create_client(
+            cluster_mode, request_timeout=5000, connection_timeout=2000
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_scope_writes_compressed_data(self, cluster_mode):
