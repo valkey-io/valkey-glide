@@ -148,17 +148,32 @@ impl std::fmt::Display for FabricConfig {
         if let Some(bind) = &self.bind {
             write!(formatter, ", bind: {bind}")?;
         }
+        if self.device_memory {
+            write!(formatter, ", device memory")?;
+        }
         Ok(())
     }
 }
 
 #[cfg(all(test, feature = "libfabric"))]
 mod tests {
-    use super::Provider;
+    use super::{FabricConfig, Provider};
 
     #[test]
     fn only_efa_direct_stops_writes_when_a_region_closes() {
         assert!(Provider::EfaDirect.close_stops_writes());
         assert!(!Provider::Tcp.close_stops_writes());
+    }
+
+    /// A fabric group refuses a client whose configuration differs, and names
+    /// both in the error, so every field compared must show here.
+    #[test]
+    fn display_names_every_field_a_group_compares() {
+        let config = FabricConfig::new(Provider::EfaDirect);
+        assert_eq!(config.to_string(), "EfaDirect");
+        assert_eq!(
+            config.with_device_memory().to_string(),
+            "EfaDirect, device memory"
+        );
     }
 }

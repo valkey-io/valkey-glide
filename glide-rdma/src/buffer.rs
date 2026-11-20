@@ -319,9 +319,7 @@ impl RdmaBuffer<Host> {
         destination.copy_from_slice(value);
         Some(value.len())
     }
-}
 
-impl RdmaBuffer {
     /// Hand this buffer over to be lent a window at a time.
     pub(crate) fn into_shared(self) -> RdmaSharedBuffer {
         let region_ref = self.region_ref.clone();

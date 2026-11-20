@@ -471,9 +471,21 @@ impl RdmaFabric {
         queue.submit(Box::new(move || close(&self)));
     }
 
-    /// Wait until every [`RdmaBuffer`] and [`crate::LentBuffer`] dropped on this
-    /// fabric before this call has finished closing its region and has freed,
-    /// parked or leaked its memory.
+    /// Whether the calling thread is this fabric's closing thread, running a close.
+    pub(crate) fn is_closing_thread(&self) -> bool {
+        self.inner.closer.is_current_thread()
+    }
+
+    /// How many threads are in [`Self::wait_for_closes`].
+    #[cfg(test)]
+    pub(crate) fn closes_waited_for(&self) -> usize {
+        self.inner.closer.queue().waiting()
+    }
+
+    /// Wait until every [`RdmaBuffer`], [`crate::LentBuffer`],
+    /// [`crate::RdmaSharedBuffer`] and [`crate::LentWindow`] dropped on this fabric
+    /// before this call has finished closing its region and has freed, parked or
+    /// leaked its memory.
     ///
     /// Dropping one of them only queues that work for the fabric's closing
     /// thread. Call this when the caller needs it done, for example before

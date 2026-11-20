@@ -260,7 +260,7 @@ impl Drop for SharedBufferInner {
             )
         };
         let unanswered = self.unanswered.load(Ordering::Acquire);
-        self.fabric.clone().close_later(move |fabric| {
+        let close = move |fabric: &RdmaFabric| {
             let closed = registration.revoke().is_ok();
             if unanswered {
                 fabric.release_unanswered(host, closed);
@@ -270,7 +270,15 @@ impl Drop for SharedBufferInner {
                 fabric.leak(host);
             }
             drop(registration);
-        });
+        };
+        // The last handle is often dropped by a window's close, on the closing
+        // thread. Finish there, so `wait_for_closes` on that close covers the
+        // memory. Not while unwinding: a second panic would abort the process.
+        if self.fabric.is_closing_thread() && !std::thread::panicking() {
+            close(&self.fabric);
+        } else {
+            self.fabric.clone().close_later(close);
+        }
     }
 }
 
@@ -436,20 +444,31 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
 
-    /// Sets its flag when dropped, which is when the fabric lets go of the memory.
-    struct Owner(Arc<AtomicBool>);
+    /// Owns the registered memory and sets its flag when dropped, which is when
+    /// the fabric lets go of the memory.
+    struct Owner {
+        released: Arc<AtomicBool>,
+        _memory: Vec<u8>,
+    }
     impl Drop for Owner {
         fn drop(&mut self) {
-            self.0.store(true, Ordering::Release);
+            self.released.store(true, Ordering::Release);
         }
     }
 
-    fn region(fabric: &RdmaFabric, memory: &mut [u8]) -> (RdmaSharedBuffer, Arc<AtomicBool>) {
+    /// Register `memory` as a shared buffer whose owner keeps it, so it lives until
+    /// the fabric lets go of it, however the test ends.
+    fn region(fabric: &RdmaFabric, mut memory: Vec<u8>) -> (RdmaSharedBuffer, Arc<AtomicBool>) {
         let released = Arc::new(AtomicBool::new(false));
-        // SAFETY: each test keeps `memory` alive until `released` is set.
-        let region =
-            unsafe { fabric.register_shared_raw(NonNull::from(memory), Owner(released.clone())) }
-                .expect("registers");
+        // Taken before the move: moving a `Vec` leaves its heap allocation in place.
+        let bytes = NonNull::from(memory.as_mut_slice());
+        let owner = Owner {
+            released: released.clone(),
+            _memory: memory,
+        };
+        // SAFETY: `owner` holds the allocation `bytes` points into, so it stays
+        // valid until the registration drops the owner.
+        let region = unsafe { fabric.register_shared_raw(bytes, owner) }.expect("registers");
         (region, released)
     }
 
@@ -474,8 +493,8 @@ mod tests {
     #[test]
     fn disjoint_windows_are_lent_at_once_and_overlapping_ones_refused() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 4096];
-        let (region, _) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 4096];
+        let (region, _) = region(&fabric, memory);
 
         let (_, first) = region.lend_for_get(b"a", 0, 1024).expect("lends");
         let (_, second) = region
@@ -509,8 +528,8 @@ mod tests {
     #[test]
     fn sets_may_share_a_window_but_a_get_shares_with_nothing() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 4096];
-        let (region, _) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 4096];
+        let (region, _) = region(&fabric, memory);
         let overlaps = |result: Result<(RdmaCommand, LentWindow), RdmaError>| match result {
             Err(RdmaError::Configuration(message)) => message.contains("overlaps"),
             _ => false,
@@ -551,10 +570,10 @@ mod tests {
     #[test]
     fn lending_names_the_window_and_checksums_only_it() {
         let fabric = fabric();
-        let mut memory = patterned(4096);
+        let memory = patterned(4096);
         let expected = crate::checksum(&memory[2048..2304]);
         assert_ne!(expected, crate::checksum(&memory[..256]));
-        let (buffer, _) = region(&fabric, &mut memory);
+        let (buffer, _) = region(&fabric, memory);
         let base = buffer.inner.region_ref.clone();
 
         let (get, _get) = buffer.lend_for_get(b"key", 1024, 256).unwrap();
@@ -588,12 +607,12 @@ mod tests {
     #[test]
     fn a_read_is_verified_against_its_window_alone() {
         let fabric = fabric();
-        let mut memory = patterned(4096);
+        let memory = patterned(4096);
         let landed = ReadReceipt {
             bytes_written: 100,
             checksum: crate::checksum(&memory[512..612]),
         };
-        let (buffer, _) = region(&fabric, &mut memory);
+        let (buffer, _) = region(&fabric, memory);
 
         let (_, loan) = buffer.lend_for_get(b"a", 512, 128).unwrap();
         // SAFETY: no command was sent.
@@ -616,8 +635,8 @@ mod tests {
     #[test]
     fn windows_at_the_edges() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 4096];
-        let (buffer, _) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 4096];
+        let (buffer, _) = region(&fabric, memory);
 
         let error = buffer.lend_for_get(b"a", usize::MAX, 2).unwrap_err();
         assert!(matches!(error, RdmaError::Configuration(_)), "{error:?}");
@@ -637,8 +656,8 @@ mod tests {
     #[test]
     fn a_window_raced_for_is_lent_to_one_transfer_at_a_time() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 64];
-        let (buffer, _) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 64];
+        let (buffer, _) = region(&fabric, memory);
         let holders = AtomicUsize::new(0);
         let lent = AtomicUsize::new(0);
         std::thread::scope(|scope| {
@@ -663,8 +682,8 @@ mod tests {
     #[test]
     fn each_window_drives_progress_until_it_ends() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 128];
-        let (buffer, _) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 128];
+        let (buffer, _) = region(&fabric, memory);
         let (_, first) = buffer.lend_for_get(b"a", 0, 64).unwrap();
         let (_, second) = buffer.lend_for_get(b"b", 64, 64).unwrap();
         assert_eq!(fabric.transfers_in_flight(), 2);
@@ -680,8 +699,8 @@ mod tests {
     #[test]
     fn revoking_from_elsewhere_ends_every_window() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 128];
-        let (buffer, _) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 128];
+        let (buffer, _) = region(&fabric, memory);
         assert!(buffer.is_registered_on(&fabric) && buffer.fabric().is(&fabric));
         assert!(!buffer.is_registered_on(&self::fabric()));
         let (_, first) = buffer.lend_for_get(b"a", 0, 64).unwrap();
@@ -715,9 +734,9 @@ mod tests {
         const WINDOW: usize = 4096;
         const WINDOWS: usize = 4;
         let fabric = fabric();
-        let mut memory = patterned(WINDOW * WINDOWS);
+        let memory = patterned(WINDOW * WINDOWS);
         let expected = memory.clone();
-        let (buffer, _) = region(&fabric, &mut memory);
+        let (buffer, _) = region(&fabric, memory);
         let mut peer = LibfabricEndpoint::open(&FabricConfig::new(Provider::Tcp)).expect("opens");
 
         let loans: Vec<_> = (0..WINDOWS)
@@ -780,8 +799,8 @@ mod tests {
     #[test]
     fn a_recall_revokes_the_region_for_every_window() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 4096];
-        let (region, released) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 4096];
+        let (region, released) = region(&fabric, memory);
         let (_, kept) = region.lend_for_set(b"a", 0, 64, SetChecksum::Skip).unwrap();
         let (_, lost) = region
             .lend_for_set(b"b", 64, 64, SetChecksum::Skip)
@@ -814,8 +833,8 @@ mod tests {
     #[test]
     fn a_lend_racing_a_recall_does_not_take_the_recalled_window() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 4096];
-        let (region, released) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 4096];
+        let (region, released) = region(&fabric, memory);
         let (_, recalled) = region.lend_for_get(b"a", 0, 64).unwrap();
         let pause = region.inner.lend_pause.get_or_init(|| Barrier::new(2));
 
@@ -838,8 +857,8 @@ mod tests {
     #[test]
     fn cancelling_an_unsent_window_lends_it_again_without_a_revoke() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 4096];
-        let (region, released) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 4096];
+        let (region, released) = region(&fabric, memory);
         let (_, other) = region.lend_for_get(b"a", 64, 64).unwrap();
         let (_, loan) = region.lend_for_get(b"b", 0, 64).unwrap();
         assert_eq!(fabric.transfers_in_flight(), 2);
@@ -866,8 +885,8 @@ mod tests {
     #[test]
     fn cancelling_an_unsent_window_after_a_revoke_leaves_the_buffer_revoked() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 4096];
-        let (region, released) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 4096];
+        let (region, released) = region(&fabric, memory);
         let (_, loan) = region.lend_for_get(b"a", 0, 64).unwrap();
         region.revoker().revoke().unwrap();
 
@@ -886,8 +905,8 @@ mod tests {
     #[test]
     fn a_recall_frees_the_memory_when_the_close_stops_writes() {
         let fabric = fabric_whose_close_stops_writes();
-        let mut memory = vec![0u8; 4096];
-        let (buffer, released) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 4096];
+        let (buffer, released) = region(&fabric, memory);
         let (_, loan) = buffer.lend_for_get(b"a", 0, 64).unwrap();
 
         loan.recall().expect("closes");
@@ -897,6 +916,74 @@ mod tests {
             released.load(Ordering::Acquire),
             "freed without waiting for the fabric"
         );
+        assert_eq!(fabric.parked_bytes(), 0);
+    }
+
+    /// Dropping the buffer and then its last window leaves the memory to the
+    /// window's close, which drops the last handle to the buffer from the closing
+    /// thread. A wait that started after both drops must still see the owner
+    /// dropped, which it would not if that cleanup were queued behind the wait.
+    #[test]
+    fn a_wait_after_the_last_window_drops_covers_the_buffers_memory() {
+        let fabric = fabric_whose_close_stops_writes();
+        let (buffer, released) = region(&fabric, vec![0u8; 64]);
+        let (_, window) = buffer.lend_for_get(b"a", 0, 64).unwrap();
+
+        // Hold the closing thread, so the window's close waits behind it.
+        let (open_first, first_opened) = std::sync::mpsc::channel::<()>();
+        fabric.clone().close_later(move |_| {
+            let _ = first_opened.recv();
+        });
+        drop(buffer);
+        drop(window);
+
+        std::thread::scope(|scope| {
+            // Moved in, so a panic here drops it before the scope joins the waiter.
+            let open_first = open_first;
+            let waiter = scope.spawn(|| {
+                fabric.wait_for_closes();
+                released.load(Ordering::Acquire)
+            });
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while fabric.closes_waited_for() == 0 {
+                // Unwinding drops both gates' senders, which lets the closes go.
+                assert!(Instant::now() < deadline, "the wait never started");
+                std::thread::yield_now();
+            }
+            // Queued after the wait counted its closes, and ahead of any cleanup
+            // the window's close would queue, so such a cleanup stays held here.
+            let (open_second, second_opened) = std::sync::mpsc::channel::<()>();
+            fabric.clone().close_later(move |_| {
+                let _ = second_opened.recv();
+            });
+            open_first.send(()).unwrap();
+            let released_when_the_wait_returned = waiter.join().unwrap();
+            open_second.send(()).unwrap();
+            assert!(
+                released_when_the_wait_returned,
+                "the owner is dropped by the time the wait returns"
+            );
+        });
+        fabric.wait_for_closes();
+        assert_eq!(fabric.parked_bytes(), 0);
+    }
+
+    /// A close that panics while it holds the last handle to a buffer drops that
+    /// handle while unwinding. The buffer's cleanup is then queued rather than run
+    /// there, and still frees the memory.
+    #[test]
+    fn a_close_that_panics_holding_the_last_handle_still_frees_the_memory() {
+        let fabric = fabric_whose_close_stops_writes();
+        let (buffer, released) = region(&fabric, vec![0u8; 64]);
+        fabric.clone().close_later(move |_| {
+            let _last_handle = buffer;
+            panic!("a close panicking");
+        });
+        // The first wait covers the panicking close, the second the cleanup it
+        // queued while unwinding.
+        fabric.wait_for_closes();
+        fabric.wait_for_closes();
+        assert!(released.load(Ordering::Acquire));
         assert_eq!(fabric.parked_bytes(), 0);
     }
 
@@ -911,8 +998,8 @@ mod tests {
     #[test]
     fn a_buffer_whose_close_failed_is_closed_though_not_revoked() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 4096];
-        let (buffer, released) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 4096];
+        let (buffer, released) = region(&fabric, memory);
         let (_, loan) = buffer.lend_for_get(b"a", 0, 64).unwrap();
 
         fabric.fail_next_closes(1);
@@ -928,15 +1015,13 @@ mod tests {
         fabric.wait_for_closes();
         assert!(!released.load(Ordering::Acquire), "the memory is leaked");
         assert_eq!(fabric.leaked_bytes(), 4096);
-        // Still registered as far as the fabric knows, so never freed.
-        std::mem::forget(memory);
     }
 
     #[test]
     fn a_dropped_loan_revokes_the_region_without_waiting() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 4096];
-        let (region, _) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 4096];
+        let (region, _) = region(&fabric, memory);
         let (_, loan) = region.lend_for_get(b"a", 0, 64).unwrap();
         drop(loan);
         fabric.wait_for_closes();
@@ -946,8 +1031,8 @@ mod tests {
     #[test]
     fn answered_loans_free_the_memory_when_the_last_handle_drops() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 4096];
-        let (region, released) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 4096];
+        let (region, released) = region(&fabric, memory);
         let clone = region.clone();
         let (_, loan) = clone.lend_for_get(b"a", 0, 64).unwrap();
         drop((region, clone));
@@ -962,8 +1047,8 @@ mod tests {
     #[test]
     fn a_read_past_the_window_revokes_the_region() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 4096];
-        let (region, _) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 4096];
+        let (region, _) = region(&fabric, memory);
         let (_, loan) = region.lend_for_get(b"a", 0, 64).unwrap();
         let receipt = crate::command::ReadReceipt {
             bytes_written: 65,
@@ -978,8 +1063,8 @@ mod tests {
     #[test]
     fn windows_lend_from_many_threads_at_once() {
         let fabric = fabric();
-        let mut memory = vec![0u8; 64 * 16];
-        let (region, _) = region(&fabric, &mut memory);
+        let memory = vec![0u8; 64 * 16];
+        let (region, _) = region(&fabric, memory);
         std::thread::scope(|scope| {
             for t in 0..16 {
                 let region = region.clone();
