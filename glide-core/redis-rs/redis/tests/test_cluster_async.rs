@@ -5843,6 +5843,67 @@ mod cluster_async {
             .unwrap();
     }
 
+    /// Runs `command` against two mock primaries, failing the first command
+    /// that reaches port 6380 with `FatalReceiveError` while retries remain.
+    /// Returns the error the caller got and how many commands 6380 received.
+    fn query_with_one_fatal_receive_error(
+        name: &'static str,
+        command: redis::Cmd,
+    ) -> (RedisError, usize) {
+        let received = Arc::new(atomic::AtomicUsize::new(0));
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            {
+                let received = received.clone();
+                move |cmd: &[u8], port| {
+                    respond_startup_two_nodes(name, cmd)?;
+                    if port == 6380 && received.fetch_add(1, atomic::Ordering::SeqCst) == 0 {
+                        return Err(Err(RedisError::from((
+                            ErrorKind::FatalReceiveError,
+                            "mock-fatal-receive-error",
+                        ))));
+                    }
+                    Err(Ok(Value::Okay))
+                }
+            },
+        );
+        let err = runtime
+            .block_on(command.query_async::<_, Value>(&mut connection))
+            .unwrap_err();
+        (err, received.load(atomic::Ordering::SeqCst))
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fan_out_gets_reconnect_error_with_retries_left() {
+        let (err, received) = query_with_one_fatal_receive_error(
+            "test_async_cluster_fan_out_gets_reconnect_error_with_retries_left",
+            cmd("FLUSHALL"),
+        );
+        assert_eq!(err.kind(), ErrorKind::FatalReceiveError, "{err}");
+        assert_eq!(received, 1, "the failed sub-request must not be retried");
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_single_node_gets_reconnect_error_with_retries_left() {
+        let mut set = cmd("SET");
+        // "foo" hashes to slot 12182, served by port 6380.
+        set.arg("foo").arg("bar");
+        let (err, received) = query_with_one_fatal_receive_error(
+            "test_async_cluster_single_node_gets_reconnect_error_with_retries_left",
+            set,
+        );
+        assert_eq!(err.kind(), ErrorKind::FatalReceiveError, "{err}");
+        assert_eq!(received, 1, "the failed request must not be retried");
+    }
+
     /// The RDMA transfer command used by the tests below; the arguments only
     /// need the right shape.
     fn rdma_get_cmd() -> redis::Cmd {

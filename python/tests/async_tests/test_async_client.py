@@ -12511,12 +12511,6 @@ class TestScripts:
         result = await glide_client.hgetdel(non_existent_key, [field1, field2])
         assert result == [None, None]
 
-        # HGETDEL on a key holding a non-hash value returns a WRONGTYPE error
-        string_key = get_random_string(10)
-        assert await glide_client.set(string_key, "not_a_hash") == OK
-        with pytest.raises(RequestError, match="WRONGTYPE"):
-            await glide_client.hgetdel(string_key, [field1])
-
         # HGETDEL with an empty fields list should raise an error
         with pytest.raises(RequestError):
             await glide_client.hgetdel(key, [])

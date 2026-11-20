@@ -942,34 +942,6 @@
     },
     "glide": null
   },
-  "hget_del": {
-    "reason": "TODO #7060: not implemented yet",
-    "redis": {
-      "name": "hget_del",
-      "generics": [
-        {
-          "name": "K",
-          "bound": "ToSingleRedisArg"
-        },
-        {
-          "name": "F",
-          "bound": "ToRedisArgs"
-        }
-      ],
-      "args": [
-        {
-          "name": "key",
-          "type_name": "K"
-        },
-        {
-          "name": "fields",
-          "type_name": "F"
-        }
-      ],
-      "return_type": "(Vec<Option<String>>)"
-    },
-    "glide": null
-  },
   "hset_multiple": {
     "reason": "`HSET` with multiple fields was introduced in Redis 4.0.0 and is supported by all Valkey versions. Unlike `HMSET` (deprecated since Redis 4.0.0), it returns the number of fields that were newly added.",
     "redis": {
