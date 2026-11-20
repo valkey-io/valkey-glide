@@ -30,6 +30,9 @@ type FtSearchDocument struct {
 	// SortKey is the sort key value returned when WITHSORTKEYS is used.
 	// Empty string when WITHSORTKEYS is not requested.
 	SortKey string
+	// Score is the document's relevance score when WithScores is used (valkey-search 1.3.0).
+	// Nil when WithScores is not requested.
+	Score *float64
 }
 
 // FtSearchResult holds the parsed response from an FT.SEARCH command.

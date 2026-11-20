@@ -251,6 +251,7 @@ class _GlideFFI:
             typedef struct {
                 const void* conn_ptr;
                 const char* connection_error_message;
+                int connection_error_type;
             } ConnectionResponse;
 
             const ConnectionResponse* create_client(
@@ -527,8 +528,7 @@ class _GlideFFI:
             int32_t glide_pool_set_pipe_client_id(uint64_t client_id, uint64_t pipe_client_id);
             typedef enum {
                 Read = 0,
-                UnknownPool = 1,
-                LockHeld = 2
+                UnknownPool = 1
             } PoolMetricsStatus;
             typedef struct {
                 PoolMetricsStatus status;

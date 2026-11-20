@@ -19,13 +19,17 @@
 
 The `valkey-glide` crate depends on several internal crates:
 
-| Package name        | Library name      | Directory                    | Depends on                                             |
-| ------------------- | ----------------- | ---------------------------- | ------------------------------------------------------ |
-| `valkey-glide`      | `glide`           | `rust/`                      | `glide-core`, `glide-core-engine`, `glide-logger`      |
-| `glide-core`        | `glide_core`      | `glide-core/`                | `glide-core-engine`, `glide-telemetry`, `glide-logger` |
-| `glide-core-engine` | `redis`           | `glide-core/redis-rs/redis/` | `glide-telemetry`, `glide-logger`                      |
-| `glide-telemetry`   | `glide_telemetry` | `glide-telemetry/`           | `glide-logger`                                         |
-| `glide-logger`      | `glide_logger`    | `glide-logger/`              | None                                                   |
+| Package name          | Library name          | Directory                         | Depends on                                                           |
+| --------------------- | --------------------- | --------------------------------- | -------------------------------------------------------------------- |
+| `valkey-glide`        | `glide`               | `rust/`                           | `glide-core`, `glide-core-engine`, `glide-logger`                    |
+| `glide-core`          | `glide_core`          | `glide-core/`                     | `glide-core-engine`, `glide-telemetry`, `glide-logger`, `glide-rdma` |
+| `glide-core-engine`   | `redis`               | `glide-core/redis-rs/redis/`      | `glide-telemetry`, `glide-logger`, `glide-rdma`                      |
+| `glide-rdma`          | `glide_rdma`          | `glide-rdma/`                     | `glide-libfabric-sys`, `glide-logger`                                |
+| `glide-libfabric-sys` | `glide_libfabric_sys` | `glide-rdma/glide-libfabric-sys/` | None                                                                 |
+| `glide-telemetry`     | `glide_telemetry`     | `glide-telemetry/`                | `glide-logger`                                                       |
+| `glide-logger`        | `glide_logger`        | `glide-logger/`                   | None                                                                 |
+
+`glide-rdma` is an optional dependency, enabled by the `rdma` feature of `glide-core` and `glide-core-engine`.
 
 The `glide-core-engine` crate is forked from redis-rs 0.25.2, so it uses the `redis` library name.
 
@@ -40,7 +44,7 @@ released version, the internal dependencies are declared with **both** `path`
 and `version` in `Cargo.toml`:
 
 ```toml
-glide-core = { path = "../glide-core", version = "0.1" }
+glide-core = { path = "../glide-core", version = "0.3.0" }
 ```
 
 Cargo uses `path` when building locally, and `version` when the crate is resolved

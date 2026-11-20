@@ -27,7 +27,7 @@ This is the Python client binding for Valkey GLIDE, providing both async and syn
 
 **Supported Platforms:** see the System Requirements section of [README.md](./README.md). Alpine Linux/MUSL is not supported.
 
-**Python Versions:** 3.9–3.14, plus 3.14t (free-threaded). CI's always-run set is 3.9, 3.13, 3.14t (`.github/json_matrices/supported-languages-versions.json`). Free-threaded 3.14t has extra concurrency rules — see "Python Free-Threading" below.
+**Python Versions:** 3.9–3.15, plus 3.14t (free-threaded). CI's always-run set is 3.9, 3.13, 3.15, and 3.14t (`.github/json_matrices/supported-languages-versions.json`); 3.13 retains the benchmark smoke check's base version. Free-threaded 3.14t has extra concurrency rules — see "Python Free-Threading" below.
 **Async Frameworks:** asyncio, trio, uvloop
 
 **Packages:** `valkey-glide` (async), `valkey-glide-sync` (sync)
@@ -191,6 +191,7 @@ cargo clippy --all-features --all-targets -- -D warnings
 - **Protobuf Updates:** Run `python3 dev.py protobuf` after proto changes
 - **Stale `libglide_ffi.so` after core changes:** `install_glide_shared` (in `dev.py`) only (re)builds and copies the C-ABI `libglide_ffi.*` into `glide-shared/glide_shared/` when that destination file is **absent** — so once a copy exists, a later `dev.py build` keeps using the old one even after you change `ffi/`/`glide-core` (symptom: sync tests fail with `undefined symbol: glide_scope_...` against a stale `.so`). Rebuilding `ffi` alone does **not** fix it because the copy is skipped. To force a refresh, delete the stale lib (`rm glide-shared/glide_shared/libglide_ffi.*`) or run `python3 dev.py clean`, then rebuild. Not environment-specific. CI never hits this (ephemeral runners build from scratch).
 - **Documentation Style:** Follow Google Style Python Docstrings format
+- **Distinguish "unset" from a falsy value:** When an optional value can legitimately be `0`, `0.0` or `""`, test it with `is not None` rather than truthiness (`if x:`, `x or default`), so a valid falsy value is not dropped or replaced by a default. Truthiness is fine for booleans and for collections/objects where empty means "not provided".
 
 ### Python Free-Threading (3.14t) Concurrency Rules
 

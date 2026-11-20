@@ -321,6 +321,7 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClientUsageError> {
         }
     };
 
+    // TODO #7666: Remove this check once `Client::send_command` rejects empty commands.
     if cmd.args_iter().next().is_none() {
         return Err(ClientUsageError::User(
             "Received command without a command name or arguments".into(),
@@ -370,34 +371,6 @@ async fn send_command(
 }
 
 /// Process a command for compression by extracting arguments and applying compression
-/// Process batch response for decompression
-///
-/// This function processes the response from a batch operation (pipeline or transaction)
-/// and decompresses individual response values using magic header detection.
-///
-/// # Arguments
-/// * `response` - The batch response value (typically an array)
-/// * `client` - The client instance containing the compression manager
-///
-/// # Returns
-/// * `Ok(Value)` - The processed response with decompressed values
-/// * `Err(CompressionError)` - If critical decompression errors occur
-fn process_batch_response_for_decompression(
-    response: redis::Value,
-    client: &Client,
-) -> Result<redis::Value, crate::compression::CompressionError> {
-    // Get compression manager from client
-    let compression_manager = client.compression_manager();
-    let compression_manager_ref = compression_manager.as_deref();
-
-    // If no compression manager, return response as-is
-    let Some(manager) = compression_manager_ref else {
-        return Ok(response);
-    };
-
-    crate::compression::decompress_batch_response(response, manager)
-}
-
 fn process_command_for_compression(
     cmd: &mut Cmd,
     client: &Client,
@@ -586,7 +559,7 @@ async fn send_batch(
         pipeline.add_command(redis_cmd);
     }
 
-    let res = match request.is_atomic {
+    let res: ClientUsageResult<Value> = match request.is_atomic {
         true => client
             .send_transaction(
                 &pipeline,
@@ -611,23 +584,12 @@ async fn send_batch(
             .map_err(|err| err.into()),
     };
 
-    // Process response for decompression if needed
-    match res {
-        Ok(value) => {
-            match process_batch_response_for_decompression(value.clone(), client) {
-                Ok(processed_value) => Ok(processed_value),
-                Err(e) => {
-                    // Log decompression error but return original response
-                    log_warn(
-                        "batch_response_decompression",
-                        format!("Failed to decompress batch response: {}", e),
-                    );
-                    Ok(value)
-                }
-            }
-        }
-        Err(e) => Err(e),
-    }
+    let decompressed = crate::compression::try_decompress_batch_response(
+        res?,
+        client.compression_manager().as_deref(),
+    )
+    .map_err(RedisError::from)?;
+    Ok(decompressed)
 }
 
 fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageResult<SlotAddr> {
@@ -682,6 +644,8 @@ fn get_route(
         ))),
         Value::SlotIdRoute(slot_id_route) => Ok(Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
+                // TODO #7681: Use a checked conversion (`u16::try_from`) and reject out-of-range
+                // slots.
                 slot_id_route.slot_id as u16,
                 get_slot_addr(&slot_id_route.slot_type)?,
             )),

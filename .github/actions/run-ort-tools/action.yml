@@ -1,10 +1,10 @@
 name: Run the OSS review tool
+description: Run the OSS Review Toolkit (ORT) on a folder and upload its results
 
 inputs:
     folder_path:
         description: "The root folder to run the ORT tool from"
         required: true
-        type: string
 
 runs:
     using: "composite"

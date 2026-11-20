@@ -1,37 +1,26 @@
 name: Build Python wrapper
+description: Install dependencies and build the GLIDE Python sync and async clients
 
 inputs:
     os:
-        description: "The current operating system"
+        description: "The current operating system (one of: amazon-linux, macos, ubuntu)"
         required: true
-        type: string
-        options:
-            - amazon-linux
-            - macos
-            - ubuntu
     target:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
-        type: string
         required: true
     engine-version:
         description: "Engine version to install"
         required: false
-        type: string
     publish:
         description: "Enable building the wrapper in release mode"
         required: false
-        type: boolean
         default: "false"
     github-token:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true
-        type: string
     features:
         description: "Comma separated list of Rust features to enable for maturin"
         required: false
-        type: string
-env:
-    CARGO_TERM_COLOR: always
 
 runs:
     using: "composite"
@@ -60,6 +49,7 @@ runs:
           working-directory: ./python
           if: ${{ inputs.publish != 'true' }}
           env:
+              CARGO_TERM_COLOR: always
               FEATURES: ${{ inputs.features }}
           run: |
               FEATURE_ARGS=""

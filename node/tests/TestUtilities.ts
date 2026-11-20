@@ -2868,13 +2868,25 @@ export function assertMemoryStatsFields(
 
     expect(stats.allocatorActive).toBeGreaterThan(0);
     expect(stats.allocatorAllocated).toBeGreaterThan(0);
-    expect(stats.allocatorFragmentationBytes).toBeGreaterThanOrEqual(0);
+    // Before 8.0 this is allocator.active - allocator.allocated. Without jemalloc (macOS), active
+    // is the RAM in use, which can be less than what was allocated, so it can go negative.
+    expect(Number.isInteger(stats.allocatorFragmentationBytes)).toBe(true);
+
+    if (serverVersion < "8.0.0") {
+        expect(stats.allocatorFragmentationBytes).toBe(
+            stats.allocatorActive - stats.allocatorAllocated,
+        );
+    } else {
+        expect(stats.allocatorFragmentationBytes).toBeGreaterThanOrEqual(0);
+    }
+
     expect(stats.allocatorResident).toBeGreaterThan(0);
     expect(typeof stats.allocatorRssBytes).toBe("number");
     expect(stats.aofBuffer).toBeGreaterThanOrEqual(0);
     expect(stats.clientsNormal).toBeGreaterThanOrEqual(0);
     expect(stats.clientsSlaves).toBeGreaterThanOrEqual(0);
-    expect(stats.datasetBytes).toBeGreaterThanOrEqual(0);
+    // dataset.bytes can be negative depending on engine memory accounting, so only check its type.
+    expect(typeof stats.datasetBytes).toBe("number");
     expect(typeof stats.fragmentationBytes).toBe("number");
     expect(stats.keysBytesPerKey).toBeGreaterThanOrEqual(0);
     expect(stats.keysCount).toBeGreaterThanOrEqual(0);

@@ -47,6 +47,8 @@ macOS:
 | 3.11           |
 | 3.12           |
 | 3.13           |
+| 3.14           |
+| 3.15           |
 
 Valkey GLIDE transparently supports both the `asyncio` and `trio` concurrency frameworks.
 
@@ -554,7 +556,8 @@ if not GlideClient.rdma_usable():
 
 client = GlideClient.create(GlideClientConfiguration(
     addresses=[NodeAddress("localhost", 6379)],
-    # EfaDirect() for EFA hardware. Tcp() emulates RDMA over TCP, for development only.
+    # EfaDirect() for EFA hardware. Tcp() emulates RDMA over TCP; only a development
+    # build honors it.
     rdma=RdmaConfiguration(provider=RdmaProvider.EfaDirect()),
 ))
 
