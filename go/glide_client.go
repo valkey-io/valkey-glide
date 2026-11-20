@@ -59,15 +59,16 @@ type Client struct {
 //	      in case of disconnections.
 //	  - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
 func NewClient(config *config.ClientConfiguration) (*Client, error) {
-	client, err := createClient(config)
-	if err != nil {
-		return nil, err
-	}
+	var handler *MessageHandler
 	if config.HasSubscription() {
 		subConfig := config.GetSubscription()
-		client.setMessageHandler(NewMessageHandler(subConfig.GetCallback(), subConfig.GetContext()))
+		handler = NewMessageHandler(subConfig.GetCallback(), subConfig.GetContext())
 	} else {
-		client.setMessageHandler(NewMessageHandler(nil, nil))
+		handler = NewMessageHandler(nil, nil)
+	}
+	client, err := createClient(config, handler)
+	if err != nil {
+		return nil, err
 	}
 
 	return &Client{baseClient: *client, clientConfig: config}, nil

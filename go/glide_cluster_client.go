@@ -66,15 +66,16 @@ type ClusterClient struct {
 //	  - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
 //	      Supports exact channels, patterns, and sharded channels (available since Valkey 7.0.0).
 func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient, error) {
-	client, err := createClient(config)
-	if err != nil {
-		return nil, err
-	}
+	var handler *MessageHandler
 	if config.HasSubscription() {
 		subConfig := config.GetSubscription()
-		client.setMessageHandler(NewMessageHandler(subConfig.GetCallback(), subConfig.GetContext()))
+		handler = NewMessageHandler(subConfig.GetCallback(), subConfig.GetContext())
 	} else {
-		client.setMessageHandler(NewMessageHandler(nil, nil))
+		handler = NewMessageHandler(nil, nil)
+	}
+	client, err := createClient(config, handler)
+	if err != nil {
+		return nil, err
 	}
 
 	return &ClusterClient{baseClient: *client, clientConfig: config}, nil
