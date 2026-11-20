@@ -5,6 +5,7 @@
 ### Features
 
 * Core: opt-in per-node results for multi-node commands ([#7751](https://github.com/valkey-io/valkey-glide/pull/7751))
+* Core: per-node partial results in the redis-rs cluster fan-out ([#7819](https://github.com/valkey-io/valkey-glide/pull/7819))
 * Rust: Add `HGETDEL` and `DELIFEQ` commands ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145), [#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Python: Add CPython 3.15 wheels for the async and sync clients ([#7321](https://github.com/valkey-io/valkey-glide/issues/7321))
 
