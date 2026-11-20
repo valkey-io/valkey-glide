@@ -587,7 +587,7 @@ impl<C> InnerCore<C>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    fn get_cluster_param<T, F>(&self, f: F) -> T
+    pub(crate) fn get_cluster_param<T, F>(&self, f: F) -> T
     where
         F: FnOnce(&ClusterParams) -> T,
         T: Clone,
@@ -3441,9 +3441,9 @@ where
                     Ok((scan_state_ref, values)) => {
                         Ok(Response::ClusterScanResult(scan_state_ref, values))
                     }
-                    // TODO: After routing issues with sending to random node on not-key based commands are resolved,
-                    // this error should be handled in the same way as other errors and not fan-out.
-                    Err(err) => Err((OperationTarget::FanOut, err)),
+                    // `try_scan` already retried with the client's `retries`, so don't retry
+                    // again here.
+                    Err(err) => Err((OperationTarget::FatalError, err)),
                 }
             }
             CmdArg::OperationRequest(operation_request) => match operation_request {

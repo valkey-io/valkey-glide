@@ -3760,6 +3760,125 @@ mod cluster_async {
         );
     }
 
+    /// Runs one `cluster_scan` against a mock cluster whose SCAN finds no connection
+    /// `failures` times. With `move_slots`, each failure also moves every slot to the other
+    /// node, so each refresh sends the scan somewhere new. Returns the result and the
+    /// number of SCANs.
+    fn scan_with_failing_scans(
+        name: &'static str,
+        retries: u32,
+        failures: usize,
+        move_slots: bool,
+    ) -> (RedisResult<(redis::ScanStateRC, Vec<Value>)>, usize) {
+        let scans = Arc::new(atomic::AtomicUsize::new(0));
+        let handler_scans = scans.clone();
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(retries)
+                .min_retry_wait(0)
+                .max_retry_wait(1),
+            name,
+            move |cmd: &[u8], _port| {
+                if contains_slice(cmd, b"PING")
+                    || contains_slice(cmd, b"SETNAME")
+                    || contains_slice(cmd, b"READONLY")
+                {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"INFO") {
+                    return Err(Ok(Value::BulkString(
+                        b"cluster_my_epoch:1\r\n".to_vec().into(),
+                    )));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    let moves = if move_slots {
+                        handler_scans.load(Ordering::SeqCst).min(failures)
+                    } else {
+                        0
+                    };
+                    return Err(Ok(create_topology_from_config(
+                        name,
+                        vec![MockSlotRange {
+                            primary_port: 6379 + (moves % 2) as u16,
+                            replica_ports: vec![],
+                            slot_range: (0..16383),
+                        }],
+                    )));
+                }
+                if contains_slice(cmd, b"SCAN") {
+                    if handler_scans.fetch_add(1, Ordering::SeqCst) < failures {
+                        return Err(Err((
+                            ErrorKind::ConnectionNotFoundForRoute,
+                            "no connection",
+                        )
+                            .into()));
+                    }
+                    return Err(Ok(Value::Array(vec![
+                        Value::BulkString(b"0".to_vec().into()),
+                        Value::Array(vec![]),
+                    ])));
+                }
+                panic!("unexpected command: {}", String::from_utf8_lossy(cmd));
+            },
+        );
+        let result = runtime
+            .block_on(async {
+                tokio::time::timeout(
+                    Duration::from_secs(10),
+                    connection
+                        .cluster_scan(redis::ScanStateRC::new(), redis::ClusterScanArgs::default()),
+                )
+                .await
+            })
+            .expect("cluster_scan did not return");
+        (result, scans.load(Ordering::SeqCst))
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_scan_retries_within_the_retry_budget() {
+        let (result, _) = scan_with_failing_scans(
+            "test_async_cluster_scan_retries_within_the_retry_budget",
+            1,
+            1,
+            false,
+        );
+        result.unwrap();
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_scan_fails_once_the_retry_budget_is_spent() {
+        let (result, scans) = scan_with_failing_scans(
+            "test_async_cluster_scan_fails_once_the_retry_budget_is_spent",
+            1,
+            usize::MAX,
+            false,
+        );
+        assert_eq!(
+            result.unwrap_err().kind(),
+            ErrorKind::ConnectionNotFoundForRoute
+        );
+        assert_eq!(scans, 2);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_scan_follows_a_topology_change_without_using_a_retry() {
+        let (result, _) = scan_with_failing_scans(
+            "test_async_cluster_scan_follows_a_topology_change_without_using_a_retry",
+            0,
+            1,
+            true,
+        );
+        result.unwrap();
+    }
+
     #[test]
     #[serial_test::parallel(otel)]
     fn test_async_cluster_update_slots_based_on_moved_error_indicates_slot_migration() {

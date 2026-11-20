@@ -780,31 +780,38 @@ async fn try_scan<C>(
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
+    let retry_params = core.get_cluster_param(|params| params.retry_params.clone());
     let mut new_scan_state = scan_state.clone();
+    let mut retry = 0;
 
     loop {
-        match send_scan(&new_scan_state, cluster_scan_args, core.clone()).await {
+        let err = match send_scan(&new_scan_state, cluster_scan_args, core.clone()).await {
             Ok(scan_response) => {
                 let (new_cursor, new_keys) = from_redis_value::<(u64, Vec<Value>)>(&scan_response)?;
                 return Ok(((new_cursor, new_keys), new_scan_state));
             }
-            Err(err) if is_scanwise_retryable_error(&err) => {
-                ClusterConnInner::check_topology_and_refresh_if_diff(
-                    core.clone(),
-                    &RefreshPolicy::NotThrottable,
-                )
-                .await?;
-
-                if let Some(next_scan_state) =
-                    next_scan_state(&core, &new_scan_state, cluster_scan_args).await?
-                {
-                    new_scan_state = next_scan_state;
-                } else {
-                    return Ok(((0, Vec::new()), ScanState::create_finished_state()));
-                }
-            }
+            Err(err) if is_scanwise_retryable_error(&err) => err,
             Err(err) => return Err(err),
+        };
+        let topology_changed = ClusterConnInner::check_topology_and_refresh_if_diff(
+            core.clone(),
+            &RefreshPolicy::NotThrottable,
+        )
+        .await?;
+
+        let Some(next) = next_scan_state(&core, &new_scan_state, cluster_scan_args).await? else {
+            return Ok(((0, Vec::new()), ScanState::create_finished_state()));
+        };
+        // Following a topology change is free; retrying the same node again counts
+        // against the client's retries, with the usual backoff.
+        if !topology_changed && next.address_in_scan == new_scan_state.address_in_scan {
+            if retry >= retry_params.number_of_retries {
+                return Err(err);
+            }
+            retry += 1;
+            tokio::time::sleep(retry_params.wait_time_for_retry(retry)).await;
         }
+        new_scan_state = next;
     }
 }
 

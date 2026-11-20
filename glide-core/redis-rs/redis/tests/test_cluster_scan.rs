@@ -1022,9 +1022,12 @@ mod test_cluster_scan_async {
                 // The old connection keeps retrying these addresses, so the cluster must come back on them.
                 let ports = cluster.cluster.reserve_ports_for_restart();
                 drop(cluster);
-                let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = connection
-                    .cluster_scan(scan_state_rc.clone(), ClusterScanArgs::default())
-                    .await;
+                let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = tokio::time::timeout(
+                    Duration::from_secs(10),
+                    connection.cluster_scan(scan_state_rc.clone(), ClusterScanArgs::default()),
+                )
+                .await
+                .expect("cluster_scan did not return after the cluster went down");
                 assert!(scan_response.is_err());
                 cluster = TestClusterContext::restart_on_ports(
                     ports,
