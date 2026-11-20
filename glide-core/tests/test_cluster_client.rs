@@ -948,4 +948,128 @@ mod cluster_client_tests {
             );
         });
     }
+
+    #[rstest]
+    #[case::httl("HTTL")]
+    #[case::hpttl("HPTTL")]
+    #[case::hexpiretime("HEXPIRETIME")]
+    #[case::hpexpiretime("HPEXPIRETIME")]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_hash_ttl_commands_routed_to_replica(#[case] cmd_name: &str) {
+        block_on_all(async {
+            match installed_server_version() {
+                Some((major, minor, _)) if (major, minor) >= (9, 0) => {}
+                other => {
+                    println!("Skipping: {cmd_name} requires Valkey 9.0+, found {other:?}");
+                    return;
+                }
+            }
+
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
+                read_from: Some(ReadFrom::PreferReplica),
+                ..Default::default()
+            })
+            .await;
+
+            let key = format!("hash_ttl_test_key_{}", generate_random_string(5));
+            let mut hset = redis::cmd("HSET");
+            hset.arg(&key).arg("f1").arg("v1");
+            test_basics
+                .client
+                .send_command(&mut hset, None)
+                .await
+                .unwrap();
+
+            let mut hexpire = redis::cmd("HEXPIRE");
+            hexpire.arg(&key).arg(3600).arg("FIELDS").arg(1).arg("f1");
+            test_basics
+                .client
+                .send_command(&mut hexpire, None)
+                .await
+                .unwrap();
+
+            let stat_prefix = format!("cmdstat_{}:calls=", cmd_name.to_lowercase());
+            let get_counts = |info_map: HashMap<String, String>| -> (usize, usize) {
+                let mut primary_calls = 0;
+                let mut replica_calls = 0;
+                for (_node, info) in info_map {
+                    let is_primary = if info.contains("role:master") {
+                        true
+                    } else if info.contains("role:slave") {
+                        false
+                    } else {
+                        panic!("Unknown node role in INFO response");
+                    };
+                    for line in info.lines() {
+                        if let Some(rest) = line.strip_prefix(&stat_prefix) {
+                            let count = rest
+                                .split(',')
+                                .next()
+                                .unwrap_or("0")
+                                .parse::<usize>()
+                                .unwrap_or(0);
+                            if is_primary {
+                                primary_calls += count;
+                            } else {
+                                replica_calls += count;
+                            }
+                        }
+                    }
+                }
+                (primary_calls, replica_calls)
+            };
+
+            let mut info_cmd = redis::cmd("INFO");
+            info_cmd.arg("COMMANDSTATS").arg("REPLICATION");
+            let res = test_basics
+                .client
+                .send_command(
+                    &mut info_cmd,
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllNodes,
+                        None,
+                    ))),
+                )
+                .await
+                .unwrap();
+            let info_before: HashMap<String, String> = redis::from_owned_redis_value(res).unwrap();
+            let (prim_before, repl_before) = get_counts(info_before);
+
+            let mut test_cmd = redis::cmd(cmd_name);
+            test_cmd.arg(&key).arg("FIELDS").arg(1).arg("f1");
+            test_basics
+                .client
+                .send_command(&mut test_cmd, None)
+                .await
+                .unwrap();
+
+            let mut info_cmd_after = redis::cmd("INFO");
+            info_cmd_after.arg("COMMANDSTATS").arg("REPLICATION");
+            let res_after = test_basics
+                .client
+                .send_command(
+                    &mut info_cmd_after,
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllNodes,
+                        None,
+                    ))),
+                )
+                .await
+                .unwrap();
+            let info_after: HashMap<String, String> =
+                redis::from_owned_redis_value(res_after).unwrap();
+            let (prim_after, repl_after) = get_counts(info_after);
+
+            assert_eq!(
+                prim_after, prim_before,
+                "{cmd_name} should not be served by primary"
+            );
+            assert!(
+                repl_after > repl_before,
+                "{cmd_name} must be served by replica"
+            );
+        });
+    }
 }

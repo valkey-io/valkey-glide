@@ -11,6 +11,7 @@
 
 ### Fixes
 
+* Core: mark HTTL, HPTTL, HEXPIRETIME, HPEXPIRETIME as readonly ([#7717](https://github.com/valkey-io/valkey-glide/pull/7717))
 * Core: keep timeout watchdog pending counts isolated from retired workers and losing singleton initialization candidates ([#7762](https://github.com/valkey-io/valkey-glide/pull/7762))
 * Core: prevent missed refresh completion notifications ([#7766](https://github.com/valkey-io/valkey-glide/pull/7766))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
