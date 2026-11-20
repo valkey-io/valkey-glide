@@ -1,0 +1,19 @@
+version: 0.2
+
+# Linux CodeBuild orchestrator; builds/tests run on the ARM EFA EC2 pair.
+# Required project settings: LINUX_CONTAINER, aws/codebuild/standard:7.0,
+# BUILD_GENERAL1_SMALL. Infrastructure is maintained in the CodeBuild repo.
+#
+# Required project environment variables:
+#   RDMA_VPC_ID        - VPC for the EFA hosts
+#   RDMA_SUBNETS       - comma-separated candidate subnets, tried on capacity failure
+#   RDMA_TEMPLATE_URL  - S3 HTTPS URL of the infrastructure-owned pair template
+#   RDMA_INSTANCE_PROFILE_ARN - instance profile the hosts run as
+#   AWS_REGION        - us-east-1
+# CodeBuild supplies CODEBUILD_BUILD_ID and CODEBUILD_RESOLVED_SOURCE_VERSION.
+# Optional KEEP_HOSTS=true retains the pair on failure only (default false).
+# Provisioning, host-step output, and teardown stream to CloudWatch Logs.
+phases:
+    build:
+        commands:
+            - python3 glide-rdma/ci/efa/bin/orchestrate.py

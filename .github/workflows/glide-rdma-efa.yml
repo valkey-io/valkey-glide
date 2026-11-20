@@ -1,0 +1,76 @@
+name: glide-rdma EFA hardware test
+
+# Like Windows CI, GitHub dispatches CodeBuild and monitors the result.
+# CodeBuild owns the EC2 pair, tests, and teardown, even if this run is cancelled.
+on:
+    workflow_dispatch:
+        inputs:
+            keep_hosts:
+                description: "Leave the EFA pair up on failure for diagnosis"
+                type: boolean
+                default: false
+
+permissions:
+    contents: read
+
+jobs:
+    test-efa:
+        name: EFA hardware test via CodeBuild
+        runs-on: ubuntu-24.04
+        environment: AWS_ACTIONS
+        permissions:
+            id-token: write
+            contents: read
+        # CodeBuild allows 10 minutes queued plus 90 minutes running.
+        timeout-minutes: 120
+        steps:
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.0.2
+              with:
+                  role-to-assume: ${{ secrets.AWS_RDMA_ROLE_ARN }}
+                  aws-region: us-east-1
+                  role-duration-seconds: 7200
+
+            - name: Trigger CodeBuild
+              env:
+                  SOURCE_VERSION: ${{ github.sha }}
+                  KEEP_HOSTS: ${{ inputs.keep_hosts }}
+              run: |
+                  BUILD_ID=$(aws codebuild start-build \
+                    --project-name GlideRdmaEfa \
+                    --source-version "$SOURCE_VERSION" \
+                    --idempotency-token "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+                    --environment-variables-override \
+                      "name=KEEP_HOSTS,value=$KEEP_HOSTS,type=PLAINTEXT" \
+                    --query 'build.id' --output text)
+                  echo "CODEBUILD_BUILD_ID=$BUILD_ID" >> "$GITHUB_ENV"
+                  echo "Started CodeBuild: $BUILD_ID"
+                  echo "CodeBuild: \`$BUILD_ID\` (source \`$SOURCE_VERSION\`)" >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Wait for CodeBuild
+              run: |
+                  deadline=$((SECONDS + 6600))
+                  while (( SECONDS < deadline )); do
+                    STATUS=$(aws codebuild batch-get-builds --ids "$CODEBUILD_BUILD_ID" \
+                      --query 'builds[0].buildStatus' --output text)
+                    echo "CodeBuild: $STATUS"
+                    case "$STATUS" in
+                      SUCCEEDED) exit 0 ;;
+                      FAILED|FAULT|STOPPED|TIMED_OUT)
+                        echo "::error::CodeBuild $CODEBUILD_BUILD_ID finished with $STATUS"
+                        exit 1 ;;
+                      IN_PROGRESS) sleep 30 ;;
+                      *) echo "::error::Unexpected CodeBuild status: $STATUS"; exit 1 ;;
+                    esac
+                  done
+                  echo "::error::Monitoring timed out. CodeBuild owns teardown; inspect $CODEBUILD_BUILD_ID."
+                  exit 1
+
+            - name: Link build logs
+              if: always() && env.CODEBUILD_BUILD_ID != ''
+              run: |
+                  LOG_URL=$(aws codebuild batch-get-builds --ids "$CODEBUILD_BUILD_ID" \
+                    --query 'builds[0].logs.deepLink' --output text)
+                  if [ "$LOG_URL" != None ] && [ -n "$LOG_URL" ]; then
+                    echo "[CodeBuild logs]($LOG_URL)" >> "$GITHUB_STEP_SUMMARY"
+                  fi
