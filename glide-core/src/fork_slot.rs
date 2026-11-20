@@ -129,8 +129,10 @@ fn wipe_on_fork_cell() -> Option<&'static std::sync::atomic::AtomicU64> {
     // Null until decided. The first caller's outcome is final for the process,
     // so no caller switches between the page and the pid after using the other.
     static CELL: AtomicPtr<AtomicU64> = AtomicPtr::new(ptr::null_mut());
-    // Never a page address.
-    let unavailable = ptr::dangling_mut::<AtomicU64>();
+    // Stands for "no page". It is a real static, so it is never a page address
+    // and every non-null decision points at valid memory.
+    static UNAVAILABLE: AtomicU64 = AtomicU64::new(0);
+    let unavailable = ptr::from_ref(&UNAVAILABLE).cast_mut();
 
     let decided = |decision: *mut AtomicU64| {
         if decision == unavailable {
