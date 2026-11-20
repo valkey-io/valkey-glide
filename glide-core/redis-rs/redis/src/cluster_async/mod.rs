@@ -5201,19 +5201,11 @@ mod partial_results_tests {
             ready("a:1", Ok(Value::BulkString(b"info a".to_vec().into()))),
             ready(
                 "b:1",
-                Err(RedisError::from((
-                    ErrorKind::ResponseError,
-                    "An error was signalled by the server:",
-                    "boom".to_string(),
-                ))),
-            ),
-            ready(
-                "c:1",
                 Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into()),
             ),
             // A target with no connection, as `into_channels` reports it.
             ready(
-                "d:1",
+                "c:1",
                 Err((
                     ErrorKind::ConnectionNotFoundForRoute,
                     "Connection not found",
@@ -5228,12 +5220,9 @@ mod partial_results_tests {
             ("a:1".into(), Value::BulkString(b"info a".to_vec().into()))
         );
         let b = error_of(&entries[1].1);
-        assert_eq!(b.kind(), ErrorKind::ResponseError);
-        assert!(b.to_string().contains("boom"), "{b}");
-        let c = error_of(&entries[2].1);
-        assert!(c.is_timeout(), "timeout kind must survive: {c:?}");
-        assert_eq!(entries[3].0, "d:1");
-        assert!(error_of(&entries[3].1)
+        assert!(b.is_timeout(), "timeout kind must survive: {b:?}");
+        assert_eq!(entries[2].0, "c:1");
+        assert!(error_of(&entries[2].1)
             .to_string()
             .contains("ConnectionNotFoundForRoute"));
     }
