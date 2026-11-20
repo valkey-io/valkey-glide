@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use core::fmt;
 use opentelemetry_sdk::error::{OTelSdkError, OTelSdkResult};
 use opentelemetry_sdk::trace::SpanData;
@@ -7,6 +6,10 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic;
+use std::time::{SystemTime, UNIX_EPOCH};
+use time::OffsetDateTime;
+use time::format_description::BorrowedFormatItem;
+use time::macros::format_description;
 
 use opentelemetry_sdk::Resource;
 
@@ -142,16 +145,26 @@ fn to_jsons(batch: Vec<SpanData>) -> Vec<Value> {
             Value::String(format!("{:?}", span.span_kind)),
         );
 
-        let datetime: DateTime<Utc> = span.start_time.into();
         map.insert(
             "start_time".to_owned(),
-            Value::String(datetime.timestamp_micros().to_string()),
+            Value::String(
+                span.start_time
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_micros()
+                    .to_string(),
+            ),
         );
 
-        let datetime: DateTime<Utc> = span.end_time.into();
         map.insert(
             "end_time".to_owned(),
-            Value::String(datetime.timestamp_micros().to_string()),
+            Value::String(
+                span.end_time
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_micros()
+                    .to_string(),
+            ),
         );
 
         map.insert(
@@ -173,10 +186,9 @@ fn to_jsons(batch: Vec<SpanData>) -> Vec<Value> {
         for event in span.events.iter() {
             let mut evt = Map::new();
             evt.insert("name".to_owned(), Value::String(event.name.to_string()));
-            let datetime: DateTime<Utc> = event.timestamp.into();
             evt.insert(
                 "timestamp".to_owned(),
-                Value::String(datetime.format("%Y-%m-%d %H:%M:%S%.6f").to_string()),
+                Value::String(format_event_timestamp(event.timestamp)),
             );
 
             let mut event_attributes = Vec::<Value>::new();
@@ -210,4 +222,29 @@ fn to_jsons(batch: Vec<SpanData>) -> Vec<Value> {
         spans.push(Value::Object(map));
     }
     spans
+}
+
+/// Format of span event timestamps: `YYYY-MM-DD HH:MM:SS.ffffff` in UTC.
+const EVENT_TIMESTAMP_FORMAT: &[BorrowedFormatItem<'static>] =
+    format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:6]");
+
+fn format_event_timestamp(timestamp: SystemTime) -> String {
+    OffsetDateTime::from(timestamp)
+        .format(EVENT_TIMESTAMP_FORMAT)
+        .expect("event timestamp format is valid")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn test_format_event_timestamp() {
+        let timestamp = UNIX_EPOCH + Duration::new(1_708_531_200, 123_456_789);
+        assert_eq!(
+            format_event_timestamp(timestamp),
+            "2024-02-21 16:00:00.123456"
+        );
+    }
 }
