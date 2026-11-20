@@ -13,6 +13,7 @@
 * Core: prevent missed refresh completion notifications ([#7766](https://github.com/valkey-io/valkey-glide/pull/7766))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
 * Core/FFI: create clients on a runtime worker so the connect does not use the caller's stack ([#7644](https://github.com/valkey-io/valkey-glide/pull/7644))
+* Python: register the sync client's fork hook only after it connects ([#7660](https://github.com/valkey-io/valkey-glide/pull/7660))
 * Core: flush server-assisted cache when its connection closes ([#7493](https://github.com/valkey-io/valkey-glide/pull/7493))
 * Core: deliver reconnect errors to cluster callers instead of dropping them ([#7737](https://github.com/valkey-io/valkey-glide/pull/7737))
 * Core/FFI: run a lazy sync client's first connect on the runtime worker ([#7671](https://github.com/valkey-io/valkey-glide/pull/7671))
