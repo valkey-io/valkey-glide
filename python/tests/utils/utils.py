@@ -433,6 +433,14 @@ def sync_wait_for(
     raise TimeoutError(failure)
 
 
+def assert_unix_socket_client(client_info: object) -> str:
+    """Asserts that a CLIENT INFO reply flags the connection as a Unix socket (`U`)."""
+    text = client_info.decode() if isinstance(client_info, bytes) else str(client_info)
+    flags = next(field for field in text.split() if field.startswith("flags="))
+    assert "U" in flags[len("flags=") :], text
+    return text
+
+
 # While a script or function runs, the server does not read other clients'
 # commands until busy-reply-threshold (default 5000 ms) elapses, so a kill or
 # stats poll against a running script cannot complete sooner than that.
@@ -2567,7 +2575,7 @@ def get_standalone_address() -> NodeAddress:
     try:
         cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
         addr = cluster.nodes_addr[0]
-        return NodeAddress(addr.host, addr.port)
+        return NodeAddress(addr.host, addr.port, unix_socket_path=addr.unix_socket_path)
     except (AttributeError, IndexError):
         return NodeAddress("localhost", 6379)
 

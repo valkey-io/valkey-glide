@@ -5174,16 +5174,13 @@ pub(crate) mod shared_client_tests {
     ) {
         use ::protobuf::MessageField;
         use glide_core::connection_request as protobuf;
+        use protobuf::AuthenticationInfo as ProtoAuthInfo;
         use protobuf::ConnectionRequest as ProtoConnectionRequest;
         use protobuf::TlsMode;
-        use protobuf::{AuthenticationInfo as ProtoAuthInfo, NodeAddress};
 
-        let server = RedisServer::new(ServerType::Tcp { tls: false });
+        let server = RedisServer::new(standalone_server_type(false));
         let addr = server.get_client_addr();
-        let (host, port) = match &addr {
-            redis::ConnectionAddr::Tcp(host, port) => (host.clone(), *port),
-            other => panic!("Expected a plain TCP test server address, got: {other:?}"),
-        };
+        let node_address = get_address_info(&addr);
 
         let admin_client = redis::Client::open(redis::ConnectionInfo {
             addr,
@@ -5200,11 +5197,7 @@ pub(crate) mod shared_client_tests {
         set_requirepass(&mut admin_conn, password).await;
 
         let mut proto_request = ProtoConnectionRequest::new();
-        proto_request.addresses.push(NodeAddress {
-            host: host.into(),
-            port: port.into(),
-            ..Default::default()
-        });
+        proto_request.addresses.push(node_address);
         proto_request.tls_mode = TlsMode::NoTls.into();
         let mut auth_info = ProtoAuthInfo::new();
         auth_info.password = password.into();

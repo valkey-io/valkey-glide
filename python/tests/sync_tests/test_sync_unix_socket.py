@@ -2,11 +2,11 @@
 
 """
 Tests for sync client connections over a Unix domain socket.
-Each test starts its own server that listens only on the socket (`--port 0`).
+The server is started through cluster_manager.py with TCP disabled (`--port 0`).
 """
 
 import sys
-from typing import Iterator, List
+from typing import List
 
 import pytest
 from glide_shared.commands.core_options import MonitorMsg
@@ -21,77 +21,74 @@ from glide_shared.exceptions import ClosingError, ConfigurationError
 from glide_sync import MonitorClient
 from glide_sync.glide_client import GlideClient
 
-from tests.utils.unix_socket_server import UnixSocketServer
-from tests.utils.utils import sync_wait_for
+from tests.utils.utils import assert_unix_socket_client, sync_wait_for
 
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32", reason="Unix domain sockets are not supported on Windows"
 )
 
 
-@pytest.fixture
-def unix_socket_server() -> Iterator[UnixSocketServer]:
-    server = UnixSocketServer()
-    yield server
-    server.stop()
-
-
-def unix_socket_config(server: UnixSocketServer, **kwargs) -> GlideClientConfiguration:
+def unix_socket_config(path: str, **kwargs) -> GlideClientConfiguration:
     return GlideClientConfiguration(
-        [NodeAddress(unix_socket_path=server.socket_path)],
+        [NodeAddress(unix_socket_path=path)],
         request_timeout=2000,
         **kwargs,
     )
 
 
-def assert_uses_socket(client: GlideClient) -> bytes:
-    """Asserts that the server flags this client's connection as a Unix socket (`U`)."""
-    info = client.custom_command(["CLIENT", "INFO"])
-    assert isinstance(info, bytes)
-    flags = next(f for f in info.split() if f.startswith(b"flags="))
-    assert b"U" in flags[len(b"flags=") :], info
-    return info
-
-
 class TestSyncUnixSocket:
-    def test_connect_over_unix_socket(self, unix_socket_server: UnixSocketServer):
-        client = GlideClient.create(
-            unix_socket_config(unix_socket_server, database_id=2)
-        )
+    def test_standalone_cluster_is_reached_over_sockets(
+        self, request: pytest.FixtureRequest
+    ):
+        if not request.config.getoption("--unix-socket"):
+            pytest.skip("Runs only with --unix-socket")
+        for address in pytest.standalone_cluster.nodes_addr:  # type: ignore[attr-defined]
+            client = GlideClient.create(
+                GlideClientConfiguration(
+                    [address], read_only=True, request_timeout=2000
+                )
+            )
+            try:
+                assert client.config_get(["port"]) == {b"port": b"0"}
+                assert_unix_socket_client(client.custom_command(["CLIENT", "INFO"]))
+            finally:
+                client.close()
+
+    def test_connect_over_unix_socket(self, unix_socket_path: str):
+        client = GlideClient.create(unix_socket_config(unix_socket_path, database_id=2))
         try:
             assert client.set("uds-key", "uds-value") == OK
             assert client.get("uds-key") == b"uds-value"
-            info = assert_uses_socket(client)
-            assert b" db=2 " in info, info
+            info = assert_unix_socket_client(client.custom_command(["CLIENT", "INFO"]))
+            assert " db=2 " in info, info
         finally:
             client.close()
 
-    def test_scoped_connection_over_unix_socket(
-        self, unix_socket_server: UnixSocketServer
-    ):
-        client = GlideClient.create(unix_socket_config(unix_socket_server))
+    def test_scoped_connection_over_unix_socket(self, unix_socket_path: str):
+        client = GlideClient.create(unix_socket_config(unix_socket_path))
         try:
             with client.scoped_connection() as scope:
+                assert_unix_socket_client(scope.execute_command("CLIENT", "INFO"))
                 scope.set("uds-scope-key", "scoped")
                 assert scope.get("uds-scope-key") == "scoped"
             assert client.get("uds-scope-key") == b"scoped"
         finally:
             client.close()
 
-    def test_monitor_over_unix_socket(self, unix_socket_server: UnixSocketServer):
+    def test_monitor_over_unix_socket(self, unix_socket_path: str):
         received: List[MonitorMsg] = []
         monitor = MonitorClient.create(
-            unix_socket_config(unix_socket_server), callback=received.append
+            unix_socket_config(unix_socket_path), callback=received.append
         )
         try:
-            client = GlideClient.create(unix_socket_config(unix_socket_server))
+            client = GlideClient.create(unix_socket_config(unix_socket_path))
             try:
                 client.set("uds-monitor-key", "value")
 
                 def seen() -> bool:
                     return any(
                         m.command.upper() == "SET"
-                        and m.client_addr == f"unix:{unix_socket_server.socket_path}"
+                        and m.client_addr == f"unix:{unix_socket_path}"
                         for m in received
                     )
 

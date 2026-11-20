@@ -1889,7 +1889,7 @@ pub(crate) mod test_cache {
                     .next()
                     .expect("cluster address")
             } else {
-                _server = RedisServer::new(ServerType::Tcp { tls: false });
+                _server = RedisServer::new(standalone_server_type(false));
                 _server.get_client_addr()
             };
 

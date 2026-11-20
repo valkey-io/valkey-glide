@@ -566,6 +566,7 @@ class TestPoolRdmaRejection:
 class TestPoolErrorHandling:
     """Negative tests — pool creation surfaces connectivity errors."""
 
+    @pytest.mark.requires_tcp
     def test_pool_bad_address_create_fails(self, request):
         """Pool with unreachable address: create should raise immediately."""
         from glide_shared.config import GlideClientConfiguration, NodeAddress

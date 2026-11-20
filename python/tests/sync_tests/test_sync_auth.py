@@ -732,6 +732,7 @@ class TestSyncAuthCommands:
         with pytest.raises(RequestError):
             acl_glide_sync_client.update_connection_password("", immediate_auth=True)
 
+    @pytest.mark.requires_tcp
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_iam_authentication_with_mock_credentials(
@@ -765,6 +766,7 @@ class TestSyncAuthCommands:
         finally:
             client.close()
 
+    @pytest.mark.requires_tcp
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_iam_authentication_automatic_token_refresh(
@@ -822,6 +824,7 @@ def _awaitable_credentials_provider():
     return _async_credentials_result()
 
 
+@pytest.mark.requires_tcp
 @pytest.mark.parametrize("cluster_mode", [True, False])
 @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
 @pytest.mark.parametrize(
@@ -885,6 +888,7 @@ class _BlockingCredentialProvider:
                 self.active -= 1
 
 
+@pytest.mark.requires_tcp
 def test_sync_hung_custom_provider_timeout_does_not_block_close(request):
     """A timed-out synchronous callback may finish later without owning close."""
     provider = _BlockingCredentialProvider()
@@ -934,6 +938,7 @@ def test_sync_hung_custom_provider_timeout_does_not_block_close(request):
         client.close()
 
 
+@pytest.mark.requires_tcp
 @pytest.mark.parametrize("cluster_mode", [True, False])
 @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
 def test_sync_iam_custom_provider_automatic_refresh_and_large_token(
@@ -966,6 +971,7 @@ def test_sync_iam_custom_provider_automatic_refresh_and_large_token(
         client.close()
 
 
+@pytest.mark.requires_tcp
 @pytest.mark.parametrize("cluster_mode", [True, False])
 @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
 @pytest.mark.parametrize(

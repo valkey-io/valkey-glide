@@ -60,7 +60,7 @@ cd glide-core/redis-rs/redis && cargo bench
 
 Per-crate build/test (exact invocations CI runs — do not substitute a bare `cargo test`):
 
-**glide-core/** (`.github/workflows/glide-core.yml` — these three are exactly what CI runs; it does NOT run `cargo build --release` or `cargo bench` as gates):
+**glide-core/** (`.github/workflows/glide-core.yml` — these three are exactly what CI runs, plus the nightly Unix socket rerun below; it does NOT run `cargo build --release` or `cargo bench` as gates):
 ```bash
 cd glide-core
 cargo test --features "proto,socket-layer,standalone_heartbeat"   # tests self-boot servers via utils/cluster_manager.py (needs valkey-server/redis-server + python3 on PATH)
@@ -112,6 +112,10 @@ Add to `/etc/hosts` (or Windows equivalent):
 ::1 valkey.glide.test.no_tls.com
 ```
 Then `export VALKEY_GLIDE_DNS_TESTS_ENABLED=1`. Skipped automatically if unset.
+
+### Unix Socket Tests (glide-core)
+
+CI also reruns tests over Unix sockets in the nightly full matrix on Ubuntu. See [Unix Socket Tests](./DEVELOPER.md#unix-socket-tests) for the local command.
 
 ### Timeout Watchdog Diagnostics
 

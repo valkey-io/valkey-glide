@@ -196,6 +196,13 @@ jobs:
               working-directory: ./glide-core
               run: cargo test --locked --features "proto,socket-layer,standalone_heartbeat"
 
+            - name: Run glide-core tests over a Unix socket
+              if: (inputs.full-matrix == true || github.event_name == 'schedule') && matrix.host.OS == 'ubuntu'
+              working-directory: ./glide-core
+              env:
+                  GLIDE_TEST_UNIX_SOCKET: "1"
+              run: cargo test --locked --features "proto,socket-layer,standalone_heartbeat"
+
             - name: Install libfabric
               uses: ./.github/actions/install-libfabric
 
