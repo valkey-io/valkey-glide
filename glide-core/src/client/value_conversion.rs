@@ -2443,23 +2443,24 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             key_type: &Some(ExpectedReturnType::SimpleString),
             value_type: &None,
         }),
-        b"INCRBYFLOAT" | b"HINCRBYFLOAT" | b"ZINCRBY" => Some(ExpectedReturnType::Double),
-        b"HEXISTS"
-        | b"HSETNX"
+        b"HINCRBYFLOAT" | b"INCRBYFLOAT" | b"ZINCRBY" => Some(ExpectedReturnType::Double),
+        b"COPY"
+        | b"DELEX"
+        | b"DELIFEQ"
         | b"EXPIRE"
         | b"EXPIREAT"
+        | b"HEXISTS"
+        | b"HSETNX"
+        | b"MOVE"
+        | b"MSETNX"
+        | b"PERSIST"
         | b"PEXPIRE"
         | b"PEXPIREAT"
-        | b"PERSIST"
-        | b"SMOVE"
         | b"PFADD"
         | b"RENAMENX"
-        | b"MOVE"
-        | b"COPY"
-        | b"MSETNX"
-        | b"DELIFEQ"
-        | b"XGROUP DESTROY"
-        | b"XGROUP CREATECONSUMER" => Some(ExpectedReturnType::Boolean),
+        | b"SMOVE"
+        | b"XGROUP CREATECONSUMER"
+        | b"XGROUP DESTROY" => Some(ExpectedReturnType::Boolean),
         b"SMISMEMBER" | b"SCRIPT EXISTS" => Some(ExpectedReturnType::ArrayOfBools),
         b"SMEMBERS" | b"SINTER" | b"SDIFF" | b"SUNION" => Some(ExpectedReturnType::Set),
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
