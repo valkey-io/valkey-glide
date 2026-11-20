@@ -2861,21 +2861,115 @@ export function runBaseTests(config: {
 
                     const key = getRandomKey();
                     const value = getRandomKey();
-                    const wrongValue = getRandomKey();
+                    const otherValue = getRandomKey();
 
-                    // Key does not exist yet
+                    // key does not exist
                     expect(await client.delifeq(key, value)).toEqual(false);
 
                     expect(await client.set(key, value)).toEqual("OK");
 
-                    // Value does not match - key remains
-                    expect(await client.delifeq(key, wrongValue)).toEqual(
+                    // value not equal, key is not deleted
+                    expect(await client.delifeq(key, otherValue)).toEqual(
                         false,
                     );
                     expect(await client.get(key)).toEqual(value);
 
-                    // Value matches - key is deleted
+                    // value equal, key is deleted
                     expect(await client.delifeq(key, value)).toEqual(true);
+                    expect(await client.get(key)).toEqual(null);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `delex ifeq_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.2.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const value = getRandomKey();
+                    const otherValue = getRandomKey();
+
+                    // key does not exist
+                    expect(
+                        await client.delex(key, {
+                            type: "onlyIfEqual",
+                            comparisonValue: value,
+                        }),
+                    ).toEqual(false);
+
+                    expect(await client.set(key, value)).toEqual("OK");
+
+                    // value not equal, key is not deleted
+                    expect(
+                        await client.delex(key, {
+                            type: "onlyIfEqual",
+                            comparisonValue: otherValue,
+                        }),
+                    ).toEqual(false);
+                    expect(await client.get(key)).toEqual(value);
+
+                    // value equal, key is deleted
+                    expect(
+                        await client.delex(key, {
+                            type: "onlyIfEqual",
+                            comparisonValue: value,
+                        }),
+                    ).toEqual(true);
+                    expect(await client.get(key)).toEqual(null);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `delex ifne_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.2.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const value = getRandomKey();
+                    const otherValue = getRandomKey();
+
+                    // key does not exist
+                    expect(
+                        await client.delex(key, {
+                            type: "onlyIfNotEqual",
+                            comparisonValue: value,
+                        }),
+                    ).toEqual(false);
+
+                    expect(await client.set(key, value)).toEqual("OK");
+
+                    // value equal, key is not deleted
+                    expect(
+                        await client.delex(key, {
+                            type: "onlyIfNotEqual",
+                            comparisonValue: value,
+                        }),
+                    ).toEqual(false);
+                    expect(await client.get(key)).toEqual(value);
+
+                    // value not equal, key is deleted
+                    expect(
+                        await client.delex(key, {
+                            type: "onlyIfNotEqual",
+                            comparisonValue: otherValue,
+                        }),
+                    ).toEqual(true);
                     expect(await client.get(key)).toEqual(null);
                 },
                 protocol,
@@ -9977,14 +10071,14 @@ export function runBaseTests(config: {
         expect(await client.get(key)).toEqual(newValue);
 
         // fail command
-        const wrongValue = "wrong value";
-        const setResFailedWithAllOptions = await client.set(key, wrongValue, {
+        const otherValue = "other value";
+        const setResFailedWithAllOptions = await client.set(key, otherValue, {
             expiry: {
                 type: TimeUnit.UnixSeconds,
                 count: Math.floor(Date.now() / 1000) + 10,
             },
             conditionalSet: "onlyIfEqual",
-            comparisonValue: wrongValue,
+            comparisonValue: otherValue,
             returnOldValue: true,
         });
         // current value of key should be newValue
@@ -10003,14 +10097,14 @@ export function runBaseTests(config: {
         // * only apply SET if the current value does not equal the comparison value
         // * expires after 10 seconds
         // * returns the old value
-        const wrongValue = "wrong value";
+        const otherValue = "other value";
         const setResWithAllOptions = await client.set(key, newValue, {
             expiry: {
                 type: TimeUnit.UnixSeconds,
                 count: Math.floor(Date.now() / 1000) + 10,
             },
             conditionalSet: "onlyIfNotEqual",
-            comparisonValue: wrongValue,
+            comparisonValue: otherValue,
             returnOldValue: true,
         });
         // initialValue is returned as the old value
@@ -10019,7 +10113,7 @@ export function runBaseTests(config: {
         expect(await client.get(key)).toEqual(newValue);
 
         // fail command
-        const setResFailedWithAllOptions = await client.set(key, wrongValue, {
+        const setResFailedWithAllOptions = await client.set(key, otherValue, {
             expiry: {
                 type: TimeUnit.UnixSeconds,
                 count: Math.floor(Date.now() / 1000) + 10,

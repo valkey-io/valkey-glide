@@ -1223,6 +1223,25 @@ export async function batchTest(
     baseBatch.set(key2, baz, { returnOldValue: true });
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
 
+    baseBatch.customCommand(["MGET", key1, key2]);
+    responseData.push(['customCommand(["MGET", key1, key2])', ["bar", "baz"]]);
+    baseBatch.mset([{ key: key3, value }]);
+    responseData.push(["mset({ [key3]: value })", "OK"]);
+    baseBatch.msetnx([{ key: key3, value }]);
+    responseData.push(["msetnx({ [key3]: value })", false]);
+    baseBatch.mget([key1, key2]);
+    responseData.push(["mget([key1, key2])", ["bar", "baz"]]);
+    baseBatch.strlen(key1);
+    responseData.push(["strlen(key1)", 3]);
+    baseBatch.setrange(key1, 0, "GLIDE");
+    responseData.push(["setrange(key1, 0, 'GLIDE')", 5]);
+    baseBatch.del([key1]);
+    responseData.push(["del([key1])", 1]);
+    baseBatch.append(key1, "bar");
+    responseData.push(["append(key1, value)", 3]);
+    baseBatch.del([key1]);
+    responseData.push(["del([key1])", 1]);
+
     if (!cluster.checkIfServerVersionLessThan("8.1.0")) {
         baseBatch.set(key29, foo, {
             conditionalSet: "onlyIfEqual",
@@ -1254,6 +1273,23 @@ export async function batchTest(
         responseData.push(["get(key29)", "bar"]);
     }
 
+    if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
+        baseBatch.set(key28, foo);
+        responseData.push(['set(key1, "foo")', "OK"]);
+        baseBatch.move(key28, 1);
+        responseData.push(["move(key1, 1)", true]);
+
+        const delIfEqKey = decodeString("{key}" + getRandomKey(), decoder);
+        baseBatch.set(delIfEqKey, value);
+        responseData.push(["set(delIfEqKey, value)", "OK"]);
+
+        baseBatch.delifeq(delIfEqKey, "other-value");
+        responseData.push(["delifeq(delIfEqKey, 'other-value')", false]);
+
+        baseBatch.delifeq(delIfEqKey, value);
+        responseData.push(["delifeq(delIfEqKey, value)", true]);
+    }
+
     if (!cluster.checkIfServerVersionLessThan("9.2.0")) {
         baseBatch.set(key30, foo, {
             conditionalSet: "onlyIfNotEqual",
@@ -1283,44 +1319,28 @@ export async function batchTest(
         ]);
         baseBatch.get(key30);
         responseData.push(["get(key30)", "bar"]);
-    }
 
-    if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
-        baseBatch.set(key28, foo);
-        responseData.push(['set(key1, "foo")', "OK"]);
-        baseBatch.move(key28, 1);
-        responseData.push(["move(key1, 1)", true]);
-    }
+        const delExKey = decodeString("{key}" + getRandomKey(), decoder);
+        baseBatch.set(delExKey, "value");
+        responseData.push(['set(delExKey, "value")', "OK"]);
 
-    baseBatch.customCommand(["MGET", key1, key2]);
-    responseData.push(['customCommand(["MGET", key1, key2])', ["bar", "baz"]]);
-    baseBatch.mset([{ key: key3, value }]);
-    responseData.push(["mset({ [key3]: value })", "OK"]);
-    baseBatch.msetnx([{ key: key3, value }]);
-    responseData.push(["msetnx({ [key3]: value })", false]);
-    baseBatch.mget([key1, key2]);
-    responseData.push(["mget([key1, key2])", ["bar", "baz"]]);
-    baseBatch.strlen(key1);
-    responseData.push(["strlen(key1)", 3]);
-    baseBatch.setrange(key1, 0, "GLIDE");
-    responseData.push(["setrange(key1, 0, 'GLIDE')", 5]);
-    baseBatch.del([key1]);
-    responseData.push(["del([key1])", 1]);
-    baseBatch.append(key1, "bar");
-    responseData.push(["append(key1, value)", 3]);
-    baseBatch.del([key1]);
-    responseData.push(["del([key1])", 1]);
+        baseBatch.delex(delExKey, {
+            type: "onlyIfEqual",
+            comparisonValue: "other",
+        });
+        responseData.push([
+            'delex(delExKey, { type: "onlyIfEqual", comparisonValue: "other" })',
+            false,
+        ]);
 
-    if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
-        const delIfEqKey = decodeString("{key}" + getRandomKey(), decoder);
-        baseBatch.set(delIfEqKey, value);
-        responseData.push(["set(delIfEqKey, value)", "OK"]);
-
-        baseBatch.delifeq(delIfEqKey, "wrong-value");
-        responseData.push(["delifeq(delIfEqKey, 'wrong-value')", false]);
-
-        baseBatch.delifeq(delIfEqKey, value);
-        responseData.push(["delifeq(delIfEqKey, value)", true]);
+        baseBatch.delex(delExKey, {
+            type: "onlyIfNotEqual",
+            comparisonValue: "other",
+        });
+        responseData.push([
+            'delex(delExKey, { type: "onlyIfNotEqual", comparisonValue: "other" })',
+            true,
+        ]);
     }
 
     baseBatch.hset(key4, [{ field, value }]);
@@ -1536,23 +1556,6 @@ export async function batchTest(
     baseBatch.lpush(key5, [field1, field2, field3, field4]);
     responseData.push(["lpush(key5, [1, 2, 3, 4])", 4]);
 
-    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-        baseBatch.lpush(key24, [field1.toString(), field2.toString()]);
-        responseData.push(["lpush(key22, [1, 2])", 2]);
-        baseBatch.lmpop([key24], ListDirection.LEFT);
-        responseData.push([
-            "lmpop([key24], ListDirection.LEFT)",
-            [{ key: key24.toString(), value: [field2.toString()] }],
-        ]);
-        baseBatch.lpush(key24, [field2]);
-        responseData.push(["lpush(key24, [2])", 2]);
-        baseBatch.blmpop([key24], ListDirection.LEFT, 0.1, 1);
-        responseData.push([
-            "blmpop([key24], ListDirection.LEFT, 0.1, 1)",
-            [{ key: key24.toString(), value: [field2.toString()] }],
-        ]);
-    }
-
     baseBatch.lpop(key5);
     responseData.push(["lpop(key5)", field4.toString()]);
     baseBatch.llen(key5);
@@ -1586,6 +1589,23 @@ export async function batchTest(
         responseData.push([
             "blmove(key20, key5, ListDirection.LEFT, ListDirection.LEFT, 3)",
             field3.toString(),
+        ]);
+    }
+
+    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+        baseBatch.lpush(key24, [field1.toString(), field2.toString()]);
+        responseData.push(["lpush(key22, [1, 2])", 2]);
+        baseBatch.lmpop([key24], ListDirection.LEFT);
+        responseData.push([
+            "lmpop([key24], ListDirection.LEFT)",
+            [{ key: key24.toString(), value: [field2.toString()] }],
+        ]);
+        baseBatch.lpush(key24, [field2]);
+        responseData.push(["lpush(key24, [2])", 2]);
+        baseBatch.blmpop([key24], ListDirection.LEFT, 0.1, 1);
+        responseData.push([
+            "blmpop([key24], ListDirection.LEFT, 0.1, 1)",
+            [{ key: key24.toString(), value: [field2.toString()] }],
         ]);
     }
 
@@ -1663,17 +1683,17 @@ export async function batchTest(
     baseBatch.sismember(key7, bar);
     responseData.push(['sismember(key7, "bar")', true]);
 
-    if (!cluster.checkIfServerVersionLessThan("9.2.0")) {
-        baseBatch.sismemberIfExists(key7, bar);
-        responseData.push(['sismemberIfExists(key7, "bar")', 1]);
-    }
-
     if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
         baseBatch.smismember(key7, [bar, foo, baz]);
         responseData.push([
             'smismember(key7, ["bar", "foo", "baz"])',
             [true, false, false],
         ]);
+    }
+
+    if (!cluster.checkIfServerVersionLessThan("9.2.0")) {
+        baseBatch.sismemberIfExists(key7, bar);
+        responseData.push(['sismemberIfExists(key7, "bar")', 1]);
     }
 
     baseBatch.smembers(key7);
@@ -1706,6 +1726,10 @@ export async function batchTest(
     responseData.push(['zrank(key8, "member1")', 1]);
     baseBatch.zrank(key8, "negInfMember");
     responseData.push(['zrank(key8, "negInfMember")', 0]);
+    baseBatch.zrevrank(key8, "member5");
+    responseData.push(['zrevrank(key8, "member5")', 1]);
+    baseBatch.zrevrank(key8, "infMember");
+    responseData.push(['zrevrank(key8, "infMember")', 0]);
 
     if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
         baseBatch.zrankWithScore(key8, member1);
@@ -1715,14 +1739,6 @@ export async function batchTest(
             'zrankWithScore(key8, "negInfMember")',
             [0, -Infinity],
         ]);
-    }
-
-    baseBatch.zrevrank(key8, "member5");
-    responseData.push(['zrevrank(key8, "member5")', 1]);
-    baseBatch.zrevrank(key8, "infMember");
-    responseData.push(['zrevrank(key8, "infMember")', 0]);
-
-    if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
         baseBatch.zrevrankWithScore(key8, "member5");
         responseData.push(['zrevrankWithScore(key8, "member5")', [1, 5]]);
         baseBatch.zrevrankWithScore(key8, "infMember");

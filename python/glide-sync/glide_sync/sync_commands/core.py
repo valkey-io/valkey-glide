@@ -502,7 +502,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> client.set("key", "value")
-            >>> client.delifeq("key", "wrong_value")
+            >>> client.delifeq("key", "other_value")
                 False
             >>> client.delifeq("key", "value")
                 True
@@ -527,7 +527,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> client.set("key", "value")
-            >>> client.delex("key", OnlyIfEqual("wrong_value"))
+            >>> client.delex("key", OnlyIfEqual("other_value"))
                 False
             >>> client.delex("key", OnlyIfNotEqual("value"))
                 False

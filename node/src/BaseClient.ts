@@ -87,6 +87,7 @@ import {
     TimeUnit,
     TimeoutError,
     ValkeyError,
+    ValueComparison,
     ZAddOptions,
     ZScanOptions,
     convertFieldsAndValuesToHashDataType,
@@ -107,6 +108,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDelEx,
     createDelIfEq,
     createDump,
     createExists,
@@ -9720,7 +9722,33 @@ export class BaseClient {
         return this.createWritePromise(createAppend(key, value));
     }
 
-    // TODO #7238: Add DELEX command support.
+    /**
+     * Deletes `key` if its value meets `condition`.
+     *
+     * @see {@link https://valkey.io/commands/delex/|valkey.io} for more details.
+     *
+     * @param key - The key to delete.
+     * @param condition - The comparison condition. The key is only deleted if its current value
+     *     meets `condition`. See {@link ValueComparison}.
+     * @returns `true` if `key` was deleted, or `false` if `key` did not exist or `condition` was
+     *     not met.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key", "value");
+     * console.log(await client.delex("key", { type: "onlyIfEqual", comparisonValue: "other_value" })); // Output: false
+     * console.log(await client.delex("key", { type: "onlyIfNotEqual", comparisonValue: "value" })); // Output: false
+     * console.log(await client.delex("key", { type: "onlyIfEqual", comparisonValue: "value" })); // Output: true
+     * ```
+     *
+     * @since Valkey 9.2.0
+     */
+    public async delex(
+        key: GlideString,
+        condition: ValueComparison,
+    ): Promise<boolean> {
+        return this.createWritePromise(createDelEx(key, condition));
+    }
 
     /**
      * Deletes `key` if its value equals `value`.

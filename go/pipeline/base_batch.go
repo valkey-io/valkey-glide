@@ -419,6 +419,33 @@ func (b *BaseBatch[T]) DelIfEq(key string, value string) *T {
 	return b.addCmdAndTypeChecker(C.DelIfEq, []string{key, value}, reflect.Bool, false)
 }
 
+// Deletes `key` if its value meets `condition`.
+//
+// Since:
+//
+//	Valkey 9.2 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key       - The key to delete.
+//	condition - The comparison condition. The key is only deleted if its current value meets `condition`.
+//	            Use [options.NewOnlyIfEquals] or [options.NewOnlyIfNotEquals] to create it.
+//
+// Command Response:
+//
+//	`true` if `key` was deleted, `false` if `key` did not exist or `condition` was not met.
+//
+// [valkey.io]: https://valkey.io/commands/delex/
+func (b *BaseBatch[T]) DelEx(key string, condition options.ValueComparison) *T {
+	conditionArgs, err := condition.ToArgs()
+	if err != nil {
+		return b.addError("DelEx", err)
+	}
+	return b.addCmdAndTypeChecker(C.DelEx, append([]string{key}, conditionArgs...), reflect.Bool, false)
+}
+
 // Returns the longest common subsequence between strings stored at `key1` and `key2`.
 //
 // Since:

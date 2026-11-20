@@ -790,30 +790,6 @@
       "return_type": "(Option<(String, Vec<String>)>)"
     }
   },
-  "del_ex": {
-    "reason": "TODO #7238: not implemented yet",
-    "redis": {
-      "name": "del_ex",
-      "generics": [
-        {
-          "name": "K",
-          "bound": "ToSingleRedisArg"
-        }
-      ],
-      "args": [
-        {
-          "name": "key",
-          "type_name": "K"
-        },
-        {
-          "name": "value_comparison",
-          "type_name": "ValueComparison"
-        }
-      ],
-      "return_type": "(usize)"
-    },
-    "glide": null
-  },
   "digest": {
     "reason": "Valkey has no `DIGEST` command",
     "redis": {

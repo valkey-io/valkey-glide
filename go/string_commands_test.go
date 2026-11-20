@@ -629,6 +629,58 @@ func ExampleClusterClient_DelIfEq() {
 	// Output: true
 }
 
+func ExampleClient_DelEx() {
+	var client *Client = getExampleClient() // example helper function
+
+	client.Set(context.Background(), "my_key", "my_value")
+	result1, err := client.DelEx(context.Background(), "my_key", options.NewOnlyIfEquals("other_value"))
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	result2, err := client.DelEx(context.Background(), "my_key", options.NewOnlyIfNotEquals("my_value"))
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	result3, err := client.DelEx(context.Background(), "my_key", options.NewOnlyIfEquals("my_value"))
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result1)
+	fmt.Println(result2)
+	fmt.Println(result3)
+
+	// Output:
+	// false
+	// false
+	// true
+}
+
+func ExampleClusterClient_DelEx() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+
+	client.Set(context.Background(), "my_key", "my_value")
+	result1, err := client.DelEx(context.Background(), "my_key", options.NewOnlyIfEquals("other_value"))
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	result2, err := client.DelEx(context.Background(), "my_key", options.NewOnlyIfNotEquals("my_value"))
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	result3, err := client.DelEx(context.Background(), "my_key", options.NewOnlyIfEquals("my_value"))
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result1)
+	fmt.Println(result2)
+	fmt.Println(result3)
+
+	// Output:
+	// false
+	// false
+	// true
+}
+
 func ExampleClient_GetDel() {
 	var client *Client = getExampleClient() // example helper function
 

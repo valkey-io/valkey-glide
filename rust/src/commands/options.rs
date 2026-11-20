@@ -227,8 +227,8 @@ pub type FlushDbOptions = FlushAllOptions;
 /// Options for the `FUNCTION FLUSH` command.
 pub type FunctionFlushOptions = FlushAllOptions;
 
-/// Value comparison for `SET` — whether the key's current value must equal,
-/// or must not equal, the given one.
+/// Value comparison for `SET` and `DELEX` — whether the key's
+/// current value must equal, or must not equal, the given one.
 ///
 /// Mirrors redis-rs's `ValueComparison` type, without its digest
 /// comparisons (`IFDEQ`/`IFDNE`), which Valkey does not support.
@@ -237,18 +237,16 @@ pub type FunctionFlushOptions = FlushAllOptions;
 // instead of a `String`: redis-rs builds that `String` lossily, silently
 // breaking comparisons of binary (non-UTF-8) values. See #7447 for a related
 // binary option-value issue in the Java client.
-//
-// TODO #7238: Use for `del_ex` (`DELEX`, Valkey 9.2).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ValueComparison {
-    /// Only set if the key exists and its value equals the given value (`IFEQ`).
+    /// Met if the key exists and its value equals the given value (`IFEQ`).
     ///
-    /// Since Valkey 8.1.0.
+    /// Since Valkey 8.1.0 for `SET`.
+    /// Since Valkey 9.2.0 for `DELEX`.
     IFEQ(Vec<u8>),
 
-    /// Only set if the key does not exist or its value does not equal the given
-    /// value (`IFNE`).
+    /// Met if the key does not exist or its value does not equal the given value (`IFNE`).
     ///
     /// Since Valkey 9.2.0.
     IFNE(Vec<u8>),

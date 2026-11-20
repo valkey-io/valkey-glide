@@ -71,6 +71,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     TimeUnit,
+    ValueComparison,
     ZAddOptions,
     ZScanOptions,
     convertFieldsAndValuesToHashDataType,
@@ -99,6 +100,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDelEx,
     createDelIfEq,
     createDump,
     createEcho,
@@ -4286,6 +4288,24 @@ export class BaseBatch<T extends BaseBatch<T>> {
      */
     public append(key: GlideString, value: GlideString): T {
         return this.addAndReturn(createAppend(key, value));
+    }
+
+    /**
+     * Deletes `key` if its value meets `condition`.
+     *
+     * @see {@link https://valkey.io/commands/delex/|valkey.io} for details.
+     *
+     * @param key - The key to delete.
+     * @param condition - The comparison condition. The key is only deleted if its current value
+     *     meets `condition`. See {@link ValueComparison}.
+     *
+     * Command Response - `true` if `key` was deleted, or `false` if `key` did not exist or
+     *     `condition` was not met.
+     *
+     * @since Valkey 9.2.0
+     */
+    public delex(key: GlideString, condition: ValueComparison): T {
+        return this.addAndReturn(createDelEx(key, condition));
     }
 
     /**

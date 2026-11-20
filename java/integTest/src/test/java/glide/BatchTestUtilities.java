@@ -14,6 +14,7 @@ import static glide.utils.Java8Utils.createMap;
 import static glide.utils.Java8Utils.createSet;
 
 import glide.api.models.BaseBatch;
+import glide.api.models.commands.CompareCondition;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.ExpirySet;
 import glide.api.models.commands.GetExOptions;
@@ -167,6 +168,8 @@ public class BatchTestUtilities {
         String genericKey3 = generateKey("GenericKey", isAtomic);
         String genericKey4 = generateKeySameSlot(genericKey3);
         String genericKey5 = generateKeySameSlot(genericKey3);
+        String genericKey6 = generateKey("GenericKey", isAtomic);
+        String genericKey7 = generateKeySameSlot(genericKey6);
         String[] ascendingList = new String[] {"1", "2", "3"};
         String[] descendingList = new String[] {"3", "2", "1"};
 
@@ -196,6 +199,14 @@ public class BatchTestUtilities {
                 .sortStore(genericKey3, genericKey4)
                 .lrange(genericKey4, 0, -1);
 
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            batch
+                    .set(genericKey6, "value")
+                    .set(genericKey7, "value2")
+                    .copy(genericKey6, genericKey7, false)
+                    .copy(genericKey6, genericKey7, true);
+        }
+
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             batch
                     .set(genericKey1, value1)
@@ -206,14 +217,6 @@ public class BatchTestUtilities {
                     .expiretime(genericKey1)
                     .pexpiretime(genericKey1)
                     .sortReadOnly(genericKey3);
-        }
-
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
-            batch
-                    .set(genericKey3, "value")
-                    .set(genericKey4, "value2")
-                    .copy(genericKey3, genericKey4, false)
-                    .copy(genericKey3, genericKey4, true);
         }
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
@@ -253,6 +256,18 @@ public class BatchTestUtilities {
                     ascendingList, // lrange(genericKey4, 0, -1)
                 };
 
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(genericKey6, "value")
+                                OK, // set(genericKey7, "value2")
+                                false, // copy(genericKey6, genericKey7, false)
+                                true, // copy(genericKey6, genericKey7, true)
+                            });
+        }
+
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResults =
                     concatenateArrays(
@@ -266,18 +281,6 @@ public class BatchTestUtilities {
                                 -2L, // expiretime(genericKey1)
                                 -2L, // pexpiretime(genericKey1)
                                 ascendingList, // sortReadOnly(genericKey3)
-                            });
-        }
-
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
-            expectedResults =
-                    concatenateArrays(
-                            expectedResults,
-                            new Object[] {
-                                OK, // set(genericKey3, "value1")
-                                OK, // set(genericKey4, "value2")
-                                false, // copy(genericKey3, genericKey4, false)
-                                true, // copy(genericKey3, genericKey4, true)
                             });
         }
 
@@ -307,6 +310,10 @@ public class BatchTestUtilities {
         String stringKey7 = generateKeySameSlot(stringKey6);
         String stringKey8 = generateKeySameSlot(stringKey6);
         String stringKey9 = generateKey("StringKey", isAtomic);
+        String stringKey10 = generateKey("StringKey", isAtomic);
+        String stringKey11 = generateKey("StringKey", isAtomic);
+        String stringKey12 = generateKey("StringKey", isAtomic);
+        String stringKey13 = generateKey("StringKey", isAtomic);
 
         Map<String, Object> expectedLcsIdxObject =
                 createMap("matches", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
@@ -342,6 +349,10 @@ public class BatchTestUtilities {
                 .msetnx(createMap(stringKey4, "foo", stringKey5, "bar"))
                 .mget(new String[] {stringKey4, stringKey5});
 
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            batch.set(stringKey9, value1).getex(stringKey9).getex(stringKey9, GetExOptions.Seconds(20L));
+        }
+
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             batch
                     .set(stringKey6, "abcd")
@@ -357,19 +368,6 @@ public class BatchTestUtilities {
                     .lcsIdxWithMatchLen(stringKey6, stringKey7, 1);
         }
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
-            batch.set(stringKey9, value1).getex(stringKey9).getex(stringKey9, GetExOptions.Seconds(20L));
-        }
-
-        String stringKey10 = generateKey("StringKey", isAtomic);
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
-            batch
-                    .set(stringKey10, value1)
-                    .delifeq(stringKey10, "wrong-value")
-                    .delifeq(stringKey10, value1);
-        }
-
-        String stringKey11 = generateKey("StringKey", isAtomic);
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
             batch
                     .set(
@@ -387,7 +385,13 @@ public class BatchTestUtilities {
                             SetOptions.builder().conditionalSetOnlyIfEqualTo("value").build());
         }
 
-        String stringKey12 = generateKey("StringKey", isAtomic);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            batch
+                    .set(stringKey10, value1)
+                    .delifeq(stringKey10, "other-value")
+                    .delifeq(stringKey10, value1);
+        }
+
         if (SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0")) {
             batch
                     .set(
@@ -402,7 +406,10 @@ public class BatchTestUtilities {
                     .set(
                             stringKey12,
                             "other",
-                            SetOptions.builder().conditionalSetOnlyIfNotEqualTo("other").build());
+                            SetOptions.builder().conditionalSetOnlyIfNotEqualTo("other").build())
+                    .set(stringKey13, "value")
+                    .delex(stringKey13, CompareCondition.ifEquals("other"))
+                    .delex(stringKey13, CompareCondition.ifNotEquals("other"));
         }
 
         Object[] expectedResults =
@@ -431,6 +438,17 @@ public class BatchTestUtilities {
                     new String[] {"foo", null}, // mget({stringKey4, stringKey5})
                 };
 
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(stringKey9, value1)
+                                value1, // getex(stringKey1)
+                                value1, // getex(stringKey1,GetExOptions.Seconds(20L))
+                            });
+        }
+
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResults =
                     concatenateArrays(
@@ -450,28 +468,6 @@ public class BatchTestUtilities {
                             });
         }
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
-            expectedResults =
-                    concatenateArrays(
-                            expectedResults,
-                            new Object[] {
-                                OK, // set(stringKey9, value1)
-                                value1, // getex(stringKey1)
-                                value1, // getex(stringKey1,GetExOptions.Seconds(20L))
-                            });
-        }
-
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
-            expectedResults =
-                    concatenateArrays(
-                            expectedResults,
-                            new Object[] {
-                                OK, // set(stringKey10, value1)
-                                false, // delifeq(stringKey10, "wrong-value")
-                                true, // delifeq(stringKey10, value1)
-                            });
-        }
-
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
             expectedResults =
                     concatenateArrays(
@@ -484,6 +480,17 @@ public class BatchTestUtilities {
                             });
         }
 
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(stringKey10, value1)
+                                false, // delifeq(stringKey10, "other-value")
+                                true, // delifeq(stringKey10, value1)
+                            });
+        }
+
         if (SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0")) {
             expectedResults =
                     concatenateArrays(
@@ -493,6 +500,9 @@ public class BatchTestUtilities {
                                 OK, // set(stringKey12, "value")
                                 null, // set(stringKey12, "other", IFNE "value") value equal
                                 OK, // set(stringKey12, "other", IFNE "other") value not equal
+                                OK, // set(stringKey13, "value")
+                                false, // delex(stringKey13, IFEQ "other") value not equal
+                                true, // delex(stringKey13, IFNE "other") value not equal
                             });
         }
 
@@ -528,6 +538,12 @@ public class BatchTestUtilities {
                 .hset(hashKey2, createMap(field1, value1))
                 .hscan(hashKey2, "0")
                 .hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            batch
+                    .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(false).build())
+                    .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(true).build());
+        }
 
         // Hash field expiration commands (Valkey 9.0.0+)
         if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
@@ -570,16 +586,14 @@ public class BatchTestUtilities {
                     .hpexpiretime(hashKey3, new String[] {field1, field2});
         }
 
-        // HGETDEL command (Valkey 9.1.0+)
         if (SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0")) {
+            // HGETDEL
             String hashKey4 = generateKey("HashKey", isAtomic);
             batch
                     .hset(hashKey4, createMap(field1, value1, field2, value2))
                     .hgetdel(hashKey4, new String[] {field1, field2});
-        }
 
-        // HSETEX key-level NX/XX condition (Valkey 9.1.0+)
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0")) {
+            // HSETEX with NX/XX
             String hashKey5 = generateKey("HashKey", isAtomic);
             HSetExOptions hsetexNxOptions = HSetExOptions.builder().onlyIfKeyDoesNotExist().build();
             HSetExOptions hsetexXxOptions = HSetExOptions.builder().onlyIfKeyExists().build();
@@ -588,12 +602,6 @@ public class BatchTestUtilities {
                     .hsetex(hashKey5, createMap(field1, value2), hsetexNxOptions)
                     .hsetex(hashKey5, createMap(field1, value2), hsetexXxOptions)
                     .hget(hashKey5, field1);
-        }
-
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
-            batch
-                    .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(false).build())
-                    .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(true).build());
         }
 
         Object[] result =
@@ -624,6 +632,18 @@ public class BatchTestUtilities {
                         "0", new Object[] {field1, value1}
                     }, // hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
                 };
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            result =
+                    concatenateArrays(
+                            result,
+                            new Object[] {
+                                new Object[] {"0", new Object[] {field1, value1}}, // hscan(hashKey2, "0",
+                                // HScanOptions.builder().count(20L).noValues(false).build());
+                                new Object[] {"0", new Object[] {field1}}, // hscan(hashKey2, "0",
+                                // HScanOptions.builder().count(20L).noValues(true).build());
+                            });
+        }
 
         // Add expected results for hash field expiration commands (Valkey 9.0.0+)
         if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
@@ -668,7 +688,7 @@ public class BatchTestUtilities {
                             });
         }
 
-        // Add expected results for HGETDEL command (Valkey 9.1.0+)
+        // Add expected results for HGETDEL and HSETEX with NX/XX
         if (SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0")) {
             result =
                     concatenateArrays(
@@ -676,15 +696,6 @@ public class BatchTestUtilities {
                             new Object[] {
                                 2L, // hset(hashKey4, createMap(field1, value1, field2, value2))
                                 new Object[] {value1, value2}, // hgetdel(hashKey4, new String[] {field1, field2})
-                            });
-        }
-
-        // Add expected results for HSETEX key-level NX/XX condition (Valkey 9.1.0+)
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0")) {
-            result =
-                    concatenateArrays(
-                            result,
-                            new Object[] {
                                 1L, // hsetex(hashKey5, createMap(field1, value1), hsetexNxOptions) - key did not
                                 // exist, NX succeeds
                                 0L, // hsetex(hashKey5, createMap(field1, value2), hsetexNxOptions) - key now
@@ -693,18 +704,6 @@ public class BatchTestUtilities {
                                 // XX succeeds
                                 value2, // hget(hashKey5, field1) - updated by the XX call, unaffected by the
                                 // failed NX call
-                            });
-        }
-
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
-            result =
-                    concatenateArrays(
-                            result,
-                            new Object[] {
-                                new Object[] {"0", new Object[] {field1, value1}}, // hscan(hashKey2, "0",
-                                // HScanOptions.builder().count(20L).noValues(false).build());
-                                new Object[] {"0", new Object[] {field1}}, // hscan(hashKey2, "0",
-                                // HScanOptions.builder().count(20L).noValues(true).build());
                             });
         }
 
@@ -747,15 +746,6 @@ public class BatchTestUtilities {
                 .lset(listKey5, 0, value1)
                 .lrange(listKey5, 0, -1);
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            batch
-                    .lpush(listKey4, new String[] {value1, value2, value3, value1, value2, value3})
-                    .lmpop(new String[] {listKey4}, ListDirection.LEFT)
-                    .lmpop(new String[] {listKey4}, ListDirection.LEFT, 2L)
-                    .blmpop(new String[] {listKey4}, ListDirection.LEFT, 0.1)
-                    .blmpop(new String[] {listKey4}, ListDirection.LEFT, 2L, 0.1);
-        } // listKey4 is now empty
-
         if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             batch
                     .lpush(listKey6, new String[] {value3, value2, value1})
@@ -769,6 +759,15 @@ public class BatchTestUtilities {
                     .lrange(listKey6, 0, -1)
                     .lrange(listKey7, 0, -1);
         }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            batch
+                    .lpush(listKey4, new String[] {value1, value2, value3, value1, value2, value3})
+                    .lmpop(new String[] {listKey4}, ListDirection.LEFT)
+                    .lmpop(new String[] {listKey4}, ListDirection.LEFT, 2L)
+                    .blmpop(new String[] {listKey4}, ListDirection.LEFT, 0.1)
+                    .blmpop(new String[] {listKey4}, ListDirection.LEFT, 2L, 0.1);
+        } // listKey4 is now empty
 
         Object[] expectedResults =
                 new Object[] {
@@ -799,20 +798,6 @@ public class BatchTestUtilities {
                     new String[] {value1, value2}, // lrange(listKey5, 0, -1)
                 };
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            expectedResults =
-                    concatenateArrays(
-                            expectedResults,
-                            new Object[] {
-                                6L, // lpush(listKey4, {value1, value2, value3})
-                                createMap(listKey4, new String[] {value3}), // lmpop({listKey4}, LEFT)
-                                createMap(listKey4, new String[] {value2, value1}), // lmpop({listKey4}, LEFT, 1L)
-                                createMap(listKey4, new String[] {value3}), // blmpop({listKey4}, LEFT, 0.1)
-                                createMap(
-                                        listKey4, new String[] {value2, value1}), // blmpop(listKey4}, LEFT, 1L, 0.1)
-                            });
-        }
-
         if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             expectedResults =
                     concatenateArrays(
@@ -828,6 +813,20 @@ public class BatchTestUtilities {
                                 value1, // blmove(listKey7, listKey6, RIGHT, LEFT, 0.1)
                                 new String[] {value1, value2, value3}, // lrange(listKey6, 0, -1)
                                 new String[] {value3, value2, value1}, // lrange(listKey7, 0, -1)
+                            });
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                6L, // lpush(listKey4, {value1, value2, value3})
+                                createMap(listKey4, new String[] {value3}), // lmpop({listKey4}, LEFT)
+                                createMap(listKey4, new String[] {value2, value1}), // lmpop({listKey4}, LEFT, 1L)
+                                createMap(listKey4, new String[] {value3}), // blmpop({listKey4}, LEFT, 0.1)
+                                createMap(
+                                        listKey4, new String[] {value2, value1}), // blmpop(listKey4}, LEFT, 1L, 0.1)
                             });
         }
 
@@ -964,14 +963,6 @@ public class BatchTestUtilities {
                 .zrandmemberWithCountWithScores(zSetKey2, 1)
                 .zscan(zSetKey2, "0")
                 .zscan(zSetKey2, "0", ZScanOptions.builder().count(20L).build());
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
-            batch
-                    .zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(false).build())
-                    .zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(true).build());
-        }
-
-        batch.bzpopmin(new String[] {zSetKey2}, .1);
-        // zSetKey2 is now empty
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             batch
@@ -1002,6 +993,15 @@ public class BatchTestUtilities {
                     .zintercard(new String[] {zSetKey4, zSetKey3})
                     .zintercard(new String[] {zSetKey4, zSetKey3}, 2);
         }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            batch
+                    .zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(false).build())
+                    .zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(true).build());
+        }
+
+        batch.bzpopmin(new String[] {zSetKey2}, .1);
+        // zSetKey2 is now empty
 
         Object[] expectedResults =
                 new Object[] {
@@ -1035,26 +1035,6 @@ public class BatchTestUtilities {
                     }, // zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).build())
                 };
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
-            expectedResults =
-                    concatenateArrays(
-                            expectedResults,
-                            new Object[] {
-                                new Object[] {
-                                    "0", new String[] {"one", "1"}
-                                }, // zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(false).build())
-                                new Object[] {
-                                    "0", new String[] {"one"}
-                                }, // zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(true).build())
-                            });
-        }
-
-        expectedResults =
-                concatenateArrays(
-                        expectedResults,
-                        new Object[] {
-                            new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
-                        });
         if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             expectedResults =
                     concatenateArrays(
@@ -1093,6 +1073,27 @@ public class BatchTestUtilities {
                                 2L, // zintercard(new String[] {zSetKey4, zSetKey3}, 2)
                             });
         }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                new Object[] {
+                                    "0", new String[] {"one", "1"}
+                                }, // zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(false).build())
+                                new Object[] {
+                                    "0", new String[] {"one"}
+                                }, // zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(true).build())
+                            });
+        }
+
+        expectedResults =
+                concatenateArrays(
+                        expectedResults,
+                        new Object[] {
+                            new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
+                        });
 
         return expectedResults;
     }

@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.GlideString;
+import glide.api.models.commands.CompareCondition;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
@@ -724,7 +725,45 @@ public interface StringBaseCommands {
      */
     CompletableFuture<Long> append(GlideString key, GlideString value);
 
-    // TODO #7238: Add DELEX command support.
+    /**
+     * Deletes <code>key</code> if its value meets <code>condition</code>.
+     *
+     * @since Valkey 9.2.0.
+     * @see <a href="https://valkey.io/commands/delex/">valkey.io</a> for details.
+     * @param key The key to delete.
+     * @param condition The comparison condition. The key is only deleted if its current value meets
+     *     <code>condition</code>.
+     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> if <code>key
+     *     </code> did not exist or <code>condition</code> was not met.
+     * @example
+     *     <pre>{@code
+     * client.set("key", "value").get();
+     * assert !client.delex("key", CompareCondition.ifEquals("other_value")).get();
+     * assert !client.delex("key", CompareCondition.ifNotEquals("value")).get();
+     * assert client.delex("key", CompareCondition.ifEquals("value")).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> delex(String key, CompareCondition condition);
+
+    /**
+     * Deletes <code>key</code> if its value meets <code>condition</code>.
+     *
+     * @since Valkey 9.2.0.
+     * @see <a href="https://valkey.io/commands/delex/">valkey.io</a> for details.
+     * @param key The key to delete.
+     * @param condition The comparison condition. The key is only deleted if its current value meets
+     *     <code>condition</code>.
+     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> if <code>key
+     *     </code> did not exist or <code>condition</code> was not met.
+     * @example
+     *     <pre>{@code
+     * client.set(gs("key"), gs("value")).get();
+     * assert !client.delex(gs("key"), CompareCondition.ifEquals(gs("other_value"))).get();
+     * assert !client.delex(gs("key"), CompareCondition.ifNotEquals(gs("value"))).get();
+     * assert client.delex(gs("key"), CompareCondition.ifEquals(gs("value"))).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> delex(GlideString key, CompareCondition condition);
 
     /**
      * Deletes <code>key</code> if its value equals <code>value</code>.

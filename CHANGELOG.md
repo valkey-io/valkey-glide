@@ -5,8 +5,7 @@
 ### Features
 
 * Python: Add CPython 3.15 wheels for the async and sync clients ([#7321](https://github.com/valkey-io/valkey-glide/issues/7321))
-* Core, Python: Add support for Valkey 9.2 commands:
-  * `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
+* All: Add support for `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
 
 ### Fixes
 

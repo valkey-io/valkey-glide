@@ -29,6 +29,7 @@ import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
 import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.DelEx;
 import static command_request.CommandRequestOuterClass.RequestType.DelIfEq;
 import static command_request.CommandRequestOuterClass.RequestType.Dump;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
@@ -250,6 +251,7 @@ import static glide.utils.ArrayTransformUtils.mapGeoDataToGlideStringArray;
 import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.commands.StringBaseCommands;
 import glide.api.models.commands.ClientPauseMode;
+import glide.api.models.commands.CompareCondition;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
@@ -614,6 +616,25 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     public <ArgType> T append(@NonNull ArgType key, @NonNull ArgType value) {
         checkTypeOrThrow(key);
         addCommand(Append, newArgsBuilder().add(key).add(value));
+        return getThis();
+    }
+
+    /**
+     * Deletes <code>key</code> if its value meets <code>condition</code>.
+     *
+     * @since Valkey 9.2.0.
+     * @see <a href="https://valkey.io/commands/delex/">valkey.io</a> for details.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @param key The key to delete.
+     * @param condition The comparison condition. The key is only deleted if its current value meets
+     *     <code>condition</code>.
+     * @return Command Response - <code>true</code> if <code>key</code> was deleted, <code>false
+     *     </code> if <code>key</code> did not exist or <code>condition</code> was not met.
+     */
+    public <ArgType> T delex(@NonNull ArgType key, @NonNull CompareCondition condition) {
+        checkTypeOrThrow(key);
+        addCommand(DelEx, newArgsBuilder().add(key).add(condition.toArgs()));
         return getThis();
     }
 

@@ -286,6 +286,54 @@ matrix_test!(set_ifne_only_if_value_differs, c, {
     assert_eq!(v.as_deref(), Some("value"));
 });
 
+matrix_test!(del_ex_ifeq, c, {
+    skip_if_version_below!(c, 9, 2, 0);
+
+    let k = common::key("del_ex_ifeq");
+
+    // Key does not exist
+    let deleted: usize = c.del_ex(&k, ValueComparison::ifeq("value")).await.unwrap();
+    assert_eq!(deleted, 0);
+
+    let _: () = c.set(&k, "value").await.unwrap();
+
+    // Value not equal, key is not deleted
+    let deleted: usize = c.del_ex(&k, ValueComparison::ifeq("other")).await.unwrap();
+    assert_eq!(deleted, 0);
+    let v: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(v.as_deref(), Some("value"));
+
+    // Value equal, key is deleted
+    let deleted: usize = c.del_ex(&k, ValueComparison::ifeq("value")).await.unwrap();
+    assert_eq!(deleted, 1);
+    let v: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(v, None);
+});
+
+matrix_test!(del_ex_ifne, c, {
+    skip_if_version_below!(c, 9, 2, 0);
+
+    let k = common::key("del_ex_ifne");
+
+    // Key does not exist
+    let deleted: usize = c.del_ex(&k, ValueComparison::ifne("value")).await.unwrap();
+    assert_eq!(deleted, 0);
+
+    let _: () = c.set(&k, "value").await.unwrap();
+
+    // Value equal, key is not deleted
+    let deleted: usize = c.del_ex(&k, ValueComparison::ifne("value")).await.unwrap();
+    assert_eq!(deleted, 0);
+    let v: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(v.as_deref(), Some("value"));
+
+    // Value not equal, key is deleted
+    let deleted: usize = c.del_ex(&k, ValueComparison::ifne("other")).await.unwrap();
+    assert_eq!(deleted, 1);
+    let v: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(v, None);
+});
+
 matrix_test!(set_with_expiry, c, {
     let k = common::key("ex");
     let opts = SetOptions::default().with_expiration(SetExpiry::EX(100));

@@ -491,7 +491,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.set("key", "value")
-            >>> await client.delifeq("key", "wrong_value")
+            >>> await client.delifeq("key", "other_value")
                 False
             >>> await client.delifeq("key", "value")
                 True
@@ -518,7 +518,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.set("key", "value")
-            >>> await client.delex("key", OnlyIfEqual("wrong_value"))
+            >>> await client.delex("key", OnlyIfEqual("other_value"))
                 False
             >>> await client.delex("key", OnlyIfNotEqual("value"))
                 False

@@ -1214,26 +1214,57 @@ func (suite *GlideTestSuite) TestCompressionIncompatibleCommands() {
 		name string
 		call func(c client) error
 	}{
-		{name: "Append", call: func(c client) error { return errOf(c.Append(ctx, "key", "0")) }},
-		{name: "BitCount", call: func(c client) error { return errOf(c.BitCount(ctx, "key")) }},
-		{name: "BitPos", call: func(c client) error { return errOf(c.BitPos(ctx, "key", 1)) }},
-		{name: "Decr", call: func(c client) error { return errOf(c.Decr(ctx, "key")) }},
-		{name: "DecrBy", call: func(c client) error { return errOf(c.DecrBy(ctx, "key", 5)) }},
-		{name: "DelIfEq", call: func(c client) error { return errOf(c.DelIfEq(ctx, "key", "10")) }},
-		{name: "GetBit", call: func(c client) error { return errOf(c.GetBit(ctx, "key", 0)) }},
-		{name: "GetRange", call: func(c client) error { return errOf(c.GetRange(ctx, "key", 0, 0)) }},
-		{name: "Incr", call: func(c client) error { return errOf(c.Incr(ctx, "key")) }},
-		{name: "IncrBy", call: func(c client) error { return errOf(c.IncrBy(ctx, "key", 5)) }},
-		{name: "IncrByFloat", call: func(c client) error { return errOf(c.IncrByFloat(ctx, "key", 0.5)) }},
+		{name: "Append", call: func(c client) error {
+			return errOf(c.Append(ctx, "key", "0"))
+		}},
+		{name: "BitCount", call: func(c client) error {
+			return errOf(c.BitCount(ctx, "key"))
+		}},
+		{name: "BitPos", call: func(c client) error {
+			return errOf(c.BitPos(ctx, "key", 1))
+		}},
+		{name: "Decr", call: func(c client) error {
+			return errOf(c.Decr(ctx, "key"))
+		}},
+		{name: "DecrBy", call: func(c client) error {
+			return errOf(c.DecrBy(ctx, "key", 5))
+		}},
+		{name: "DelEx", call: func(c client) error {
+			return errOf(c.DelEx(ctx, "key", options.NewOnlyIfEquals("10")))
+		}},
+		{name: "DelIfEq", call: func(c client) error {
+			return errOf(c.DelIfEq(ctx, "key", "10"))
+		}},
+		{name: "GetBit", call: func(c client) error {
+			return errOf(c.GetBit(ctx, "key", 0))
+		}},
+		{name: "GetRange", call: func(c client) error {
+			return errOf(c.GetRange(ctx, "key", 0, 0))
+		}},
+		{name: "Incr", call: func(c client) error {
+			return errOf(c.Incr(ctx, "key"))
+		}},
+		{name: "IncrBy", call: func(c client) error {
+			return errOf(c.IncrBy(ctx, "key", 5))
+		}},
+		{name: "IncrByFloat", call: func(c client) error {
+			return errOf(c.IncrByFloat(ctx, "key", 0.5))
+		}},
+		{name: "SetBit", call: func(c client) error {
+			return errOf(c.SetBit(ctx, "key", 0, 1))
+		}},
 		{name: "SetIfEq", call: func(c client) error {
 			return errOf(c.SetWithOptions(ctx, "key", "20", *options.NewSetOptions().SetOnlyIfEquals("10")))
 		}},
 		{name: "SetIfNe", call: func(c client) error {
 			return errOf(c.SetWithOptions(ctx, "key", "20", *options.NewSetOptions().SetOnlyIfNotEquals("20")))
 		}},
-		{name: "SetBit", call: func(c client) error { return errOf(c.SetBit(ctx, "key", 0, 1)) }},
-		{name: "SetRange", call: func(c client) error { return errOf(c.SetRange(ctx, "key", 1, "5")) }},
-		{name: "Strlen", call: func(c client) error { return errOf(c.Strlen(ctx, "key")) }},
+		{name: "SetRange", call: func(c client) error {
+			return errOf(c.SetRange(ctx, "key", 1, "5"))
+		}},
+		{name: "Strlen", call: func(c client) error {
+			return errOf(c.Strlen(ctx, "key"))
+		}},
 	}
 
 	clients := map[string]client{
@@ -1257,101 +1288,139 @@ func (suite *GlideTestSuite) TestCompressionIncompatibleCommandsWorkWithoutCompr
 
 	t := suite.T()
 
+	ctx := context.Background()
 	key := fmt.Sprintf("no_compression_test_%s", randomString(8))
+	var err error
 
-	// Set initial value
-	_, err := client.Set(context.Background(), key, "100")
-	assert.NoError(t, err)
-
-	// All these commands should work without compression
-	// INCR
-	incrResult, err := client.Incr(context.Background(), key)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(101), incrResult)
-
-	// INCRBY
-	incrByResult, err := client.IncrBy(context.Background(), key, 10)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(111), incrByResult)
-
-	// DECR
-	decrResult, err := client.Decr(context.Background(), key)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(110), decrResult)
-
-	// DECRBY
-	decrByResult, err := client.DecrBy(context.Background(), key, 10)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(100), decrByResult)
-
-	// STRLEN
-	_, err = client.Set(context.Background(), key, "hello")
-	assert.NoError(t, err)
-	strlenResult, err := client.Strlen(context.Background(), key)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(5), strlenResult)
+	// All these commands should work without compression.
+	// Each command runs against the key set to "10".
 
 	// APPEND
-	appendResult, err := client.Append(context.Background(), key, " world")
+	_, err = client.Set(ctx, key, "10")
 	assert.NoError(t, err)
-	assert.Equal(t, int64(11), appendResult)
-
-	// DELIFEQ
-	if compareServerVersions(suite.serverVersion, "9.0.0") >= 0 {
-		_, err = client.DelIfEq(context.Background(), key, "nonexistent")
-		assert.NoError(t, err)
-	}
-
-	// GETRANGE
-	getrangeResult, err := client.GetRange(context.Background(), key, 0, 4)
+	appendResult, err := client.Append(ctx, key, "0")
 	assert.NoError(t, err)
-	assert.Equal(t, "hello", getrangeResult)
-
-	// SETRANGE
-	setrangeResult, err := client.SetRange(context.Background(), key, 6, "WORLD")
-	assert.NoError(t, err)
-	assert.Equal(t, int64(11), setrangeResult)
-
-	// GETBIT
-	_, err = client.Set(context.Background(), key, "\x00")
-	assert.NoError(t, err)
-	getbitResult, err := client.GetBit(context.Background(), key, 0)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), getbitResult)
-
-	// SETBIT
-	setbitResult, err := client.SetBit(context.Background(), key, 0, 1)
-	assert.NoError(t, err)
-	assert.Equal(t, int64(0), setbitResult)
+	assert.Equal(t, int64(3), appendResult)
 
 	// BITCOUNT
-	bitcountResult, err := client.BitCount(context.Background(), key)
+	_, err = client.Set(ctx, key, "10")
 	assert.NoError(t, err)
-	assert.GreaterOrEqual(t, bitcountResult, int64(0))
+	bitCountResult, err := client.BitCount(ctx, key)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(5), bitCountResult)
 
-	// SET with IFEQ
-	// TODO #5368: Compare versions semantically, not as strings.
-	if suite.serverVersion >= "8.1.0" {
-		_, err = client.Set(context.Background(), key, "hello")
+	// BITPOS
+	_, err = client.Set(ctx, key, "10")
+	assert.NoError(t, err)
+	bitPosResult, err := client.BitPos(ctx, key, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), bitPosResult)
+
+	// DECR
+	_, err = client.Set(ctx, key, "10")
+	assert.NoError(t, err)
+	decrResult, err := client.Decr(ctx, key)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(9), decrResult)
+
+	// DECRBY
+	_, err = client.Set(ctx, key, "10")
+	assert.NoError(t, err)
+	decrByResult, err := client.DecrBy(ctx, key, 5)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(5), decrByResult)
+
+	// GETBIT
+	_, err = client.Set(ctx, key, "10")
+	assert.NoError(t, err)
+	getBitResult, err := client.GetBit(ctx, key, 0)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), getBitResult)
+
+	// GETRANGE
+	_, err = client.Set(ctx, key, "10")
+	assert.NoError(t, err)
+	getRangeResult, err := client.GetRange(ctx, key, 0, 0)
+	assert.NoError(t, err)
+	assert.Equal(t, "1", getRangeResult)
+
+	// INCR
+	_, err = client.Set(ctx, key, "10")
+	assert.NoError(t, err)
+	incrResult, err := client.Incr(ctx, key)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(11), incrResult)
+
+	// INCRBY
+	_, err = client.Set(ctx, key, "10")
+	assert.NoError(t, err)
+	incrByResult, err := client.IncrBy(ctx, key, 5)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(15), incrByResult)
+
+	// INCRBYFLOAT
+	_, err = client.Set(ctx, key, "10")
+	assert.NoError(t, err)
+	incrByFloatResult, err := client.IncrByFloat(ctx, key, 0.5)
+	assert.NoError(t, err)
+	assert.Equal(t, float64(10.5), incrByFloatResult)
+
+	// SETBIT
+	_, err = client.Set(ctx, key, "10")
+	assert.NoError(t, err)
+	setBitResult, err := client.SetBit(ctx, key, 0, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), setBitResult)
+
+	// SETRANGE
+	_, err = client.Set(ctx, key, "10")
+	assert.NoError(t, err)
+	setRangeResult, err := client.SetRange(ctx, key, 1, "5")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), setRangeResult)
+
+	// STRLEN
+	_, err = client.Set(ctx, key, "10")
+	assert.NoError(t, err)
+	strlenResult, err := client.Strlen(ctx, key)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), strlenResult)
+
+	if compareServerVersions(suite.serverVersion, "8.1.0") >= 0 {
+		// SET with IFEQ
+		_, err = client.Set(ctx, key, "10")
 		assert.NoError(t, err)
-		setIfEqResult, err := client.SetWithOptions(
-			context.Background(), key, "world", *options.NewSetOptions().SetOnlyIfEquals("hello"))
+		setIfEqResult, err := client.SetWithOptions(ctx, key, "20", *options.NewSetOptions().SetOnlyIfEquals("10"))
 		assert.NoError(t, err)
 		assert.Equal(t, "OK", setIfEqResult.Value())
 	}
 
-	// SET with IFNE
-	// TODO #5368: Compare versions semantically, not as strings.
-	if suite.serverVersion >= "9.2.0" {
-		_, err = client.Set(context.Background(), key, "hello")
+	if compareServerVersions(suite.serverVersion, "9.0.0") >= 0 {
+		// DELIFEQ
+		_, err = client.Set(ctx, key, "10")
 		assert.NoError(t, err)
-		setIfNeResult, err := client.SetWithOptions(
-			context.Background(), key, "world", *options.NewSetOptions().SetOnlyIfNotEquals("world"))
+		delIfEqResult, err := client.DelIfEq(ctx, key, "10")
+		assert.NoError(t, err)
+		assert.True(t, delIfEqResult)
+	}
+
+	if compareServerVersions(suite.serverVersion, "9.2.0") >= 0 {
+		// DELEX
+		_, err = client.Set(ctx, key, "10")
+		assert.NoError(t, err)
+		delExResult, err := client.DelEx(ctx, key, options.NewOnlyIfEquals("10"))
+		assert.NoError(t, err)
+		assert.True(t, delExResult)
+
+		// SET with IFNE
+		_, err = client.Set(ctx, key, "10")
+		assert.NoError(t, err)
+		setIfNeResult, err := client.SetWithOptions(ctx, key, "20", *options.NewSetOptions().SetOnlyIfNotEquals("20"))
 		assert.NoError(t, err)
 		assert.Equal(t, "OK", setIfNeResult.Value())
 	}
 
-	client.Del(context.Background(), []string{key})
+	client.Del(ctx, []string{key})
 }
 
 // ============================================================================

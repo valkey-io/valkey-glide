@@ -51,7 +51,7 @@ type StringCommands interface {
 
 	DelIfEq(ctx context.Context, key string, value string) (bool, error)
 
-	// TODO #7238: Add DelEx command support.
+	DelEx(ctx context.Context, key string, condition options.ValueComparison) (bool, error)
 
 	LCS(ctx context.Context, key1 string, key2 string) (*models.LCSMatch, error)
 

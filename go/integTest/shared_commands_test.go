@@ -633,22 +633,91 @@ func (suite *GlideTestSuite) TestDelIfEq() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.New().String()
 		value := uuid.New().String()
-		wrongValue := uuid.New().String()
+		otherValue := uuid.New().String()
 
+		// key does not exist
 		res, err := client.DelIfEq(context.Background(), key, value)
 		suite.NoError(err)
 		assert.False(suite.T(), res)
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		res, err = client.DelIfEq(context.Background(), key, wrongValue)
+		// value not equal, key is not deleted
+		res, err = client.DelIfEq(context.Background(), key, otherValue)
 		suite.NoError(err)
 		assert.False(suite.T(), res)
 		res1, err := client.Get(context.Background(), key)
 		suite.NoError(err)
 		assert.Equal(suite.T(), value, res1.Value())
 
+		// value equal, key is deleted
 		res, err = client.DelIfEq(context.Background(), key, value)
+		suite.NoError(err)
+		assert.True(suite.T(), res)
+		res1, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.True(suite.T(), res1.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestDelEx_IfEq() {
+	suite.SkipIfServerVersionLowerThan("9.2.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.New().String()
+		value := uuid.New().String()
+		otherValue := uuid.New().String()
+
+		// key does not exist
+		res, err := client.DelEx(context.Background(), key, options.NewOnlyIfEquals(value))
+		suite.NoError(err)
+		assert.False(suite.T(), res)
+
+		suite.verifyOK(client.Set(context.Background(), key, value))
+
+		// value not equal, key is not deleted
+		res, err = client.DelEx(context.Background(), key, options.NewOnlyIfEquals(otherValue))
+		suite.NoError(err)
+		assert.False(suite.T(), res)
+		res1, err := client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), value, res1.Value())
+
+		// value equal, key is deleted
+		res, err = client.DelEx(context.Background(), key, options.NewOnlyIfEquals(value))
+		suite.NoError(err)
+		assert.True(suite.T(), res)
+		res1, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.True(suite.T(), res1.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestDelEx_IfNe() {
+	suite.SkipIfServerVersionLowerThan("9.2.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.New().String()
+		value := uuid.New().String()
+		otherValue := uuid.New().String()
+
+		// key does not exist
+		res, err := client.DelEx(context.Background(), key, options.NewOnlyIfNotEquals(value))
+		suite.NoError(err)
+		assert.False(suite.T(), res)
+
+		suite.verifyOK(client.Set(context.Background(), key, value))
+
+		// value equal, key is not deleted
+		res, err = client.DelEx(context.Background(), key, options.NewOnlyIfNotEquals(value))
+		suite.NoError(err)
+		assert.False(suite.T(), res)
+		res1, err := client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), value, res1.Value())
+
+		// value not equal, key is deleted
+		res, err = client.DelEx(context.Background(), key, options.NewOnlyIfNotEquals(otherValue))
 		suite.NoError(err)
 		assert.True(suite.T(), res)
 		res1, err = client.Get(context.Background(), key)
