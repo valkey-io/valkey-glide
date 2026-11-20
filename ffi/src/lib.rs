@@ -2163,19 +2163,32 @@ impl ClientAdapter {
                 std::ptr::null_mut()
             }
             ClientType::SyncClient => {
-                // Enter background runtime context inside the future so tokio::spawn
-                // calls within the command (e.g. reconnection, lazy subscribe) land
-                // on the background runtime where TCP I/O is registered.
-                // Note: block_on overrides any context entered before it, so the
-                // guard must be held inside the future being polled.
-                let bg = self
-                    .background_runtime
-                    .as_ref()
-                    .map(|rt| rt.handle().clone());
-                let result = self.runtime.block_on(async {
-                    let _guard = bg.as_ref().map(|h| h.enter());
-                    request_future.await
-                });
+                // A lazy client connects inside this command, so keep that off the caller's stack.
+                let result = if self.core.client.is_lazy()
+                    && let Some(bg) = self.background_runtime.as_ref()
+                {
+                    block_on_worker(bg, request_future).unwrap_or_else(|err| {
+                        Err(RedisError::from((
+                            ErrorKind::ClientError,
+                            "Command task on the runtime worker failed",
+                            err,
+                        )))
+                    })
+                } else {
+                    // Enter background runtime context inside the future so tokio::spawn
+                    // calls within the command (e.g. reconnection, lazy subscribe) land
+                    // on the background runtime where TCP I/O is registered.
+                    // Note: block_on overrides any context entered before it, so the
+                    // guard must be held inside the future being polled.
+                    let bg = self
+                        .background_runtime
+                        .as_ref()
+                        .map(|rt| rt.handle().clone());
+                    self.runtime.block_on(async {
+                        let _guard = bg.as_ref().map(|h| h.enter());
+                        request_future.await
+                    })
+                };
                 Self::handle_result(result, None, None, request_id, response_buf, false)
             }
         }
@@ -5642,6 +5655,8 @@ fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo
         ))),
         Value::SlotIdRoute(slot_id_route) => Ok(Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
+                // TODO #7681: Use a checked conversion (`u16::try_from`) and reject out-of-range
+                // slots.
                 slot_id_route.slot_id as u16,
                 get_slot_addr(&slot_id_route.slot_type)?,
             )),
@@ -6432,6 +6447,8 @@ pub(crate) unsafe fn create_route(
         ))),
         RouteType::SlotId => Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
+                // TODO #7681: Use a checked conversion (`u16::try_from`) and reject out-of-range
+                // slots.
                 route.slot_id as u16,
                 (&route.slot_type).into(),
             )),
@@ -7248,6 +7265,7 @@ pub struct OpenTelemetryMetricsConfig {
 pub unsafe extern "C" fn init_open_telemetry(
     open_telemetry_config: *const OpenTelemetryConfig,
 ) -> *const c_char {
+    // TODO #7706: Remove once glide-telemetry's validate_config rejects this.
     // At least one of traces or metrics must be provided
     if unsafe { (*open_telemetry_config).traces.is_null() }
         && unsafe { (*open_telemetry_config).metrics.is_null() }

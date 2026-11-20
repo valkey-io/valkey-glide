@@ -168,6 +168,18 @@ impl std::fmt::Debug for StandaloneClientConnectionError {
     }
 }
 
+/// The read-only mode check: errors when `cmd` can write. Callers check the
+/// read-only flag first, so normal clients skip it.
+pub(super) fn reject_write_command(cmd: &[u8]) -> RedisResult<()> {
+    if is_readonly_cmd(cmd) {
+        return Ok(());
+    }
+    Err(RedisError::from((
+        redis::ErrorKind::ReadOnly,
+        "write commands are not allowed in read-only mode",
+    )))
+}
+
 impl StandaloneClient {
     pub async fn create_client(
         connection_request: ConnectionRequest,
@@ -316,6 +328,7 @@ impl StandaloneClient {
             }
             Some(manager.get_params().await)
         } else if has_root_certs || has_client_cert || has_client_key {
+            // TODO #7707: Reject root certificates with `TlsMode::InsecureTls`, which ignores them.
             if tls_mode.unwrap_or(TlsMode::NoTls) == TlsMode::NoTls {
                 return Err(StandaloneClientConnectionError::FailedConnection(vec![(
                     None,
@@ -1035,12 +1048,8 @@ impl StandaloneClient {
             return self.send_request_to_single_node(cmd, false).await;
         };
 
-        // Block write commands in read-only mode
-        if self.inner.read_only && !is_readonly_cmd(cmd_bytes.as_slice()) {
-            return Err(RedisError::from((
-                redis::ErrorKind::ReadOnly,
-                "write commands are not allowed in read-only mode",
-            )));
+        if self.inner.read_only {
+            reject_write_command(cmd_bytes.as_slice())?;
         }
 
         if RoutingInfo::is_all_nodes(cmd_bytes.as_slice()) {
@@ -1057,6 +1066,12 @@ impl StandaloneClient {
         offset: usize,
         count: usize,
     ) -> RedisResult<Vec<Value>> {
+        // Covers transactions too: their MULTI/EXEC are added when packing.
+        if self.inner.read_only {
+            for cmd in pipeline.cmd_iter() {
+                reject_write_command(&cmd.command().unwrap_or_default())?;
+            }
+        }
         let reconnecting_connection = self.get_primary_connection();
         let mut connection = reconnecting_connection.get_connection().await?;
         let result = connection

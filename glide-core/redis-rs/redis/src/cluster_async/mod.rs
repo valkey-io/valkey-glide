@@ -115,6 +115,7 @@ use futures::{future::BoxFuture, prelude::*, ready};
 use parking_lot::RwLock as ParkingLotRwLock;
 use pin_project_lite::pin_project;
 use tokio::sync::{
+    futures::OwnedNotified,
     mpsc,
     oneshot::{self, Receiver},
 };
@@ -1708,18 +1709,23 @@ where
                         self.poll(cx)
                     }
                     RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
-                        let mut request = this.request.take().unwrap();
-                        // TODO should we reset the redirect here?
-                        request.info.reset_routing();
                         log_warn_rate_limited!(
                             "cluster",
                             5,
                             format!("disconnected from {:?}", address)
                         );
-                        let should_retry =
-                            matches!(err.retry_method(), RetryMethod::ReconnectAndRetry);
+                        let request = if matches!(retry_method, RetryMethod::ReconnectAndRetry) {
+                            let mut request = this.request.take().unwrap();
+                            // TODO should we reset the redirect here?
+                            request.info.reset_routing();
+                            Some(request)
+                        } else {
+                            // Not retried, so the caller must get this error instead of a dropped sender.
+                            self.respond(Err(err));
+                            None
+                        };
                         Next::Reconnect {
-                            request: should_retry.then_some(request),
+                            request,
                             target: address,
                             mode: ReconnectMode::CheckExisting,
                         }
@@ -2190,30 +2196,26 @@ where
             "cluster",
             "refresh_and_update_connections: Await on all tasks' refresh notifier"
         );
-        futures::future::join_all(
-            refresh_task_notifiers
-                .iter()
-                .map(|notify| notify.notified()),
-        )
-        .await;
+        futures::future::join_all(refresh_task_notifiers).await;
     }
 
     // Triggers a reconnection Tokio task for each supplied address.
     // If a refresh task is already running for an address, no new task is created;
-    // instead, the notifier from the existing task is returned.
-    // Returns a vector of notifiers for the refresh tasks (new or existing) corresponding to the supplied addresses.
+    // instead, a wait future for the existing task is returned.
+    // Wait futures are created under conn_lock before completion can notify them.
+    // Callers may safely await them after the task has finished or been superseded.
     async fn trigger_refresh_connection_tasks(
         inner: Arc<InnerCore<C>>,
         addresses: HashSet<ClusterAddress>,
         conn_type: RefreshConnectionType,
         existing_conn: ExistingConnection,
-    ) -> Vec<Arc<Notify>> {
+    ) -> Vec<OwnedNotified> {
         log_debug_lazy!(
             "cluster",
             format!("Triggering refresh connections tasks to {:?} ", addresses)
         );
 
-        let mut notifiers = Vec::<Arc<Notify>>::new();
+        let mut notifiers = Vec::<OwnedNotified>::new();
 
         let resolver = inner.get_cluster_param(|p| p.address_resolver.clone());
         let mut prepared_addresses = HashSet::new();
@@ -2241,7 +2243,9 @@ where
                     existing_conn != ExistingConnection::Replace || !task.may_keep_existing_conn
                 })
                 .map(|task| match &task.status {
-                    RefreshTaskStatus::Reconnecting(notifier) => Some(notifier.get_notifier()),
+                    RefreshTaskStatus::Reconnecting(notifier) => {
+                        Some(notifier.get_notifier().notified_owned())
+                    }
                     RefreshTaskStatus::ReconnectingTooLong => {
                         log_debug_lazy!(
                             "cluster",
@@ -2273,7 +2277,7 @@ where
             let may_keep_existing_conn = node_option.is_some();
 
             let notifier = RefreshTaskNotifier::new();
-            notifiers.push(notifier.get_notifier());
+            notifiers.push(notifier.get_notifier().notified_owned());
             let task_identity = Arc::new(());
             let task_identity_for_task = task_identity.clone();
 
@@ -3849,7 +3853,7 @@ where
                         )
                     );
                     // Wait for the refresh task to notify that it's done reconnecting (or transitioning).
-                    refresh_notifier.notified().await;
+                    refresh_notifier.await;
                     log_debug_lazy!(
                         "cluster",
                         format!(
@@ -6523,9 +6527,12 @@ pub(super) mod refresh_task_resolution_tests {
         )
         .await;
 
-        tokio::time::timeout(Duration::from_secs(1), notifiers[0].notified())
-            .await
-            .expect("raw seed refresh should complete");
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            notifiers.into_iter().next().expect("one refresh waiter"),
+        )
+        .await
+        .expect("raw seed refresh should complete");
 
         let connection = core
             .conn_lock
@@ -6568,8 +6575,8 @@ pub(super) mod refresh_task_resolution_tests {
         assert_eq!(first.len(), 1);
         assert_eq!(second.len(), 1);
 
-        let first_done = first[0].notified();
-        let second_done = second[0].notified();
+        let first_done = first.into_iter().next().expect("first refresh waiter");
+        let second_done = second.into_iter().next().expect("second refresh waiter");
         RELEASE_POISON_CONNECT.add_permits(2);
 
         tokio::time::timeout(Duration::from_secs(1), async {
@@ -6679,6 +6686,89 @@ pub(super) mod refresh_task_resolution_tests {
         assert_eq!(Arc::strong_count(&core), 1, "no task may hold the core");
     }
 
+    async fn refresh_completion_before_wait(join_existing: bool) {
+        use futures::FutureExt;
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381".to_owned();
+        let first = ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
+            RefreshConnectionType::AllConnections,
+            ExistingConnection::Ignore,
+        )
+        .await;
+        tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
+            .await
+            .expect("refresh should enter connection creation");
+        let identity = core
+            .conn_lock
+            .read()
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .get(&address)
+            .unwrap()
+            .identity
+            .clone();
+        let completion = if join_existing {
+            let joined = ClusterConnInner::trigger_refresh_connection_tasks(
+                core.clone(),
+                HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
+                RefreshConnectionType::AllConnections,
+                ExistingConnection::Ignore,
+            )
+            .await;
+            assert!(refresh_is_same_generation(&core, &address, &identity));
+            joined
+        } else {
+            first
+        };
+        assert_eq!(completion.len(), 1);
+        RELEASE_POISON_CONNECT.add_permits(2);
+        // Observing removal under the lock guarantees the state's Drop has
+        // already sent its notifications. Do not poll completion until then.
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if !core
+                    .conn_lock
+                    .read()
+                    .refresh_conn_state
+                    .refresh_address_in_progress
+                    .contains_key(&address)
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("refresh task should finish before the caller waits");
+        assert!(core
+            .conn_lock
+            .read()
+            .connection_for_address(&address)
+            .is_some());
+        assert!(
+            completion
+                .into_iter()
+                .next()
+                .unwrap()
+                .now_or_never()
+                .is_some(),
+            "completion must remain observable after the refresh task finishes"
+        );
+    }
+
+    #[tokio::test]
+    async fn started_refresh_completion_before_wait_is_observable() {
+        refresh_completion_before_wait(false).await;
+    }
+
+    #[tokio::test]
+    async fn joined_refresh_completion_before_wait_is_observable() {
+        refresh_completion_before_wait(true).await;
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
     async fn refresh_generation_is_replaced_through_production_path() {
         let _guard = gated_test_guard().await;
@@ -6757,9 +6847,10 @@ pub(super) mod refresh_task_resolution_tests {
             "old generation must not remove new state"
         );
 
+        let completed = new.into_iter().next().expect("new refresh waiter");
         gate.release_new.release();
 
-        tokio::time::timeout(Duration::from_secs(1), new[0].notified())
+        tokio::time::timeout(Duration::from_secs(1), completed)
             .await
             .expect("new generation should complete");
 
@@ -7004,7 +7095,7 @@ pub(super) mod refresh_task_resolution_tests {
             "equivalent raw/ready addresses share a task"
         );
         assert_eq!(RESOLVER_CALLS.load(Ordering::SeqCst), 1);
-        let done = notifiers[0].notified();
+        let done = notifiers.into_iter().next().expect("one refresh waiter");
         RELEASE_POISON_CONNECT.add_permits(2);
         tokio::time::timeout(Duration::from_secs(1), done)
             .await

@@ -618,6 +618,25 @@ mod dma_tests {
         unsafe { free_foreign_memory(memory) };
     }
 
+    /// A client whose RDMA configuration did not ask for device memory refuses a
+    /// device region by naming the setting, and drops the owner at once.
+    #[tokio::test]
+    async fn a_client_without_device_memory_refuses_a_device_region() {
+        let mock = ServerMock::new(primary_responses());
+        let client = rdma_client_against(&mock).await;
+        let (memory, owner, released) = foreign_memory();
+        let refused = unsafe {
+            client.register_rdma_device_region_raw(memory, glide_rdma::DeviceRuntime::Cuda, owner)
+        }
+        .expect_err("the fabric was opened without device memory");
+        assert!(refused.to_string().contains("device memory"), "{refused}");
+        assert!(
+            released.load(std::sync::atomic::Ordering::SeqCst),
+            "a refused registration drops the owner"
+        );
+        unsafe { free_foreign_memory(memory) };
+    }
+
     /// Wait up to [`PROMPTLY`] for `freed` to be set.
     async fn freed_promptly(freed: &std::sync::atomic::AtomicBool) -> bool {
         let deadline = tokio::time::Instant::now() + PROMPTLY;
