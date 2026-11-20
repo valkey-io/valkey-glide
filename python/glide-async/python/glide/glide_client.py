@@ -831,41 +831,9 @@ class BaseClient(CoreCommands):
             iam_config.credential_provider if iam_config is not None else None
         )
         if credential_provider is None:
-            self._pipe_client_id = self._lib.glide_allocate_client_id()
-            client_response_ptr = self._lib.create_client(
-                conn_req_bytes,
-                len(conn_req_bytes),
-                client_type,
-                pubsub_callback,
-                address_resolver_callback,
-                self._pipe_client_id,
+            await self._create_native_direct(
+                conn_req_bytes, client_type, pubsub_callback, address_resolver_callback
             )
-
-            ClientLogger.log(
-                LogLevel.INFO, "connection info", "new connection established"
-            )
-
-            if client_response_ptr == self._ffi.NULL:
-                raise ClosingError("Failed to create client, response pointer is NULL.")
-
-            client_response = self._ffi.cast("ConnectionResponse*", client_response_ptr)
-            if client_response.conn_ptr != self._ffi.NULL:
-                self._core_client = client_response.conn_ptr
-            else:
-                error_msg = (
-                    self._ffi.string(client_response.connection_error_message).decode(
-                        ENCODING
-                    )
-                    if client_response.connection_error_message != self._ffi.NULL
-                    else "Unknown error"
-                )
-                error_class = get_connection_error_class(
-                    client_response.connection_error_type
-                )
-                self._lib.free_connection_response(client_response_ptr)
-                raise error_class(error_msg)
-
-            self._lib.free_connection_response(client_response_ptr)
         else:
             import anyio
 
@@ -932,6 +900,86 @@ class BaseClient(CoreCommands):
         self._setup_pipe_after_creation(credential_provider is not None)
 
         return self
+
+    async def _create_native_direct(
+        self,
+        conn_req_bytes: bytes,
+        client_type: Any,
+        pubsub_callback: Any,
+        address_resolver_callback: Any,
+    ) -> None:
+        """Native creation without a credential provider.
+
+        ``create_client`` blocks for the entire connection attempt inside the
+        C ABI, so it must not run on the event-loop thread — otherwise every
+        coroutine in the process stalls for the whole connect, success or
+        failure (issue #7773). Offload it to a worker thread, exactly like the
+        provider-backed path in ``create``.
+        """
+        import anyio
+
+        self._pipe_client_id = self._lib.glide_allocate_client_id()
+        response_holder: List[Any] = []
+
+        def _create_blocking() -> None:
+            response_holder.append(
+                self._lib.create_client(
+                    conn_req_bytes,
+                    len(conn_req_bytes),
+                    client_type,
+                    pubsub_callback,
+                    address_resolver_callback,
+                    self._pipe_client_id,
+                )
+            )
+
+        def _process_response() -> None:
+            """Parse the native response, adopt the client, and free it."""
+            client_response_ptr = response_holder.pop()
+            if client_response_ptr == self._ffi.NULL:
+                raise ClosingError("Failed to create client, response pointer is NULL.")
+            client_response = self._ffi.cast("ConnectionResponse*", client_response_ptr)
+            if client_response.conn_ptr != self._ffi.NULL:
+                self._core_client = client_response.conn_ptr
+            else:
+                error_msg = (
+                    self._ffi.string(client_response.connection_error_message).decode(
+                        ENCODING
+                    )
+                    if client_response.connection_error_message != self._ffi.NULL
+                    else "Unknown error"
+                )
+                error_class = get_connection_error_class(
+                    client_response.connection_error_type
+                )
+                self._lib.free_connection_response(client_response_ptr)
+                raise error_class(error_msg)
+
+            self._lib.free_connection_response(client_response_ptr)
+
+        try:
+            # abandon_on_cancel is False (the default): if the awaiting task
+            # is cancelled, run_sync still waits for the worker, so the
+            # handler below always sees a completed call and can release the
+            # response it produced.
+            await anyio.to_thread.run_sync(_create_blocking)
+            _process_response()
+        except BaseException:
+            if response_holder:
+                # The call finished but the response was never consumed
+                # (e.g. the awaiting task was cancelled): close the connection
+                # it holds so it does not leak.
+                client_response_ptr = response_holder.pop()
+                if client_response_ptr != self._ffi.NULL:
+                    client_response = self._ffi.cast(
+                        "ConnectionResponse*", client_response_ptr
+                    )
+                    if client_response.conn_ptr != self._ffi.NULL:
+                        self._lib.close_client(client_response.conn_ptr)
+                    self._lib.free_connection_response(client_response_ptr)
+            raise
+
+        ClientLogger.log(LogLevel.INFO, "connection info", "new connection established")
 
     def _setup_pipe_after_creation(self, provider_backed: bool) -> None:
         """Set up delivery and roll back only provider-backed direct failures."""
