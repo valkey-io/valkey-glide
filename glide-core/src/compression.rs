@@ -255,10 +255,12 @@ pub trait CompressionBackend: Send + Sync + fmt::Debug {
     fn validate_compression_level(&self, level: Option<i32>) -> CompressionResult<()>;
 }
 
+/// A compression backend.
+#[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CompressionBackendType {
-    Zstd,
-    Lz4,
+    Zstd = 0,
+    Lz4 = 1,
 }
 
 impl CompressionBackendType {
