@@ -200,19 +200,39 @@ fn child_creates_standalone_clients() {
     create_clients_on_a_musl_sized_thread(false);
 }
 
-/// A periodic topology check resolves every node. One that runs while a sync command blocks
-/// runs its resolutions on the command's caller.
+/// A cluster request whose periodic topology check runs every second. Each check resolves every
+/// node, so it calls the resolver whether the caller is blocked or not.
+fn checked_request(node: &str) -> ConnectionRequest {
+    let mut request = request(node, TlsMode::SecureTls);
+    let mut interval = PeriodicChecksManualInterval::new();
+    interval.duration_in_sec = 1;
+    request.set_periodic_checks_manual_interval(interval);
+    request
+}
+
+/// Waits until the resolver of `client_id` has run on the caller.
+fn wait_for_a_resolution_on_the_caller(client_id: usize) {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let mut threads = Vec::new();
+    while !threads.iter().any(|name| name == CALLER) {
+        assert!(
+            Instant::now() < deadline,
+            "no resolution ran on the blocked caller: {threads:?}"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+        threads.extend(take_threads(client_id));
+    }
+}
+
+/// A periodic check that runs while a sync command blocks runs its resolutions on the
+/// command's caller.
 #[test]
 fn resolutions_while_a_sync_command_blocks_run_on_its_caller() {
     const CLIENT_ID: usize = 4;
     const KEY: &str = "resolver-caller-thread:blpop";
     let cluster = TlsCluster::start(true);
-    let mut checked = request(&cluster.node, TlsMode::SecureTls);
-    let mut interval = PeriodicChecksManualInterval::new();
-    interval.duration_in_sec = 1;
-    checked.set_periodic_checks_manual_interval(interval);
     let client = create(
-        &checked,
+        &checked_request(&cluster.node),
         ClientType::SyncClient,
         Some(record_resolver_thread),
         CLIENT_ID,
@@ -228,16 +248,7 @@ fn resolutions_while_a_sync_command_blocks_run_on_its_caller() {
         .name(CALLER.to_string())
         .spawn(move || send(&client, RequestType::BLPop, &[KEY, "0"]))
         .expect("spawn the caller");
-    let deadline = Instant::now() + Duration::from_secs(20);
-    let mut threads = Vec::new();
-    while !threads.iter().any(|name| name == CALLER) {
-        assert!(
-            Instant::now() < deadline,
-            "no resolution ran on the blocked caller: {threads:?}"
-        );
-        std::thread::sleep(Duration::from_millis(10));
-        threads.extend(take_threads(CLIENT_ID));
-    }
+    wait_for_a_resolution_on_the_caller(CLIENT_ID);
     assert_eq!(send(&pusher, RequestType::LPush, &[KEY, "v"]), Ok(()));
     assert_eq!(blocked.join().expect("the caller panicked"), Ok(()));
 }
@@ -285,79 +296,67 @@ fn a_sync_command_from_the_resolver_on_a_blocked_caller_fails() {
     }
 }
 
+/// The same for RDMA transfers, which block their caller as sync commands do.
 #[cfg(feature = "rdma-tcp-dev")]
-mod rdma {
-    use super::*;
+#[test]
+fn resolutions_while_an_rdma_transfer_blocks_run_on_its_caller() {
     use glide_core::connection_request::{RdmaConfig, TcpProvider};
+    use std::sync::atomic::AtomicBool;
 
-    /// The client and region the resolver below runs its nested transfer on.
-    static TARGET: Mutex<(usize, usize)> = Mutex::new((0, 0));
-    /// What each nested transfer returned as its error.
-    static ERRORS: Mutex<Vec<Option<String>>> = Mutex::new(Vec::new());
+    const CLIENT_ID: usize = 6;
+    let cluster = TlsCluster::start(true);
+    let mut request = checked_request(&cluster.node);
+    let mut rdma = RdmaConfig::new();
+    rdma.set_tcp(TcpProvider::new());
+    request.rdma_config = protobuf::MessageField::some(rdma);
+    let client = create(
+        &request,
+        ClientType::SyncClient,
+        Some(record_resolver_thread),
+        CLIENT_ID,
+    );
+    let mut memory = vec![0u8; 64];
+    let region = unsafe {
+        let registration = register_rdma_region(client.0, memory.as_mut_ptr(), memory.len());
+        let region = (*registration).region;
+        assert!(!region.is_null(), "the region should register");
+        free_rdma_registration(registration);
+        region as usize
+    };
 
-    unsafe extern "C-unwind" fn resolve_with_a_nested_transfer(
-        _: usize,
-        _: *const u8,
-        _: usize,
-        _: u16,
-        _: *mut u8,
-        _: usize,
-        _: *mut usize,
-    ) -> u16 {
-        let (client, region) = *TARGET.lock().unwrap();
-        let key = b"key";
-        unsafe {
-            let result = rdma_get(
-                client as *const c_void,
-                key.as_ptr(),
-                key.len(),
-                region as *mut RdmaRegion,
-                0,
-                64,
-            );
-            let message = (*result).error_message;
-            let error = (!message.is_null())
-                .then(|| CStr::from_ptr(message).to_string_lossy().into_owned());
-            free_rdma_result(result);
-            ERRORS.lock().unwrap().push(error);
-        }
-        0
-    }
+    // The servers have no RDMA module, so each transfer fails at its handshake and hands the
+    // region back. Transferring in a loop keeps the caller blocked nearly all the time.
+    let stop = std::sync::Arc::new(AtomicBool::new(false));
+    let transfers = {
+        let (stop, client) = (stop.clone(), client.0 as usize);
+        std::thread::Builder::new()
+            .name(CALLER.to_string())
+            .spawn(move || {
+                let key = b"resolver-caller-thread:rdma";
+                while !stop.load(Ordering::Acquire) {
+                    unsafe {
+                        let result = rdma_get(
+                            client as *const c_void,
+                            key.as_ptr(),
+                            key.len(),
+                            region as *mut RdmaRegion,
+                            0,
+                            64,
+                        );
+                        assert!(!(*result).region_closed, "a transfer closed the region");
+                        free_rdma_result(result);
+                    }
+                }
+            })
+            .expect("spawn the caller")
+    };
+    wait_for_a_resolution_on_the_caller(CLIENT_ID);
+    stop.store(true, Ordering::Release);
+    transfers.join().expect("the caller panicked");
 
-    #[test]
-    fn an_rdma_transfer_from_the_resolver_on_a_blocked_caller_fails() {
-        let server = TlsCluster::start(false);
-        let mut rdma_request = quiet_request(&server.node, false);
-        let mut rdma = RdmaConfig::new();
-        rdma.set_tcp(TcpProvider::new());
-        rdma_request.rdma_config = protobuf::MessageField::some(rdma);
-        let target = create(&rdma_request, ClientType::SyncClient, None, 0);
-        let mut memory = vec![0u8; 64];
-        let region = unsafe {
-            let registration = register_rdma_region(target.0, memory.as_mut_ptr(), memory.len());
-            let region = (*registration).region;
-            assert!(!region.is_null(), "the region should register");
-            free_rdma_registration(registration);
-            region
-        };
-        *TARGET.lock().unwrap() = (target.0 as usize, region as usize);
-
-        let _client = create(
-            &quiet_request(&server.node, false),
-            ClientType::SyncClient,
-            Some(resolve_with_a_nested_transfer),
-            6,
-        );
-        let errors = std::mem::take(&mut *ERRORS.lock().unwrap());
-        assert!(!errors.is_empty(), "the resolver never ran");
-        for error in errors {
-            let error = error.expect("a nested transfer succeeded");
-            assert!(error.contains(REENTRANT_CALL), "unexpected error: {error}");
-        }
-        let hold = unsafe { free_rdma_region(region) };
-        if !hold.is_null() {
-            // Something may still write to the memory, so it must outlive the test.
-            std::mem::forget(memory);
-        }
+    let hold = unsafe { free_rdma_region(region as *mut RdmaRegion) };
+    if !hold.is_null() {
+        // Something may still write to the memory, so it must outlive the test.
+        std::mem::forget(memory);
     }
 }

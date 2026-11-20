@@ -453,7 +453,7 @@ impl redis::AddressResolver for FFIAddressResolver {
     }
 }
 
-/// Calls the foreign resolver on this thread; [`FFIAddressResolver::resolve`] picks the thread.
+/// Calls the foreign resolver on this thread. [`FFIAddressResolver`] picks the thread.
 fn resolve_with_callback(
     callback: NonNullAddressResolverCallback,
     client_id: usize,
@@ -2779,8 +2779,8 @@ struct CallerQueue {
 }
 
 impl CallerDispatch {
-    /// Whether this thread is blocked in an FFI call. A call made on it now comes from one of the
-    /// callbacks it runs, and would wait on the call that runs that callback.
+    /// Whether this thread is blocked in an FFI call and runs callbacks meanwhile. An FFI call
+    /// made on it now comes from one of those callbacks, and would wait on the call running it.
     fn is_pumping() -> bool {
         PUMPING.get()
     }
