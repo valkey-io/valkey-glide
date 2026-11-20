@@ -595,7 +595,9 @@ libfabric 2.7.0 or newer, and the dmabuf path libfabric takes by default. GLIDE 
 memory, so a GPU region has no `memoryview()`, `rdma_set` takes `Skip()` or `Known(crc)` but not
 `Compute()`, and `rdma_get` returns the server's checksum in the receipt without checking it.
 Finish the GPU work that writes a window, for example with `torch.cuda.synchronize()`, before you
-`rdma_set` it, and submit GPU work that reads a window only after `rdma_get` returns.
+`rdma_set` it. Submit GPU work that reads a window only after `rdma_get` returns, since work already
+running can see stale data. If the device's `CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WRITES_ORDERING`
+does not cover that work, call `cuFlushGPUDirectRDMAWrites` first.
 
 ### Handling a Failed Transfer
 

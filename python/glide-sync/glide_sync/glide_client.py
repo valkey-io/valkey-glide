@@ -192,8 +192,9 @@ def _cuda_span(memory: Any) -> Optional[Tuple[int, int]]:
 
     The range comes from ``__cuda_array_interface__``, which PyTorch,
     CuPy, Numba and JAX offer, or else from a ``torch.Tensor``'s own
-    ``data_ptr()``, since PyTorch raises for a dtype it has no typestr for:
-    the float8 types, and bfloat16 in older releases.
+    ``data_ptr()``, since PyTorch raises for a dtype it has no typestr for
+    (the float8 types, and bfloat16 in older releases) and for a tensor that
+    requires grad.
 
     Raises:
         TypeError: If the memory is on a device other than the host or a CUDA
@@ -219,8 +220,9 @@ def _cuda_span(memory: Any) -> Optional[Tuple[int, int]]:
 
     try:
         interface = memory.__cuda_array_interface__
-    except (AttributeError, KeyError, TypeError):
-        # PyTorch raises KeyError for a dtype it has no typestr for.
+    except (AttributeError, KeyError, RuntimeError, TypeError):
+        # PyTorch raises KeyError for a dtype it has no typestr for, and
+        # RuntimeError for a tensor that requires grad, such as a parameter.
         interface = None
     if interface is not None:
         return _cuda_array_interface_span(interface)

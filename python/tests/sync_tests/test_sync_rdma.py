@@ -897,16 +897,22 @@ class _FakeCudaArray:
         }
 
 
-class _FakeOldTorchBfloat16(_FakeCudaArray):
-    """A bfloat16 CUDA tensor of a PyTorch with no typestr for it."""
+class _FakeTorchTensor(_FakeCudaArray):
+    """A CUDA torch.Tensor whose __cuda_array_interface__ PyTorch refuses."""
 
-    def __init__(self, contiguous: bool = True, **kwargs):
+    def __init__(
+        self,
+        contiguous: bool = True,
+        refusal: Exception = KeyError("torch.bfloat16"),
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.contiguous = contiguous
+        self.refusal = refusal
 
     @property
     def __cuda_array_interface__(self):
-        raise KeyError("torch.bfloat16")
+        raise self.refusal
 
     def data_ptr(self) -> int:
         return self.address
@@ -1039,16 +1045,31 @@ def test_a_failed_pop_is_logged_so_a_registration_is_not_lost(monkeypatch):
     assert "cuCtxPopCurrent failed with CUDA_ERROR" in logged[0][1]
 
 
-def test_a_tensor_without_a_cuda_array_interface_is_registered_by_data_ptr():
-    # Older PyTorch raises for bfloat16, which it had no typestr for, and model
-    # caches are mostly bfloat16.
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        # Older PyTorch had no typestr for bfloat16, which model caches are
+        # mostly made of.
+        pytest.param(KeyError("torch.bfloat16"), id="no-typestr"),
+        pytest.param(
+            RuntimeError(
+                "Can't get __cuda_array_interface__ on Variable that requires grad"
+            ),
+            id="requires-grad",
+        ),
+    ],
+)
+def test_a_tensor_without_a_cuda_array_interface_is_registered_by_data_ptr(refusal):
     client = _offline_client()
     client._core_client = object()
-    memory = _FakeOldTorchBfloat16(shape=(8, 64))
+    memory = _FakeTorchTensor(shape=(8, 64), refusal=refusal)
 
-    client.register_rdma_region(memory).close()
+    region = client.register_rdma_region(memory)
+    client.rdma_get(b"key", region.window(0, 8))
+    region.close()
 
     assert client._lib.device_registrations == [(memory.address, 1024)]
+    assert len(client._lib.sets) == 1, "and transfers, which check the range again"
 
 
 def test_size_one_dimensions_may_carry_any_stride():
@@ -1073,7 +1094,7 @@ def test_size_one_dimensions_may_carry_any_stride():
             id="strided",
         ),
         pytest.param(
-            _FakeOldTorchBfloat16(contiguous=False), "C-contiguous", id="torch-strided"
+            _FakeTorchTensor(contiguous=False), "C-contiguous", id="torch-strided"
         ),
         pytest.param(_FakeCudaArray(mask=object()), "mask", id="masked"),
         pytest.param(_FakeCudaArray(device=(13, 0)), "managed memory", id="managed"),
@@ -1819,10 +1840,11 @@ def test_gpu_memory_needs_a_client_with_device_memory(glide_sync_client: GlideCl
     if not GlideClient.rdma_usable():
         pytest.skip("needs libfabric to open a tcp fabric")
     addresses = glide_sync_client._config.addresses
-    client = GlideClient.create(
+    client = _create_tcp_client(
+        type(glide_sync_client),
         GlideClientConfiguration(
             addresses=addresses, rdma=RdmaConfiguration(provider=RdmaProvider.Tcp())
-        )
+        ),
     )
     try:
         with pytest.raises(RdmaError, match="device memory"):
