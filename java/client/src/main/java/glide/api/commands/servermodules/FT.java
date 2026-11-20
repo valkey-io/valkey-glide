@@ -13,12 +13,19 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.FT.FTAggregateOptions;
 import glide.api.models.commands.FT.FTCreateOptions;
 import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
+import glide.api.models.commands.FT.FTHybridOptions;
+import glide.api.models.commands.FT.FTHybridSearchArm;
+import glide.api.models.commands.FT.FTHybridVsimArm;
 import glide.api.models.commands.FT.FTInfoOptions;
 import glide.api.models.commands.FT.FTProfileOptions;
 import glide.api.models.commands.FT.FTSearchOptions;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.NonNull;
@@ -190,6 +197,10 @@ public class FT {
      *     document names and map of their attributes. When {@link
      *     FTSearchOptions.FTSearchOptionsBuilder#nocontent()} is set, the attribute maps will be
      *     empty.<br>
+     *     When {@link FTSearchOptions.FTSearchOptionsBuilder#withScores()} is set, each document
+     *     value is instead an {@code Object[]} of {@code [score, fieldMap]}, or {@code [score,
+     *     sortKey, fieldMap]} when {@link FTSearchOptions.FTSearchOptionsBuilder#withSortKeys()} is
+     *     also set.<br>
      *     If {@link FTSearchOptions.FTSearchOptionsBuilder#count()} or {@link
      *     FTSearchOptions.FTSearchOptionsBuilder#limit(int, int)} with values <code>0, 0</code> is
      *     set, the command returns array with only one element - the count of the documents.
@@ -241,6 +252,10 @@ public class FT {
      *     second element, which has format <code>
      *     {@literal Map<GlideString, Map<GlideString, GlideString>>}</code> - a mapping between
      *     document names and map of their attributes.<br>
+     *     When {@link FTSearchOptions.FTSearchOptionsBuilder#withScores()} is set, each document
+     *     value is instead an {@code Object[]} of {@code [score, fieldMap]}, or {@code [score,
+     *     sortKey, fieldMap]} when {@link FTSearchOptions.FTSearchOptionsBuilder#withSortKeys()} is
+     *     also set.<br>
      *     If {@link FTSearchOptions.FTSearchOptionsBuilder#count()} or {@link
      *     FTSearchOptions.FTSearchOptionsBuilder#limit(int, int)} with values <code>0, 0</code> is
      *     set, the command returns array with only one element - the count of the documents.
@@ -391,11 +406,16 @@ public class FT {
     /**
      * Runs a search query on an index, and perform aggregate transformations on the results.
      *
+     * <p>Rejects {@code options} with {@code withCursor} set -- use {@link
+     * #aggregateWithCursor(BaseClient, String, String, FTAggregateOptions)} instead, which returns
+     * the honestly-typed {@code [rows, cursorId]} 2-tuple that WITHCURSOR actually produces.
+     *
      * @param client The client to execute the command.
      * @param indexName The index name.
      * @param query The text query to search.
      * @param options Additional parameters for the command - see {@link FTAggregateOptions}.
      * @return Results of the last stage of the pipeline.
+     * @throws IllegalArgumentException If {@code options} has {@code withCursor} set.
      * @example
      *     <pre>{@code
      * // example of using the API:
@@ -483,11 +503,16 @@ public class FT {
     /**
      * Runs a search query on an index, and perform aggregate transformations on the results.
      *
+     * <p>Rejects {@code options} with {@code withCursor} set -- use {@link
+     * #aggregateWithCursor(BaseClient, GlideString, GlideString, FTAggregateOptions)} instead, which
+     * returns the honestly-typed {@code [rows, cursorId]} 2-tuple that WITHCURSOR actually produces.
+     *
      * @param client The client to execute the command.
      * @param indexName The index name.
      * @param query The text query to search.
      * @param options Additional parameters for the command - see {@link FTAggregateOptions}.
      * @return Results of the last stage of the pipeline.
+     * @throws IllegalArgumentException If {@code options} has {@code withCursor} set.
      * @example
      *     <pre>{@code
      * // example of using the API:
@@ -524,11 +549,538 @@ public class FT {
             @NonNull GlideString indexName,
             @NonNull GlideString query,
             @NonNull FTAggregateOptions options) {
+        if (options.hasWithCursor()) {
+            throw new IllegalArgumentException(
+                    "FT.aggregate's declared return type Map<GlideString, Object>[] cannot represent"
+                            + " WITHCURSOR's own [rows, cursorId] 2-tuple reply shape; call"
+                            + " FT.aggregateWithCursor(...) instead, which returns that shape honestly as"
+                            + " Object[].");
+        }
         GlideString[] args =
                 concatenateArrays(
                         new GlideString[] {gs("FT.AGGREGATE"), indexName, query}, options.toArgs());
         return FT.<Object[]>executeCommand(client, args, false)
                 .thenApply(res -> castArray(res, Map.class));
+    }
+
+    /**
+     * Runs a search query on an index with a paged ({@code WITHCURSOR}) reply, and perform aggregate
+     * transformations on the results.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.aggregate/">FT.AGGREGATE documentation</a>.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param query The text query to search.
+     * @param options Additional parameters for the command - see {@link FTAggregateOptions}. Must
+     *     have {@code withCursor} set; see {@link
+     *     FTAggregateOptions.FTAggregateOptionsBuilder#withCursor}.
+     * @return A two-element {@code Object[]} of {@code [rows, cursorId]}, where {@code rows} is a
+     *     {@code Map<GlideString, Object>[]} (the same per-document mapping shape {@link #aggregate}
+     *     returns) and {@code cursorId} is a {@code Long}, {@code 0} once the cursor is exhausted, or
+     *     the id to pass to a subsequent {@link #cursorRead} call otherwise. Declared as {@code
+     *     Object[]} rather than a more specific generic type because the two elements have different
+     *     runtime types -- see {@link #cursorRead} for the same shape returned by the paging call.
+     * @throws IllegalArgumentException If {@code options} does not have {@code withCursor} set.
+     * @example
+     *     <pre>{@code
+     * Object[] page = FT.aggregateWithCursor(client, "myIndex", "*",
+     *         FTAggregateOptions.builder().loadFields(new String[] {"__key"})
+     *             .withCursor(new FTWithCursor(10)).build())
+     *     .get();
+     * Map<GlideString, Object>[] rows = (Map<GlideString, Object>[]) page[0];
+     * long cursorId = (long) page[1];
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> aggregateWithCursor(
+            @NonNull BaseClient client,
+            @NonNull String indexName,
+            @NonNull String query,
+            @NonNull FTAggregateOptions options) {
+        return aggregateWithCursor(client, gs(indexName), gs(query), options);
+    }
+
+    /**
+     * Runs a search query on an index with a paged ({@code WITHCURSOR}) reply, and perform aggregate
+     * transformations on the results.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.aggregate/">FT.AGGREGATE documentation</a>.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param query The text query to search.
+     * @param options Additional parameters for the command - see {@link FTAggregateOptions}. Must
+     *     have {@code withCursor} set; see {@link
+     *     FTAggregateOptions.FTAggregateOptionsBuilder#withCursor}.
+     * @return A two-element {@code Object[]} of {@code [rows, cursorId]}. See the {@code String}
+     *     overload's {@code @return} for the shape of each element.
+     * @throws IllegalArgumentException If {@code options} does not have {@code withCursor} set.
+     */
+    public static CompletableFuture<Object[]> aggregateWithCursor(
+            @NonNull BaseClient client,
+            @NonNull GlideString indexName,
+            @NonNull GlideString query,
+            @NonNull FTAggregateOptions options) {
+        if (!options.hasWithCursor()) {
+            throw new IllegalArgumentException(
+                    "FT.aggregateWithCursor requires options.withCursor to be set; call FT.aggregate"
+                            + " instead for a plain (non-paged) aggregate.");
+        }
+        GlideString[] args =
+                concatenateArrays(
+                        new GlideString[] {gs("FT.AGGREGATE"), indexName, query}, options.toArgs());
+        return FT.<Object[]>executeCommand(client, args, false).thenApply(FT::castCursorPage);
+    }
+
+    /**
+     * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
+     * String, String, FTAggregateOptions)} (with {@code
+     * FTAggregateOptions.builder().withCursor(...)}) or {@link #hybridWithCursor}.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.cursor/">FT.CURSOR documentation</a> (the READ subcommand).
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name the cursor was opened against.
+     * @param cursorId The cursor id, from the opening command's reply or a previous {@link
+     *     #cursorRead} call. {@code 0} means the cursor is already exhausted; calling this with
+     *     {@code 0} is a caller error, not something this function special-cases.
+     * @return A two-element array of {@code [rows, cursorId]}, where {@code rows} is a {@code
+     *     Map<GlideString, Object>[]} (the same per-document mapping shape {@link #aggregate}
+     *     returns, regardless of whether the cursor was opened by {@link #aggregateWithCursor} or
+     *     {@link #hybridWithCursor} -- the server replies the same way either way), and {@code
+     *     cursorId} is {@code 0} once the cursor is exhausted, or the id to pass to the next {@link
+     *     #cursorRead} call otherwise.
+     * @example
+     *     <pre>{@code
+     * Object[] page = FT.aggregateWithCursor(client, "myIndex", "*",
+     *         FTAggregateOptions.builder().loadFields(new String[] {"__key"})
+     *             .withCursor(new FTWithCursor(10)).build())
+     *     .get();
+     * Map<GlideString, Object>[] rows = (Map<GlideString, Object>[]) page[0];
+     * long cursorId = (long) page[1];
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> cursorRead(
+            @NonNull BaseClient client, @NonNull String indexName, long cursorId) {
+        return cursorRead(client, gs(indexName), cursorId, null);
+    }
+
+    /**
+     * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
+     * String, String, FTAggregateOptions)} or {@link #hybridWithCursor}.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.cursor/">FT.CURSOR documentation</a> (the READ subcommand).
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name the cursor was opened against.
+     * @param cursorId The cursor id.
+     * @param count Overrides how many rows this page returns, instead of the count the cursor was
+     *     opened with.
+     * @return A two-element array of {@code [rows, cursorId]}.
+     */
+    public static CompletableFuture<Object[]> cursorRead(
+            @NonNull BaseClient client, @NonNull String indexName, long cursorId, Integer count) {
+        return cursorRead(client, gs(indexName), cursorId, count);
+    }
+
+    /**
+     * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
+     * GlideString, GlideString, FTAggregateOptions)} or {@link #hybridWithCursor}.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.cursor/">FT.CURSOR documentation</a> (the READ subcommand).
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name the cursor was opened against.
+     * @param cursorId The cursor id.
+     * @return A two-element array of {@code [rows, cursorId]}.
+     */
+    public static CompletableFuture<Object[]> cursorRead(
+            @NonNull BaseClient client, @NonNull GlideString indexName, long cursorId) {
+        return cursorRead(client, indexName, cursorId, null);
+    }
+
+    /**
+     * Reads the next page of results from a cursor opened by {@link #aggregateWithCursor(BaseClient,
+     * GlideString, GlideString, FTAggregateOptions)} or {@link #hybridWithCursor}.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.cursor/">FT.CURSOR documentation</a> (the READ subcommand).
+     *
+     * <p>In cluster mode, always reads from the PRIMARY of the index's slot, regardless of the
+     * client's {@code ReadFrom} configuration -- a cursor is a per-process, node-local resource. A
+     * cursor opened by FT.HYBRID is read the same way as one opened by FT.AGGREGATE; the server does
+     * not distinguish which command created it.
+     *
+     * <p>On a standalone client with {@code ReadFrom.PREFER_REPLICA}, this pinning does not hold: the
+     * opening query can land on a replica, but this call always goes to the primary, so a cursor
+     * opened on a replica fails on its next page. Use {@code ReadFrom.PRIMARY} on a standalone client
+     * whenever {@code withCursor} is set, until this is fixed in glide-core (tracked separately).
+     *
+     * <p>On a client created with {@code readOnly(true)}, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats {@code FT.CURSOR} as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry for
+     * {@code FT.CURSOR}; this is a known gap tracked as a follow-up, not fixed in this PR.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name the cursor was opened against.
+     * @param cursorId The cursor id, from the opening command's reply or a previous {@link
+     *     #cursorRead} call. {@code 0} means the cursor is already exhausted; calling this with
+     *     {@code 0} is a caller error, not something this function special-cases.
+     * @param count Overrides how many rows this page returns, instead of the count the cursor was
+     *     opened with.
+     * @return A two-element array of {@code [rows, cursorId]}, where {@code rows} is a {@code
+     *     Map<GlideString, Object>[]} (the same per-document mapping shape {@link #aggregate}
+     *     returns, regardless of whether the cursor was opened by {@link #aggregateWithCursor} or
+     *     {@link #hybridWithCursor} -- the server replies the same way either way), and {@code
+     *     cursorId} is {@code 0} once the cursor is exhausted, or the id to pass to the next {@link
+     *     #cursorRead} call otherwise.
+     */
+    public static CompletableFuture<Object[]> cursorRead(
+            @NonNull BaseClient client, @NonNull GlideString indexName, long cursorId, Integer count) {
+        ArrayList<GlideString> argsList = new ArrayList<>();
+        argsList.add(gs("FT.CURSOR"));
+        argsList.add(gs("READ"));
+        argsList.add(indexName);
+        argsList.add(gs(Long.toString(cursorId)));
+        if (count != null) {
+            argsList.add(gs("COUNT"));
+            argsList.add(gs(count.toString()));
+        }
+        return FT.<Object[]>executeCommand(client, argsList.toArray(new GlideString[0]), false)
+                .thenApply(FT::castCursorPage);
+    }
+
+    /**
+     * Deletes an open cursor, discarding it before it would otherwise be exhausted or time out.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.cursor/">FT.CURSOR documentation</a> (the DEL subcommand).
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name the cursor was opened against.
+     * @param cursorId The cursor id to delete.
+     * @return <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * FT.cursorDel(client, "myIndex", cursorId).get();
+     * }</pre>
+     */
+    public static CompletableFuture<String> cursorDel(
+            @NonNull BaseClient client, @NonNull String indexName, long cursorId) {
+        return cursorDel(client, gs(indexName), cursorId);
+    }
+
+    /**
+     * Deletes an open cursor, discarding it before it would otherwise be exhausted or time out.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.cursor/">FT.CURSOR documentation</a> (the DEL subcommand).
+     *
+     * <p>In cluster mode, always reads from the PRIMARY of the index's slot, regardless of the
+     * client's {@code ReadFrom} configuration -- see {@link #cursorRead}'s note, including the
+     * standalone and read-only-client caveats.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name the cursor was opened against.
+     * @param cursorId The cursor id to delete.
+     * @return <code>"OK"</code>.
+     */
+    public static CompletableFuture<String> cursorDel(
+            @NonNull BaseClient client, @NonNull GlideString indexName, long cursorId) {
+        GlideString[] args = {gs("FT.CURSOR"), gs("DEL"), indexName, gs(Long.toString(cursorId))};
+        return executeCommand(client, args, false);
+    }
+
+    /**
+     * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
+     * arm) in a single query, fusing both arms' results into one ranked reply.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.hybrid/">FT.HYBRID documentation</a>.
+     *
+     * <p>On a client created with {@code readOnly(true)}, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats {@code FT.HYBRID} as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry for
+     * {@code FT.HYBRID}; this is a known gap tracked as a follow-up, not fixed in this PR.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to query.
+     * @param searchArm The text/tag/numeric query arm. See {@link FTHybridSearchArm}.
+     * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
+     * @return An array containing a mapping of field name and associated value for each matching
+     *     document, after both arms' results have been fused and any clauses in {@code options}
+     *     applied. With no LOAD clause (the default), each mapping contains just the document key and
+     *     the fused score.
+     * @example
+     *     <pre>{@code
+     * Object[] result = FT.hybrid(client, "idx",
+     *         new FTHybridSearchArm("hello world"),
+     *         FTHybridVsimArm.builder("vec", queryVectorBytes).k(10).build())
+     *     .get();
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> hybrid(
+            @NonNull BaseClient client,
+            @NonNull String indexName,
+            @NonNull FTHybridSearchArm searchArm,
+            @NonNull FTHybridVsimArm vsimArm) {
+        return hybrid(client, gs(indexName), searchArm, vsimArm, FTHybridOptions.builder().build());
+    }
+
+    /**
+     * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
+     * arm) in a single query, fusing both arms' results into one ranked reply.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.hybrid/">FT.HYBRID documentation</a>.
+     *
+     * <p>Rejects {@code options} with {@code withCursor} set -- use {@link
+     * #hybridWithCursor(BaseClient, String, FTHybridSearchArm, FTHybridVsimArm, FTHybridOptions)}
+     * instead, which returns the honestly-typed {@code [rows, cursorId]} 2-tuple that WITHCURSOR
+     * actually produces.
+     *
+     * <p>On a client created with {@code readOnly(true)}, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats {@code FT.HYBRID} as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry for
+     * {@code FT.HYBRID}; this is a known gap tracked as a follow-up, not fixed in this PR.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to query.
+     * @param searchArm The text/tag/numeric query arm. See {@link FTHybridSearchArm}.
+     * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
+     * @param options The optional arguments for the FT.HYBRID command, covering COMBINE, LOAD,
+     *     FILTER/LIMIT/GROUPBY/SORTBY/APPLY clauses, LOCALONLY, TIMEOUT, PARAMS and DIALECT. See
+     *     {@link FTHybridOptions}.
+     * @return An array containing a mapping of field name and associated value for each matching
+     *     document, after both arms' results have been fused and any clauses in {@code options}
+     *     applied.
+     * @throws IllegalArgumentException If {@code options} has {@code withCursor} set.
+     * @example
+     *     <pre>{@code
+     * Object[] result = FT.hybrid(client, "idx",
+     *         new FTHybridSearchArm(gs("hello world"), null, gs("ss")),
+     *         FTHybridVsimArm.builder("vec", queryVectorBytes).k(10).yieldScoreAs("vs").build(),
+     *         FTHybridOptions.builder()
+     *             .combine(FTHybridCombine.Rrf.builder().constant(60.0).build())
+     *             .loadFields(new String[] {"title"})
+     *             .build())
+     *     .get();
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> hybrid(
+            @NonNull BaseClient client,
+            @NonNull String indexName,
+            @NonNull FTHybridSearchArm searchArm,
+            @NonNull FTHybridVsimArm vsimArm,
+            @NonNull FTHybridOptions options) {
+        return hybrid(client, gs(indexName), searchArm, vsimArm, options);
+    }
+
+    /**
+     * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
+     * arm) in a single query, fusing both arms' results into one ranked reply.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.hybrid/">FT.HYBRID documentation</a>.
+     *
+     * <p>Rejects {@code options} with {@code withCursor} set -- use {@link
+     * #hybridWithCursor(BaseClient, GlideString, FTHybridSearchArm, FTHybridVsimArm,
+     * FTHybridOptions)} instead, which returns the honestly-typed {@code [rows, cursorId]} 2-tuple
+     * that WITHCURSOR actually produces.
+     *
+     * <p>Transactions: FT.HYBRID is an ordinary custom command as far as GLIDE's batch/transaction
+     * machinery is concerned, but the server itself rejects FT.HYBRID inside MULTI/EXEC outright (and
+     * inside a Lua script, or when the reader thread pool is disabled), because the per-arm results
+     * cannot be revalidated against concurrent mutations before fusion under forced synchronous
+     * execution.
+     *
+     * <p>On a client created with {@code readOnly(true)}, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats {@code FT.HYBRID} as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry for
+     * {@code FT.HYBRID}; this is a known gap tracked as a follow-up, not fixed in this PR.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to query.
+     * @param searchArm The text/tag/numeric query arm. See {@link FTHybridSearchArm}.
+     * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
+     * @param options The optional arguments for the FT.HYBRID command. See {@link FTHybridOptions}.
+     * @return An array containing a mapping of field name and associated value for each matching
+     *     document, after both arms' results have been fused and any clauses in {@code options}
+     *     applied.
+     * @throws IllegalArgumentException If {@code options} has {@code withCursor} set.
+     */
+    public static CompletableFuture<Object[]> hybrid(
+            @NonNull BaseClient client,
+            @NonNull GlideString indexName,
+            @NonNull FTHybridSearchArm searchArm,
+            @NonNull FTHybridVsimArm vsimArm,
+            @NonNull FTHybridOptions options) {
+        if (options.hasWithCursor()) {
+            throw new IllegalArgumentException(
+                    "FT.hybrid's declared return type Object[] (the fused per-document mapping) cannot"
+                            + " also represent WITHCURSOR's own [rows, cursorId] 2-tuple reply shape; call"
+                            + " FT.hybridWithCursor(...) instead, which returns that shape honestly.");
+        }
+        GlideString[] args =
+                hybridArgs(indexName, searchArm, vsimArm, options, FT::generatedVsimParamName);
+        return executeCommand(client, args, false);
+    }
+
+    /**
+     * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
+     * arm) in a single query with a paged ({@code WITHCURSOR}) reply, fusing both arms' results into
+     * one ranked reply.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.hybrid/">FT.HYBRID documentation</a>.
+     *
+     * <p>In cluster mode, always reads from the PRIMARY of the index's slot, regardless of the
+     * client's {@code ReadFrom} configuration -- see {@link #cursorRead}'s note for why, and for the
+     * standalone caveat with {@code ReadFrom.PREFER_REPLICA}.
+     *
+     * <p>On a client created with {@code readOnly(true)}, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats {@code FT.HYBRID} as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry for
+     * {@code FT.HYBRID}; this is a known gap tracked as a follow-up, not fixed in this PR.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to query.
+     * @param searchArm The text/tag/numeric query arm. See {@link FTHybridSearchArm}.
+     * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
+     * @param options The optional arguments for the FT.HYBRID command. Must have {@code withCursor}
+     *     set; see {@link FTHybridOptions.FTHybridOptionsBuilder}.
+     * @return A two-element {@code Object[]} of {@code [rows, cursorId]}, where {@code rows} is a
+     *     {@code Map<GlideString, Object>[]} (the same per-document mapping shape {@link #aggregate}
+     *     returns, not the raw {@code Object[]} {@link #hybrid} returns for its own, non-paged rows)
+     *     and {@code cursorId} is a {@code Long}, {@code 0} once the cursor is exhausted, or the id
+     *     to pass to a subsequent {@link #cursorRead} call otherwise. With no explicit {@code LIMIT}
+     *     clause, {@code rows} is capped at 10 per the server's own default, even after reading the
+     *     cursor to exhaustion; add an {@code FTAggregateOptions.Limit} clause through {@code
+     *     options} to request more.
+     * @throws IllegalArgumentException If {@code options} does not have {@code withCursor} set.
+     * @example
+     *     <pre>{@code
+     * Object[] page = FT.hybridWithCursor(client, "idx",
+     *         new FTHybridSearchArm(gs("hello world"), null, gs("ss")),
+     *         FTHybridVsimArm.builder("vec", queryVectorBytes).k(10).yieldScoreAs("vs").build(),
+     *         FTHybridOptions.builder().withCursor(new FTWithCursor(10)).build())
+     *     .get();
+     * Map<GlideString, Object>[] rows = (Map<GlideString, Object>[]) page[0];
+     * long cursorId = (long) page[1];
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> hybridWithCursor(
+            @NonNull BaseClient client,
+            @NonNull String indexName,
+            @NonNull FTHybridSearchArm searchArm,
+            @NonNull FTHybridVsimArm vsimArm,
+            @NonNull FTHybridOptions options) {
+        return hybridWithCursor(client, gs(indexName), searchArm, vsimArm, options);
+    }
+
+    /**
+     * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the VSIM
+     * arm) in a single query with a paged ({@code WITHCURSOR}) reply, fusing both arms' results into
+     * one ranked reply.
+     *
+     * <p>Requires valkey-search 1.3 or later. See the <a
+     * href="https://valkey.io/commands/ft.hybrid/">FT.HYBRID documentation</a>.
+     *
+     * <p>In cluster mode, always reads from the PRIMARY of the index's slot, regardless of the
+     * client's {@code ReadFrom} configuration -- see {@link #cursorRead}'s note for why, and for the
+     * standalone caveat with {@code ReadFrom.PREFER_REPLICA}.
+     *
+     * <p>On a client created with {@code readOnly(true)}, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats {@code FT.HYBRID} as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry for
+     * {@code FT.HYBRID}; this is a known gap tracked as a follow-up, not fixed in this PR.
+     *
+     * <p>Transactions: FT.HYBRID is an ordinary custom command as far as GLIDE's batch/transaction
+     * machinery is concerned, but the server itself rejects FT.HYBRID inside MULTI/EXEC outright (and
+     * inside a Lua script, or when the reader thread pool is disabled), because the per-arm results
+     * cannot be revalidated against concurrent mutations before fusion under forced synchronous
+     * execution.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to query.
+     * @param searchArm The text/tag/numeric query arm. See {@link FTHybridSearchArm}.
+     * @param vsimArm The vector similarity search arm. See {@link FTHybridVsimArm}.
+     * @param options The optional arguments for the FT.HYBRID command. Must have {@code withCursor}
+     *     set; see {@link FTHybridOptions.FTHybridOptionsBuilder}.
+     * @return A two-element {@code Object[]} of {@code [rows, cursorId]}. See the {@code String}
+     *     overload's {@code @return} for the shape of each element, including the default {@code
+     *     LIMIT 10} cap that still applies when reading the cursor to exhaustion.
+     * @throws IllegalArgumentException If {@code options} does not have {@code withCursor} set.
+     */
+    public static CompletableFuture<Object[]> hybridWithCursor(
+            @NonNull BaseClient client,
+            @NonNull GlideString indexName,
+            @NonNull FTHybridSearchArm searchArm,
+            @NonNull FTHybridVsimArm vsimArm,
+            @NonNull FTHybridOptions options) {
+        if (!options.hasWithCursor()) {
+            throw new IllegalArgumentException(
+                    "FT.hybridWithCursor requires options.withCursor to be set; call FT.hybrid instead"
+                            + " for a plain (non-paged) hybrid query.");
+        }
+        GlideString[] args =
+                hybridArgs(indexName, searchArm, vsimArm, options, FT::generatedVsimParamName);
+        return FT.<Object[]>executeCommand(client, args, false).thenApply(FT::castCursorPage);
+    }
+
+    /**
+     * Generates a fresh {@code $}-prefixed PARAMS name for a VSIM arm given raw vector bytes rather
+     * than an explicit {@code $name} reference. Broken out from {@link #hybridArgs} so tests can
+     * substitute a deterministic supplier instead of a random UUID.
+     */
+    private static String generatedVsimParamName() {
+        return "$" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    /**
+     * Builds the full FT.HYBRID argv: the command name and index, the SEARCH arm, the VSIM arm (with
+     * a generated PARAMS entry merged in when the arm was given raw vector bytes rather than a {@code
+     * $name} reference), the COMBINE clause (if any), and {@code options}' own aggregate-suffix tail
+     * (LOCALONLY, LOAD, TIMEOUT, PARAMS, clauses, WITHCURSOR, DIALECT). Package-private and separated
+     * from command dispatch specifically so this assembly can be unit-tested end to end without a
+     * live client.
+     *
+     * @param generatedVsimParamNameSupplier Supplies the {@code $name} to generate for a raw-bytes
+     *     VSIM arm. Production callers pass {@link #generatedVsimParamName}; tests pass a
+     *     deterministic supplier so the generated name in the expected argv is known ahead of time.
+     */
+    static GlideString[] hybridArgs(
+            @NonNull GlideString indexName,
+            @NonNull FTHybridSearchArm searchArm,
+            @NonNull FTHybridVsimArm vsimArm,
+            @NonNull FTHybridOptions options,
+            @NonNull Supplier<String> generatedVsimParamNameSupplier) {
+        ArrayList<GlideString> argsList = new ArrayList<>();
+        argsList.add(gs("FT.HYBRID"));
+        argsList.add(indexName);
+        argsList.addAll(Arrays.asList(searchArm.toArgs()));
+
+        Map<String, GlideString> generatedVsimParam = null;
+        if (vsimArm.isParamReference()) {
+            argsList.addAll(Arrays.asList(vsimArm.toArgs()));
+        } else {
+            String generatedName = generatedVsimParamNameSupplier.get();
+            generatedVsimParam = new HashMap<>();
+            generatedVsimParam.put(generatedName.substring(1), gs(vsimArm.getRawVector()));
+            argsList.addAll(Arrays.asList(vsimArm.toArgs(gs(generatedName))));
+        }
+
+        if (options.getCombine() != null) {
+            argsList.addAll(Arrays.asList(options.getCombine().toArgs()));
+        }
+        argsList.addAll(Arrays.asList(options.toArgs(generatedVsimParam)));
+
+        return argsList.toArray(new GlideString[0]);
     }
 
     /**
@@ -1022,5 +1574,20 @@ public class FT {
         }
         throw new IllegalArgumentException(
                 "Unknown type of client, should be either `GlideClient` or `GlideClusterClient`");
+    }
+
+    /**
+     * Converts the raw {@code [rows, cursorId]} reply from FT.AGGREGATE WITHCURSOR or FT.CURSOR READ
+     * into {@code [Map<GlideString, Object>[] rows, Long cursorId]}, matching the typed shape {@link
+     * #aggregate} returns for its own (non-paged) rows. The server's reply has {@code page[0]} as a
+     * raw {@code Object[]} of maps, not an array typed as {@code Map[]}; casting it directly throws
+     * {@code ClassCastException}.
+     *
+     * @param page The raw two-element {@code [rows, cursorId]} reply.
+     * @return The same two elements, with {@code rows} cast to {@code Map<GlideString, Object>[]}.
+     */
+    private static Object[] castCursorPage(Object[] page) {
+        page[0] = castArray((Object[]) page[0], Map.class);
+        return page;
     }
 }
