@@ -65,7 +65,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     pin::Pin,
     sync::{
-        atomic::{self, AtomicIsize, AtomicUsize, Ordering},
+        atomic::{self, AtomicBool, AtomicIsize, AtomicUsize, Ordering},
         Arc,
     },
     task::{self, Poll},
@@ -587,7 +587,7 @@ impl<C> InnerCore<C>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    fn get_cluster_param<T, F>(&self, f: F) -> T
+    pub(crate) fn get_cluster_param<T, F>(&self, f: F) -> T
     where
         F: FnOnce(&ClusterParams) -> T,
         T: Clone,
@@ -1732,6 +1732,18 @@ fn fail_queued_senders<C>(
     failed
 }
 
+/// Clears `SlotRefreshState::in_progress` on drop, so a refresh future cancelled
+/// mid-flight (e.g. by a `cluster_scan` timeout) cannot block all later refreshes.
+struct SlotRefreshInProgressGuard<'a> {
+    in_progress: &'a AtomicBool,
+}
+
+impl Drop for SlotRefreshInProgressGuard<'_> {
+    fn drop(&mut self) {
+        self.in_progress.store(false, Ordering::Relaxed);
+    }
+}
+
 impl<C> ClusterConnInner<C>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
@@ -2778,6 +2790,7 @@ where
             log_warn_lazy!("topology_refresh", "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)");
             return Ok(());
         }
+        let _in_progress_guard = SlotRefreshInProgressGuard { in_progress };
         let acquire_elapsed = acquire_start.elapsed();
         if acquire_elapsed > Duration::from_millis(100) {
             log_warn_lazy!(
@@ -2844,7 +2857,6 @@ where
             })
             .await;
         }
-        in_progress.store(false, Ordering::Relaxed);
         res
     }
 
@@ -3434,9 +3446,9 @@ where
                     Ok((scan_state_ref, values)) => {
                         Ok(Response::ClusterScanResult(scan_state_ref, values))
                     }
-                    // TODO: After routing issues with sending to random node on not-key based commands are resolved,
-                    // this error should be handled in the same way as other errors and not fan-out.
-                    Err(err) => Err((OperationTarget::FanOut, err)),
+                    // `try_scan` already retried with the client's `retries`, so don't retry
+                    // again here.
+                    Err(err) => Err((OperationTarget::FatalError, err)),
                 }
             }
             CmdArg::OperationRequest(operation_request) => match operation_request {
