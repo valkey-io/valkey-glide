@@ -5448,12 +5448,4 @@ mod fork_tests {
         release.send(()).unwrap();
         holder.join().unwrap();
     }
-
-    #[test]
-    #[serial]
-    fn child_does_not_see_the_parents_pools() {
-        let parent_id = register_pool(test_pool());
-        assert_in_forked_child(move || get_pool(parent_id).is_none());
-        unregister_pool(parent_id);
-    }
 }

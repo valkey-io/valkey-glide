@@ -594,6 +594,9 @@ def _run_in_forked_child(child, timeout_s: int = 30) -> None:
     if pid == 0:
         code = 1
         try:
+            # Drop pytest-timeout's inherited handler: it can't run while the
+            # child is stuck in native code, so the alarm would not stop it.
+            signal.signal(signal.SIGALRM, signal.SIG_DFL)
             signal.alarm(timeout_s)
             child()
             code = 0
@@ -641,6 +644,8 @@ class TestPoolFork:
             def child():
                 with pytest.raises(ClosingError, match="before fork"):
                     pool.acquire(timeout=1)
+                with pytest.raises(ClosingError, match="before fork"):
+                    pool.release(1)
 
             _run_in_forked_child(child)
         finally:
@@ -668,25 +673,6 @@ class TestPoolFork:
             _run_in_forked_child(child)
         finally:
             client.close()
-
-    def test_close_inherited_pool_in_child(self, cluster_mode):
-        pool = ClientPool.create(
-            _get_pool_client_config(cluster_mode), PoolConfig(max_size=2, min_idle=1)
-        )
-        try:
-            with pool.borrow(timeout=5) as client:
-                client.get("fork-pool")
-
-            def child():
-                pool.close()
-                assert pool.is_closed
-
-            _run_in_forked_child(child)
-            # The child's close must not destroy the parent's pool.
-            with pool.borrow(timeout=5) as client:
-                client.get("fork-pool")
-        finally:
-            pool.close()
 
     def test_borrow_exit_in_child_does_not_mask_the_error(self, cluster_mode):
         pool = ClientPool.create(

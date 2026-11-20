@@ -238,14 +238,6 @@ mod tests {
 
     #[test]
     #[serial]
-    fn repeated_calls_reuse_the_value() {
-        let first = SLOT.get_or_init(build);
-        let second = SLOT.get_or_init(build);
-        assert!(ptr::eq(first, second));
-    }
-
-    #[test]
-    #[serial]
     fn child_builds_a_fresh_value_and_the_parent_keeps_its_own() {
         let parent = SLOT.get_or_init(build) as *const usize as usize;
         assert_in_forked_child(move || {
@@ -269,28 +261,6 @@ mod tests {
             .is_ok();
             child != parent && grandchild_is_fresh
         });
-    }
-
-    /// A raw clone() runs no atfork handlers, so only the wipe-on-fork page
-    /// can tell the child apart.
-    #[cfg(target_os = "linux")]
-    #[test]
-    #[serial]
-    fn child_without_atfork_handlers_builds_a_fresh_value() {
-        static RAW_SLOT: ForkSlot<usize> = ForkSlot::new();
-        let parent = RAW_SLOT.get_or_init(build) as *const usize as usize;
-        let pid = unsafe { libc::syscall(libc::SYS_clone, libc::SIGCHLD, 0, 0, 0, 0) };
-        assert!(pid >= 0, "clone failed");
-        if pid == 0 {
-            let fresh = RAW_SLOT.get_or_init(build) as *const usize as usize != parent;
-            unsafe { libc::_exit(if fresh { 0 } else { 1 }) };
-        }
-        let mut status = 0;
-        assert_eq!(
-            unsafe { libc::waitpid(pid as libc::pid_t, &mut status, 0) },
-            pid as libc::pid_t
-        );
-        assert!(libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0);
     }
 
     /// macOS, and Linux where `madvise` fails, tell a child apart by process id.

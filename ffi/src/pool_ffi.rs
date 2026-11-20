@@ -1689,7 +1689,18 @@ mod fork_tests {
         if pid == 0 {
             let (tx, rx) = std::sync::mpsc::channel();
             get_pool_runtime().spawn(async move { tx.send(()).unwrap() });
-            let ran = rx.recv_timeout(Duration::from_secs(5)).is_ok();
+            // Poll instead of parking: on macOS the parker is a libdispatch
+            // semaphore this thread created before the fork, and libdispatch
+            // crashes the child if it is used again.
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            let mut ran = false;
+            while std::time::Instant::now() < deadline {
+                if rx.try_recv().is_ok() {
+                    ran = true;
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
             unsafe { libc::_exit(if ran { 0 } else { 1 }) };
         }
         wait_for_clean_exit(pid, "pool runtime did not run work in the forked child");

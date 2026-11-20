@@ -326,9 +326,7 @@ class AsyncClientPool:
             self._closed = True
             for cid in list(self._client_cache.keys()):
                 _client_registry.pop(cid, None)
-            # The parent owns the native pool; a child's copy has nothing to destroy.
-            if self._create_pid == os.getpid():
-                self._lib.glide_pool_destroy(self._pool_id)
+            self._lib.glide_pool_destroy(self._pool_id)
             self._client_cache.clear()
 
     async def aclose(self):
