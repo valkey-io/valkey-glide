@@ -410,6 +410,14 @@ fn process_command_for_compression(
         None => return Ok(()), // Unknown command, no compression processing needed
     };
 
+    // Reply-only commands need no argument processing; keep the original command.
+    if matches!(
+        request_type.compression_behavior(),
+        crate::compression::CommandCompressionBehavior::DecompressValues
+    ) {
+        return Ok(());
+    }
+
     // Get arguments excluding the command name
     let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
 
