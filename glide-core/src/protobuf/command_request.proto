@@ -492,6 +492,9 @@ enum RequestType {
     FtInfo                         = 2111;
     FtProfile                      = 2112;
     FtSearch                       = 2113;
+    FtHybrid                       = 2114;
+    FtCursorRead                   = 2115;
+    FtCursorDel                    = 2116;
 }
 
 message Command {
