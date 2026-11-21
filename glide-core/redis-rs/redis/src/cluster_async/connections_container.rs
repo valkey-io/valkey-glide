@@ -639,6 +639,25 @@ where
         }
     }
 
+    /// Whether looking `route` up may read and advance a slot's round-robin node index
+    /// (`last_used_node_index`), i.e. whether `lookup_route` may pick one of several nodes.
+    /// Only primary-only lookups return `false`. Conservative: a slot without replicas returns
+    /// `true` here although its lookup never rotates.
+    ///
+    /// The round-robin index is advanced with a single optimistic compare-exchange, which is
+    /// exact only while one task makes all lookups (the cluster event loop). Callers that look
+    /// routes up concurrently from many tasks use this to leave rotating lookups to that task.
+    pub(crate) fn route_uses_node_rotation(&self, route: &Route) -> bool {
+        match route.slot_addr() {
+            SlotAddr::Master => false,
+            SlotAddr::ReplicaOptional => !matches!(
+                self.read_from_replica_strategy,
+                ReadFromReplicaStrategy::AlwaysFromPrimary
+            ),
+            SlotAddr::ReplicaRequired => true,
+        }
+    }
+
     pub(crate) fn connection_for_route(
         &self,
         route: &Route,
@@ -1044,6 +1063,39 @@ mod tests {
 
     fn create_container() -> ConnectionsContainer<usize> {
         create_container_with_strategy(ReadFromReplicaStrategy::RoundRobin, false)
+    }
+
+    #[test]
+    fn route_uses_node_rotation_only_for_lookups_that_may_pick_a_replica() {
+        let route = |slot_addr| Route::new(1500, slot_addr);
+        let primary_only =
+            create_container_with_strategy(ReadFromReplicaStrategy::AlwaysFromPrimary, false);
+        assert!(!primary_only.route_uses_node_rotation(&route(SlotAddr::Master)));
+        assert!(!primary_only.route_uses_node_rotation(&route(SlotAddr::ReplicaOptional)));
+        // An explicit replica route rotates over replicas even with AlwaysFromPrimary.
+        assert!(primary_only.route_uses_node_rotation(&route(SlotAddr::ReplicaRequired)));
+
+        for strategy in [
+            ReadFromReplicaStrategy::RoundRobin,
+            ReadFromReplicaStrategy::AllNodes,
+            ReadFromReplicaStrategy::AZAffinity("use-1a".to_owned()),
+            ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary("use-1a".to_owned()),
+            ReadFromReplicaStrategy::AZAffinityAllNodes("use-1a".to_owned()),
+        ] {
+            let container = create_container_with_strategy(strategy.clone(), false);
+            assert!(
+                !container.route_uses_node_rotation(&route(SlotAddr::Master)),
+                "{strategy:?}"
+            );
+            assert!(
+                container.route_uses_node_rotation(&route(SlotAddr::ReplicaOptional)),
+                "{strategy:?}"
+            );
+            assert!(
+                container.route_uses_node_rotation(&route(SlotAddr::ReplicaRequired)),
+                "{strategy:?}"
+            );
+        }
     }
 
     #[test]

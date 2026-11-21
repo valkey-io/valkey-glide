@@ -357,11 +357,18 @@ pub fn respond_startup_with_config(
 #[cfg(feature = "cluster-async")]
 impl aio::ConnectionLike for MockConnection {
     fn req_packed_command<'a>(&'a mut self, cmd: &'a redis::Cmd) -> RedisFuture<'a, Value> {
-        Box::pin(future::ready(
-            (self.handler)(&cmd.get_packed_command(), self.port)
-                .map_err(|err| err.and_then(|v| v.extract_error()))
-                .expect_err("Handler did not specify a response"),
-        ))
+        // The handler runs when the command is sent, as a real connection writes it into its
+        // pipeline channel. Waiting for the reply then takes a unit of the task's tokio
+        // cooperative budget, as a real connection's reply channel does: a request polled after
+        // about 128 others in one task poll sends its command, then returns Pending (tokio defers
+        // its wake to the end of the task poll).
+        let result = (self.handler)(&cmd.get_packed_command(), self.port)
+            .map_err(|err| err.and_then(|v| v.extract_error()))
+            .expect_err("Handler did not specify a response");
+        Box::pin(async move {
+            tokio::task::consume_budget().await;
+            result
+        })
     }
 
     fn req_packed_commands<'a>(

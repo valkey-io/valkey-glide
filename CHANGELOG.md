@@ -32,6 +32,10 @@
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 
+### Changes
+
+* Core: cluster single-node fast path from the caller's task, plus write coalescing (`GLIDE_PIPELINE_COALESCE=0` turns coalescing off) ([#7532](https://github.com/valkey-io/valkey-glide/pull/7532))
+
 ## 2.6
 
 ### Features
