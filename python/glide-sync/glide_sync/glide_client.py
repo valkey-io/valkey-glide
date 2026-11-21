@@ -285,9 +285,16 @@ def _view_or_cuda_span(memory: Any) -> Union[memoryview, Tuple[int, int]]:
 
 
 # The CUDA driver, loaded the first time GPU memory is registered. GLIDE calls it
-# only to make a GPU's context current around a registration.
+# only to check how GPU memory was allocated and to make its GPU's context current
+# around a registration.
 _CUDA_DRIVER: Optional[ctypes.CDLL] = None
 _CUDA_DRIVER_LOCK = threading.Lock()
+
+# From cuda.h.
+_CUDA_ERROR_INVALID_VALUE = 1
+_CU_POINTER_ATTRIBUTE_MEMORY_TYPE = 2
+_CU_POINTER_ATTRIBUTE_IS_MANAGED = 8
+_CU_MEMORYTYPE_DEVICE = 2
 
 
 def _cuda_driver() -> ctypes.CDLL:
@@ -313,6 +320,11 @@ def _cuda_driver() -> ctypes.CDLL:
             driver.cuDevicePrimaryCtxRelease_v2.argtypes = [ctypes.c_int]
             driver.cuCtxPushCurrent_v2.argtypes = [ctypes.c_void_p]
             driver.cuCtxPopCurrent_v2.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+            driver.cuPointerGetAttribute.argtypes = [
+                ctypes.POINTER(ctypes.c_uint),
+                ctypes.c_int,
+                ctypes.c_uint64,
+            ]
             _cuda_check(driver, driver.cuInit(0), "cuInit")
             _CUDA_DRIVER = driver
         return _CUDA_DRIVER
@@ -335,6 +347,49 @@ def _cuda_error(driver: ctypes.CDLL, code: int, call: str) -> Optional[str]:
     else:
         reason = f"error {code}"
     return f"{call} failed with {reason}"
+
+
+def _check_cuda_device_memory(address: int) -> None:
+    """
+    Refuse the memory at `address` unless CUDA allocated it as device memory.
+
+    ``__dlpack_device__`` names the device a tensor is on, not how its memory
+    was allocated: PyTorch reports managed memory from a custom allocator as
+    ordinary CUDA memory. So the driver is asked, as libfabric asks it.
+    Managed memory has no dmabuf to register, and a failed dmabuf registration
+    can stop libfabric using dmabuf for the rest of the process.
+
+    Raises:
+        TypeError: If the memory is CUDA managed memory, or not CUDA device
+            memory.
+        RdmaError: If the driver does not initialize, or cannot report on the
+            memory.
+    """
+    driver = _cuda_driver()
+
+    def _attribute(name: int, call: str) -> int:
+        value = ctypes.c_uint()
+        code = driver.cuPointerGetAttribute(ctypes.byref(value), name, address)
+        if code == _CUDA_ERROR_INVALID_VALUE:
+            raise TypeError("memory is not CUDA memory; CUDA does not know its address")
+        _cuda_check(driver, code, call)
+        return value.value
+
+    if _attribute(
+        _CU_POINTER_ATTRIBUTE_IS_MANAGED, "cuPointerGetAttribute(IS_MANAGED)"
+    ):
+        raise TypeError(
+            "CUDA managed memory cannot be registered; allocate the memory on "
+            "the device instead"
+        )
+    memory_type = _attribute(
+        _CU_POINTER_ATTRIBUTE_MEMORY_TYPE, "cuPointerGetAttribute(MEMORY_TYPE)"
+    )
+    if memory_type != _CU_MEMORYTYPE_DEVICE:
+        raise TypeError(
+            f"memory of CUDA memory type {memory_type} cannot be registered; "
+            "only CUDA device memory can"
+        )
 
 
 @contextmanager
@@ -2017,13 +2072,13 @@ class BaseClient(CoreCommands):
             RdmaError: If this build has no RDMA support, the client was not
                 configured for RDMA, or was configured without
                 ``device_memory`` and given GPU memory, the memory is still held
-                from a closed region, the CUDA driver could not make the GPU
-                memory's context current, or the fabric refused the
-                registration.
+                from a closed region, the CUDA driver could not report how the GPU
+                memory was allocated or make its context current, or the fabric
+                refused the registration.
             ClosingError: If the client is closed.
             TypeError: If the buffer is not writable and C-contiguous, or the
                 memory is on a device other than a CUDA GPU, or is CUDA managed
-                memory.
+                memory or otherwise not CUDA device memory.
 
         Example:
             >>> region = client.register_rdma_region(bytearray(1 << 20))
@@ -2098,6 +2153,7 @@ class BaseClient(CoreCommands):
         client_adapter_ptr = self._begin_rdma_call()
         try:
             with _gpu_context(ordinal):
+                _check_cuda_device_memory(address)
                 registration = self._lib.register_rdma_cuda_region(
                     client_adapter_ptr,
                     self._ffi.cast("uint8_t*", address),

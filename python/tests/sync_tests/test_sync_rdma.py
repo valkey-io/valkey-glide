@@ -44,6 +44,8 @@ from glide_sync.glide_client import _RETAINED_RDMA_MEMORY
 
 # Taken before the `gpu_contexts` fixture replaces it, for the tests of it.
 _REAL_GPU_CONTEXT = glide_client_module._gpu_context
+# Taken before the `cuda_memory_checks` fixture replaces it, for the tests of it.
+_REAL_CHECK_CUDA_DEVICE_MEMORY = glide_client_module._check_cuda_device_memory
 
 REGION_BYTES = 1024
 
@@ -66,6 +68,19 @@ def gpu_contexts(monkeypatch):
 
     monkeypatch.setattr(glide_client_module, "_gpu_context", record)
     return entered
+
+
+@pytest.fixture(autouse=True)
+def cuda_memory_checks(monkeypatch):
+    """
+    The addresses a registration asks the CUDA driver about, recorded instead of
+    calling CUDA, which CI does not have. Each is taken as CUDA device memory.
+    """
+    checked = []
+    monkeypatch.setattr(
+        glide_client_module, "_check_cuda_device_memory", checked.append
+    )
+    return checked
 
 
 def _survives_collecting_a_kept_error(failing_call: str, setup: str = "") -> None:
@@ -963,15 +978,29 @@ def test_registration_makes_the_tensors_gpu_context_current(gpu_contexts):
 
 
 class _FakeCudaDriver:
-    """The CUDA driver calls `_gpu_context` makes, recorded in order."""
+    """
+    The CUDA driver calls `_gpu_context` and `_check_cuda_device_memory` make,
+    recorded in order.
+    """
 
-    def __init__(self, fail: str = ""):
+    def __init__(self, fail: str = "", attributes=None, attribute_error: int = 0):
         self.calls: list = []
         self.fail = fail
+        # Plain device memory unless a test says otherwise.
+        self.attributes = {
+            glide_client_module._CU_POINTER_ATTRIBUTE_IS_MANAGED: 0,
+            glide_client_module._CU_POINTER_ATTRIBUTE_MEMORY_TYPE: 2,
+            **(attributes or {}),
+        }
+        self.attribute_error = attribute_error
 
     def _call(self, name, code=0):
         self.calls.append(name)
         return 1 if name == self.fail else code
+
+    def cuPointerGetAttribute(self, value, attribute, address):
+        value._obj.value = self.attributes[attribute]
+        return self._call(f"attribute({attribute}, {address:#x})", self.attribute_error)
 
     def cuDeviceGet(self, device, ordinal):
         device._obj.value = ordinal
@@ -1043,6 +1072,114 @@ def test_a_failed_pop_is_logged_so_a_registration_is_not_lost(monkeypatch):
     assert driver.calls[-2:] == ["pop", "release(1)"]
     assert [level for level, _ in logged] == [glide_client_module.Level.ERROR]
     assert "cuCtxPopCurrent failed with CUDA_ERROR" in logged[0][1]
+
+
+def test_registration_asks_the_driver_inside_the_gpu_context(monkeypatch, gpu_contexts):
+    # PyTorch reports managed memory as ordinary CUDA memory, so the driver is
+    # asked how the memory was allocated, with its GPU's context current, before
+    # anything is registered.
+    client = _offline_client()
+    client._core_client = object()
+    register = client._lib.register_rdma_cuda_region
+
+    def check_inside_the_context(address):
+        gpu_contexts.append(("check", address))
+
+    def register_inside_the_context(*arguments):
+        gpu_contexts.append(("register", None))
+        return register(*arguments)
+
+    monkeypatch.setattr(
+        glide_client_module, "_check_cuda_device_memory", check_inside_the_context
+    )
+    client._lib.register_rdma_cuda_region = register_inside_the_context
+    memory = _FakeCudaArray(device=(2, 3))
+
+    client.register_rdma_region(memory).close()
+
+    assert gpu_contexts == [
+        ("enter", 3),
+        ("check", memory.address),
+        ("register", None),
+        ("exit", 3),
+    ]
+
+
+ATTRIBUTE_IS_MANAGED = glide_client_module._CU_POINTER_ATTRIBUTE_IS_MANAGED
+ATTRIBUTE_MEMORY_TYPE = glide_client_module._CU_POINTER_ATTRIBUTE_MEMORY_TYPE
+
+
+def test_the_driver_is_asked_whether_memory_is_managed_and_its_type(monkeypatch):
+    driver = _FakeCudaDriver()
+    monkeypatch.setattr(glide_client_module, "_cuda_driver", lambda: driver)
+
+    _REAL_CHECK_CUDA_DEVICE_MEMORY(0x7000)
+
+    assert driver.calls == [
+        f"attribute({ATTRIBUTE_IS_MANAGED}, 0x7000)",
+        f"attribute({ATTRIBUTE_MEMORY_TYPE}, 0x7000)",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("driver", "error", "message"),
+    [
+        pytest.param(
+            _FakeCudaDriver(attributes={ATTRIBUTE_IS_MANAGED: 1}),
+            TypeError,
+            "managed memory",
+            id="managed",
+        ),
+        pytest.param(
+            # CU_MEMORYTYPE_HOST: host memory a library reported as CUDA memory.
+            _FakeCudaDriver(attributes={ATTRIBUTE_MEMORY_TYPE: 1}),
+            TypeError,
+            "memory type 1",
+            id="host",
+        ),
+        pytest.param(
+            _FakeCudaDriver(attribute_error=1),  # CUDA_ERROR_INVALID_VALUE
+            TypeError,
+            "not CUDA memory",
+            id="unknown-to-cuda",
+        ),
+        pytest.param(
+            _FakeCudaDriver(attribute_error=201),  # CUDA_ERROR_INVALID_CONTEXT
+            RdmaError,
+            r"cuPointerGetAttribute\(IS_MANAGED\) failed with CUDA_ERROR",
+            id="driver-error",
+        ),
+    ],
+)
+def test_memory_the_driver_does_not_report_as_device_memory_is_refused(
+    monkeypatch, driver, error, message
+):
+    monkeypatch.setattr(glide_client_module, "_cuda_driver", lambda: driver)
+
+    with pytest.raises(error, match=message):
+        _REAL_CHECK_CUDA_DEVICE_MEMORY(0x7000)
+
+
+def test_managed_memory_reported_as_cuda_memory_is_never_registered(
+    monkeypatch, gpu_contexts
+):
+    # What PyTorch does for a tensor from a managed-memory allocator.
+    driver = _FakeCudaDriver(attributes={ATTRIBUTE_IS_MANAGED: 1})
+    monkeypatch.setattr(glide_client_module, "_cuda_driver", lambda: driver)
+    monkeypatch.setattr(
+        glide_client_module,
+        "_check_cuda_device_memory",
+        _REAL_CHECK_CUDA_DEVICE_MEMORY,
+    )
+    client = _offline_client()
+    client._core_client = object()
+    memory = _FakeCudaArray(device=(2, 0))
+
+    with pytest.raises(TypeError, match="managed memory"):
+        client.register_rdma_region(memory)
+
+    assert client._lib.device_registrations == []
+    assert gpu_contexts == [("enter", 0), ("exit", 0)], "the context is put back"
 
 
 @pytest.mark.parametrize(
