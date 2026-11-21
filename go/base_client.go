@@ -81,12 +81,7 @@ type baseClient struct {
 	resolverID uintptr
 }
 
-// setMessageHandler assigns a message handler to the client for processing pub/sub messages
-func (client *baseClient) setMessageHandler(handler *MessageHandler) {
-	client.messageHandler = handler
-}
-
-// getMessageHandler returns the currently assigned message handler
+// getMessageHandler returns the message handler assigned at creation.
 func (client *baseClient) getMessageHandler() *MessageHandler {
 	return client.messageHandler
 }
@@ -154,7 +149,7 @@ func buildAsyncClientType(successCb C.SuccessCallback, failureCb C.FailureCallba
 // Passes the pointers to callback functions which will be invoked when the command succeeds or fails.
 // Once the connection is established, this function invokes `free_connection_response` exposed by rust library to free the
 // connection_response to avoid any memory leaks.
-func createClient(cfg clientConfiguration) (*baseClient, error) {
+func createClient(cfg clientConfiguration, handler *MessageHandler) (*baseClient, error) {
 	request, err := cfg.ToProtobuf()
 	if err != nil {
 		return nil, err
@@ -175,7 +170,8 @@ func createClient(cfg clientConfiguration) (*baseClient, error) {
 	if err != nil {
 		return nil, NewClosingError(err.Error())
 	}
-	client := &baseClient{pending: make(map[uintptr]struct{}), mu: &sync.Mutex{}}
+	// Registry readers must see a fully initialized handler on the first push.
+	client := &baseClient{pending: make(map[uintptr]struct{}), mu: &sync.Mutex{}, messageHandler: handler}
 
 	// Determine resolver callback, credential provider callback, and shared client ID.
 	// A single clientID is passed to create_client and forwarded to both callbacks.
