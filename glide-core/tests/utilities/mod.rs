@@ -44,11 +44,44 @@ pub enum ServerType {
 }
 
 type SharedServer = Lazy<Mutex<Option<RedisServer>>>;
-static SHARED_SERVER: SharedServer =
-    Lazy::new(|| Mutex::new(Some(RedisServer::new(ServerType::Tcp { tls: false }))));
+static SHARED_SERVER: SharedServer = Lazy::new(|| {
+    Mutex::new(Some(new_server_accepting_connections(ServerType::Tcp {
+        tls: false,
+    })))
+});
 
-static SHARED_TLS_SERVER: SharedServer =
-    Lazy::new(|| Mutex::new(Some(RedisServer::new(ServerType::Tcp { tls: true }))));
+static SHARED_TLS_SERVER: SharedServer = Lazy::new(|| {
+    Mutex::new(Some(new_server_accepting_connections(ServerType::Tcp {
+        tls: true,
+    })))
+});
+
+/// Spawns a server and returns only once its listening port accepts TCP connections.
+/// `redis-server` is spawned as a child process, so without this wait the first test to use
+/// the shared server can try to connect before the port is open and fail with a connection error.
+/// A plain TCP connect is used (also for TLS ports) since the clients perform the TLS handshake.
+/// It is synchronous so it is safe to run from within a tokio runtime.
+fn new_server_accepting_connections(server_type: ServerType) -> RedisServer {
+    let mut server = RedisServer::new(server_type);
+    let (host, port) = match server.get_client_addr() {
+        ConnectionAddr::Tcp(host, port) => (host, port),
+        ConnectionAddr::TcpTls { host, port, .. } => (host, port),
+        _ => return server,
+    };
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    loop {
+        if std::net::TcpStream::connect((host.as_str(), port)).is_ok() {
+            return server;
+        }
+        if let Ok(Some(status)) = server.process.try_wait() {
+            panic!("redis-server exited before accepting connections: {status}");
+        }
+        if std::time::Instant::now() > deadline {
+            panic!("redis-server did not accept connections on {host}:{port} within 30 seconds");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
 
 static SHARED_SERVER_ADDRESS: Lazy<ConnectionAddr> = Lazy::new(|| {
     SHARED_SERVER
