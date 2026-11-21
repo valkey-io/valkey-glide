@@ -2229,6 +2229,14 @@ impl Client {
         raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            // Without this guard, a multi-node route falls through to the no-route
+            // arm and the batch runs on a single node.
+            if matches!(routing, Some(RoutingInfo::MultiNode(_))) {
+                return Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "batches support only single-node routes",
+                )));
+            }
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             // Before the tracking below, so a rejected batch leaves no state.
             for cmd in pipeline.cmd_iter() {
@@ -2277,8 +2285,8 @@ impl Client {
                                         .route_pipeline(pipeline, offset, 1, Some(route), None)
                                         .await?
                                 }
-                                // TODO #7673: Return a client error for `RoutingInfo::MultiNode`;
-                                // keep this path for `None`.
+                                // Only `None` reaches here: a multi-node route is
+                                // rejected upfront.
                                 _ => {
                                     client
                                         .req_packed_commands(pipeline, offset, 1, None)
@@ -2333,6 +2341,14 @@ impl Client {
         pipeline_retry_strategy: PipelineRetryStrategy,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            // Without this guard, a multi-node route falls through to the no-route
+            // arm and the batch runs on a single node.
+            if matches!(routing, Some(RoutingInfo::MultiNode(_))) {
+                return Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "batches support only single-node routes",
+                )));
+            }
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             // Before the tracking below, so a rejected batch leaves no state.
             for cmd in pipeline.cmd_iter() {
@@ -2409,8 +2425,8 @@ impl Client {
                                     )
                                     .await
                             }
-                            // TODO #7673: Return a client error for `RoutingInfo::MultiNode`;
-                            // keep this path for `None`.
+                            // Only `None` reaches here: a multi-node route is
+                            // rejected upfront.
                             _ => {
                                 client
                                     .route_pipeline(
@@ -6235,6 +6251,65 @@ mod tests {
         rt.block_on(client.send_command(&mut redis::cmd("MONITOR"), None))
             .expect_err("read-only mode rejects MONITOR");
         rt.block_on(client.reset_connection_state(0)).unwrap();
+    }
+
+    /// A batch with a multi-node route must fail with a client error instead of
+    /// silently running on one node (valkey-io/valkey-glide#7673).
+    #[test]
+    fn send_pipeline_rejects_multi_node_route() {
+        use redis::cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo};
+
+        let mut client = create_test_client();
+        let rt = borrow_test_runtime();
+        let strategy = redis::PipelineRetryStrategy::default();
+
+        let mut pipe = redis::pipe();
+        pipe.cmd("CLUSTER").arg("MYID");
+        let err = rt
+            .block_on(client.send_pipeline(
+                &pipe,
+                Some(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllMasters,
+                    None,
+                ))),
+                false,
+                None,
+                strategy,
+            ))
+            .expect_err("a batch with a multi-node route must be rejected");
+        assert_eq!(err.kind(), redis::ErrorKind::ClientError);
+        assert!(
+            err.to_string().contains("single-node"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// Same rejection for atomic batches (MULTI/EXEC transactions).
+    #[test]
+    fn send_transaction_rejects_multi_node_route() {
+        use redis::cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo};
+
+        let mut client = create_test_client();
+        let rt = borrow_test_runtime();
+
+        let mut txn = redis::pipe();
+        txn.atomic().cmd("CLUSTER").arg("MYID");
+        let err = rt
+            .block_on(client.send_transaction(
+                &txn,
+                Some(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    None,
+                ))),
+                None,
+                false,
+            ))
+            .expect_err("a transaction with a multi-node route must be rejected");
+        assert_eq!(err.kind(), redis::ErrorKind::ClientError);
+        assert!(
+            err.to_string().contains("single-node"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
