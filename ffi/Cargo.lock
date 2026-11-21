@@ -965,6 +965,7 @@ dependencies = [
 name = "glide-core"
 version = "0.3.0"
 dependencies = [
+ "arc-swap",
  "async-trait",
  "aws-config",
  "aws-credential-types",
