@@ -453,7 +453,7 @@ mod socket_listener {
         let address = server
             .as_ref()
             .map(|server| server.get_client_addr())
-            .unwrap_or(get_shared_server_address(use_tls.to_bool()));
+            .unwrap_or_else(|| get_shared_server_address(use_tls.to_bool()));
         let socket = setup_socket(use_tls, socket_path, &[address], ClusterMode::Disabled);
         ServerTestBasics { server, socket }
     }

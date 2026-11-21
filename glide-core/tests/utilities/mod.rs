@@ -44,11 +44,82 @@ pub enum ServerType {
 }
 
 type SharedServer = Lazy<Mutex<Option<RedisServer>>>;
-static SHARED_SERVER: SharedServer =
-    Lazy::new(|| Mutex::new(Some(RedisServer::new(ServerType::Tcp { tls: false }))));
+static SHARED_SERVER: SharedServer = Lazy::new(|| {
+    Mutex::new(Some(new_server_accepting_connections(ServerType::Tcp {
+        tls: false,
+    })))
+});
 
-static SHARED_TLS_SERVER: SharedServer =
-    Lazy::new(|| Mutex::new(Some(RedisServer::new(ServerType::Tcp { tls: true }))));
+static SHARED_TLS_SERVER: SharedServer = Lazy::new(|| {
+    Mutex::new(Some(new_server_accepting_connections(ServerType::Tcp {
+        tls: true,
+    })))
+});
+
+/// Spawns a server and returns only once that server (not just any process) is ready.
+/// `redis-server` is spawned as a child process, so without this wait the first test to use
+/// the shared server can try to connect before the port is open and fail with a connection error.
+/// `get_available_port` releases the port before the child binds it, so another server started
+/// concurrently can win the bind. A successful TCP connect therefore does not prove that this
+/// child owns the port. Instead, each child writes its own log file and readiness is the child
+/// logging "Ready to accept connections". A child that lost the bind race exits (or never logs
+/// it), and the server is respawned on a newly selected port.
+/// Polling is synchronous so it is safe to run from within a tokio runtime.
+fn new_server_accepting_connections(server_type: ServerType) -> RedisServer {
+    const MAX_SPAWN_ATTEMPTS: usize = 5;
+    let tls = match server_type {
+        ServerType::Tcp { tls } => tls,
+        ServerType::Unix => return RedisServer::new(server_type),
+    };
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    for _ in 0..MAX_SPAWN_ATTEMPTS {
+        let port = get_available_port();
+        let addr = if tls {
+            ConnectionAddr::TcpTls {
+                host: IP_ADDRESS_V4.to_string(),
+                port,
+                insecure: true,
+                tls_params: None,
+            }
+        } else {
+            ConnectionAddr::Tcp(IP_ADDRESS_V4.to_string(), port)
+        };
+        let log_dir = tempfile::Builder::new()
+            .prefix("redis-log")
+            .tempdir()
+            .expect("failed to create tempdir");
+        let log_path = log_dir.path().join("server.log");
+        let mut server = RedisServer::new_with_addr_tls_modules_and_spawner(
+            addr,
+            None,
+            &[],
+            false,
+            |cmd| {
+                cmd.arg("--logfile")
+                    .arg(&log_path)
+                    .spawn()
+                    .unwrap_or_else(|err| panic!("Failed to run {cmd:?}: {err}"))
+            },
+        );
+        loop {
+            let ready = fs::read_to_string(&log_path)
+                .map(|log| log.contains("Ready to accept connections"))
+                .unwrap_or(false);
+            if ready {
+                return server;
+            }
+            if let Ok(Some(_)) = server.process.try_wait() {
+                // The child exited, most likely because another process took the port.
+                break;
+            }
+            if std::time::Instant::now() > deadline {
+                panic!("redis-server did not become ready on port {port} within 30 seconds");
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+    panic!("redis-server failed to start after {MAX_SPAWN_ATTEMPTS} attempts");
+}
 
 static SHARED_SERVER_ADDRESS: Lazy<ConnectionAddr> = Lazy::new(|| {
     SHARED_SERVER
@@ -99,7 +170,9 @@ pub enum Module {
 pub fn get_available_port() -> u16 {
     let attempts = 100;
     for _ in 0..attempts {
-        let port = rand::random::<u16>().max(6379);
+        // Pick uniformly from 6379..=65535. `rand::random::<u16>().max(6379)` returned 6379
+        // for ~10% of draws, so two servers started close together often picked the same port.
+        let port = rand::thread_rng().gen_range(6379..=u16::MAX);
 
         let addr4 = format!("{}:{}", IP_ADDRESS_V4, port)
             .parse::<SocketAddr>()
@@ -972,7 +1045,7 @@ pub(crate) async fn create_client(
             let connection_addr = server
                 .as_ref()
                 .map(|server| server.get_client_addr())
-                .unwrap_or(get_shared_server_address(configuration.use_tls));
+                .unwrap_or_else(|| get_shared_server_address(configuration.use_tls));
 
             // TODO - this is a patch, handling the situation where the new server
             // still isn't available to connection. This should be fixed in [RedisServer].
