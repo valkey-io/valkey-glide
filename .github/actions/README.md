@@ -12,6 +12,7 @@ This directory contains composite actions shared across valkey-glide language re
   - [install-rust](#install-rust)
   - [install-protoc](#install-protoc)
   - [install-zig](#install-zig)
+  - [install-cargo-tool](#install-cargo-tool)
 - [Platform Support Matrix](#platform-support-matrix)
 - [Submodule Configuration](#submodule-configuration)
 - [Reusable Workflows](#reusable-workflows)
@@ -299,6 +300,34 @@ jobs:
 
 ---
 
+### install-cargo-tool
+
+Installs a prebuilt cargo subcommand from a GitHub release into the cargo bin directory, verifying the release's `.sha256` file.
+
+**Location:** `.github/actions/install-cargo-tool/action.yml`
+
+#### Inputs
+
+| Name | Required | Default | Description |
+|------|----------|---------|-------------|
+| `repo` | Yes | - | GitHub repository that publishes the release, e.g. `EmbarkStudios/cargo-deny` |
+| `tag` | Yes | - | Release tag, e.g. `0.20.2` |
+| `asset` | Yes | - | Release asset name; a `.tar.gz` whose top-level directory is the asset name without `.tar.gz` |
+| `binary` | Yes | - | Executable inside that directory, e.g. `cargo-deny` |
+
+#### Example Usage
+
+```yaml
+      - uses: ./.github/actions/install-cargo-tool
+        with:
+          repo: EmbarkStudios/cargo-deny
+          tag: "0.20.2"
+          asset: cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz
+          binary: cargo-deny
+```
+
+---
+
 ## Platform Support Matrix
 
 | Action | Ubuntu | macOS | Windows | Amazon Linux | Alpine/MUSL |
@@ -309,6 +338,7 @@ jobs:
 | install-rust | ✓ | ✓ | ✓ | ✓ | ✓ |
 | install-protoc | ✓ | ✓ | ✓ | ✓ | ✓ |
 | install-zig | ✓ | ✓ | ✓ | ✓ | ✓ |
+| install-cargo-tool | ✓ | ✗ | ✗ | ✓ | ✓ |
 
 **Notes:**
 - **Windows:** Uses WSL (Windows Subsystem for Linux) for Valkey server operations

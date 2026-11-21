@@ -1,0 +1,35 @@
+name: Install a prebuilt cargo tool
+description: Download a cargo subcommand from its GitHub release and install it into the cargo bin directory
+
+inputs:
+    repo:
+        description: "GitHub repository that publishes the release, ex. EmbarkStudios/cargo-deny"
+        required: true
+    tag:
+        description: "Release tag, ex. 0.20.2"
+        required: true
+    asset:
+        description: "Release asset name; a .tar.gz whose top-level directory is the asset name without .tar.gz"
+        required: true
+    binary:
+        description: "Executable inside that directory, ex. cargo-deny"
+        required: true
+
+runs:
+    using: "composite"
+    steps:
+        - name: Install ${{ inputs.binary }}
+          shell: bash
+          env:
+              REPO: ${{ inputs.repo }}
+              TAG: ${{ inputs.tag }}
+              ASSET: ${{ inputs.asset }}
+              BINARY: ${{ inputs.binary }}
+          run: |
+              url="https://github.com/${REPO}/releases/download/${TAG}"
+              curl -fsSL -o "$ASSET" "$url/$ASSET"
+              curl -fsSL -o "$ASSET.sha256" "$url/$ASSET.sha256"
+              echo "$(cut -d' ' -f1 "$ASSET.sha256")  $ASSET" | sha256sum -c
+              tar -xzf "$ASSET" --strip-components=1 -C "${CARGO_HOME:-$HOME/.cargo}/bin" "${ASSET%.tar.gz}/$BINARY"
+              rm -f "$ASSET" "$ASSET.sha256"
+              cargo "${BINARY#cargo-}" --version
