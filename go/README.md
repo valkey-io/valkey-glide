@@ -139,6 +139,17 @@ func main() {
 }
 ```
 
+### Unix Domain Socket Example:
+
+A standalone client can connect through the server's Unix domain socket (its `unixsocket` setting, as an absolute path) instead of TCP. Unix domain sockets are not supported in cluster mode, with TLS, with `NodeDiscoveryModeDiscoverAll`, or mixed with TCP addresses.
+
+```go
+config := config.NewClientConfiguration().
+    WithAddress(&config.NodeAddress{UnixSocketPath: "/run/valkey/valkey.sock"})
+
+client, err := glide.NewClient(config)
+```
+
 ### PubSub Example:
 
 Valkey GLIDE supports PubSub (Publish/Subscribe) for real-time messaging. You can subscribe to channels and patterns, and dynamically manage subscriptions.
