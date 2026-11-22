@@ -97,6 +97,7 @@ EXCLUDED_TESTS = {
         "test_client_death_mid_command",
         # Async-only: _CompatFuture is the trio/anyio future shim, which has no
         # sync counterpart (the sync client blocks on FFI calls instead).
+        "test_future_is_weak_referenceable_and_collectible",
         "test_set_result_from_worker_thread_wakes_waiter",
         "test_set_exception_from_worker_thread_wakes_waiter",
         # Backend-pinning fixture override for the _CompatFuture tests above
