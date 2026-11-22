@@ -10455,6 +10455,302 @@ mod cluster_async {
         assert_eq!(set_calls.load(Ordering::SeqCst), 2);
     }
 
+    /// Sends a SET whose fast-path attempt gets an error that the event loop answers without
+    /// retrying and then recovers from, and a second SET as soon as the caller has that error.
+    /// `set_reply(index, replaced)` is the node's reply to the `index`th SET, where `replaced`
+    /// says whether the client has opened connections since the first SET. Returns the caller's
+    /// task, both results, and each SET's sender task and whether `hold2` was holding the event
+    /// loop when the node received it.
+    ///
+    /// The node keeps open the window between the error reaching the caller and the event loop
+    /// entering recovery. A by-address request (`hold1`) holds the event loop until it has been
+    /// handed, in this order, a by-address request from another task (`wake`), the caller's failed
+    /// attempt and a by-address request from the caller's task (`hold2`). The event loop then
+    /// polls them in one poll: the failed attempt first, so it answers the caller; then `wake`,
+    /// whose answer wakes the other task. Tokio puts the task a worker wakes in that worker's
+    /// LIFO slot and moves the one already there to its run queue, so the caller can run on
+    /// another worker while the event loop goes on; on a loaded client that is any caller
+    /// answered before the last one in a poll. `hold2` then holds the event loop until the caller
+    /// has received the error and polled its next SET once, which is when a fast-path send would
+    /// reach the node.
+    #[allow(clippy::type_complexity)]
+    fn next_command_after_unretried_error(
+        name: &'static str,
+        retries: u32,
+        set_reply: impl Fn(usize, bool) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
+    ) -> (
+        tokio::task::Id,
+        RedisResult<Option<String>>,
+        RedisResult<Option<String>>,
+        Vec<(SenderTask, bool)>,
+    ) {
+        // Mock connections open when the node received the first SET.
+        let connections_at_first = Arc::new(atomic::AtomicUsize::new(usize::MAX));
+        let hold1_started = Arc::new(AtomicBool::new(false));
+        let wake_sent = Arc::new(AtomicBool::new(false));
+        let both_sent = Arc::new(AtomicBool::new(false));
+        let held_until_both_sent = Arc::new(AtomicBool::new(false));
+        let next_set_polled = Arc::new(AtomicBool::new(false));
+        let holding = Arc::new(AtomicBool::new(false));
+        let held_until_next_set = Arc::new(AtomicBool::new(false));
+        // Each SET: the task that sent it, and whether `hold2` was holding the event loop.
+        let sets: Recorded<Vec<(SenderTask, bool)>> = Default::default();
+
+        let wait_for = |flag: &AtomicBool| {
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while !flag.load(Ordering::SeqCst) {
+                if std::time::Instant::now() >= deadline {
+                    return false;
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            true
+        };
+        let _handler = MockConnectionBehavior::register_new(name, {
+            let connections_at_first = connections_at_first.clone();
+            let hold1_started = hold1_started.clone();
+            let both_sent = both_sent.clone();
+            let held_until_both_sent = held_until_both_sent.clone();
+            let next_set_polled = next_set_polled.clone();
+            let holding = holding.clone();
+            let held_until_next_set = held_until_next_set.clone();
+            let sets = sets.clone();
+            Arc::new(move |cmd: &[u8], _port| {
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    return Err(Ok(create_topology_from_config(
+                        name,
+                        vec![MockSlotRange {
+                            primary_port: 6379,
+                            replica_ports: vec![],
+                            slot_range: 0..16383,
+                        }],
+                    )));
+                }
+                if contains_slice(cmd, b"hold1") {
+                    // On the event loop's task.
+                    hold1_started.store(true, Ordering::SeqCst);
+                    held_until_both_sent.store(wait_for(&both_sent), Ordering::SeqCst);
+                    return Err(Ok(Value::BulkString(b"1".to_vec().into())));
+                }
+                if contains_slice(cmd, b"hold2") {
+                    // On the event loop's task, polled after the error was answered.
+                    holding.store(true, Ordering::SeqCst);
+                    held_until_next_set.store(wait_for(&next_set_polled), Ordering::SeqCst);
+                    holding.store(false, Ordering::SeqCst);
+                    return Err(Ok(Value::BulkString(b"2".to_vec().into())));
+                }
+                // Match the RESP-encoded command name, so that `SETNAME` doesn't match.
+                if !contains_slice(cmd, b"\r\nSET\r\n") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                let index = {
+                    let mut sets = sets.lock().unwrap();
+                    sets.push((tokio::task::try_id(), holding.load(Ordering::SeqCst)));
+                    sets.len() - 1
+                };
+                let connections = mock_connection_count(name);
+                let _ = connections_at_first.compare_exchange(
+                    usize::MAX,
+                    connections,
+                    Ordering::SeqCst,
+                    Ordering::SeqCst,
+                );
+                set_reply(
+                    index,
+                    connections > connections_at_first.load(Ordering::SeqCst),
+                )
+            })
+        });
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(4)
+            .enable_all()
+            .build()
+            .expect("failed to build runtime");
+        let client = ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .retries(retries)
+            .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            .build()
+            .expect("failed to build ClusterClient");
+        let connection: ClusterConnection<MockConnection> = runtime
+            .block_on(client.get_async_generic_connection())
+            .expect("failed to get async connection");
+
+        let by_address = |connection: &ClusterConnection<MockConnection>, key: &'static str| {
+            let mut connection = connection.clone();
+            async move {
+                connection
+                    .route_command(
+                        cmd("GET").arg(key),
+                        RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                            host: name.to_string(),
+                            port: 6379,
+                        }),
+                    )
+                    .await
+            }
+        };
+        let (caller, first, second, hold1, hold2) = runtime.block_on(async move {
+            let hold1 = tokio::spawn(by_address(&connection, "hold1"));
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while !hold1_started.load(Ordering::SeqCst) {
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+            })
+            .await
+            .expect("the event loop should send hold1");
+            let wake = tokio::spawn({
+                let wake_sent = wake_sent.clone();
+                let mut wake = Box::pin(by_address(&connection, "wake"));
+                async move {
+                    let polled = futures::poll!(&mut wake);
+                    assert!(polled.is_pending());
+                    wake_sent.store(true, Ordering::SeqCst);
+                    wake.await
+                }
+            });
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while !wake_sent.load(Ordering::SeqCst) {
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+            })
+            .await
+            .expect("wake should be handed to the event loop");
+
+            let caller = tokio::spawn({
+                let mut set_connection = connection.clone();
+                let hold2 = by_address(&connection, "hold2");
+                async move {
+                    let mut set = cmd("SET");
+                    set.arg("key").arg("value");
+                    let sets = async {
+                        let first = set
+                            .query_async::<_, Option<String>>(&mut set_connection)
+                            .await;
+                        // Send the next command at once, polling it once before telling the node.
+                        let mut second =
+                            Box::pin(set.query_async::<_, Option<String>>(&mut set_connection));
+                        let polled = futures::poll!(&mut second);
+                        next_set_polled.store(true, Ordering::SeqCst);
+                        let second = match polled {
+                            std::task::Poll::Ready(second) => second,
+                            std::task::Poll::Pending => second.await,
+                        };
+                        (first, second)
+                    };
+                    let mut sets = Box::pin(sets);
+                    let mut hold2 = Box::pin(hold2);
+                    // The first poll of each sends it: the SET from this task (the fast path), its
+                    // error to the event loop, then hold2 to the event loop.
+                    let sets_polled = futures::poll!(&mut sets);
+                    let hold2_polled = futures::poll!(&mut hold2);
+                    assert!(sets_polled.is_pending() && hold2_polled.is_pending());
+                    both_sent.store(true, Ordering::SeqCst);
+                    let ((first, second), hold2) = futures::join!(sets, hold2);
+                    (tokio::task::id(), first, second, hold2)
+                }
+            });
+            let (caller, first, second, hold2) =
+                tokio::time::timeout(Duration::from_secs(20), caller)
+                    .await
+                    .expect("the SETs timed out")
+                    .expect("task panicked");
+            let hold1 = tokio::time::timeout(Duration::from_secs(20), hold1)
+                .await
+                .expect("hold1 timed out")
+                .expect("task panicked");
+            let wake = tokio::time::timeout(Duration::from_secs(20), wake)
+                .await
+                .expect("wake timed out")
+                .expect("task panicked");
+            assert_eq!(wake, Ok(Value::SimpleString("OK".into())));
+            (caller, first, second, hold1, hold2)
+        });
+
+        assert_eq!(hold1, Ok(Value::BulkString(b"1".to_vec().into())));
+        assert_eq!(hold2, Ok(Value::BulkString(b"2".to_vec().into())));
+        assert!(
+            held_until_both_sent.load(Ordering::SeqCst),
+            "setup: hold1 must hold the event loop until the caller has sent its SET and hold2"
+        );
+        assert!(
+            held_until_next_set.load(Ordering::SeqCst),
+            "setup: hold2 must hold the event loop until the caller has polled its next SET"
+        );
+        let sets = std::mem::take(&mut *sets.lock().unwrap());
+        assert_eq!(
+            sets[0],
+            (Some(caller), false),
+            "the first SET takes the fast path"
+        );
+        (caller, first, second, sets)
+    }
+
+    /// With no retries left, the event loop answers a circular MOVED before it enters the
+    /// reconnect that replaces the connection. A command the caller sends as soon as it has that
+    /// reply must not take the fast path to the connection being replaced: like a request sent
+    /// through the event loop, it waits for the replacement.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fast_path_closes_before_a_terminal_moved_reply() {
+        let name = "fast_path_closes_before_moved_reply";
+        let (caller, first, second, sets) =
+            next_command_after_unretried_error(name, 0, move |_, replaced| {
+                if replaced {
+                    Err(Ok(Value::SimpleString("OK".into())))
+                } else {
+                    Err(parse_redis_value(
+                        format!("-MOVED {} {name}:6379\r\n", get_slot(b"key")).as_bytes(),
+                    ))
+                }
+            });
+
+        assert_eq!(first.unwrap_err().kind(), ErrorKind::Moved);
+        assert_eq!(
+            second,
+            Ok(Some("OK".to_string())),
+            "the next SET must wait for the replacement connection (SETs: {sets:?}, caller \
+             {caller:?})"
+        );
+        assert_eq!(sets.len(), 2, "SETs: {sets:?}");
+        assert!(
+            sets[1].0.is_some() && sets[1].0 != Some(caller) && !sets[1].1,
+            "the next SET must be sent by the event loop after the replacement, got {:?} (caller \
+             {caller:?})",
+            sets[1]
+        );
+    }
+
+    /// A Reconnect-class error is not retried (#7737): the event loop answers it, then reconnects
+    /// the node. As after a circular MOVED, the caller's next command must wait for that
+    /// reconnect instead of taking the fast path while it is being decided.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fast_path_closes_before_an_unretried_reconnect_error() {
+        let name = "fast_path_closes_before_reconnect_error";
+        let (caller, first, second, sets) =
+            next_command_after_unretried_error(name, 1, move |index, _| {
+                if index == 0 {
+                    Err(Err(RedisError::from(std::io::Error::new(
+                        std::io::ErrorKind::ConnectionReset,
+                        "mock connection reset",
+                    ))))
+                } else {
+                    Err(Ok(Value::SimpleString("OK".into())))
+                }
+            });
+
+        assert_eq!(first.unwrap_err().kind(), ErrorKind::IoError);
+        assert_eq!(second, Ok(Some("OK".to_string())));
+        assert_eq!(sets.len(), 2, "SETs: {sets:?}");
+        assert!(
+            sets[1].0.is_some() && sets[1].0 != Some(caller) && !sets[1].1,
+            "the next SET must be sent by the event loop after the reconnect, got {:?} (caller \
+             {caller:?})",
+            sets[1]
+        );
+    }
+
     /// Pipeline variant of `test_async_cluster_circular_moved_replaces_healthy_connection`.
     ///
     /// To run: cargo test --test test_cluster_async -- test_async_cluster_circular_moved_pipeline_replaces_healthy_connection --nocapture

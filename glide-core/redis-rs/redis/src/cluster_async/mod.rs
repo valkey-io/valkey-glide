@@ -731,11 +731,12 @@ pub(crate) struct InnerCore<C> {
     pub(crate) conn_lock: ParkingLotRwLock<Connections<C>>,
     /// Mirror of the event loop's `ConnectionState`, for the caller-task fast path in
     /// [`ClusterConnection::route_on_fast_path`]: set when the event loop enters
-    /// `ConnectionState::Recover` (`ClusterConnInner::enter_recovery`, the only way in), and
-    /// cleared in `ClusterConnInner::poll_flush` once recovery has ended and the requests drained
-    /// from the recovery queue have been polled. While set, every request goes through the event
-    /// loop, so the recovery queue (buffering or fail-fast) applies to it as before. A gate, not
-    /// a lock: see `InnerCore::is_in_recovery`.
+    /// `ConnectionState::Recover` (`ClusterConnInner::enter_recovery`, the only way in), or just
+    /// before, by a request that answers its caller with the error that makes the event loop enter
+    /// it (`InnerCore::close_fast_path`); cleared in `ClusterConnInner::poll_flush` once recovery
+    /// has ended and the requests drained from the recovery queue have been polled. While set,
+    /// every request goes through the event loop, so the recovery queue (buffering or fail-fast)
+    /// applies to it as before. A gate, not a lock: see `InnerCore::is_in_recovery`.
     in_recovery: AtomicBool,
     cluster_params: ParkingLotRwLock<ClusterParams>,
     pending_requests_tx: mpsc::UnboundedSender<PendingRequest<C>>,
@@ -925,6 +926,14 @@ where
     /// read `false` just before recovery began is sent during it.
     fn is_in_recovery(&self) -> bool {
         self.in_recovery.load(Ordering::Relaxed)
+    }
+
+    /// Close the caller-task fast path ahead of a recovery: `ClusterConnInner::enter_recovery`,
+    /// and a request that answers its caller with the error that triggers one, before the event
+    /// loop enters it. The caller's next command then goes through the event loop, as before the
+    /// fast path, so that recovery's queue (buffering or fail-fast) applies to it.
+    fn close_fast_path(&self) {
+        self.in_recovery.store(true, Ordering::Relaxed);
     }
 }
 
@@ -1763,6 +1772,14 @@ where
                     } else {
                         Next::Done.into()
                     };
+                    if !matches!(next, Poll::Ready(Next::Done)) {
+                        // `poll_flush` enters recovery for `next` when this poll of the requests
+                        // ends, but the caller can send its next command as soon as it has this
+                        // error. Close the fast path first, so that command goes through the
+                        // event loop and its recovery queue instead of a connection the
+                        // recovery may replace.
+                        this.core.close_fast_path();
+                    }
                     self.respond(Err(err));
                     return next;
                 }
@@ -1917,7 +1934,10 @@ where
                             request.info.reset_routing();
                             Some(request)
                         } else {
-                            // Not retried, so the caller must get this error instead of a dropped sender.
+                            // Not retried, so the caller must get this error instead of a dropped
+                            // sender. The reconnect starts when this poll ends: close the fast
+                            // path first, as for an error with no retries left.
+                            this.core.close_fast_path();
                             self.respond(Err(err));
                             None
                         };
@@ -4266,7 +4286,7 @@ where
     /// reach the event loop (and its recovery queue) until recovery ends. The fast path opens
     /// again in `poll_flush`, after the requests buffered during recovery have been polled.
     fn enter_recovery(&mut self, recover_future: RecoverFuture) {
-        self.inner.in_recovery.store(true, Ordering::Relaxed);
+        self.inner.close_fast_path();
         self.state = ConnectionState::Recover(recover_future);
     }
 
