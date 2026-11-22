@@ -10202,6 +10202,10 @@ mod cluster_async {
         let release_refresh = Arc::new(AtomicBool::new(false));
         // The order in which the node received the buffered and the new requests.
         let arrivals: Recorded<Vec<&'static str>> = Default::default();
+        // The task that sent each buffered request, and each attempt of the MOVED request (its
+        // retry is sent by the event loop).
+        let buffered_senders: Recorded<Vec<SenderTask>> = Default::default();
+        let trigger_senders: Recorded<Vec<SenderTask>> = Default::default();
         // The task that sent each request issued after everything else finished.
         let after_senders: Recorded<Vec<SenderTask>> = Default::default();
         // Set once the connection exists; the node uses it to issue the new requests.
@@ -10218,6 +10222,8 @@ mod cluster_async {
             let refresh_blocked = refresh_blocked.clone();
             let release_refresh = release_refresh.clone();
             let arrivals = arrivals.clone();
+            let buffered_senders = buffered_senders.clone();
+            let trigger_senders = trigger_senders.clone();
             let after_senders = after_senders.clone();
             let fresh_connection = fresh_connection.clone();
             let fresh_requests = fresh_requests.clone();
@@ -10250,6 +10256,7 @@ mod cluster_async {
                     ])])));
                 }
                 if contains_slice(cmd, b"buffered") {
+                    buffered_senders.lock().unwrap().push(tokio::task::try_id());
                     let issue_fresh = {
                         let mut arrivals = arrivals.lock().unwrap();
                         arrivals.push("buffered");
@@ -10309,9 +10316,11 @@ mod cluster_async {
                     arrivals.lock().unwrap().push("fresh");
                 } else if contains_slice(cmd, b"after") {
                     after_senders.lock().unwrap().push(tokio::task::try_id());
-                } else if contains_slice(cmd, b"trigger")
-                    && !moved_fired.swap(true, Ordering::SeqCst)
-                {
+                } else if contains_slice(cmd, b"trigger") {
+                    trigger_senders.lock().unwrap().push(tokio::task::try_id());
+                    if moved_fired.swap(true, Ordering::SeqCst) {
+                        return Err(Ok(Value::BulkString(b"1".to_vec().into())));
+                    }
                     return Err(parse_redis_value(
                         format!("-MOVED {} {name}:6380\r\n", get_slot(b"trigger")).as_bytes(),
                     ));
@@ -10421,6 +10430,27 @@ mod cluster_async {
         assert_eq!(
             arrivals.iter().filter(|a| **a == "buffered").count(),
             QUEUED
+        );
+        // Every buffered request must have been sent by the event loop, from the recovery queue.
+        // One sent from its own task started too late to be buffered: the setup failed, not the
+        // order the test checks.
+        let trigger_senders = trigger_senders.lock().unwrap();
+        assert_eq!(
+            trigger_senders.len(),
+            2,
+            "setup: the MOVED request is sent once and retried once"
+        );
+        let event_loop = trigger_senders[1];
+        let not_buffered = buffered_senders
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|sender| **sender != event_loop)
+            .count();
+        assert_eq!(
+            not_buffered, 0,
+            "setup: {not_buffered} of the {QUEUED} buffered requests were not sent by the event \
+             loop ({event_loop:?}): their tasks started after the recovery"
         );
         let last_buffered = arrivals.iter().rposition(|a| *a == "buffered").unwrap();
         let fresh_before = arrivals[..last_buffered]
@@ -10557,10 +10587,12 @@ mod cluster_async {
 
     /// Sends a SET whose fast-path attempt gets an error that the event loop answers without
     /// retrying and then recovers from, and a second SET as soon as the caller has that error.
-    /// `set_reply(index, replaced)` is the node's reply to the `index`th SET, where `replaced`
-    /// says whether the client has opened connections since the first SET. Returns the caller's
-    /// task, both results, and each SET's sender task and whether `hold2` was holding the event
-    /// loop when the node received it.
+    /// `set_reply(index, replaced, pings)` is the node's reply to the `index`th SET, where
+    /// `replaced` says whether the client has opened connections since the first SET and `pings`
+    /// is how many PINGs the node has received since then (a reconnect's health check sends one).
+    /// `ping_reply(index)` is the node's reply to the `index`th PING since the first SET; PINGs
+    /// before it get `OK`. Returns the caller's task, both results, and each SET's sender task
+    /// and whether `hold2` was holding the event loop when the node received it.
     ///
     /// The node keeps open the window between the error reaching the caller and the event loop
     /// entering recovery. A by-address request (`hold1`) holds the event loop until it has been
@@ -10574,16 +10606,21 @@ mod cluster_async {
     /// has received the error and polled its next SET once, which is when a fast-path send would
     /// reach the node.
     #[allow(clippy::type_complexity)]
-    fn next_command_after_unretried_error(
+    fn next_command_after_unretried_error<S, P>(
         name: &'static str,
         retries: u32,
-        set_reply: impl Fn(usize, bool) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
+        set_reply: S,
+        ping_reply: P,
     ) -> (
         tokio::task::Id,
         RedisResult<Option<String>>,
         RedisResult<Option<String>>,
         Vec<(SenderTask, bool)>,
-    ) {
+    )
+    where
+        S: Fn(usize, bool, usize) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
+        P: Fn(usize) -> RedisResult<Value> + Send + Sync + 'static,
+    {
         // Mock connections open when the node received the first SET.
         let connections_at_first = Arc::new(atomic::AtomicUsize::new(usize::MAX));
         let hold1_started = Arc::new(AtomicBool::new(false));
@@ -10595,6 +10632,8 @@ mod cluster_async {
         let held_until_next_set = Arc::new(AtomicBool::new(false));
         // Each SET: the task that sent it, and whether `hold2` was holding the event loop.
         let sets: Recorded<Vec<(SenderTask, bool)>> = Default::default();
+        // PINGs received since the first SET.
+        let pings = Arc::new(atomic::AtomicUsize::new(0));
 
         let wait_for = |flag: &AtomicBool| {
             let deadline = std::time::Instant::now() + Duration::from_secs(5);
@@ -10615,7 +10654,14 @@ mod cluster_async {
             let holding = holding.clone();
             let held_until_next_set = held_until_next_set.clone();
             let sets = sets.clone();
+            let pings = pings.clone();
             Arc::new(move |cmd: &[u8], _port| {
+                if contains_slice(cmd, b"PING") {
+                    if sets.lock().unwrap().is_empty() {
+                        return Err(Ok(Value::SimpleString("OK".into())));
+                    }
+                    return Err(ping_reply(pings.fetch_add(1, Ordering::SeqCst)));
+                }
                 if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
                     return Err(Ok(create_topology_from_config(
                         name,
@@ -10658,6 +10704,7 @@ mod cluster_async {
                 set_reply(
                     index,
                     connections > connections_at_first.load(Ordering::SeqCst),
+                    pings.load(Ordering::SeqCst),
                 )
             })
         });
@@ -10794,8 +10841,10 @@ mod cluster_async {
     #[serial_test::parallel(otel)]
     fn test_async_cluster_fast_path_closes_before_a_terminal_moved_reply() {
         let name = "fast_path_closes_before_moved_reply";
-        let (caller, first, second, sets) =
-            next_command_after_unretried_error(name, 0, move |_, replaced| {
+        let (caller, first, second, sets) = next_command_after_unretried_error(
+            name,
+            0,
+            move |_, replaced, _| {
                 if replaced {
                     Err(Ok(Value::SimpleString("OK".into())))
                 } else {
@@ -10803,7 +10852,9 @@ mod cluster_async {
                         format!("-MOVED {} {name}:6379\r\n", get_slot(b"key")).as_bytes(),
                     ))
                 }
-            });
+            },
+            |_| Ok(Value::SimpleString("OK".into())),
+        );
 
         assert_eq!(first.unwrap_err().kind(), ErrorKind::Moved);
         assert_eq!(
@@ -10823,29 +10874,83 @@ mod cluster_async {
 
     /// A Reconnect-class error is not retried (#7737): the event loop answers it, then reconnects
     /// the node. As after a circular MOVED, the caller's next command must wait for that
-    /// reconnect instead of taking the fast path while it is being decided.
+    /// reconnect instead of taking the fast path while it is being decided. Here the node passes
+    /// the reconnect's health check (`CheckExisting` PINGs the user connection and keeps it), so
+    /// the next SET is answered `OK` only once the node has seen that PING, and `-ERR early`
+    /// before it.
     #[test]
     #[serial_test::parallel(otel)]
     fn test_async_cluster_fast_path_closes_before_an_unretried_reconnect_error() {
         let name = "fast_path_closes_before_reconnect_error";
-        let (caller, first, second, sets) =
-            next_command_after_unretried_error(name, 1, move |index, _| {
-                if index == 0 {
-                    Err(Err(RedisError::from(std::io::Error::new(
-                        std::io::ErrorKind::ConnectionReset,
-                        "mock connection reset",
-                    ))))
-                } else {
-                    Err(Ok(Value::SimpleString("OK".into())))
-                }
-            });
+        let (caller, first, second, sets) = next_command_after_unretried_error(
+            name,
+            1,
+            move |index, _, pings| match index {
+                0 => Err(Err(RedisError::from(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionReset,
+                    "mock connection reset",
+                )))),
+                _ if pings > 0 => Err(Ok(Value::SimpleString("OK".into()))),
+                _ => Err(parse_redis_value(b"-ERR early\r\n")),
+            },
+            |_| Ok(Value::SimpleString("OK".into())),
+        );
 
         assert_eq!(first.unwrap_err().kind(), ErrorKind::IoError);
-        assert_eq!(second, Ok(Some("OK".to_string())));
+        assert_eq!(
+            second,
+            Ok(Some("OK".to_string())),
+            "the next SET must wait for the reconnect's health check (SETs: {sets:?}, caller \
+             {caller:?})"
+        );
         assert_eq!(sets.len(), 2, "SETs: {sets:?}");
         assert!(
             sets[1].0.is_some() && sets[1].0 != Some(caller) && !sets[1].1,
             "the next SET must be sent by the event loop after the reconnect, got {:?} (caller \
+             {caller:?})",
+            sets[1]
+        );
+    }
+
+    /// As `test_async_cluster_fast_path_closes_before_an_unretried_reconnect_error`, but the
+    /// user connection fails the reconnect's health check, so the reconnect replaces it. The next
+    /// SET must wait for the replacement and be answered on the new connection.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fast_path_closes_before_a_reconnect_that_replaces_the_connection() {
+        let name = "fast_path_closes_before_replacing_reconnect";
+        let (caller, first, second, sets) = next_command_after_unretried_error(
+            name,
+            1,
+            move |index, replaced, _| match index {
+                0 => Err(Err(RedisError::from(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionReset,
+                    "mock connection reset",
+                )))),
+                _ if replaced => Err(Ok(Value::SimpleString("OK".into()))),
+                _ => Err(parse_redis_value(b"-ERR old connection\r\n")),
+            },
+            // The health check's PING fails; the new connection's own setup PINGs pass.
+            |index| {
+                if index == 0 {
+                    parse_redis_value(b"-ERR mock health check failed\r\n")
+                } else {
+                    Ok(Value::SimpleString("OK".into()))
+                }
+            },
+        );
+
+        assert_eq!(first.unwrap_err().kind(), ErrorKind::IoError);
+        assert_eq!(
+            second,
+            Ok(Some("OK".to_string())),
+            "the next SET must wait for the replacement connection (SETs: {sets:?}, caller \
+             {caller:?})"
+        );
+        assert_eq!(sets.len(), 2, "SETs: {sets:?}");
+        assert!(
+            sets[1].0.is_some() && sets[1].0 != Some(caller) && !sets[1].1,
+            "the next SET must be sent by the event loop after the replacement, got {:?} (caller \
              {caller:?})",
             sets[1]
         );
