@@ -732,8 +732,9 @@ pub(crate) struct InnerCore<C> {
     /// Mirror of the event loop's `ConnectionState`, for the caller-task fast path in
     /// [`ClusterConnection::route_on_fast_path`]: set when the event loop enters
     /// `ConnectionState::Recover` (`ClusterConnInner::enter_recovery`, the only way in), or just
-    /// before, by a request that answers its caller with the error that makes the event loop enter
-    /// it (`InnerCore::close_fast_path`); cleared in `ClusterConnInner::poll_flush` once recovery
+    /// before (`InnerCore::close_fast_path`): by a request that answers its caller with the error
+    /// that makes the event loop enter it, and by `ClusterConnInner::poll_complete` as soon as a
+    /// request's result calls for one; cleared in `ClusterConnInner::poll_flush` once recovery
     /// has ended and the requests drained from the recovery queue have been polled. While set,
     /// every request goes through the event loop, so the recovery queue (buffering or fail-fast)
     /// applies to it as before. A gate, not a lock: see `InnerCore::is_in_recovery`.
@@ -935,10 +936,12 @@ where
         self.in_recovery.load(Ordering::Relaxed)
     }
 
-    /// Close the caller-task fast path ahead of a recovery: `ClusterConnInner::enter_recovery`,
-    /// and a request that answers its caller with the error that triggers one, before the event
-    /// loop enters it. The caller's next command then goes through the event loop, as before the
-    /// fast path, so that recovery's queue (buffering or fail-fast) applies to it.
+    /// Close the caller-task fast path ahead of a recovery. Called by
+    /// `ClusterConnInner::enter_recovery` and, before the event loop enters a recovery, by a
+    /// request that answers its caller with the error that triggers it and by
+    /// `ClusterConnInner::poll_complete` when a result calls for it. The caller's next command
+    /// then goes through the event loop, as before the fast path, so that recovery's queue
+    /// (buffering or fail-fast) applies to it.
     fn close_fast_path(&self) {
         self.in_recovery.store(true, Ordering::Relaxed);
     }
@@ -4680,6 +4683,11 @@ where
                     sleep_duration,
                     moved_redirect,
                 } => {
+                    // `poll_flush` enters recovery for this when the poll ends. Close the fast
+                    // path now: this loop goes on polling other requests (a retry sent here can
+                    // wait for its connection), and a caller whose command arrives meanwhile must
+                    // meet that recovery's queue, as it would through the event loop.
+                    self.inner.close_fast_path();
                     poll_flush_action =
                         poll_flush_action.change_state(PollFlushAction::RebuildSlots);
                     let future: Option<
@@ -4721,6 +4729,8 @@ where
                     target,
                     mode,
                 } => {
+                    // As for `RefreshSlots`.
+                    self.inner.close_fast_path();
                     poll_flush_action = poll_flush_action
                         .change_state(PollFlushAction::Reconnect(HashMap::from([(target, mode)])));
                     if let Some(request) = request {
@@ -4728,6 +4738,8 @@ where
                     }
                 }
                 Next::ReconnectToInitialNodes { request } => {
+                    // As for `RefreshSlots`.
+                    self.inner.close_fast_path();
                     poll_flush_action = poll_flush_action
                         .change_state(PollFlushAction::ReconnectFromInitialConnections);
                     if let Some(request) = request {
