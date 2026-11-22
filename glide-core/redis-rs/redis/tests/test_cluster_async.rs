@@ -10160,8 +10160,9 @@ mod cluster_async {
     /// request once in the poll that drains them: all of them are sent before the event loop
     /// returns and clears its recovery flag. The node issues the new requests from new tasks when
     /// it has received 200 of the 300 drained ones, which is past the first 128, and holds the
-    /// event loop for up to 30 ms while they run on the other worker: any of them that took the
-    /// fast path would reach the node then, ahead of the drained requests not yet sent.
+    /// event loop until each of them has been polled once on the other worker. A request that took
+    /// the fast path would reach the node in that poll, ahead of the drained requests not yet
+    /// sent; one that did not is then waiting for the event loop.
     #[test]
     #[serial_test::parallel(otel)]
     fn test_async_cluster_fast_path_drained_requests_are_sent_before_new_ones() {
@@ -10181,6 +10182,9 @@ mod cluster_async {
             Default::default();
         type FreshRequest = tokio::task::JoinHandle<RedisResult<Option<i32>>>;
         let fresh_requests: Recorded<Vec<FreshRequest>> = Default::default();
+        // New requests polled once, and whether all of them were while the event loop was held.
+        let fresh_polled = Arc::new(atomic::AtomicUsize::new(0));
+        let all_fresh_polled = Arc::new(AtomicBool::new(false));
 
         let _handler = MockConnectionBehavior::register_new(name, {
             let moved_fired = moved_fired.clone();
@@ -10190,6 +10194,8 @@ mod cluster_async {
             let after_senders = after_senders.clone();
             let fresh_connection = fresh_connection.clone();
             let fresh_requests = fresh_requests.clone();
+            let fresh_polled = fresh_polled.clone();
+            let all_fresh_polled = all_fresh_polled.clone();
             Arc::new(move |cmd: &[u8], _port| {
                 if contains_slice(cmd, b"PING")
                     || contains_slice(cmd, b"SETNAME")
@@ -10224,27 +10230,53 @@ mod cluster_async {
                     };
                     if issue_fresh {
                         let connection = fresh_connection.get().expect("connection is set");
-                        let mut fresh_requests = fresh_requests.lock().unwrap();
-                        for _ in 0..FRESH {
-                            let mut connection = connection.clone();
-                            fresh_requests.push(tokio::spawn(async move {
-                                redis::cmd("GET")
-                                    .arg("fresh")
-                                    .query_async::<_, Option<i32>>(&mut connection)
-                                    .await
-                            }));
-                        }
-                        drop(fresh_requests);
-                        // Hold the event loop here (this handler runs on its task) while the new
-                        // requests run on the other worker. If the fast path were open, they
-                        // would reach the node now, ahead of the 100 drained requests not yet
-                        // sent; with it closed they wait for the event loop, and this times out.
-                        let deadline = std::time::Instant::now() + Duration::from_millis(30);
-                        while !arrivals.lock().unwrap().contains(&"fresh")
+                        let runtime = tokio::runtime::Handle::current();
+                        // Spawn from a thread outside the runtime, so that every new task is in
+                        // the shared queue: a task spawned on this worker could wait in its LIFO
+                        // slot, which other workers don't take from, until the handler returns.
+                        let spawned: Vec<FreshRequest> = std::thread::scope(|scope| {
+                            scope
+                                .spawn(|| {
+                                    (0..FRESH)
+                                        .map(|_| {
+                                            let mut connection = connection.clone();
+                                            let fresh_polled = fresh_polled.clone();
+                                            runtime.spawn(async move {
+                                                let mut get = redis::cmd("GET");
+                                                get.arg("fresh");
+                                                let mut get =
+                                                    Box::pin(get.query_async::<_, Option<i32>>(
+                                                        &mut connection,
+                                                    ));
+                                                let polled = futures::poll!(&mut get);
+                                                fresh_polled.fetch_add(1, Ordering::SeqCst);
+                                                match polled {
+                                                    std::task::Poll::Ready(value) => value,
+                                                    std::task::Poll::Pending => get.await,
+                                                }
+                                            })
+                                        })
+                                        .collect()
+                                })
+                                .join()
+                                .unwrap()
+                        });
+                        fresh_requests.lock().unwrap().extend(spawned);
+                        // Hold the event loop here (this handler runs on its task) until every
+                        // new request has been polled once on the other worker. If the fast path
+                        // were open, that poll would send it to the node now, ahead of the 100
+                        // drained requests not yet sent; with it closed, it waits for the event
+                        // loop.
+                        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+                        while fresh_polled.load(Ordering::SeqCst) < FRESH
                             && std::time::Instant::now() < deadline
                         {
                             std::thread::sleep(Duration::from_millis(1));
                         }
+                        all_fresh_polled.store(
+                            fresh_polled.load(Ordering::SeqCst) == FRESH,
+                            Ordering::SeqCst,
+                        );
                     }
                 } else if contains_slice(cmd, b"fresh") {
                     arrivals.lock().unwrap().push("fresh");
@@ -10345,6 +10377,11 @@ mod cluster_async {
                 (trigger, buffered, fresh_results, caller_task_sent_after)
             });
 
+        assert!(
+            all_fresh_polled.load(Ordering::SeqCst),
+            "setup: every new request must be polled once while the drain is held, polled {}",
+            fresh_polled.load(Ordering::SeqCst)
+        );
         assert_eq!(trigger, Ok(Some(1)));
         for result in buffered {
             assert_eq!(result.expect("task panicked"), Ok(Some(1)));
