@@ -18,6 +18,7 @@ use utilities::*;
 const APPROX_RESP_HEADER_LEN: usize = 3;
 const KEY_LENGTH: usize = 6;
 const REQUEST_TIMEOUT_MS: u32 = 1000;
+const CONNECTION_TIMEOUT_MS: u32 = 10_000;
 
 #[cfg(test)]
 mod socket_listener {
@@ -371,6 +372,31 @@ mod socket_listener {
         u32::decode_var(buffer).unwrap()
     }
 
+    /// Waits until the server answers PING. Unlike `wait_for_server_to_become_ready` it doesn't
+    /// FLUSHDB, so it is safe to call on the shared server while other tests are using it.
+    async fn wait_for_server_to_answer_ping(address: &ConnectionAddr) {
+        let client = redis::Client::open(redis::ConnectionInfo {
+            addr: address.clone(),
+            redis: redis::RedisConnectionInfo::default(),
+        })
+        .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            if let Ok(mut con) = client
+                .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+                .await
+                && redis::cmd("PING").query_async::<_, String>(&mut con).await.is_ok()
+            {
+                return;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "Server at {address} did not answer PING in time"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    }
+
     fn connect_to_redis(
         addresses: &[ConnectionAddr],
         socket: &UnixStream,
@@ -379,7 +405,7 @@ mod socket_listener {
     ) {
         // Send the server address
         const CALLBACK_INDEX: u32 = 0;
-        let connection_request = create_connection_request(
+        let mut connection_request = create_connection_request(
             addresses,
             &TestConfiguration {
                 use_tls: use_tls.to_bool(),
@@ -388,6 +414,9 @@ mod socket_listener {
                 ..Default::default()
             },
         );
+        // The default connection timeout (2000 ms) is too tight when many test processes
+        // compete for CPU; a ready server can then still time out during the handshake.
+        connection_request.connection_timeout = CONNECTION_TIMEOUT_MS;
         let approx_message_length =
             APPROX_RESP_HEADER_LEN + connection_request.compute_size() as usize;
         let mut buffer = Vec::with_capacity(approx_message_length);
@@ -454,6 +483,9 @@ mod socket_listener {
             .as_ref()
             .map(|server| server.get_client_addr())
             .unwrap_or(get_shared_server_address(use_tls.to_bool()));
+        // The server process is spawned without waiting for it to listen. Connecting before it
+        // does makes the socket listener answer the connection request with a closing error.
+        block_on_all(wait_for_server_to_answer_ping(&address));
         let socket = setup_socket(use_tls, socket_path, &[address], ClusterMode::Disabled);
         ServerTestBasics { server, socket }
     }
@@ -568,6 +600,7 @@ mod socket_listener {
         ));
         close_socket(&socket_path);
         let server = Arc::new(RedisServer::new(ServerType::Tcp { tls: false }));
+        block_on_all(wait_for_server_to_answer_ping(&server.get_client_addr()));
 
         thread::scope(|scope| {
             for i in 0..20 {
