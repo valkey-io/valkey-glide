@@ -10074,13 +10074,20 @@ mod cluster_async {
                 let mut probe_connection = connection.clone();
                 let probe_failed = probe_failed.clone();
                 async move {
-                    let mut get = cmd("GET");
-                    get.arg("in_flight");
-                    let mut get = Box::pin(get.query_async::<_, Option<i32>>(&mut connection));
+                    let mut get_cmd = cmd("GET");
+                    get_cmd.arg("in_flight");
+                    let mut get = Box::pin(get_cmd.query_async::<_, Option<i32>>(&mut connection));
                     // This poll sends the fast-path attempt, waits in the node's handler until
                     // the node replies during recovery, and hands the error to the event loop.
                     let polled = futures::poll!(&mut get);
                     assert!(polled.is_pending());
+                    // The request now waits for the event loop, which holds it until the refresh
+                    // ends: for the watchdog it is Queued again, as an event-loop request is.
+                    assert_eq!(
+                        get_cmd.watchdog_phase.load(Ordering::Acquire),
+                        redis::PHASE_QUEUED,
+                        "a fast-path request handed to the event loop must be marked Queued"
+                    );
                     let probe = probe_connection
                         .route_command(
                             cmd("GET").arg("probe"),

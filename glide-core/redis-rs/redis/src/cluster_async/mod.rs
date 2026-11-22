@@ -449,7 +449,15 @@ where
                     .store(crate::cmd::PHASE_SENT, Ordering::Release);
                 match conn.req_packed_command(cmd).await {
                     Ok(value) => return Ok(value),
-                    Err(err) => first_attempt_error = Some((address.into(), err)),
+                    Err(err) => {
+                        // The request now waits for the event loop, which may hold it until a
+                        // recovery ends and then retry it on its own clone of the command: mark
+                        // the caller's command Queued again, as it is for every event-loop
+                        // request, so a timeout while it waits is not reported as Sent.
+                        cmd.watchdog_phase
+                            .store(crate::cmd::PHASE_QUEUED, Ordering::Release);
+                        first_attempt_error = Some((address.into(), err));
+                    }
                 }
             }
         }
