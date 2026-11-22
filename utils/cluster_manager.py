@@ -884,6 +884,45 @@ def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
         return None
 
 
+# Number of failed CLUSTER SLOTS polls (1s apart) between diagnostic/recovery rounds.
+TOPOLOGY_RETRY_ROUND_POLLS = 20
+
+
+def _best_effort_cli_output(cmd_args: List[str]) -> str:
+    """Run a diagnostic/recovery CLI command, returning its output or an error text. Never raises."""
+    try:
+        output = redis_cli_run_command(cmd_args)
+        return "<timed out>" if output is None else output
+    except Exception as e:
+        return f"<failed: {e}>"
+
+
+def _topology_retry_round(
+    server: Server,
+    servers: List[Server],
+    cli_base_args: List[str],
+    cluster_nodes_cmd_args: List[str],
+    attempt: int,
+):
+    """
+    Log CLUSTER NODES of a node that still doesn't list all nodes in CLUSTER SLOTS, and re-introduce
+    servers that are entirely absent from its view. Servers that are present (e.g. a replica that is still
+    syncing, or in handshake) are only logged, since CLUSTER MEET cannot speed them up.
+    A MEET of a known node only creates a temporary handshake node that is dropped once the PONG shows a
+    known node ID, so it is harmless. Failures are logged and ignored.
+    """
+    nodes_output = _best_effort_cli_output(cluster_nodes_cmd_args)
+    logging.warning(f"Server {server} does not know all hosts after {attempt} polls. CLUSTER NODES:\n{nodes_output}")
+    for other in servers:
+        if other is server or re.search(rf":{other.port}(@|\s)", nodes_output):
+            continue
+        logging.warning(f"Server {server} does not list {other}, sending CLUSTER MEET")
+        meet_output = _best_effort_cli_output(
+            [*cli_base_args, "cluster", "meet", other.cluster_create_address, str(other.port)]
+        )
+        logging.debug(f"CLUSTER MEET {other} result: {meet_output}")
+
+
 def wait_for_all_topology_views(
     servers: List[Server],
     cluster_folder: str,
@@ -903,30 +942,34 @@ def wait_for_all_topology_views(
 
         # Server is ready when CLUSTER SLOTS returns
         # node IDs for the expected number of nodes.
-        cluster_slots_cmd_args = [
+        cli_base_args = [
             get_cli_command(),
             "-h",
             server.host,
             "-p",
             str(server.port),
             *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
-            "cluster",
-            "slots",
         ]
+        cluster_slots_cmd_args = [*cli_base_args, "cluster", "slots"]
 
         logging.debug(f"Executing: {cluster_slots_cmd_args}")
 
-        for _ in range(81):
+        cluster_nodes_diag_cmd_args = [*cli_base_args, "cluster", "nodes"]
+
+        for attempt in range(81):
             cluster_slots_output = redis_cli_run_command(cluster_slots_cmd_args)
             if cluster_slots_output is not None and (
                 len(set(CLUSTER_SLOTS_NODE_ID_REGEX.findall(cluster_slots_output))) == len(servers)
             ):
                 break
+            if attempt > 0 and attempt % TOPOLOGY_RETRY_ROUND_POLLS == 0:
+                _topology_retry_round(server, servers, cli_base_args, cluster_nodes_diag_cmd_args, attempt)
             time.sleep(1)
         else:
             raise Exception(
                 f"Timeout exceeded trying to wait for server {server} to know all hosts.\n"
-                f"Current CLUSTER SLOTS output:\n{cluster_slots_output}"
+                f"Current CLUSTER SLOTS output:\n{cluster_slots_output}\n"
+                f"Current CLUSTER NODES output:\n{_best_effort_cli_output(cluster_nodes_diag_cmd_args)}"
             )
 
         # [2] Determine if server is primary
