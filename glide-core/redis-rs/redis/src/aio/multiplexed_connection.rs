@@ -778,6 +778,9 @@ where
                 let fut = this
                     .coalesce_yield
                     .get_or_insert_with(|| Box::pin(tokio::task::yield_now()));
+                // A producer that sends during the yield wakes this task before the yield's
+                // deferred wake fires: the stored `YieldNow` has already yielded, so the yield ends
+                // there, and the deferred wake later costs one spurious writer poll.
                 if fut.as_mut().poll(cx).is_pending() {
                     return Poll::Pending;
                 }

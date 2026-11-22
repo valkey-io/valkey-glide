@@ -423,13 +423,14 @@ where
         };
         if let Some((address, conn)) = fast_path {
             let conn = match conn.peek() {
-                // The usual case: the connection is established.
+                // The usual case: the connection's shared future has been polled before.
                 Some(conn) => Some(conn.clone()),
-                // Still connecting: wait for it as the event loop's `get_connection` would. An
-                // event-loop request waiting here would not be sent until a recovery that began
-                // meanwhile had ended, so check the gate again (and, if recovery began, let the
-                // event loop route the request; its lookup is primary-only, so a second lookup
-                // changes no round-robin state).
+                // Not polled yet: every connection in the map until its first use. The map holds
+                // established connections wrapped in a ready future (see
+                // `ConnectionDetails::into_future`), so this await completes at once. The gate is
+                // read again after it, which only narrows the same advisory race as the first
+                // read; if recovery began, the event loop routes the request (its lookup is
+                // primary-only, so a second lookup changes no round-robin state).
                 None => {
                     let conn = conn.await;
                     (!self.inner_core.is_in_recovery()).then_some(conn)
@@ -4911,6 +4912,8 @@ where
 
         match self.as_mut().poll_recover(cx) {
             Poll::Pending => {
+                // Only `Recover` is pending, and every way into it closes the fast path.
+                debug_assert!(self.inner.is_in_recovery());
                 // Buffer during fast reconnects (circular MOVED) and slot refresh paths.
                 // For ReconnectToInitialNodes, fail fast to preserve throughput.
                 if matches!(
