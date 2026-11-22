@@ -3435,10 +3435,19 @@ pub(crate) mod shared_client_tests {
             let mut select_cmd = redis::Cmd::new();
             select_cmd.arg("SELECT").arg("5");
 
+            // Client IDs are per node, so in cluster mode pin CLIENT INFO to a single node.
+            // With random routing, IDs from different nodes can coincide or differ spuriously.
+            let client_info_route = use_cluster.then(|| {
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    0,
+                    SlotAddr::Master,
+                )))
+            });
+
             // Verify initial connection is to database 0
             let initial_client_info_response = test_basics
                 .client
-                .send_command(&mut client_info_cmd, None)
+                .send_command(&mut client_info_cmd, client_info_route.clone())
                 .await
                 .unwrap();
 
@@ -3467,7 +3476,7 @@ pub(crate) mod shared_client_tests {
             // Verify we're now on database 5
             let post_select_client_info_response = test_basics
                 .client
-                .send_command(&mut client_info_cmd, None)
+                .send_command(&mut client_info_cmd, client_info_route.clone())
                 .await
                 .unwrap();
 
@@ -3489,7 +3498,7 @@ pub(crate) mod shared_client_tests {
             // Try to send another command - this should trigger reconnection
             let res = test_basics
                 .client
-                .send_command(&mut client_info_cmd, None)
+                .send_command(&mut client_info_cmd, client_info_route.clone())
                 .await;
             match res {
                 Err(err) => {
@@ -3517,19 +3526,32 @@ pub(crate) mod shared_client_tests {
                     assert!(client_info.contains("db=5"));
                 }
                 Ok(response) => {
-                    // Command succeeded — reconnection completed within the timeout.
-                    // Extract new client ID and verify it changed (new connection).
-                    let new_client_info = match response {
+                    // Command succeeded. CLIENT KILL is processed asynchronously by the server,
+                    // so the command may have been served by the old connection right before it
+                    // closed. Poll until the new connection reports a different client ID.
+                    let parse = |response: Value| match response {
                         Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
                         Value::VerbatimString { text, .. } => text,
                         _ => panic!("Unexpected CLIENT INFO response type: {:?}", response),
                     };
-                    let new_client_id = utilities::extract_client_id(&new_client_info)
-                        .expect("Failed to extract new client ID");
-                    assert_ne!(
-                        initial_client_id, new_client_id,
-                        "Client ID should change after reconnection if command succeeds"
-                    );
+                    let mut new_client_info = parse(response);
+                    if utilities::extract_client_id(&new_client_info)
+                        .expect("Failed to extract new client ID")
+                        == initial_client_id
+                    {
+                        new_client_info = retry(|| async {
+                            let mut client = test_basics.client.clone();
+                            let mut cmd = client_info_cmd.clone();
+                            let response = client
+                                .send_command(&mut cmd, client_info_route.clone())
+                                .await
+                                .ok()?;
+                            let info = parse(response);
+                            let id = utilities::extract_client_id(&info)?;
+                            (id != initial_client_id).then_some(info)
+                        })
+                        .await;
+                    }
                     // Check that the database ID is still 5 (from SELECT command)
                     assert!(new_client_info.contains("db=5"));
                 }
