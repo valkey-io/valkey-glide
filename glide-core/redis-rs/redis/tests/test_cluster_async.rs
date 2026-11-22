@@ -9955,6 +9955,11 @@ mod cluster_async {
     /// treated like an event-loop attempt in flight: retried after recovery. It is not a new
     /// request, so the recovery queue must not buffer, cap or fail it (the queue cap here is 0,
     /// which fails every new request arriving during recovery).
+    ///
+    /// The caller's task hands the error to the event loop, then sends a new request (`probe`)
+    /// through the same channel. The event loop takes messages in order, so when the probe is
+    /// failed as a new request arriving during recovery, the error has reached the event loop
+    /// during that recovery too. The refresh is released only then.
     #[test]
     #[serial_test::parallel(otel)]
     fn test_async_cluster_fast_path_error_during_recovery_is_retried_not_queued() {
@@ -10010,7 +10015,9 @@ mod cluster_async {
                         // The fast-path attempt: on the wire before recovery, answered during it.
                         in_flight_sent.store(true, Ordering::SeqCst);
                         wait_for(&refresh_blocked);
-                        // Let the event loop enter `Recover` (it spawns the refresh task first).
+                        // Margin only: the event loop enters `Recover` in the poll that spawns the
+                        // refresh task, before it takes another message, so the order the probe
+                        // checks does not depend on this pause.
                         std::thread::sleep(Duration::from_millis(50));
                         return Err(parse_redis_value(b"-TRYAGAIN mock\r\n"));
                     }
@@ -10040,15 +10047,31 @@ mod cluster_async {
             .block_on(client.get_async_generic_connection())
             .expect("failed to get async connection");
 
-        let (caller, in_flight, trigger) = runtime.block_on(async move {
+        let (caller, in_flight, trigger, probe) = runtime.block_on(async move {
+            let probe_failed: Recorded<Option<RedisResult<Value>>> = Default::default();
             let in_flight = tokio::spawn({
                 let mut connection = connection.clone();
+                let mut probe_connection = connection.clone();
+                let probe_failed = probe_failed.clone();
                 async move {
-                    let value = cmd("GET")
-                        .arg("in_flight")
-                        .query_async::<_, Option<i32>>(&mut connection)
+                    let mut get = cmd("GET");
+                    get.arg("in_flight");
+                    let mut get = Box::pin(get.query_async::<_, Option<i32>>(&mut connection));
+                    // This poll sends the fast-path attempt, waits in the node's handler until
+                    // the node replies during recovery, and hands the error to the event loop.
+                    let polled = futures::poll!(&mut get);
+                    assert!(polled.is_pending());
+                    let probe = probe_connection
+                        .route_command(
+                            cmd("GET").arg("probe"),
+                            RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                                host: name.to_string(),
+                                port: 6379,
+                            }),
+                        )
                         .await;
-                    (tokio::task::id(), value)
+                    *probe_failed.lock().unwrap() = Some(probe);
+                    (tokio::task::id(), get.await)
                 }
             });
             let wait_until = |flag: Arc<AtomicBool>, what: &'static str| async move {
@@ -10079,8 +10102,16 @@ mod cluster_async {
                 "the MOVED reply should start a slot refresh",
             )
             .await;
-            // The fast-path error reaches the event loop while the refresh is blocked.
-            tokio::time::sleep(Duration::from_millis(200)).await;
+            // Release the refresh once the probe, sent after the fast-path error, has been
+            // failed as a new request during recovery.
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while probe_failed.lock().unwrap().is_none() {
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+            })
+            .await
+            .expect("the probe should be answered during recovery");
+            let probe = probe_failed.lock().unwrap().take().unwrap();
             release_refresh.store(true, Ordering::SeqCst);
 
             let (caller, in_flight) = tokio::time::timeout(Duration::from_secs(10), in_flight)
@@ -10091,9 +10122,14 @@ mod cluster_async {
                 .await
                 .expect("MOVED request timed out")
                 .expect("task panicked");
-            (caller, in_flight, trigger)
+            (caller, in_flight, trigger, probe)
         });
 
+        let probe_error = probe.expect_err("setup: the probe must arrive during recovery");
+        assert!(
+            probe_error.to_string().contains("Connection in recovery"),
+            "setup: the probe must be failed by the recovery queue, got {probe_error}"
+        );
         assert_eq!(
             in_flight,
             Ok(Some(2)),
