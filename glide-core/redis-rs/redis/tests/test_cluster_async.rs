@@ -8882,15 +8882,35 @@ mod cluster_async {
         let connection = cluster.async_connection(None).await;
 
         let request_count = 10_000;
+        // Route each SET by address to its slot's primary. A key-routed SET would take the
+        // caller-task fast path and never use the channel; a by-address one goes through the
+        // event loop, and the node is the one the key-routed SET would reach.
+        let routes: Vec<_> = (0..request_count)
+            .map(|i| {
+                let key = format!("key:{}", i);
+                let address = connection
+                    .address_for_slot(get_slot(key.as_bytes()))
+                    .expect("every slot has a primary");
+                let (host, port) = address.rsplit_once(':').expect("address is host:port");
+                let routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                    host: host.to_string(),
+                    port: port.parse().expect("port is a number"),
+                });
+                (key, routing)
+            })
+            .collect();
         let start = std::time::Instant::now();
 
         // Spawn many concurrent operations (SET) that go to pending_requests channel
-        let tasks: Vec<_> = (0..request_count)
-            .map(|i| {
+        let tasks: Vec<_> = routes
+            .into_iter()
+            .enumerate()
+            .map(|(i, (key, routing))| {
                 let mut connection = connection.clone();
                 tokio::spawn(async move {
-                    let key = format!("key:{}", i);
-                    let _: () = connection.set(&key, i).await?;
+                    connection
+                        .route_command(cmd("SET").arg(&key).arg(i), routing)
+                        .await?;
                     Ok::<_, RedisError>(())
                 })
             })
