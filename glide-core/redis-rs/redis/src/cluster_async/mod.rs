@@ -896,6 +896,8 @@ where
     ///
     /// Only a [`SingleNodeRoutingInfo::SpecificNode`] route qualifies, and only when:
     /// - the event loop is not in recovery (`in_recovery`);
+    /// - no writer (a slot refresh, a connection refresh, a MOVED slot update) holds the slot
+    ///   map's lock or waits for it;
     /// - its lookup is primary-only (`route_uses_node_rotation`): read-from-replica round
     ///   robin advances its index with one optimistic compare-exchange, exact only on the single
     ///   event-loop task, so concurrent callers would skew the rotation;
@@ -915,7 +917,12 @@ where
         if self.is_in_recovery() {
             return None;
         }
-        let conn_lock = self.conn_lock.read();
+        // Never wait for the slot map's lock on the caller's task: while a writer (a slot
+        // refresh, a connection refresh, a MOVED slot update) holds it, or is waiting for it,
+        // `read()` would block the caller's worker thread. The event loop's `get_connection`
+        // waits for it instead, as for every request before the fast path. parking_lot's
+        // `try_read` fails only then, so an uncontended lookup is unchanged.
+        let conn_lock = self.conn_lock.try_read()?;
         if conn_lock.route_uses_node_rotation(route) {
             return None;
         }
@@ -8019,6 +8026,40 @@ pub(super) mod refresh_task_resolution_tests {
 
         core.in_recovery.store(false, Ordering::SeqCst);
         assert!(core.fast_path_connection(&routing).is_some());
+    }
+
+    /// While a writer holds the slot map's write lock, the fast path declines at once
+    /// instead of blocking the caller's thread; the request goes to the event loop.
+    #[tokio::test]
+    async fn fast_path_connection_declines_while_the_slot_map_is_write_locked() {
+        let address = "resolved-node:6381";
+        let core = core_with_single_node_slot_map(address);
+        complete_refresh(&core, address, 6381);
+        let routing = specific_node_routing(100);
+
+        let write_guard = core.conn_lock.write();
+        let (result_tx, result_rx) = std::sync::mpsc::channel();
+        let lookup_core = core.clone();
+        let lookup_routing = routing.clone();
+        let lookup_thread = std::thread::spawn(move || {
+            let found = lookup_core
+                .fast_path_connection(&lookup_routing)
+                .map(|(address, _)| address);
+            result_tx.send(found).unwrap();
+        });
+        let locked_result = result_rx.recv_timeout(Duration::from_secs(2));
+        drop(write_guard);
+        lookup_thread.join().unwrap();
+        assert_eq!(
+            locked_result,
+            Ok(None),
+            "the lookup must not wait for the write lock"
+        );
+
+        let (found_address, _) = core
+            .fast_path_connection(&routing)
+            .expect("an uncontended lookup takes the fast path");
+        assert_eq!(found_address, address);
     }
 
     #[tokio::test]
