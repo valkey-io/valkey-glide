@@ -801,6 +801,11 @@ where
             let this = self.as_mut().project();
             *this.unflushed = 0;
             *this.coalesce_yielded = false;
+            // A yield begun for this flush and then skipped (the batch grew to
+            // `COALESCE_MAX_BATCH` meanwhile, or replies read under backpressure left no other
+            // request outstanding) has already yielded: reused, it would let the next small flush
+            // through without yielding.
+            *this.coalesce_yield = None;
             self.poll_read(cx)
         } else {
             // Flush is blocked (TCP send buffer full). Drain incoming responses
@@ -3599,6 +3604,83 @@ mod tests {
             assert_eq!(request.await.unwrap(), Ok(Value::Okay));
         }
         assert_eq!(*handles.flushes.lock().unwrap(), vec![1, 2]);
+
+        drop(pipeline);
+        let _ = driver.await;
+    }
+
+    /// A yield begun before a small flush, skipped because the batch reached `COALESCE_MAX_BATCH`
+    /// while it ran, does not carry over: the next small flush yields again and a sender that
+    /// becomes runnable meanwhile joins it.
+    #[tokio::test]
+    async fn test_small_flush_after_a_full_batch_yields_again() {
+        if !coalesce_enabled() {
+            return; // GLIDE_PIPELINE_COALESCE=0 in this environment
+        }
+        let (sink, handles) = FlushRecordingSink::new();
+        let (pipeline, driver) = Pipeline::new_with_buffer_size(sink, None, None, 50);
+        let driver = tokio::spawn(driver);
+        let wait_until = |held: usize, flushes: usize| {
+            let handles = &handles;
+            async move {
+                tokio::time::timeout(Duration::from_secs(5), async {
+                    while handles.held_replies() < held
+                        || handles.flushes.lock().unwrap().len() < flushes
+                    {
+                        tokio::time::sleep(Duration::from_millis(1)).await;
+                    }
+                })
+                .await
+                .expect("the commands should reach the sink")
+            }
+        };
+        let mut requests = Vec::new();
+
+        // An outstanding request: flushed alone (nothing else in flight), reply held.
+        handles.hold_replies();
+        requests.push(tokio::spawn(send_ping(pipeline.clone())));
+        wait_until(1, 1).await;
+
+        // A second request starts a yield; while it runs, 16 more are enqueued, so the flush
+        // carries 17 and skips the rest of the yield.
+        let _ = handles.on_send.notified().now_or_never();
+        let burst = tokio::spawn({
+            let pipeline = pipeline.clone();
+            let on_send = handles.on_send.clone();
+            async move {
+                on_send.notified().await;
+                (0..COALESCE_MAX_BATCH)
+                    .map(|_| tokio::spawn(send_ping(pipeline.clone())))
+                    .collect::<Vec<_>>()
+            }
+        });
+        requests.push(tokio::spawn(send_ping(pipeline.clone())));
+        requests.extend(burst.await.unwrap());
+        wait_until(2 + COALESCE_MAX_BATCH, 2).await;
+
+        // The next small flush yields, so a sender that becomes runnable only after another task
+        // hop (here a `yield_now`) still joins it.
+        let _ = handles.on_send.notified().now_or_never();
+        let late = tokio::spawn({
+            let pipeline = pipeline.clone();
+            let on_send = handles.on_send.clone();
+            async move {
+                on_send.notified().await;
+                tokio::task::yield_now().await;
+                send_ping(pipeline).await
+            }
+        });
+        requests.push(tokio::spawn(send_ping(pipeline.clone())));
+        wait_until(4 + COALESCE_MAX_BATCH, 3).await;
+        handles.release_replies();
+
+        for request in requests.into_iter().chain([late]) {
+            assert_eq!(request.await.unwrap(), Ok(Value::Okay));
+        }
+        assert_eq!(
+            *handles.flushes.lock().unwrap(),
+            vec![1, 1 + COALESCE_MAX_BATCH, 2]
+        );
 
         drop(pipeline);
         let _ = driver.await;
