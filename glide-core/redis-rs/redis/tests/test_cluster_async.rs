@@ -10914,21 +10914,34 @@ mod cluster_async {
 
     /// As `test_async_cluster_fast_path_closes_before_an_unretried_reconnect_error`, but the
     /// user connection fails the reconnect's health check, so the reconnect replaces it. The next
-    /// SET must wait for the replacement and be answered on the new connection.
+    /// SET must wait for the replacement and be answered on a different mock connection than the
+    /// first SET.
     #[test]
     #[serial_test::parallel(otel)]
     fn test_async_cluster_fast_path_closes_before_a_reconnect_that_replaces_the_connection() {
         let name = "fast_path_closes_before_replacing_reconnect";
+        // The mock connection that received the first SET. Only another connection may answer
+        // the next SET: a new management connection alone would not do.
+        let first_set_connection = atomic::AtomicUsize::new(usize::MAX);
         let (caller, first, second, sets) = next_command_after_unretried_error(
             name,
             1,
-            move |index, replaced, _| match index {
-                0 => Err(Err(RedisError::from(std::io::Error::new(
-                    std::io::ErrorKind::ConnectionReset,
-                    "mock connection reset",
-                )))),
-                _ if replaced => Err(Ok(Value::SimpleString("OK".into()))),
-                _ => Err(parse_redis_value(b"-ERR old connection\r\n")),
+            move |index, _, _| {
+                let connection =
+                    handler_connection_id().expect("the handler runs on a mock connection");
+                match index {
+                    0 => {
+                        first_set_connection.store(connection, Ordering::SeqCst);
+                        Err(Err(RedisError::from(std::io::Error::new(
+                            std::io::ErrorKind::ConnectionReset,
+                            "mock connection reset",
+                        ))))
+                    }
+                    _ if connection != first_set_connection.load(Ordering::SeqCst) => {
+                        Err(Ok(Value::SimpleString("OK".into())))
+                    }
+                    _ => Err(parse_redis_value(b"-ERR old connection\r\n")),
+                }
             },
             // The health check's PING fails; the new connection's own setup PINGs pass.
             |index| {

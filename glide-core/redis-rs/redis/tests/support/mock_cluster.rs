@@ -377,8 +377,23 @@ pub fn respond_startup_with_config(
 }
 
 #[cfg(feature = "cluster-async")]
+thread_local! {
+    static HANDLER_CONNECTION_ID: std::cell::Cell<Option<usize>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// The id of the mock connection whose handler is running on this thread, for a handler that
+/// must tell connections apart: a replaced connection gets a new id. Set only while an async
+/// `req_packed_command` runs the handler.
+#[cfg(feature = "cluster-async")]
+pub fn handler_connection_id() -> Option<usize> {
+    HANDLER_CONNECTION_ID.with(|id| id.get())
+}
+
+#[cfg(feature = "cluster-async")]
 impl aio::ConnectionLike for MockConnection {
     fn req_packed_command<'a>(&'a mut self, cmd: &'a redis::Cmd) -> RedisFuture<'a, Value> {
+        let previous = HANDLER_CONNECTION_ID.with(|id| id.replace(Some(self.id)));
         let packed = cmd.get_packed_command();
         // A command sent after `ASKING` in the same write: the handler answers `ASKING`, and
         // its reply is dropped as `MultiplexedConnection` does, then answers the command.
@@ -400,6 +415,7 @@ impl aio::ConnectionLike for MockConnection {
         let result = result
             .map_err(|err| err.and_then(|v| v.extract_error()))
             .expect_err("Handler did not specify a response");
+        HANDLER_CONNECTION_ID.with(|id| id.set(previous));
         Box::pin(async move {
             tokio::task::consume_budget().await;
             result
