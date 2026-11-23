@@ -646,10 +646,13 @@ class BaseClient(CoreCommands):
         self._config = config
         self._is_closed = False
 
+        self._create_core_client()
+
+        # Register the hook only after a successful connect. A failed create()
+        # never returns the client, so nothing can close it, and every later
+        # fork would retry the failed connect in the child.
         if hasattr(os, "register_at_fork"):
             os.register_at_fork(after_in_child=self._create_core_client)
-
-        self._create_core_client()
 
         return self
 
