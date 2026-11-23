@@ -1422,12 +1422,8 @@ mod compression_tests {
     fn decompress_reply_for_cmd_returns_the_size_limit() {
         let manager = size_limited_manager();
         let oversized = compressed(&manager, &"A".repeat(200).into_bytes());
-        let error = decompress_reply_for_cmd(
-            oversized,
-            &command(&["GET", "key"]),
-            Some(&manager),
-        )
-        .expect_err("oversized decompressed value should return the size limit");
+        let error = decompress_reply_for_cmd(oversized, &command(&["GET", "key"]), Some(&manager))
+            .expect_err("oversized decompressed value should return the size limit");
         assert_eq!(error.max_size, 100);
         assert_eq!(error.decompressed_size, 200);
     }

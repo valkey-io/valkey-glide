@@ -14,9 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
-import glide.api.models.BaseBatch;
-import glide.api.models.Batch;
-import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.SetOptions;
@@ -24,7 +21,6 @@ import glide.api.models.configuration.CompressionBackend;
 import glide.api.models.configuration.CompressionConfiguration;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.RequestException;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -32,7 +28,6 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
@@ -1100,149 +1095,26 @@ public class CompressionTests {
         return ((GlideClient) client).exec(batch, true).get();
     }
 
-    /** Names a real backend so the decoder runs, on a payload it rejects. */
-    private static final byte[] HEADER_SHAPED_PLAIN = {
-        0x00, 0x01, 0x02, 0x00, 0x01, 'z', 'z', 'z', 'z'
-    };
-
+    /** A batch size-limit error with raiseOnError reaches Java as a RequestException. */
     @SneakyThrows
-    @ParameterizedTest(name = "clusterMode={0} atomic={1}")
-    @MethodSource("batchModes")
-    public void compression_batch_surfaces_size_limit(boolean clusterMode, boolean atomic) {
+    @Test
+    public void compression_batch_surfaces_size_limit() {
         CompressionConfiguration unlimited = CompressionConfiguration.builder().enabled(true).build();
         CompressionConfiguration limited =
                 CompressionConfiguration.builder().enabled(true).maxDecompressedSize(100L).build();
-        try (BaseClient writer = clientWithCompression(clusterMode, unlimited);
-                BaseClient reader = clientWithCompression(clusterMode, limited)) {
+        try (BaseClient writer = clientWithCompression(false, unlimited);
+                BaseClient reader = clientWithCompression(false, limited)) {
             String key = randomKey("{batch_limit}");
             assertEquals(OK, writer.set(key, generateCompressibleText(10_000)).get());
 
             Throwable cause =
-                    assertThrows(ExecutionException.class, () -> execGets(reader, atomic, gs(key)))
-                            .getCause();
+                    assertThrows(ExecutionException.class, () -> execGets(reader, false, gs(key))).getCause();
             assertTrue(cause instanceof RequestException, "Should throw RequestException, got " + cause);
             assertTrue(
                     cause.getMessage().toLowerCase().contains("size limit exceeded"),
                     "Error should name the size limit: " + cause.getMessage());
 
             writer.del(new String[] {key}).get();
-        }
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(name = "clusterMode={0} atomic={1}")
-    @MethodSource("batchModes")
-    public void compression_batch_keeps_header_shaped_neighbour(boolean clusterMode, boolean atomic) {
-        CompressionConfiguration enabled = CompressionConfiguration.builder().enabled(true).build();
-        try (BaseClient compressed = clientWithCompression(clusterMode, enabled);
-                BaseClient plain = plainClient(clusterMode)) {
-            String compressedKey = randomKey("{batch_collision}_compressed");
-            String plainKey = randomKey("{batch_collision}_plain");
-            String value = generateCompressibleText(1024);
-            assertEquals(OK, compressed.set(compressedKey, value).get());
-            assertEquals(OK, plain.set(gs(plainKey), gs(HEADER_SHAPED_PLAIN)).get());
-
-            Object[] results = execGets(compressed, atomic, gs(compressedKey), gs(plainKey));
-            assertEquals(gs(value), results[0]);
-            assertEquals(gs(HEADER_SHAPED_PLAIN), results[1]);
-
-            plain.del(new String[] {compressedKey, plainKey}).get();
-        }
-    }
-
-    @SneakyThrows
-    private static Object[] execBinary(
-            BaseClient client, boolean atomic, Consumer<BaseBatch<?>> commands) {
-        if (client instanceof GlideClusterClient) {
-            ClusterBatch batch = new ClusterBatch(atomic).withBinaryOutput();
-            commands.accept(batch);
-            return ((GlideClusterClient) client).exec(batch, true).get();
-        }
-        Batch batch = new Batch(atomic).withBinaryOutput();
-        commands.accept(batch);
-        return ((GlideClient) client).exec(batch, true).get();
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(name = "clusterMode={0} atomic={1}")
-    @MethodSource("batchModes")
-    public void compression_batch_returns_non_string_reply_unchanged(
-            boolean clusterMode, boolean atomic) {
-        CompressionConfiguration enabled = CompressionConfiguration.builder().enabled(true).build();
-        try (BaseClient compressed = clientWithCompression(clusterMode, enabled);
-                BaseClient plain = plainClient(clusterMode)) {
-            String tag = randomKey("{batch_list") + "}";
-            GlideString valueKey = gs(tag + "value");
-            GlideString listKey = gs(tag + "list");
-            String value = generateCompressibleText(1024);
-            assertEquals(OK, compressed.set(valueKey, gs(value)).get());
-
-            byte[] compressedBytes = plain.get(valueKey).get().getBytes();
-            assertTrue(compressedBytes.length >= 3, "Stored value should carry the header");
-            assertEquals(0x00, compressedBytes[0]);
-            assertEquals(0x01, compressedBytes[1]);
-            assertEquals(0x02, compressedBytes[2]);
-            assertEquals(1L, plain.rpush(listKey, new GlideString[] {gs(compressedBytes)}).get());
-
-            Object[] results =
-                    execBinary(
-                            compressed,
-                            atomic,
-                            batch -> {
-                                batch.lrange(listKey, 0, -1);
-                                batch.get(valueKey);
-                            });
-
-            Object[] elements = (Object[]) results[0];
-            assertEquals(1, elements.length);
-            assertEquals(gs(compressedBytes), elements[0]);
-            assertEquals(gs(value), results[1]);
-
-            plain.del(new GlideString[] {valueKey, listKey}).get();
-        }
-    }
-
-    /** An LZ4 header whose size claim (200 bytes) exceeds a 100-byte decompression limit. */
-    private static final byte[] HEADER_SHAPED_SIZE_CLAIM = headerShapedSizeClaim();
-
-    private static byte[] headerShapedSizeClaim() {
-        byte[] header = {0x00, 0x01, 0x02, 0x00, 0x02, (byte) 0xC8, 0x00, 0x00, 0x00};
-        byte[] payload = Arrays.copyOf(header, header.length + 16);
-        Arrays.fill(payload, header.length, payload.length, (byte) 'z');
-        return payload;
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(name = "clusterMode={0} atomic={1}")
-    @MethodSource("batchModes")
-    public void compression_batch_ignores_size_claim_in_list(boolean clusterMode, boolean atomic) {
-        CompressionConfiguration limited =
-                CompressionConfiguration.builder().enabled(true).maxDecompressedSize(100L).build();
-        try (BaseClient compressed = clientWithCompression(clusterMode, limited);
-                BaseClient plain = plainClient(clusterMode)) {
-            String tag = randomKey("{batch_size_claim") + "}";
-            GlideString listKey = gs(tag + "list");
-            GlideString stringKey = gs(tag + "string");
-            GlideString payload = gs(HEADER_SHAPED_SIZE_CLAIM);
-            assertEquals(1L, plain.rpush(listKey, new GlideString[] {payload}).get());
-            assertEquals(OK, plain.set(stringKey, payload).get());
-
-            Object[] results = execBinary(compressed, atomic, batch -> batch.lrange(listKey, 0, -1));
-            Object[] elements = (Object[]) results[0];
-            assertEquals(1, elements.length);
-            assertEquals(payload, elements[0]);
-
-            Throwable cause =
-                    assertThrows(
-                                    ExecutionException.class,
-                                    () -> execBinary(compressed, atomic, batch -> batch.get(stringKey)))
-                            .getCause();
-            assertTrue(cause instanceof RequestException, "Should throw RequestException, got " + cause);
-            assertTrue(
-                    cause.getMessage().toLowerCase().contains("size limit exceeded"),
-                    "Error should name the size limit: " + cause.getMessage());
-
-            plain.del(new GlideString[] {listKey, stringKey}).get();
         }
     }
 

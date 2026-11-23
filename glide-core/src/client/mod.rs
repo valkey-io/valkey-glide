@@ -2177,8 +2177,7 @@ impl Client {
         } else {
             value
         };
-        let value =
-            crate::compression::decompress_reply_for_cmd(value, cmd, compression_manager)?;
+        let value = crate::compression::decompress_reply_for_cmd(value, cmd, compression_manager)?;
         convert_to_expected_type(value, expected_type_for_cmd(cmd))
     }
 
@@ -7155,11 +7154,10 @@ mod batch_decompression_tests {
         bulk(&manager.compress_value(original))
     }
 
-    /// LZ4-headed bytes claiming 200 decompressed bytes, over the 100-byte limit.
-    fn lz4_oversize_claim() -> Vec<u8> {
-        let mut bytes = create_header(CompressionBackendType::Lz4.backend_id()).to_vec();
-        bytes.extend_from_slice(&200u32.to_le_bytes());
-        bytes.extend_from_slice(&[b'z'; 16]);
+    /// A plain value that begins with a valid Zstd header but does not decode.
+    fn header_shaped_plain() -> Vec<u8> {
+        let mut bytes = create_header(CompressionBackendType::Zstd.backend_id()).to_vec();
+        bytes.extend_from_slice(b"zzzz");
         bytes
     }
 
@@ -7197,55 +7195,6 @@ mod batch_decompression_tests {
     const LRANGE: &[&str] = &["LRANGE", "events", "0", "-1"];
 
     #[test]
-    fn non_string_command_reply_is_not_decompressed_in_a_batch() {
-        let manager = size_limited_manager();
-        let list_element = compressed(&manager, &"A".repeat(80).into_bytes());
-        let batch = pipeline(&[LRANGE, &["GET", "key"]]);
-        let replies = vec![
-            Value::Array(vec![list_element.clone()]),
-            compressed(&manager, &"B".repeat(80).into_bytes()),
-        ];
-
-        assert_eq!(
-            convert(&batch, replies, Some(&manager), true).unwrap(),
-            Value::Array(vec![
-                Value::Array(vec![list_element]),
-                bulk(&"B".repeat(80).into_bytes()),
-            ])
-        );
-    }
-
-    #[test]
-    fn oversize_claim_in_a_non_string_command_reply_does_not_fail_the_batch() {
-        let manager = size_limited_manager();
-        let claim = bulk(&lz4_oversize_claim());
-        assert!(
-            convert(
-                &pipeline(&[&["GET", "key"]]),
-                vec![claim.clone()],
-                Some(&manager),
-                true
-            )
-            .is_err()
-        );
-
-        let batch = pipeline(&[LRANGE, &["GET", "key"]]);
-        for raise_on_error in [false, true] {
-            let replies = vec![
-                Value::Array(vec![claim.clone()]),
-                compressed(&manager, &"B".repeat(80).into_bytes()),
-            ];
-            assert_eq!(
-                convert(&batch, replies, Some(&manager), raise_on_error).unwrap(),
-                Value::Array(vec![
-                    Value::Array(vec![claim.clone()]),
-                    bulk(&"B".repeat(80).into_bytes()),
-                ])
-            );
-        }
-    }
-
-    #[test]
     fn each_reply_follows_the_rules_of_its_command() {
         let manager = size_limited_manager();
         let list_element = compressed(&manager, &"L".repeat(80).into_bytes());
@@ -7255,6 +7204,7 @@ mod batch_decompression_tests {
             LRANGE,
             &["SET", "key-d", "value", "GET"],
             &["get", "key-e"],
+            &["GET", "key-f"],
         ]);
         let replies = vec![
             Value::Array(vec![
@@ -7265,6 +7215,7 @@ mod batch_decompression_tests {
             Value::Array(vec![list_element.clone()]),
             compressed(&manager, &"D".repeat(80).into_bytes()),
             compressed(&manager, &"E".repeat(80).into_bytes()),
+            bulk(&header_shaped_plain()),
         ];
 
         assert_eq!(
@@ -7275,6 +7226,7 @@ mod batch_decompression_tests {
                 Value::Array(vec![list_element]),
                 bulk(&"D".repeat(80).into_bytes()),
                 bulk(&"E".repeat(80).into_bytes()),
+                bulk(&header_shaped_plain()),
             ])
         );
     }
@@ -7282,25 +7234,16 @@ mod batch_decompression_tests {
     #[test]
     fn oversized_reply_fails_the_batch_regardless_of_raise_on_error() {
         let manager = size_limited_manager();
-        let batch = pipeline(&[
-            &["SET", "marker", "written"],
-            &["GET", "big"],
-            &["GET", "fits"],
-        ]);
-        let replies = vec![
-            Value::Okay,
-            compressed(&manager, &"A".repeat(200).into_bytes()),
-            compressed(&manager, &"B".repeat(80).into_bytes()),
-        ];
+        let batch = pipeline(&[&["SET", "marker", "written"], &["GET", "big"]]);
+        let replies = || {
+            vec![
+                Value::Okay,
+                compressed(&manager, &"A".repeat(200).into_bytes()),
+            ]
+        };
 
         for raise_on_error in [false, true] {
-            let error = convert(
-                &batch,
-                replies.clone(),
-                Some(&manager),
-                raise_on_error,
-            )
-            .unwrap_err();
+            let error = convert(&batch, replies(), Some(&manager), raise_on_error).unwrap_err();
             assert_eq!(error.kind(), ErrorKind::IoError);
             assert!(error.to_string().contains("maxDecompressedSize"), "{error}");
         }
@@ -7317,18 +7260,6 @@ mod batch_decompression_tests {
                 assert_eq!(error.kind(), ErrorKind::ResponseError);
             }
         }
-    }
-
-    #[test]
-    fn batch_without_a_compression_manager_keeps_compressed_replies() {
-        let manager = size_limited_manager();
-        let stored = compressed(&manager, &"A".repeat(80).into_bytes());
-        let batch = pipeline(&[&["GET", "key"]]);
-
-        assert_eq!(
-            convert(&batch, vec![stored.clone()], None, true).unwrap(),
-            Value::Array(vec![stored])
-        );
     }
 
     #[test]

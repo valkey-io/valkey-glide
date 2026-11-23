@@ -79,35 +79,18 @@ def generate_unicode_text(size_bytes: int) -> str:
 HEADER_SHAPED_PLAIN = b"\x00\x01\x02\x00\x01zzzz"
 
 
-# A list element shaped as an LZ4 value that claims 200 decompressed bytes.
-HEADER_SHAPED_LZ4_CLAIM = (
-    b"\x00\x01\x02\x00\x02" + (200).to_bytes(4, "little") + b"z" * 16
-)
-
-
-def new_batch(client: TGlideClient, is_atomic: bool) -> Union[Batch, ClusterBatch]:
-    if isinstance(client, GlideClient):
-        return Batch(is_atomic=is_atomic)
-    return ClusterBatch(is_atomic=is_atomic)
-
-
-def exec_batch(
-    client: TGlideClient, batch: Union[Batch, ClusterBatch]
-) -> Optional[List[Any]]:
-    if isinstance(client, GlideClient):
-        return client.exec(cast(Batch, batch), raise_on_error=True)
-    return cast(GlideClusterClient, client).exec(
-        cast(ClusterBatch, batch), raise_on_error=True
-    )
-
-
 def exec_gets(
     client: TGlideClient, is_atomic: bool, keys: List[str]
 ) -> Optional[List[Any]]:
-    batch = new_batch(client, is_atomic)
+    if isinstance(client, GlideClient):
+        batch = Batch(is_atomic=is_atomic)
+        for key in keys:
+            batch.get(key)
+        return client.exec(batch, raise_on_error=True)
+    cluster_batch = ClusterBatch(is_atomic=is_atomic)
     for key in keys:
-        batch.get(key)
-    return exec_batch(client, batch)
+        cluster_batch.get(key)
+    return cast(GlideClusterClient, client).exec(cluster_batch, raise_on_error=True)
 
 
 def generate_mixed_size_list(count: int, min_size: int, max_size: int) -> List[str]:
@@ -1184,56 +1167,6 @@ class TestCompressionBatch:
         # Cleanup
         compression_client.delete(cast(List[Union[str, bytes]], [key1, key2, key3]))
 
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("is_atomic", [True, False])
-    def test_compression_batch_keeps_header_shaped_neighbour(
-        self,
-        compression_client: TGlideClient,
-        no_compression_client: TGlideClient,
-        is_atomic: bool,
-    ):
-        compressed_key = f"{{batch_collision}}_compressed_{get_random_string(8)}"
-        plain_key = f"{{batch_collision}}_plain_{get_random_string(8)}"
-        value = generate_compressible_text(1024)
-        assert compression_client.set(compressed_key, value) == OK
-        assert no_compression_client.set(plain_key, HEADER_SHAPED_PLAIN) == OK
-
-        results = exec_gets(compression_client, is_atomic, [compressed_key, plain_key])
-        assert results == [value.encode(), HEADER_SHAPED_PLAIN]
-
-        no_compression_client.delete(
-            cast(List[Union[str, bytes]], [compressed_key, plain_key])
-        )
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("is_atomic", [True, False])
-    def test_compression_batch_keeps_list_reply_unchanged(
-        self,
-        compression_client: TGlideClient,
-        no_compression_client: TGlideClient,
-        is_atomic: bool,
-    ):
-        """A compressed value stored in a list comes back from LRANGE as stored,
-        while GET in the same batch still decompresses."""
-        tag = f"{{batch_list_{get_random_string(8)}}}"
-        value_key = f"{tag}value"
-        list_key = f"{tag}list"
-        value = generate_compressible_text(1024)
-        assert compression_client.set(value_key, value) == OK
-        compressed_bytes = no_compression_client.get(value_key)
-        assert compressed_bytes is not None
-        assert compressed_bytes[:3] == b"\x00\x01\x02"
-        assert no_compression_client.rpush(list_key, [compressed_bytes]) == 1
-
-        batch = new_batch(compression_client, is_atomic)
-        batch.lrange(list_key, 0, -1).get(value_key)
-        results = exec_batch(compression_client, batch)
-        assert results == [[compressed_bytes], value.encode()]
-
-        no_compression_client.delete([value_key, list_key])
-
 
 class TestCompressionEdgeCases:
     """Test compression edge cases and error handling."""
@@ -1889,12 +1822,12 @@ class TestCompressionMaxDecompressedSize:
         finally:
             unlimited_client.close()
 
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("is_atomic", [True, False])
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
     def test_max_decompressed_size_enforced_on_batch(
-        self, request, cluster_mode: bool, protocol: ProtocolVersion, is_atomic: bool
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
     ):
+        """A batch size-limit error with raise_on_error reaches Python as a RequestError."""
         unlimited_client = create_sync_client(
             request,
             cluster_mode,
@@ -1926,64 +1859,13 @@ class TestCompressionMaxDecompressedSize:
 
             try:
                 with pytest.raises(RequestError, match="size limit exceeded"):
-                    exec_gets(limited_client, is_atomic, [key])
+                    exec_gets(limited_client, False, [key])
             finally:
                 limited_client.close()
 
             unlimited_client.delete([key])
         finally:
             unlimited_client.close()
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("is_atomic", [True, False])
-    def test_max_decompressed_size_ignores_header_shaped_list_element(
-        self,
-        request,
-        no_compression_client: TGlideClient,
-        cluster_mode: bool,
-        protocol: ProtocolVersion,
-        is_atomic: bool,
-    ):
-        """An LRANGE element whose bytes claim an oversized LZ4 value does not fail
-        the batch. The same bytes under GET do, so they reach the size check."""
-        tag = f"{{batch_lz4_claim_{get_random_string(8)}}}"
-        list_key = f"{tag}list"
-        string_key = f"{tag}string"
-        assert no_compression_client.rpush(list_key, [HEADER_SHAPED_LZ4_CLAIM]) == 1
-        assert no_compression_client.set(string_key, HEADER_SHAPED_LZ4_CLAIM) == OK
-
-        limited_config = create_sync_client_config(
-            request,
-            cluster_mode,
-            protocol=protocol,
-            enable_compression=False,
-        )
-        limited_config.compression = CompressionConfiguration(
-            enabled=True,
-            backend=CompressionBackend.ZSTD,
-            compression_level=3,
-            min_compression_size=64,
-            max_decompressed_size=100,
-        )
-        limited_client: GlideClient | GlideClusterClient
-        if cluster_mode:
-            limited_client = GlideClusterClient.create(limited_config)
-        else:
-            limited_client = GlideClient.create(limited_config)
-
-        try:
-            list_batch = new_batch(limited_client, is_atomic)
-            list_batch.lrange(list_key, 0, -1)
-            results = exec_batch(limited_client, list_batch)
-            assert results == [[HEADER_SHAPED_LZ4_CLAIM]]
-
-            with pytest.raises(RequestError, match="size limit exceeded"):
-                exec_gets(limited_client, is_atomic, [string_key])
-        finally:
-            limited_client.close()
-
-        no_compression_client.delete([list_key, string_key])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

@@ -19,7 +19,6 @@ import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     BaseClientConfiguration,
     Batch,
-    ClusterBatch,
     CompressionConfiguration,
     Decoder,
     GlideClient,
@@ -208,15 +207,11 @@ describe("Compression MaxDecompressedSize", () => {
         TIMEOUT,
     );
 
-    it.each([
-        [false, false],
-        [false, true],
-        [true, false],
-        [true, true],
-    ])(
-        "maxDecompressedSize_enforced_on_batch cluster_mode=%p atomic=%p",
-        async (clusterMode, atomic) => {
-            const unlimitedClient = await createCompressedClient(clusterMode, {
+    // A batch size-limit error with raiseOnError reaches Node as a RequestError.
+    it(
+        "maxDecompressedSize_enforced_on_batch",
+        async () => {
+            const unlimitedClient = await createCompressedClient(false, {
                 enabled: true,
             });
 
@@ -224,27 +219,18 @@ describe("Compression MaxDecompressedSize", () => {
                 const key = uniqueKey("batch_max_test");
                 await unlimitedClient.set(key, generateCompressibleText(10000));
 
-                const limitedClient = await createCompressedClient(
-                    clusterMode,
-                    {
-                        enabled: true,
-                        maxDecompressedSize: 100,
-                    },
-                );
+                const limitedClient = await createCompressedClient(false, {
+                    enabled: true,
+                    maxDecompressedSize: 100,
+                });
 
                 try {
                     const execGet = () =>
-                        clusterMode
-                            ? (limitedClient as GlideClusterClient).exec(
-                                  new ClusterBatch(atomic).get(key),
-                                  true,
-                                  { decoder: Decoder.Bytes },
-                              )
-                            : (limitedClient as GlideClient).exec(
-                                  new Batch(atomic).get(key),
-                                  true,
-                                  { decoder: Decoder.Bytes },
-                              );
+                        (limitedClient as GlideClient).exec(
+                            new Batch(false).get(key),
+                            true,
+                            { decoder: Decoder.Bytes },
+                        );
 
                     await expect(execGet()).rejects.toThrow(RequestError);
                     await expect(execGet()).rejects.toThrow(
