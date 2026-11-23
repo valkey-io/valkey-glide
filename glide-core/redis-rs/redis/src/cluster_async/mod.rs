@@ -149,6 +149,14 @@ fn no_fan_out_connections_error() -> RedisError {
     ))
 }
 
+/// Whether a node's `error` means the client could not reach it: an I/O error
+/// other than a timeout, a dropped connection, or no connection to it.
+fn is_node_unreachable(error: &RedisError) -> bool {
+    (error.is_io_error() && !error.is_timeout())
+        || error.is_connection_dropped()
+        || error.kind() == ErrorKind::ConnectionNotFoundForRoute
+}
+
 /// Sets the routed node's address on the command span for OTel reporting.
 /// Called after cluster routing resolves the actual target node.
 fn set_routed_node_on_span(span: &GlideSpan, address: &str) {
@@ -2618,8 +2626,7 @@ where
     /// `Value::ServerError`, and timeouts keep [`crate::TIMEOUT_ERROR_CODE`].
     /// The map has an entry for every node even when all of them failed.
     ///
-    /// Also returns whether the client could not reach a node: an I/O error
-    /// other than a timeout, a dropped connection, or no connection to it.
+    /// Also returns whether any node was unreachable ([`is_node_unreachable`]).
     async fn collect_partial_results(
         receivers: Vec<(Option<String>, oneshot::Receiver<RedisResult<Response>>)>,
         deadline: Option<std::time::Instant>,
@@ -2642,18 +2649,13 @@ where
                     }
                     None => receiver.await,
                 };
-                let mut unreached = false;
+                let node_unreachable = matches!(&result, Ok(Err(err)) if is_node_unreachable(err));
                 let value = match result {
                     Ok(Ok(Response::Single(value))) => value,
                     Ok(Ok(_)) => unreachable!(
                         "collect_partial_results only handles `Response::Single` for multi-node commands"
                     ),
-                    Ok(Err(err)) => {
-                        unreached = (err.is_io_error() && !err.is_timeout())
-                            || err.is_connection_dropped()
-                            || err.kind() == ErrorKind::ConnectionNotFoundForRoute;
-                        Value::ServerError(ServerError::from_error_keeping_timeout(err))
-                    }
+                    Ok(Err(err)) => Value::ServerError(ServerError::from_error_keeping_timeout(err)),
                     Err(_) => Value::ServerError(
                         RedisError::from((
                             ErrorKind::ResponseError,
@@ -2664,14 +2666,16 @@ where
                 };
                 Ok::<_, RedisError>((
                     (Value::BulkString(address.into_bytes().into()), value),
-                    unreached,
+                    node_unreachable,
                 ))
             },
         ))
         .await?;
-        let unreached = entries.iter().any(|(_, unreached)| *unreached);
+        let any_unreachable = entries
+            .iter()
+            .any(|(_, node_unreachable)| *node_unreachable);
         let pairs = entries.into_iter().map(|(pair, _)| pair).collect();
-        Ok((Value::Map(pairs), unreached))
+        Ok((Value::Map(pairs), any_unreachable))
     }
 
     /// Synchronously folds a fully‐collected `Vec<(Option<String>, Value)>` according to `response_policy`.
@@ -3425,11 +3429,9 @@ where
                 MultipleNodeRoutingInfo::AllNodes | MultipleNodeRoutingInfo::AllMasters
                     if partial_results =>
                 {
-                    let (connections, unconnected) = connections_container
-                        .connections_and_unconnected_nodes(matches!(
-                            routing,
-                            MultipleNodeRoutingInfo::AllMasters
-                        ));
+                    let primaries_only = matches!(routing, MultipleNodeRoutingInfo::AllMasters);
+                    let (connections, unconnected) =
+                        connections_container.connections_and_unconnected_nodes(primaries_only);
                     // With no node reachable, fail as the default path does, so
                     // the request refreshes slots and retries.
                     if connections.is_empty() {
@@ -3491,19 +3493,16 @@ where
         }
 
         let result = if partial_results {
-            Self::collect_partial_results(receivers, cmd.fan_out_deadline())
-                .await
-                .map(|(value, unreached)| {
-                    // The node may have failed over, so ask for a throttled slot
-                    // refresh in the background. The command is not retried.
-                    if unreached {
-                        drop(Self::spawn_refresh_slots_task(
-                            core,
-                            &RefreshPolicy::Throttable,
-                        ));
-                    }
-                    value
-                })
+            let collected = Self::collect_partial_results(receivers, cmd.fan_out_deadline()).await;
+            if matches!(collected, Ok((_, true))) {
+                // The node may have failed over, so ask for a throttled slot
+                // refresh in the background. The command is not retried.
+                drop(Self::spawn_refresh_slots_task(
+                    core,
+                    &RefreshPolicy::Throttable,
+                ));
+            }
+            collected.map(|(value, _)| value)
         } else {
             Self::aggregate_results(receivers, routing, response_policy).await
         };
@@ -5370,10 +5369,10 @@ mod partial_results_tests {
         ];
         for (result, expected) in cases {
             let label = format!("{result:?}");
-            let (_, unreached) = collect_with_flag(vec![ready("a:1", result)], None)
+            let (_, any_unreachable) = collect_with_flag(vec![ready("a:1", result)], None)
                 .await
                 .unwrap();
-            assert_eq!(unreached, expected, "{label}");
+            assert_eq!(any_unreachable, expected, "{label}");
         }
     }
 

@@ -417,23 +417,22 @@ impl ServerError {
     /// and a server's error reply keeps its message as the server sent it.
     pub(crate) fn from_error_keeping_timeout(error: RedisError) -> Self {
         if error.is_timeout() {
-            ServerError::ExtensionError {
+            return ServerError::ExtensionError {
                 code: TIMEOUT_ERROR_CODE.into(),
                 detail: Some(error.to_string()),
-            }
-        } else if let (true, Some(kind)) = (
-            error.is_server_reply(),
-            Option::<ServerErrorKind>::from(error.kind()),
-        ) {
-            // `ServerError::from` would put the server-error description into
-            // the detail, and converting back adds it a second time.
-            ServerError::KnownError {
-                kind,
-                detail: error.detail().map(str::to_string),
-            }
-        } else {
-            error.into()
+            };
         }
+        if error.is_server_reply() {
+            if let Some(kind) = Option::<ServerErrorKind>::from(error.kind()) {
+                // `ServerError::from` would put the server-error description into
+                // the detail, and converting back adds it a second time.
+                return ServerError::KnownError {
+                    kind,
+                    detail: error.detail().map(str::to_string),
+                };
+            }
+        }
+        error.into()
     }
 }
 

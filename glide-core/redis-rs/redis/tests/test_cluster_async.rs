@@ -5194,12 +5194,14 @@ mod cluster_async {
             name,
             handler,
         );
-        runtime.block_on(connection.route_command(
-            &info,
-            RoutingInfo::MultiNode((
-                routing,
-                Some(redis::cluster_routing::ResponsePolicy::Special),
-            )),
+        runtime.block_on(connection.route_command(&info, per_node_route(routing)))
+    }
+
+    // `routing` with the `Special` response policy, which keeps one entry per node.
+    fn per_node_route(routing: MultipleNodeRoutingInfo) -> RoutingInfo {
+        RoutingInfo::MultiNode((
+            routing,
+            Some(redis::cluster_routing::ResponsePolicy::Special),
         ))
     }
 
@@ -5220,10 +5222,16 @@ mod cluster_async {
         })
     }
 
+    fn info_with_one_unconnected_primary(name: &'static str, partial: bool) -> RedisResult<Value> {
+        info_to_all_primaries(name, partial, one_unconnected_primary(name))
+    }
+
     // 6379 replies and 6380 refuses every command, so the client never gets a
     // connection to it.
-    fn info_with_one_unconnected_primary(name: &'static str, partial: bool) -> RedisResult<Value> {
-        info_to_all_primaries(name, partial, move |received_cmd, port| {
+    fn one_unconnected_primary(
+        name: &'static str,
+    ) -> impl Fn(&[u8], u16) -> Result<(), RedisResult<Value>> + Send + Sync + 'static {
+        move |received_cmd, port| {
             if port == 6380 {
                 return Err(Err(std::io::Error::from(
                     std::io::ErrorKind::ConnectionRefused,
@@ -5232,7 +5240,7 @@ mod cluster_async {
             }
             respond_startup_two_nodes(name, received_cmd)?;
             Err(Ok(info_reply(port)))
-        })
+        }
     }
 
     fn sorted_map(value: Value) -> Vec<(String, Value)> {
@@ -5355,6 +5363,7 @@ mod cluster_async {
         let name = "test_async_cluster_partial_results_refresh_slots_after_an_unconnected_primary";
         let slot_queries = Arc::new(atomic::AtomicUsize::new(0));
         let queries = slot_queries.clone();
+        let unconnected_primary = one_unconnected_primary(name);
         let mut info = cmd("INFO");
         info.set_allow_partial_results(true);
         let MockEnv {
@@ -5368,30 +5377,19 @@ mod cluster_async {
                 .slots_refresh_rate_limit(Duration::ZERO, 0),
             name,
             move |received_cmd: &[u8], port| {
-                // 6380 refuses every command, so the client never gets a connection to it.
-                if port == 6380 {
-                    return Err(Err(std::io::Error::from(
-                        std::io::ErrorKind::ConnectionRefused,
-                    )
-                    .into()));
-                }
                 if contains_slice(received_cmd, b"SLOTS") {
                     queries.fetch_add(1, Ordering::SeqCst);
                 }
-                respond_startup_two_nodes(name, received_cmd)?;
-                Err(Ok(info_reply(port)))
+                unconnected_primary(received_cmd, port)
             },
         );
         let before = slot_queries.load(Ordering::SeqCst);
 
         runtime
-            .block_on(connection.route_command(
-                &info,
-                RoutingInfo::MultiNode((
-                    MultipleNodeRoutingInfo::AllMasters,
-                    Some(redis::cluster_routing::ResponsePolicy::Special),
-                )),
-            ))
+            .block_on(
+                connection
+                    .route_command(&info, per_node_route(MultipleNodeRoutingInfo::AllMasters)),
+            )
             .unwrap();
 
         let refreshed = runtime.block_on(async {
@@ -5428,10 +5426,7 @@ mod cluster_async {
             let mut connection = cluster.async_connection(None).await;
             let mut info = cmd("INFO");
             info.arg("SERVER").set_allow_partial_results(true);
-            let all_primaries = RoutingInfo::MultiNode((
-                MultipleNodeRoutingInfo::AllMasters,
-                Some(redis::cluster_routing::ResponsePolicy::Special),
-            ));
+            let all_primaries = per_node_route(MultipleNodeRoutingInfo::AllMasters);
             let slot_0 = |slot_addr| {
                 RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
                     0, slot_addr,
