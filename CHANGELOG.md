@@ -11,6 +11,7 @@
 
 ### Fixes
 
+* Core: count every request timeout in `glide.timeout_errors`, not only those the timeout watchdog notices first ([#7845](https://github.com/valkey-io/valkey-glide/pull/7845))
 * Core: keep timeout watchdog pending counts isolated from retired workers and losing singleton initialization candidates ([#7762](https://github.com/valkey-io/valkey-glide/pull/7762))
 * Core: prevent missed refresh completion notifications ([#7766](https://github.com/valkey-io/valkey-glide/pull/7766))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
