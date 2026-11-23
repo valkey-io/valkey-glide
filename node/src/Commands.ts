@@ -4769,11 +4769,25 @@ export function createDelEx(
     key: GlideString,
     options: DelexOptions,
 ): command_request.Command {
-    return createCommand(RequestType.DelEx, [
-        key,
-        options.condition === "onlyIfEqual" ? "IFEQ" : "IFNE",
-        options.value,
-    ]);
+    let condition: string;
+
+    if (options.condition === "onlyIfEqual") {
+        condition = "IFEQ";
+    } else if (options.condition === "onlyIfNotEqual") {
+        condition = "IFNE";
+    } else {
+        throw new Error(
+            `Received invalid DELEX condition '${options.condition}'`,
+        );
+    }
+
+    if (options.value == null) {
+        throw new Error(
+            `Received DELEX condition '${options.condition}' without a value`,
+        );
+    }
+
+    return createCommand(RequestType.DelEx, [key, condition, options.value]);
 }
 
 /**

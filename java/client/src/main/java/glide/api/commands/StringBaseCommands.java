@@ -725,8 +725,6 @@ public interface StringBaseCommands {
      */
     CompletableFuture<Long> append(GlideString key, GlideString value);
 
-    // TODO #7238: Add DELEX command support.
-
     /**
      * Deletes <code>key</code> if its value meets the condition in <code>options</code>.
      *
