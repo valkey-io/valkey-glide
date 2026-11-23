@@ -2617,11 +2617,14 @@ where
     /// at the connection's response timeout. Errors are stored as
     /// `Value::ServerError`, and timeouts keep [`crate::TIMEOUT_ERROR_CODE`].
     /// The map has an entry for every node even when all of them failed.
+    ///
+    /// Also returns whether the client could not reach a node: an I/O error
+    /// other than a timeout, or no connection to it.
     async fn collect_partial_results(
         receivers: Vec<(Option<String>, oneshot::Receiver<RedisResult<Response>>)>,
         deadline: Option<std::time::Instant>,
-    ) -> RedisResult<Value> {
-        let pairs = future::try_join_all(receivers.into_iter().map(
+    ) -> RedisResult<(Value, bool)> {
+        let entries = future::try_join_all(receivers.into_iter().map(
             |(address, receiver)| async move {
                 let address = address.ok_or_else(|| {
                     RedisError::from((
@@ -2639,12 +2642,17 @@ where
                     }
                     None => receiver.await,
                 };
+                let mut unreached = false;
                 let value = match result {
                     Ok(Ok(Response::Single(value))) => value,
                     Ok(Ok(_)) => unreachable!(
                         "collect_partial_results only handles `Response::Single` for multi-node commands"
                     ),
-                    Ok(Err(err)) => Value::ServerError(ServerError::from_error_keeping_timeout(err)),
+                    Ok(Err(err)) => {
+                        unreached = (err.is_io_error() && !err.is_timeout())
+                            || err.kind() == ErrorKind::ConnectionNotFoundForRoute;
+                        Value::ServerError(ServerError::from_error_keeping_timeout(err))
+                    }
                     Err(_) => Value::ServerError(
                         RedisError::from((
                             ErrorKind::ResponseError,
@@ -2653,11 +2661,16 @@ where
                         .into(),
                     ),
                 };
-                Ok::<_, RedisError>((Value::BulkString(address.into_bytes().into()), value))
+                Ok::<_, RedisError>((
+                    (Value::BulkString(address.into_bytes().into()), value),
+                    unreached,
+                ))
             },
         ))
         .await?;
-        Ok(Value::Map(pairs))
+        let unreached = entries.iter().any(|(_, unreached)| *unreached);
+        let pairs = entries.into_iter().map(|(pair, _)| pair).collect();
+        Ok((Value::Map(pairs), unreached))
     }
 
     /// Synchronously folds a fully‐collected `Vec<(Option<String>, Value)>` according to `response_policy`.
@@ -3477,7 +3490,19 @@ where
         }
 
         let result = if partial_results {
-            Self::collect_partial_results(receivers, cmd.fan_out_deadline()).await
+            Self::collect_partial_results(receivers, cmd.fan_out_deadline())
+                .await
+                .map(|(value, unreached)| {
+                    // The node may have failed over, so ask for a throttled slot
+                    // refresh in the background. The command is not retried.
+                    if unreached {
+                        drop(Self::spawn_refresh_slots_task(
+                            core,
+                            &RefreshPolicy::Throttable,
+                        ));
+                    }
+                    value
+                })
         } else {
             Self::aggregate_results(receivers, routing, response_policy).await
         };
@@ -5236,9 +5261,18 @@ mod partial_results_tests {
         (Some(address.to_string()), receiver)
     }
 
-    async fn collect(receivers: Receivers, deadline: Option<Instant>) -> RedisResult<Value> {
+    async fn collect_with_flag(
+        receivers: Receivers,
+        deadline: Option<Instant>,
+    ) -> RedisResult<(Value, bool)> {
         ClusterConnInner::<MultiplexedConnection>::collect_partial_results(receivers, deadline)
             .await
+    }
+
+    async fn collect(receivers: Receivers, deadline: Option<Instant>) -> RedisResult<Value> {
+        collect_with_flag(receivers, deadline)
+            .await
+            .map(|(value, _)| value)
     }
 
     fn entries(value: Value) -> Vec<(String, Value)> {
@@ -5300,6 +5334,42 @@ mod partial_results_tests {
         assert!(error_of(&entries[1].1).is_timeout());
         // Dropping the receiver is what stops the node's sub-request.
         assert!(silent_sender.is_closed());
+    }
+
+    #[tokio::test]
+    async fn flags_only_nodes_the_client_could_not_reach() {
+        let Value::ServerError(server) =
+            crate::parse_redis_value(b"-NOPERM no permissions\r\n").unwrap()
+        else {
+            panic!("expected a server error");
+        };
+        let cases: Vec<(RedisResult<Value>, bool)> = vec![
+            (
+                Err(std::io::Error::from(std::io::ErrorKind::ConnectionRefused).into()),
+                true,
+            ),
+            (
+                Err((
+                    ErrorKind::ConnectionNotFoundForRoute,
+                    "Connection not found",
+                )
+                    .into()),
+                true,
+            ),
+            (
+                Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into()),
+                false,
+            ),
+            (Err(server.into()), false),
+            (Ok(Value::Okay), false),
+        ];
+        for (result, expected) in cases {
+            let label = format!("{result:?}");
+            let (_, unreached) = collect_with_flag(vec![ready("a:1", result)], None)
+                .await
+                .unwrap();
+            assert_eq!(unreached, expected, "{label}");
+        }
     }
 
     #[tokio::test]
