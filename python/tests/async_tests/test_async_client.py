@@ -5903,19 +5903,61 @@ class TestCommands:
     async def test_delifeq(self, glide_client: TGlideClient):
         key = get_random_string(10)
         value = get_random_string(10)
-        wrong_value = get_random_string(10)
+        other_value = get_random_string(10)
 
-        # key does not exist yet
+        # key does not exist
         assert await glide_client.delifeq(key, value) is False
 
         assert await glide_client.set(key, value) == OK
 
-        # value does not match
-        assert await glide_client.delifeq(key, wrong_value) is False
+        # value not equal, key is not deleted
+        assert await glide_client.delifeq(key, other_value) is False
         assert await glide_client.get(key) == value.encode()
 
-        # value matches, key is deleted
+        # value equal, key is deleted
         assert await glide_client.delifeq(key, value) is True
+        assert await glide_client.get(key) is None
+
+    @pytest.mark.skip_if_version_below("9.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_delex_ifeq(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        other_value = get_random_string(10)
+
+        # key does not exist
+        assert await glide_client.delex(key, OnlyIfEqual(value)) is False
+
+        assert await glide_client.set(key, value) == OK
+
+        # value not equal, key is not deleted
+        assert await glide_client.delex(key, OnlyIfEqual(other_value)) is False
+        assert await glide_client.get(key) == value.encode()
+
+        # value equal, key is deleted
+        assert await glide_client.delex(key, OnlyIfEqual(value)) is True
+        assert await glide_client.get(key) is None
+
+    @pytest.mark.skip_if_version_below("9.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_delex_ifne(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        other_value = get_random_string(10)
+
+        # key does not exist
+        assert await glide_client.delex(key, OnlyIfNotEqual(value)) is False
+
+        assert await glide_client.set(key, value) == OK
+
+        # value equal, key is not deleted
+        assert await glide_client.delex(key, OnlyIfNotEqual(value)) is False
+        assert await glide_client.get(key) == value.encode()
+
+        # value not equal, key is deleted
+        assert await glide_client.delex(key, OnlyIfNotEqual(other_value)) is True
         assert await glide_client.get(key) is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
