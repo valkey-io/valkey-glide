@@ -598,6 +598,11 @@ Finish the GPU work that writes a window, for example with `torch.cuda.synchroni
 `rdma_set` it. Submit GPU work that reads a window only after `rdma_get` returns, since work already
 running can see stale data. If the device's `CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WRITES_ORDERING`
 does not cover that work, call `cuFlushGPUDirectRDMAWrites` first.
+A tensor that requires grad can be registered, but `rdma_get` writes it outside PyTorch, so
+autograd's version counter does not change. Do not `rdma_get` into storage, or an alias of it, that
+a pending backward pass saved. `torch.autograd.graph.increment_version()` lets PyTorch detect such
+an overwrite but does not make the old graph valid. `rdma_set` and loading weights between backward
+passes are safe.
 
 ### Handling a Failed Transfer
 

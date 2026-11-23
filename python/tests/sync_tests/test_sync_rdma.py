@@ -1105,6 +1105,22 @@ def test_registration_asks_the_driver_inside_the_gpu_context(monkeypatch, gpu_co
     ]
 
 
+def test_a_driver_that_does_not_load_raises_rdma_error_and_is_tried_again(
+    monkeypatch,
+):
+    def fail_to_load(name):
+        raise OSError(f"{name}: cannot open shared object file")
+
+    monkeypatch.setattr(glide_client_module, "_CUDA_DRIVER", None)
+    monkeypatch.setattr(glide_client_module.ctypes, "CDLL", fail_to_load)
+
+    for _ in range(2):
+        with pytest.raises(RdmaError, match="libcuda.so.1 could not be loaded") as e:
+            glide_client_module._cuda_driver()
+        assert isinstance(e.value.__cause__, OSError)
+    assert glide_client_module._CUDA_DRIVER is None
+
+
 ATTRIBUTE_IS_MANAGED = glide_client_module._CU_POINTER_ATTRIBUTE_IS_MANAGED
 ATTRIBUTE_MEMORY_TYPE = glide_client_module._CU_POINTER_ATTRIBUTE_MEMORY_TYPE
 
@@ -1231,7 +1247,24 @@ def test_size_one_dimensions_may_carry_any_stride():
             id="strided",
         ),
         pytest.param(
+            # `zip` would drop the second dimension and accept the first.
+            _FakeCudaArray(shape=(2, 3), typestr="<f4", strides=(4,)),
+            "1 strides for 2 dimensions",
+            id="strides-rank-mismatch",
+        ),
+        pytest.param(
             _FakeTorchTensor(contiguous=False), "C-contiguous", id="torch-strided"
+        ),
+        # Views such as `x.conj()`: PyTorch applies the bit only when it reads them.
+        pytest.param(
+            type("_Conj", (_FakeCudaArray,), {"is_conj": lambda self: True})(),
+            "resolve_conj",
+            id="conj-view",
+        ),
+        pytest.param(
+            type("_Neg", (_FakeCudaArray,), {"is_neg": lambda self: True})(),
+            "resolve_neg",
+            id="neg-view",
         ),
         pytest.param(_FakeCudaArray(mask=object()), "mask", id="masked"),
         pytest.param(_FakeCudaArray(device=(13, 0)), "managed memory", id="managed"),

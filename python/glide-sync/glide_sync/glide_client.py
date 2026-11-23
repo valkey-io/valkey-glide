@@ -198,8 +198,9 @@ def _cuda_span(memory: Any) -> Optional[Tuple[int, int]]:
 
     Raises:
         TypeError: If the memory is on a device other than the host or a CUDA
-            GPU, is managed memory, is read-only or not C-contiguous, or offers
-            no way to find its address.
+            GPU, is managed memory, is read-only or not C-contiguous, has
+            strides that do not match its shape, is a tensor with its conjugate
+            or negative bit set, or offers no way to find its address.
     """
     dlpack_device = getattr(memory, "__dlpack_device__", None)
     if dlpack_device is None:
@@ -217,6 +218,16 @@ def _cuda_span(memory: Any) -> Optional[Tuple[int, int]]:
             f"memory on DLPack device type {device_type} cannot be registered; "
             "only host memory and CUDA device memory can"
         )
+
+    for bit in ("conj", "neg"):
+        # PyTorch applies these bits when it reads the storage; the fabric would
+        # move the stored values as they are.
+        is_set = getattr(memory, f"is_{bit}", None)
+        if callable(is_set) and is_set():
+            raise TypeError(
+                f"a tensor with its {bit} bit set cannot be registered; call "
+                f"resolve_{bit}() first"
+            )
 
     try:
         interface = memory.__cuda_array_interface__
@@ -253,6 +264,11 @@ def _cuda_array_interface_span(interface: dict) -> Tuple[int, int]:
     for extent in shape:
         length *= extent
     strides = interface.get("strides")
+    if strides is not None and len(strides) != len(shape):
+        raise TypeError(
+            f"__cuda_array_interface__ has {len(strides)} strides for "
+            f"{len(shape)} dimensions"
+        )
     if strides is not None and length:
         expected = itemsize
         for extent, stride in reversed(list(zip(shape, strides))):
@@ -302,12 +318,18 @@ def _cuda_driver() -> ctypes.CDLL:
     The CUDA driver library, loaded and initialized once.
 
     Raises:
-        RdmaError: If the driver does not initialize.
+        RdmaError: If the driver does not load or initialize. A later call
+            tries again.
     """
     global _CUDA_DRIVER
     with _CUDA_DRIVER_LOCK:
         if _CUDA_DRIVER is None:
-            driver = ctypes.CDLL("libcuda.so.1")
+            try:
+                driver = ctypes.CDLL("libcuda.so.1")
+            except OSError as error:
+                raise RdmaError(
+                    f"the CUDA driver libcuda.so.1 could not be loaded: {error}"
+                ) from error
             driver.cuGetErrorName.argtypes = [
                 ctypes.c_int,
                 ctypes.POINTER(ctypes.c_char_p),
@@ -362,8 +384,8 @@ def _check_cuda_device_memory(address: int) -> None:
     Raises:
         TypeError: If the memory is CUDA managed memory, or not CUDA device
             memory.
-        RdmaError: If the driver does not initialize, or cannot report on the
-            memory.
+        RdmaError: If the driver does not load or initialize, or cannot report
+            on the memory.
     """
     driver = _cuda_driver()
 
@@ -407,8 +429,8 @@ def _gpu_context(ordinal: int) -> Iterator[None]:
     then the registration may have succeeded, and raising would lose it.
 
     Raises:
-        RdmaError: If the driver does not initialize, or making the context
-            current fails.
+        RdmaError: If the driver does not load or initialize, or making the
+            context current fails.
     """
     driver = _cuda_driver()
     device = ctypes.c_int()
@@ -2045,6 +2067,15 @@ class BaseClient(CoreCommands):
         A tensor whose address range changes after registration, as it does
         through ``resize_()`` or ``set_()``, is refused at its next transfer.
 
+        A tensor that requires grad, such as a parameter, can be registered.
+        ``rdma_get`` writes its storage outside PyTorch, so autograd's version
+        counter does not change. Do not ``rdma_get`` into storage, or any alias
+        of it, that a pending backward pass saved: backward would silently use
+        the new values. ``torch.autograd.graph.increment_version()`` after the
+        transfer lets PyTorch detect such an overwrite, but does not make the
+        old graph valid. Sending with ``rdma_set``, or loading weights between
+        backward passes, is safe.
+
         GLIDE makes the memory's GPU context current while it registers, so GPU
         memory can be registered from any thread, including one that never used
         CUDA. A tensor from PyTorch's expandable segments
@@ -2072,13 +2103,15 @@ class BaseClient(CoreCommands):
             RdmaError: If this build has no RDMA support, the client was not
                 configured for RDMA, or was configured without
                 ``device_memory`` and given GPU memory, the memory is still held
-                from a closed region, the CUDA driver could not report how the GPU
-                memory was allocated or make its context current, or the fabric
-                refused the registration.
+                from a closed region, the CUDA driver could not be loaded, report
+                how the GPU memory was allocated, or make its context current, or
+                the fabric refused the registration.
             ClosingError: If the client is closed.
-            TypeError: If the buffer is not writable and C-contiguous, or the
-                memory is on a device other than a CUDA GPU, or is CUDA managed
-                memory or otherwise not CUDA device memory.
+            TypeError: If the buffer is not writable and C-contiguous, or has
+                strides that do not match its shape, or the memory is on a
+                device other than a CUDA GPU, or is CUDA managed memory or
+                otherwise not CUDA device memory, or is a tensor with its
+                conjugate or negative bit set.
 
         Example:
             >>> region = client.register_rdma_region(bytearray(1 << 20))
