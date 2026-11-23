@@ -11,8 +11,12 @@ import lombok.NonNull;
  * A pre-filter on the VSIM arm's vector search, written in the same query language the SEARCH arm
  * uses (e.g. {@code @title:hello}). With a filter present, the VSIM arm becomes an ordinary
  * FT.SEARCH-style vector query under the hood ({@code <filter>=>[KNN ...]}), so the filter decides
- * membership and the arm's score stays the vector distance -- it is never replaced by a
- * text-relevance score the way a plain hybrid text query's score would be.
+ * membership and the arm's score stays the vector similarity -- it is never replaced by a
+ * text-relevance score the way a plain hybrid text query's score would be. The similarity is
+ * derived from the vector distance (for L2, {@code 1 / (1 + distance)}, so distance 3 scores 0.25),
+ * and that similarity, not the raw distance, is what {@code COMBINE FUNCTION} and {@code LINEAR}
+ * see. Requires valkey-search 1.3 or later. See the <a
+ * href="https://valkey.io/commands/ft.hybrid/">FT.HYBRID documentation</a>.
  */
 public class FTHybridVsimFilter {
     private final GlideString expression;

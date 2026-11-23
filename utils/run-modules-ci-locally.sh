@@ -159,6 +159,13 @@ case "$MODULES_TEST_LANG" in
             echo "       code the pinned protobuf-java runtime can't compile." >&2
             exit 1
         fi
+        if [ ! -x "${PROTOC_29_1_DIR}/protoc" ] \
+            || ! "${PROTOC_29_1_DIR}/protoc" --version 2>/dev/null | grep -Eq '^libprotoc 29\.1$'; then
+            echo "ERROR: ${PROTOC_29_1_DIR}/protoc is missing, not executable, or not version 29.1." >&2
+            echo "       Gradle invokes protoc by name, so a broken pinned directory would let it" >&2
+            echo "       fall back to whatever protoc is on PATH." >&2
+            exit 1
+        fi
         export PATH="${PROTOC_29_1_DIR}:${PATH}"
         # --rerun-tasks: modulesTest's inputs don't include the -D endpoint
         # properties, so Gradle's up-to-date check doesn't notice when this

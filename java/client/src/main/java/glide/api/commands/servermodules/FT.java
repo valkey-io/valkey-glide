@@ -200,7 +200,9 @@ public class FT {
      *     When {@link FTSearchOptions.FTSearchOptionsBuilder#withScores()} is set, each document
      *     value is instead an {@code Object[]} of {@code [score, fieldMap]}, or {@code [score,
      *     sortKey, fieldMap]} when {@link FTSearchOptions.FTSearchOptionsBuilder#withSortKeys()} is
-     *     also set.<br>
+     *     also set. The {@code [score, sortKey, fieldMap]} form requires content to be present: when
+     *     {@link FTSearchOptions.FTSearchOptionsBuilder#nocontent()} is also set, each document value
+     *     is {@code [score, {}]} with an empty field map and no sort key.<br>
      *     If {@link FTSearchOptions.FTSearchOptionsBuilder#count()} or {@link
      *     FTSearchOptions.FTSearchOptionsBuilder#limit(int, int)} with values <code>0, 0</code> is
      *     set, the command returns array with only one element - the count of the documents.
@@ -255,7 +257,9 @@ public class FT {
      *     When {@link FTSearchOptions.FTSearchOptionsBuilder#withScores()} is set, each document
      *     value is instead an {@code Object[]} of {@code [score, fieldMap]}, or {@code [score,
      *     sortKey, fieldMap]} when {@link FTSearchOptions.FTSearchOptionsBuilder#withSortKeys()} is
-     *     also set.<br>
+     *     also set. The {@code [score, sortKey, fieldMap]} form requires content to be present: when
+     *     {@link FTSearchOptions.FTSearchOptionsBuilder#nocontent()} is also set, each document value
+     *     is {@code [score, {}]} with an empty field map and no sort key.<br>
      *     If {@link FTSearchOptions.FTSearchOptionsBuilder#count()} or {@link
      *     FTSearchOptions.FTSearchOptionsBuilder#limit(int, int)} with values <code>0, 0</code> is
      *     set, the command returns array with only one element - the count of the documents.

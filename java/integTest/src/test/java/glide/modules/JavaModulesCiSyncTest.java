@@ -44,7 +44,7 @@ public class JavaModulesCiSyncTest {
 
     @Test
     public void bothInvokeModulesTestWithTheSameEndpointFlags() throws IOException {
-        String workflowText = readFile(WORKFLOW_FILE);
+        String workflowText = extractStep(readFile(WORKFLOW_FILE), "Build and run modules tests");
         String runnerText = readFile(LOCAL_RUNNER_FILE);
 
         assertTrue(
@@ -85,6 +85,14 @@ public class JavaModulesCiSyncTest {
                             + " --"
                             + " check for a standalone/cluster swap.");
         }
+    }
+
+    /** Returns the text of the first workflow step named {@code stepName}, up to the next step. */
+    private static String extractStep(String workflow, String stepName) {
+        int start = workflow.indexOf("- name: " + stepName);
+        assertTrue(start >= 0, "java-modules.yml has no step named '" + stepName + "'.");
+        int next = workflow.indexOf("\n            - ", start + 1);
+        return next < 0 ? workflow.substring(start) : workflow.substring(start, next);
     }
 
     /**

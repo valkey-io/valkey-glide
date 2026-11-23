@@ -145,7 +145,8 @@ public class FTHybridVsimArm {
      * @param k The number of nearest neighbours to return.
      * @param efRuntime HNSW search-time effort parameter.
      * @param shardKRatio Tunes how much of {@code k} each shard returns during a cluster fanout.
-     * @param yieldScoreAs Exposes this arm's score (the vector distance) under the given column name.
+     * @param yieldScoreAs Exposes this arm's score (the vector similarity, not the raw distance)
+     *     under the given column name.
      */
     public FTHybridVsimArm(
             @NonNull String field,
@@ -174,7 +175,8 @@ public class FTHybridVsimArm {
      * @param k The number of nearest neighbours to return.
      * @param efRuntime HNSW search-time effort parameter.
      * @param shardKRatio Tunes how much of {@code k} each shard returns during a cluster fanout.
-     * @param yieldScoreAs Exposes this arm's score (the vector distance) under the given column name.
+     * @param yieldScoreAs Exposes this arm's score (the vector similarity, not the raw distance)
+     *     under the given column name.
      */
     public FTHybridVsimArm(
             @NonNull String field,
@@ -195,7 +197,8 @@ public class FTHybridVsimArm {
      * @param k The number of nearest neighbours to return.
      * @param efRuntime HNSW search-time effort parameter.
      * @param shardKRatio Tunes how much of {@code k} each shard returns during a cluster fanout.
-     * @param yieldScoreAs Exposes this arm's score (the vector distance) under the given column name.
+     * @param yieldScoreAs Exposes this arm's score (the vector similarity, not the raw distance)
+     *     under the given column name.
      * @param filter A pre-filter on the vector search. See {@link FTHybridVsimFilter}.
      * @throws IllegalArgumentException If {@code efRuntime} is set while {@code filter.policy} is
      *     {@code HybridFilterPolicy.ADHOC} -- the server rejects that combination outright.
@@ -229,7 +232,8 @@ public class FTHybridVsimArm {
      * @param k The number of nearest neighbours to return.
      * @param efRuntime HNSW search-time effort parameter.
      * @param shardKRatio Tunes how much of {@code k} each shard returns during a cluster fanout.
-     * @param yieldScoreAs Exposes this arm's score (the vector distance) under the given column name.
+     * @param yieldScoreAs Exposes this arm's score (the vector similarity, not the raw distance)
+     *     under the given column name.
      * @param filter A pre-filter on the vector search. See {@link FTHybridVsimFilter}.
      * @throws IllegalArgumentException If {@code efRuntime} is set while {@code filter.policy} is
      *     {@code HybridFilterPolicy.ADHOC} -- the server rejects that combination outright.
@@ -313,13 +317,19 @@ public class FTHybridVsimArm {
             return this;
         }
 
-        /** Exposes this arm's score (the vector distance) under the given column name. */
+        /**
+         * Exposes this arm's score (the vector similarity, not the raw distance) under the given column
+         * name.
+         */
         public Builder yieldScoreAs(@NonNull String yieldScoreAs) {
             this.yieldScoreAs = gs(yieldScoreAs);
             return this;
         }
 
-        /** Exposes this arm's score (the vector distance) under the given column name. */
+        /**
+         * Exposes this arm's score (the vector similarity, not the raw distance) under the given column
+         * name.
+         */
         public Builder yieldScoreAs(@NonNull GlideString yieldScoreAs) {
             this.yieldScoreAs = yieldScoreAs;
             return this;

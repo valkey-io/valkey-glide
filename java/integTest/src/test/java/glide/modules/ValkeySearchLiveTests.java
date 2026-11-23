@@ -78,7 +78,7 @@ public class ValkeySearchLiveTests {
 
     private static final List<Arguments> clients = new ArrayList<>();
     private static final List<Arguments> resp2Clients = new ArrayList<>();
-    private static boolean capability;
+    private static final Map<BaseClient, Boolean> capabilityByClient = new HashMap<>();
 
     @BeforeAll
     @SneakyThrows
@@ -86,17 +86,20 @@ public class ValkeySearchLiveTests {
         GlideClusterClient clusterClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(5000).build())
                         .get();
-        clusterClient.flushall(FlushMode.SYNC, SimpleMultiNodeRoute.ALL_PRIMARIES).get();
         clients.add(Arguments.of(named("cluster", clusterClient)));
+        clusterClient.flushall(FlushMode.SYNC, SimpleMultiNodeRoute.ALL_PRIMARIES).get();
+        boolean clusterCapable = probeSearch13Capability(clusterClient);
+        capabilityByClient.put(clusterClient, clusterCapable);
 
+        boolean standaloneCapable = false;
         if (!TestConfiguration.STANDALONE_HOSTS[0].isEmpty()) {
             GlideClient standaloneClient =
                     GlideClient.createClient(commonClientConfig().requestTimeout(5000).build()).get();
-            standaloneClient.flushall(FlushMode.SYNC).get();
             clients.add(Arguments.of(named("standalone", standaloneClient)));
+            standaloneClient.flushall(FlushMode.SYNC).get();
+            standaloneCapable = probeSearch13Capability(standaloneClient);
+            capabilityByClient.put(standaloneClient, standaloneCapable);
         }
-
-        capability = probeSearch13Capability(clusterClient);
 
         // RESP2 coverage: a representative subset of the wave-2 live tests (scoring, cursor,
         // FT.HYBRID) is parametrized over both protocols via getResp2Clients(); the rest of this
@@ -110,12 +113,14 @@ public class ValkeySearchLiveTests {
                                         .build())
                         .get();
         resp2Clients.add(Arguments.of(named("cluster-resp2", resp2ClusterClient)));
+        capabilityByClient.put(resp2ClusterClient, clusterCapable);
         if (!TestConfiguration.STANDALONE_HOSTS[0].isEmpty()) {
             GlideClient resp2StandaloneClient =
                     GlideClient.createClient(
                                     commonClientConfig().requestTimeout(5000).protocol(ProtocolVersion.RESP2).build())
                             .get();
             resp2Clients.add(Arguments.of(named("standalone-resp2", resp2StandaloneClient)));
+            capabilityByClient.put(resp2StandaloneClient, standaloneCapable);
         }
     }
 
@@ -123,21 +128,45 @@ public class ValkeySearchLiveTests {
     @SneakyThrows
     @SuppressWarnings("unchecked")
     public static void teardown() {
+        Throwable failure = null;
         for (Arguments args : clients) {
             BaseClient client = ((Named<BaseClient>) args.get()[0]).getPayload();
-            if (client instanceof GlideClusterClient) {
-                ((GlideClusterClient) client)
-                        .flushall(FlushMode.SYNC, SimpleMultiNodeRoute.ALL_PRIMARIES)
-                        .get();
-            } else {
-                ((GlideClient) client).flushall(FlushMode.SYNC).get();
+            try {
+                if (client instanceof GlideClusterClient) {
+                    ((GlideClusterClient) client)
+                            .flushall(FlushMode.SYNC, SimpleMultiNodeRoute.ALL_PRIMARIES)
+                            .get();
+                } else {
+                    ((GlideClient) client).flushall(FlushMode.SYNC).get();
+                }
+            } catch (Throwable t) {
+                failure = accumulate(failure, t);
             }
-            client.close();
+            try {
+                client.close();
+            } catch (Throwable t) {
+                failure = accumulate(failure, t);
+            }
         }
         for (Arguments args : resp2Clients) {
             BaseClient client = ((Named<BaseClient>) args.get()[0]).getPayload();
-            client.close();
+            try {
+                client.close();
+            } catch (Throwable t) {
+                failure = accumulate(failure, t);
+            }
         }
+        if (failure != null) {
+            throw failure;
+        }
+    }
+
+    private static Throwable accumulate(Throwable first, Throwable next) {
+        if (first == null) {
+            return next;
+        }
+        first.addSuppressed(next);
+        return first;
     }
 
     @AfterEach
@@ -154,6 +183,12 @@ public class ValkeySearchLiveTests {
                 ((GlideClient) client).flushall(FlushMode.SYNC).get();
             }
         }
+    }
+
+    static void assumeSearch13Capable(BaseClient client) {
+        Assumptions.assumeTrue(
+                Boolean.TRUE.equals(capabilityByClient.get(client)),
+                "search module present but pre-1.3 (INKEYS probe rejected it)");
     }
 
     static Stream<Arguments> getClients() {
@@ -331,8 +366,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_search_inkeys(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String tag = "{" + UUID.randomUUID() + "}";
         String prefix = tag + ":";
@@ -448,8 +482,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_search_wildcard(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-wildcard-" + UUID.randomUUID() + "}:";
         String indexName = prefix + "index";
@@ -502,8 +535,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_search_vector_range_yield_distance_as(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-vecrange-" + UUID.randomUUID() + "}:";
         String indexName = prefix + "index";
@@ -562,8 +594,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_aggregate_sortby_adjacent_limit_widens_retained_rows(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-sortby-limit-" + UUID.randomUUID() + "}:";
         String indexName = prefix + "index";
@@ -681,8 +712,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_create_float16_bfloat16_vector(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         runFloat16Bfloat16KnnQuery(
                 client,
@@ -807,8 +837,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_create_filter_score_field_no_highlight(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{" + UUID.randomUUID() + "}:";
         String indexName = prefix + "parity_idx";
@@ -882,8 +911,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_create_score_field_affects_ranking(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-score-field-" + UUID.randomUUID() + "}:";
         String indexName = prefix + "index";
@@ -945,8 +973,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_create_sortable_unf(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-unf-" + UUID.randomUUID() + "}:";
         String indexName = prefix + "index";
@@ -1010,8 +1037,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_aggregate_reducers(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String tag = "{" + UUID.randomUUID() + "}";
         String prefix = tag + ":";
@@ -1156,26 +1182,35 @@ public class ValkeySearchLiveTests {
                                         .prefixes(new String[] {prefix})
                                         .build())
                         .get());
-        Map<String, Object> textWinnerFields = new HashMap<>();
-        textWinnerFields.put("title", "hello hello hello world");
-        Map<String, Object> vectorWinnerFields = new HashMap<>();
-        vectorWinnerFields.put("title", "goodbye");
-        Map<String, byte[]> vectors = new HashMap<>();
-        vectors.put(HYBRID_DOC_TEXT_WINNER, packVector(100.0f, 100.0f));
-        vectors.put(HYBRID_DOC_VECTOR_WINNER, packVector(1.0f, 1.0f));
-        for (String docName : new String[] {HYBRID_DOC_TEXT_WINNER, HYBRID_DOC_VECTOR_WINNER}) {
-            Map<String, Object> rawFields =
-                    docName.equals(HYBRID_DOC_TEXT_WINNER) ? textWinnerFields : vectorWinnerFields;
-            Map<GlideString, GlideString> hashFields = new HashMap<>();
-            hashFields.put(gs("title"), gs((String) rawFields.get("title")));
-            hashFields.put(gs("vec"), gs(vectors.get(docName)));
-            if (client instanceof GlideClusterClient) {
-                ((GlideClusterClient) client).hset(gs(prefix + docName), hashFields).get();
-            } else {
-                ((GlideClient) client).hset(gs(prefix + docName), hashFields).get();
+        try {
+            Map<String, Object> textWinnerFields = new HashMap<>();
+            textWinnerFields.put("title", "hello hello hello world");
+            Map<String, Object> vectorWinnerFields = new HashMap<>();
+            vectorWinnerFields.put("title", "goodbye");
+            Map<String, byte[]> vectors = new HashMap<>();
+            vectors.put(HYBRID_DOC_TEXT_WINNER, packVector(100.0f, 100.0f));
+            vectors.put(HYBRID_DOC_VECTOR_WINNER, packVector(1.0f, 1.0f));
+            for (String docName : new String[] {HYBRID_DOC_TEXT_WINNER, HYBRID_DOC_VECTOR_WINNER}) {
+                Map<String, Object> rawFields =
+                        docName.equals(HYBRID_DOC_TEXT_WINNER) ? textWinnerFields : vectorWinnerFields;
+                Map<GlideString, GlideString> hashFields = new HashMap<>();
+                hashFields.put(gs("title"), gs((String) rawFields.get("title")));
+                hashFields.put(gs("vec"), gs(vectors.get(docName)));
+                if (client instanceof GlideClusterClient) {
+                    ((GlideClusterClient) client).hset(gs(prefix + docName), hashFields).get();
+                } else {
+                    ((GlideClient) client).hset(gs(prefix + docName), hashFields).get();
+                }
             }
+            Thread.sleep(1000);
+        } catch (Throwable seedFailure) {
+            try {
+                FT.dropindex(client, index).get();
+            } catch (Throwable cleanupFailure) {
+                seedFailure.addSuppressed(cleanupFailure);
+            }
+            throw seedFailure;
         }
-        Thread.sleep(1000);
         return index;
     }
 
@@ -1185,8 +1220,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_search_with_scores_and_scorer(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-with-scores-" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
@@ -1260,8 +1294,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_search_with_scores_and_withsortkeys_combined_shape(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-scores-sortkeys-" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
@@ -1329,8 +1362,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_search_scorer_tfidf_rejected(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-scorer-tfidf-" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
@@ -1377,8 +1409,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_aggregate_add_scores_sortable_by_score(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-add-scores-" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
@@ -1443,8 +1474,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_aggregate_load_as(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-load-as-" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
@@ -1506,8 +1536,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_aggregate_typed_cursor_paged_to_exhaustion(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-typed-cursor-" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
@@ -1548,6 +1577,8 @@ public class ValkeySearchLiveTests {
                             .get();
             Map<GlideString, Object>[] rows = (Map<GlideString, Object>[]) page[0];
             long cursorId = (long) page[1];
+            assertTrue(rows.length < 20, "first page already held every row");
+            assertNotEquals(0L, cursorId, "first page did not open a cursor");
             totalRows += rows.length;
             for (Map<GlideString, Object> row : rows) {
                 seenNValues.add(Integer.parseInt(row.get(gs("n")).toString()));
@@ -1556,6 +1587,7 @@ public class ValkeySearchLiveTests {
             while (cursorId != 0) {
                 Object[] nextPage = FT.cursorRead(client, index, cursorId).get();
                 Map<GlideString, Object>[] nextRows = (Map<GlideString, Object>[]) nextPage[0];
+                assertTrue(nextRows.length <= 5, "continuation page exceeded COUNT 5");
                 totalRows += nextRows.length;
                 for (Map<GlideString, Object> row : nextRows) {
                     seenNValues.add(Integer.parseInt(row.get(gs("n")).toString()));
@@ -1586,8 +1618,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_aggregate_typed_cursor_del_and_errors(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-typed-cursor-del-" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
@@ -1647,8 +1678,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClustersOnly")
     public void ft_cursor_affinity_prefer_replica_client(BaseClient clusterClient) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(clusterClient);
         GlideClusterClient client = (GlideClusterClient) clusterClient;
 
         String prefix = "{ft-cursor-affinity-" + UUID.randomUUID() + "}:";
@@ -1664,21 +1694,20 @@ public class ValkeySearchLiveTests {
                                         .prefixes(new String[] {prefix})
                                         .build())
                         .get());
-        for (int i = 1; i <= 20; i++) {
-            Map<String, String> fields = new HashMap<>();
-            fields.put("n", Integer.toString(i));
-            client.hset(prefix + "d" + i, fields).get();
-        }
-        Thread.sleep(1000);
-
-        GlideClusterClient preferReplicaClient =
+        try (GlideClusterClient preferReplicaClient =
                 GlideClusterClient.createClient(
                                 commonClusterClientConfig()
                                         .requestTimeout(5000)
                                         .readFrom(ReadFrom.PREFER_REPLICA)
                                         .build())
-                        .get();
-        try {
+                        .get()) {
+            for (int i = 1; i <= 20; i++) {
+                Map<String, String> fields = new HashMap<>();
+                fields.put("n", Integer.toString(i));
+                client.hset(prefix + "d" + i, fields).get();
+            }
+            Thread.sleep(1000);
+
             int totalRows = 0;
             Object[] page =
                     (Object[])
@@ -1807,7 +1836,6 @@ public class ValkeySearchLiveTests {
                 assertTrue(e.getCause().getMessage().contains("Cursor"));
             }
         } finally {
-            preferReplicaClient.close();
             FT.dropindex(client, index).get();
         }
     }
@@ -1828,8 +1856,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_hybrid_basic_query(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-hybrid-basic-" + UUID.randomUUID() + "}:";
         String index = createHybridIndex(client, prefix);
@@ -1862,8 +1889,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_hybrid_params_not_substituted_in_search_query_text(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         // Confirms (rather than assumes) that FT.HYBRID's params map is NOT substituted into the
         // SEARCH arm's query text the way it is into the VSIM arm's $name vector reference. For a
@@ -1897,8 +1923,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_hybrid_params_substituted_in_filter_clause(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         // Confirms (rather than assumes) that FT.HYBRID's params map IS substituted into an
         // aggregate-tail clause's expression text (unlike the SEARCH arm's own query text -- see
@@ -1957,8 +1982,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_hybrid_aggregate_clause_filters_post_fusion(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-hybrid-postfusion-filter-" + UUID.randomUUID() + "}:";
         String index = createHybridIndex(client, prefix);
@@ -2025,8 +2049,7 @@ public class ValkeySearchLiveTests {
     @SneakyThrows
     private void assertCombineWinner(
             BaseClient client, FTHybridCombine combine, String expectedFirst) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-hybrid-combine-" + UUID.randomUUID() + "}:";
         String index = createHybridIndex(client, prefix);
@@ -2072,8 +2095,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_hybrid_vector_inline_bytes_and_param_reference(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-hybrid-vecparam-" + UUID.randomUUID() + "}:";
         String index = createHybridIndex(client, prefix);
@@ -2131,8 +2153,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_hybrid_per_arm_and_combine_yield_score_as_columns(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-hybrid-yieldscore-" + UUID.randomUUID() + "}:";
         String index = createHybridIndex(client, prefix);
@@ -2188,8 +2209,7 @@ public class ValkeySearchLiveTests {
 
     @SneakyThrows
     private void assertVsimFilterWithPolicy(BaseClient client, HybridFilterPolicy policy) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-hybrid-filter-" + UUID.randomUUID() + "}:";
         String index = createHybridIndex(client, prefix);
@@ -2217,8 +2237,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_hybrid_localonly_accepted(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-hybrid-localonly-" + UUID.randomUUID() + "}:";
         String index = createHybridIndex(client, prefix);
@@ -2241,8 +2260,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_hybrid_without_k_uses_engine_default(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-hybrid-default-k-" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
@@ -2274,14 +2292,27 @@ public class ValkeySearchLiveTests {
             }
             Thread.sleep(1000);
 
-            Object[] result =
+            FTHybridOptions limitFifteen =
+                    FTHybridOptions.builder().addClause(new FTAggregateOptions.Limit(0, 15)).build();
+            Object[] defaultK =
                     FT.hybrid(
                                     client,
                                     index,
                                     new FTHybridSearchArm("nonexistentterm12345"),
-                                    FTHybridVsimArm.builder("vec", packVector(1.0f, 1.0f)).build())
+                                    FTHybridVsimArm.builder("vec", packVector(1.0f, 1.0f)).build(),
+                                    limitFifteen)
                             .get();
-            assertEquals(10, result.length);
+            assertEquals(10, defaultK.length);
+
+            Object[] explicitK =
+                    FT.hybrid(
+                                    client,
+                                    index,
+                                    new FTHybridSearchArm("nonexistentterm12345"),
+                                    FTHybridVsimArm.builder("vec", packVector(1.0f, 1.0f)).k(15).build(),
+                                    limitFifteen)
+                            .get();
+            assertEquals(15, explicitK.length);
         } finally {
             FT.dropindex(client, index).get();
         }
@@ -2291,8 +2322,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_hybrid_withCursor_split_matches_aggregate(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-hybrid-cursor-split-" + UUID.randomUUID() + "}:";
         String index = createHybridIndex(client, prefix);
@@ -2343,21 +2373,19 @@ public class ValkeySearchLiveTests {
     @MethodSource("getClustersOnly")
     public void ft_hybrid_with_cursor_prefer_replica_client_paged_to_exhaustion(
             BaseClient clusterClient) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(clusterClient);
         GlideClusterClient client = (GlideClusterClient) clusterClient;
 
         String prefix = "{ft-hybrid-cursor-" + UUID.randomUUID() + "}:";
         String index = createHybridIndex(client, prefix);
 
-        GlideClusterClient preferReplicaClient =
+        try (GlideClusterClient preferReplicaClient =
                 GlideClusterClient.createClient(
                                 commonClusterClientConfig()
                                         .requestTimeout(5000)
                                         .readFrom(ReadFrom.PREFER_REPLICA)
                                         .build())
-                        .get();
-        try {
+                        .get()) {
             int totalRows = 0;
             Object[] page =
                     FT.hybridWithCursor(
@@ -2369,6 +2397,8 @@ public class ValkeySearchLiveTests {
                             .get();
             Map<GlideString, Object>[] rows = (Map<GlideString, Object>[]) page[0];
             long cursorId = (long) page[1];
+            assertTrue(rows.length < 2, "first page already held every row");
+            assertNotEquals(0L, cursorId, "first page did not open a cursor");
             totalRows += rows.length;
             Set<GlideString> seenKeys = new HashSet<>();
             for (Map<GlideString, Object> row : rows) {
@@ -2392,7 +2422,6 @@ public class ValkeySearchLiveTests {
             expectedKeys.add(gs(prefix + HYBRID_DOC_VECTOR_WINNER));
             assertEquals(expectedKeys, seenKeys);
         } finally {
-            preferReplicaClient.close();
             FT.dropindex(client, index).get();
         }
     }
@@ -2401,8 +2430,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_hybrid_inside_multi_exec_rejected(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-hybrid-multiexec-" + UUID.randomUUID() + "}:";
         String index = createHybridIndex(client, prefix);
@@ -2420,6 +2448,7 @@ public class ValkeySearchLiveTests {
                 gs("q"),
                 gs(packVector(HYBRID_QUERY_VECTOR[0], HYBRID_QUERY_VECTOR[1]))
             };
+            customCommand(client, cmd);
             if (client instanceof GlideClusterClient) {
                 glide.api.models.ClusterBatch batch = new glide.api.models.ClusterBatch(true);
                 batch.customCommand(cmd);
@@ -2460,8 +2489,7 @@ public class ValkeySearchLiveTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void ft_hybrid_vsim_range_rejected(BaseClient client) {
-        Assumptions.assumeTrue(
-                capability, "search module present but pre-1.3 (INKEYS probe rejected it)");
+        assumeSearch13Capable(client);
 
         String prefix = "{ft-hybrid-range-" + UUID.randomUUID() + "}:";
         String index = createHybridIndex(client, prefix);

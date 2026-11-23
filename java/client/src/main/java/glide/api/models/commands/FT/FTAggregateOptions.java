@@ -313,7 +313,11 @@ public class FTAggregateOptions {
             return this;
         }
 
-        /** If set, exposes the relevance score as a pipeline field named {@code __score}. */
+        /**
+         * If set, exposes the relevance score as a pipeline field named {@code __score}. Requires
+         * valkey-search 1.3 or later. See the <a
+         * href="https://valkey.io/commands/ft.aggregate/">FT.AGGREGATE documentation</a>.
+         */
         public FTAggregateOptionsBuilder addScores() {
             this.addScores$value = true;
             this.addScores$set = true;
@@ -322,7 +326,8 @@ public class FTAggregateOptions {
 
         /**
          * Set the scoring function used to compute {@code __score} and rank results. {@code "BM25STD"}
-         * is the only value currently registered and selectable.
+         * is the only value currently registered and selectable. Requires valkey-search 1.3 or later.
+         * See the <a href="https://valkey.io/commands/ft.aggregate/">FT.AGGREGATE documentation</a>.
          *
          * @param scorer The scoring function name.
          */
@@ -333,7 +338,8 @@ public class FTAggregateOptions {
 
         /**
          * Set the scoring function used to compute {@code __score} and rank results. {@code "BM25STD"}
-         * is the only value currently registered and selectable.
+         * is the only value currently registered and selectable. Requires valkey-search 1.3 or later.
+         * See the <a href="https://valkey.io/commands/ft.aggregate/">FT.AGGREGATE documentation</a>.
          *
          * @param scorer The scoring function name.
          */

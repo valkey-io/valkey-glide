@@ -36,14 +36,16 @@ public class FTHybridOptions {
     /**
      * FILTER, LIMIT, GROUPBY, SORTBY and APPLY clauses, reusing {@link
      * FTAggregateOptions.FTAggregateClause} and its subclasses verbatim from the FT.AGGREGATE options
-     * module. Every arm alias is freely reachable from these clauses (APPLY, SORTBY, GROUPBY/REDUCE)
-     * -- only the LOAD clause has the alias restriction described on {@link FTHybridSearchArm}.
-     * FT.HYBRID also applies its own default LIMIT of 10 rows when no {@link
-     * FTAggregateOptions.Limit} clause is given here -- FT.AGGREGATE has no such default and returns
-     * everything. {@link #toArgs} always emits {@code clauses} after {@code params}'s own serialized
-     * arguments (PARAMS is emitted only when the merged params map is non-empty, so this tail can be
-     * empty) -- emitting a leading FILTER clause right after the VSIM arm would otherwise let the
-     * server's VSIM parser claim it as a VSIM pre-filter instead.
+     * module. Every arm alias is reachable from these clauses (APPLY, SORTBY, GROUPBY/REDUCE) unless
+     * {@link FTHybridOptions.FTHybridOptionsBuilder#loadAll()} is set: under {@code LOAD *} the
+     * server does not let these clauses reference per-arm score aliases, so callers who need those
+     * aliases must use an explicit LOAD field list instead. The LOAD clause also has the alias
+     * restriction described on {@link FTHybridSearchArm}. FT.HYBRID also applies its own default
+     * LIMIT of 10 rows when no {@link FTAggregateOptions.Limit} clause is given here -- FT.AGGREGATE
+     * has no such default and returns everything. {@link #toArgs} always emits {@code clauses} after
+     * {@code params}'s own serialized arguments (PARAMS is emitted only when the merged params map is
+     * non-empty, so this tail can be empty) -- emitting a leading FILTER clause right after the VSIM
+     * arm would otherwise let the server's VSIM parser claim it as a VSIM pre-filter instead.
      */
     private final List<FTAggregateOptions.FTAggregateClause> clauses;
 
