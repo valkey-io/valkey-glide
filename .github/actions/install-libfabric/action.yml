@@ -1,0 +1,60 @@
+name: Install libfabric
+description: "Install libfabric for glide-rdma tests (Linux builds it from source, macOS uses Homebrew)"
+
+inputs:
+    # The vendored headers are libfabric 2.4, and a library older than the headers
+    # rejects every call. Ubuntu's package is 1.x, so Linux builds it from source.
+    version:
+        description: "libfabric release to build on Linux"
+        required: false
+        default: "2.6.0"
+    # From the release notes; update together with the version.
+    sha512:
+        description: "SHA-512 of the release tarball"
+        required: false
+        default: "4aa70dfad7d38c142c6758ce00a23fc0f2f919cb3a4acf9ea294c6bc1db182fc402e4e6578148b34a37b9bd0dad09045cf0284d118c6a5e47eea8b766c051c37"
+
+runs:
+    using: "composite"
+    steps:
+        - name: Reject unsupported runners
+          if: runner.os != 'Linux' && runner.os != 'macOS'
+          shell: bash
+          run: |
+              echo "::error::install-libfabric supports Linux and macOS only, not ${RUNNER_OS}"
+              exit 1
+
+        - name: Cache libfabric
+          if: runner.os == 'Linux'
+          id: cache-libfabric
+          uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+          with:
+              path: ~/libfabric
+              key: ${{ runner.os }}-${{ runner.arch }}-libfabric-${{ inputs.version }}
+
+        - name: Build libfabric (Linux)
+          if: runner.os == 'Linux' && steps.cache-libfabric.outputs.cache-hit != 'true'
+          shell: bash
+          working-directory: ${{ runner.temp }}
+          env:
+              LIBFABRIC_VERSION: ${{ inputs.version }}
+              LIBFABRIC_SHA512: ${{ inputs.sha512 }}
+          run: |
+              tarball="libfabric-${LIBFABRIC_VERSION}.tar.bz2"
+              curl -fsSL -o "$tarball" "https://github.com/ofiwg/libfabric/releases/download/v${LIBFABRIC_VERSION}/${tarball}"
+              echo "${LIBFABRIC_SHA512}  ${tarball}" | sha512sum -c -
+              tar xjf "$tarball"
+              cd "libfabric-${LIBFABRIC_VERSION}"
+              # The tests only use the tcp provider.
+              ./configure --prefix="$HOME/libfabric" --enable-only --enable-tcp
+              make -j"$(nproc)" install
+
+        - name: Point the loader at libfabric (Linux)
+          if: runner.os == 'Linux'
+          shell: bash
+          run: echo "GLIDE_LIBFABRIC_PATH=$HOME/libfabric/lib/libfabric.so.1" >> "$GITHUB_ENV"
+
+        - name: Install libfabric (macOS)
+          if: runner.os == 'macOS'
+          shell: bash
+          run: brew install libfabric

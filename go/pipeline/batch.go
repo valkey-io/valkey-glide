@@ -30,6 +30,14 @@ type BaseBatch[T StandaloneBatch | ClusterBatch] struct {
 //	Each element in the array represents a command given to the batch.
 //	The response for each command depends on the executed Valkey command.
 //	Specific response types are documented alongside each method.
+//
+// Atomic batches, batches sent while a raw MULTI is open, and non-atomic batches containing a
+// command that writes, changes connection or server state, uses a cursor, or is sent to every
+// node when run on its own (e.g. SELECT, CLIENT SETNAME, CONFIG SET, SLOWLOG GET, SCAN) run on
+// the primary node. HTTL, HPTTL, HEXPIRETIME and HPEXPIRETIME also keep a batch on the primary.
+// Other non-atomic batches, including ones with read-only admin commands such as CONFIG GET or
+// INFO, follow the client's ReadFrom setting, so with a replica setting they may observe
+// replication lag.
 type StandaloneBatch struct {
 	BaseBatch[StandaloneBatch]
 }
@@ -262,7 +270,7 @@ func (b *ClusterBatch) MigrateWithOptions(
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -284,7 +292,7 @@ func (b *ClusterBatch) SPublish(channel string, message string) *ClusterBatch {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -301,7 +309,7 @@ func (b *ClusterBatch) PubSubShardChannels() *ClusterBatch {
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //
@@ -328,7 +336,7 @@ func (b *ClusterBatch) PubSubShardChannelsWithPattern(pattern string) *ClusterBa
 //
 // Since:
 //
-//	Valkey 7.0 and above.
+//	Valkey 7.0.0.
 //
 // See [valkey.io] for details.
 //

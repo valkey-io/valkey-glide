@@ -62,6 +62,7 @@ public abstract class BaseScanOptions {
      * @return a String array that holds the options and their arguments.
      */
     public String[] toArgs() {
+        // TODO #7447: Converts `matchPatternBinary` lossily. Use `toGlideStringArgs()` instead.
         return Arrays.stream(toGlideStringArgs()).map(e -> e.getString()).toArray(String[]::new);
     }
 

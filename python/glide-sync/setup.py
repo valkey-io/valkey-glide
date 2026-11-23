@@ -4,7 +4,7 @@
 # This setup script defines the build logic for a Python package that wraps a
 # Rust-based FFI layer. It integrates with Cargo to compile the Rust component,
 # and vendors required Rust crates (`ffi`, `glide-core`, `glide-logger`,
-# `glide-telemetry`) and the
+# `glide-telemetry`, `glide-rdma`) and the
 # `glide_shared` Python package when building from source or creating sdists.
 #
 # It provides:
@@ -18,6 +18,9 @@
 #
 # Environment Variables:
 # - `GLIDE_SYNC_RELEASE=1` — Enables release mode and triggers vendoring during sdist creation.
+# - `GLIDE_SYNC_RDMA=1` — Builds the FFI layer with RDMA support.
+# - `GLIDE_SYNC_RDMA_TCP=1` — With `GLIDE_SYNC_RDMA=1`, also the `tcp` provider, for
+#   development and tests only; `RdmaProvider.Tcp()` is refused by a build without it.
 #
 # Typical usage:
 #   python setup.py build_ext      # Build the Rust shared library
@@ -34,6 +37,7 @@ import sysconfig
 from dataclasses import dataclass
 from pathlib import Path
 
+from build_utils import rust_cdylib_filename
 from setuptools import Command, setup
 from setuptools.command.build_ext import build_ext as build_ext_orig
 from setuptools.command.build_py import build_py as build_py_orig
@@ -70,6 +74,10 @@ VENDORED_DEPENDENCIES = {
     "glide-telemetry": VendorFolder(
         source=ROOT.parent.parent / "glide-telemetry",
         dist=ROOT / "glide-telemetry",
+    ),
+    "glide-rdma": VendorFolder(
+        source=ROOT.parent.parent / "glide-rdma",
+        dist=ROOT / "glide-rdma",
     ),
 }
 
@@ -110,7 +118,7 @@ def vendor_dependencies():
     for _name, folder in VENDORED_DEPENDENCIES.items():
         if folder.dist.exists():
             remove_existing(folder.dist)
-        print(f"[INFO] Copying {folder.source} → {folder.dist}")
+        print(f"[INFO] Copying {folder.source} -> {folder.dist}")
         shutil.copytree(folder.source, folder.dist, ignore=ignore_dirs)
 
     # Vendor only the Rust build files for glide-shared (Cargo.toml, Cargo.lock
@@ -162,6 +170,7 @@ class CleanCommand(Command):
             "glide-core",
             "glide-logger",
             "glide-telemetry",
+            "glide-rdma",
         ]
         for pattern in paths_to_remove:
             # Perform glob under ROOT only
@@ -200,25 +209,43 @@ class build_ext(build_ext_orig):
             }
         )
 
+        # Builds the RDMA support in. libfabric is dynamically loaded only
+        # when a client provides an optional RDMA configuration.
+        rdma = os.environ.get("GLIDE_SYNC_RDMA", "0") == "1"
+        rdma_tcp = os.environ.get("GLIDE_SYNC_RDMA_TCP", "0") == "1"
+        cargo_cmd = [
+            "cargo",
+            "rustc",
+            "--lib",
+            "--crate-type",
+            "cdylib",
+            "--locked",
+        ] + (["--release"] if release else [])
+        if rdma and rdma_tcp:
+            cargo_cmd += ["--features", "rdma-tcp-dev"]
+        elif rdma:
+            cargo_cmd += ["--features", "rdma"]
+
         ffi_path = VENDORED_DEPENDENCIES["ffi"].dist
-        print(f"[INFO] Building Rust FFI lib with cargo in {ffi_path}")
+        print(
+            f"[INFO] Building Rust FFI lib with cargo in {ffi_path}"
+            f"{' (RDMA enabled)' if rdma else ''}"
+        )
         subprocess.run(
-            ["cargo", "rustc", "--lib", "--crate-type", "cdylib", "--locked"]
-            + (["--release"] if release else []),
+            cargo_cmd,
             cwd=ffi_path,
             env=env,
             check=True,
         )
 
-        # Determine shared library path based on platform
+        # Determine shared library paths based on platform
         target_dir = "release" if release else "debug"
-        suffix = {"linux": ".so", "darwin": ".dylib", "win32": ".dll"}[sys.platform]
-        lib_name = "libglide_ffi" + suffix
+        lib_name = rust_cdylib_filename("glide_ffi", sys.platform)
 
         built_lib = cargo_target_dir(ffi_path) / target_dir / lib_name
         dest_dir = Path(self.build_lib) / "glide_sync"
         dest_dir.mkdir(parents=True, exist_ok=True)
-        print(f"[INFO] Copying {built_lib} → {dest_dir / lib_name}")
+        print(f"[INFO] Copying {built_lib} -> {dest_dir / lib_name}")
         shutil.copy2(built_lib, dest_dir / lib_name)
 
         # Build _fast_response native extension from glide-shared Rust crate
@@ -249,12 +276,12 @@ class build_ext(build_ext_orig):
         src_lib = (
             cargo_target_dir(glide_shared_rs)
             / target_dir
-            / ("lib_fast_response" + suffix)
+            / rust_cdylib_filename("_fast_response", sys.platform)
         )
         dest_shared = Path(self.build_lib) / "glide_shared"
         dest_shared.mkdir(parents=True, exist_ok=True)
         dest_ext = dest_shared / ("_fast_response" + ext_suffix)
-        print(f"[INFO] Copying {src_lib} → {dest_ext}")
+        print(f"[INFO] Copying {src_lib} -> {dest_ext}")
         shutil.copy2(src_lib, dest_ext)
 
         super().run()
@@ -296,7 +323,7 @@ class build_py(build_py_orig):
             source = ROOT.parent / "glide-shared" / "glide_shared"
         dest = Path(self.build_lib) / "glide_shared"
 
-        print(f"[INFO] Vendoring glide_shared from {source} → {dest}")
+        print(f"[INFO] Vendoring glide_shared from {source} -> {dest}")
         shutil.copytree(source, dest, dirs_exist_ok=True)
         super().run()
 

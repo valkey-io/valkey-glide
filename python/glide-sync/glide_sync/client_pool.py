@@ -23,6 +23,7 @@ Usage:
     pool.close()
 """
 
+import os
 import threading
 from dataclasses import dataclass
 from typing import Optional
@@ -30,6 +31,7 @@ from typing import Optional
 from glide_shared._glide_ffi import _GlideFFI
 from glide_shared.config import BaseClientConfiguration
 from glide_shared.connection_request import _create_sync_connection_request
+from glide_shared.exceptions import ClosingError
 
 from .glide_client import BaseClient, GlideClient
 
@@ -81,6 +83,7 @@ class ClientPool:
         "_conn_req_bytes",
         "_pool_id",
         "_cache_lock",
+        "_create_pid",
     )
 
     @classmethod
@@ -139,6 +142,13 @@ class ClientPool:
                 "Use the main client's pubsub API for subscriptions."
             )
 
+        # TODO: support RDMA in pools.
+        if getattr(client_config, "rdma", None) is not None:
+            raise ValueError(
+                "Pool clients cannot have RDMA configured. "
+                "Use a client outside a pool for RDMA transfers."
+            )
+
         ffi_instance = _GlideFFI()
         self._ffi = ffi_instance.ffi
         self._lib = ffi_instance.lib
@@ -175,6 +185,14 @@ class ClientPool:
             raise RuntimeError(f"Failed to create pool (error code: {pool_id})")
 
         self._pool_id = pool_id
+        self._create_pid = os.getpid()
+
+    def _check_same_process(self) -> None:
+        if self._create_pid != os.getpid():
+            raise ClosingError(
+                "Cannot use a pool created before fork(). "
+                "Create a new pool in the child process."
+            )
 
     @property
     def pool_id(self) -> int:
@@ -197,7 +215,9 @@ class ClientPool:
         Raises:
             TimeoutError: If no client available within timeout.
             RuntimeError: If pool is closed or invalid.
+            ClosingError: If the pool was created before a fork().
         """
+        self._check_same_process()
         if self._closed:
             raise RuntimeError("Pool is closed")
 
@@ -219,6 +239,7 @@ class ClientPool:
 
     def release(self, client_id: int) -> None:
         """Release a borrowed client back to the pool."""
+        self._check_same_process()
         self._lib.glide_pool_release(self._pool_id, client_id)
 
     def borrow(self, timeout: Optional[float] = None):
@@ -280,14 +301,12 @@ class ClientPool:
             return client
 
     def metrics(self) -> dict:
-        """Get pool metrics: idle, active, total counts."""
-        idle = self._ffi.new("uint32_t*")
-        active = self._ffi.new("uint32_t*")
-        total = self._ffi.new("uint32_t*")
-        result = self._lib.glide_pool_metrics(self._pool_id, idle, active, total)
-        if result != 0:
-            return {"idle": 0, "active": 0, "total": 0}
-        return {"idle": idle[0], "active": active[0], "total": total[0]}
+        """Get pool metrics: idle, active, total counts.
+
+        Zeros when the pool was destroyed.
+        """
+        m = self._lib.glide_pool_metrics(self._pool_id)
+        return {"idle": m.idle, "active": m.active, "total": m.total}
 
     @property
     def idle_count(self) -> int:
@@ -336,5 +355,7 @@ class _BorrowContext:
         return self._pool._get_or_create_client(self._client_id)
 
     def __exit__(self, *_):
-        self._pool.release(self._client_id)
+        # In a forked child the parent owns the borrow; don't mask the user's error.
+        if self._pool._create_pid == os.getpid():
+            self._pool.release(self._client_id)
         return False

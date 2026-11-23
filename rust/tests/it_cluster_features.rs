@@ -13,6 +13,7 @@ use glide::{
 };
 use std::time::Duration;
 
+// TODO #7673: Update for the single-node route type, and cover a routed batch.
 timed_tokio_test!(
     async fn cluster_exec_with_options() {
         let cluster = common::ClusterHarness::start().await;

@@ -2538,7 +2538,7 @@ func (suite *GlideTestSuite) TestFunctionDumpAndRestoreCluster() {
 	_, err = client.FunctionRestoreWithPolicy(context.Background(), dump, constants.ReplacePolicy)
 	assert.NotNil(suite.T(), err)
 	errMsg := err.Error()
-	// valkey checks names in random order and blames on first collision
+	// Valkey checks names in random order and blames on first collision
 	assert.True(suite.T(),
 		strings.Contains(errMsg, "Function "+name1+" already exists") ||
 			strings.Contains(errMsg, "Function "+name2+" already exists"))

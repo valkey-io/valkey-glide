@@ -1,15 +1,3 @@
-/*
- * DIVERGENCE FROM UPSTREAM: libfabric's exported functions are renamed.
- *
- * libfabric is never linked. glide-rdma defines each of these functions itself
- * under a glide_ prefix, forwarding to the libfabric it loads at run time. The
- * prefix keeps those definitions from clashing with a real libfabric that
- * something else in the same process has loaded.
- *
- * These are function-like macros, so a name is only replaced where it is called
- * or declared. fi_prov.h also has a struct field named fi_version, which a plain
- * macro would rename. The list must match SHIMMED in build.rs.
- */
 #define fi_getinfo(...) glide_fi_getinfo(__VA_ARGS__)
 #define fi_freeinfo(...) glide_fi_freeinfo(__VA_ARGS__)
 #define fi_dupinfo(...) glide_fi_dupinfo(__VA_ARGS__)
@@ -178,16 +166,6 @@ int wrap_fi_rx_context(struct fid_ep *ep, int idx, struct fi_rx_attr *attr,
 		       struct fid_ep **rx_ep, void *context)
 {
 	return fi_rx_context(ep, idx, attr, rx_ep, context);
-}
-
-ssize_t wrap_fi_rx_size_left(struct fid_ep *ep)
-{
-	return fi_rx_size_left(ep);
-}
-
-ssize_t wrap_fi_tx_size_left(struct fid_ep *ep)
-{
-	return fi_tx_size_left(ep);
 }
 
 int wrap_fi_stx_context(struct fid_domain *domain, struct fi_tx_attr *attr,
@@ -417,18 +395,6 @@ int wrap_fi_cntr_open(struct fid_domain *domain, struct fi_cntr_attr *attr,
 	return fi_cntr_open(domain, attr, cntr, context);
 }
 
-int wrap_fi_wait_open(struct fid_fabric *fabric, struct fi_wait_attr *attr,
-		      struct fid_wait **waitset)
-{
-	return fi_wait_open(fabric, attr, waitset);
-}
-
-int wrap_fi_poll_open(struct fid_domain *domain, struct fi_poll_attr *attr,
-		      struct fid_poll **pollset)
-{
-	return fi_poll_open(domain, attr, pollset);
-}
-
 int wrap_fi_mr_reg(struct fid_domain *domain, const void *buf, size_t len,
 		   uint64_t acs, uint64_t offset, uint64_t requested_key,
 		   uint64_t flags, struct fid_mr **mr, void *context)
@@ -500,11 +466,6 @@ int wrap_fi_av_open(struct fid_domain *domain, struct fi_av_attr *attr,
 		    struct fid_av **av, void *context)
 {
 	return fi_av_open(domain, attr, av, context);
-}
-
-int wrap_fi_av_bind(struct fid_av *av, struct fid *fid, uint64_t flags)
-{
-	return fi_av_bind(av, fid, flags);
 }
 
 int wrap_fi_av_insert(struct fid_av *av, const void *addr, size_t count,
@@ -774,28 +735,6 @@ int wrap_fi_query_collective(struct fid_domain *domain,
 int wrap_fi_trywait(struct fid_fabric *fabric, struct fid **fids, int count)
 {
 	return fi_trywait(fabric, fids, count);
-}
-
-int wrap_fi_wait(struct fid_wait *waitset, int timeout)
-{
-	return fi_wait(waitset, timeout);
-}
-
-int wrap_fi_poll(struct fid_poll *pollset, void **context, int count)
-{
-	return fi_poll(pollset, context, count);
-}
-
-int wrap_fi_poll_add(struct fid_poll *pollset, struct fid *event_fid,
-		     uint64_t flags)
-{
-	return fi_poll_add(pollset, event_fid, flags);
-}
-
-int wrap_fi_poll_del(struct fid_poll *pollset, struct fid *event_fid,
-		     uint64_t flags)
-{
-	return fi_poll_del(pollset, event_fid, flags);
 }
 
 int wrap_fi_eq_open(struct fid_fabric *fabric, struct fi_eq_attr *attr,

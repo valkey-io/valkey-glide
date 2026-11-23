@@ -51,7 +51,7 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
         /**
          * Use sharded pubsub.
          *
-         * @since Valkey 7.0 and above.
+         * @since Valkey 7.0.0.
          */
         SHARDED,
     }

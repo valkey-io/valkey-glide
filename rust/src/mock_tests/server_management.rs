@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 //! Mock-executor unit tests for the server-management command family.
 use super::Mock;
+use crate::InfoSection;
 use crate::ValkeyValue;
 use crate::commands::server_management::ServerManagementCommands;
 
@@ -12,7 +13,9 @@ async fn info_and_sections() {
     assert!(info.starts_with("# Server"));
 
     let m = Mock::bulk("# CPU\n");
-    m.info_sections(&["cpu", "memory"]).await.unwrap();
+    m.info_sections(&[InfoSection::Cpu, InfoSection::Memory])
+        .await
+        .unwrap();
     m.assert_args(&["INFO", "cpu", "memory"]);
 }
 

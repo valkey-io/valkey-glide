@@ -68,21 +68,57 @@ const ReturnOldValue = "GET"
 type ConditionalSet string
 
 const (
-	// OnlyIfExists only sets the key if it already exists. Equivalent to "XX" in the valkey API.
+	// OnlyIfExists only sets the key if it already exists.
+	// Equivalent to "XX" in the Valkey API.
 	OnlyIfExists ConditionalSet = "XX"
-	// OnlyIfDoesNotExist only sets the key if it does not already exist. Equivalent to "NX" in the valkey API.
+
+	// OnlyIfDoesNotExist only sets the key if it does not already exist.
+	// Equivalent to "NX" in the Valkey API.
 	OnlyIfDoesNotExist ConditionalSet = "NX"
-	// OnlyIfEquals only sets the key if it already exists and the value is equal to the given value. Equivalent to "IFEQ" in
-	// the valkey API.
+
+	// OnlyIfEquals only sets the key if it already exists and the value is equal to the given value.
+	// Equivalent to "IFEQ" in the Valkey API.
+	// Since Valkey 8.1.0.
+	// Not supported when compression is enabled. See [Valkey GLIDE – Data Compression].
 	//
-	// since Valkey 8.1 and above.
+	// [Valkey GLIDE – Data Compression]: https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands
 	OnlyIfEquals ConditionalSet = "IFEQ"
-	// OnlyIfFieldsDoNotExist only sets the hash fields if none of them already exist. Equivalent to "FNX" in the valkey API.
+
+	// OnlyIfNotEquals only sets the key if it does not exist or if the value is not equal to the given value.
+	// Equivalent to "IFNE" in the Valkey API.
+	// Since Valkey 9.2.0.
+	// Not supported when compression is enabled. See [Valkey GLIDE – Data Compression].
+	//
+	// [Valkey GLIDE – Data Compression]: https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands
+	OnlyIfNotEquals ConditionalSet = "IFNE"
+
+	// TODO: https://github.com/valkey-io/valkey-glide/issues/7489
+
+	// OnlyIfFieldsDoNotExist only sets the hash fields if none of them already exist.
+	// Equivalent to "FNX" in the Valkey API.
 	// Used with hash field expiration commands.
+	//
+	// Deprecated: Use [HashFieldsDoNotExist] with options.HSetExOptions.SetFieldConditionalSet instead.
 	OnlyIfFieldsDoNotExist ConditionalSet = "FNX"
-	// OnlyIfAllFieldsExist only sets the hash fields if all of them already exist. Equivalent to "FXX" in the valkey API.
+
+	// TODO: https://github.com/valkey-io/valkey-glide/issues/7489
+
+	// OnlyIfAllFieldsExist only sets the hash fields if all of them already exist.
+	// Equivalent to "FXX" in the Valkey API.
 	// Used with hash field expiration commands.
+	//
+	// Deprecated: Use [HashAllFieldsExist] with options.HSetExOptions.SetFieldConditionalSet instead.
 	OnlyIfAllFieldsExist ConditionalSet = "FXX"
+)
+
+// A HashFieldConditionalSet defines a field condition for setting hash fields, used by the HSETEX command.
+type HashFieldConditionalSet string
+
+const (
+	// HashFieldsDoNotExist only sets the hash fields if none of them already exist. Equivalent to "FNX" in the Valkey API.
+	HashFieldsDoNotExist HashFieldConditionalSet = "FNX"
+	// HashAllFieldsExist only sets the hash fields if all of them already exist. Equivalent to "FXX" in the Valkey API.
+	HashAllFieldsExist HashFieldConditionalSet = "FXX"
 )
 
 func (conditionalSet ConditionalSet) ToString() (string, error) {
@@ -93,6 +129,8 @@ func (conditionalSet ConditionalSet) ToString() (string, error) {
 		return string(OnlyIfDoesNotExist), nil
 	case OnlyIfEquals:
 		return string(OnlyIfEquals), nil
+	case OnlyIfNotEquals:
+		return string(OnlyIfNotEquals), nil
 	case OnlyIfFieldsDoNotExist:
 		return string(OnlyIfFieldsDoNotExist), nil
 	case OnlyIfAllFieldsExist:
@@ -105,13 +143,20 @@ func (conditionalSet ConditionalSet) ToString() (string, error) {
 type ExpireCondition string
 
 const (
-	// HasExistingExpiry only sets the key if it already exists. Equivalent to "XX" in the valkey API.
+	// HasExistingExpiry only sets the key if it already exists.
+	// Equivalent to "XX" in the Valkey API.
 	HasExistingExpiry ExpireCondition = "XX"
-	// HasNoExpiry only sets the key if it does not already exist. Equivalent to "NX" in the valkey API.
+
+	// HasNoExpiry only sets the key if it does not already exist.
+	// Equivalent to "NX" in the Valkey API.
 	HasNoExpiry ExpireCondition = "NX"
-	// NewExpiryGreaterThanCurrent only sets the key if its greater than current. Equivalent to "GT" in the valkey API.
+
+	// NewExpiryGreaterThanCurrent only sets the key if its greater than current.
+	// Equivalent to "GT" in the Valkey API.
 	NewExpiryGreaterThanCurrent ExpireCondition = "GT"
-	// NewExpiryLessThanCurrent only sets the key if its lesser than current. Equivalent to "LT" in the valkey API.
+
+	// NewExpiryLessThanCurrent only sets the key if its lesser than current.
+	// Equivalent to "LT" in the Valkey API.
 	NewExpiryLessThanCurrent ExpireCondition = "LT"
 )
 
@@ -345,8 +390,20 @@ const (
 type VectorDataType string
 
 const (
-	// VectorDataTypeFloat32 is the FLOAT32 vector type (default).
+	// VectorDataTypeFloat32 is the FLOAT32 vector type (default). 4 bytes per element, IEEE 754
+	// single precision.
 	VectorDataTypeFloat32 VectorDataType = "FLOAT32"
+	// VectorDataTypeFloat16 is the FLOAT16 vector type (valkey-search 1.3.0). 2 bytes per
+	// element, IEEE 754 half precision. Callers must pass already-encoded bytes, the same way
+	// FLOAT32 works today -- GLIDE does not encode vectors on the caller's behalf.
+	VectorDataTypeFloat16 VectorDataType = "FLOAT16"
+	// VectorDataTypeBfloat16 is the BFLOAT16 vector type (valkey-search 1.3.0). 2 bytes per
+	// element, truncated IEEE 754 single precision (the top 16 bits of a FLOAT32 -- sign, 8-bit
+	// exponent, 7-bit mantissa). Callers must pass already-encoded bytes; there is no built-in Go
+	// packer for this format. The engine may refuse to create or load a BFLOAT16 index on a host
+	// whose CPU lacks a SIMD BF16 code path -- this is a server-side capability check, not a
+	// GLIDE-side restriction.
+	VectorDataTypeBfloat16 VectorDataType = "BFLOAT16"
 )
 
 // IndexDataType is the type of the index dataset.
@@ -389,6 +446,28 @@ const (
 	FtAggregateOrderByAsc FtAggregateOrderBy = "ASC"
 	// FtAggregateOrderByDesc sorts results in descending order.
 	FtAggregateOrderByDesc FtAggregateOrderBy = "DESC"
+)
+
+// HybridFilterPolicy controls how a VSIM pre-filter is applied against the vector search in
+// FT.HYBRID. Only meaningful inside a counted VSIM FILTER block -- valkey-search's uncounted
+// "FILTER <expr>" extension on VSIM (no leading token count) cannot carry a policy at all; the
+// server requires the counted form to accept POLICY.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/ft.hybrid/
+type HybridFilterPolicy string
+
+const (
+	// HybridFilterPolicyAdhoc evaluates the filter against every candidate as it is produced
+	// (brute-force), rather than pre-restricting the vector index's own search space. EfRuntime
+	// on the same VSIM arm is rejected when this policy is set ("EF_RUNTIME is irrelevant for
+	// POLICY ADHOC").
+	HybridFilterPolicyAdhoc HybridFilterPolicy = "ADHOC"
+	// HybridFilterPolicyBatches evaluates the filter in batches drawn from the vector index.
+	// Required for BatchSize to be set on FtHybridVsimFilter ("BATCH_SIZE requires POLICY
+	// BATCHES").
+	HybridFilterPolicyBatches HybridFilterPolicy = "BATCHES"
 )
 
 // FunctionRestorePolicy represents the policy to use when restoring functions.

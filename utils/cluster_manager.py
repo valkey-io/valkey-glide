@@ -3,6 +3,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import argparse
+import ipaddress
 
 try:
     import fcntl  # POSIX only — not available on Windows
@@ -21,6 +22,8 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
+from enum import Enum
+from functools import cached_property
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -78,6 +81,10 @@ OPENSSL_CONFIG_CONTENTS = f"""\
 keyUsage = digitalSignature, keyEncipherment
 subjectAltName = IP:{DEFAULT_HOST_IPV4}, IP:{DEFAULT_HOST_IPV6}, DNS:localhost, DNS:{HOSTNAME_TLS}
 """
+
+# Matches a cluster node ID in a CLUSTER SLOTS response.
+# A Valkey/Redis node ID is composed of 40 lowercase hex characters.
+CLUSTER_SLOTS_NODE_ID_REGEX = re.compile(r"^[0-9a-f]{40}$", re.MULTILINE)
 
 
 def get_command(commands: List[str]) -> str:
@@ -300,6 +307,12 @@ def get_random_string(length):
     return result_str
 
 
+class NodeCheck(Enum):
+    READY = "ready"
+    PORT_TAKEN = "port taken"
+    NO_VERDICT = "no verdict"
+
+
 class Server:
     def __init__(self, host: str, port: int) -> None:
         self.host = host
@@ -327,6 +340,48 @@ class Server:
     def set_primary(self, is_primary: bool):
         self.is_primary = is_primary
 
+    @cached_property
+    def is_dns_name(self) -> bool:
+        """Whether the server's host is a DNS name rather than an IP address."""
+        try:
+            ipaddress.ip_address(self.host)
+            return False
+        except ValueError:
+            return True
+
+    @cached_property
+    def bind_addresses(self) -> List[str]:
+        """The IP addresses to pass for the server to `--bind`."""
+        # Loopback hosts bind to both the IPv4 and IPv6 loopback addresses.
+        if self.host in (DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6, "localhost"):
+            return [DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6]
+
+        # Any other host binds to its IP addresses plus the IPv4 loopback, so that
+        # local and remote clients can connect. Remove duplicates because binding
+        # the same address twice makes the server fail with "Address already in use".
+        return list(dict.fromkeys(self._ip_addresses + [DEFAULT_HOST_IPV4]))
+
+    @cached_property
+    def cluster_create_address(self) -> str:
+        """The IP address to pass for the server to `--cluster create`."""
+        # Send the resolved IP address instead of the host name:
+        # `CLUSTER MEET` only accepts IP addresses, and `redis-cli`
+        # before Redis 7.0 did not resolve host names.
+        return self._ip_addresses[0]
+
+    @cached_property
+    def _ip_addresses(self) -> List[str]:
+        """The server's IP addresses."""
+        if not self.is_dns_name:
+            return [self.host]
+
+        try:
+            addr_infos = socket.getaddrinfo(self.host, None, proto=socket.IPPROTO_TCP)
+        except socket.gaierror as e:
+            raise ValueError(f"Could not resolve host {self.host}: {e}") from e
+
+        return list(dict.fromkeys(str(addr_info[4][0]) for addr_info in addr_infos))
+
 
 def print_servers_json(servers: List[Server]):
     """
@@ -339,35 +394,62 @@ def print_servers_json(servers: List[Server]):
     print("SERVERS_JSON={}".format(json.dumps(arr)))
 
 
+# valkey's default cluster-port is the client port plus this offset.
+CLUSTER_BUS_PORT_OFFSET = 10000
+
+
+def listening_ports(port: int, cluster_mode: bool) -> List[int]:
+    """Every port a node started with `--port port` binds."""
+    if cluster_mode:
+        return [port, port + CLUSTER_BUS_PORT_OFFSET]
+    return [port]
+
+
+def is_port_free(port: int) -> bool:
+    """Whether a plain bind of `port` succeeds on both loopback addresses."""
+    for family, host in (
+        (socket.AF_INET, DEFAULT_HOST_IPV4),
+        (socket.AF_INET6, DEFAULT_HOST_IPV6),
+    ):
+        sock = None
+        try:
+            sock = socket.socket(family, socket.SOCK_STREAM)
+            if family == socket.AF_INET6:
+                sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            sock.bind((host, port))
+        except OSError as e:
+            logging.warning(f"next_free_port error for port {port}: {e}")
+            return False
+        finally:
+            if sock is not None:
+                sock.close()
+    return True
+
+
 def next_free_port(
-    min_port: int = 6379, max_port: int = 55535, timeout: int = 60
+    min_port: int = 6379,
+    max_port: int = 55535,
+    timeout: float = 60,
+    *,
+    cluster_mode: bool,
 ) -> int:
+    """A random client port in [min_port, max_port] whose `listening_ports`
+    are all free, or raise once `timeout` seconds pass without one."""
     tic = time.perf_counter()
 
     timeout_start = time.time()
     while time.time() < timeout_start + timeout:
-        try:
-            port = random.randint(min_port, max_port)
-
-            # Check IPv4 address.
-            sock4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock4.bind((DEFAULT_HOST_IPV4, port))
-            sock4.close()
-
-            # Check IPv6 address.
-            sock6 = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-            sock6.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-            sock6.bind((DEFAULT_HOST_IPV6, port))
-            sock6.close()
-
+        port = random.randint(min_port, max_port)
+        # A collision on a port the probe skipped surfaces only as the node
+        # exiting with "Address already in use". Without SO_REUSEADDR the probe
+        # also rejects server-side TIME_WAIT the server could bind over; that
+        # costs one retry.
+        if all(is_port_free(p) for p in listening_ports(port, cluster_mode)):
             toc = time.perf_counter()
             logging.debug(f"next_free_port() is {port} Elapsed time: {toc - tic:0.4f}")
             return port
-        except OSError as e:
-            logging.warning(f"next_free_port error for port {port}: {e}")
-            # Sleep so we won't spam the system with sockets
-            time.sleep(random.randint(0, 9) / 10000 + 0.01)
-            continue
+        # Sleep so we won't spam the system with sockets
+        time.sleep(random.randint(0, 9) / 10000 + 0.01)
 
     logging.error("Timeout Expired: No free port found")
     raise Exception("Timeout Expired: No free port found")
@@ -389,35 +471,6 @@ def create_cluster_folder(path: str, prefix: str) -> str:
     logging.debug(f"## Creating cluster folder in {cluster_folder}")
     Path(cluster_folder).mkdir(exist_ok=True)
     return cluster_folder
-
-
-def get_bind_addresses(host: str) -> List[str]:
-    """
-    Returns the addresses a server should bind to for the given host.
-
-    Loopback hosts bind to both the IPv4 and IPv6 loopback addresses. Any other
-    host binds to its resolved addresses plus the IPv4 loopback, so that local
-    and remote clients can connect.
-
-    Args:
-        host (str): The host the server is started with.
-
-    Returns:
-        List[str]: The unique addresses to pass to `--bind`.
-    """
-    if host in (DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6, "localhost"):
-        return [DEFAULT_HOST_IPV4, DEFAULT_HOST_IPV6]
-
-    try:
-        addr_infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
-        resolved = [str(addr_info[4][0]) for addr_info in addr_infos]
-    except socket.gaierror:
-        logging.warning(f"Could not resolve host {host}; binding it as given")
-        resolved = [host]
-
-    # Remove duplicates because binding the same address
-    # twice makes the server fail with "Address already in use".
-    return list(dict.fromkeys(resolved + [DEFAULT_HOST_IPV4]))
 
 
 def build_loadmodule_args(module_path: str) -> List[str]:
@@ -460,7 +513,7 @@ def start_server(
     load_module: Optional[List[str]] = None,
     cluster_node_timeout: Optional[int] = None,
 ) -> Tuple[Server, str]:
-    port = port if port else next_free_port()
+    port = port if port else next_free_port(cluster_mode=cluster_mode)
     logging.debug(f"Creating server {host}:{port}")
 
     # Create sub-folder for each node
@@ -510,24 +563,25 @@ def start_server(
         "0",
     ]
 
-    cmd_args.extend(["--bind", *get_bind_addresses(host)])
+    server = Server(host, port)
+    cmd_args.extend(["--bind", *server.bind_addresses])
 
-    # If host is a DNS hostname, set cluster-announce-hostname so
-    # the cluster topology reports DNS names instead of IP addresses.
     if cluster_mode:
         if cluster_node_timeout is not None:
             cmd_args.extend(["--cluster-node-timeout", str(cluster_node_timeout)])
-        try:
-            import ipaddress
-            ipaddress.ip_address(host)
-        except ValueError:
+
+        # Enable cluster-announce-hostname if host is a DNS hostname so that
+        # cluster topology reports hostnames instead of IP addresses (Redis 7.0+).
+        if server_version >= (7, 0, 0) and server.is_dns_name:
             cmd_args.extend(["--cluster-announce-hostname", host])
+
+        # Enable multi-database support (Valkey 9.0+).
+        if server_version >= (9, 0, 0):
+            cmd_args.extend(["--cluster-databases", "16"])
 
     if server_version >= (7, 0, 0):
         cmd_args.extend(["--enable-debug-command", "yes"])
-    # Enable multi-database support in cluster mode for Valkey 9.0+
-    if cluster_mode and server_version >= (9, 0, 0):
-        cmd_args.extend(["--cluster-databases", "16"])
+
     if load_module:
         if len(load_module) == 0:
             raise ValueError(
@@ -547,8 +601,6 @@ def start_server(
         raise Exception(
             f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
         )
-
-    server = Server(host, port)
 
     # Read the process ID from the log file
     # Note that `p.pid` is not good here since we daemonize the process
@@ -634,17 +686,49 @@ def create_servers(
             )
         )
     # Check all servers
+    replacements_left = nodes_count
     while len(servers_to_check) > 0:
         server, node_folder = servers_to_check.pop()
         logging.debug(f"Checking server {server.host}:{server.port}")
-        if is_address_already_in_use(server, f"{node_folder}/server.log"):
-            remove_folder(node_folder)
-            if ports is not None:
-                # The user passed a taken port, exit with an error
+        verdict = check_node_startup(server, f"{node_folder}/server.log")
+        # Only a node that reported Ready goes to --cluster create: a PING answer
+        # from the port does not prove it is this node's.
+        if verdict is not NodeCheck.READY:
+            if verdict is NodeCheck.NO_VERDICT:
+                # Still running, and would keep going with its data directory
+                # deleted underneath it.
+                if server.process_id() > 0:
+                    try:
+                        os.kill(server.process_id(), signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                else:
+                    logging.warning(
+                        f"Server {server} never logged its pid; it may still be running after {node_folder} is removed"
+                    )
+                failure = "it never reported Ready"
+            else:
+                failure = "address already in use"
+                # The node folder is removed below; this is the only record of
+                # which address (client or cluster bus port, v4 or v6) collided.
+                for line in bind_failures(f"{node_folder}/server.log"):
+                    logging.warning(f"Server {server}: {line}")
+            # A failure a new port cannot fix (a bad --load-module path, a config
+            # the engine rejects) would otherwise be replaced forever, with the
+            # log that explains it deleted on every round.
+            if ports is not None or replacements_left == 0:
+                if verdict is NodeCheck.PORT_TAKEN:
+                    # The port belongs to another server now, and the failure
+                    # cleanup sends SHUTDOWN to every port it finds a node folder for.
+                    remove_folder(node_folder)
+                    detail = ""
+                else:
+                    detail = f".\nSee {node_folder}/server.log for more information"
                 raise Exception(
-                    f"Couldn't start server on {server.host}:{server.port}, address already in use"
+                    f"Couldn't start server on {server.host}:{server.port}, {failure}{detail}"
                 )
-            # The port was already taken, try to find a new free one
+            replacements_left -= 1
+            remove_folder(node_folder)
             servers_to_check.add(
                 start_server(
                     server.host,
@@ -680,16 +764,18 @@ def create_cluster(
     tls_key_file: Optional[str] = None,
     tls_ca_cert_file: Optional[str] = None,
 ):
+    endpoints = [f"{server.cluster_create_address}:{server.port}" for server in servers]
+
     tic = time.perf_counter()
-    servers_tuple = (str(server) for server in servers)
     logging.debug("## Starting cluster creation...")
+
     p = subprocess.Popen(
         [
             get_cli_command(),
             *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
             "--cluster",
             "create",
-            *servers_tuple,
+            *endpoints,
             "--cluster-replicas",
             str(replica_count),
             "--cluster-yes",
@@ -780,40 +866,6 @@ def wait_for_a_message_in_logs(
             )
 
 
-def parse_cluster_nodes(command_output: Optional[str]) -> Optional[dict]:
-    """
-    Parameters
-    ----------
-    command_output: str :
-        The output returned from valkey for the command 'CLUSTER NODES'
-
-    Returns
-    -------
-        A dictionary for the current node's details
-    """
-    if command_output is None:
-        return None
-
-    lines = command_output.splitlines(keepends=False)
-    for line in lines:
-        tokens = line.split(" ")
-        if len(tokens) < 3:
-            continue
-
-        node_id = tokens[0].strip()
-        network = tokens[1].strip()
-        flags = tokens[2].strip()
-
-        if "myself" in flags:
-            # This is us
-            return {
-                "node_id": node_id,
-                "network": network,
-                "is_primary": "master" in flags,
-            }
-    return None
-
-
 def redis_cli_run_command(cmd_args: List[str]) -> Optional[str]:
     try:
         p = subprocess.Popen(
@@ -845,7 +897,13 @@ def wait_for_all_topology_views(
     Only when a replica finished syncing and loading, it will be included in the CLUSTER SLOTS output.
     """
     for server in servers:
-        cmd_args = [
+
+        # [1] Wait for server to be ready
+        # -------------------------------
+
+        # Server is ready when CLUSTER SLOTS returns
+        # node IDs for the expected number of nodes.
+        cluster_slots_cmd_args = [
             get_cli_command(),
             "-h",
             server.host,
@@ -855,38 +913,56 @@ def wait_for_all_topology_views(
             "cluster",
             "slots",
         ]
-        logging.debug(f"Executing: {cmd_args}")
-        retries = 80
-        while retries >= 0:
-            output = redis_cli_run_command(cmd_args)
-            if output is not None and output.count(f"{server.host}") == len(servers):
-                # Server is ready, get the node's role
-                cmd_args = [
-                    get_cli_command(),
-                    "-h",
-                    server.host,
-                    "-p",
-                    str(server.port),
-                    *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
-                    "cluster",
-                    "nodes",
-                ]
-                cluster_slots_output = redis_cli_run_command(cmd_args)
-                node_info = parse_cluster_nodes(cluster_slots_output)
-                if node_info:
-                    server.set_primary(node_info["is_primary"])
-                logging.debug(f"Server {server} is ready!")
-                break
-            else:
-                retries -= 1
-                time.sleep(1)
-                continue
 
-        if retries < 0:
+        logging.debug(f"Executing: {cluster_slots_cmd_args}")
+
+        for _ in range(81):
+            cluster_slots_output = redis_cli_run_command(cluster_slots_cmd_args)
+            if cluster_slots_output is not None and (
+                len(set(CLUSTER_SLOTS_NODE_ID_REGEX.findall(cluster_slots_output))) == len(servers)
+            ):
+                break
+            time.sleep(1)
+        else:
             raise Exception(
                 f"Timeout exceeded trying to wait for server {server} to know all hosts.\n"
-                f"Current CLUSTER SLOTS output:\n{output}"
+                f"Current CLUSTER SLOTS output:\n{cluster_slots_output}"
             )
+
+        # [2] Determine if server is primary
+        # ----------------------------------
+
+        # Server is a primary when CLUSTER NODES returns
+        # a line with both "myself" and "master" flags.
+        cluster_nodes_cmd_args = [
+            get_cli_command(),
+            "-h",
+            server.host,
+            "-p",
+            str(server.port),
+            *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
+            "cluster",
+            "nodes",
+        ]
+
+        cluster_nodes_output = redis_cli_run_command(cluster_nodes_cmd_args)
+        if cluster_nodes_output is None:
+            raise Exception(f"Timed out getting CLUSTER NODES from server {server}")
+
+        # Each line is `<id> <ip:port@cport> <flags> ...`.
+        # Flags is a comma-separated list (e.g. `myself,master` or `slave`).
+        is_primary = False
+        for line in cluster_nodes_output.splitlines():
+            fields = line.split(" ")
+            if len(fields) < 3:
+                continue
+            flags = set(fields[2].split(","))
+            if {"myself", "master"} <= flags:
+                is_primary = True
+                break
+        server.set_primary(is_primary)
+
+        logging.debug(f"Server {server} is ready!")
 
 
 def wait_for_server(
@@ -977,12 +1053,12 @@ def wait_for_regex_in_log(
     return None
 
 
-def is_address_already_in_use(
+def check_node_startup(
     server: Server,
     log_file: str,
-    timeout: int = 10,
-):
-    logging.debug(f"checking is address already bind for: {server}")
+    timeout: float = 10,
+) -> NodeCheck:
+    logging.debug(f"reading startup log of {server}")
     timeout_start = time.time()
     address_in_use_errors = [
         "Address already in use",
@@ -999,17 +1075,23 @@ def is_address_already_in_use(
             # Check for known error message variants because different C libraries
             if any(error_msg in server_log for error_msg in address_in_use_errors):
                 logging.debug(f"Address is already bind for server {server}")
-                return True
+                return NodeCheck.PORT_TAKEN
             elif "Ready" in server_log:
                 logging.debug(f"Address is free for server {server}!")
-                return False
+                return NodeCheck.READY
             else:
                 time.sleep(0.1)
                 continue
-    logging.warn(
-        f"Timeout exceeded trying to check if address already in use for server {server}!"
+    logging.warning(
+        f"Server {server} reported neither Ready nor a bind error within {timeout}s"
     )
-    return False
+    return NodeCheck.NO_VERDICT
+
+
+def bind_failures(log_file: str) -> List[str]:
+    """The server's own report of each address it could not bind."""
+    with open(log_file, "r") as f:
+        return [line.rstrip("\n") for line in f if "listening socket" in line]
 
 
 def dir_path(path: str):

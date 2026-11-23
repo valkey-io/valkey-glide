@@ -1,0 +1,3 @@
+disallowed-methods = [
+    { path = "tokio::runtime::Builder::new_multi_thread", reason = "use worker_runtime, so connect threads get RUNTIME_THREAD_STACK_SIZE" },
+]

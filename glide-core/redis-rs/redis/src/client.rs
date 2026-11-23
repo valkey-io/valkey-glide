@@ -83,6 +83,9 @@ impl Client {
 /// Glide-specific connection options
 #[derive(Clone, Default)]
 pub struct GlideConnectionOptions {
+    /// The fabric a connection advertises when it handshakes for RDMA.
+    #[cfg(feature = "rdma")]
+    pub rdma_fabric: Option<glide_rdma::RdmaFabric>,
     /// Queue for RESP3 notifications
     pub push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     #[cfg(feature = "aio")]

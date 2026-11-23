@@ -7,7 +7,15 @@ use glide::FlushAllOptions;
 use glide::FlushDbOptions;
 use glide::{AsyncTypedCommands, ServerManagementCommands};
 
-// TODO #7362: Change to `matrix_test!` once the typed `INFO` methods return per-node replies.
+// TODO #7362: Add `matrix_test!` tests for:
+// - `bgrewriteaof`
+// - `bgsave`
+// - `info_sections`
+// - `latency_doctor`
+// - `latency_graph`
+// - `latency_history`
+// - `latency_latest`
+
 resp_test!(info_returns_expected_fields, c, {
     // Default fields
     for info in common::get_info(&c, &[]).await {
@@ -24,7 +32,7 @@ resp_test!(info_returns_expected_fields, c, {
     }
 
     // Persistence fields
-    for persistence in common::get_info(&c, &["persistence"]).await {
+    for persistence in common::get_info(&c, &[glide::InfoSection::Persistence]).await {
         assert!(common::BGSAVE_TYPES.contains(&persistence["rdb_current_bgsave_type"].as_str()));
         assert!(common::BGSAVE_TYPES.contains(&persistence["rdb_last_bgsave_type"].as_str()));
 
@@ -37,7 +45,7 @@ resp_test!(info_returns_expected_fields, c, {
     // TODO #7362: Uncomment once the typed `INFO` methods return per-node replies.
     // let is_cluster = (&c as &dyn std::any::Any).is::<glide::GlideClusterClient>();
     // if is_cluster {
-    //     for cluster_info in common::get_info(&c, &["cluster_info"]).await {
+    //     for cluster_info in common::get_info(&c, &[glide::InfoSection::ClusterInfo]).await {
     //         let fallbacks_name = "cluster_io_main_thread_fallbacks";
     //         let fallbacks_value = common::parse_int(&cluster_info[fallbacks_name], fallbacks_name);
     //         assert!(fallbacks_value >= 0);

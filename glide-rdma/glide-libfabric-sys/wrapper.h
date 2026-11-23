@@ -71,8 +71,6 @@ int wrap_fi_tx_context(struct fid_ep *ep, int idx, struct fi_tx_attr *attr,
 		       struct fid_ep **tx_ep, void *context);
 int wrap_fi_rx_context(struct fid_ep *ep, int idx, struct fi_rx_attr *attr,
 		       struct fid_ep **rx_ep, void *context);
-ssize_t wrap_fi_rx_size_left(struct fid_ep *ep);
-ssize_t wrap_fi_tx_size_left(struct fid_ep *ep);
 int wrap_fi_stx_context(struct fid_domain *domain, struct fi_tx_attr *attr,
 			struct fid_stx **stx, void *context);
 int wrap_fi_srx_context(struct fid_domain *domain, struct fi_rx_attr *attr,
@@ -166,10 +164,6 @@ int wrap_fi_cq_open(struct fid_domain *domain, struct fi_cq_attr *attr,
 		    struct fid_cq **cq, void *context);
 int wrap_fi_cntr_open(struct fid_domain *domain, struct fi_cntr_attr *attr,
 		      struct fid_cntr **cntr, void *context);
-int wrap_fi_wait_open(struct fid_fabric *fabric, struct fi_wait_attr *attr,
-		      struct fid_wait **waitset);
-int wrap_fi_poll_open(struct fid_domain *domain, struct fi_poll_attr *attr,
-		      struct fid_poll **pollset);
 int wrap_fi_mr_reg(struct fid_domain *domain, const void *buf, size_t len,
 		   uint64_t acs, uint64_t offset, uint64_t requested_key,
 		   uint64_t flags, struct fid_mr **mr, void *context);
@@ -193,7 +187,6 @@ int wrap_fi_mr_refresh(struct fid_mr *mr, const struct iovec *iov, size_t count,
 int wrap_fi_mr_enable(struct fid_mr *mr);
 int wrap_fi_av_open(struct fid_domain *domain, struct fi_av_attr *attr,
 		    struct fid_av **av, void *context);
-int wrap_fi_av_bind(struct fid_av *av, struct fid *fid, uint64_t flags);
 int wrap_fi_av_insert(struct fid_av *av, const void *addr, size_t count,
 		      fi_addr_t *fi_addr, uint64_t flags, void *context);
 int wrap_fi_av_insertsvc(struct fid_av *av, const char *node,
@@ -290,12 +283,6 @@ int wrap_fi_query_collective(struct fid_domain *domain,
 
 /* Static inline function declarations from fi_eq.h */
 int wrap_fi_trywait(struct fid_fabric *fabric, struct fid **fids, int count);
-int wrap_fi_wait(struct fid_wait *waitset, int timeout);
-int wrap_fi_poll(struct fid_poll *pollset, void **context, int count);
-int wrap_fi_poll_add(struct fid_poll *pollset, struct fid *event_fid,
-		     uint64_t flags);
-int wrap_fi_poll_del(struct fid_poll *pollset, struct fid *event_fid,
-		     uint64_t flags);
 int wrap_fi_eq_open(struct fid_fabric *fabric, struct fi_eq_attr *attr,
 		    struct fid_eq **eq, void *context);
 ssize_t wrap_fi_eq_read(struct fid_eq *eq, uint32_t *event, void *buf,

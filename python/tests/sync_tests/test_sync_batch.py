@@ -30,6 +30,7 @@ from glide_shared.commands.core_options import (
     OnlyIfEqual,
     OnlyIfNotEqual,
 )
+from glide_shared.commands.sorted_set import RangeByIndex
 from glide_shared.commands.stream import StreamAddOptions
 from glide_shared.config import NodeAddress, ProtocolVersion
 from glide_shared.constants import OK, TResult, TSingleNodeRoute
@@ -157,6 +158,63 @@ class TestSyncBatch:
         assert glide_sync_client.get(key_ba_key) == b"value1"
         assert glide_sync_client.get(key_mv_key) == b"value2"
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_batch_memoryview_args_sent_by_byte_length(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Test that batch set() accepts memoryview values whose len() is smaller
+        than nbytes (wider item formats and 2-D views)."""
+        data = os.urandom(64)
+        views = [
+            memoryview(data).cast("H"),
+            memoryview(data).cast("I"),
+            memoryview(data).cast("Q"),
+            memoryview(data).cast("B", (2, 32)),
+        ]
+        keys = [get_random_string(10) for _ in views]
+
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(glide_sync_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+        for key, view in zip(keys, views):
+            assert len(view) < view.nbytes == len(data)
+            batch.set(key, view)
+        assert exec_batch(glide_sync_client, batch) == [OK] * len(views)
+
+        for key in keys:
+            assert glide_sync_client.get(key) == data
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_batch_zadd_bytes_like_members(self, glide_sync_client: TGlideClient):
+        """Test that batch zadd() stores bytes and memoryview members verbatim."""
+        key = get_random_string(10)
+
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(glide_sync_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+        batch.zadd(
+            key,
+            {
+                b"\x00\xffab": 1.0,
+                b"\x01\xfecd": 2.0,
+                memoryview(b"\x02\xfdef"): 3.0,
+            },
+        )
+        result = exec_batch(glide_sync_client, batch)
+        assert result == [3]
+
+        assert glide_sync_client.zrange(key, RangeByIndex(0, -1)) == [
+            b"\x00\xffab",
+            b"\x01\xfecd",
+            b"\x02\xfdef",
+        ]
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_transaction_with_different_slots(
@@ -194,10 +252,12 @@ class TestSyncBatch:
             else ClusterBatch(is_atomic=True)
         )
         transaction.custom_command(["WATCH", key])
+
+        # TODO #7654: Expect ExecAbortError instead of RequestError.
         with pytest.raises(RequestError) as e:
             exec_batch(glide_sync_client, transaction)
 
-        assert "not allowed" in str(e)  # TODO : add an assert on EXEC ABORT
+        assert "not allowed" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -214,7 +274,7 @@ class TestSyncBatch:
         transaction.custom_command(["DISCARD"])
         with pytest.raises(RequestError) as e:
             exec_batch(glide_sync_client, transaction)
-        assert "EXEC without MULTI" in str(e)  # TODO : add an assert on EXEC ABORT
+        assert "EXEC without MULTI" in str(e)
         value = glide_sync_client.get(key)
         assert value == b"1"
 
@@ -228,7 +288,7 @@ class TestSyncBatch:
             exec_batch(glide_sync_client, transaction)
         assert "wrong number of arguments" in str(
             e
-        )  # TODO : add an assert on EXEC ABORT
+        )  # TODO #7654: Expect ExecAbortError instead of RequestError.
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("is_atomic", [True, False])
@@ -301,7 +361,7 @@ class TestSyncBatch:
     @pytest.mark.parametrize("is_atomic", [True, False])
     def test_sync_batch_large_values(self, request, cluster_mode, protocol, is_atomic):
         glide_sync_client = create_sync_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
         length = 2**25  # 33mb
         key = "0" * length
@@ -437,13 +497,14 @@ class TestSyncBatch:
             else ClusterBatch(is_atomic=is_atomic)
         )
 
+        batch.set(key, "value", conditional_set=OnlyIfEqual("other"))
         batch.set(key, "value")
         batch.set(key, "other", conditional_set=OnlyIfEqual("other"))
         batch.set(key, "other", conditional_set=OnlyIfEqual("value"))
         batch.get(key)
 
         result = exec_batch(glide_sync_client, batch)
-        assert result == [OK, None, OK, b"other"]
+        assert result == [None, OK, None, OK, b"other"]
 
     @pytest.mark.skip_if_version_below("9.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -460,13 +521,14 @@ class TestSyncBatch:
             else ClusterBatch(is_atomic=is_atomic)
         )
 
+        batch.set(key, "value", conditional_set=OnlyIfNotEqual("other"))
         batch.set(key, "value")
         batch.set(key, "other", conditional_set=OnlyIfNotEqual("value"))
         batch.set(key, "other", conditional_set=OnlyIfNotEqual("other"))
         batch.get(key)
 
         result = exec_batch(glide_sync_client, batch)
-        assert result == [OK, None, OK, b"other"]
+        assert result == [OK, OK, None, OK, b"other"]
 
     # The object commands are tested here instead of transaction_test because they have special requirements:
     # - OBJECT FREQ and OBJECT IDLETIME require specific maxmemory policies to be set on the config

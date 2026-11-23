@@ -85,6 +85,7 @@ pub use config::NodeAddress;
 pub use config::NodeDiscoveryMode;
 pub use config::PeriodicChecks;
 pub use config::ProtocolVersion;
+// TODO #7691: Remove this re-export.
 pub use config::PubSubChannelMode;
 pub use config::PubSubSubscriptions;
 pub use config::ReadFrom;
@@ -119,6 +120,7 @@ pub use commands::options::FlushDbOptions;
 pub use commands::options::FunctionFlushOptions;
 pub use commands::options::FunctionRestorePolicy;
 pub use commands::options::HashFieldExpirationOptions;
+pub use commands::options::InfoSection;
 pub use commands::options::Limit;
 pub use commands::options::LposOptions;
 pub use commands::options::MigrateOptions;
@@ -190,4 +192,5 @@ pub use pipeline_options::PipelineOptions;
 
 // External types.
 pub use bytes::Bytes;
+// TODO #7664: Re-export `BigUint` too, once both implement `ToValkeyArgs` and `FromValkeyValue`.
 pub use num_bigint::BigInt;
