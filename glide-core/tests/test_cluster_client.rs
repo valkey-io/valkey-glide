@@ -12,8 +12,6 @@ mod cluster_client_tests {
     use std::time::Duration;
 
     use crate::constants::{IP_ADDRESS_V4, IP_ADDRESS_V6};
-    #[cfg(unix)]
-    use crate::utilities::cluster::create_cluster_client;
     use crate::utilities::{
         cluster::{
             LONG_CLUSTER_TEST_TIMEOUT, RedisCluster, SHORT_CLUSTER_TEST_TIMEOUT,
@@ -948,6 +946,271 @@ mod cluster_client_tests {
                 WINDOW_MS,
                 CONNECTION_TIMEOUT_MS,
             );
+        });
+    }
+
+    /// `INFO SERVER` with partial results.
+    fn partial_info() -> redis::Cmd {
+        let mut cmd = redis::cmd("INFO");
+        cmd.arg("SERVER").set_allow_partial_results(true);
+        cmd
+    }
+
+    /// The entries of a multi-node reply, keyed by node address.
+    fn node_entries(value: Value) -> HashMap<String, Value> {
+        let Value::Map(entries) = value else {
+            panic!("expected a map, got {value:?}");
+        };
+        entries
+            .into_iter()
+            .map(|(address, value)| (redis::from_owned_redis_value(address).unwrap(), value))
+            .collect()
+    }
+
+    fn is_client_timeout(value: &Value) -> bool {
+        matches!(value, Value::ServerError(error) if error.err_code() == redis::TIMEOUT_ERROR_CODE)
+    }
+
+    /// A second client, so its commands are not queued behind the client under test.
+    async fn second_client(cluster: Option<&RedisCluster>) -> Client {
+        create_cluster_client(
+            cluster,
+            TestConfiguration {
+                shared_server: false,
+                ..Default::default()
+            },
+        )
+        .await
+    }
+
+    /// Pauses every client of the node at `address` for 3 s and returns its route.
+    async fn pause_node(pauser: &mut Client, address: &str) -> RoutingInfo {
+        let (host, port) = address.rsplit_once(':').unwrap();
+        let route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+            host: host.to_string(),
+            port: port.parse().unwrap(),
+        });
+        let mut pause = redis::cmd("CLIENT");
+        pause.arg("PAUSE").arg(3000).arg("ALL");
+        pauser
+            .send_command(&mut pause, Some(route.clone()))
+            .await
+            .unwrap();
+        route
+    }
+
+    /// Waits for the `CLIENT PAUSE` on each route to end (`CLIENT UNPAUSE` would
+    /// wait for it too).
+    async fn wait_for_pauses_to_end(pauser: &mut Client, routes: &[RoutingInfo]) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        for route in routes {
+            while pauser
+                .send_command(&mut redis::cmd("PING"), Some(route.clone()))
+                .await
+                .is_err()
+            {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "{route:?} did not recover"
+                );
+            }
+        }
+    }
+
+    #[rstest]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_partial_results_keep_replies_when_a_primary_is_slow() {
+        block_on_all(async {
+            const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(500);
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: false,
+                request_timeout: Some(REQUEST_TIMEOUT.as_millis() as u32),
+                ..Default::default()
+            })
+            .await;
+            let mut pauser = second_client(test_basics.cluster.as_ref()).await;
+            let client = &mut test_basics.client;
+
+            let healthy = node_entries(
+                client
+                    .send_command(&mut partial_info(), None)
+                    .await
+                    .unwrap(),
+            );
+            assert_eq!(healthy.len(), 3);
+            assert!(
+                healthy
+                    .values()
+                    .all(|v| !matches!(v, Value::ServerError(_)))
+            );
+
+            let slow = healthy.keys().min().unwrap();
+            let route = pause_node(&mut pauser, slow).await;
+
+            let start = std::time::Instant::now();
+            let result = node_entries(
+                client
+                    .send_command(&mut partial_info(), None)
+                    .await
+                    .unwrap(),
+            );
+            assert!(start.elapsed() < REQUEST_TIMEOUT, "{:?}", start.elapsed());
+            assert_eq!(result.len(), 3);
+            assert!(is_client_timeout(&result[slow]), "{result:?}");
+            assert!(
+                result
+                    .iter()
+                    .all(|(address, v)| address == slow || !matches!(v, Value::ServerError(_))),
+                "{result:?}"
+            );
+
+            wait_for_pauses_to_end(&mut pauser, &[route]).await;
+        });
+    }
+
+    #[rstest]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_partial_results_with_no_node_answering_open_the_circuit_breaker() {
+        block_on_all(async {
+            let cluster = RedisCluster::new(false, &None, None, None);
+            let mut request: glide_core::client::ConnectionRequest = create_connection_request(
+                &cluster.get_server_addresses(),
+                &TestConfiguration {
+                    cluster_mode: ClusterMode::Enabled,
+                    request_timeout: Some(500),
+                    ..Default::default()
+                },
+            )
+            .into();
+            // One counted error in two requests opens it.
+            request.client_circuit_breaker = Some(glide_core::client::ClientCircuitBreakerConfig {
+                window_size_ms: 60_000,
+                failure_rate_threshold: 0.5,
+                min_errors: 1,
+                open_timeout_ms: 60_000,
+                count_timeouts: true,
+                consecutive_successes: 1,
+            });
+            let mut client = Client::new(request, None).await.unwrap();
+            let mut pauser = second_client(Some(&cluster)).await;
+            let healthy = node_entries(
+                client
+                    .send_command(&mut partial_info(), None)
+                    .await
+                    .unwrap(),
+            );
+            let mut routes = Vec::new();
+            for address in healthy.keys() {
+                routes.push(pause_node(&mut pauser, address).await);
+            }
+
+            let entries = node_entries(
+                client
+                    .send_command(&mut partial_info(), None)
+                    .await
+                    .unwrap(),
+            );
+            assert_eq!(entries.len(), routes.len());
+            assert!(entries.values().all(is_client_timeout), "{entries:?}");
+            assert!(
+                !client.is_circuit_breaker_healthy(),
+                "a result in which no node answered must count as the plain timeout"
+            );
+
+            wait_for_pauses_to_end(&mut pauser, &routes).await;
+        });
+    }
+
+    #[rstest]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_partial_results_rejected_hello_keeps_the_stored_credentials() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: false,
+                request_timeout: Some(1000),
+                ..Default::default()
+            })
+            .await;
+            let mut killer = second_client(test_basics.cluster.as_ref()).await;
+            let all_nodes = |name: &[u8]| {
+                RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    redis::cluster_routing::ResponsePolicy::for_command(name),
+                ))
+            };
+
+            let mut hello = redis::cmd("HELLO");
+            hello.arg("3").arg("AUTH").arg("nosuchuser").arg("badpass");
+            hello.set_allow_partial_results(true);
+            let rejected = test_basics
+                .client
+                .send_command(&mut hello, Some(all_nodes(b"HELLO")))
+                .await;
+            assert!(
+                matches!(&rejected, Ok(Value::Map(entries))
+                    if entries.iter().all(|(_, v)| matches!(v, Value::ServerError(_)))),
+                "{rejected:?}"
+            );
+
+            // Drop every connection of the client under test, as a network blip
+            // or a failover would; it reconnects with its stored credentials.
+            let mut kill = redis::cmd("CLIENT");
+            kill.arg("KILL")
+                .arg("USER")
+                .arg("default")
+                .arg("SKIPME")
+                .arg("yes");
+            killer
+                .send_command(&mut kill, Some(all_nodes(b"CLIENT KILL")))
+                .await
+                .unwrap();
+
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            let mut set = redis::cmd("SET");
+            set.arg("partial-hello-key").arg("v");
+            while let Err(error) = test_basics.client.send_command(&mut set, None).await {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the client never reconnected: {error:?}"
+                );
+            }
+        });
+    }
+
+    #[rstest]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_partial_results_blocking_command_timeout_makes_the_borrow_unresettable() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: false,
+                ..Default::default()
+            })
+            .await;
+            let mut pauser = second_client(test_basics.cluster.as_ref()).await;
+            let client = &mut test_basics.client;
+            let all_primaries = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, None));
+            let healthy = client
+                .send_command(&mut redis::cmd("PING"), Some(all_primaries.clone()))
+                .await
+                .unwrap();
+            let route = pause_node(&mut pauser, node_entries(healthy).keys().next().unwrap()).await;
+
+            // WAIT blocks for up to 100 ms; the paused primary never answers in time.
+            let mut wait = redis::cmd("WAIT");
+            wait.arg(0).arg(100).set_allow_partial_results(true);
+            let result = client.send_command(&mut wait, Some(all_primaries)).await;
+            assert!(
+                node_entries(result.unwrap())
+                    .values()
+                    .any(is_client_timeout),
+                "the paused primary must time out"
+            );
+            assert!(client.reset_connection_state(0).await.is_err());
+
+            wait_for_pauses_to_end(&mut pauser, &[route]).await;
         });
     }
 
