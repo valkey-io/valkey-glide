@@ -49,6 +49,8 @@ from glide_shared.commands.core_options import (
     FlushMode,
     InfoSection,
     InsertPosition,
+    OnlyIfEqual,
+    OnlyIfNotEqual,
 )
 from glide_shared.commands.memory import MemoryStats, MemoryStatsDb
 from glide_shared.commands.sorted_set import (
@@ -1391,6 +1393,7 @@ def batch_test(
     key28 = generate_key(keyslot, batch.is_atomic)  # hash field expiration
     key29 = generate_key(keyslot, batch.is_atomic)  # hash
     key30 = generate_key(keyslot, batch.is_atomic)  # string
+    key31 = generate_key(keyslot, batch.is_atomic)  # string
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value_bytes = value.encode()
     value2 = get_random_string(5)
@@ -1541,6 +1544,9 @@ def batch_test(
     if not check_version_lt(version, "9.1.0"):
         helper_valkey_9_1(batch, key29, args)
 
+    if not check_version_lt(version, "9.2.0"):
+        helper_valkey_9_2(batch, key31, args)
+
     return args
 
 
@@ -1603,6 +1609,15 @@ def helper_valkey_9_1(transaction, key29, args):
         key29, {"f1": "v2"}, key_conditional_change=ConditionalChange.ONLY_IF_EXISTS
     )
     args.append(1)
+
+
+def helper_valkey_9_2(transaction, key31, args):
+    transaction.set(key31, "value")
+    args.append(OK)
+    transaction.delex(key31, OnlyIfEqual("other"))
+    args.append(False)
+    transaction.delex(key31, OnlyIfNotEqual("other"))
+    args.append(True)
 
 
 def helper6(
