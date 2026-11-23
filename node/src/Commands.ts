@@ -4744,6 +4744,39 @@ export function createDelIfEq(
 }
 
 /**
+ * Arguments for the DELEX command.
+ *
+ * Not supported when compression is enabled. See
+ * {@link https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands|Valkey GLIDE - Data Compression}.
+ */
+export interface DelexOptions {
+    /**
+     * The condition that the key must meet to be deleted.
+     *
+     * `onlyIfEqual` - Only delete the key if its value equals `value` (`IFEQ`).
+     *
+     * `onlyIfNotEqual` - Only delete the key if its value does not equal `value` (`IFNE`).
+     */
+    condition: "onlyIfEqual" | "onlyIfNotEqual";
+    /**
+     * Value to compare against the key.
+     */
+    value: GlideString;
+}
+
+/** @internal */
+export function createDelEx(
+    key: GlideString,
+    options: DelexOptions,
+): command_request.Command {
+    return createCommand(RequestType.DelEx, [
+        key,
+        options.condition === "onlyIfEqual" ? "IFEQ" : "IFNE",
+        options.value,
+    ]);
+}
+
+/**
  * @internal
  */
 export function createLMPop(

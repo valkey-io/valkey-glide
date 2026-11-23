@@ -14,7 +14,7 @@ import static glide.utils.Java8Utils.createMap;
 import static glide.utils.Java8Utils.createSet;
 
 import glide.api.models.BaseBatch;
-import glide.api.models.commands.CompareCondition;
+import glide.api.models.commands.DelexOptions;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.ExpirySet;
 import glide.api.models.commands.GetExOptions;
@@ -408,8 +408,8 @@ public class BatchTestUtilities {
                             "other",
                             SetOptions.builder().conditionalSetOnlyIfNotEqualTo("other").build())
                     .set(stringKey13, "value")
-                    .delex(stringKey13, CompareCondition.ifEquals("other"))
-                    .delex(stringKey13, CompareCondition.ifNotEquals("other"));
+                    .delex(stringKey13, DelexOptions.onlyIfEqualTo("other"))
+                    .delex(stringKey13, DelexOptions.onlyIfNotEqualTo("other"));
         }
 
         Object[] expectedResults =

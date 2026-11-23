@@ -2896,8 +2896,8 @@ export function runBaseTests(config: {
                     // key does not exist
                     expect(
                         await client.delex(key, {
-                            type: "onlyIfEqual",
-                            comparisonValue: value,
+                            condition: "onlyIfEqual",
+                            value: value,
                         }),
                     ).toEqual(false);
 
@@ -2906,8 +2906,8 @@ export function runBaseTests(config: {
                     // value not equal, key is not deleted
                     expect(
                         await client.delex(key, {
-                            type: "onlyIfEqual",
-                            comparisonValue: otherValue,
+                            condition: "onlyIfEqual",
+                            value: otherValue,
                         }),
                     ).toEqual(false);
                     expect(await client.get(key)).toEqual(value);
@@ -2915,8 +2915,8 @@ export function runBaseTests(config: {
                     // value equal, key is deleted
                     expect(
                         await client.delex(key, {
-                            type: "onlyIfEqual",
-                            comparisonValue: value,
+                            condition: "onlyIfEqual",
+                            value: value,
                         }),
                     ).toEqual(true);
                     expect(await client.get(key)).toEqual(null);
@@ -2943,8 +2943,8 @@ export function runBaseTests(config: {
                     // key does not exist
                     expect(
                         await client.delex(key, {
-                            type: "onlyIfNotEqual",
-                            comparisonValue: value,
+                            condition: "onlyIfNotEqual",
+                            value: value,
                         }),
                     ).toEqual(false);
 
@@ -2953,8 +2953,8 @@ export function runBaseTests(config: {
                     // value equal, key is not deleted
                     expect(
                         await client.delex(key, {
-                            type: "onlyIfNotEqual",
-                            comparisonValue: value,
+                            condition: "onlyIfNotEqual",
+                            value: value,
                         }),
                     ).toEqual(false);
                     expect(await client.get(key)).toEqual(value);
@@ -2962,8 +2962,8 @@ export function runBaseTests(config: {
                     // value not equal, key is deleted
                     expect(
                         await client.delex(key, {
-                            type: "onlyIfNotEqual",
-                            comparisonValue: otherValue,
+                            condition: "onlyIfNotEqual",
+                            value: otherValue,
                         }),
                     ).toEqual(true);
                     expect(await client.get(key)).toEqual(null);

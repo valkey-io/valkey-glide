@@ -1325,20 +1325,20 @@ export async function batchTest(
         responseData.push(['set(delExKey, "value")', "OK"]);
 
         baseBatch.delex(delExKey, {
-            type: "onlyIfEqual",
-            comparisonValue: "other",
+            condition: "onlyIfEqual",
+            value: "other",
         });
         responseData.push([
-            'delex(delExKey, { type: "onlyIfEqual", comparisonValue: "other" })',
+            'delex(delExKey, { condition: "onlyIfEqual", value: "other" })',
             false,
         ]);
 
         baseBatch.delex(delExKey, {
-            type: "onlyIfNotEqual",
-            comparisonValue: "other",
+            condition: "onlyIfNotEqual",
+            value: "other",
         });
         responseData.push([
-            'delex(delExKey, { type: "onlyIfNotEqual", comparisonValue: "other" })',
+            'delex(delExKey, { condition: "onlyIfNotEqual", value: "other" })',
             true,
         ]);
     }

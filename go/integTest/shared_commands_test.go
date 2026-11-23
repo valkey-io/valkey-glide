@@ -669,14 +669,14 @@ func (suite *GlideTestSuite) TestDelEx_IfEq() {
 		otherValue := uuid.New().String()
 
 		// key does not exist
-		res, err := client.DelEx(context.Background(), key, options.NewOnlyIfEquals(value))
+		res, err := client.DelEx(context.Background(), key, options.NewDelexOptionsOnlyIfEquals(value))
 		suite.NoError(err)
 		assert.False(suite.T(), res)
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
 		// value not equal, key is not deleted
-		res, err = client.DelEx(context.Background(), key, options.NewOnlyIfEquals(otherValue))
+		res, err = client.DelEx(context.Background(), key, options.NewDelexOptionsOnlyIfEquals(otherValue))
 		suite.NoError(err)
 		assert.False(suite.T(), res)
 		res1, err := client.Get(context.Background(), key)
@@ -684,7 +684,7 @@ func (suite *GlideTestSuite) TestDelEx_IfEq() {
 		assert.Equal(suite.T(), value, res1.Value())
 
 		// value equal, key is deleted
-		res, err = client.DelEx(context.Background(), key, options.NewOnlyIfEquals(value))
+		res, err = client.DelEx(context.Background(), key, options.NewDelexOptionsOnlyIfEquals(value))
 		suite.NoError(err)
 		assert.True(suite.T(), res)
 		res1, err = client.Get(context.Background(), key)
@@ -702,14 +702,14 @@ func (suite *GlideTestSuite) TestDelEx_IfNe() {
 		otherValue := uuid.New().String()
 
 		// key does not exist
-		res, err := client.DelEx(context.Background(), key, options.NewOnlyIfNotEquals(value))
+		res, err := client.DelEx(context.Background(), key, options.NewDelexOptionsOnlyIfNotEquals(value))
 		suite.NoError(err)
 		assert.False(suite.T(), res)
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
 		// value equal, key is not deleted
-		res, err = client.DelEx(context.Background(), key, options.NewOnlyIfNotEquals(value))
+		res, err = client.DelEx(context.Background(), key, options.NewDelexOptionsOnlyIfNotEquals(value))
 		suite.NoError(err)
 		assert.False(suite.T(), res)
 		res1, err := client.Get(context.Background(), key)
@@ -717,7 +717,7 @@ func (suite *GlideTestSuite) TestDelEx_IfNe() {
 		assert.Equal(suite.T(), value, res1.Value())
 
 		// value not equal, key is deleted
-		res, err = client.DelEx(context.Background(), key, options.NewOnlyIfNotEquals(otherValue))
+		res, err = client.DelEx(context.Background(), key, options.NewDelexOptionsOnlyIfNotEquals(otherValue))
 		suite.NoError(err)
 		assert.True(suite.T(), res)
 		res1, err = client.Get(context.Background(), key)

@@ -619,10 +619,13 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 		delExKey := atomicKeyPrefix + "delex-" + uuid.NewString()
 		batch.Set(delExKey, "value")
 		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(delExKey, value)"})
-		batch.DelEx(delExKey, options.NewOnlyIfEquals("other"))
+		batch.DelEx(delExKey, options.NewDelexOptionsOnlyIfEquals("other"))
 		testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "DelEx(delExKey, OnlyIfEquals(other))"})
-		batch.DelEx(delExKey, options.NewOnlyIfNotEquals("other"))
-		testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "DelEx(delExKey, OnlyIfNotEquals(other))"})
+		batch.DelEx(delExKey, options.NewDelexOptionsOnlyIfNotEquals("other"))
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: true, TestName: "DelEx(delExKey, OnlyIfNotEquals(other))"},
+		)
 
 		atomicKey3 := atomicKeyPrefix + "5-" + uuid.NewString()
 

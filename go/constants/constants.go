@@ -76,18 +76,22 @@ const (
 	// Equivalent to "NX" in the Valkey API.
 	OnlyIfDoesNotExist ConditionalSet = "NX"
 
-	// OnlyIfEquals is a condition that is met if the key exists and its current value is equal to the comparison value.
-	// Used by the SET and DELEX commands. Equivalent to "IFEQ" in the Valkey API.
-	//
+	// OnlyIfEquals only sets the key if it already exists and the value is equal to the given value.
+	// Equivalent to "IFEQ" in the Valkey API.
+    //
+	// Since Valkey 8.1.0.
+    //
 	// Not supported when compression is enabled. See [Valkey GLIDE – Data Compression].
 	//
 	// [Valkey GLIDE – Data Compression]: https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands
 	OnlyIfEquals ConditionalSet = "IFEQ"
 
-	// OnlyIfNotEquals is a condition that is met if the key does not exist or its current value is not equal to the
-	// comparison value. Used by the SET and DELEX commands. Equivalent to "IFNE" in the Valkey API.
+	// OnlyIfNotEquals only sets the key if it does not exist or if the value is not equal to the given value.
+	// Equivalent to "IFNE" in the Valkey API.
+    //
+	// Since Valkey 9.2.0.
 	//
-	// Not supported when compression is enabled. See [Valkey GLIDE – Data Compression].
+    // Not supported when compression is enabled. See [Valkey GLIDE – Data Compression].
 	//
 	// [Valkey GLIDE – Data Compression]: https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands
 	OnlyIfNotEquals ConditionalSet = "IFNE"

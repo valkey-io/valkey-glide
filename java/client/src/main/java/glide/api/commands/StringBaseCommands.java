@@ -2,7 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.GlideString;
-import glide.api.models.commands.CompareCondition;
+import glide.api.models.commands.DelexOptions;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
@@ -728,44 +728,40 @@ public interface StringBaseCommands {
     // TODO #7238: Add DELEX command support.
 
     /**
-     * Deletes <code>key</code> if its value meets <code>condition</code>.
+     * Deletes <code>key</code> if its value meets the condition in <code>options</code>.
      *
      * @since Valkey 9.2.0.
      * @see <a href="https://valkey.io/commands/delex/">valkey.io</a> for details.
      * @param key The key to delete.
-     * @param condition The comparison condition. The key is only deleted if its current value meets
-     *     <code>condition</code>.
-     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> if <code>key
-     *     </code> did not exist or <code>condition</code> was not met.
+     * @param options The condition for deleting the key.
+     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> otherwise.
      * @example
      *     <pre>{@code
      * client.set("key", "value").get();
-     * assert !client.delex("key", CompareCondition.ifEquals("other_value")).get();
-     * assert !client.delex("key", CompareCondition.ifNotEquals("value")).get();
-     * assert client.delex("key", CompareCondition.ifEquals("value")).get();
+     * assert !client.delex("key", DelexOptions.onlyIfEqualTo("other_value")).get();
+     * assert !client.delex("key", DelexOptions.onlyIfNotEqualTo("value")).get();
+     * assert client.delex("key", DelexOptions.onlyIfEqualTo("value")).get();
      * }</pre>
      */
-    CompletableFuture<Boolean> delex(String key, CompareCondition condition);
+    CompletableFuture<Boolean> delex(String key, DelexOptions options);
 
     /**
-     * Deletes <code>key</code> if its value meets <code>condition</code>.
+     * Deletes <code>key</code> if its value meets the condition in <code>options</code>.
      *
      * @since Valkey 9.2.0.
      * @see <a href="https://valkey.io/commands/delex/">valkey.io</a> for details.
      * @param key The key to delete.
-     * @param condition The comparison condition. The key is only deleted if its current value meets
-     *     <code>condition</code>.
-     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> if <code>key
-     *     </code> did not exist or <code>condition</code> was not met.
+     * @param options The condition for deleting the key.
+     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> otherwise.
      * @example
      *     <pre>{@code
      * client.set(gs("key"), gs("value")).get();
-     * assert !client.delex(gs("key"), CompareCondition.ifEquals(gs("other_value"))).get();
-     * assert !client.delex(gs("key"), CompareCondition.ifNotEquals(gs("value"))).get();
-     * assert client.delex(gs("key"), CompareCondition.ifEquals(gs("value"))).get();
+     * assert !client.delex(gs("key"), DelexOptions.onlyIfEqualTo(gs("other_value"))).get();
+     * assert !client.delex(gs("key"), DelexOptions.onlyIfNotEqualTo(gs("value"))).get();
+     * assert client.delex(gs("key"), DelexOptions.onlyIfEqualTo(gs("value"))).get();
      * }</pre>
      */
-    CompletableFuture<Boolean> delex(GlideString key, CompareCondition condition);
+    CompletableFuture<Boolean> delex(GlideString key, DelexOptions options);
 
     /**
      * Deletes <code>key</code> if its value equals <code>value</code>.
@@ -773,10 +769,8 @@ public interface StringBaseCommands {
      * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/delifeq/">valkey.io</a> for details.
      * @param key The key to delete.
-     * @param value The comparison value. The key is only deleted if its current value matches
-     *     exactly.
-     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> if <code>key
-     *     </code> did not exist or its value did not match <code>value</code>.
+     * @param value The value to compare against the key.
+     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> otherwise.
      * @example
      *     <pre>{@code
      * Boolean deleted = client.delifeq("key", "value").get();
@@ -791,10 +785,8 @@ public interface StringBaseCommands {
      * @since Valkey 9.0.0.
      * @see <a href="https://valkey.io/commands/delifeq/">valkey.io</a> for details.
      * @param key The key to delete.
-     * @param value The comparison value. The key is only deleted if its current value matches
-     *     exactly.
-     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> if <code>key
-     *     </code> did not exist or its value did not match <code>value</code>.
+     * @param value The value to compare against the key.
+     * @return <code>true</code> if <code>key</code> was deleted, <code>false</code> otherwise.
      * @example
      *     <pre>{@code
      * Boolean deleted = client.delifeq(gs("key"), gs("value")).get();

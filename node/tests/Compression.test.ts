@@ -524,7 +524,10 @@ describe("Compression", () => {
         conditionalSet: "onlyIfNotEqual",
         comparisonValue: "20",
     };
-    const delexIfEqual = { type: "onlyIfEqual", comparisonValue: "10" };
+    const delexIfEqual = {
+        condition: "onlyIfEqual",
+        value: "10",
+    };
 
     /** Commands that are incompatible with compression, with their arguments after the key. */
     const INCOMPATIBLE_COMMANDS: {
@@ -666,8 +669,8 @@ describe("Compression", () => {
                 await client.set(key, "10");
                 expect(
                     await client.delex(key, {
-                        type: "onlyIfEqual",
-                        comparisonValue: "10",
+                        condition: "onlyIfEqual",
+                        value: "10",
                     }),
                 ).toBe(true);
 

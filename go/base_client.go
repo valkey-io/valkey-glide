@@ -1639,11 +1639,11 @@ func (client *baseClient) Append(ctx context.Context, key string, value string) 
 //
 //	ctx   - The context for controlling the command execution.
 //	key   - The key to delete.
-//	value - The comparison value. The key is only deleted if its current value matches exactly.
+//	value - The value to compare against the key.
 //
 // Return value:
 //
-//	`true` if `key` was deleted, `false` if `key` did not exist or its value did not match `value`.
+//	`true` if `key` was deleted, `false` otherwise.
 //
 // [valkey.io]: https://valkey.io/commands/delifeq/
 func (client *baseClient) DelIfEq(ctx context.Context, key string, value string) (bool, error) {
@@ -1655,7 +1655,7 @@ func (client *baseClient) DelIfEq(ctx context.Context, key string, value string)
 	return handleBoolResponse(result)
 }
 
-// Deletes `key` if its value meets `condition`.
+// Deletes `key` if its value meets the condition in `options`.
 //
 // Since:
 //
@@ -1667,21 +1667,20 @@ func (client *baseClient) DelIfEq(ctx context.Context, key string, value string)
 //
 //	ctx       - The context for controlling the command execution.
 //	key       - The key to delete.
-//	condition - The comparison condition. The key is only deleted if its current value meets `condition`.
-//	            Use [options.NewOnlyIfEquals] or [options.NewOnlyIfNotEquals] to create it.
+//	options   - The condition for deleting the key.
 //
 // Return value:
 //
-//	`true` if `key` was deleted, `false` if `key` did not exist or `condition` was not met.
+//	`true` if `key` was deleted, `false` otherwise.
 //
 // [valkey.io]: https://valkey.io/commands/delex/
-func (client *baseClient) DelEx(ctx context.Context, key string, condition options.ValueComparison) (bool, error) {
-	conditionArgs, err := condition.ToArgs()
+func (client *baseClient) DelEx(ctx context.Context, key string, options options.DelexOptions) (bool, error) {
+	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
 
-	result, err := client.executeCommand(ctx, C.DelEx, append([]string{key}, conditionArgs...))
+	result, err := client.executeCommand(ctx, C.DelEx, append([]string{key}, optionArgs...))
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}

@@ -260,7 +260,7 @@ import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
-import glide.api.models.commands.DeleteOptions;
+import glide.api.models.commands.DelexOptions;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
@@ -1421,13 +1421,12 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Boolean> delex(@NonNull String key, @NonNull DeleteOptions options) {
+    public CompletableFuture<Boolean> delex(@NonNull String key, @NonNull DelexOptions options) {
         return delex(gs(key), options);
     }
 
     @Override
-    public CompletableFuture<Boolean> delex(
-            @NonNull GlideString key, @NonNull DeleteOptions options) {
+    public CompletableFuture<Boolean> delex(@NonNull GlideString key, @NonNull DelexOptions options) {
         GlideString[] arguments = new ArgsBuilder().add(key).add(options.toArgs()).toArray();
         return commandManager.submitNewCommand(DelEx, arguments, this::handleBooleanResponse);
     }

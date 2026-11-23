@@ -1230,7 +1230,7 @@ func (suite *GlideTestSuite) TestCompressionIncompatibleCommands() {
 			return errOf(c.DecrBy(ctx, "key", 5))
 		}},
 		{name: "DelEx", call: func(c client) error {
-			return errOf(c.DelEx(ctx, "key", options.NewOnlyIfEquals("10")))
+			return errOf(c.DelEx(ctx, "key", options.NewDelexOptionsOnlyIfEquals("10")))
 		}},
 		{name: "DelIfEq", call: func(c client) error {
 			return errOf(c.DelIfEq(ctx, "key", "10"))
@@ -1408,7 +1408,7 @@ func (suite *GlideTestSuite) TestCompressionIncompatibleCommandsWorkWithoutCompr
 		// DELEX
 		_, err = client.Set(ctx, key, "10")
 		assert.NoError(t, err)
-		delExResult, err := client.DelEx(ctx, key, options.NewOnlyIfEquals("10"))
+		delExResult, err := client.DelEx(ctx, key, options.NewDelexOptionsOnlyIfEquals("10"))
 		assert.NoError(t, err)
 		assert.True(t, delExResult)
 

@@ -15,7 +15,7 @@ import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.GlideString;
-import glide.api.models.commands.CompareCondition;
+import glide.api.models.commands.DelexOptions;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.CompressionBackend;
@@ -544,8 +544,9 @@ public class CompressionTests {
      * Commands that are incompatible with compression, called on a key that does not need to exist.
      */
     static Stream<Arguments> getIncompatibleCommands() {
-        SetOptions ifEqual = SetOptions.builder().conditionalSetOnlyIfEqualTo("10").build();
-        SetOptions ifNotEqual = SetOptions.builder().conditionalSetOnlyIfNotEqualTo("20").build();
+        DelexOptions delexIfEqualTo = DelexOptions.onlyIfEqualTo("10");
+        SetOptions setIfEqualTo = SetOptions.builder().conditionalSetOnlyIfEqualTo("10").build();
+        SetOptions setIfNotEqualTo = SetOptions.builder().conditionalSetOnlyIfNotEqualTo("20").build();
 
         return Stream.of(
                         incompatible("append", c -> c.append("key", "0")),
@@ -553,15 +554,15 @@ public class CompressionTests {
                         incompatible("bitpos", c -> c.bitpos("key", 1)),
                         incompatible("decr", c -> c.decr("key")),
                         incompatible("decrby", c -> c.decrBy("key", 5)),
-                        incompatible("delex", c -> c.delex("key", CompareCondition.ifEquals("10"))),
+                        incompatible("delex", c -> c.delex("key", delexIfEqualTo)),
                         incompatible("delifeq", c -> c.delifeq("key", "10")),
                         incompatible("getbit", c -> c.getbit("key", 0)),
                         incompatible("getrange", c -> c.getrange("key", 0, 0)),
                         incompatible("incr", c -> c.incr("key")),
                         incompatible("incrby", c -> c.incrBy("key", 5)),
                         incompatible("incrbyfloat", c -> c.incrByFloat("key", 0.5)),
-                        incompatible("set_ifeq", c -> c.set("key", "20", ifEqual)),
-                        incompatible("set_ifne", c -> c.set("key", "20", ifNotEqual)),
+                        incompatible("set_ifeq", c -> c.set("key", "20", setIfEqualTo)),
+                        incompatible("set_ifne", c -> c.set("key", "20", setIfNotEqualTo)),
                         incompatible("setbit", c -> c.setbit("key", 0, 1)),
                         incompatible("setrange", c -> c.setrange("key", 1, "5")),
                         incompatible("strlen", c -> c.strlen("key")))
@@ -668,7 +669,7 @@ public class CompressionTests {
             if (SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0")) {
                 // DELEX
                 assertEquals(OK, client.set(key, "10").get());
-                assertTrue(client.delex(key, CompareCondition.ifEquals("10")).get());
+                assertTrue(client.delex(key, DelexOptions.onlyIfEqualTo("10")).get());
 
                 // SET with IFNE
                 assertEquals(OK, client.set(key, "10").get());

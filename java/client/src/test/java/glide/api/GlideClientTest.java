@@ -315,8 +315,8 @@ import glide.api.models.Batch;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
-import glide.api.models.commands.CompareCondition;
 import glide.api.models.commands.ConditionalChange;
+import glide.api.models.commands.DelexOptions;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
@@ -11429,7 +11429,7 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Boolean> response = service.delex(key, CompareCondition.ifEquals(value));
+        CompletableFuture<Boolean> response = service.delex(key, DelexOptions.onlyIfEqualTo(value));
         Boolean payload = response.get();
 
         // verify
@@ -11450,7 +11450,7 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Boolean> response = service.delex(key, CompareCondition.ifEquals(value));
+        CompletableFuture<Boolean> response = service.delex(key, DelexOptions.onlyIfEqualTo(value));
         Boolean payload = response.get();
 
         // verify
@@ -11471,7 +11471,7 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Boolean> response = service.delex(key, CompareCondition.ifNotEquals(value));
+        CompletableFuture<Boolean> response = service.delex(key, DelexOptions.onlyIfNotEqualTo(value));
         Boolean payload = response.get();
 
         // verify
@@ -11492,7 +11492,7 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Boolean> response = service.delex(key, CompareCondition.ifNotEquals(value));
+        CompletableFuture<Boolean> response = service.delex(key, DelexOptions.onlyIfNotEqualTo(value));
         Boolean payload = response.get();
 
         // verify

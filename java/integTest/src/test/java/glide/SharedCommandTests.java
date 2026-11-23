@@ -44,8 +44,8 @@ import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
-import glide.api.models.commands.CompareCondition;
 import glide.api.models.commands.ConditionalChange;
+import glide.api.models.commands.DelexOptions;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.ExpirySet;
 import glide.api.models.commands.GetExOptions;
@@ -393,16 +393,16 @@ public class SharedCommandTests {
         String otherValue = String.valueOf(UUID.randomUUID());
 
         // key does not exist
-        assertFalse(client.delex(key, CompareCondition.ifEquals(value)).get());
+        assertFalse(client.delex(key, DelexOptions.onlyIfEqualTo(value)).get());
 
         assertEquals(OK, client.set(key, value).get());
 
         // value not equal, key is not deleted
-        assertFalse(client.delex(key, CompareCondition.ifEquals(otherValue)).get());
+        assertFalse(client.delex(key, DelexOptions.onlyIfEqualTo(otherValue)).get());
         assertEquals(value, client.get(key).get());
 
         // value equal, key is deleted
-        assertTrue(client.delex(key, CompareCondition.ifEquals(value)).get());
+        assertTrue(client.delex(key, DelexOptions.onlyIfEqualTo(value)).get());
         assertNull(client.get(key).get());
     }
 
@@ -418,16 +418,16 @@ public class SharedCommandTests {
         GlideString otherValue = gs(String.valueOf(UUID.randomUUID()));
 
         // key does not exist
-        assertFalse(client.delex(key, CompareCondition.ifEquals(value)).get());
+        assertFalse(client.delex(key, DelexOptions.onlyIfEqualTo(value)).get());
 
         assertEquals(OK, client.set(key, value).get());
 
         // value not equal, key is not deleted
-        assertFalse(client.delex(key, CompareCondition.ifEquals(otherValue)).get());
+        assertFalse(client.delex(key, DelexOptions.onlyIfEqualTo(otherValue)).get());
         assertEquals(value, client.get(key).get());
 
         // value equal, key is deleted
-        assertTrue(client.delex(key, CompareCondition.ifEquals(value)).get());
+        assertTrue(client.delex(key, DelexOptions.onlyIfEqualTo(value)).get());
         assertNull(client.get(key).get());
     }
 
@@ -443,16 +443,16 @@ public class SharedCommandTests {
         String otherValue = String.valueOf(UUID.randomUUID());
 
         // key does not exist
-        assertFalse(client.delex(key, CompareCondition.ifNotEquals(value)).get());
+        assertFalse(client.delex(key, DelexOptions.onlyIfNotEqualTo(value)).get());
 
         assertEquals(OK, client.set(key, value).get());
 
         // value equal, key is not deleted
-        assertFalse(client.delex(key, CompareCondition.ifNotEquals(value)).get());
+        assertFalse(client.delex(key, DelexOptions.onlyIfNotEqualTo(value)).get());
         assertEquals(value, client.get(key).get());
 
         // value not equal, key is deleted
-        assertTrue(client.delex(key, CompareCondition.ifNotEquals(otherValue)).get());
+        assertTrue(client.delex(key, DelexOptions.onlyIfNotEqualTo(otherValue)).get());
         assertNull(client.get(key).get());
     }
 
@@ -468,16 +468,16 @@ public class SharedCommandTests {
         GlideString otherValue = gs(String.valueOf(UUID.randomUUID()));
 
         // key does not exist
-        assertFalse(client.delex(key, CompareCondition.ifNotEquals(value)).get());
+        assertFalse(client.delex(key, DelexOptions.onlyIfNotEqualTo(value)).get());
 
         assertEquals(OK, client.set(key, value).get());
 
         // value equal, key is not deleted
-        assertFalse(client.delex(key, CompareCondition.ifNotEquals(value)).get());
+        assertFalse(client.delex(key, DelexOptions.onlyIfNotEqualTo(value)).get());
         assertEquals(value, client.get(key).get());
 
         // value not equal, key is deleted
-        assertTrue(client.delex(key, CompareCondition.ifNotEquals(otherValue)).get());
+        assertTrue(client.delex(key, DelexOptions.onlyIfNotEqualTo(otherValue)).get());
         assertNull(client.get(key).get());
     }
 

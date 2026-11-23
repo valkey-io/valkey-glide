@@ -71,7 +71,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     TimeUnit,
-    ValueComparison,
+    DelexOptions,
     ZAddOptions,
     ZScanOptions,
     convertFieldsAndValuesToHashDataType,
@@ -4296,16 +4296,14 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @see {@link https://valkey.io/commands/delex/|valkey.io} for details.
      *
      * @param key - The key to delete.
-     * @param condition - The comparison condition. The key is only deleted if its current value
-     *     meets `condition`. See {@link ValueComparison}.
+     * @param options - The condition for deleting the key.
      *
-     * Command Response - `true` if `key` was deleted, or `false` if `key` did not exist or
-     *     `condition` was not met.
+     * Command Response - `true` if `key` was deleted, `false` otherwise.
      *
      * @since Valkey 9.2.0
      */
-    public delex(key: GlideString, condition: ValueComparison): T {
-        return this.addAndReturn(createDelEx(key, condition));
+    public delex(key: GlideString, options: DelexOptions): T {
+        return this.addAndReturn(createDelEx(key, options));
     }
 
     /**
@@ -4314,11 +4312,9 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @see {@link https://valkey.io/commands/delifeq/|valkey.io} for details.
      *
      * @param key - The key to delete.
-     * @param value - The comparison value. The key is only deleted if its current value matches
-     *     exactly.
+     * @param value - The value to compare against the key.
      *
-     * Command Response - `true` if `key` was deleted, or `false` if `key` did not exist or its
-     *     value did not match `value`.
+     * Command Response - `true` if `key` was deleted, `false` otherwise.
      *
      * @since Valkey 9.0.0
      */

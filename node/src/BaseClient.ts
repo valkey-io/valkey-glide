@@ -87,7 +87,7 @@ import {
     TimeUnit,
     TimeoutError,
     ValkeyError,
-    ValueComparison,
+    DelexOptions,
     ZAddOptions,
     ZScanOptions,
     convertFieldsAndValuesToHashDataType,
@@ -9730,26 +9730,24 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/delex/|valkey.io} for more details.
      *
      * @param key - The key to delete.
-     * @param condition - The comparison condition. The key is only deleted if its current value
-     *     meets `condition`. See {@link ValueComparison}.
-     * @returns `true` if `key` was deleted, or `false` if `key` did not exist or `condition` was
-     *     not met.
+     * @param options - The condition for deleting the key.
+     * @returns `true` if `key` was deleted, `false` otherwise.
      *
      * @example
      * ```typescript
      * await client.set("key", "value");
-     * console.log(await client.delex("key", { type: "onlyIfEqual", comparisonValue: "other_value" })); // Output: false
-     * console.log(await client.delex("key", { type: "onlyIfNotEqual", comparisonValue: "value" })); // Output: false
-     * console.log(await client.delex("key", { type: "onlyIfEqual", comparisonValue: "value" })); // Output: true
+     * console.log(await client.delex("key", { condition: "onlyIfEqual", value: "other_value" })); // Output: false
+     * console.log(await client.delex("key", { condition: "onlyIfNotEqual", value: "value" })); // Output: false
+     * console.log(await client.delex("key", { condition: "onlyIfEqual", value: "value" })); // Output: true
      * ```
      *
      * @since Valkey 9.2.0
      */
     public async delex(
         key: GlideString,
-        condition: ValueComparison,
+        options: DelexOptions,
     ): Promise<boolean> {
-        return this.createWritePromise(createDelEx(key, condition));
+        return this.createWritePromise(createDelEx(key, options));
     }
 
     /**
@@ -9758,10 +9756,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/delifeq/|valkey.io} for more details.
      *
      * @param key - The key to delete.
-     * @param value - The comparison value. The key is only deleted if its current value matches
-     *     exactly.
-     * @returns `true` if `key` was deleted, or `false` if `key` did not exist or its value did
-     *     not match `value`.
+     * @param value - The value to compare against the key.
+     * @returns `true` if `key` was deleted, `false` otherwise.
      *
      * @example
      * ```typescript
