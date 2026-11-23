@@ -5351,6 +5351,152 @@ mod cluster_async {
 
     #[test]
     #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_refresh_slots_after_an_unconnected_primary() {
+        let name = "test_async_cluster_partial_results_refresh_slots_after_an_unconnected_primary";
+        let slot_queries = Arc::new(atomic::AtomicUsize::new(0));
+        let queries = slot_queries.clone();
+        let mut info = cmd("INFO");
+        info.set_allow_partial_results(true);
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(0)
+                .slots_refresh_rate_limit(Duration::ZERO, 0),
+            name,
+            move |received_cmd: &[u8], port| {
+                // 6380 refuses every command, so the client never gets a connection to it.
+                if port == 6380 {
+                    return Err(Err(std::io::Error::from(
+                        std::io::ErrorKind::ConnectionRefused,
+                    )
+                    .into()));
+                }
+                if contains_slice(received_cmd, b"SLOTS") {
+                    queries.fetch_add(1, Ordering::SeqCst);
+                }
+                respond_startup_two_nodes(name, received_cmd)?;
+                Err(Ok(info_reply(port)))
+            },
+        );
+        let before = slot_queries.load(Ordering::SeqCst);
+
+        runtime
+            .block_on(connection.route_command(
+                &info,
+                RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllMasters,
+                    Some(redis::cluster_routing::ResponsePolicy::Special),
+                )),
+            ))
+            .unwrap();
+
+        let refreshed = runtime.block_on(async {
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while slot_queries.load(Ordering::SeqCst) == before {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+        });
+        assert!(
+            refreshed.is_ok(),
+            "no slot refresh after the unconnected entry"
+        );
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_drop_a_failed_over_primary() {
+        // No periodic topology checks, so only the refresh a partial result requests can
+        // update the slot map.
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            6,
+            1,
+            |builder| {
+                builder
+                    .retries(0)
+                    .slots_refresh_rate_limit(Duration::ZERO, 0)
+            },
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+            let mut info = cmd("INFO");
+            info.arg("SERVER").set_allow_partial_results(true);
+            let all_primaries = RoutingInfo::MultiNode((
+                MultipleNodeRoutingInfo::AllMasters,
+                Some(redis::cluster_routing::ResponsePolicy::Special),
+            ));
+            let slot_0 = |slot_addr| {
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    0, slot_addr,
+                )))
+            };
+
+            let server: String = redis::from_owned_redis_value(
+                connection
+                    .route_command(cmd("INFO").arg("SERVER"), slot_0(SlotAddr::Master))
+                    .await?,
+            )?;
+            let port = server
+                .lines()
+                .find_map(|line| line.strip_prefix("tcp_port:"))
+                .unwrap()
+                .trim()
+                .to_string();
+            let primaries = sorted_map(
+                connection
+                    .route_command(&info, all_primaries.clone())
+                    .await?,
+            );
+            let victim = primaries
+                .iter()
+                .map(|(address, _)| address.clone())
+                .find(|address| address.ends_with(&format!(":{port}")))
+                .unwrap();
+
+            // Kill slot 0's primary, then promote its replica.
+            let _ = connection
+                .route_command(cmd("SHUTDOWN").arg("NOSAVE"), slot_0(SlotAddr::Master))
+                .await;
+            connection
+                .route_command(
+                    cmd("CLUSTER").arg("FAILOVER").arg("TAKEOVER"),
+                    slot_0(SlotAddr::ReplicaRequired),
+                )
+                .await?;
+
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            loop {
+                let addresses: Vec<_> = sorted_map(
+                    connection
+                        .route_command(&info, all_primaries.clone())
+                        .await?,
+                )
+                .into_iter()
+                .map(|(address, _)| address)
+                .collect();
+                if !addresses.contains(&victim) {
+                    assert_eq!(addresses.len(), 3, "{addresses:?}");
+                    return Ok::<_, RedisError>(());
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "{victim} is still listed: {addresses:?}"
+                );
+                sleep(futures_time::time::Duration::from_millis(100)).await;
+            }
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_partial_results_return_map_when_all_nodes_fail() {
         let name = "test_async_cluster_partial_results_return_map_when_all_nodes_fail";
         let value = info_to_all_primaries(name, true, move |received_cmd, port| {
