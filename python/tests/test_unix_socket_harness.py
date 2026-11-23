@@ -2,6 +2,7 @@
 
 """Tests for the Unix socket mode of the standalone test harness."""
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -146,6 +147,40 @@ def test_stop_keeps_the_socket_of_a_server_it_could_not_stop(
         )
         assert not socket_file.exists()
         assert not (tmp_path / "cluster").exists()
+
+
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0,
+    reason="root ignores socket permissions",
+)
+def test_stop_keeps_a_running_server_it_cannot_reach():
+    cluster = ValkeyCluster(
+        tls=False, cluster_mode=False, shard_count=1, replica_count=0, unix_socket=True
+    )
+    socket_file = Path(cluster.unix_socket_paths[0])
+    # PING fails with "Permission denied" while the server keeps running.
+    socket_file.chmod(0)
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                str(UTILS_DIR / "cluster_manager.py"),
+                "stop",
+                "--cluster-folder",
+                cluster.cluster_folder,
+            ],
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+        assert socket_file.exists()
+        assert cluster_manager.node_unix_socket(
+            cluster.cluster_folder, cluster.nodes_addr[0].port
+        ) == str(socket_file)
+    finally:
+        socket_file.chmod(0o700)
+        del cluster
+    assert not socket_file.exists()
 
 
 def test_socket_server_has_tcp_disabled():

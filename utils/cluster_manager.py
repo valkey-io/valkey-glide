@@ -1152,6 +1152,11 @@ def stop_server(server: Server, cluster_folder: str, use_tls: bool, auth: str):
             capture_output=True, text=True, timeout=2,
         )
         if ping.returncode != 0:
+            # A socket node is down only if its socket is gone or refuses connections. On any
+            # other failure it may still run, and the kept socket is the only way to reach it.
+            down_errors = ("Connection refused", "No such file or directory")
+            if node_unix_socket(cluster_folder, server.port) and not any(e in ping.stderr for e in down_errors):
+                raise Exception(f"Could not tell if {server} is down: {ping.stderr.strip()}")
             logging.info(f"Server {server} is already down, skipping shutdown")
             return
     except subprocess.TimeoutExpired:
