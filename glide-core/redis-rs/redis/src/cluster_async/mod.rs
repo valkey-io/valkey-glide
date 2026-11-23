@@ -2619,7 +2619,7 @@ where
     /// The map has an entry for every node even when all of them failed.
     ///
     /// Also returns whether the client could not reach a node: an I/O error
-    /// other than a timeout, or no connection to it.
+    /// other than a timeout, a dropped connection, or no connection to it.
     async fn collect_partial_results(
         receivers: Vec<(Option<String>, oneshot::Receiver<RedisResult<Response>>)>,
         deadline: Option<std::time::Instant>,
@@ -2650,6 +2650,7 @@ where
                     ),
                     Ok(Err(err)) => {
                         unreached = (err.is_io_error() && !err.is_timeout())
+                            || err.is_connection_dropped()
                             || err.kind() == ErrorKind::ConnectionNotFoundForRoute;
                         Value::ServerError(ServerError::from_error_keeping_timeout(err))
                     }
@@ -5354,6 +5355,10 @@ mod partial_results_tests {
                     "Connection not found",
                 )
                     .into()),
+                true,
+            ),
+            (
+                Err((ErrorKind::FatalSendError, "Connection dropped").into()),
                 true,
             ),
             (
