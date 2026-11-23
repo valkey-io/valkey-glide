@@ -1084,214 +1084,6 @@ mod compression_tests {
     }
 
     #[test]
-    fn test_decompress_batch_response() {
-        // Create an enabled compression manager
-        let backend = Box::new(ZstdBackend::new());
-        let config = CompressionConfig::new(CompressionBackendType::Zstd);
-        let manager = CompressionManager::new(backend, config).unwrap();
-
-        // Test with array of uncompressed values (should return as-is)
-        let array_response = Value::Array(vec![
-            Value::BulkString(b"value1".to_vec().into()),
-            Value::BulkString(b"value2".to_vec().into()),
-            Value::Nil,
-        ]);
-        let result = decompress_batch_response(array_response.clone(), &manager);
-        assert!(result.is_ok());
-        let decompressed = result.unwrap();
-        match decompressed {
-            Value::Array(values) => {
-                assert_eq!(values.len(), 3);
-                assert_eq!(values[0], Value::BulkString(b"value1".to_vec().into()));
-                assert_eq!(values[1], Value::BulkString(b"value2".to_vec().into()));
-                assert_eq!(values[2], Value::Nil);
-            }
-            _ => panic!("Expected array response"),
-        }
-
-        // Test with array containing compressed values
-        let test_data = b"test data for compression that is long enough to be compressed";
-        let compressed = manager.compress_value(test_data).into_owned();
-        let array_with_compressed = Value::Array(vec![
-            Value::BulkString(compressed.clone().into()),
-            Value::BulkString(b"uncompressed".to_vec().into()),
-        ]);
-        let result = decompress_batch_response(array_with_compressed, &manager);
-        assert!(result.is_ok());
-        let decompressed = result.unwrap();
-        match decompressed {
-            Value::Array(values) => {
-                assert_eq!(values.len(), 2);
-                // First value should be decompressed
-                assert_eq!(values[0], Value::BulkString(test_data.to_vec().into()));
-                // Second value should remain unchanged
-                assert_eq!(
-                    values[1],
-                    Value::BulkString(b"uncompressed".to_vec().into())
-                );
-            }
-            _ => panic!("Expected array response"),
-        }
-
-        // Test with non-array response (single value)
-        let single_response = Value::BulkString(compressed.clone().into());
-        let result = decompress_batch_response(single_response, &manager);
-        assert!(result.is_ok());
-        let decompressed = result.unwrap();
-        assert_eq!(decompressed, Value::BulkString(test_data.to_vec().into()));
-
-        // Test with disabled compression manager
-        let disabled_config = CompressionConfig {
-            enabled: false,
-            backend: CompressionBackendType::Zstd,
-            compression_level: None,
-            min_compression_size: 64,
-            max_decompressed_size: Some(DEFAULT_MAX_DECOMPRESSED_SIZE),
-        };
-        let disabled_backend = Box::new(ZstdBackend::new());
-        let disabled_manager = CompressionManager::new(disabled_backend, disabled_config).unwrap();
-
-        // With disabled manager, compressed data should NOT be decompressed
-        let array_with_compressed =
-            Value::Array(vec![Value::BulkString(compressed.clone().into())]);
-        let result = decompress_batch_response(array_with_compressed, &disabled_manager);
-        assert!(result.is_ok());
-        let not_decompressed = result.unwrap();
-        match not_decompressed {
-            Value::Array(values) => {
-                assert_eq!(values.len(), 1);
-                // Value should remain compressed since manager is disabled
-                assert_eq!(values[0], Value::BulkString(compressed.into()));
-            }
-            _ => panic!("Expected array response"),
-        }
-    }
-
-    #[test]
-    fn test_decompress_batch_response_nested_arrays() {
-        // Create an enabled compression manager
-        let backend = Box::new(ZstdBackend::new());
-        let config = CompressionConfig::new(CompressionBackendType::Zstd);
-        let manager = CompressionManager::new(backend, config).unwrap();
-
-        // Create compressed test data
-        let test_data1 =
-            b"test data for compression that is long enough to be compressed - value 1";
-        let test_data2 =
-            b"test data for compression that is long enough to be compressed - value 2";
-        let test_data3 =
-            b"test data for compression that is long enough to be compressed - value 3";
-        let compressed1 = manager.compress_value(test_data1).into_owned();
-        let compressed2 = manager.compress_value(test_data2).into_owned();
-        let compressed3 = manager.compress_value(test_data3).into_owned();
-
-        // Simulate a batch response with MSET result (OK) followed by MGET result (nested array)
-        // This is what happens when you do: batch.mset(...); batch.mget(...); exec(batch);
-        let batch_response = Value::Array(vec![
-            // MSET result
-            Value::SimpleString("OK".to_string()),
-            // MGET result - nested array with compressed values
-            Value::Array(vec![
-                Value::BulkString(compressed1.clone().into()),
-                Value::BulkString(compressed2.clone().into()),
-                Value::BulkString(compressed3.clone().into()),
-            ]),
-        ]);
-
-        let result = decompress_batch_response(batch_response, &manager);
-        assert!(result.is_ok());
-        let decompressed = result.unwrap();
-
-        match decompressed {
-            Value::Array(values) => {
-                assert_eq!(values.len(), 2);
-
-                // First value should be MSET result (OK)
-                assert_eq!(values[0], Value::SimpleString("OK".to_string()));
-
-                // Second value should be decompressed MGET result (nested array)
-                match &values[1] {
-                    Value::Array(mget_values) => {
-                        assert_eq!(mget_values.len(), 3);
-                        assert_eq!(
-                            mget_values[0],
-                            Value::BulkString(test_data1.to_vec().into())
-                        );
-                        assert_eq!(
-                            mget_values[1],
-                            Value::BulkString(test_data2.to_vec().into())
-                        );
-                        assert_eq!(
-                            mget_values[2],
-                            Value::BulkString(test_data3.to_vec().into())
-                        );
-                    }
-                    _ => panic!("Expected nested array for MGET result"),
-                }
-            }
-            _ => panic!("Expected array response"),
-        }
-
-        // Test with deeply nested arrays (edge case)
-        let deeply_nested = Value::Array(vec![Value::Array(vec![Value::Array(vec![
-            Value::BulkString(compressed1.clone().into()),
-        ])])]);
-
-        let result = decompress_batch_response(deeply_nested, &manager);
-        assert!(result.is_ok());
-        let decompressed = result.unwrap();
-
-        // Verify the deeply nested value was decompressed
-        match decompressed {
-            Value::Array(level1) => match &level1[0] {
-                Value::Array(level2) => match &level2[0] {
-                    Value::Array(level3) => {
-                        assert_eq!(level3[0], Value::BulkString(test_data1.to_vec().into()));
-                    }
-                    _ => panic!("Expected array at level 3"),
-                },
-                _ => panic!("Expected array at level 2"),
-            },
-            _ => panic!("Expected array at level 1"),
-        }
-
-        // Test with mixed nested and non-nested values
-        let mixed_response = Value::Array(vec![
-            Value::BulkString(compressed1.clone().into()), // Direct compressed value
-            Value::Array(vec![
-                // Nested array with compressed values
-                Value::BulkString(compressed2.clone().into()),
-                Value::Nil,
-            ]),
-            Value::SimpleString("OK".to_string()), // Simple string
-        ]);
-
-        let result = decompress_batch_response(mixed_response, &manager);
-        assert!(result.is_ok());
-        let decompressed = result.unwrap();
-
-        match decompressed {
-            Value::Array(values) => {
-                assert_eq!(values.len(), 3);
-                // First value should be decompressed
-                assert_eq!(values[0], Value::BulkString(test_data1.to_vec().into()));
-                // Second value should be nested array with decompressed values
-                match &values[1] {
-                    Value::Array(nested) => {
-                        assert_eq!(nested.len(), 2);
-                        assert_eq!(nested[0], Value::BulkString(test_data2.to_vec().into()));
-                        assert_eq!(nested[1], Value::Nil);
-                    }
-                    _ => panic!("Expected nested array"),
-                }
-                // Third value should be unchanged
-                assert_eq!(values[2], Value::SimpleString("OK".to_string()));
-            }
-            _ => panic!("Expected array response"),
-        }
-    }
-
-    #[test]
     fn test_max_decompressed_size_limit() {
         // Test ZSTD with size limit
         let zstd_backend = ZstdBackend::new();
@@ -1467,58 +1259,195 @@ mod compression_tests {
         assert_eq!(values[1], Value::BulkString(plain.into()));
     }
 
+    /// 100-byte decompression limit.
+    fn size_limited_manager() -> CompressionManager {
+        let config = CompressionConfig::new(CompressionBackendType::Zstd)
+            .with_min_compression_size(64)
+            .with_max_decompressed_size(Some(100));
+        CompressionManager::new(Box::new(ZstdBackend::new()), config).unwrap()
+    }
+
+    fn compressed(manager: &CompressionManager, original: &[u8]) -> Value {
+        let bytes = manager.compress_value(original).into_owned();
+        assert!(has_magic_header(&bytes));
+        Value::BulkString(bytes.into())
+    }
+
+    fn command(args: &[&str]) -> redis::Cmd {
+        let mut command = redis::Cmd::new();
+        for arg in args {
+            command.arg(*arg);
+        }
+        command
+    }
+
+    /// LZ4-headed bytes claiming 200 decompressed bytes, over `size_limited_manager`'s limit.
+    fn lz4_oversize_claim() -> Vec<u8> {
+        let mut bytes = create_header(CompressionBackendType::Lz4.backend_id()).to_vec();
+        bytes.extend_from_slice(&200u32.to_le_bytes());
+        bytes.extend_from_slice(&[b'z'; 16]);
+        bytes
+    }
+
     #[test]
-    fn batch_reply_keeps_siblings_when_one_element_mimics_header() {
+    fn request_type_for_decompression_reads_the_command_name() {
+        let cases: [(&[&str], Option<RequestType>); 12] = [
+            (&["GET", "key"], Some(RequestType::Get)),
+            (&["get", "key"], Some(RequestType::Get)),
+            (&["MGET", "a", "b"], Some(RequestType::MGet)),
+            (&["GETEX", "key"], Some(RequestType::GetEx)),
+            (&["GETDEL", "key"], Some(RequestType::GetDel)),
+            (&["GETSET", "key", "value"], Some(RequestType::GetSet)),
+            (&["SET", "key", "value", "GET"], Some(RequestType::GetSet)),
+            (
+                &["set", "key", "value", "NX", "get"],
+                Some(RequestType::GetSet),
+            ),
+            (&["SET", "key", "GET"], None),
+            (&["SET", "key", "value"], None),
+            (&["LRANGE", "key", "0", "-1"], None),
+            (&[], None),
+        ];
+        for (args, expected) in cases {
+            let actual = request_type_for_decompression(&command(args));
+            assert_eq!(format!("{actual:?}"), format!("{expected:?}"), "{args:?}");
+        }
+    }
+
+    #[test]
+    fn decompress_reply_for_cmd_keeps_replies_of_commands_that_do_not_return_stored_values() {
+        let manager = zstd_manager();
+        let stored = compressed(&manager, &"A".repeat(200).into_bytes());
+        let cases = [
+            (
+                command(&["LRANGE", "events", "0", "-1"]),
+                Value::Array(vec![stored.clone()]),
+            ),
+            (
+                command(&["SMEMBERS", "set"]),
+                Value::Set(vec![stored.clone()]),
+            ),
+            (command(&["HGET", "hash", "field"]), stored.clone()),
+            (
+                command(&["HGETALL", "hash"]),
+                Value::Map(vec![(
+                    Value::BulkString(b"field".to_vec().into()),
+                    stored.clone(),
+                )]),
+            ),
+            (command(&["EVAL", "return ARGV[1]", "0"]), stored.clone()),
+            (command(&["SET", "key", "GET"]), stored),
+        ];
+        for (cmd, reply) in cases {
+            assert_eq!(
+                decompress_reply_for_cmd(reply.clone(), &cmd, Some(&manager)).unwrap(),
+                reply,
+                "{cmd:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn decompress_reply_for_cmd_decompresses_replies_of_commands_that_return_stored_values() {
         let manager = zstd_manager();
         let original = "A".repeat(200).into_bytes();
-        let compressed = manager.compress_value(&original).into_owned();
-        let plain = header_shaped_plain(CompressionBackendType::Zstd.backend_id());
-
-        let batch = Value::Array(vec![
-            Value::BulkString(plain.clone().into()),
-            Value::BulkString(compressed.clone().into()),
-            Value::Array(vec![
-                Value::BulkString(compressed.into()),
-                Value::BulkString(plain.clone().into()),
-            ]),
-        ]);
-        let result =
-            decompress_batch_response(batch, &manager).expect("batch reply should decompress");
+        let stored = compressed(&manager, &original);
+        let plain = Value::BulkString(original.clone().into());
+        for args in [
+            &["GET", "key"][..],
+            &["get", "key"],
+            &["GETEX", "key"],
+            &["GETDEL", "key"],
+            &["GETSET", "key", "value"],
+            &["SET", "key", "value", "GET"],
+        ] {
+            assert_eq!(
+                decompress_reply_for_cmd(stored.clone(), &command(args), Some(&manager)).unwrap(),
+                plain,
+                "{args:?}"
+            );
+        }
         assert_eq!(
-            result,
-            Value::Array(vec![
-                Value::BulkString(plain.clone().into()),
-                Value::BulkString(original.clone().into()),
-                Value::Array(vec![
-                    Value::BulkString(original.into()),
-                    Value::BulkString(plain.into()),
-                ]),
-            ])
+            decompress_reply_for_cmd(
+                Value::Array(vec![stored, Value::Nil]),
+                &command(&["MGET", "a", "b"]),
+                Some(&manager)
+            )
+            .unwrap(),
+            Value::Array(vec![plain, Value::Nil])
         );
     }
 
     #[test]
-    fn batch_reply_propagates_size_limit_from_nested_element() {
-        let config = CompressionConfig::new(CompressionBackendType::Zstd)
-            .with_min_compression_size(64)
-            .with_max_decompressed_size(Some(50));
-        let manager = CompressionManager::new(Box::new(ZstdBackend::new()), config).unwrap();
-        let too_large = manager
-            .compress_value(&"A".repeat(200).into_bytes())
-            .into_owned();
-        assert!(has_magic_header(&too_large));
+    fn decompress_reply_for_cmd_without_an_enabled_manager_keeps_the_reply() {
+        let manager = zstd_manager();
+        let stored = compressed(&manager, &"A".repeat(200).into_bytes());
+        let disabled_manager = CompressionManager::new(
+            Box::new(ZstdBackend::new()),
+            CompressionConfig {
+                enabled: false,
+                ..CompressionConfig::new(CompressionBackendType::Zstd)
+            },
+        )
+        .unwrap();
+        let get = command(&["GET", "key"]);
+        assert_eq!(
+            decompress_reply_for_cmd(stored.clone(), &get, None).unwrap(),
+            stored
+        );
+        assert_eq!(
+            decompress_reply_for_cmd(stored.clone(), &get, Some(&disabled_manager)).unwrap(),
+            stored
+        );
+    }
 
-        let batch = Value::Array(vec![
-            Value::BulkString(b"small plain".to_vec().into()),
-            Value::Array(vec![
-                Value::BulkString(b"small plain".to_vec().into()),
-                Value::BulkString(too_large.into()),
-            ]),
-        ]);
+    #[test]
+    fn decompress_reply_for_cmd_ignores_an_oversize_claim_in_a_non_string_command_reply() {
+        let manager = size_limited_manager();
+        let claim = Value::BulkString(lz4_oversize_claim().into());
         assert!(matches!(
-            decompress_batch_response(batch, &manager),
+            decompress_reply_for_cmd(claim.clone(), &command(&["GET", "key"]), Some(&manager)),
             Err(SizeLimitExceeded { .. })
         ));
+
+        let lrange = command(&["LRANGE", "events", "0", "-1"]);
+        let reply = Value::Array(vec![claim]);
+        assert_eq!(
+            decompress_reply_for_cmd(reply.clone(), &lrange, Some(&manager)).unwrap(),
+            reply
+        );
+    }
+
+    #[test]
+    fn decompress_reply_for_cmd_returns_the_size_limit() {
+        let manager = size_limited_manager();
+        let oversized = compressed(&manager, &"A".repeat(200).into_bytes());
+        let error = decompress_reply_for_cmd(
+            oversized,
+            &command(&["GET", "key"]),
+            Some(&manager),
+        )
+        .expect_err("oversized decompressed value should return the size limit");
+        assert_eq!(error.max_size, 100);
+        assert_eq!(error.decompressed_size, 200);
+    }
+
+    #[test]
+    fn decompress_reply_for_cmd_keeps_server_errors() {
+        let manager = size_limited_manager();
+        let wrong_type = redis::parse_redis_value(
+            b"-WRONGTYPE Operation against a key holding the wrong kind of value\r\n",
+        )
+        .unwrap();
+        assert_eq!(
+            decompress_reply_for_cmd(
+                wrong_type.clone(),
+                &command(&["GET", "key"]),
+                Some(&manager),
+            )
+            .unwrap(),
+            wrong_type
+        );
     }
 
     #[test]

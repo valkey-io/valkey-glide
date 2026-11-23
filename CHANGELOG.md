@@ -4,7 +4,6 @@
 
 ### Features
 
-* Node: valkey-search 1.3 stable surface ([#7378](https://github.com/valkey-io/valkey-glide/pull/7378))
 * Rust: Add `HGETDEL` and `DELIFEQ` commands ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145), [#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Python: Add CPython 3.15 wheels for the async and sync clients ([#7321](https://github.com/valkey-io/valkey-glide/issues/7321))
 * Core, Python: Add support for Valkey 9.2 commands:
@@ -30,6 +29,7 @@
 * Rust: `telemetry::init` rejects a configuration with no exporter ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Rust: `telemetry::init` runs the HTTP and gRPC exporters on GLIDE's runtime ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core: reject writes in read-only standalone pipelines, transactions and scopes ([#7761](https://github.com/valkey-io/valkey-glide/pull/7761))
+* Core: A batch reply is decompressed only if its command returns stored values (`GET`, `MGET`, `GETEX`, `GETDEL`, `GETSET`, `SET ... GET`), as outside a batch. Replies of other commands, such as `LRANGE` or `HGET`, are no longer changed or rejected when their bytes begin with the compression header ([#7555](https://github.com/valkey-io/valkey-glide/issues/7555))
 
 ### Breaking Changes
 

@@ -6327,10 +6327,7 @@ pub unsafe extern "C" fn batch(
     #[cfg(not(feature = "pool-support"))]
     let batch_blocking_arc: Option<std::sync::Arc<std::sync::atomic::AtomicU32>> = None;
 
-    // Get compression manager for batch operations
     let compression_manager = client_adapter.core.client.compression_manager();
-    // Clone for use in async block
-    let compression_manager_for_decompression = compression_manager.clone();
 
     // TODO handle panics
     let mut pipeline = match unsafe { create_pipeline(batch_ptr, compression_manager.as_ref()) } {
@@ -6400,11 +6397,7 @@ pub unsafe extern "C" fn batch(
         let _ = batch_pool_ids;
         let _ = batch_blocking_arc;
 
-        let decompressed = glide_core::compression::try_decompress_batch_response(
-            result?,
-            compression_manager_for_decompression.as_deref(),
-        )?;
-        Ok(decompressed)
+        result
     })
 }
 

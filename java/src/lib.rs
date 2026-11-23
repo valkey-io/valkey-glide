@@ -1759,13 +1759,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             glide_core::pool::refresh_activity_by_client(handle_id);
                         }
 
-                        exec_res.and_then(|value| {
-                            glide_core::compression::try_decompress_batch_response(
-                                value,
-                                client.compression_manager().as_deref(),
-                            )
-                            .map_err(redis::RedisError::from)
-                        })
+                        exec_res
                     }
                     .await;
 

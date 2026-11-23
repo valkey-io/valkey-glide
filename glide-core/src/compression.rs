@@ -9,6 +9,7 @@ use std::fmt;
 use crate::request_type::RequestType;
 use glide_logger::log_warn_rate_limited;
 use glide_telemetry::Telemetry;
+use redis::cluster_routing::Routable;
 
 /// Detailed compression error with context for debugging
 #[derive(Debug, Clone, PartialEq)]
@@ -1092,68 +1093,44 @@ pub fn decompress_mget_response(
     }
 }
 
-/// Decompress a batch (pipeline/transaction) response.
+/// Returns the request type whose reply rules apply to `cmd`, or `None` if its reply is
+/// never decompressed.
 ///
-/// This function processes the response from a batch operation and decompresses
-/// individual response values using magic header detection. It recursively handles
-/// nested arrays (like MGET responses within a batch).
-///
-/// # Arguments
-/// * `response` - The batch response value (typically an array of responses)
-/// * `manager` - The compression manager to use for decompression
-///
-/// # Returns
-/// * `Ok(Value)` - The processed response with decompressed values
-/// * `Err(SizeLimitExceeded)` - If decompressing an element would exceed the size limit
-pub fn decompress_batch_response(
-    response: redis::Value,
-    manager: &CompressionManager,
-) -> Result<redis::Value, SizeLimitExceeded> {
-    use redis::Value;
-
-    if !manager.is_enabled() {
-        return Ok(response);
-    }
-
-    match response {
-        Value::Array(responses) => {
-            let mut processed_responses = Vec::with_capacity(responses.len());
-            for resp in responses {
-                // Recursively process nested arrays (e.g., MGET responses within a batch)
-                // We take ownership of resp to avoid cloning
-                let processed = match resp {
-                    Value::Array(_) => decompress_batch_response(resp, manager)?,
-                    other => decompress_single_value_response(other, manager)?,
-                };
-                processed_responses.push(processed);
-            }
-            Ok(Value::Array(processed_responses))
-        }
-        // For non-array responses, try to decompress directly
-        other => decompress_single_value_response(other, manager),
+/// The type is read from the command name, so a custom command such as `["GET", key]`
+/// follows the same rules as the typed command, and `SET ... GET` follows `GETSET`.
+pub fn request_type_for_decompression(cmd: &redis::Cmd) -> Option<RequestType> {
+    let command_name = cmd.command()?;
+    match command_name.as_slice() {
+        b"GET" => Some(RequestType::Get),
+        b"MGET" => Some(RequestType::MGet),
+        b"GETEX" => Some(RequestType::GetEx),
+        b"GETDEL" => Some(RequestType::GetDel),
+        b"GETSET" => Some(RequestType::GetSet),
+        b"SET" if set_returns_old_value(cmd) => Some(RequestType::GetSet),
+        _ => None,
     }
 }
 
-/// Attempts to decompress a batch response if a compression manager is provided.
-///
-/// This is a convenience wrapper around `decompress_batch_response` that handles
-/// the `Option<CompressionManager>` case.
-///
-/// # Arguments
-/// * `value` - The batch response value to decompress
-/// * `manager` - Optional compression manager
-///
-/// # Returns
-/// * `Ok(Value)` - The decompressed value, or the original value if no manager
-/// * `Err(SizeLimitExceeded)` - If decompressing an element would exceed the size limit
-pub fn try_decompress_batch_response(
-    value: redis::Value,
-    manager: Option<&CompressionManager>,
+/// `SET key value [NX | XX] [GET] ...` returns the old value only with the `GET` option.
+fn set_returns_old_value(cmd: &redis::Cmd) -> bool {
+    cmd.args_iter().skip(3).any(|arg| match arg {
+        redis::Arg::Simple(bytes) => bytes.eq_ignore_ascii_case(b"GET"),
+        redis::Arg::Cursor => false,
+    })
+}
+
+/// Decompresses `cmd`'s reply if `cmd` returns stored values, as `GET` and `MGET` do.
+/// Any other command's reply is returned unchanged, even if it begins with the
+/// compression header.
+pub fn decompress_reply_for_cmd(
+    reply: redis::Value,
+    cmd: &redis::Cmd,
+    compression_manager: Option<&CompressionManager>,
 ) -> Result<redis::Value, SizeLimitExceeded> {
-    match manager {
-        Some(mgr) => decompress_batch_response(value, mgr),
-        None => Ok(value),
-    }
+    let Some(request_type) = request_type_for_decompression(cmd) else {
+        return Ok(reply);
+    };
+    process_response_for_decompression(reply, request_type, compression_manager)
 }
 
 /// Magic prefix for compressed data headers (first 3 bytes)

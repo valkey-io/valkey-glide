@@ -729,7 +729,7 @@ async fn execute_batch(
     }
 
     // Execute based on type
-    let result = if is_atomic {
+    if is_atomic {
         client
             .send_transaction(&pipeline, routing, timeout, raise_on_error)
             .await
@@ -741,13 +741,7 @@ async fn execute_batch(
         client
             .send_pipeline(&pipeline, routing, raise_on_error, timeout, retry_strategy)
             .await
-    };
-
-    let decompressed = glide_core::compression::try_decompress_batch_response(
-        result?,
-        client.compression_manager().as_deref(),
-    )?;
-    Ok(decompressed)
+    }
 }
 
 // ============================================================================

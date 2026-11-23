@@ -53,7 +53,6 @@ pub use monitor_client::{MonitorClient, MonitorLine, MonitorLineCallback};
 mod standalone_client;
 mod value_conversion;
 use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
-use crate::request_type::RequestType;
 use glide_telemetry::GlideOpenTelemetry;
 use redis::InfoDict;
 use std::future::Future;
@@ -90,42 +89,6 @@ pub const DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE: u32 = 1000;
 /// A 3-second interval provides a reasonable balance between connection validation
 /// and performance overhead.
 pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
-
-/// Extract RequestType from a Redis command for decompression processing
-fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
-    // Get the command name (first argument)
-    let command_name = cmd.command()?;
-    let command_str = String::from_utf8_lossy(&command_name).to_uppercase();
-
-    // Map command names to RequestType for decompression
-    // Only read commands that return values needing decompression are included
-    match command_str.as_str() {
-        "GET" => Some(RequestType::Get),
-        "MGET" => Some(RequestType::MGet),
-        "GETEX" => Some(RequestType::GetEx),
-        "GETDEL" => Some(RequestType::GetDel),
-        "GETSET" => Some(RequestType::GetSet),
-        "SET" => {
-            // SET with GET option returns the old value, which needs decompression
-            // Check if the command has the GET option by looking for "GET" in the arguments
-            // SET key value [NX | XX] [GET] [EX seconds | PX milliseconds | EXAT unix-time | PXAT unix-time | KEEPTTL]
-            let has_get_option = cmd.args_iter().skip(3).any(|arg| {
-                if let redis::Arg::Simple(bytes) = arg {
-                    bytes.eq_ignore_ascii_case(b"GET")
-                } else {
-                    false
-                }
-            });
-            if has_get_option {
-                // Treat SET with GET option like GETSET for decompression purposes
-                Some(RequestType::GetSet)
-            } else {
-                None
-            }
-        }
-        _ => None, // Unknown command or write command, no decompression needed
-    }
-}
 
 /// A static Glide runtime instance
 static RUNTIME: OnceCell<GlideRt> = OnceCell::new();
@@ -1435,17 +1398,11 @@ impl Client {
 
         // Post-process: decompress and convert to expected type.
         // Done after the mutable borrow on cmd is released.
-        let processed_value = match &compression_manager {
-            Some(compression_manager) => match extract_request_type_from_cmd(&cmd) {
-                Some(request_type) => crate::compression::process_response_for_decompression(
-                    raw_value,
-                    request_type,
-                    Some(compression_manager.as_ref()),
-                )?,
-                None => raw_value,
-            },
-            None => raw_value,
-        };
+        let processed_value = crate::compression::decompress_reply_for_cmd(
+            raw_value,
+            &cmd,
+            compression_manager.as_deref(),
+        )?;
 
         let expected_type = expected_type_for_cmd(&cmd);
         let value = convert_to_expected_type(processed_value, expected_type)?;
@@ -1589,12 +1546,7 @@ impl Client {
         cmd.set_inflight_tracker(tracker);
         cmd.set_response_timeout(request_timeout);
 
-        // Clone compression_manager reference only if compression is enabled
-        let compression_manager = if self.is_compression_enabled() {
-            self.compression_manager.clone()
-        } else {
-            None
-        };
+        let compression_manager = self.enabled_compression_manager();
         let self_clone = self.clone();
 
         // Blocking commands have artificially long latencies; exclude from tracker.
@@ -1897,17 +1849,11 @@ impl Client {
             None => connection.send_packed_command(&cmd_to_send).await?,
         };
 
-        let processed_value = match &self.compression_manager {
-            Some(compression_manager) => match extract_request_type_from_cmd(cmd) {
-                Some(request_type) => crate::compression::process_response_for_decompression(
-                    raw_value,
-                    request_type,
-                    Some(compression_manager.as_ref()),
-                )?,
-                None => raw_value,
-            },
-            None => raw_value,
-        };
+        let processed_value = crate::compression::decompress_reply_for_cmd(
+            raw_value,
+            cmd,
+            self.compression_manager.as_deref(),
+        )?;
 
         // Type conversion
         let expected_type = expected_type_for_cmd(cmd);
@@ -2151,6 +2097,7 @@ impl Client {
         command_count: usize,
         offset: usize,
         raise_on_error: bool,
+        compression_manager: Option<&CompressionManager>,
     ) -> RedisResult<Value> {
         assert_eq!(values.len(), 1);
         let value = values.pop();
@@ -2184,6 +2131,7 @@ impl Client {
             values,
             command_count,
             raise_on_error,
+            compression_manager,
         )
     }
 
@@ -2192,30 +2140,46 @@ impl Client {
         values: Vec<Value>,
         command_count: usize,
         raise_on_error: bool,
+        compression_manager: Option<&CompressionManager>,
     ) -> RedisResult<Value> {
+        // Each reply is paired with its command by position, so a count mismatch would pair
+        // replies with the wrong commands.
+        if values.len() != command_count {
+            return Err((
+                ErrorKind::ResponseError,
+                "Received a batch response with an unexpected number of replies",
+                format!(
+                    "(expected {command_count} replies, received {})",
+                    values.len()
+                ),
+            )
+                .into());
+        }
         let values = values
             .into_iter()
-            .map(|value| {
-                if raise_on_error {
-                    value.extract_error()
-                } else {
-                    Ok(value)
-                }
+            .zip(pipeline.cmd_iter())
+            .map(|(value, cmd)| {
+                Self::convert_pipeline_reply(value, cmd, raise_on_error, compression_manager)
             })
-            .zip(
-                pipeline
-                    .cmd_iter()
-                    .map(|cmd| expected_type_for_cmd(cmd.as_ref())),
-            )
-            .map(|(value, expected_type)| convert_to_expected_type(value?, expected_type))
-            .try_fold(
-                Vec::with_capacity(command_count),
-                |mut acc, result| -> RedisResult<_> {
-                    acc.push(result?);
-                    Ok(acc)
-                },
-            )?;
+            .collect::<RedisResult<Vec<_>>>()?;
         Ok(Value::Array(values))
+    }
+
+    /// Processes one batch reply as the same command's reply is processed outside a batch.
+    fn convert_pipeline_reply(
+        value: Value,
+        cmd: &Cmd,
+        raise_on_error: bool,
+        compression_manager: Option<&CompressionManager>,
+    ) -> RedisResult<Value> {
+        let value = if raise_on_error {
+            value.extract_error()?
+        } else {
+            value
+        };
+        let value =
+            crate::compression::decompress_reply_for_cmd(value, cmd, compression_manager)?;
+        convert_to_expected_type(value, expected_type_for_cmd(cmd))
     }
 
     /// Send a pipeline to the server.
@@ -2247,6 +2211,7 @@ impl Client {
                 self.shared.db_maybe_dirty.store(true, Ordering::Release);
             }
             let client = self.get_or_initialize_client().await?;
+            let compression_manager = self.enabled_compression_manager();
             let command_count = pipeline.cmd_iter().count();
             // The offset is set to command_count + 1 to account for:
             // 1. The first command, which is the "MULTI" command, that returns "OK"
@@ -2268,6 +2233,7 @@ impl Client {
                                 command_count,
                                 offset,
                                 raise_on_error,
+                                compression_manager.as_deref(),
                             )
                         }
                         ClientWrapper::Cluster { mut client, .. } => {
@@ -2291,6 +2257,7 @@ impl Client {
                                 command_count,
                                 offset,
                                 raise_on_error,
+                                compression_manager.as_deref(),
                             )
                         }
                         ClientWrapper::Lazy(_) => {
@@ -2375,6 +2342,7 @@ impl Client {
                 self.shared.db_maybe_dirty.store(true, Ordering::Release);
             }
             let client = self.get_or_initialize_client().await?;
+            let compression_manager = self.enabled_compression_manager();
 
             let command_count = pipeline.cmd_iter().count();
             if pipeline.is_empty() {
@@ -2433,6 +2401,7 @@ impl Client {
                         values,
                         command_count,
                         raise_on_error,
+                        compression_manager.as_deref(),
                     )
                 },
             )
@@ -4311,6 +4280,14 @@ impl Client {
             .as_ref()
             .map(|manager| manager.is_enabled())
             .unwrap_or(false)
+    }
+
+    /// The compression manager, or `None` if compression is disabled, so a caller can skip
+    /// per-reply compression work.
+    fn enabled_compression_manager(&self) -> Option<Arc<CompressionManager>> {
+        self.compression_manager
+            .clone()
+            .filter(|manager| manager.is_enabled())
     }
 
     /// Returns the initial connection address (the socket path for a Unix domain
@@ -7150,5 +7127,253 @@ mod tests {
         {
             panic!("IAM with non-empty cluster name and region must be accepted");
         }
+    }
+}
+
+#[cfg(test)]
+mod batch_decompression_tests {
+    use super::Client;
+    use crate::compression::zstd_backend::ZstdBackend;
+    use crate::compression::{
+        CompressionBackendType, CompressionConfig, CompressionManager, create_header,
+    };
+    use redis::{Cmd, ErrorKind, Pipeline, RedisResult, Value};
+
+    /// Zstd manager with a 100-byte decompression limit.
+    fn size_limited_manager() -> CompressionManager {
+        let config = CompressionConfig::new(CompressionBackendType::Zstd)
+            .with_min_compression_size(64)
+            .with_max_decompressed_size(Some(100));
+        CompressionManager::new(Box::new(ZstdBackend::new()), config).unwrap()
+    }
+
+    fn bulk(bytes: &[u8]) -> Value {
+        Value::BulkString(bytes.to_vec().into())
+    }
+
+    fn compressed(manager: &CompressionManager, original: &[u8]) -> Value {
+        bulk(&manager.compress_value(original))
+    }
+
+    /// LZ4-headed bytes claiming 200 decompressed bytes, over the 100-byte limit.
+    fn lz4_oversize_claim() -> Vec<u8> {
+        let mut bytes = create_header(CompressionBackendType::Lz4.backend_id()).to_vec();
+        bytes.extend_from_slice(&200u32.to_le_bytes());
+        bytes.extend_from_slice(&[b'z'; 16]);
+        bytes
+    }
+
+    fn command(args: &[&str]) -> Cmd {
+        let mut command = Cmd::new();
+        for arg in args {
+            command.arg(*arg);
+        }
+        command
+    }
+
+    fn pipeline(commands: &[&[&str]]) -> Pipeline {
+        let mut pipeline = Pipeline::with_capacity(commands.len());
+        for args in commands {
+            pipeline.add_command(command(args));
+        }
+        pipeline
+    }
+
+    fn convert(
+        pipeline: &Pipeline,
+        replies: Vec<Value>,
+        manager: Option<&CompressionManager>,
+        raise_on_error: bool,
+    ) -> RedisResult<Value> {
+        Client::convert_pipeline_values_to_expected_types(
+            pipeline,
+            replies,
+            pipeline.cmd_iter().count(),
+            raise_on_error,
+            manager,
+        )
+    }
+
+    const LRANGE: &[&str] = &["LRANGE", "events", "0", "-1"];
+
+    #[test]
+    fn non_string_command_reply_is_not_decompressed_in_a_batch() {
+        let manager = size_limited_manager();
+        let list_element = compressed(&manager, &"A".repeat(80).into_bytes());
+        let batch = pipeline(&[LRANGE, &["GET", "key"]]);
+        let replies = vec![
+            Value::Array(vec![list_element.clone()]),
+            compressed(&manager, &"B".repeat(80).into_bytes()),
+        ];
+
+        assert_eq!(
+            convert(&batch, replies, Some(&manager), true).unwrap(),
+            Value::Array(vec![
+                Value::Array(vec![list_element]),
+                bulk(&"B".repeat(80).into_bytes()),
+            ])
+        );
+    }
+
+    #[test]
+    fn oversize_claim_in_a_non_string_command_reply_does_not_fail_the_batch() {
+        let manager = size_limited_manager();
+        let claim = bulk(&lz4_oversize_claim());
+        assert!(
+            convert(
+                &pipeline(&[&["GET", "key"]]),
+                vec![claim.clone()],
+                Some(&manager),
+                true
+            )
+            .is_err()
+        );
+
+        let batch = pipeline(&[LRANGE, &["GET", "key"]]);
+        for raise_on_error in [false, true] {
+            let replies = vec![
+                Value::Array(vec![claim.clone()]),
+                compressed(&manager, &"B".repeat(80).into_bytes()),
+            ];
+            assert_eq!(
+                convert(&batch, replies, Some(&manager), raise_on_error).unwrap(),
+                Value::Array(vec![
+                    Value::Array(vec![claim.clone()]),
+                    bulk(&"B".repeat(80).into_bytes()),
+                ])
+            );
+        }
+    }
+
+    #[test]
+    fn each_reply_follows_the_rules_of_its_command() {
+        let manager = size_limited_manager();
+        let list_element = compressed(&manager, &"L".repeat(80).into_bytes());
+        let batch = pipeline(&[
+            &["MGET", "key-a", "key-b"],
+            &["GET", "key-c"],
+            LRANGE,
+            &["SET", "key-d", "value", "GET"],
+            &["get", "key-e"],
+        ]);
+        let replies = vec![
+            Value::Array(vec![
+                compressed(&manager, &"A".repeat(80).into_bytes()),
+                bulk(b"plain-b"),
+            ]),
+            compressed(&manager, &"C".repeat(80).into_bytes()),
+            Value::Array(vec![list_element.clone()]),
+            compressed(&manager, &"D".repeat(80).into_bytes()),
+            compressed(&manager, &"E".repeat(80).into_bytes()),
+        ];
+
+        assert_eq!(
+            convert(&batch, replies, Some(&manager), true).unwrap(),
+            Value::Array(vec![
+                Value::Array(vec![bulk(&"A".repeat(80).into_bytes()), bulk(b"plain-b")]),
+                bulk(&"C".repeat(80).into_bytes()),
+                Value::Array(vec![list_element]),
+                bulk(&"D".repeat(80).into_bytes()),
+                bulk(&"E".repeat(80).into_bytes()),
+            ])
+        );
+    }
+
+    #[test]
+    fn oversized_reply_fails_the_batch_regardless_of_raise_on_error() {
+        let manager = size_limited_manager();
+        let batch = pipeline(&[
+            &["SET", "marker", "written"],
+            &["GET", "big"],
+            &["GET", "fits"],
+        ]);
+        let replies = vec![
+            Value::Okay,
+            compressed(&manager, &"A".repeat(200).into_bytes()),
+            compressed(&manager, &"B".repeat(80).into_bytes()),
+        ];
+
+        for raise_on_error in [false, true] {
+            let error = convert(
+                &batch,
+                replies.clone(),
+                Some(&manager),
+                raise_on_error,
+            )
+            .unwrap_err();
+            assert_eq!(error.kind(), ErrorKind::IoError);
+            assert!(error.to_string().contains("maxDecompressedSize"), "{error}");
+        }
+    }
+
+    #[test]
+    fn reply_count_that_differs_from_command_count_is_a_response_error() {
+        let manager = size_limited_manager();
+        let batch = pipeline(&[LRANGE, &["GET", "key"]]);
+        for replies in [vec![Value::Nil], vec![Value::Nil, Value::Nil, Value::Nil]] {
+            for compression_manager in [None, Some(&manager)] {
+                let error =
+                    convert(&batch, replies.clone(), compression_manager, false).unwrap_err();
+                assert_eq!(error.kind(), ErrorKind::ResponseError);
+            }
+        }
+    }
+
+    #[test]
+    fn batch_without_a_compression_manager_keeps_compressed_replies() {
+        let manager = size_limited_manager();
+        let stored = compressed(&manager, &"A".repeat(80).into_bytes());
+        let batch = pipeline(&[&["GET", "key"]]);
+
+        assert_eq!(
+            convert(&batch, vec![stored.clone()], None, true).unwrap(),
+            Value::Array(vec![stored])
+        );
+    }
+
+    #[test]
+    fn transaction_replies_follow_the_rules_of_their_commands() {
+        let manager = size_limited_manager();
+        let list_element = compressed(&manager, &"L".repeat(80).into_bytes());
+        let transaction = pipeline(&[LRANGE, &["GET", "key"]]);
+        let exec_reply = Value::Array(vec![
+            Value::Array(vec![list_element.clone()]),
+            compressed(&manager, &"B".repeat(80).into_bytes()),
+        ]);
+
+        assert_eq!(
+            Client::get_transaction_values(
+                &transaction,
+                vec![exec_reply],
+                2,
+                3,
+                true,
+                Some(&manager)
+            )
+            .unwrap(),
+            Value::Array(vec![
+                Value::Array(vec![list_element]),
+                bulk(&"B".repeat(80).into_bytes()),
+            ])
+        );
+    }
+
+    #[test]
+    fn aborted_transaction_returns_nil() {
+        let manager = size_limited_manager();
+        let transaction = pipeline(&[LRANGE, &["GET", "key"]]);
+
+        assert_eq!(
+            Client::get_transaction_values(
+                &transaction,
+                vec![Value::Nil],
+                2,
+                3,
+                false,
+                Some(&manager)
+            )
+            .unwrap(),
+            Value::Nil
+        );
     }
 }
