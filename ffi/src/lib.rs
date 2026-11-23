@@ -960,8 +960,10 @@ type NonNullCredentialProviderCallback = unsafe extern "C-unwind" fn(
     expires_at_epoch_millis: *mut i64,
 ) -> u8;
 
-/// Nullable custom AWS credential-provider callback accepted by [`create_client`]. Pass
-/// `None`/`NULL` to use the default AWS credential chain.
+/// Nullable custom AWS credential-provider callback accepted by
+/// [`create_client_with_credential_provider`] and
+/// [`create_client_from_uri_with_credential_provider`]. Pass `None`/`NULL` to use the default AWS
+/// credential chain.
 ///
 /// The Rust core invokes the callback whenever it needs fresh credentials to generate an IAM
 /// token, possibly many times while the client is active. All string outputs must be UTF-8. The
@@ -989,7 +991,7 @@ type NonNullCredentialProviderCallback = unsafe extern "C-unwind" fn(
 /// All other status values are invalid.
 ///
 /// # Parameters
-/// * `client_id` - The client identifier passed to `create_client`.
+/// * `client_id` - The client identifier passed to the client creation function.
 /// * `access_key_id_buf` - Buffer to write the AWS Access Key ID into.
 /// * `access_key_id_buf_len` - Capacity of `access_key_id_buf`.
 /// * `access_key_id_len` - Output: actual or required byte length of the AWS Access Key ID.
@@ -3361,14 +3363,21 @@ unsafe fn create_client_response(
     let request_bytes =
         unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
     let client_type = unsafe { &*client_type };
-    let response = match create_client_internal(
+    connection_response(create_client_internal(
         request_bytes,
         client_type.clone(),
         pubsub_callback,
         address_resolver,
         credential_provider,
         client_id,
-    ) {
+    ))
+}
+
+/// Boxes a client creation result as the `ConnectionResponse` returned across the C ABI.
+fn connection_response(
+    result: Result<*const ClientAdapter, CreateClientError>,
+) -> *const ConnectionResponse {
+    let response = match result {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
@@ -3590,59 +3599,93 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
     client_type: *const ClientType,
     pubsub_callback: PubSubCallback,
 ) -> *const ConnectionResponse {
+    unsafe {
+        create_client_from_uri_response(
+            uri_str,
+            extra_options_json,
+            client_type,
+            pubsub_callback,
+            0,
+            None,
+        )
+    }
+}
+
+/// Creates a new client from a URI string and optional JSON configuration, with an optional
+/// custom IAM credential provider.
+///
+/// This additive ABI preserves the complete four-argument [`create_client_from_uri`] prefix and
+/// appends `client_id` and the provider callback. The URI and `extra_options_json` formats are
+/// those documented on [`create_client_from_uri`].
+///
+/// # Parameters
+///
+/// * `uri_str`, `extra_options_json`, `client_type`, `pubsub_callback`: As for [`create_client_from_uri`].
+/// * `client_id`: The identifier passed back to `credential_provider`, with the same meaning as the
+///   `client_id` argument of [`create_client`]. Allocate it with [`glide_allocate_client_id`].
+/// * `credential_provider`: Optional custom AWS credential provider. Pass `NULL` to use the default
+///   AWS credential chain. A non-null provider requires `iam_credentials` in `extra_options_json`
+///   and a username in the URI, and must satisfy the callback lifetime and buffer contracts
+///   documented by [`CredentialProviderCallback`].
+///
+/// # Returns
+///
+/// A pointer to a `ConnectionResponse`. The caller must call [`free_connection_response`] when done.
+///
+/// # Safety
+///
+/// The [`create_client_from_uri`] safety contract applies. The provider must remain callable until
+/// all already-entered invocations return, including an invocation that times out and outlives close.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn create_client_from_uri_with_credential_provider(
+    uri_str: *const c_char,
+    extra_options_json: *const c_char,
+    client_type: *const ClientType,
+    pubsub_callback: PubSubCallback,
+    client_id: usize,
+    credential_provider: CredentialProviderCallback,
+) -> *const ConnectionResponse {
+    unsafe {
+        create_client_from_uri_response(
+            uri_str,
+            extra_options_json,
+            client_type,
+            pubsub_callback,
+            client_id,
+            credential_provider,
+        )
+    }
+}
+
+unsafe fn create_client_from_uri_response(
+    uri_str: *const c_char,
+    extra_options_json: *const c_char,
+    client_type: *const ClientType,
+    pubsub_callback: PubSubCallback,
+    client_id: usize,
+    credential_provider: CredentialProviderCallback,
+) -> *const ConnectionResponse {
     assert!(!uri_str.is_null());
     let client_type = unsafe { &*client_type };
-
-    let response = match create_client_from_uri_internal(uri_str, extra_options_json) {
-        Err(err) => ConnectionResponse {
-            conn_ptr: std::ptr::null(),
-            connection_error_message: CString::into_raw(
-                CString::new(err).expect("Couldn't convert error message to CString"),
-            ),
-            connection_error_type: ConnectionErrorType::Unspecified,
-        },
-        Ok(connection_request) => {
-            // Convert ConnectionRequest to protobuf bytes to reuse existing logic
-            let request_bytes = connection_request
+    let result = create_client_from_uri_internal(uri_str, extra_options_json)
+        .and_then(|request| {
+            // Serialize to protobuf bytes to reuse the protobuf client creation path.
+            request
                 .write_to_bytes()
-                .map_err(|err| format!("Failed to serialize connection request: {}", err));
-
-            match request_bytes {
-                Err(err) => ConnectionResponse {
-                    conn_ptr: std::ptr::null(),
-                    connection_error_message: CString::into_raw(
-                        CString::new(err).expect("Couldn't convert error message to CString"),
-                    ),
-                    connection_error_type: ConnectionErrorType::Unspecified,
-                },
-                Ok(bytes) => {
-                    match create_client_internal(
-                        &bytes,
-                        client_type.clone(),
-                        pubsub_callback,
-                        None,
-                        None,
-                        0,
-                    ) {
-                        Err(err) => ConnectionResponse {
-                            conn_ptr: std::ptr::null(),
-                            connection_error_message: CString::into_raw(
-                                CString::new(err.message)
-                                    .expect("Couldn't convert error message to CString"),
-                            ),
-                            connection_error_type: err.error_type,
-                        },
-                        Ok(client) => ConnectionResponse {
-                            conn_ptr: client as *const c_void,
-                            connection_error_message: std::ptr::null(),
-                            connection_error_type: ConnectionErrorType::Unspecified,
-                        },
-                    }
-                }
-            }
-        }
-    };
-    Box::into_raw(Box::new(response))
+                .map_err(|err| format!("Failed to serialize connection request: {err}"))
+        })
+        .map_err(CreateClientError::from)
+        .and_then(|bytes| {
+            create_client_internal(
+                &bytes,
+                client_type.clone(),
+                pubsub_callback,
+                None,
+                credential_provider,
+                client_id,
+            )
+        });
+    connection_response(result)
 }
 
 /// Normalizes Valkey URI schemes to their Redis equivalents understood by `parse_redis_url`.

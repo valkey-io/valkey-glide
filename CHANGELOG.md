@@ -7,6 +7,7 @@
 * Node: valkey-search 1.3 stable surface ([#7378](https://github.com/valkey-io/valkey-glide/pull/7378))
 * Rust: Add `HGETDEL` and `DELIFEQ` commands ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145), [#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Python: Add CPython 3.15 wheels for the async and sync clients ([#7321](https://github.com/valkey-io/valkey-glide/issues/7321))
+* FFI: Add `create_client_from_uri_with_credential_provider` so URI-based bindings can supply a custom IAM credential provider ([valkey-glide-ruby#439](https://github.com/valkey-io/valkey-glide-ruby/issues/439))
 * Core, Python: Add support for Valkey 9.2 commands:
   * `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
 * Core: use atomics for telemetry instead of shared lock ([#7497](https://github.com/valkey-io/valkey-glide/pull/7497))
