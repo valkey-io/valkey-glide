@@ -4745,9 +4745,6 @@ export function createDelIfEq(
 
 /**
  * Arguments for the DELEX command.
- *
- * Not supported when compression is enabled. See
- * {@link https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands|Valkey GLIDE - Data Compression}.
  */
 export interface DelexOptions {
     /**

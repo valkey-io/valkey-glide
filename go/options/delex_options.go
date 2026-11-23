@@ -8,12 +8,9 @@ import (
 
 // DelexOptions represents arguments for the [api.StringCommands.DelEx] command.
 //
-// Not supported when compression is enabled. See [Valkey GLIDE – Data Compression].
-//
 // See [valkey.io]
 //
 // [valkey.io]: https://valkey.io/commands/delex/
-// [Valkey GLIDE – Data Compression]: https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands
 type DelexOptions struct {
 	// The condition that the key must meet to be deleted.
 	condition deleteCondition

@@ -12,10 +12,6 @@ import lombok.ToString;
 /**
  * Arguments for the {@link glide.api.BaseClient#delex(String, DelexOptions) DELEX} command.
  *
- * <p>Not supported when compression is enabled. See <a
- * href="https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands">Valkey
- * GLIDE – Data Compression</a>.
- *
  * @since Valkey 9.2.0
  * @see <a href="https://valkey.io/commands/delex/">DELEX Command Documentation</a>
  */
