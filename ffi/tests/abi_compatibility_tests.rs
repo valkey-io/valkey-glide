@@ -163,7 +163,7 @@ const ConnectionResponse* create_client(
     uintptr_t client_id
 );
 
-/* Byte-for-byte copy of the four-argument URI declaration. */
+/* A compatible redeclaration proves existing four-argument URI callers still compile. */
 const ConnectionResponse* create_client_from_uri(
     const char* uri_str,
     const char* extra_options_json,

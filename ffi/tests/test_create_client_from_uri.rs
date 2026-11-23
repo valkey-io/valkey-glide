@@ -1781,8 +1781,11 @@ fn test_create_client_from_uri_unix_socket_authenticates(#[case] scheme: &str) {
 const IAM_OPTIONS: &str = r#"{"iam_credentials": {"cluster_name": "my-cluster", "region": "us-east-1", "service_type": "ELASTICACHE"}}"#;
 const IAM_LAZY_OPTIONS: &str = r#"{"lazy_connect": true, "iam_credentials": {"cluster_name": "my-cluster", "region": "us-east-1", "service_type": "ELASTICACHE"}}"#;
 
-/// Records each call to one test's credential provider. Each test owns its recorder because
-/// tests in this file run concurrently.
+const PROVIDER_FAILURE: u8 = 0;
+const PROVIDER_SUCCESS: u8 = 1;
+
+/// Records calls to a credential provider. One recorder per test function, since tests run
+/// concurrently.
 struct ProviderCalls {
     count: std::sync::atomic::AtomicUsize,
     client_id: std::sync::atomic::AtomicUsize,
@@ -1830,7 +1833,7 @@ macro_rules! failing_provider {
             _: *mut i64,
         ) -> u8 {
             $calls.record(client_id);
-            0 // failure
+            PROVIDER_FAILURE
         }
     };
 }
@@ -1863,7 +1866,7 @@ unsafe extern "C-unwind" fn signing_provider(
         *session_token_len = 0;
         *expires_at_epoch_millis = 0;
     }
-    1 // success
+    PROVIDER_SUCCESS
 }
 
 /// A TLS URI for an IAM user on a local port nothing listens on.
@@ -1992,6 +1995,6 @@ fn uri_credential_provider_preserves_uri_errors(#[case] uri: &str, #[case] optio
 
     assert!(!expected.0.is_empty());
     assert_eq!(actual, expected);
-    // Calls only accumulate, so a call from any case fails the case that made it.
+    // The count only grows, so any provider call fails the case that made it.
     assert_eq!(URI_ERRORS_CALLS.count(), 0);
 }

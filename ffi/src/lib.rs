@@ -3132,6 +3132,8 @@ mod tests_block_on_worker {
     }
 }
 
+/// `client_id` is passed to the address resolver and credential provider callbacks.
+/// `pipe_client_id` routes an async client's results and pushes through the async pipe; 0 opts out.
 fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
@@ -3139,6 +3141,7 @@ fn create_client_internal(
     address_resolver: AddressResolverCallback,
     credential_provider: Option<NonNullCredentialProviderCallback>,
     client_id: usize,
+    pipe_client_id: u64,
 ) -> Result<*const ClientAdapter, CreateClientError> {
     // Checked before any runtime is built: dropping one here would panic.
     if CallerDispatch::is_pumping() {
@@ -3287,7 +3290,7 @@ fn create_client_internal(
     let pubsub_callback_store = Arc::new(std::sync::RwLock::new(pubsub_callback));
     let client_adapter = Arc::new(ClientAdapter {
         runtime: ManuallyDrop::new(runtime),
-        pipe_client_id: std::sync::atomic::AtomicU64::new(client_id as u64),
+        pipe_client_id: std::sync::atomic::AtomicU64::new(pipe_client_id),
         has_external_blocking_provider,
         background_runtime: ManuallyDrop::new(background_runtime),
         core,
@@ -3303,7 +3306,7 @@ fn create_client_internal(
         .as_ref()
         .unwrap_or(&client_adapter.runtime);
     let callback_store = pubsub_callback_store.clone();
-    let async_push_delivery = async_push_delivery_mode(pubsub_callback, client_id as u64);
+    let async_push_delivery = async_push_delivery_mode(pubsub_callback, pipe_client_id);
     if is_sync {
         // Sync clients: direct callback (CFFI acquires GIL automatically).
         spawn_runtime.spawn(async move {
@@ -3370,6 +3373,7 @@ unsafe fn create_client_response(
         address_resolver,
         credential_provider,
         client_id,
+        client_id as u64,
     ))
 }
 
@@ -3615,18 +3619,15 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
 /// custom IAM credential provider.
 ///
 /// This additive ABI preserves the complete four-argument [`create_client_from_uri`] prefix and
-/// appends `client_id` and the provider callback. The URI and `extra_options_json` formats are
-/// those documented on [`create_client_from_uri`].
+/// appends `client_id` and the provider callback.
 ///
 /// # Parameters
 ///
-/// * `uri_str`, `extra_options_json`, `client_type`, `pubsub_callback`: As for [`create_client_from_uri`].
-/// * `client_id`: The identifier passed back to `credential_provider`, with the same meaning as the
-///   `client_id` argument of [`create_client`]. Allocate it with [`glide_allocate_client_id`].
+/// * First four parameters: As for [`create_client_from_uri`].
+/// * `client_id`: Passed to `credential_provider`. Allocate it with [`glide_allocate_client_id`].
 /// * `credential_provider`: Optional custom AWS credential provider. Pass `NULL` to use the default
 ///   AWS credential chain. A non-null provider requires `iam_credentials` in `extra_options_json`
-///   and a username in the URI, and must satisfy the callback lifetime and buffer contracts
-///   documented by [`CredentialProviderCallback`].
+///   and must satisfy the [`CredentialProviderCallback`] contract.
 ///
 /// # Returns
 ///
@@ -3683,6 +3684,7 @@ unsafe fn create_client_from_uri_response(
                 None,
                 credential_provider,
                 client_id,
+                0, // URI clients never use the async pipe.
             )
         });
     connection_response(result)
@@ -3873,6 +3875,86 @@ fn create_client_from_uri_internal(
     }
 
     Ok(request)
+}
+
+#[cfg(test)]
+mod tests_pipe_client_id {
+    //! A nonzero pipe ID routes an async client's results and pushes through the async pipe, so
+    //! only the protobuf entry points set it.
+    use super::*;
+    use std::ffi::CString;
+
+    const CLIENT_ID: usize = 0x1234;
+
+    unsafe extern "C-unwind" fn ignore_success(_: usize, _: *const CommandResponse) {}
+
+    unsafe extern "C-unwind" fn ignore_failure(_: usize, _: *const c_char, _: RequestErrorType) {}
+
+    fn async_client() -> ClientType {
+        ClientType::AsyncClient {
+            success_callback: ignore_success,
+            failure_callback: ignore_failure,
+            allow_stack_response: false,
+        }
+    }
+
+    /// Returns the pipe ID of the created client, then closes it.
+    unsafe fn pipe_client_id(response: *const ConnectionResponse) -> u64 {
+        unsafe {
+            let adapter = (*response).conn_ptr as *const ClientAdapter;
+            assert!(
+                !adapter.is_null(),
+                "{:?}",
+                CStr::from_ptr((*response).connection_error_message)
+            );
+            let pipe_client_id = (*adapter).pipe_client_id.load(Ordering::Relaxed);
+            close_client((*response).conn_ptr);
+            free_connection_response(response as *mut ConnectionResponse);
+            pipe_client_id
+        }
+    }
+
+    #[test]
+    fn uri_client_never_uses_the_async_pipe() {
+        let uri = CString::new("valkey://127.0.0.1:1").unwrap();
+        let options = CString::new(r#"{"lazy_connect": true}"#).unwrap();
+        let client_type = async_client();
+        let response = unsafe {
+            create_client_from_uri_with_credential_provider(
+                uri.as_ptr(),
+                options.as_ptr(),
+                &client_type,
+                None,
+                CLIENT_ID,
+                None,
+            )
+        };
+        assert_eq!(unsafe { pipe_client_id(response) }, 0);
+    }
+
+    #[test]
+    fn protobuf_client_uses_its_client_id_as_pipe_id() {
+        let mut request = connection_request::ConnectionRequest::new();
+        request.lazy_connect = true;
+        let mut address = connection_request::NodeAddress::new();
+        address.host = "127.0.0.1".into();
+        address.port = 1;
+        request.addresses.push(address);
+        let request = request.write_to_bytes().unwrap();
+        let client_type = async_client();
+        let response = unsafe {
+            create_client_with_credential_provider(
+                request.as_ptr(),
+                request.len(),
+                &client_type,
+                None,
+                None,
+                CLIENT_ID,
+                None,
+            )
+        };
+        assert_eq!(unsafe { pipe_client_id(response) }, CLIENT_ID as u64);
+    }
 }
 
 #[cfg(test)]
