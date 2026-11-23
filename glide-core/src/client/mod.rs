@@ -1901,6 +1901,7 @@ impl Client {
                 {
                     Ok(result) => result?,
                     Err(_) => {
+                        record_timeout_error();
                         return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
                     }
                 }
