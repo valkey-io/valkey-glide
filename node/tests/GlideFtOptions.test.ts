@@ -3,6 +3,8 @@ import {
     FtAggregateReducer,
     FtCreateOptions,
     FtSearchOptions,
+    FtSearchReturnType,
+    FtSearchWithScoresReturnType,
     GlideClusterClient,
     GlideFt,
     TextField,
@@ -100,6 +102,55 @@ describe("GlideFt 1.3 argv serialization", () => {
             const scorerIdx = args.indexOf("SCORER");
             expect(withScoresIdx).toBeGreaterThanOrEqual(0);
             expect(scorerIdx).toBeGreaterThan(withScoresIdx);
+        });
+
+        it("sends unchanged argv for withScores: true", async () => {
+            const { client, customCommand } = mockClient();
+            await GlideFt.search(client, "idx", "*", { withScores: true });
+            expect(customCommand.mock.calls[0][0]).toEqual([
+                "FT.SEARCH",
+                "idx",
+                "*",
+                "WITHSCORES",
+            ]);
+        });
+
+        it("types a withScores: true call as FtSearchWithScoresReturnType", async () => {
+            const { client } = mockClient();
+            const result: FtSearchWithScoresReturnType = await GlideFt.search(
+                client,
+                "idx",
+                "*",
+                { withScores: true },
+            );
+            expect(result).toBeDefined();
+        });
+
+        it("types withScores with nocontent and withsortkeys as FtSearchWithScoresReturnType", async () => {
+            const { client } = mockClient();
+            const noContent: FtSearchWithScoresReturnType =
+                await GlideFt.search(client, "idx", "*", {
+                    withScores: true,
+                    nocontent: true,
+                });
+            const sortKeys: FtSearchWithScoresReturnType = await GlideFt.search(
+                client,
+                "idx",
+                "*",
+                { withScores: true, sortby: "price", withsortkeys: true },
+            );
+            expect(noContent).toBeDefined();
+            expect(sortKeys).toBeDefined();
+        });
+
+        it("keeps the plain search return type as FtSearchReturnType", async () => {
+            const { client } = mockClient();
+            const result: FtSearchReturnType = await GlideFt.search(
+                client,
+                "idx",
+                "*",
+            );
+            expect(result).toBeDefined();
         });
     });
 

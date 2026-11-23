@@ -43,6 +43,20 @@ export type FtSearchReturnType = [
 ];
 
 /**
+ * Response type for the {@link GlideFt.search | ft.search} command when `withScores` is set.
+ * Each document's value is a `[score, fields]` pair, or a `[score, sortKey, fields]` triple when
+ * `withsortkeys` is also set. `score` is a string-encoded decimal. `sortKey` is `null` when the
+ * sort field is missing from the document. `fields` is empty when `nocontent` is set.
+ */
+export type FtSearchWithScoresReturnType = [
+    number,
+    GlideRecord<
+        | [GlideString, GlideRecord<GlideString>]
+        | [GlideString, GlideString | null, GlideRecord<GlideString>]
+    >,
+];
+
+/**
  * Response type for the {@link GlideFt.aggregate | ft.aggregate} command.
  */
 export type FtAggregateReturnType = GlideRecord<GlideReturnType>[];
@@ -516,14 +530,14 @@ export class GlideFt {
      *     otherwise.
      *
      * Always reads from the PRIMARY of the index's slot, regardless of the client's `ReadFrom`
-     * configuration -- see the cursor-affinity note on {@link GlideFt.aggregate}/{@link GlideFt.hybrid}.
+     * configuration -- see the cursor-affinity note on {@link FtWithCursor}.
      * A cursor opened by FT.HYBRID is read the same way as one opened by FT.AGGREGATE; the
      * server does not distinguish which command created it.
      *
      * On a client created with `readOnly: true`, this call fails client-side with "write
      * commands are not allowed in read-only mode", even though the server treats FT.CURSOR as
      * read-only and a replica can answer it. glide-core's read-only command list has no entry
-     * for FT.CURSOR; this is a known gap tracked as a follow-up, not fixed in this PR.
+     * for FT.CURSOR, so the client rejects the call before it reaches the server.
      *
      * @example
      * ```typescript
@@ -567,12 +581,12 @@ export class GlideFt {
      * @returns `"OK"`
      *
      * Always reads from the PRIMARY of the index's slot, regardless of the client's `ReadFrom`
-     * configuration -- see the cursor-affinity note on {@link GlideFt.aggregate}/{@link GlideFt.hybrid}.
+     * configuration -- see the cursor-affinity note on {@link FtWithCursor}.
      *
      * On a client created with `readOnly: true`, this call fails client-side with "write
      * commands are not allowed in read-only mode", even though the server treats FT.CURSOR as
      * read-only and a replica can answer it. glide-core's read-only command list has no entry
-     * for FT.CURSOR; this is a known gap tracked as a follow-up, not fixed in this PR.
+     * for FT.CURSOR, so the client rejects the call before it reaches the server.
      *
      * @example
      * ```typescript
@@ -627,16 +641,10 @@ export class GlideFt {
      * found". A failover of the primary that was holding an open cursor loses that cursor, the
      * same as any other cursor-discarding event on that node.
      *
-     * On a standalone `GlideClient` with `readFrom: "preferReplica"`, this pinning does not
-     * hold: the opening query can land on a replica, but `cursorRead`/`cursorDel` always go to
-     * the primary, so a cursor opened on a replica fails on its next page the same way. Use
-     * `readFrom: "primary"` on a standalone client whenever `withCursor` is set, until this is
-     * fixed in glide-core (tracked separately).
-     *
      * On a client created with `readOnly: true`, this call fails client-side with "write
      * commands are not allowed in read-only mode", even though the server treats FT.HYBRID as
      * read-only and a replica can answer it. glide-core's read-only command list has no entry
-     * for FT.HYBRID; this is a known gap tracked as a follow-up, not fixed in this PR.
+     * for FT.HYBRID, so the client rejects the call before it reaches the server.
      *
      * @example
      * ```typescript
@@ -857,6 +865,24 @@ export class GlideFt {
     }
 
     /**
+     * Runs a search query with `withScores` set, so each matching document carries its relevance
+     * score. Other parameters are the same as {@link GlideFt.search | search}.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name to search into.
+     * @param query - The text query to search.
+     * @param options - `withScores: true`, plus any other {@link FtSearchOptions} and {@link DecoderOption}.
+     * @returns A two-element array, where the first element is the number of documents in the result set, and the
+     * second element maps each document key to a `[score, fields]` pair, or to a `[score, sortKey, fields]` triple
+     * when `withsortkeys` is also set. With `nocontent`, `fields` is empty.
+     */
+    static async search(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options: DecoderOption & FtSearchOptions & { withScores: true },
+    ): Promise<FtSearchWithScoresReturnType>;
+    /**
      * Uses the provided query expression to locate keys within an index. Once located, the count
      * and/or content of indexed fields within those keys can be returned.
      *
@@ -930,7 +956,13 @@ export class GlideFt {
         indexName: GlideString,
         query: GlideString,
         options?: FtSearchOptions & DecoderOption,
-    ): Promise<FtSearchReturnType> {
+    ): Promise<FtSearchReturnType>;
+    static async search(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: FtSearchOptions & DecoderOption,
+    ): Promise<FtSearchReturnType | FtSearchWithScoresReturnType> {
         const args: GlideString[] = [
             "FT.SEARCH",
             indexName,
@@ -939,7 +971,7 @@ export class GlideFt {
         ];
 
         return _handleCustomCommand(client, args, options) as Promise<
-            [number, GlideRecord<GlideRecord<GlideString>>]
+            FtSearchReturnType | FtSearchWithScoresReturnType
         >;
     }
 

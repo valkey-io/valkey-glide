@@ -9,11 +9,8 @@ import {
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     ClusterBatch,
-    FtAggregateOptions,
     FtAggregateReducer,
-    FtCreateOptions,
     FtHybridOptions,
-    FtSearchOptions,
     GlideClient,
     GlideClusterClient,
     GlideFt,
@@ -258,7 +255,7 @@ describe("GlideFt", () => {
                             client,
                             indexName,
                             "*",
-                            { inKeys: [] } as FtSearchOptions,
+                            { inKeys: [] },
                         );
                         expect(none[0]).toBe(0);
 
@@ -268,7 +265,7 @@ describe("GlideFt", () => {
                             "*",
                             {
                                 inKeys: [keys[0], keys[1]],
-                            } as FtSearchOptions,
+                            },
                         );
                         expect(some[0]).toBe(2);
                         const someKeys = (
@@ -284,7 +281,7 @@ describe("GlideFt", () => {
                             "*",
                             {
                                 inKeys: [Buffer.from(keys[2])],
-                            } as FtSearchOptions,
+                            },
                         );
                         expect(bufferResult[0]).toBe(1);
                         const bufferKeys = (
@@ -330,7 +327,7 @@ describe("GlideFt", () => {
                             client,
                             indexName,
                             "@title:hello",
-                            { count: true } as FtSearchOptions,
+                            { count: true },
                         );
                         expect(result[0]).toBe(2);
                         expect(result.length).toBe(1);
@@ -365,7 +362,7 @@ describe("GlideFt", () => {
                         {
                             dataType: "HASH",
                             prefixes: [prefix],
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -512,7 +509,7 @@ describe("GlideFt", () => {
                         await GlideFt.create(client, indexName, [vectorField], {
                             dataType: "HASH",
                             prefixes: [prefix],
-                        } as FtCreateOptions);
+                        });
 
                         try {
                             const points: [string, [number, number]][] = [
@@ -539,7 +536,7 @@ describe("GlideFt", () => {
                                     returnFields: [
                                         { fieldIdentifier: "__vec_score" },
                                     ],
-                                } as FtSearchOptions,
+                                },
                             );
                             expect(result[0]).toBe(1);
                             const matchedKey = prefix + "1";
@@ -588,7 +585,7 @@ describe("GlideFt", () => {
                             dataType: "HASH",
                             prefixes: [prefix],
                             filter: "@age > 18",
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -600,7 +597,7 @@ describe("GlideFt", () => {
                             client,
                             indexName,
                             "*",
-                            { nocontent: true } as FtSearchOptions,
+                            { nocontent: true },
                         );
                         expect(result[0]).toBe(1);
                         const keys = (
@@ -635,7 +632,7 @@ describe("GlideFt", () => {
                     await GlideFt.create(client, indexName, [titleField], {
                         dataType: "HASH",
                         prefixes: [prefix],
-                    } as FtCreateOptions);
+                    });
 
                     try {
                         const info = (await GlideFt.info(
@@ -664,7 +661,7 @@ describe("GlideFt", () => {
                                 returnFields: [{ fieldIdentifier: "title" }],
                                 sortby: "title",
                                 sortbyOrder: "ASC",
-                            } as FtSearchOptions,
+                            },
                         );
                         const orderedKeys = (
                             result[1] as unknown as { key: GlideString }[]
@@ -698,7 +695,7 @@ describe("GlideFt", () => {
                             dataType: "HASH",
                             prefixes: [prefix],
                             scoreField: "boost",
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -716,7 +713,7 @@ describe("GlideFt", () => {
                             client,
                             indexName,
                             "hello",
-                            { withScores: true } as FtSearchOptions,
+                            { withScores: true },
                         );
                         expect(result[0]).toBe(2);
                         const resultEntries = result[1] as unknown as {
@@ -782,7 +779,7 @@ describe("GlideFt", () => {
                             dataType: "HASH",
                             prefixes: [prefix],
                             noHighlight: true,
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -818,7 +815,7 @@ describe("GlideFt", () => {
                         {
                             dataType: "HASH",
                             prefixes: [prefix],
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -844,7 +841,7 @@ describe("GlideFt", () => {
                                 client,
                                 indexName,
                                 "*",
-                                { loadFields } as FtAggregateOptions,
+                                { loadFields },
                             );
                             expect(result.length).toBe(1);
                             const flat = result[0] as unknown as {
@@ -858,7 +855,7 @@ describe("GlideFt", () => {
                             await expect(
                                 GlideFt.aggregate(client, indexName, "*", {
                                     loadFields,
-                                } as FtAggregateOptions),
+                                }),
                             ).rejects.toThrow(/field `AS` does not exist/);
                         }
                     } finally {
@@ -884,7 +881,7 @@ describe("GlideFt", () => {
                         {
                             dataType: "HASH",
                             prefixes: [prefix],
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -903,7 +900,7 @@ describe("GlideFt", () => {
                             {
                                 withScores: true,
                                 scorer: "BM25STD",
-                            } as FtSearchOptions,
+                            },
                         );
                         expect(result[0]).toBe(2);
                         const resultMap = result[1];
@@ -953,7 +950,7 @@ describe("GlideFt", () => {
                         {
                             dataType: "HASH",
                             prefixes: [prefix],
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -966,7 +963,7 @@ describe("GlideFt", () => {
                             GlideFt.search(client, indexName, "hello", {
                                 withScores: true,
                                 scorer: "TFIDF",
-                            } as FtSearchOptions),
+                            }),
                         ).rejects.toThrow(/SCORER/);
                     } finally {
                         await client.customCommand(["FT.DROPINDEX", indexName]);
@@ -1002,7 +999,7 @@ describe("GlideFt", () => {
                         {
                             dataType: "HASH",
                             prefixes: [prefix],
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -1025,7 +1022,7 @@ describe("GlideFt", () => {
                                 sortby: "price",
                                 sortbyOrder: "ASC",
                                 withsortkeys: true,
-                            } as FtSearchOptions,
+                            },
                         );
                         expect(result[0]).toBe(2);
                         const resultMap = result[1];
@@ -1073,7 +1070,7 @@ describe("GlideFt", () => {
                         {
                             dataType: "HASH",
                             prefixes: [prefix],
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -1147,7 +1144,7 @@ describe("GlideFt", () => {
                         {
                             dataType: "HASH",
                             prefixes: [prefix],
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -1270,7 +1267,7 @@ describe("GlideFt", () => {
                         {
                             dataType: "HASH",
                             prefixes: [prefix],
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -1336,7 +1333,7 @@ describe("GlideFt", () => {
                         {
                             dataType: "HASH",
                             prefixes: [prefix],
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -1358,7 +1355,7 @@ describe("GlideFt", () => {
                             client,
                             indexName,
                             "*",
-                            {} as FtSearchOptions,
+                            {},
                         );
                         expect(result[0]).toBe(3);
                         const keys = (
@@ -1403,7 +1400,7 @@ describe("GlideFt", () => {
                         {
                             dataType: "HASH",
                             prefixes: [prefix],
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -1432,7 +1429,7 @@ describe("GlideFt", () => {
                             {
                                 params: [{ key: "blob", value: queryBlob }],
                                 nocontent: true,
-                            } as FtSearchOptions,
+                            },
                         );
                         expect(result[0]).toBe(2);
                         expect(
@@ -1455,7 +1452,7 @@ describe("GlideFt", () => {
                                     { key: "r", value: "0" },
                                 ],
                                 returnFields: [{ fieldIdentifier: "dist" }],
-                            } as FtSearchOptions,
+                            },
                         );
                         expect(resultDist[0]).toBe(1);
                         const distEntries = resultDist[1] as unknown as {
@@ -1473,7 +1470,7 @@ describe("GlideFt", () => {
                             {
                                 params: [{ key: "blob", value: queryBlob }],
                                 nocontent: true,
-                            } as FtSearchOptions,
+                            },
                         );
                         expect(resultAnd[0]).toBe(1);
                         expect(
@@ -1493,7 +1490,7 @@ describe("GlideFt", () => {
                             {
                                 params: [{ key: "blob", value: queryBlob }],
                                 nocontent: true,
-                            } as FtSearchOptions,
+                            },
                         );
                         expect(resultOr[0]).toBe(3);
                         expect(
@@ -1515,7 +1512,7 @@ describe("GlideFt", () => {
                             {
                                 params: [{ key: "blob", value: queryBlob }],
                                 nocontent: true,
-                            } as FtSearchOptions,
+                            },
                         );
                         expect(resultNegate[0]).toBe(2);
                         expect(
@@ -1562,7 +1559,7 @@ describe("GlideFt", () => {
                         {
                             dataType: "HASH",
                             prefixes: [prefix],
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -1600,7 +1597,7 @@ describe("GlideFt", () => {
                                         ],
                                     },
                                 ],
-                            } as FtAggregateOptions,
+                            },
                         );
                         expect(result.length).toBe(2);
                         const flatRows = result as unknown as {
@@ -1638,7 +1635,7 @@ describe("GlideFt", () => {
                         {
                             dataType: "HASH",
                             prefixes: [prefix],
-                        } as FtCreateOptions,
+                        },
                     );
 
                     try {
@@ -1661,7 +1658,7 @@ describe("GlideFt", () => {
                             client,
                             indexName,
                             "*",
-                            { clauses: [sortAsc] } as FtAggregateOptions,
+                            { clauses: [sortAsc] },
                         );
                         expect(result.length).toBe(10);
 
@@ -1670,7 +1667,7 @@ describe("GlideFt", () => {
                             client,
                             indexName,
                             "*",
-                            { clauses: [sortMax5] } as FtAggregateOptions,
+                            { clauses: [sortMax5] },
                         );
                         expect(result.length).toBe(5);
 
@@ -1687,7 +1684,7 @@ describe("GlideFt", () => {
                                         count: 15,
                                     },
                                 ],
-                            } as FtAggregateOptions,
+                            },
                         );
                         expect(result.length).toBe(legacy ? 10 : 15);
 
@@ -1704,7 +1701,7 @@ describe("GlideFt", () => {
                                         count: 12,
                                     },
                                 ],
-                            } as FtAggregateOptions,
+                            },
                         );
                         expect(result.length).toBe(legacy ? 5 : 12);
 
@@ -1721,7 +1718,7 @@ describe("GlideFt", () => {
                                     },
                                     sortAsc,
                                 ],
-                            } as FtAggregateOptions,
+                            },
                         );
                         expect(result.length).toBe(legacy ? 10 : 15);
 
@@ -1743,7 +1740,7 @@ describe("GlideFt", () => {
                                         count: 15,
                                     },
                                 ],
-                            } as FtAggregateOptions,
+                            },
                         );
                         expect(result.length).toBe(10);
                     } finally {
@@ -1776,7 +1773,7 @@ describe("GlideFt", () => {
                             {
                                 dataType: "HASH",
                                 prefixes: [prefix],
-                            } as FtCreateOptions,
+                            },
                         );
                         await testClient.hset(prefix + HYBRID_DOC_TEXT_WINNER, {
                             title: "hello hello hello world",
@@ -1976,7 +1973,7 @@ describe("GlideFt", () => {
                                             expression: `@${HYBRID_SEARCH_ALIAS} > 0`,
                                         },
                                     ],
-                                } as FtHybridOptions,
+                                },
                             );
                             expect(result.length).toBe(1);
                             expect(
@@ -2337,7 +2334,7 @@ describe("GlideFt", () => {
                                     vector: packVector2f(1.0, 1.0),
                                     k: 5,
                                 },
-                                { localOnly: true } as FtHybridOptions,
+                                { localOnly: true },
                             );
                             expect(result.length).toBe(2);
                             const keys = new Set(
@@ -2473,7 +2470,7 @@ describe("GlideFt", () => {
                             {
                                 dataType: "HASH",
                                 prefixes: [prefix],
-                            } as FtCreateOptions,
+                            },
                         );
 
                         try {
@@ -2556,7 +2553,7 @@ describe("GlideFt", () => {
                             client,
                             indexName,
                             "*",
-                            { inKeys: [] } as FtSearchOptions,
+                            { inKeys: [] },
                         );
                         expect(result[0]).toBe(0);
                     } finally {
@@ -2604,7 +2601,7 @@ describe("GlideFt", () => {
                             {
                                 withScores: true,
                                 scorer: "BM25STD",
-                            } as FtSearchOptions,
+                            },
                         );
                         expect(result[0]).toBe(2);
                         expect(result[1].length).toBe(2);
@@ -2644,7 +2641,7 @@ describe("GlideFt", () => {
                         client,
                         indexName,
                         [{ type: "NUMERIC", name: "n", sortable: true }],
-                        { dataType: "HASH" } as FtCreateOptions,
+                        { dataType: "HASH" },
                     );
 
                     try {
@@ -2745,7 +2742,7 @@ describe("GlideFt", () => {
                                 },
                             },
                         ],
-                        { dataType: "HASH" } as FtCreateOptions,
+                        { dataType: "HASH" },
                     );
 
                     try {

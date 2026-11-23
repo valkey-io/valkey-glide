@@ -268,11 +268,11 @@ export type FtAggregateOptions = {
      * exception to GLIDE's normal read routing. A plain aggregate without `withCursor` is
      * unaffected and still prefers replicas as normal.
      *
-     * On a standalone `GlideClient` with `readFrom: "preferReplica"`, this pinning does not
-     * hold: the opening query can land on a replica, but `cursorRead`/`cursorDel` always go to
-     * the primary, so a cursor opened on a replica fails on its next page with "Cursor: not
-     * found" (confirmed live). Use `readFrom: "primary"` on a standalone client whenever
-     * `withCursor` is set, until this is fixed in glide-core (tracked separately).
+     * On a standalone `GlideClient`, this pinning does not hold for any `readFrom` except
+     * `"primary"`, including AZ affinity and `allNodes`: the opening query can land on a replica,
+     * but `cursorRead`/`cursorDel` always go to the primary, so a cursor opened on a replica
+     * fails on its next page with "Cursor: not found". Use `readFrom: "primary"` on a standalone
+     * client whenever `withCursor` is set.
      */
     withCursor?: FtWithCursor;
 } & (
@@ -302,11 +302,11 @@ export type FtAggregateOptions = {
  * the index's slot regardless of `ReadFrom` -- a cursor is a per-process, node-local resource,
  * and this is a deliberate, documented exception to GLIDE's normal read routing.
  *
- * On a standalone `GlideClient` with `readFrom: "preferReplica"`, this pinning does not hold:
- * the opening query can land on a replica, but `cursorRead`/`cursorDel` always go to the
- * primary, so a cursor opened on a replica fails on its next page with "Cursor: not found"
- * (confirmed live). Use `readFrom: "primary"` on a standalone client whenever `withCursor` is
- * set, until this is fixed in glide-core (tracked separately).
+ * On a standalone `GlideClient` with FT.AGGREGATE, this pinning does not hold for any
+ * `readFrom` except `"primary"`, including AZ affinity and `allNodes`: the opening query can
+ * land on a replica, but `cursorRead`/`cursorDel` always go to the primary, so a cursor opened
+ * on a replica fails on its next page with "Cursor: not found". Use `readFrom: "primary"` on a
+ * standalone client whenever `withCursor` is set on FT.AGGREGATE.
  */
 export interface FtWithCursor {
     /** The number of rows to return per page. */
