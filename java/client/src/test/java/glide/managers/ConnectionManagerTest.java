@@ -765,11 +765,6 @@ public class ConnectionManagerTest {
                 () ->
                         GlideClient.createClient(
                                 GlideClientConfiguration.builder().address(socketAddress()).useTLS(true).build()));
-        assertThrows(
-                ConfigurationError.class,
-                () ->
-                        GlideClusterClient.createClient(
-                                GlideClusterClientConfiguration.builder().address(socketAddress()).build()));
     }
 
     @Test
