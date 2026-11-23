@@ -1532,6 +1532,7 @@ class TestCompressionIncompatibleCommands:
         param("bitpos", [1], 2, None, id="bitpos"),
         param("decr", [], 9, None, id="decr"),
         param("decrby", [5], 5, None, id="decrby"),
+        param("delex", [OnlyIfEqual("10")], True, "9.2.0", id="delex_ifeq"),
         param("delifeq", ["10"], True, "9.0.0", id="delifeq"),
         param("getbit", [0], 0, None, id="getbit"),
         param("getrange", [0, 0], b"1", None, id="getrange"),

@@ -527,6 +527,7 @@ fn process_command_for_compression(
         "BITPOS" => RequestType::BitPos,
         "DECR" => RequestType::Decr,
         "DECRBY" => RequestType::DecrBy,
+        // TODO #7238: Add DELEX so that it is rejected when compression is enabled.
         "DELIFEQ" => RequestType::DelIfEq,
         "GETBIT" => RequestType::GetBit,
         "GETRANGE" => RequestType::GetRange,

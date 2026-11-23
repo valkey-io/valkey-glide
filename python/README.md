@@ -471,10 +471,10 @@ Valkey GLIDE supports automatic compression and decompression of string values t
 
 **Incompatible Commands**: Compression is NOT compatible with commands that manipulate or compare string data on the server:
 
-- APPEND, GETRANGE, SETRANGE, STRLEN, LCS, SUBSTR
-- DELIFEQ and SET with IFEQ or IFNE
-- INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY
-- GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP
+- String manipulation: APPEND, GETRANGE, LCS, SETRANGE, STRLEN, SUBSTR
+- Value comparison: DELEX, DELIFEQ, and SET with IFEQ or IFNE
+- Numeric operations: DECR, DECRBY, INCR, INCRBY, INCRBYFLOAT
+- Bit operations: BITCOUNT, BITFIELD, BITFIELD_RO, BITOP, BITPOS, GETBIT, SETBIT
 
 Using these commands with compressed values will result in incorrect behavior or errors.
 

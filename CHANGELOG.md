@@ -4,7 +4,10 @@
 
 ### Features
 
+* Rust: Add `HGETDEL` and `DELIFEQ` commands ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145), [#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Python: Add CPython 3.15 wheels for the async and sync clients ([#7321](https://github.com/valkey-io/valkey-glide/issues/7321))
+* Core, Python: Add support for Valkey 9.2 commands:
+  * `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
 
 ### Fixes
 
@@ -12,10 +15,14 @@
 * Core: keep timeout watchdog pending counts isolated from retired workers and losing singleton initialization candidates ([#7762](https://github.com/valkey-io/valkey-glide/pull/7762))
 * Core: prevent missed refresh completion notifications ([#7766](https://github.com/valkey-io/valkey-glide/pull/7766))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
+* Core: release connections when a reconnecting client closes ([#7492](https://github.com/valkey-io/valkey-glide/pull/7492))
 * Core/FFI: create clients on a runtime worker so the connect does not use the caller's stack ([#7644](https://github.com/valkey-io/valkey-glide/pull/7644))
+* Python: register the sync client's fork hook only after it connects ([#7660](https://github.com/valkey-io/valkey-glide/pull/7660))
+* Core: flush server-assisted cache when its connection closes ([#7493](https://github.com/valkey-io/valkey-glide/pull/7493))
 * Core: deliver reconnect errors to cluster callers instead of dropping them ([#7737](https://github.com/valkey-io/valkey-glide/pull/7737))
 * Core/FFI: run a lazy sync client's first connect on the runtime worker ([#7671](https://github.com/valkey-io/valkey-glide/pull/7671))
 * Go: strip LLVM bitcode from the prebuilt `libglide_ffi.a` so Go 1.26.11+ / 1.27.4+ no longer reject it with `disallowed LTO section` ([#7739](https://github.com/valkey-io/valkey-glide/pull/7739))
+* Go: link CoreFoundation on macOS arm64 so programs that do not import `crypto/x509` link with Go 1.27 ([#7784](https://github.com/valkey-io/valkey-glide/issues/7784))
 * Python: `AsyncClientPool` borrowing and async `IsolatedScope` commands work under trio ([#7513](https://github.com/valkey-io/valkey-glide/issues/7513), [#7651](https://github.com/valkey-io/valkey-glide/issues/7651))
 * Rust: `telemetry::init` rejects a configuration with no exporter ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Rust: `telemetry::init` runs the HTTP and gRPC exporters on GLIDE's runtime ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
@@ -24,9 +31,6 @@
 ### Breaking Changes
 
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
-
-### Breaking Changes
-
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 
 ## 2.6
@@ -48,6 +52,8 @@
 * Core: Add `glide-rdma` crate, an RDMA transfer layer over libfabric (loaded at runtime), for later RDMA support ([#7177](https://github.com/valkey-io/valkey-glide/pull/7177))
 * Core: Add opt-in RDMA support to glide-core behind the `rdma` feature: `RdmaConfig` in the connection request, `Client::register_rdma_region` / `rdma_get` / `rdma_set` / `close_rdma`, and the `rdma_parked_bytes` / `rdma_leaked_bytes` counters. Transfers route to the key's primary and have no request timeout. `BLOB.RDMA_*` commands are refused when sent any other way, in every build ([#7412](https://github.com/valkey-io/valkey-glide/pull/7412))
 * Core/FFI: Add opt-in RDMA to glide-ffi behind the `rdma` feature: `rdma_available`, `rdma_usable`, `rdma_checksum`, `register_rdma_region` over caller-owned memory, `rdma_get` / `rdma_set` (blocking, with `region_closed` saying whether the region can transfer again), and `free_rdma_region` with `RdmaMemoryHold` for memory the fabric still holds (`rdma_memory_leaked` says whether it is leaked rather than parked), plus the `rdma_parked_bytes` / `rdma_leaked_bytes` counters. Sync clients only; pools refuse an RDMA configuration, and `rdma_close_regions` cancels transfers in flight without freeing the client ([#7458](https://github.com/valkey-io/valkey-glide/pull/7458))
+* Core: Standalone non-atomic batches of only read-only commands follow the client's `ReadFrom` setting instead of always running on the primary. Transactions, batches sent while a raw `MULTI` is open, and batches with a command that writes, changes connection or server state, uses a cursor, or is sent to every node when run on its own (`SELECT`, `CLIENT SETNAME`, `CONFIG SET`, `SLOWLOG GET`, `SCAN`, ...) still run on the primary, as do batches with `HTTL`, `HPTTL`, `HEXPIRETIME` or `HPEXPIRETIME` (see [#7703](https://github.com/valkey-io/valkey-glide/issues/7703)). Other read-only admin commands, such as `CONFIG GET` and `INFO`, can read from a replica ([#7486](https://github.com/valkey-io/valkey-glide/issues/7486))
+* Core: With a replica `ReadFrom`, a standalone batch `SELECT` or `RESET` ran on the primary only, so replica reads kept returning the previous database. The client now selects the database on each replica in the background, and reads skip a replica until it has ([#7486](https://github.com/valkey-io/valkey-glide/issues/7486))
 * Python: Add experimental RDMA to the sync client: `RdmaConfiguration` / `RdmaProvider` / `RdmaSetChecksum` in both client configurations, and `register_rdma_region`, `rdma_get`, `rdma_set`, `rdma_available`, `rdma_usable` and `rdma_checksum` on the sync client, transferring through windows of caller-owned memory. Published `valkey-glide-sync` wheels include RDMA; libfabric is loaded only when a client asks for it. The async client and `ClientPool` refuse an RDMA configuration ([#7464](https://github.com/valkey-io/valkey-glide/pull/7464))
 * Core/FFI: Add opt-in RDMA transfers to and from CUDA device memory, with no copy through host memory, enabled by `RdmaConfig.device_memory` ([#7609](https://github.com/valkey-io/valkey-glide/pull/7609))
 
