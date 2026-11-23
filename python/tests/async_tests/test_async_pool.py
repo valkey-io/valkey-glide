@@ -10,6 +10,9 @@ cluster deployments behave identically.
 """
 
 import asyncio
+import multiprocessing
+import os
+import queue
 import uuid
 
 import anyio
@@ -28,6 +31,7 @@ from glide import (
     ServerCredentials,
     ServiceType,
 )
+from glide_shared.exceptions import ClosingError
 
 from tests.utils.utils import check_if_server_version_lt
 from tests.utils.utils import get_standalone_address as _get_standalone_address
@@ -716,3 +720,154 @@ class TestPoolErrorHandling:
         )
         with pytest.raises(Exception):
             await AsyncClientPool.create(config, PoolConfig(max_size=1, min_idle=1))
+
+
+# ─── Fork safety ──────────────────────────────────────────────────────────────
+
+
+def _run_in_forked_child(child, timeout_s: float = 30.0) -> None:
+    """Run the coroutine function `child` on a fresh loop in a forked child.
+
+    Fails unless it returns normally. A hung child is killed.
+    """
+    ctx = multiprocessing.get_context("fork")
+    errors = ctx.Queue()
+
+    def _target():
+        try:
+            asyncio.run(child())
+        except BaseException as e:  # noqa: BLE001
+            errors.put(f"{type(e).__name__}: {e}")
+            # The queue's feeder thread must flush before the hard exit.
+            errors.close()
+            errors.join_thread()
+            os._exit(1)
+
+    process = ctx.Process(target=_target)
+    process.start()
+    process.join(timeout_s)
+    if process.is_alive():
+        process.kill()
+        process.join()
+        pytest.fail("forked child hung")
+    detail = ""
+    if process.exitcode:
+        try:
+            detail = errors.get(timeout=1)
+        except queue.Empty:
+            detail = "(child exited without a diagnostic)"
+    assert process.exitcode == 0, f"forked child failed: {detail}"
+
+
+@pytest.mark.parametrize("cluster_mode", [True, False])
+class TestAsyncPoolFork:
+    async def test_new_pool_in_child_after_parent_used_pool(self, cluster_mode):
+        config = _get_pool_client_config(cluster_mode)
+        pool_config = PoolConfig(max_size=2, min_idle=1)
+        pool = await AsyncClientPool.create(config, pool_config)
+        try:
+            async with pool.borrow(timeout=5) as client:
+                await client.get("fork-pool")
+
+            async def child():
+                child_pool = await AsyncClientPool.create(config, pool_config)
+                try:
+                    for _ in range(5):
+                        async with child_pool.borrow(timeout=5) as client:
+                            await client.get("fork-pool")
+                finally:
+                    child_pool.close()
+
+            _run_in_forked_child(child)
+        finally:
+            pool.close()
+
+    async def test_inherited_pool_raises_in_child(self, cluster_mode):
+        pool = await AsyncClientPool.create(
+            _get_pool_client_config(cluster_mode), PoolConfig(max_size=2, min_idle=1)
+        )
+        try:
+
+            async def child():
+                with pytest.raises(ClosingError, match="before fork"):
+                    await pool.acquire(timeout=1)
+                with pytest.raises(ClosingError, match="before fork"):
+                    pool.release(1)
+
+            _run_in_forked_child(child)
+        finally:
+            pool.close()
+
+    async def test_borrow_exit_in_child_does_not_mask_the_error(self, cluster_mode):
+        pool = await AsyncClientPool.create(
+            _get_pool_client_config(cluster_mode), PoolConfig(max_size=2, min_idle=1)
+        )
+        try:
+            borrow = pool.borrow(timeout=5)
+            await borrow.__aenter__()
+
+            async def child():
+                suppressed = await borrow.__aexit__(
+                    ValueError, ValueError("user error"), None
+                )
+                assert suppressed is False
+
+            _run_in_forked_child(child)
+            await borrow.__aexit__(None, None, None)
+        finally:
+            pool.close()
+
+    async def test_scope_on_inherited_client_raises_in_child(self, cluster_mode):
+        config = _get_pool_client_config(cluster_mode)
+        client_class = GlideClusterClient if cluster_mode else GlideClient
+        client = await client_class.create(config)
+        try:
+
+            async def child():
+                with pytest.raises(ClosingError, match="before fork"):
+                    await client.scoped_connection(timeout=5, routing_key="fork-scope")
+
+            _run_in_forked_child(child)
+        finally:
+            await client.close()
+
+    async def test_scope_in_child_after_parent_used_scope(self, cluster_mode):
+        config = _get_pool_client_config(cluster_mode)
+        client_class = GlideClusterClient if cluster_mode else GlideClient
+        client = await client_class.create(config)
+        try:
+            async with await client.scoped_connection(
+                timeout=5, routing_key="fork-scope"
+            ) as scope:
+                await scope.get("fork-scope")
+
+            async def child():
+                child_client = await client_class.create(config)
+                try:
+                    async with await child_client.scoped_connection(
+                        timeout=5, routing_key="fork-scope"
+                    ) as scope:
+                        await scope.get("fork-scope")
+                finally:
+                    await child_client.close()
+
+            _run_in_forked_child(child)
+        finally:
+            await client.close()
+
+    async def test_inherited_open_scope_fails_in_child(self, cluster_mode):
+        config = _get_pool_client_config(cluster_mode)
+        client_class = GlideClusterClient if cluster_mode else GlideClient
+        client = await client_class.create(config)
+        try:
+            async with await client.scoped_connection(
+                timeout=5, routing_key="fork-scope"
+            ) as scope:
+
+                async def child():
+                    with pytest.raises(RuntimeError, match="invalid scope"):
+                        await scope.get("fork-scope")
+
+                _run_in_forked_child(child, timeout_s=10)
+        finally:
+            await client.close()
