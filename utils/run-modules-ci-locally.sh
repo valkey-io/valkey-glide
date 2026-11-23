@@ -51,8 +51,7 @@
 #     CI step runs on a fresh runner and must build from scratch, this
 #     script assumes a dev checkout that's already built).
 #   node: docker, valkey-cli, and the Node client already built (npm ci &&
-#     npm run build) -- matching the Python arm's own assumption that this
-#     script does not rebuild the wrapper itself.
+#     npm run build).
 #   go: docker, valkey-cli, the Rust toolchain + cbindgen (`cargo install
 #     cbindgen`), and `protoc-gen-go` (`go install
 #     google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0`). This script
@@ -146,12 +145,6 @@ case "$MODULES_TEST_LANG" in
         ;;
     node)
         cd "${REPO_ROOT}/node"
-        # Single-sourced from .github/workflows/node-modules.yml's "Run modules
-        # tests" step -- these must not drift independently; see
-        # tests/ServerModulesCiSync.test.ts, which greps the workflow file for
-        # this exact arg list and fails the suite if it ever changes there without
-        # a matching update here. Assumes a dev checkout that's already built
-        # (npm ci && npm run build), matching the Python arm's own assumption.
         npm run test:modules -- \
             --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
             --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"

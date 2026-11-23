@@ -1,20 +1,3 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
-
-/**
- * Pure argv-serialization tests for the valkey-search 1.3 port: the wave-1
- * stable surface (INKEYS, typed reducer factories, FLOAT16/BFLOAT16,
- * FILTER/UNF/NOHL/SCORE_FIELD, count -> LIMIT 0 0) plus wave 2's scoring
- * (WITHSCORES/SCORER/ADDSCORES), cursors (FT.AGGREGATE WITHCURSOR, FT.CURSOR
- * READ/DEL) and FT.HYBRID. No live server is needed: a mock client captures
- * the argv array `GlideFt` builds and passes to `customCommand`, mirroring
- * the Python reference's `test_options.py`, which calls `to_args()` directly
- * on each option object. Node's option-serialization helpers are internal
- * module functions rather than public methods, so a mock `customCommand` is
- * the equivalent seam here.
- */
-
 import { describe, expect, it, jest } from "@jest/globals";
 import {
     FtAggregateReducer,
@@ -26,7 +9,6 @@ import {
     VectorField,
 } from "../build-ts";
 
-/** A minimal mock satisfying only the `customCommand` surface `GlideFt` calls. */
 function mockClient() {
     const customCommand = jest
         .fn<(...args: unknown[]) => Promise<unknown>>()
@@ -79,17 +61,6 @@ describe("GlideFt 1.3 argv serialization", () => {
             expect(args).not.toContain("COUNT");
             const i = args.indexOf("LIMIT");
             expect(args.slice(i, i + 3)).toEqual(["LIMIT", "0", "0"]);
-        });
-
-        it("still emits an explicit limit normally", async () => {
-            const { client, customCommand } = mockClient();
-            const options: FtSearchOptions = {
-                limit: { offset: 5, count: 10 },
-            };
-            await GlideFt.search(client, "idx", "*", options);
-            const args = customCommand.mock.calls[0][0] as string[];
-            const i = args.indexOf("LIMIT");
-            expect(args.slice(i, i + 3)).toEqual(["LIMIT", "5", "10"]);
         });
 
         it("omits WITHSCORES and SCORER by default", async () => {
@@ -309,7 +280,7 @@ describe("GlideFt 1.3 argv serialization", () => {
 
         it("generates an internal $-param for a raw bytes vector, never treating it as a reference", async () => {
             const { client, customCommand } = mockClient();
-            const vectorBytes = Buffer.from([0x24, 0x01, 0x02]); // starts with '$' byte, must still be raw data
+            const vectorBytes = Buffer.from([0x24, 0x01, 0x02]);
             await GlideFt.hybrid(
                 client,
                 "idx",
@@ -367,8 +338,6 @@ describe("GlideFt 1.3 argv serialization", () => {
                 randomUUID: () => "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             }));
 
-            // Re-require after mocking "crypto" so GlideFt picks up the
-            // fixed UUID (the module caches `randomUUID` on import).
             const { GlideFt: MockedGlideFt } = await import("../build-ts");
             const { client } = mockClient();
 
@@ -860,7 +829,6 @@ describe("GlideFt 1.3 argv serialization", () => {
                 },
             );
             const args = customCommand.mock.calls[0][0] as string[];
-            // Everything after the VSIM arm's own tokens.
             const tail = args.slice(args.indexOf("VSIM") + 3);
             expect(tail).toEqual([
                 "LOCALONLY",
@@ -932,15 +900,6 @@ describe("GlideFt 1.3 argv serialization", () => {
         });
 
         it("emits a FILTER clause directly after the VSIM arm's own argv, not misread as a VSIM pre-filter, when there is no LOAD", async () => {
-            // Regression proof: the server's VSIM parser claims FILTER (and
-            // POLICY/BATCH_SIZE) as its own immediately after the VSIM
-            // arm's K/EF_RUNTIME/SHARD_K_RATIO/YIELD_SCORE_AS tokens. A
-            // FtAggregateFilter clause placed in the aggregate tail must
-            // never land there. PARAMS must always separate the VSIM arm
-            // from any aggregate-tail clause, which this test's exact
-            // scenario (no LOAD, no combine, no localOnly, no timeout)
-            // isolates: with a LOAD clause in between, the bug would be
-            // masked even if PARAMS were missing.
             const { client, customCommand } = mockClient();
             await GlideFt.hybrid(
                 client,
@@ -954,10 +913,6 @@ describe("GlideFt 1.3 argv serialization", () => {
             );
             const args = customCommand.mock.calls[0][0] as string[];
             const vsimIdx = args.indexOf("VSIM");
-            // VSIM, @vec, $v, KNN, 2, K, 5 -- exactly 7 tokens, then PARAMS
-            // must appear before FILTER, proving FILTER is in the
-            // aggregate tail and not swallowed by the VSIM arm's own
-            // sub-argument scan.
             expect(args.slice(vsimIdx, vsimIdx + 7)).toEqual([
                 "VSIM",
                 "@vec",

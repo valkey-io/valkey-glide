@@ -1159,23 +1159,10 @@ export class GlideFt {
     }
 }
 
-/**
- * @internal
- *
- * Only a `string` starting with `$` is treated as a parameter reference. A `Buffer`'s packed
- * binary representation is arbitrary and can legitimately start with the byte `0x24` (`$`) by
- * coincidence; treating it the same way as a `string` here would misclassify that vector as a
- * parameter reference, skip generating the internal PARAMS entry, and send the raw vector bytes
- * in the parameter-reference position, which the server cannot resolve. A `Buffer` is therefore
- * always raw vector data regardless of its first byte.
- */
 function _isVsimParamReference(vector: GlideString): boolean {
     return typeof vector === "string" && vector.startsWith("$");
 }
 
-/**
- * @internal
- */
 function _addFtHybridSearchArm(arm: FtHybridSearchArm): GlideString[] {
     const args: GlideString[] = ["SEARCH", arm.query];
     if (arm.scorer !== undefined) args.push("SCORER", arm.scorer);
@@ -1184,12 +1171,6 @@ function _addFtHybridSearchArm(arm: FtHybridSearchArm): GlideString[] {
     return args;
 }
 
-/**
- * @internal
- *
- * `paramRef` is the `$`-prefixed parameter name to reference on the wire -- either `vector`
- * itself (already a reference) or a generated name, supplied by the caller.
- */
 function _addFtHybridVsimArm(
     arm: FtHybridVsimArm,
     paramRef: GlideString,
@@ -1240,8 +1221,6 @@ function _addFtHybridVsimArm(
             subArgs.push("BATCH_SIZE", filter.batchSize.toString());
 
         if (subArgs.length === 0) {
-            // Uncounted extension: a bare expression, no POLICY/BATCH_SIZE
-            // possible in this form (confirmed live).
             args.push("FILTER", filter.expression);
         } else {
             const tokenCount = 1 + subArgs.length;
@@ -1257,9 +1236,6 @@ function _addFtHybridVsimArm(
     return args;
 }
 
-/**
- * @internal
- */
 function _addFtHybridCombine(
     combine: FtHybridOptions["combine"],
 ): GlideString[] {
@@ -1323,16 +1299,6 @@ function _addFtHybridCombine(
     }
 }
 
-/**
- * @internal
- *
- * Serializes FT.HYBRID's aggregate-suffix tail: LOCALONLY, then LOAD, then PARAMS (merged with
- * any internally generated VSIM param), then clauses, then WITHCURSOR, then DIALECT. LOCALONLY
- * must come before PARAMS (the server rejects it once PARAMS has been parsed), and PARAMS must
- * come before clauses (a leading FILTER clause emitted right after the VSIM arm would otherwise
- * be claimed by the server's VSIM parser as a VSIM pre-filter instead) -- this order is always
- * emitted regardless of the order `options`'s own fields were set in.
- */
 function _addFtHybridOptions(
     options: FtHybridOptions | undefined,
     generatedVsimParam?: { name: GlideString; value: GlideString },
@@ -1433,12 +1399,6 @@ function _addFtAggregateOptions(options?: FtAggregateOptions): GlideString[] {
     return args;
 }
 
-/**
- * @internal
- *
- * Serializes FILTER/LIMIT/GROUPBY/SORTBY/APPLY clauses, shared between FT.AGGREGATE and
- * FT.HYBRID (the two commands' aggregate-suffix clause grammar is byte-identical).
- */
 function _addAggregateClauses(
     clauses: FtAggregateOptions["clauses"],
 ): GlideString[] {
@@ -1496,15 +1456,6 @@ function _addAggregateClauses(
     return args;
 }
 
-/**
- * @internal
- *
- * Serializes a LOAD clause's field list for FT.AGGREGATE and FT.HYBRID (shared, since the two
- * commands' LOAD clause grammar is byte-identical). The count is a token budget, not an entry
- * count -- each {@link LoadField} with an alias contributes 3 tokens (field, AS, alias) rather
- * than 1, matching the parser's own accounting. An empty or `undefined` list emits nothing
- * (not `LOAD 0`), matching the Python reference.
- */
 function _loadFieldsToArgs(
     loadFields: (GlideString | LoadField)[] | undefined,
 ): GlideString[] {
@@ -1531,13 +1482,6 @@ function _loadFieldsToArgs(
     return ["LOAD", loadFieldArgs.length.toString(), ...loadFieldArgs];
 }
 
-/**
- * @internal
- *
- * Serializes the WITHCURSOR option, shared between FT.AGGREGATE and FT.HYBRID (both commands
- * drive the exact same aggregate-suffix parser, so the option's own grammar is identical
- * regardless of which command opened the cursor).
- */
 function _addWithCursor(withCursor?: FtWithCursor): GlideString[] {
     if (!withCursor) return [];
 
@@ -1595,7 +1539,6 @@ function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
         args.push("SLOP", options.slop.toString());
     }
 
-    // INKEYS
     if (options.inKeys !== undefined) {
         args.push(
             "INKEYS",
@@ -1656,22 +1599,14 @@ function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
         );
     }
 
-    // COUNT: a bare COUNT token is not a real FT.SEARCH keyword --
-    // valkey-search's parser rejects it outright. The documented
-    // count-only form is LIMIT 0 0, which also returns just the total
-    // count with zero result rows. `count` and `limit` are mutually
-    // exclusive at the type level, so this never collides with the
-    // LIMIT emitted just above.
     if (options.count) {
         args.push("LIMIT", "0", "0");
     }
 
-    // WITHSCORES
     if (options.withScores) {
         args.push("WITHSCORES");
     }
 
-    // SCORER
     if (options.scorer !== undefined) {
         args.push("SCORER", options.scorer);
     }

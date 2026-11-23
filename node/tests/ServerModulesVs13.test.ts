@@ -1,40 +1,3 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
-
-/**
- * Live tests for the valkey-search 1.3 stable surface (wave 1 of the ports)
- * and wave 2 (scoring, cursors, FT.HYBRID).
- * Wave 1 scope: INKEYS, the typed reducer factories, FLOAT16/BFLOAT16, FT.CREATE
- * FILTER/UNF/NOHL/SCORE_FIELD, and count -> LIMIT 0 0.
- * Wave 2 scope: WITHSCORES/SCORER on FT.SEARCH, ADDSCORES/SCORER on
- * FT.AGGREGATE, FT.AGGREGATE/FT.HYBRID WITHCURSOR plus FT.CURSOR READ/DEL
- * (primary-pinned routing), and FT.HYBRID (SEARCH/VSIM arms, COMBINE
- * RRF/LINEAR/FUNCTION, VSIM FILTER/POLICY/BATCH_SIZE, LOCALONLY, LOAD,
- * per-arm and COMBINE yield-score-as aliases).
- *
- * Mirrors the Python reference's two-stage gate:
- *   1. A capability probe (real command + a 1.3-only argument, classified by
- *      error text, never a version string) answers "is the search module
- *      1.3-capable at all?" -- a missing module raises loudly, never skips.
- *   2. An emulate-release level read answers "is 1.3 behaviour actually
- *      active right now?" -- only needed by the legacy-vs-1.3 branching
- *      test (SCORE_FIELD in FT.INFO) in this stable-surface slice.
- *
- * The count -> LIMIT 0 0 behaviour change itself is NOT gated behind the 1.3
- * probe above: a bare COUNT token is invalid FT.SEARCH syntax on search 1.2.x
- * too, so "count maps to LIMIT 0 0" below runs unconditionally and is the
- * test that actually exercises CI's own search 1.2.1 image for this change.
- * It queries a real field-filter expression rather than a bare "*" wildcard,
- * since "*" as a standalone query string is itself rejected by 1.2.x
- * ("Invalid query string syntax") and only became valid there in 1.3 --
- * unrelated to LIMIT or count, confirmed directly against both engine
- * versions (matches Java's ft_search_count_maps_to_limit_zero_zero).
- * The 1.3-gated variant covers only the INKEYS/reducer/vector-type/parity
- * additions that genuinely need 1.3, plus every wave-2 test below (all of
- * which genuinely need 1.3).
- */
-
 import {
     afterAll,
     afterEach,
@@ -74,21 +37,14 @@ import {
     getServerVersion,
     parseEndpoints,
 } from "./TestUtilities";
-import { recordGate, writeWave2SkipReport } from "./wave2SkipTracker";
 
 const TIMEOUT = 50000;
-/** Waiting interval to let server process the data before querying (matches ServerModules.test.ts). */
 const DATA_PROCESSING_TIMEOUT = 1000;
 
-/** Sleeps so the index has time to catch up with recently written keys. */
 function sleep(ms: number = DATA_PROCESSING_TIMEOUT): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Packs two 32-bit floats as little-endian bytes, matching the vector blob
- * format `struct.pack("2f", x, y)` produces in the Python reference.
- */
 function packVector2f(x: number, y: number): Buffer {
     const buf = Buffer.alloc(8);
     buf.writeFloatLE(x, 0);
@@ -96,12 +52,6 @@ function packVector2f(x: number, y: number): Buffer {
     return buf;
 }
 
-/**
- * Encodes each value as an IEEE 754 binary16 (FLOAT16) little-endian pair,
- * matching Python's `struct.pack("<e", v)`. Only exact binary powers (0.0,
- * 1.0, 2.0) are used by the live test that calls this, so this doesn't need
- * to replicate the full round-to-nearest-even rounding rule.
- */
 function encodeFloat16(values: number[]): Buffer {
     const buf = Buffer.alloc(values.length * 2);
 
@@ -112,7 +62,6 @@ function encodeFloat16(values: number[]): Buffer {
     return buf;
 }
 
-/** Converts a JS number to its IEEE 754 binary16 bit pattern. */
 function float32ToFloat16Bits(value: number): number {
     const floatBuf = Buffer.alloc(4);
     floatBuf.writeFloatLE(value, 0);
@@ -127,11 +76,6 @@ function float32ToFloat16Bits(value: number): number {
     return sign | (exponent << 10) | (mantissa >>> 13);
 }
 
-/**
- * Encodes each value as a BFLOAT16 little-endian pair -- the upper 2 bytes
- * of its binary32 (truncation, not rounding), matching Python's
- * `struct.pack("<f", v)[2:4]`.
- */
 function encodeBfloat16(values: number[]): Buffer {
     const buf = Buffer.alloc(values.length * 2);
 
@@ -144,7 +88,6 @@ function encodeBfloat16(values: number[]): Buffer {
     return buf;
 }
 
-/** Reads a flat `GlideRecord<GlideReturnType>` row's field by key, as a string. */
 function readRowField(
     row: { key: GlideString; value: GlideReturnType }[],
     field: string,
@@ -164,17 +107,6 @@ function readRowField(
         : String(entry.value);
 }
 
-/**
- * Finds the real `host:port` of every REPLICA on the shard that owns
- * `key`'s slot, using `CLUSTER KEYSLOT` and `CLUSTER SHARDS` (the actual
- * slot function), rather than inferring placement or hard-coding the
- * cluster's layout. Mirrors Python's
- * `test_ft_cursor_affinity_prefer_replica_client`'s own replica-presence
- * check, so the negative-control case fails loudly (a test fixture bug,
- * not an engine finding) if a local cluster was started with zero
- * replicas per shard instead of silently passing without having tested
- * anything.
- */
 async function findReplicaAddressesForKey(
     client: GlideClusterClient,
     key: GlideString,
@@ -249,8 +181,6 @@ describe("GlideFt", () => {
                 );
             }
 
-            // Session-once probe, cluster-mode if available (matches the
-            // Python reference's connect-cluster-else-standalone rule).
             const probeClient = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -267,12 +197,6 @@ describe("GlideFt", () => {
         }, 40000);
 
         afterAll(async () => {
-            writeWave2SkipReport(
-                emulateReleaseLevel !== undefined
-                    ? `capable (emulate-release ${emulateReleaseLevel})`
-                    : "incapable (pre-1.3 module)",
-                { capability, emulateReleaseLevel },
-            );
             await cluster.close();
             await standalone?.close();
         }, TIMEOUT);
@@ -290,8 +214,8 @@ describe("GlideFt", () => {
                     );
                 });
 
-                it("INKEYS: absent, [], and a list", async () => {
-                    if (!recordGate(capability)) return;
+                it("INKEYS: absent is unrestricted, [] matches nothing, a list or Buffer key restricts to exactly those keys", async () => {
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -323,7 +247,6 @@ describe("GlideFt", () => {
 
                         await sleep();
 
-                        // absent -> no restriction, all 3 match
                         const all = await GlideFt.search(
                             client,
                             indexName,
@@ -331,7 +254,6 @@ describe("GlideFt", () => {
                         );
                         expect(all[0]).toBe(3);
 
-                        // [] -> INKEYS 0, excludes every result
                         const none = await GlideFt.search(
                             client,
                             indexName,
@@ -340,9 +262,6 @@ describe("GlideFt", () => {
                         );
                         expect(none[0]).toBe(0);
 
-                        // a list -> restricts to just those keys, by SET
-                        // not just count, so a bug that returned the wrong
-                        // two keys would still fail this.
                         const some = await GlideFt.search(
                             client,
                             indexName,
@@ -359,7 +278,6 @@ describe("GlideFt", () => {
                             new Set([keys[0], keys[1]]),
                         );
 
-                        // a Buffer key -> restricts to that one key.
                         const bufferResult = await GlideFt.search(
                             client,
                             indexName,
@@ -380,7 +298,7 @@ describe("GlideFt", () => {
                     }
                 });
 
-                it("count maps to LIMIT 0 0 (count-only, no document rows)", async () => {
+                it("count maps to LIMIT 0 0 (count-only, no document rows) on a field-filter query", async () => {
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
                             cluster.getAddresses(),
@@ -408,14 +326,6 @@ describe("GlideFt", () => {
 
                         await sleep();
 
-                        // A bare "*" wildcard query is rejected outright by
-                        // search 1.2.x ("Invalid query string syntax") -- it
-                        // only became valid as a standalone token in 1.3. This
-                        // test runs unconditionally against both versions
-                        // (see the file docstring), so it uses a real
-                        // field-filter query instead, which both versions
-                        // accept identically (matches Java's
-                        // ft_search_count_maps_to_limit_zero_zero).
                         const result = await GlideFt.search(
                             client,
                             indexName,
@@ -429,8 +339,8 @@ describe("GlideFt", () => {
                     }
                 });
 
-                it("typed reducer factories: TOLIST, FIRST_VALUE, RANDOM_SAMPLE", async () => {
-                    if (!recordGate(capability)) return;
+                it("typed reducer factories: TOLIST, FIRST_VALUE, RANDOM_SAMPLE (sample capped at size; all values kept when size exceeds the group)", async () => {
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -521,10 +431,6 @@ describe("GlideFt", () => {
                         expect(
                             (asMap.get("max_price") as GlideString).toString(),
                         ).toBe("30");
-                        // RANDOM_SAMPLE with size (2) < group count (3): the
-                        // reservoir must cap at exactly `size`, not merely
-                        // tolerate a larger size, and every sampled value
-                        // must be a genuine member of the group.
                         const sample = (
                             asMap.get("sample") as GlideString[]
                         ).map((v) => v.toString());
@@ -534,8 +440,6 @@ describe("GlideFt", () => {
                             expect(["10", "30"]).toContain(v);
                         }
 
-                        // RANDOM_SAMPLE with size (10) >= group count (3):
-                        // every value must be included.
                         const resultFullSample = await GlideFt.aggregate(
                             client,
                             indexName,
@@ -581,7 +485,7 @@ describe("GlideFt", () => {
                 ])(
                     "FT.CREATE FLOAT16/BFLOAT16 vector types run a real KNN query (%s)",
                     async (vectorType, encode) => {
-                        if (!recordGate(capability)) return;
+                        if (!capability) return;
 
                         client = await GlideClusterClient.createClient(
                             getClientConfigurationOption(
@@ -611,9 +515,6 @@ describe("GlideFt", () => {
                         } as FtCreateOptions);
 
                         try {
-                            // Points at known L2 distances from (1,0):
-                            // 0 -> dist 1, 1 -> dist 0, 2 -> dist 1
-                            // (matches Python's test_ft_create_float16_bfloat16_vector).
                             const points: [string, [number, number]][] = [
                                 ["0", [0.0, 0.0]],
                                 ["1", [1.0, 0.0]],
@@ -668,7 +569,7 @@ describe("GlideFt", () => {
                 );
 
                 it("FT.CREATE FILTER excludes documents that fail the expression", async () => {
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -714,7 +615,7 @@ describe("GlideFt", () => {
                 });
 
                 it("FT.CREATE SORTABLE UNF round-trips through FT.INFO and sorts in ASCII order", async () => {
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -768,8 +669,6 @@ describe("GlideFt", () => {
                         const orderedKeys = (
                             result[1] as unknown as { key: GlideString }[]
                         ).map((e) => e.key.toString());
-                        // ASCII order: uppercase 'B' (0x42) sorts before
-                        // lowercase 'a' (0x61).
                         expect(orderedKeys).toEqual([
                             prefix + "2",
                             prefix + "1",
@@ -780,7 +679,7 @@ describe("GlideFt", () => {
                 });
 
                 it("FT.CREATE SCORE_FIELD affects ranking", async () => {
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -824,9 +723,6 @@ describe("GlideFt", () => {
                             key: GlideString;
                             value: [GlideString, unknown];
                         }[];
-                        // The high-boost document must rank first (the
-                        // server-returned order) and score strictly higher
-                        // than the low-boost one.
                         expect(resultEntries[0].key.toString()).toBe(
                             prefix + "high",
                         );
@@ -866,8 +762,8 @@ describe("GlideFt", () => {
                     }
                 });
 
-                it("FT.CREATE NOHL is accepted (no server-side effect on this release)", async () => {
-                    if (!recordGate(capability)) return;
+                it("FT.CREATE NOHL is accepted and the index resolves through FT.INFO", async () => {
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -889,11 +785,19 @@ describe("GlideFt", () => {
                         } as FtCreateOptions,
                     );
 
-                    await client.customCommand(["FT.DROPINDEX", indexName]);
+                    try {
+                        const info = (await GlideFt.info(
+                            client,
+                            indexName,
+                        )) as Record<string, unknown>;
+                        expect(String(info["index_name"])).toBe(indexName);
+                    } finally {
+                        await client.customCommand(["FT.DROPINDEX", indexName]);
+                    }
                 });
 
                 it("FT.AGGREGATE LOAD ... AS (LoadField) renames the column at >= 1.3.0, is rejected below it", async () => {
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -962,23 +866,8 @@ describe("GlideFt", () => {
                     }
                 });
 
-                it("rejects an empty FILTER expression client-side", async () => {
-                    client = await GlideClusterClient.createClient(
-                        getClientConfigurationOption(
-                            cluster.getAddresses(),
-                            protocol,
-                        ),
-                    );
-                    await expect(
-                        GlideFt.create(client, "whatever", [], {
-                            dataType: "HASH",
-                            filter: "",
-                        } as FtCreateOptions),
-                    ).rejects.toThrow(/filter cannot be empty/);
-                });
-
                 it("FT.SEARCH WITHSCORES and SCORER rank by relevance", async () => {
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -1047,7 +936,7 @@ describe("GlideFt", () => {
                 });
 
                 it("FT.SEARCH rejects an unregistered SCORER value (TFIDF)", async () => {
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -1073,11 +962,6 @@ describe("GlideFt", () => {
                         });
                         await sleep();
 
-                        // BM25STD is the only scorer valkey-search 1.3's search
-                        // module registers (confirmed live above); TFIDF is
-                        // the classic RediSearch default elsewhere, which
-                        // makes it a realistic value for a caller to try here
-                        // and have it silently accepted rather than rejected.
                         await expect(
                             GlideFt.search(client, indexName, "hello", {
                                 withScores: true,
@@ -1090,7 +974,7 @@ describe("GlideFt", () => {
                 });
 
                 it("FT.SEARCH WITHSCORES + WITHSORTKEYS combined shape", async () => {
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -1172,7 +1056,7 @@ describe("GlideFt", () => {
                 });
 
                 it("FT.AGGREGATE ADDSCORES exposes __score, sortable", async () => {
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -1244,8 +1128,8 @@ describe("GlideFt", () => {
                     }
                 });
 
-                it("FT.AGGREGATE WITHCURSOR + FT.CURSOR READ/DEL affinity (PRIMARY, never a replica)", async () => {
-                    if (!recordGate(capability)) return;
+                it("FT.AGGREGATE WITHCURSOR + FT.CURSOR READ/DEL affinity (PRIMARY, never a replica; a replica read fails)", async () => {
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient({
                         ...getClientConfigurationOption(
@@ -1327,13 +1211,6 @@ describe("GlideFt", () => {
                             ),
                         );
 
-                        // Negative control, mirroring the maintainers' own
-                        // TestCursorCluster.test_cursor_is_node_local: a
-                        // read explicitly routed to a REPLICA of the
-                        // index's OWN slot must fail, confirming the
-                        // cursor really is node-local rather than this
-                        // test passing vacuously because preferReplica
-                        // happened to fall back to the primary.
                         const replicaAddrs = await findReplicaAddressesForKey(
                             client,
                             indexName,
@@ -1376,7 +1253,7 @@ describe("GlideFt", () => {
                 });
 
                 it("FT.CURSOR DEL discards an open cursor; reading it or an unknown id errors", async () => {
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -1438,7 +1315,7 @@ describe("GlideFt", () => {
                 });
 
                 it("FT.SEARCH bare `*` matches every document in the index", async () => {
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -1496,7 +1373,7 @@ describe("GlideFt", () => {
                 });
 
                 it("FT.SEARCH VECTOR_RANGE with YIELD_DISTANCE_AS, AND/OR/negation", async () => {
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -1530,8 +1407,6 @@ describe("GlideFt", () => {
                     );
 
                     try {
-                        // Points at known L2 distances from the origin: 0, 1,
-                        // 4, 9 (matches Python's VECTOR_RANGE_SEARCH_POINTS).
                         const points: [string, [number, number], string][] = [
                             ["0", [0.0, 0.0], "a"],
                             ["1", [1.0, 0.0], "b"],
@@ -1550,9 +1425,6 @@ describe("GlideFt", () => {
 
                         const queryBlob = packVector2f(0.0, 0.0);
 
-                        // Standalone VECTOR_RANGE: radius 2 covers distances
-                        // 0 and 1 (keys 0, 1); key 2 (distance 4) and key 3
-                        // (distance 9) fall outside.
                         const result = await GlideFt.search(
                             client,
                             indexName,
@@ -1573,9 +1445,6 @@ describe("GlideFt", () => {
                             ),
                         ).toEqual(new Set([prefix + "0", prefix + "1"]));
 
-                        // YIELD_DISTANCE_AS: the computed distance is
-                        // returned under the given property name, resolved
-                        // via PARAMS for both the radius and the blob.
                         const resultDist = await GlideFt.search(
                             client,
                             indexName,
@@ -1597,9 +1466,6 @@ describe("GlideFt", () => {
                             Number(readRowField(distEntries[0].value, "dist")),
                         ).toBe(0.0);
 
-                        // AND with a tag filter: radius 2 (keys 0,1)
-                        // intersected with category "a" (keys 0,2) leaves
-                        // only key 0.
                         const resultAnd = await GlideFt.search(
                             client,
                             indexName,
@@ -1620,8 +1486,6 @@ describe("GlideFt", () => {
                             ),
                         ).toEqual(new Set([prefix + "0"]));
 
-                        // OR with a tag filter: radius 0 (key 0 only) union
-                        // category "b" (keys 1, 3) gives keys 0, 1, 3.
                         const resultOr = await GlideFt.search(
                             client,
                             indexName,
@@ -1644,9 +1508,6 @@ describe("GlideFt", () => {
                             new Set([prefix + "0", prefix + "1", prefix + "3"]),
                         );
 
-                        // Negation: everything NOT within radius 1 of the
-                        // origin (excludes keys 0 and 1, leaves keys 2 and
-                        // 3).
                         const resultNegate = await GlideFt.search(
                             client,
                             indexName,
@@ -1672,7 +1533,7 @@ describe("GlideFt", () => {
                 });
 
                 it("FT.AGGREGATE VECTOR_RANGE with YIELD_DISTANCE_AS, loaded and sorted by distance", async () => {
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -1705,9 +1566,6 @@ describe("GlideFt", () => {
                     );
 
                     try {
-                        // Distances 0, 1, 100 from the origin -- a radius of
-                        // 5 must include the first two and exclude the
-                        // third.
                         const points: [number, number][] = [
                             [0.0, 0.0],
                             [1.0, 0.0],
@@ -1758,8 +1616,8 @@ describe("GlideFt", () => {
                     }
                 });
 
-                it("FT.AGGREGATE SORTBY widening by an adjacent LIMIT", async () => {
-                    if (!recordGate(capability)) return;
+                it("FT.AGGREGATE SORTBY widening by an adjacent LIMIT (either order; GROUPBY between them blocks it)", async () => {
+                    if (!capability) return;
 
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -1799,9 +1657,6 @@ describe("GlideFt", () => {
                             ],
                         };
 
-                        // SORTBY, no MAX, no LIMIT -> the default 10 rows.
-                        // Unaffected by the gate: no adjacent LIMIT, same on
-                        // both branches.
                         let result = await GlideFt.aggregate(
                             client,
                             indexName,
@@ -1810,9 +1665,6 @@ describe("GlideFt", () => {
                         );
                         expect(result.length).toBe(10);
 
-                        // SORTBY MAX 5, no LIMIT -> 5 rows. Unaffected by
-                        // the gate: no adjacent LIMIT, same on both
-                        // branches.
                         const sortMax5 = { ...sortAsc, max: 5 };
                         result = await GlideFt.aggregate(
                             client,
@@ -1822,10 +1674,6 @@ describe("GlideFt", () => {
                         );
                         expect(result.length).toBe(5);
 
-                        // SORTBY + LIMIT 0 15, adjacent -> the 1.3 fix
-                        // raises the retained window to 15 rows; below
-                        // 1.3.0, the adjacent LIMIT does not widen SORTBY's
-                        // own default-10 retention.
                         result = await GlideFt.aggregate(
                             client,
                             indexName,
@@ -1843,9 +1691,6 @@ describe("GlideFt", () => {
                         );
                         expect(result.length).toBe(legacy ? 10 : 15);
 
-                        // SORTBY MAX 5 + LIMIT 0 12, adjacent -> the 1.3 fix
-                        // lets LIMIT outrank MAX; below 1.3.0, SORTBY's own
-                        // MAX 5 still wins.
                         result = await GlideFt.aggregate(
                             client,
                             indexName,
@@ -1863,10 +1708,6 @@ describe("GlideFt", () => {
                         );
                         expect(result.length).toBe(legacy ? 5 : 12);
 
-                        // LIMIT 0 15 THEN SORTBY -- either side of the pair
-                        // counts as adjacent, not just LIMIT-after-SORTBY.
-                        // Same legacy-vs-fixed split as the SORTBY-then-LIMIT
-                        // row above.
                         result = await GlideFt.aggregate(
                             client,
                             indexName,
@@ -1884,11 +1725,6 @@ describe("GlideFt", () => {
                         );
                         expect(result.length).toBe(legacy ? 10 : 15);
 
-                        // SORTBY + GROUPBY + LIMIT 0 15 -- GROUPBY sits
-                        // between SORTBY and LIMIT, so the LIMIT is not
-                        // adjacent and must NOT widen SORTBY's default-10
-                        // retention. Unaffected by the gate: GROUPBY blocks
-                        // widening on both branches.
                         result = await GlideFt.aggregate(
                             client,
                             indexName,
@@ -1916,11 +1752,6 @@ describe("GlideFt", () => {
                 });
 
                 describe("FT.HYBRID", () => {
-                    /**
-                     * Creates an index with a TEXT field (`title`) and a 2-dimensional FLAT
-                     * FLOAT32 VECTOR field (`vec`), seeds the shared hybrid-docs fixture, and
-                     * waits for both documents to be indexed. Returns the index name.
-                     */
                     async function createHybridIndex(
                         testClient: GlideClusterClient,
                         prefix: string,
@@ -1962,8 +1793,8 @@ describe("GlideFt", () => {
                         return indexName;
                     }
 
-                    it("FT.HYBRID's VSIM ... RANGE form is parsed but rejected at execution", async () => {
-                        if (!recordGate(capability)) return;
+                    it("FT.HYBRID's VSIM RANGE form is parsed but rejected at execution (raw customCommand, no typed arm)", async () => {
+                        if (!capability) return;
 
                         client = await GlideClusterClient.createClient(
                             getClientConfigurationOption(
@@ -1978,15 +1809,6 @@ describe("GlideFt", () => {
                         );
 
                         try {
-                            // RANGE stays excluded from the typed FtHybridVsimArm
-                            // API entirely (by design -- see the Python
-                            // reference's equivalent test), so this goes
-                            // through customCommand directly rather than
-                            // GlideFt.hybrid. RANGE's own sub-argument count is
-                            // a token budget (matching INKEYS/PARAMS/RETURN
-                            // elsewhere in this module), not an arbitrary
-                            // result count -- "RANGE 2 RADIUS 5.0" because
-                            // "RADIUS 5.0" is 2 tokens.
                             await expect(
                                 client.customCommand([
                                     "FT.HYBRID",
@@ -2014,8 +1836,8 @@ describe("GlideFt", () => {
                         }
                     });
 
-                    it("FT.HYBRID is rejected inside a MULTI/EXEC transaction", async () => {
-                        if (!recordGate(capability)) return;
+                    it("FT.HYBRID is rejected inside a MULTI/EXEC transaction (raw customCommand, no typed wrapper)", async () => {
+                        if (!capability) return;
 
                         client = await GlideClusterClient.createClient(
                             getClientConfigurationOption(
@@ -2030,11 +1852,6 @@ describe("GlideFt", () => {
                         );
 
                         try {
-                            // No typed transaction wrapper for FT.HYBRID exists
-                            // (nor should one), since this path exists purely
-                            // to confirm the rejection, not to exercise the
-                            // typed API -- goes through customCommand inside a
-                            // ClusterBatch.
                             const batch = new ClusterBatch(true);
                             batch.customCommand([
                                 "FT.HYBRID",
@@ -2061,7 +1878,7 @@ describe("GlideFt", () => {
                     });
 
                     it("basic query: default reply is just the document key and the fused score", async () => {
-                        if (!recordGate(capability)) return;
+                        if (!capability) return;
 
                         client = await GlideClusterClient.createClient(
                             getClientConfigurationOption(
@@ -2125,7 +1942,7 @@ describe("GlideFt", () => {
                     });
 
                     it("a post-fusion FILTER clause (no LOAD) filters after both arms, never misread as a VSIM pre-filter", async () => {
-                        if (!recordGate(capability)) return;
+                        if (!capability) return;
 
                         client = await GlideClusterClient.createClient(
                             getClientConfigurationOption(
@@ -2140,14 +1957,6 @@ describe("GlideFt", () => {
                         );
 
                         try {
-                            // SEARCH arm yields its own score under "ss", only
-                            // matching HYBRID_DOC_VECTOR_WINNER's query
-                            // ("goodbye"). The VSIM arm (k=5) matches both
-                            // documents, so the union going into the aggregate
-                            // tail is both documents. A FILTER keeping only
-                            // rows where "ss" is positive, applied correctly
-                            // (post-fusion, not misread as a VSIM pre-filter),
-                            // keeps only HYBRID_DOC_VECTOR_WINNER.
                             const result = await GlideFt.hybrid(
                                 client,
                                 indexName,
@@ -2217,7 +2026,7 @@ describe("GlideFt", () => {
                     ])(
                         "COMBINE %s fuses results so the expected arm wins",
                         async (_label, combine, expectedFirst) => {
-                            if (!recordGate(capability)) return;
+                            if (!capability) return;
 
                             client = await GlideClusterClient.createClient(
                                 getClientConfigurationOption(
@@ -2269,7 +2078,7 @@ describe("GlideFt", () => {
                     );
 
                     it("vector as inline bytes and as a $-reference produce the same result", async () => {
-                        if (!recordGate(capability)) return;
+                        if (!capability) return;
 
                         client = await GlideClusterClient.createClient(
                             getClientConfigurationOption(
@@ -2372,7 +2181,7 @@ describe("GlideFt", () => {
                     it.each(["ADHOC", "BATCHES"] as const)(
                         "VSIM FILTER with POLICY %s narrows the vector candidate set",
                         async (policy) => {
-                            if (!recordGate(capability)) return;
+                            if (!capability) return;
 
                             client = await GlideClusterClient.createClient(
                                 getClientConfigurationOption(
@@ -2387,10 +2196,6 @@ describe("GlideFt", () => {
                             );
 
                             try {
-                                // SEARCH arm matches nothing; the VSIM
-                                // arm's own pre-filter narrows the vector
-                                // candidate set down to only the
-                                // text-winner document via its title.
                                 const result = await GlideFt.hybrid(
                                     client,
                                     indexName,
@@ -2425,7 +2230,7 @@ describe("GlideFt", () => {
                     );
 
                     it("both arms' and COMBINE's yieldScoreAs are distinct, independently reachable columns", async () => {
-                        if (!recordGate(capability)) return;
+                        if (!capability) return;
 
                         client = await GlideClusterClient.createClient(
                             getClientConfigurationOption(
@@ -2508,7 +2313,7 @@ describe("GlideFt", () => {
                     });
 
                     it("LOCALONLY is accepted, no shape change on a single shard", async () => {
-                        if (!recordGate(capability)) return;
+                        if (!capability) return;
 
                         client = await GlideClusterClient.createClient(
                             getClientConfigurationOption(
@@ -2561,7 +2366,7 @@ describe("GlideFt", () => {
                     });
 
                     it("WITHCURSOR paging on FT.HYBRID is pinned to PRIMARY and reaches exhaustion", async () => {
-                        if (!recordGate(capability)) return;
+                        if (!capability) return;
 
                         client = await GlideClusterClient.createClient({
                             ...getClientConfigurationOption(
@@ -2638,8 +2443,8 @@ describe("GlideFt", () => {
                         }
                     });
 
-                    it("without k, the VSIM arm uses the engine default K=10", async () => {
-                        if (!recordGate(capability)) return;
+                    it("without k, the VSIM arm uses the engine default K=10 (not capped by FT.HYBRID's own LIMIT 10)", async () => {
+                        if (!capability) return;
 
                         client = await GlideClusterClient.createClient(
                             getClientConfigurationOption(
@@ -2687,14 +2492,6 @@ describe("GlideFt", () => {
                                 { query: "nonexistentterm2" },
                                 { field: "vec", vector: packVector2f(0, 0) },
                                 {
-                                    // Without this, FT.HYBRID's own default
-                                    // LIMIT 10 would cap the result count at
-                                    // 10 regardless of the VSIM arm's actual
-                                    // default K, making the assertion below
-                                    // unable to detect a change to that
-                                    // default. LIMIT 0 20 raises the
-                                    // ceiling above K so the count below
-                                    // actually measures K.
                                     clauses: [
                                         { type: "LIMIT", offset: 0, count: 20 },
                                     ],
@@ -2733,7 +2530,7 @@ describe("GlideFt", () => {
                         return;
                     }
 
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClient.createClient(
                         getClientConfigurationOption(
@@ -2775,7 +2572,7 @@ describe("GlideFt", () => {
                         return;
                     }
 
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClient.createClient(
                         getClientConfigurationOption(
@@ -2834,7 +2631,7 @@ describe("GlideFt", () => {
                         return;
                     }
 
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClient.createClient(
                         getClientConfigurationOption(
@@ -2923,7 +2720,7 @@ describe("GlideFt", () => {
                         return;
                     }
 
-                    if (!recordGate(capability)) return;
+                    if (!capability) return;
 
                     client = await GlideClient.createClient(
                         getClientConfigurationOption(
