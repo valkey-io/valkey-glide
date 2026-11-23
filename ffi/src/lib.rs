@@ -2062,6 +2062,8 @@ fn create_pipe_writer(pipe_write_fd: i32) -> &'static SharedPipeWriter {
 pub struct ClientAdapter {
     runtime: ManuallyDrop<Runtime>,
     pipe_client_id: std::sync::atomic::AtomicU64,
+    /// How an async client's push handler delivers pushes, fixed at creation.
+    async_push_delivery: AsyncPushDeliveryMode,
     /// Provider callbacks may outlive their timeout and must not block runtime destruction.
     has_external_blocking_provider: bool,
     /// Background runtime for spawned tasks (connection drivers, reconnection, cluster manager).
@@ -3291,6 +3293,7 @@ fn create_client_internal(
     let client_adapter = Arc::new(ClientAdapter {
         runtime: ManuallyDrop::new(runtime),
         pipe_client_id: std::sync::atomic::AtomicU64::new(pipe_client_id),
+        async_push_delivery: async_push_delivery_mode(pubsub_callback, pipe_client_id),
         has_external_blocking_provider,
         background_runtime: ManuallyDrop::new(background_runtime),
         core,
@@ -3306,7 +3309,7 @@ fn create_client_internal(
         .as_ref()
         .unwrap_or(&client_adapter.runtime);
     let callback_store = pubsub_callback_store.clone();
-    let async_push_delivery = async_push_delivery_mode(pubsub_callback, pipe_client_id);
+    let async_push_delivery = client_adapter.async_push_delivery;
     if is_sync {
         // Sync clients: direct callback (CFFI acquires GIL automatically).
         spawn_runtime.spawn(async move {
@@ -3464,6 +3467,9 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 /// The URI parsing and configuration building happens in Rust, making it easier to add new connection
 /// options without changing FFI signatures across all language bindings.
 ///
+/// This entrypoint never installs a custom credential provider; use
+/// [`create_client_from_uri_with_credential_provider`] to supply one.
+///
 /// # Parameters
 ///
 /// * `uri_str`: A null-terminated C string containing the connection URI.
@@ -3618,9 +3624,6 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
 /// Creates a new client from a URI string and optional JSON configuration, with an optional
 /// custom IAM credential provider.
 ///
-/// This additive ABI preserves the complete four-argument [`create_client_from_uri`] prefix and
-/// appends `client_id` and the provider callback.
-///
 /// # Parameters
 ///
 /// * First four parameters: As for [`create_client_from_uri`].
@@ -3635,8 +3638,7 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
 ///
 /// # Safety
 ///
-/// The [`create_client_from_uri`] safety contract applies. The provider must remain callable until
-/// all already-entered invocations return, including an invocation that times out and outlives close.
+/// The [`create_client_from_uri`] and [`CredentialProviderCallback`] safety contracts apply.
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn create_client_from_uri_with_credential_provider(
     uri_str: *const c_char,
@@ -3879,8 +3881,7 @@ fn create_client_from_uri_internal(
 
 #[cfg(test)]
 mod tests_pipe_client_id {
-    //! A nonzero pipe ID routes an async client's results and pushes through the async pipe, so
-    //! only the protobuf entry points set it.
+    //! Only the protobuf entry points set a nonzero pipe ID.
     use super::*;
     use std::ffi::CString;
 
@@ -3898,8 +3899,8 @@ mod tests_pipe_client_id {
         }
     }
 
-    /// Returns the pipe ID of the created client, then closes it.
-    unsafe fn pipe_client_id(response: *const ConnectionResponse) -> u64 {
+    /// Returns the pipe ID and push delivery mode of the created client, then closes it.
+    unsafe fn pipe_routing(response: *const ConnectionResponse) -> (u64, AsyncPushDeliveryMode) {
         unsafe {
             let adapter = (*response).conn_ptr as *const ClientAdapter;
             assert!(
@@ -3907,10 +3908,13 @@ mod tests_pipe_client_id {
                 "{:?}",
                 CStr::from_ptr((*response).connection_error_message)
             );
-            let pipe_client_id = (*adapter).pipe_client_id.load(Ordering::Relaxed);
+            let routing = (
+                (*adapter).pipe_client_id.load(Ordering::Relaxed),
+                (*adapter).async_push_delivery,
+            );
             close_client((*response).conn_ptr);
             free_connection_response(response as *mut ConnectionResponse);
-            pipe_client_id
+            routing
         }
     }
 
@@ -3929,7 +3933,10 @@ mod tests_pipe_client_id {
                 None,
             )
         };
-        assert_eq!(unsafe { pipe_client_id(response) }, 0);
+        assert_eq!(
+            unsafe { pipe_routing(response) },
+            (0, AsyncPushDeliveryMode::Disabled)
+        );
     }
 
     #[test]
@@ -3953,7 +3960,13 @@ mod tests_pipe_client_id {
                 None,
             )
         };
-        assert_eq!(unsafe { pipe_client_id(response) }, CLIENT_ID as u64);
+        assert_eq!(
+            unsafe { pipe_routing(response) },
+            (
+                CLIENT_ID as u64,
+                AsyncPushDeliveryMode::Pipe(CLIENT_ID as u64)
+            )
+        );
     }
 }
 
