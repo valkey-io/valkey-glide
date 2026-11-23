@@ -658,6 +658,11 @@ public class ConnectionManagerTest {
     }
 
     @Test
+    void unixSocketAddress_toStringShowsThePath() {
+        assertEquals("unix:" + SOCKET_PATH, socketAddress().toString());
+    }
+
+    @Test
     void buildConnectionRequest_sendsOnlyTheUnixSocketPath() {
         GlideClientConfiguration config =
                 GlideClientConfiguration.builder().address(socketAddress()).build();

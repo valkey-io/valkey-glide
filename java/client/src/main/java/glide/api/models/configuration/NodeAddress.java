@@ -5,7 +5,6 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
-import lombok.ToString;
 
 /**
  * Represents the address of a node in the cluster or in standalone installation: a host and port,
@@ -21,7 +20,6 @@ import lombok.ToString;
  */
 @Getter
 @Builder
-@ToString
 @SuppressFBWarnings(
         value = "CT_CONSTRUCTOR_THROW",
         justification = "Builder enforces non-null/default invariants and throws early")
@@ -38,4 +36,13 @@ public class NodeAddress {
      * NodeDiscoveryMode#DISCOVER_ALL}, or mixed with TCP addresses.
      */
     private final String unixSocketPath;
+
+    /** Returns {@code unix:<path>} for a Unix domain socket address, the form the core logs. */
+    @Override
+    public String toString() {
+        if (unixSocketPath != null) {
+            return "unix:" + unixSocketPath;
+        }
+        return "NodeAddress(host=" + host + ", port=" + port + ")";
+    }
 }
