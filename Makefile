@@ -1,4 +1,17 @@
-.PHONY: all java java-test python python-test node node-test check-valkey-server go go-test prettier-check prettier-fix
+.PHONY: \
+	all \
+	java \
+	java-test \
+	python \
+	python-test \
+	node \
+	node-test \
+	prettier-check \
+	prettier-fix \
+	action-lint \
+	go \
+	go-test \
+	check-valkey-server
 
 BLUE=\033[34m
 YELLOW=\033[33m
@@ -83,10 +96,21 @@ prettier-fix:
 	done
 
 ##
+## GitHub Actions targets
+##
+action-lint:
+	@echo "$(GREEN)Linting GitHub Actions$(RESET)"
+
+	@# Check that dependencies are installed
+	@command -v actionlint >/dev/null || { echo "actionlint not found - see https://github.com/rhysd/actionlint/blob/main/docs/install.md"; exit 1; }
+	@command -v shellcheck >/dev/null || { echo "shellcheck not found - see https://github.com/koalaman/shellcheck#installing"; exit 1; }
+	@command -v pyflakes >/dev/null || { echo "pyflakes not found - see https://pypi.org/project/pyflakes"; exit 1; }
+
+	actionlint
+
+##
 ## Go targets
 ##
-
-
 go: .build/go_deps
 	$(MAKE) -C go build
 
