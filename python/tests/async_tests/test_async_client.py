@@ -13357,7 +13357,6 @@ class TestScripts:
         assert ttl_results == [-1] * len(field_names)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.requires_tcp
     @pytest.mark.parametrize("tcp_nodelay", [None, True, False])
     async def test_tcp_nodelay_configuration(
         self,
