@@ -100,7 +100,7 @@ npm run prettier:format         # Format code automatically
 # Development utilities
 npm run repl                    # Interactive TypeScript REPL
 npm run clean:build             # Clean build artifacts only
-npm run clean                   # Full cleanup — WARNING: also deletes the committed lockfiles (package-lock.json, rust-client/{package-lock.json,Cargo.lock}) and node_modules; restore the lockfiles with git before committing
+npm run clean                   # Full cleanup — WARNING: also deletes the committed npm lockfiles (package-lock.json, rust-client/package-lock.json) and node_modules; restore the lockfiles with git before committing. rust-client/Cargo.lock is kept: the --locked builds need it
 ```
 
 ### Raw Equivalents

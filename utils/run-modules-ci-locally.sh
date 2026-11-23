@@ -201,6 +201,13 @@ case "$MODULES_TEST_LANG" in
             ( cd "${REPO_ROOT}/ffi" && cargo clean -p glide-ffi --release && cargo rustc --crate-type staticlib --release )
             cp "${REPO_ROOT}/ffi/target/release/libglide_ffi.a" \
                 "${REPO_ROOT}/go/rustbin/${GO_TARGET_TRIPLET}/libglide_ffi.a"
+            # This copy skips the Makefile's strip step, so it still carries the LLVM bitcode that
+            # go/Makefile removes (Go >= 1.26.11 / 1.27.4 rejects it in the #cgo -L dir, see
+            # https://github.com/valkey-io/valkey-glide/issues/7648). Remove it the same way, with
+            # rust-objcopy, which needs the llvm-tools component that `make install-build-tools` adds.
+            "$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin/rust-objcopy" \
+                --remove-section=__LLVM,__bitcode --remove-section=__LLVM,__cmdline \
+                "${REPO_ROOT}/go/rustbin/${GO_TARGET_TRIPLET}/libglide_ffi.a"
         fi
         # Single-sourced from .github/workflows/go-modules.yml's "Build and run
         # modules tests" step -- these must not drift independently; see

@@ -55,9 +55,8 @@ Installs platform-specific dependencies for valkey-glide builds. This is the pri
 #### Behavior
 
 - **Ubuntu/Debian:** Installs `git`, `gcc`, `pkg-config`, `openssl`, `libssl-dev` via `apt`
-- **macOS:** Installs `openssl`, `coreutils` via `brew`
 - **Amazon Linux:** Installs `gcc`, `pkgconfig`, `openssl`, `openssl-devel`, and other build tools via `yum`
-- **Alpine/MUSL:** Installs `protobuf-dev`, `musl-dev`, `make`, `gcc`, and Rust via `apk`
+- **Alpine/MUSL:** Installs `protobuf-dev`, `musl-dev`, `make`, `gcc`, `openssl`, `openssl-dev`, and Rust via `apk`
 - **Windows:** Sets up WSL with Ubuntu 22.04 and Python
 - **Windows ARM64:** Skips Valkey server installation (platform limitation)
 
@@ -78,8 +77,9 @@ Installs and caches a specific Valkey server version for testing. Caching is bas
 
 #### Behavior
 
-- Computes a cache key from the source version, the target, and the runner image
+- Computes a cache key from the source version, the target, the runner image, and (on macOS and Alpine) the TLS library
 - Restores from cache if available, otherwise builds from source
+- On macOS, builds against Homebrew `openssl@3` (installing it if missing)
 - Rebuilds from source when a restored binary cannot run on the current image
 - Creates backward-compatible symlinks (`redis-*` → `valkey-*`)
 - Adds binaries to `PATH`
@@ -88,10 +88,12 @@ Installs and caches a specific Valkey server version for testing. Caching is bas
 #### Cache Key Format
 
 ```
-valkey-{version}-{target}-{image}
+valkey-{version}-{target}-{image}[-{tls}]
 ```
 
-Example: `valkey-9.0.6-x86_64-unknown-linux-gnu-ubuntu24.04-x86_64`
+`{tls}` is `openssl3` on macOS and `openssl` on Alpine; other platforms have no suffix.
+
+Examples: `valkey-9.0.6-x86_64-unknown-linux-gnu-ubuntu24.04-x86_64`, `valkey-9.0.7-aarch64-apple-darwin-macos15-arm64-openssl3`
 
 #### Example Usage
 
@@ -547,13 +549,6 @@ runs:
     using: "composite"
     steps:
         # Platform-specific OS dependencies (inline - these are simple shell commands)
-        - name: Install software dependencies for macOS
-          shell: bash
-          if: "${{ inputs.os == 'macos' }}"
-          run: |
-              brew update
-              brew install openssl coreutils
-
         - name: Install software dependencies for Ubuntu GNU
           shell: bash
           if: "${{ inputs.os == 'ubuntu' }}"
