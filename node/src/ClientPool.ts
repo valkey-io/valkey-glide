@@ -12,8 +12,8 @@
  *   3. Wraps the handle in a `GlideClient` / `GlideClusterClient` for callers.
  *
  * Pool clients are created without a pub/sub push channel (pub/sub is not
- * supported on pooled connections).  State reset (DISCARD + UNWATCH + SELECT)
- * on release is performed by `release_client_async` inside Rust.
+ * supported on pooled connections).  On release, `release_client_async` inside
+ * Rust resets only the state the borrow changed (MULTI, WATCH, database).
  *
  * Scope commands (WATCH/MULTI/EXEC via IsolatedScope) go through the Rust
  * glide-core::scope module for per-connection state tracking and slot pinning.
@@ -266,8 +266,8 @@ export class ClientPool {
     /**
      * Release a client back to the pool.
      *
-     * State reset (DISCARD + UNWATCH + SELECT) is performed in Rust before
-     * returning the connection to idle.  The handle is stopped without
+     * Rust resets only the state the borrow changed (MULTI, WATCH, database)
+     * before returning the connection to idle.  The handle is stopped without
      * unregistering the client from the scope registry (so the next acquire
      * can reuse the same underlying connection).
      */

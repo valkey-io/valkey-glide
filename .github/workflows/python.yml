@@ -11,12 +11,21 @@ on:
             - v*
         paths:
             - python/**
-            - glide-core/src/**
-            - glide-core/redis-rs/redis/src/**/**
+            - glide-core/**
+            - ffi/**
+            - glide-logger/**
+            - glide-telemetry/**
+            - glide-rdma/**
             - utils/cluster_manager.py
+            - deny.toml
+            - .cargo/config.toml
             - .github/workflows/python.yml
             - .github/actions/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-zig/action.yml
+            - .github/actions/setup-dns-tests/**
             - .github/actions/test-benchmark/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
@@ -29,12 +38,21 @@ on:
     pull_request:
         paths:
             - python/**
-            - glide-core/src/**
-            - glide-core/redis-rs/redis/src/**
+            - glide-core/**
+            - ffi/**
+            - glide-logger/**
+            - glide-telemetry/**
+            - glide-rdma/**
             - utils/cluster_manager.py
+            - deny.toml
+            - .cargo/config.toml
             - .github/workflows/python.yml
             - .github/actions/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-zig/action.yml
+            - .github/actions/setup-dns-tests/**
             - .github/actions/test-benchmark/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml

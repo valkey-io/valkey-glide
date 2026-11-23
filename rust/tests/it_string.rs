@@ -327,3 +327,25 @@ matrix_test!(lcs_len, c, {
     let _: () = c.set(&k2, "mynewtext").await.unwrap();
     assert_eq!(c.lcs_len(&k1, &k2).await.unwrap(), 6);
 });
+
+matrix_test!(del_if_eq, c, {
+    skip_if_version_below!(c, 9, 0, 0);
+
+    let k = common::key("delifeq");
+    let v = "value";
+
+    // Key does not exist yet.
+    assert!(!c.del_if_eq(&k, v).await.unwrap());
+
+    let _: () = c.set(&k, v).await.unwrap();
+
+    // Value does not match - key remains.
+    assert!(!c.del_if_eq(&k, "wrong_value").await.unwrap());
+    let got: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(got.as_deref(), Some(v));
+
+    // Value matches - key is deleted.
+    assert!(c.del_if_eq(&k, v).await.unwrap());
+    let got: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(got, None);
+});

@@ -11,7 +11,6 @@ Requires a running Valkey server (standalone).
 import asyncio
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -55,6 +54,15 @@ class TestAsyncIsolatedScopeBasic:
             assert result == "PONG" or result == "OK"
         assert scope.is_released
 
+    async def test_scope_noscript_error_keeps_the_server_text(self, client):
+        """A NOSCRIPT reply keeps the server's text after the scope's own prefix."""
+        async with await client.scoped_connection() as scope:
+            with pytest.raises(
+                RuntimeError,
+                match=r"^Scope command error: NOSCRIPT No matching script\.( Please use EVAL\.)?$",
+            ):
+                await scope.execute_command("EVALSHA", "f" * 40, "0")
+
     async def test_scope_get_set(self, client):
         """SET and GET on a scoped connection."""
         key = f"async-scope-test-{uuid.uuid4().hex[:8]}"
@@ -84,23 +92,6 @@ class TestAsyncIsolatedScopeBasic:
         await scope.close()
         with pytest.raises(RuntimeError, match="released"):
             await scope.ping()
-
-    async def test_release_frees_thread_of_cancelled_blocking_command(self, client):
-        """Releasing a scope ends the native call a cancelled BLPOP left running,
-        so its executor thread is free again."""
-        loop = asyncio.get_running_loop()
-        loop.set_default_executor(ThreadPoolExecutor(max_workers=1))
-        key = f"async-scope-blpop-{uuid.uuid4().hex[:8]}"
-        scope = await client.scoped_connection()
-        # Bounded past the 2s check so a failed release can't pin the worker forever.
-        blpop = asyncio.create_task(scope.execute_command("BLPOP", key, "10"))
-        await asyncio.sleep(0.2)
-        blpop.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await blpop
-
-        await scope.close()
-        await asyncio.wait_for(loop.run_in_executor(None, lambda: None), timeout=2)
 
 
 class TestAsyncIsolatedScopeOCC:

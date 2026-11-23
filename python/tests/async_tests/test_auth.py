@@ -33,6 +33,7 @@ from tests.constants import (
     IAM_TEST_REGION_US_EAST_1,
     IAM_USERNAME,
 )
+from tests.utils.pubsub_test_utils import is_reconnect_in_progress_error
 from tests.utils.utils import (
     INITIAL_PASSWORD,
     NEW_PASSWORD,
@@ -634,37 +635,43 @@ class TestAuthCommands:
         # This command right after disconnection requires the acl_glide_client to have a request timeout of 2000 ms
         # for full matrix tests to pass (otherwise failing on linux-aarch64 architecture).
         # TODO: We do not fully understand why such a long timeout is required.
-        # Retry during reconnection - non-blocking reconnect may still be in progress
-        max_retries = 20
-        for i in range(max_retries):
+        # The client may still be reconnecting, so retry only the documented
+        # reconnect errors; anything else fails the test.
+        async def _immediate_auth() -> bool:
             try:
-                result = await acl_glide_client.update_connection_password(
-                    NEW_PASSWORD, immediate_auth=True
+                assert (
+                    await acl_glide_client.update_connection_password(
+                        NEW_PASSWORD, immediate_auth=True
+                    )
+                    == OK
                 )
-                assert result == OK
-                break
+                return True
             except Exception as e:
-                if (
-                    "AllConnectionsUnavailable" in str(e)
-                    or "Connection in recovery" in str(e)
-                ) and i < max_retries - 1:
-                    await anyio.sleep(0.5)
-                    continue
+                if is_reconnect_in_progress_error(e):
+                    return False
                 raise
 
-        # Verify client is authenticated - retry during reconnection
-        for i in range(max_retries):
+        await wait_for(
+            _immediate_auth,
+            "Client did not accept immediate-auth after reconnect",
+            timeout=_CLUSTER_RECONNECT_TIMEOUT_SEC,
+        )
+
+        # Verify client is authenticated
+        async def _set_succeeds() -> bool:
             try:
                 assert await acl_glide_client.set("test_key", "test_value") == OK
-                break
+                return True
             except Exception as e:
-                if (
-                    "AllConnectionsUnavailable" in str(e)
-                    or "Connection in recovery" in str(e)
-                ) and i < max_retries - 1:
-                    await anyio.sleep(0.5)
-                    continue
+                if is_reconnect_in_progress_error(e):
+                    return False
                 raise
+
+        await wait_for(
+            _set_succeeds,
+            "Client did not serve commands after immediate-auth",
+            timeout=_CLUSTER_RECONNECT_TIMEOUT_SEC,
+        )
         value = await acl_glide_client.get("test_key")
         assert value == b"test_value"
 

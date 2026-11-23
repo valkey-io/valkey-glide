@@ -250,10 +250,10 @@ class CompressionConfiguration:
     WARNING: This feature is experimental and not recommended for production use.
 
     Compression is NOT compatible with commands that manipulate or compare string data on the server side:
-    - APPEND, GETRANGE, SETRANGE, STRLEN, LCS, SUBSTR
-    - DELIFEQ and SET with IFEQ or IFNE
-    - INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY
-    - GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP
+    - String manipulation: APPEND, GETRANGE, LCS, SETRANGE, STRLEN, SUBSTR
+    - Value comparison: DELEX, DELIFEQ, and SET with IFEQ or IFNE
+    - Numeric operations: DECR, DECRBY, INCR, INCRBY, INCRBYFLOAT
+    - Bit operations: BITCOUNT, BITFIELD, BITFIELD_RO, BITOP, BITPOS, GETBIT, SETBIT
 
     Using these commands with compressed values will result in incorrect behavior or errors.
 
@@ -854,6 +854,7 @@ class TlsAdvancedConfiguration:
         client_key_path: Optional[StrPath] = None,
         cert_reload_interval_seconds: Optional[int] = None,
     ):
+        # TODO #7707: Document that root certificates or IAM authentication with use_insecure_tls is rejected.
         self.use_insecure_tls = use_insecure_tls
         self.root_pem_cacerts = root_pem_cacerts
         self.client_cert_pem = client_cert_pem
@@ -1669,6 +1670,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         request.node_discovery_mode = self.node_discovery_mode.value
 
         if self.pubsub_subscriptions:
+            # TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
             if self.protocol == ProtocolVersion.RESP2:
                 raise ConfigurationError(
                     "PubSub subscriptions require RESP3 protocol, but RESP2 was configured."
@@ -1942,6 +1944,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             request.periodic_checks_disabled.SetInParent()
 
         if self.pubsub_subscriptions:
+            # TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
             if self.protocol == ProtocolVersion.RESP2:
                 raise ConfigurationError(
                     "PubSub subscriptions require RESP3 protocol, but RESP2 was configured."
