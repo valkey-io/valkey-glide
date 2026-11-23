@@ -1899,7 +1899,10 @@ impl Client {
                 match tokio::time::timeout(duration, connection.send_packed_command(&cmd_to_send))
                     .await
                 {
-                    Ok(result) => result?,
+                    Ok(result) => {
+                        record_if_timed_out(&result);
+                        result?
+                    }
                     Err(_) => {
                         record_timeout_error();
                         return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());

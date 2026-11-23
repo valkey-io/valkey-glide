@@ -126,46 +126,59 @@ fn every_request_timeout_is_counted_whichever_timer_fires_first() {
     });
 }
 
+/// Sends GETs on a scope connection while the server is paused, and asserts each times out. A
+/// `response_timeout` of its own on the command races the request timeout `send_command_on_connection`
+/// applies, and fails the command first when shorter.
+async fn time_out_on_a_scope_connection(response_timeout: Option<Duration>) {
+    let (server, mut client) = server_and_client().await;
+    let BackingServer::Standalone(Some(redis_server)) = &server else {
+        unreachable!("server_and_client starts a standalone server of its own")
+    };
+    // A raw connection standing in for a scoped one, which also has no response timeout of its own.
+    let mut scope_connection = redis::Client::open(redis::ConnectionInfo {
+        addr: redis_server.get_client_addr(),
+        redis: RedisConnectionInfo::default(),
+    })
+    .unwrap()
+    .get_multiplexed_async_connection(GlideConnectionOptions::default())
+    .await
+    .unwrap();
+    let mut auth_generation = AuthGeneration::NEVER;
+
+    let counted = timeouts_counted_during(async {
+        for _ in 0..TIMEOUTS {
+            pause_server(&mut client).await;
+            let mut get = redis::cmd("GET");
+            get.arg("timeout-metric");
+            get.set_response_timeout(response_timeout);
+            let err = client
+                .send_command_on_connection(
+                    &get,
+                    &mut scope_connection,
+                    &mut auth_generation,
+                    false,
+                )
+                .await
+                .unwrap_err();
+            assert!(err.is_timeout(), "{err}");
+            wait_out_pause().await;
+        }
+    })
+    .await;
+
+    assert_eq!(counted, TIMEOUTS);
+}
+
 #[test]
 #[serial_test::serial]
 fn a_request_timeout_on_a_scope_connection_is_counted() {
-    block_on_all(async {
-        let (server, mut client) = server_and_client().await;
-        let BackingServer::Standalone(Some(redis_server)) = &server else {
-            unreachable!("server_and_client starts a standalone server of its own")
-        };
-        // A raw connection standing in for a scoped one, which also has no response timeout of its own,
-        // so the request timeout `send_command_on_connection` applies is what fails the command.
-        let mut scope_connection = redis::Client::open(redis::ConnectionInfo {
-            addr: redis_server.get_client_addr(),
-            redis: RedisConnectionInfo::default(),
-        })
-        .unwrap()
-        .get_multiplexed_async_connection(GlideConnectionOptions::default())
-        .await
-        .unwrap();
-        let mut auth_generation = AuthGeneration::NEVER;
+    block_on_all(time_out_on_a_scope_connection(None));
+}
 
-        let counted = timeouts_counted_during(async {
-            for _ in 0..TIMEOUTS {
-                pause_server(&mut client).await;
-                let mut get = redis::cmd("GET");
-                get.arg("timeout-metric");
-                let err = client
-                    .send_command_on_connection(
-                        &get,
-                        &mut scope_connection,
-                        &mut auth_generation,
-                        false,
-                    )
-                    .await
-                    .unwrap_err();
-                assert!(err.is_timeout(), "{err}");
-                wait_out_pause().await;
-            }
-        })
-        .await;
-
-        assert_eq!(counted, TIMEOUTS);
-    });
+#[test]
+#[serial_test::serial]
+fn a_shorter_response_timeout_on_a_scope_connection_is_counted() {
+    block_on_all(time_out_on_a_scope_connection(Some(Duration::from_millis(
+        u64::from(REQUEST_TIMEOUT_MS) / 4,
+    ))));
 }
