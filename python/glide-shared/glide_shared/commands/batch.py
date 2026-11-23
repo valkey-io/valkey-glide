@@ -334,7 +334,7 @@ class BaseBatch:
 
     def delex(self: TBatch, key: TEncodable, condition: ValueComparison) -> TBatch:
         """
-        Deletes `key` if its value meets `condition`.
+        Deletes `key` if its value meets the given condition.
 
         Since: Valkey 9.2.0.
 

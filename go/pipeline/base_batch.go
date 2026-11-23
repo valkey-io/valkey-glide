@@ -419,7 +419,7 @@ func (b *BaseBatch[T]) DelIfEq(key string, value string) *T {
 	return b.addCmdAndTypeChecker(C.DelIfEq, []string{key, value}, reflect.Bool, false)
 }
 
-// Deletes `key` if its value meets the condition in `options`.
+// Deletes `key` if its value meets the given condition.
 //
 // Since:
 //

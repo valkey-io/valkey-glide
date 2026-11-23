@@ -509,7 +509,7 @@ class CoreCommands(Protocol):
 
     def delex(self, key: TEncodable, condition: ValueComparison) -> bool:
         """
-        Deletes `key` if its value meets `condition`.
+        Deletes `key` if its value meets the given condition.
 
         Since: Valkey 9.2.0.
 

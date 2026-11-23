@@ -620,7 +620,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Deletes <code>key</code> if its value meets the condition in <code>options</code>.
+     * Deletes <code>key</code> if its value meets the given condition.
      *
      * @since Valkey 9.2.0.
      * @see <a href="https://valkey.io/commands/delex/">valkey.io</a> for details.

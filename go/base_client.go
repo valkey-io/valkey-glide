@@ -1655,7 +1655,7 @@ func (client *baseClient) DelIfEq(ctx context.Context, key string, value string)
 	return handleBoolResponse(result)
 }
 
-// Deletes `key` if its value meets the condition in `options`.
+// Deletes `key` if its value meets the given condition.
 //
 // Since:
 //

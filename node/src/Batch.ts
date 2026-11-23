@@ -4291,7 +4291,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Deletes `key` if its value meets the condition in `options`.
+     * Deletes `key` if its value meets the given condition.
      *
      * @see {@link https://valkey.io/commands/delex/|valkey.io} for details.
      *

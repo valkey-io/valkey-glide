@@ -726,7 +726,7 @@ public interface StringBaseCommands {
     CompletableFuture<Long> append(GlideString key, GlideString value);
 
     /**
-     * Deletes <code>key</code> if its value meets the condition in <code>options</code>.
+     * Deletes <code>key</code> if its value meets the given condition.
      *
      * @since Valkey 9.2.0.
      * @see <a href="https://valkey.io/commands/delex/">valkey.io</a> for details.
@@ -744,7 +744,7 @@ public interface StringBaseCommands {
     CompletableFuture<Boolean> delex(String key, DelexOptions options);
 
     /**
-     * Deletes <code>key</code> if its value meets the condition in <code>options</code>.
+     * Deletes <code>key</code> if its value meets the given condition.
      *
      * @since Valkey 9.2.0.
      * @see <a href="https://valkey.io/commands/delex/">valkey.io</a> for details.
