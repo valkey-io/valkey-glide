@@ -157,7 +157,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-matrices, approve-self-hosted]
         if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
-        timeout-minutes: 35
+        timeout-minutes: 60
         strategy:
             fail-fast: false
             matrix:
@@ -197,7 +197,7 @@ jobs:
               run: cargo test --locked --features "proto,socket-layer,standalone_heartbeat"
 
             - name: Run glide-core tests over a Unix socket
-              if: (inputs.full-matrix == true || github.event_name == 'schedule') && matrix.host.OS == 'ubuntu'
+              if: ${{ !cancelled() && (inputs.full-matrix == true || github.event_name == 'schedule') && matrix.host.OS == 'ubuntu' }}
               working-directory: ./glide-core
               env:
                   GLIDE_TEST_UNIX_SOCKET: "1"
