@@ -9,7 +9,6 @@ import sys
 from typing import List
 
 import pytest
-import sniffio
 from glide import GlideClient, MonitorClient
 from glide_shared.commands.core_options import MonitorMsg
 from glide_shared.config import (
@@ -71,18 +70,7 @@ class TestUnixSocket:
         finally:
             await client.close()
 
-    async def test_scoped_connection_over_unix_socket(
-        self, request: pytest.FixtureRequest, unix_socket_path: str
-    ):
-        if sniffio.current_async_library() == "trio":
-            request.applymarker(
-                pytest.mark.xfail(
-                    reason="scoped_connection() calls asyncio.get_running_loop(), "
-                    "so it does not run on trio yet",
-                    raises=RuntimeError,
-                    strict=True,
-                )
-            )
+    async def test_scoped_connection_over_unix_socket(self, unix_socket_path: str):
         client = await GlideClient.create(unix_socket_config(unix_socket_path))
         try:
             async with await client.scoped_connection() as scope:
