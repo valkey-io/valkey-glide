@@ -32,6 +32,7 @@
 
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
+* Python, Go: a whitespace-only client AZ is now rejected for AZ-affinity read strategies, like an empty one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))
 
 ## 2.6
 
