@@ -1676,9 +1676,9 @@ fn convert_array_elements(
     element_type: ExpectedReturnType,
 ) -> RedisResult<Value> {
     let converted_array = array
-        .iter()
-        .map(|v| convert_to_expected_type(v.clone(), Some(element_type)).unwrap())
-        .collect();
+        .into_iter()
+        .map(|v| convert_to_expected_type(v, Some(element_type)))
+        .collect::<RedisResult<Vec<_>>>()?;
     Ok(Value::Array(converted_array))
 }
 
@@ -2385,8 +2385,68 @@ fn ft_hybrid_option_tail_contains_flag(cmd: &Cmd, flag: &[u8]) -> bool {
     ft_aggregate_option_tail_contains_flag(cmd, tail_start, flag)
 }
 
-// TODO #7631: Match option keywords (`JUSTID`, `IDX`, `WITHSCORES`, ...) only among each command's
-// option arguments, not every argument (as `ft_search_option_tail_contains_flag` does).
+/// Returns true if any argument at index `start` or later equals `keyword`
+/// (ASCII case-insensitive). Index 0 is the command name, and `start` must be
+/// the first index past the command's positional arguments (key, member,
+/// group, consumer, ...), so that user-supplied values are never mistaken for
+/// option keywords.
+fn has_option_from(cmd: &Cmd, start: usize, keyword: &[u8]) -> bool {
+    (start..cmd.args_iter().len())
+        .filter_map(|i| cmd.arg_idx(i))
+        .any(|a| arg_eq_ignore_case(a, keyword))
+}
+
+/// Returns true if ZADD's leading flags (`NX|XX|GT|LT|CH|INCR`, which come
+/// before the first score) contain `INCR`. Stops at the first non-flag token,
+/// so a member named "incr" is never matched.
+fn zadd_has_incr(cmd: &Cmd) -> bool {
+    let mut i = 2;
+    while let Some(arg) = cmd.arg_idx(i) {
+        if arg_eq_ignore_case(arg, b"INCR") {
+            return true;
+        }
+        let is_flag = [&b"NX"[..], b"XX", b"GT", b"LT", b"CH"]
+            .iter()
+            .any(|f| arg_eq_ignore_case(arg, f));
+        if !is_flag {
+            return false;
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Returns true if GEOSEARCH has any of WITHDIST / WITHHASH / WITHCOORD as an
+/// option. Walks the clauses after the key, skipping each clause's operands,
+/// so a member given to FROMMEMBER is never mistaken for an option.
+fn geosearch_has_with_option(cmd: &Cmd) -> bool {
+    let total = cmd.args_iter().len();
+    let mut i = 2;
+    while i < total {
+        let Some(tok) = cmd.arg_idx(i) else {
+            break;
+        };
+        let upper = tok.to_ascii_uppercase();
+        i += match upper.as_slice() {
+            b"WITHDIST" | b"WITHHASH" | b"WITHCOORD" => return true,
+            b"FROMMEMBER" | b"COUNT" => 2,
+            b"FROMLONLAT" | b"BYRADIUS" => 3,
+            b"BYBOX" => 4,
+            _ => 1,
+        };
+    }
+    false
+}
+
+/// Returns true if ZDIFF / ZUNION / ZINTER has WITHSCORES after its
+/// `numkeys key [key ...]` prefix.
+fn zset_multi_key_has_withscores(cmd: &Cmd) -> bool {
+    match cmd.arg_idx(1).and_then(parse_count_arg) {
+        Some(numkeys) => has_option_from(cmd, 2usize.saturating_add(numkeys), b"WITHSCORES"),
+        None => false,
+    }
+}
+
 pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>> {
     let command = cmd.command()?;
 
@@ -2410,7 +2470,8 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             Some(&is_array),
         )),
         b"XCLAIM" => {
-            if cmd.position(b"JUSTID").is_some() {
+            // XCLAIM key group consumer min-idle-time id [id ...] [options]
+            if has_option_from(cmd, 5, b"JUSTID") {
                 Some(ExpectedReturnType::ArrayOfStrings)
             } else {
                 Some(ExpectedReturnType::Map {
@@ -2420,7 +2481,8 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             }
         }
         b"XAUTOCLAIM" => {
-            if cmd.position(b"JUSTID").is_some() {
+            // XAUTOCLAIM key group consumer min-idle-time start [options]
+            if has_option_from(cmd, 6, b"JUSTID") {
                 // Value conversion is not needed if the JUSTID arg was passed.
                 None
             } else {
@@ -2439,7 +2501,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
                 value_type: &Some(ExpectedReturnType::ArrayOfPairs),
             }),
         }),
-        b"LCS" => cmd.position(b"IDX").map(|_| ExpectedReturnType::Map {
+        b"LCS" => has_option_from(cmd, 3, b"IDX").then_some(ExpectedReturnType::Map {
             key_type: &Some(ExpectedReturnType::SimpleString),
             value_type: &None,
         }),
@@ -2471,21 +2533,22 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
         b"GEOPOS" => Some(ExpectedReturnType::ArrayOfArraysOfDoubleOrNull),
         b"LMPOP" => Some(ExpectedReturnType::ArrayOfStringAndArrays),
         b"BLMPOP" => Some(ExpectedReturnType::ArrayOfStringAndArrays),
-        b"HRANDFIELD" => cmd
-            .position(b"WITHVALUES")
-            .map(|_| ExpectedReturnType::ArrayOfPairs),
-        b"ZRANDMEMBER" => cmd
-            .position(b"WITHSCORES")
-            .map(|_| ExpectedReturnType::ArrayOfMemberScorePairs),
-        b"ZADD" => cmd
-            .position(b"INCR")
-            .map(|_| ExpectedReturnType::DoubleOrNull),
-        b"ZRANGE" | b"ZDIFF" | b"ZUNION" | b"ZINTER" => cmd
-            .position(b"WITHSCORES")
-            .map(|_| ExpectedReturnType::MapOfStringToDouble),
-        b"ZRANK" | b"ZREVRANK" => cmd
-            .position(b"WITHSCORE")
-            .map(|_| ExpectedReturnType::ZRankReturnType),
+        b"HRANDFIELD" => {
+            has_option_from(cmd, 3, b"WITHVALUES").then_some(ExpectedReturnType::ArrayOfPairs)
+        }
+        b"ZRANDMEMBER" => has_option_from(cmd, 3, b"WITHSCORES")
+            .then_some(ExpectedReturnType::ArrayOfMemberScorePairs),
+        b"ZADD" => zadd_has_incr(cmd).then_some(ExpectedReturnType::DoubleOrNull),
+        // ZRANGE key min max [options]
+        b"ZRANGE" => has_option_from(cmd, 4, b"WITHSCORES")
+            .then_some(ExpectedReturnType::MapOfStringToDouble),
+        b"ZDIFF" | b"ZUNION" | b"ZINTER" => {
+            zset_multi_key_has_withscores(cmd).then_some(ExpectedReturnType::MapOfStringToDouble)
+        }
+        // ZRANK key member [WITHSCORE]
+        b"ZRANK" | b"ZREVRANK" => {
+            has_option_from(cmd, 3, b"WITHSCORE").then_some(ExpectedReturnType::ZRankReturnType)
+        }
         b"BZPOPMIN" | b"BZPOPMAX" => Some(ExpectedReturnType::KeyWithMemberAndScore),
         b"SPOP" => {
             if cmd.arg_idx(2).is_some() {
@@ -2517,17 +2580,15 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             Some(&is_array),
         )),
         b"GEOSEARCH" => {
-            if cmd.position(b"WITHDIST").is_some()
-                || cmd.position(b"WITHHASH").is_some()
-                || cmd.position(b"WITHCOORD").is_some()
-            {
+            if geosearch_has_with_option(cmd) {
                 Some(ExpectedReturnType::GeoSearchReturnType)
             } else {
                 None
             }
         }
         b"XINFO STREAM" => {
-            if cmd.position(b"FULL").is_some() {
+            // XINFO STREAM key [FULL [COUNT count]]
+            if has_option_from(cmd, 3, b"FULL") {
                 Some(ExpectedReturnType::XInfoStreamFullReturnType)
             } else {
                 Some(ExpectedReturnType::Map {
@@ -4083,18 +4144,24 @@ mod tests {
     #[test]
     fn convert_zrange_zdiff_only_if_withsocres_is_included() {
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("zrange").arg("0").arg("-1").arg("withscores")),
+            expected_type_for_cmd(
+                redis::cmd("zrange")
+                    .arg("k")
+                    .arg("0")
+                    .arg("-1")
+                    .arg("withscores")
+            ),
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
 
-        assert!(expected_type_for_cmd(redis::cmd("ZRANGE").arg("0").arg("-1")).is_none());
+        assert!(expected_type_for_cmd(redis::cmd("ZRANGE").arg("k").arg("0").arg("-1")).is_none());
 
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("ZDIFF").arg("1").arg("withscores")),
+            expected_type_for_cmd(redis::cmd("ZDIFF").arg("1").arg("k").arg("withscores")),
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
 
-        assert!(expected_type_for_cmd(redis::cmd("ZDIFF").arg("1")).is_none());
+        assert!(expected_type_for_cmd(redis::cmd("ZDIFF").arg("1").arg("k")).is_none());
     }
 
     #[test]
@@ -4623,6 +4690,12 @@ mod tests {
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("GEOSEARCH")
+                    .arg("key")
+                    .arg("FROMMEMBER")
+                    .arg("m")
+                    .arg("BYRADIUS")
+                    .arg("5")
+                    .arg("km")
                     .arg("WITHDIST")
                     .arg("WITHHASH")
                     .arg("WITHCOORD")
@@ -4631,12 +4704,33 @@ mod tests {
         ));
 
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("GEOSEARCH").arg("WITHDIST").arg("WITHHASH")),
+            expected_type_for_cmd(
+                redis::cmd("GEOSEARCH")
+                    .arg("key")
+                    .arg("FROMLONLAT")
+                    .arg("1")
+                    .arg("2")
+                    .arg("BYBOX")
+                    .arg("5")
+                    .arg("5")
+                    .arg("km")
+                    .arg("WITHDIST")
+                    .arg("WITHHASH")
+            ),
             Some(ExpectedReturnType::GeoSearchReturnType)
         ));
 
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("GEOSEARCH").arg("WITHDIST")),
+            expected_type_for_cmd(
+                redis::cmd("GEOSEARCH")
+                    .arg("key")
+                    .arg("FROMMEMBER")
+                    .arg("m")
+                    .arg("BYRADIUS")
+                    .arg("5")
+                    .arg("km")
+                    .arg("WITHDIST")
+            ),
             Some(ExpectedReturnType::GeoSearchReturnType)
         ));
 
@@ -6078,5 +6172,155 @@ mod tests {
             (Value::BulkString(b"colors".to_vec().into()), tolist_values),
         ])]);
         assert_eq!(result, expected);
+    }
+
+    fn cmd_of(args: &[&str]) -> Cmd {
+        let mut cmd = Cmd::new();
+        for a in args {
+            cmd.arg(*a);
+        }
+        cmd
+    }
+
+    /// Variant tag of the expected type, so tests can compare two results.
+    fn tag(cmd: &Cmd) -> String {
+        match expected_type_for_cmd(cmd) {
+            None => "none".to_string(),
+            Some(ExpectedReturnType::ArrayOfStrings) => "ArrayOfStrings".to_string(),
+            Some(ExpectedReturnType::Map { .. }) => "Map".to_string(),
+            Some(ExpectedReturnType::XAutoClaimReturnType) => "XAutoClaim".to_string(),
+            Some(ExpectedReturnType::ArrayOfPairs) => "ArrayOfPairs".to_string(),
+            Some(ExpectedReturnType::ArrayOfMemberScorePairs) => "MemberScorePairs".to_string(),
+            Some(ExpectedReturnType::MapOfStringToDouble) => "MapOfStringToDouble".to_string(),
+            Some(ExpectedReturnType::DoubleOrNull) => "DoubleOrNull".to_string(),
+            Some(ExpectedReturnType::ZRankReturnType) => "ZRank".to_string(),
+            Some(ExpectedReturnType::GeoSearchReturnType) => "GeoSearch".to_string(),
+            Some(ExpectedReturnType::XInfoStreamFullReturnType) => "XInfoStreamFull".to_string(),
+            Some(_) => "other".to_string(),
+        }
+    }
+
+    /// A positional argument equal to an option keyword (in any case) must give
+    /// the same expected type as an ordinary value, and a real option must still
+    /// be detected.
+    #[test]
+    fn positional_args_equal_to_option_keywords_are_not_options() {
+        // (colliding command, control command, command with the real option, expected tag with option)
+        type Case<'a> = (Vec<&'a str>, Vec<&'a str>, Vec<&'a str>, &'a str);
+        let cases: Vec<Case> = vec![
+            (
+                vec!["XCLAIM", "JUSTID", "JUSTID", "JUSTID", "0", "1-1"],
+                vec!["XCLAIM", "k", "g", "c", "0", "1-1"],
+                vec!["XCLAIM", "k", "g", "c", "0", "1-1", "JUSTID"],
+                "ArrayOfStrings",
+            ),
+            (
+                vec!["XAUTOCLAIM", "JUSTID", "JUSTID", "JUSTID", "0", "0-0"],
+                vec!["XAUTOCLAIM", "k", "g", "c", "0", "0-0"],
+                vec!["XAUTOCLAIM", "k", "g", "c", "0", "0-0", "JUSTID"],
+                "none",
+            ),
+            (
+                vec![
+                    "GEOSEARCH",
+                    "k",
+                    "FROMMEMBER",
+                    "WITHDIST",
+                    "BYRADIUS",
+                    "5",
+                    "km",
+                ],
+                vec!["GEOSEARCH", "k", "FROMMEMBER", "m", "BYRADIUS", "5", "km"],
+                vec![
+                    "GEOSEARCH",
+                    "k",
+                    "FROMMEMBER",
+                    "m",
+                    "BYRADIUS",
+                    "5",
+                    "km",
+                    "WITHCOORD",
+                ],
+                "GeoSearch",
+            ),
+            (
+                vec!["LCS", "IDX", "b"],
+                vec!["LCS", "a", "b"],
+                vec!["LCS", "a", "b", "IDX"],
+                "Map",
+            ),
+            (
+                vec!["ZRANGE", "WITHSCORES", "0", "-1"],
+                vec!["ZRANGE", "k", "0", "-1"],
+                vec!["ZRANGE", "k", "0", "-1", "WITHSCORES"],
+                "MapOfStringToDouble",
+            ),
+            (
+                vec!["ZUNION", "2", "WITHSCORES", "b"],
+                vec!["ZUNION", "2", "a", "b"],
+                vec!["ZUNION", "2", "a", "b", "WITHSCORES"],
+                "MapOfStringToDouble",
+            ),
+            (
+                vec!["ZRANDMEMBER", "WITHSCORES"],
+                vec!["ZRANDMEMBER", "k"],
+                vec!["ZRANDMEMBER", "k", "2", "WITHSCORES"],
+                "MemberScorePairs",
+            ),
+            (
+                vec!["HRANDFIELD", "WITHVALUES"],
+                vec!["HRANDFIELD", "k"],
+                vec!["HRANDFIELD", "k", "2", "WITHVALUES"],
+                "ArrayOfPairs",
+            ),
+            (
+                vec!["ZRANK", "k", "WITHSCORE"],
+                vec!["ZRANK", "k", "m"],
+                vec!["ZRANK", "k", "m", "WITHSCORE"],
+                "ZRank",
+            ),
+            (
+                vec!["ZADD", "k", "1", "INCR"],
+                vec!["ZADD", "k", "1", "m"],
+                vec!["ZADD", "k", "NX", "INCR", "1", "m"],
+                "DoubleOrNull",
+            ),
+            (
+                vec!["XINFO", "STREAM", "FULL"],
+                vec!["XINFO", "STREAM", "k"],
+                vec!["XINFO", "STREAM", "k", "FULL"],
+                "XInfoStreamFull",
+            ),
+        ];
+        for (colliding, control, with_option, expected) in cases {
+            let control_tag = tag(&cmd_of(&control));
+            assert_ne!(control_tag, expected, "control {control:?}");
+            for variant in [
+                colliding.clone(),
+                colliding
+                    .iter()
+                    .map(|a| a.to_lowercase())
+                    .collect::<Vec<_>>()
+                    .iter()
+                    .map(String::as_str)
+                    .collect(),
+            ] {
+                assert_eq!(tag(&cmd_of(&variant)), control_tag, "colliding {variant:?}");
+            }
+            assert_eq!(
+                tag(&cmd_of(&with_option)),
+                expected,
+                "option {with_option:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn convert_array_elements_returns_error_instead_of_panicking() {
+        let result = convert_array_elements(
+            vec![Value::Array(vec![Value::Int(1)])],
+            ExpectedReturnType::BulkString,
+        );
+        assert!(result.is_err());
     }
 }
