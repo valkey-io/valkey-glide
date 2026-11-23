@@ -37,25 +37,6 @@ def unix_socket_config(path: str, **kwargs) -> GlideClientConfiguration:
 
 @pytest.mark.anyio
 class TestUnixSocket:
-    async def test_standalone_cluster_is_reached_over_sockets(
-        self, request: pytest.FixtureRequest
-    ):
-        if not request.config.getoption("--unix-socket"):
-            pytest.skip("Runs only with --unix-socket")
-        for address in pytest.standalone_cluster.nodes_addr:  # type: ignore[attr-defined]
-            client = await GlideClient.create(
-                GlideClientConfiguration(
-                    [address], read_only=True, request_timeout=2000
-                )
-            )
-            try:
-                assert await client.config_get(["port"]) == {b"port": b"0"}
-                assert_unix_socket_client(
-                    await client.custom_command(["CLIENT", "INFO"])
-                )
-            finally:
-                await client.close()
-
     async def test_connect_over_unix_socket(self, unix_socket_path: str):
         client = await GlideClient.create(
             unix_socket_config(unix_socket_path, database_id=2)

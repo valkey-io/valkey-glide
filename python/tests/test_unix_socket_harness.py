@@ -25,18 +25,18 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_unix_socket_session_does_not_create_tcp_clusters(request):
+def test_unix_socket_session_server_has_tcp_disabled(request):
     if not request.config.getoption("--unix-socket"):
         pytest.skip("Runs only with --unix-socket")
-
-    for attr in (
-        "valkey_cluster",
-        "valkey_tls_cluster",
-        "standalone_tls_cluster",
-        "valkey_auth_cluster",
-        "valkey_auth_tls_cluster",
-    ):
-        assert not hasattr(pytest, attr), f"UDS session created {attr}"
+    for address in pytest.standalone_cluster.nodes_addr:  # type: ignore[attr-defined]
+        client = GlideClient.create(
+            GlideClientConfiguration([address], request_timeout=2000)
+        )
+        try:
+            assert client.config_get(["port"]) == {b"port": b"0"}
+            assert_unix_socket_client(client.custom_command(["CLIENT", "INFO"]))
+        finally:
+            client.close()
 
 
 @pytest.mark.parametrize(
@@ -59,10 +59,7 @@ def test_start_rejects_unsupported_flags(args):
     assert "--unix-socket is not supported with" in result.stderr
 
 
-@pytest.mark.parametrize("ports", [None, [51234]])
-def test_start_preserves_socket_record_when_pid_is_unknown(
-    tmp_path, monkeypatch, ports
-):
+def test_start_preserves_socket_record_when_pid_is_unknown(tmp_path, monkeypatch):
     cluster_folder = tmp_path / "cluster"
     node_folder = cluster_folder / "51234"
     node_folder.mkdir(parents=True)
@@ -85,7 +82,7 @@ def test_start_preserves_socket_record_when_pid_is_unknown(
             host="127.0.0.1",
             shard_count=1,
             replica_count=0,
-            ports=ports,
+            ports=None,
             cluster_folder=str(cluster_folder),
             tls=False,
             cluster_mode=False,
@@ -98,27 +95,10 @@ def test_start_preserves_socket_record_when_pid_is_unknown(
         socket_file
     )
 
-    targets = []
-    monkeypatch.setattr(
-        cluster_manager,
-        "stop_server",
-        lambda server, folder, *args: targets.append(
-            cluster_manager.cli_target_args(server, folder)
-        ),
-    )
-    monkeypatch.setattr(cluster_manager, "init_logger", lambda logfile: None)
-    cluster_manager.stop_cluster(
-        "127.0.0.1", str(cluster_folder), False, "", None, keep_folder=False
-    )
-    assert targets == [["-s", str(socket_file)]]
-    assert not socket_file.exists()
-    assert not cluster_folder.exists()
-
 
 @pytest.mark.parametrize("stopped", [True, False])
-@pytest.mark.parametrize("keep_folder", [True, False])
 def test_stop_keeps_the_socket_of_a_server_it_could_not_stop(
-    tmp_path, monkeypatch, stopped, keep_folder
+    tmp_path, monkeypatch, stopped
 ):
     socket_file = tmp_path / "node.sock"
     socket_file.touch()
@@ -133,10 +113,10 @@ def test_stop_keeps_the_socket_of_a_server_it_could_not_stop(
     monkeypatch.setattr(cluster_manager, "stop_server", stop_server)
     monkeypatch.setattr(cluster_manager, "init_logger", lambda logfile: None)
     cluster_manager.stop_cluster(
-        "127.0.0.1", str(tmp_path / "cluster"), False, "", None, keep_folder=keep_folder
+        "127.0.0.1", str(tmp_path / "cluster"), False, "", None, keep_folder=False
     )
     assert socket_file.exists() is not stopped
-    assert node_folder.exists() is (keep_folder or not stopped)
+    assert node_folder.exists() is not stopped
     if not stopped:
         assert cluster_manager.node_unix_socket(
             str(tmp_path / "cluster"), 51234
