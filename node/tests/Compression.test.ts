@@ -132,6 +132,21 @@ describe("Compression", () => {
         return await GlideClient.createClient(config);
     }
 
+    async function createPlainClient(
+        clusterMode: boolean,
+    ): Promise<GlideClient | GlideClusterClient> {
+        const config = getClientConfigurationOption(
+            getAddresses(clusterMode),
+            ProtocolVersion.RESP3,
+        );
+
+        if (clusterMode) {
+            return await GlideClusterClient.createClient(config);
+        }
+
+        return await GlideClient.createClient(config);
+    }
+
     function uniqueKey(prefix: string): string {
         return `${prefix}_${Date.now()}`;
     }
@@ -1043,6 +1058,123 @@ describe("Compression", () => {
                 expect(results![1]).toEqual(headerShapedPlain);
 
                 await plainClient.del([compressedKey, plainKey]);
+            } finally {
+                plainClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([
+        [false, false],
+        [false, true],
+        [true, false],
+        [true, true],
+    ])(
+        "compression_batch_keeps_compressed_bytes_in_list_reply cluster_mode=%p atomic=%p",
+        async (clusterMode, atomic) => {
+            client = await createCompressedClient(clusterMode, {
+                enabled: true,
+            });
+            const plainClient = await createPlainClient(clusterMode);
+
+            try {
+                const valueKey = uniqueKey("{batch_list_reply}_value");
+                const listKey = uniqueKey("{batch_list_reply}_list");
+
+                await setAndExpectCompression(client, valueKey, TEXT_1K);
+                const compressedBytes = (await plainClient.get(valueKey, {
+                    decoder: Decoder.Bytes,
+                })) as Buffer;
+                expect(compressedBytes.subarray(0, 3)).toEqual(
+                    Buffer.from([0x00, 0x01, 0x02]),
+                );
+                await plainClient.rpush(listKey, [compressedBytes]);
+
+                const results = clusterMode
+                    ? await (client as GlideClusterClient).exec(
+                          new ClusterBatch(atomic)
+                              .lrange(listKey, 0, -1)
+                              .get(valueKey),
+                          true,
+                          { decoder: Decoder.Bytes },
+                      )
+                    : await (client as GlideClient).exec(
+                          new Batch(atomic)
+                              .lrange(listKey, 0, -1)
+                              .get(valueKey),
+                          true,
+                          { decoder: Decoder.Bytes },
+                      );
+
+                expect(results).not.toBeNull();
+                expect(results![0]).toEqual([compressedBytes]);
+                expect((results![1] as Buffer).toString()).toBe(TEXT_1K);
+
+                await plainClient.del([valueKey, listKey]);
+            } finally {
+                plainClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([
+        [false, false],
+        [false, true],
+        [true, false],
+        [true, true],
+    ])(
+        "compression_batch_skips_size_limit_for_list_reply cluster_mode=%p atomic=%p",
+        async (clusterMode, atomic) => {
+            client = await createCompressedClient(clusterMode, {
+                enabled: true,
+                maxDecompressedSize: 100,
+            });
+            const plainClient = await createPlainClient(clusterMode);
+
+            try {
+                const listKey = uniqueKey("{batch_size_claim}_list");
+                const stringKey = uniqueKey("{batch_size_claim}_string");
+                // LZ4 header, then a little-endian claim of 200 decompressed bytes.
+                const oversizedClaim = Buffer.concat([
+                    Buffer.from([0x00, 0x01, 0x02, 0x00, 0x02]),
+                    Buffer.from([0xc8, 0x00, 0x00, 0x00]),
+                    Buffer.from("z".repeat(16)),
+                ]);
+
+                await plainClient.rpush(listKey, [oversizedClaim]);
+                await plainClient.set(stringKey, oversizedClaim);
+
+                const execLrange = () =>
+                    clusterMode
+                        ? (client as GlideClusterClient).exec(
+                              new ClusterBatch(atomic).lrange(listKey, 0, -1),
+                              true,
+                              { decoder: Decoder.Bytes },
+                          )
+                        : (client as GlideClient).exec(
+                              new Batch(atomic).lrange(listKey, 0, -1),
+                              true,
+                              { decoder: Decoder.Bytes },
+                          );
+                const execGet = () =>
+                    clusterMode
+                        ? (client as GlideClusterClient).exec(
+                              new ClusterBatch(atomic).get(stringKey),
+                              true,
+                              { decoder: Decoder.Bytes },
+                          )
+                        : (client as GlideClient).exec(
+                              new Batch(atomic).get(stringKey),
+                              true,
+                              { decoder: Decoder.Bytes },
+                          );
+
+                expect(await execLrange()).toEqual([[oversizedClaim]]);
+                await expect(execGet()).rejects.toThrow(/size limit exceeded/i);
+
+                await plainClient.del([listKey, stringKey]);
             } finally {
                 plainClient.close();
             }
