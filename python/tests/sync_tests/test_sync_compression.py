@@ -93,6 +93,23 @@ def exec_gets(
     return cast(GlideClusterClient, client).exec(cluster_batch, raise_on_error=True)
 
 
+def exec_size_limit_batch(
+    client: TGlideClient, is_atomic: bool, big_key: str, marker_key: str
+) -> Optional[List[Any]]:
+    """Runs SET marker, GET big, GET marker, MGET [marker, big] with raise_on_error=False."""
+    if isinstance(client, GlideClient):
+        batch = Batch(is_atomic=is_atomic)
+        batch.set(marker_key, "written").get(big_key).get(marker_key).mget(
+            [marker_key, big_key]
+        )
+        return client.exec(batch, raise_on_error=False)
+    cluster_batch = ClusterBatch(is_atomic=is_atomic)
+    cluster_batch.set(marker_key, "written").get(big_key).get(marker_key).mget(
+        [marker_key, big_key]
+    )
+    return cast(GlideClusterClient, client).exec(cluster_batch, raise_on_error=False)
+
+
 def generate_mixed_size_list(count: int, min_size: int, max_size: int) -> List[str]:
     """Generate list of strings with varying sizes."""
     return [
@@ -1929,22 +1946,9 @@ class TestCompressionMaxDecompressedSize:
                 limited_client = GlideClient.create(limited_config)
 
             try:
-                if cluster_mode:
-                    cluster_batch = ClusterBatch(is_atomic)
-                    cluster_batch.set(marker_key, "written").get(big_key).get(
-                        marker_key
-                    ).mget([marker_key, big_key])
-                    results = cast(GlideClusterClient, limited_client).exec(
-                        cluster_batch, raise_on_error=False
-                    )
-                else:
-                    batch = Batch(is_atomic)
-                    batch.set(marker_key, "written").get(big_key).get(marker_key).mget(
-                        [marker_key, big_key]
-                    )
-                    results = cast(GlideClient, limited_client).exec(
-                        batch, raise_on_error=False
-                    )
+                results = exec_size_limit_batch(
+                    limited_client, is_atomic, big_key, marker_key
+                )
 
                 assert results is not None
                 assert len(results) == 4
