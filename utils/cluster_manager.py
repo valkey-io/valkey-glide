@@ -657,8 +657,6 @@ def create_servers(
     cluster_node_timeout: Optional[int] = None,
     unix_socket: bool = False,
 ) -> List[Server]:
-    if unix_socket and replica_count:
-        raise ValueError("Unix socket test servers cannot have replicas because TCP is disabled")
     tic = time.perf_counter()
     logging.debug("## Creating servers")
     ready_servers: List[Server] = []

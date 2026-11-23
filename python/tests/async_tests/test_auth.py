@@ -738,7 +738,6 @@ class TestAuthCommands:
         with pytest.raises(RequestError):
             await acl_glide_client.update_connection_password("", immediate_auth=True)
 
-    @pytest.mark.requires_tcp
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_iam_authentication_with_mock_credentials(
@@ -772,7 +771,6 @@ class TestAuthCommands:
         finally:
             await client.close()
 
-    @pytest.mark.requires_tcp
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_iam_authentication_automatic_token_refresh(
@@ -853,7 +851,6 @@ class _BlockingCredentialProvider:
                 self.active -= 1
 
 
-@pytest.mark.requires_tcp
 @pytest.mark.timeout(120)
 @pytest.mark.anyio
 @pytest.mark.parametrize("cluster_mode", [False])
@@ -946,7 +943,6 @@ async def test_live_async_sync_provider_ids_coexist_without_registry_leaks(
             )
 
 
-@pytest.mark.requires_tcp
 @pytest.mark.timeout(120)
 @pytest.mark.anyio
 @pytest.mark.parametrize("cluster_mode", [False])
@@ -1015,7 +1011,6 @@ def _failing_credentials_provider():
     raise RuntimeError("credentials unavailable")
 
 
-@pytest.mark.requires_tcp
 @pytest.mark.anyio
 @pytest.mark.parametrize("cluster_mode", [True, False])
 @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1039,7 +1034,6 @@ async def test_iam_custom_provider_initial_and_manual_refresh(
         await client.close()
 
 
-@pytest.mark.requires_tcp
 @pytest.mark.anyio
 @pytest.mark.parametrize("cluster_mode", [False])
 @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
@@ -1065,7 +1059,6 @@ async def test_iam_custom_async_provider_forms(
         await client.close()
 
 
-@pytest.mark.requires_tcp
 @pytest.mark.anyio
 @pytest.mark.parametrize("cluster_mode", [True, False])
 @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1099,7 +1092,6 @@ async def test_iam_custom_provider_automatic_refresh_and_large_token(
         await client.close()
 
 
-@pytest.mark.requires_tcp
 @pytest.mark.anyio
 @pytest.mark.parametrize("cluster_mode", [True, False])
 @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1116,7 +1108,6 @@ async def test_iam_custom_provider_exception_fails_direct_creation(
         )
 
 
-@pytest.mark.requires_tcp
 @pytest.mark.anyio
 @pytest.mark.parametrize("cluster_mode", [False])
 @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])

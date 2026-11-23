@@ -308,10 +308,6 @@ jobs:
                       && matrix.python == env.BASE_PYTHON_VERSION
                   }}
               working-directory: ./python
-              env:
-                  AWS_ACCESS_KEY_ID: test_access_key
-                  AWS_SECRET_ACCESS_KEY: test_secret_key
-                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   ulimit -n 65536 2>/dev/null || true
                   python3 dev.py test --args -n 4 --dist loadgroup -m "not serial_only" --async-backend=asyncio --unix-socket --html=pytest_report_unix_socket.html --self-contained-html
