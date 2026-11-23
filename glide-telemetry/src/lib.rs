@@ -321,6 +321,27 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_decr_at_zero_never_wraps() {
+        let t = Telemetry::new();
+        const N: usize = 10_000;
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    for _ in 0..N {
+                        assert!(saturating_add(&t.total_connections, 1) <= 4 * N);
+                    }
+                });
+                scope.spawn(|| {
+                    for _ in 0..N {
+                        assert!(saturating_sub(&t.total_connections, 2) <= 4 * N);
+                    }
+                });
+            }
+        });
+        assert!(t.total_connections.load(Ordering::Relaxed) <= 4 * N);
+    }
+
+    #[test]
     fn serialize_yields_all_zero_fields_with_expected_keys() {
         let value = serde_json::to_value(Telemetry::new()).unwrap();
         let expected = serde_json::json!({
