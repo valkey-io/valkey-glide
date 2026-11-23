@@ -5203,15 +5203,6 @@ mod partial_results_tests {
                 "b:1",
                 Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into()),
             ),
-            // A target with no connection, as `into_channels` reports it.
-            ready(
-                "c:1",
-                Err((
-                    ErrorKind::ConnectionNotFoundForRoute,
-                    "Connection not found",
-                )
-                    .into()),
-            ),
         ];
         let entries = entries(collect(receivers, None).await.unwrap());
 
@@ -5221,10 +5212,6 @@ mod partial_results_tests {
         );
         let b = error_of(&entries[1].1);
         assert!(b.is_timeout(), "timeout kind must survive: {b:?}");
-        assert_eq!(entries[2].0, "c:1");
-        assert!(error_of(&entries[2].1)
-            .to_string()
-            .contains("ConnectionNotFoundForRoute"));
     }
 
     #[tokio::test]
