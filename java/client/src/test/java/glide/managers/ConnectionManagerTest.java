@@ -17,6 +17,7 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.GlideCredentialProvider;
 import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.NodeDiscoveryMode;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.ServiceType;
@@ -671,20 +672,6 @@ public class ConnectionManagerTest {
     }
 
     @Test
-    void buildConnectionRequest_sendsAnEmptyUnixSocketPathForTheCoreToReject() {
-        GlideClientConfiguration config =
-                GlideClientConfiguration.builder()
-                        .address(NodeAddress.builder().unixSocketPath("").build())
-                        .build();
-
-        ConnectionRequestOuterClass.NodeAddress address =
-                ConnectionManager.buildConnectionRequest(config).getAddresses(0);
-
-        assertTrue(address.hasUnixSocketPath());
-        assertEquals("", address.getUnixSocketPath());
-    }
-
-    @Test
     void buildConnectionRequest_tcpAddressHasNoUnixSocketPath() {
         GlideClientConfiguration config =
                 GlideClientConfiguration.builder()
@@ -725,6 +712,34 @@ public class ConnectionManagerTest {
                                                 .address(NodeAddress.builder().build())
                                                 .build()));
         assertTrue(error.getMessage().contains("combined with TCP addresses"), error.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "valkey.sock"})
+    void validateUnixSocketAddresses_rejectsRelativePath(String path) {
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () ->
+                                ConnectionManager.validateUnixSocketAddresses(
+                                        GlideClientConfiguration.builder()
+                                                .address(NodeAddress.builder().unixSocketPath(path).build())
+                                                .build()));
+        assertTrue(error.getMessage().contains("must be absolute"), error.getMessage());
+    }
+
+    @Test
+    void validateUnixSocketAddresses_rejectsDiscoverAll() {
+        ConfigurationError error =
+                assertThrows(
+                        ConfigurationError.class,
+                        () ->
+                                ConnectionManager.validateUnixSocketAddresses(
+                                        GlideClientConfiguration.builder()
+                                                .address(socketAddress())
+                                                .nodeDiscoveryMode(NodeDiscoveryMode.DISCOVER_ALL)
+                                                .build()));
+        assertTrue(error.getMessage().contains("DiscoverAll"), error.getMessage());
     }
 
     @Test

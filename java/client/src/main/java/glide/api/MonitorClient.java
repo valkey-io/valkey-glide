@@ -58,8 +58,8 @@ public class MonitorClient implements AutoCloseable {
      * @throws NullPointerException if {@code config} is null.
      * @throws IllegalArgumentException if IAM authentication is configured. The monitor native ABI
      *     does not support IAM authentication.
-     * @throws glide.api.models.exceptions.ConfigurationError if a Unix domain socket address is mixed
-     *     with TCP addresses or used with TLS.
+     * @throws glide.api.models.exceptions.ConfigurationError if a Unix domain socket address has a
+     *     relative path, is mixed with TCP addresses, or is used with TLS or {@code DISCOVER_ALL}.
      */
     public static MonitorClient create(@NonNull GlideClientConfiguration config)
             throws ConnectionException {
@@ -75,8 +75,8 @@ public class MonitorClient implements AutoCloseable {
      * @throws ConnectionException if the native monitor client cannot be created.
      * @throws IllegalArgumentException if IAM authentication is configured. The monitor native ABI
      *     does not support IAM authentication.
-     * @throws glide.api.models.exceptions.ConfigurationError if a Unix domain socket address is mixed
-     *     with TCP addresses or used with TLS.
+     * @throws glide.api.models.exceptions.ConfigurationError if a Unix domain socket address has a
+     *     relative path, is mixed with TCP addresses, or is used with TLS or {@code DISCOVER_ALL}.
      */
     public static MonitorClient create(
             @NonNull GlideClientConfiguration config, Consumer<MonitorMsg> callback)

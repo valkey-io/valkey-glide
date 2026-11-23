@@ -741,11 +741,14 @@ public class ConnectionManager {
     }
 
     /**
-     * Rejects Unix domain socket misconfigurations before connecting. {@code MonitorClient} connects
-     * only to the first address, so this is its only mixed-address check.
+     * Rejects Unix domain socket misconfigurations before connecting, with the core's rules and
+     * messages. {@code MonitorClient} connects only to the first address, so this is its only
+     * mixed-address check. The core also rejects paths that are too long or contain a NUL byte, and
+     * every socket address on Windows.
      *
      * @throws ConfigurationError if a Unix domain socket address is used in cluster mode, mixed with
-     *     TCP addresses, or with TLS.
+     *     TCP addresses, with {@link NodeDiscoveryMode#DISCOVER_ALL}, with a relative path, or with
+     *     TLS.
      */
     public static void validateUnixSocketAddresses(BaseClientConfiguration configuration) {
         List<glide.api.models.configuration.NodeAddress> addresses = configuration.getAddresses();
@@ -759,6 +762,19 @@ public class ConnectionManager {
         if (!addresses.stream().allMatch(address -> address.getUnixSocketPath() != null)) {
             throw new ConfigurationError(
                     "Unix domain socket addresses cannot be combined with TCP addresses");
+        }
+        if (configuration instanceof GlideClientConfiguration
+                && ((GlideClientConfiguration) configuration).getNodeDiscoveryMode()
+                        == NodeDiscoveryMode.DISCOVER_ALL) {
+            throw new ConfigurationError(
+                    "DiscoverAll node discovery is not supported with Unix domain socket addresses");
+        }
+        for (glide.api.models.configuration.NodeAddress address : addresses) {
+            // A relative path would resolve against the working directory at each reconnect.
+            if (!address.getUnixSocketPath().startsWith("/")) {
+                throw new ConfigurationError(
+                        "Unix domain socket path \"" + address.getUnixSocketPath() + "\" must be absolute");
+            }
         }
         if (configuration.isUseTLS()) {
             throw new ConfigurationError("TLS is not supported over Unix domain sockets");
