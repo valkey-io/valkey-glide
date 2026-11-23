@@ -5173,6 +5173,15 @@ mod cluster_async {
         partial: bool,
         handler: impl Fn(&[u8], u16) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
     ) -> RedisResult<Value> {
+        info_to_nodes(name, MultipleNodeRoutingInfo::AllMasters, partial, handler)
+    }
+
+    fn info_to_nodes(
+        name: &'static str,
+        routing: MultipleNodeRoutingInfo,
+        partial: bool,
+        handler: impl Fn(&[u8], u16) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
+    ) -> RedisResult<Value> {
         let mut info = cmd("INFO");
         info.set_allow_partial_results(partial);
         let MockEnv {
@@ -5188,7 +5197,7 @@ mod cluster_async {
         runtime.block_on(connection.route_command(
             &info,
             RoutingInfo::MultiNode((
-                MultipleNodeRoutingInfo::AllMasters,
+                routing,
                 Some(redis::cluster_routing::ResponsePolicy::Special),
             )),
         ))
@@ -5288,6 +5297,56 @@ mod cluster_async {
         let name = "test_async_cluster_without_partial_results_skips_unconnected_primary";
         let pairs = sorted_map(info_with_one_unconnected_primary(name, false).unwrap());
         assert_eq!(pairs, vec![(format!("{name}:6379"), info_reply(6379))]);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_to_all_nodes_keep_replicas() {
+        let name = "test_async_cluster_partial_results_to_all_nodes_keep_replicas";
+        let value = info_to_nodes(
+            name,
+            MultipleNodeRoutingInfo::AllNodes,
+            true,
+            move |received_cmd, port| {
+                respond_startup_with_replica_using_config(name, received_cmd, None)?;
+                Err(Ok(info_reply(port)))
+            },
+        )
+        .unwrap();
+
+        let addresses: Vec<_> = sorted_map(value)
+            .into_iter()
+            .map(|(address, _)| address)
+            .collect();
+        assert_eq!(
+            addresses,
+            [6379, 6380, 6381, 6382].map(|port| format!("{name}:{port}"))
+        );
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_fail_when_no_primary_is_connected() {
+        let name = "test_async_cluster_partial_results_fail_when_no_primary_is_connected";
+        // The client connects to the replica 6379; its primary 6380 refuses every command.
+        let slots = vec![MockSlotRange {
+            primary_port: 6380,
+            replica_ports: vec![6379],
+            slot_range: 0..16383,
+        }];
+        let err = info_to_all_primaries(name, true, move |received_cmd, port| {
+            if port == 6380 {
+                return Err(Err(std::io::Error::from(
+                    std::io::ErrorKind::ConnectionRefused,
+                )
+                .into()));
+            }
+            respond_startup_with_replica_using_config(name, received_cmd, Some(slots.clone()))?;
+            Err(Ok(info_reply(port)))
+        })
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ConnectionNotFoundForRoute, "{err:?}");
     }
 
     #[test]
