@@ -386,6 +386,10 @@ where
             Ok(())
         }
         Value::ServerError(ref err) => write!(writer, "server-error({err})\r\n"),
+        Value::ClientError(_) => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "a client error has no wire encoding",
+        )),
     }
 }
 

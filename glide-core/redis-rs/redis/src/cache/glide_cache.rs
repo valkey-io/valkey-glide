@@ -1070,6 +1070,7 @@ pub fn calculate_value_size(value: &Value) -> usize {
         }
 
         Value::ServerError(err) => err.to_string().len(),
+        Value::ClientError(err) => err.to_string().len(),
     };
 
     base_overhead + additional_data

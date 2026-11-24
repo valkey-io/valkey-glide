@@ -73,8 +73,8 @@ pub(crate) fn convert_to_expected_type(
         return Ok(value);
     };
 
-    // If the value is a server error, return it as is, without conversion.
-    if let Value::ServerError(_) = value {
+    // An error in place of a reply is returned as is, without conversion.
+    if matches!(value, Value::ServerError(_) | Value::ClientError(_)) {
         return Ok(value);
     }
 
@@ -2687,12 +2687,37 @@ pub(crate) fn get_value_type<'a>(value: &Value) -> &'a str {
         Value::BigNumber(_) => "BigNumber",
         Value::Push { .. } => "Push",
         Value::ServerError(_) => "ServerError",
+        Value::ClientError(_) => "ClientError",
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn errors_in_place_of_a_reply_skip_expected_type_conversion() {
+        let server_error = redis::parse_redis_value(b"-ERR boom\r\n").unwrap();
+        let client_error = Value::ClientError(redis::ClientError::new(
+            "Decompression error",
+            Some("Decompression size limit exceeded".to_string()),
+        ));
+        for value in [server_error, client_error] {
+            for expected in [
+                ExpectedReturnType::Boolean,
+                ExpectedReturnType::Map {
+                    key_type: &None,
+                    value_type: &None,
+                },
+                ExpectedReturnType::ArrayOfStrings,
+            ] {
+                assert_eq!(
+                    convert_to_expected_type(value.clone(), Some(expected)).unwrap(),
+                    value
+                );
+            }
+        }
+    }
 
     #[test]
     fn xinfo_stream_expected_return_type() {

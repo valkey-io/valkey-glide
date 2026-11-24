@@ -598,6 +598,10 @@ where
             Some(details) => write!(writer, "-{} {details}\r\n", err.err_code()),
             None => write!(writer, "-{}\r\n", err.err_code()),
         },
+        Value::ClientError(_) => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "a client error has no wire encoding",
+        )),
     }
 }
 

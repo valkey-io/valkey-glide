@@ -1535,23 +1535,88 @@ mod compression_tests {
         Value::BulkString(bytes.into())
     }
 
-    /// Asserts `value` is the in-place size-limit error, and that a binding converting it
-    /// (as it does every `Value::ServerError`) gets a plain request error naming the limit.
-    fn assert_size_limit_error_reply(value: &Value) {
-        let Value::ServerError(server_error) = value else {
-            panic!("expected the size-limit error in place, got {value:?}");
-        };
-        let error = redis::RedisError::from(server_error.clone());
-        let message = glide_core::errors::error_message(&error);
+    /// Asserts `error` is the size-limit error: a client error, never a server reply or
+    /// retried, that bindings report as a plain request error naming the limit.
+    fn assert_size_limit_error(error: &redis::RedisError) {
+        assert_eq!(error.kind(), redis::ErrorKind::ClientError);
+        assert!(!error.is_server_reply(), "{error}");
+        assert!(!error.is_unrecoverable_error(), "{error}");
+        let message = glide_core::errors::error_message(error);
         assert!(
-            message.starts_with("DecompressionError: Decompression size limit exceeded"),
+            message.starts_with(
+                "Decompression error - ClientError: Decompression size limit exceeded"
+            ),
             "unexpected message: {message}"
         );
         assert!(message.contains("maxDecompressedSize"), "{message}");
         assert_eq!(
-            glide_core::errors::error_type(&error),
+            glide_core::errors::error_type(error),
             glide_core::errors::RequestErrorType::Unspecified
         );
+    }
+
+    /// Asserts `value` is the in-place size-limit error.
+    fn assert_size_limit_error_reply(value: &Value) {
+        let Value::ClientError(client_error) = value else {
+            panic!("expected the size-limit client error in place, got {value:?}");
+        };
+        assert_size_limit_error(&redis::RedisError::from(client_error.clone()));
+    }
+
+    #[test]
+    fn batch_reply_size_limit_is_the_same_client_error_in_both_modes() {
+        let manager = size_limited_manager();
+        let batch = || {
+            Value::Array(vec![
+                Value::Okay,
+                compressed(&manager, &"A".repeat(200).into_bytes()),
+            ])
+        };
+
+        let Value::Array(values) =
+            decompress_batch_response(batch(), &manager, false).expect("batch should not fail")
+        else {
+            panic!("expected array");
+        };
+        let Value::ClientError(in_place) = values[1].clone() else {
+            panic!(
+                "expected the size-limit client error in place, got {:?}",
+                values[1]
+            );
+        };
+        let in_place = redis::RedisError::from(in_place);
+        let raised = redis::RedisError::from(
+            decompress_batch_response(batch(), &manager, true)
+                .expect_err("raise_on_error should fail the whole batch"),
+        );
+
+        assert_size_limit_error(&in_place);
+        assert_size_limit_error(&raised);
+        assert_eq!(in_place.kind(), raised.kind());
+        assert_eq!(in_place.detail(), raised.detail());
+        assert_eq!(
+            glide_core::errors::error_message(&in_place),
+            glide_core::errors::error_message(&raised)
+        );
+    }
+
+    #[test]
+    fn single_command_size_limit_is_a_client_error() {
+        let manager = size_limited_manager();
+        for (request_type, reply) in [
+            (
+                RequestType::Get,
+                compressed(&manager, &"A".repeat(200).into_bytes()),
+            ),
+            (
+                RequestType::MGet,
+                Value::Array(vec![compressed(&manager, &"A".repeat(200).into_bytes())]),
+            ),
+        ] {
+            let limit = process_response_for_decompression(reply, request_type, Some(&manager))
+                .expect_err("the reply exceeds the limit");
+            assert_size_limit_error(&redis::RedisError::from(limit));
+        }
     }
 
     #[test]
@@ -1634,10 +1699,16 @@ mod compression_tests {
             b"-WRONGTYPE Operation against a key holding the wrong kind of value\r\n",
         )
         .unwrap();
+        // A server reply with the client error's code and text is still a server reply.
+        let lookalike = redis::parse_redis_value(
+            b"-DecompressionError Decompression size limit exceeded: maxDecompressedSize\r\n",
+        )
+        .unwrap();
         let batch = Value::Array(vec![
             compressed(&manager, &"A".repeat(200).into_bytes()),
             wrong_type.clone(),
             compressed(&manager, &"C".repeat(500).into_bytes()),
+            lookalike.clone(),
         ]);
 
         let Value::Array(values) =
@@ -1645,10 +1716,14 @@ mod compression_tests {
         else {
             panic!("expected array");
         };
-        assert_eq!(values.len(), 3);
+        assert_eq!(values.len(), 4);
         assert_size_limit_error_reply(&values[0]);
         assert_eq!(values[1], wrong_type);
         assert_size_limit_error_reply(&values[2]);
+        assert_eq!(values[3], lookalike);
+        let lookalike_error = values[3].clone().extract_error().unwrap_err();
+        assert!(lookalike_error.is_server_reply(), "{lookalike_error}");
+        assert_eq!(lookalike_error.kind(), redis::ErrorKind::ExtensionError);
     }
 
     #[test]

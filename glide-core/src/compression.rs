@@ -134,13 +134,17 @@ impl From<SizeLimitExceeded> for CompressionError {
     }
 }
 
+/// The client, not the server, rejects the reply, so the error never claims to be a server
+/// reply, whether it fails the whole call or sits in a batch slot.
+impl From<SizeLimitExceeded> for redis::ClientError {
+    fn from(limit: SizeLimitExceeded) -> Self {
+        redis::ClientError::new("Decompression error", Some(limit.to_string()))
+    }
+}
+
 impl From<SizeLimitExceeded> for redis::RedisError {
     fn from(limit: SizeLimitExceeded) -> Self {
-        redis::RedisError::from((
-            redis::ErrorKind::IoError,
-            "Decompression error",
-            limit.to_string(),
-        ))
+        redis::ClientError::from(limit).into()
     }
 }
 
@@ -1103,7 +1107,7 @@ pub fn decompress_mget_response(
 /// * `response` - The batch response value (typically an array of responses)
 /// * `manager` - The compression manager to use for decompression
 /// * `raise_on_error` - If `false`, an oversized command reply becomes an in-place
-///   `Value::ServerError`; if `true`, the batch fails.
+///   `Value::ClientError`; if `true`, the batch fails. Both carry the same client error.
 ///
 /// # Returns
 /// * `Ok(Value)` - The processed response with decompressed values
@@ -1141,13 +1145,7 @@ fn decompress_batch_reply_or_error(
     raise_on_error: bool,
 ) -> Result<redis::Value, SizeLimitExceeded> {
     match decompress_batch_reply(reply, manager) {
-        Err(limit) if !raise_on_error => {
-            let error = redis::make_extension_error(
-                "DecompressionError".to_string(),
-                Some(limit.to_string()),
-            );
-            Ok(redis::Value::ServerError(error.into()))
-        }
+        Err(limit) if !raise_on_error => Ok(redis::Value::ClientError(limit.into())),
         result => result,
     }
 }

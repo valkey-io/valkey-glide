@@ -424,6 +424,71 @@ impl From<ServerError> for RedisError {
     }
 }
 
+/// An error this client raised while handling a reply, held in a [`Value`] in place of
+/// that reply.
+///
+/// A batch that does not raise on error keeps each command's outcome in its own slot. When
+/// the client rather than the server fails one command's reply, this records the failure
+/// in that slot without presenting it as a server error reply.
+///
+/// Converting it to a [`RedisError`] gives [`ErrorKind::ClientError`], so
+/// [`RedisError::is_server_reply`] is false and the error is never retried.
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct ClientError {
+    description: &'static str,
+    detail: Option<String>,
+}
+
+impl ClientError {
+    /// Creates a client error from a static description and an optional detail, the same
+    /// parts a [`RedisError`] of kind [`ErrorKind::ClientError`] is built from.
+    ///
+    /// # Panics
+    ///
+    /// If `description` is [`SERVER_ERROR_DESCRIPTION`], which would mark the converted
+    /// error as a server reply.
+    pub fn new(description: &'static str, detail: Option<String>) -> Self {
+        assert_ne!(
+            description, SERVER_ERROR_DESCRIPTION,
+            "a client error cannot use the server error description"
+        );
+        Self {
+            description,
+            detail,
+        }
+    }
+
+    /// Returns the error kind, which is always [`ErrorKind::ClientError`].
+    pub fn kind(&self) -> ErrorKind {
+        ErrorKind::ClientError
+    }
+
+    /// Returns the static description of the error.
+    pub fn description(&self) -> &'static str {
+        self.description
+    }
+
+    /// Returns the error detail, if any.
+    pub fn detail(&self) -> Option<&str> {
+        self.detail.as_deref()
+    }
+}
+
+impl From<ClientError> for RedisError {
+    fn from(error: ClientError) -> Self {
+        match error.detail {
+            Some(detail) => RedisError::from((ErrorKind::ClientError, error.description, detail)),
+            None => RedisError::from((ErrorKind::ClientError, error.description)),
+        }
+    }
+}
+
+impl fmt::Display for ClientError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&RedisError::from(self.clone()), f)
+    }
+}
+
 /// Internal low-level redis value enum.
 #[derive(PartialEq, Clone)]
 pub enum Value {
@@ -481,6 +546,8 @@ pub enum Value {
     },
     /// Error from the server.
     ServerError(ServerError),
+    /// Error this client raised in place of a reply; never sent by the server.
+    ClientError(ClientError),
 }
 
 /// `VerbatimString`'s format types defined by spec
@@ -742,9 +809,10 @@ impl Value {
         }
     }
 
-    /// Extracts a server error from the value, if present.
+    /// Extracts a server or client error from the value, if present.
     ///
-    /// If the value contains a `ServerError`, this function returns it as an `Err(RedisError)`.
+    /// If the value contains a `ServerError` or `ClientError`, this function returns it as an
+    /// `Err(RedisError)`.
     /// Otherwise, it wraps the value in `Ok`.
     ///
     /// If there are multiple errors (e.g., within an array or map), only the first encountered error is returned.
@@ -765,6 +833,7 @@ impl Value {
                 data: Self::extract_error_vec(data)?,
             }),
             Value::ServerError(err) => Err(err.into()),
+            Value::ClientError(err) => Err(err.into()),
             Value::BigNumber(_)
             | Value::Boolean(_)
             | Value::BulkString(_)
@@ -822,6 +891,7 @@ impl fmt::Debug for Value {
             }
             Value::BigNumber(ref m) => write!(fmt, "big-number({m:?})"),
             Value::ServerError(ref err) => write!(fmt, "server-error({err:?})"),
+            Value::ClientError(ref err) => write!(fmt, "client-error({err:?})"),
         }
     }
 }
@@ -2557,4 +2627,77 @@ pub enum ProtocolVersion {
 pub trait AddressResolver: Send + Sync + std::fmt::Debug {
     /// Resolve the given host and port to the actual connection address.
     fn resolve(&self, host: &str, port: u16) -> (String, u16);
+}
+
+#[cfg(test)]
+mod client_error_tests {
+    use super::*;
+
+    const DESCRIPTION: &str = "Decompression error";
+    const DETAIL: &str = "Decompression size limit exceeded";
+
+    fn size_limit_error() -> ClientError {
+        ClientError::new(DESCRIPTION, Some(DETAIL.to_string()))
+    }
+
+    #[test]
+    fn client_error_clones_and_compares_by_description_and_detail() {
+        let error = size_limit_error();
+        assert_eq!(error.clone(), error);
+        assert_eq!(Value::ClientError(error.clone()), Value::ClientError(error));
+        assert_ne!(
+            size_limit_error(),
+            ClientError::new(DESCRIPTION, Some("other".to_string()))
+        );
+        assert_ne!(size_limit_error(), ClientError::new(DESCRIPTION, None));
+    }
+
+    #[test]
+    fn client_error_converts_to_a_non_retried_client_error() {
+        for (error, detail) in [
+            (size_limit_error(), Some(DETAIL)),
+            (ClientError::new(DESCRIPTION, None), None),
+        ] {
+            let text = error.to_string();
+            assert_eq!(error.kind(), ErrorKind::ClientError);
+            assert_eq!(error.description(), DESCRIPTION);
+            assert_eq!(error.detail(), detail);
+
+            let converted = RedisError::from(error);
+            assert_eq!(converted.kind(), ErrorKind::ClientError);
+            assert!(!converted.is_server_reply(), "{converted}");
+            assert_eq!(converted.retry_method(), RetryMethod::NoRetry);
+            assert!(!converted.is_unrecoverable_error());
+            assert_eq!(converted.detail(), detail);
+            assert_eq!(converted.to_string(), text);
+        }
+    }
+
+    #[test]
+    fn extract_error_returns_a_nested_client_error() {
+        let reply = Value::Array(vec![Value::Okay, Value::ClientError(size_limit_error())]);
+        let error = reply.extract_error().expect_err("the client error");
+        assert_eq!(error.kind(), ErrorKind::ClientError);
+        assert!(!error.is_server_reply());
+        assert_eq!(error.detail(), Some(DETAIL));
+    }
+
+    #[test]
+    fn server_extension_error_with_the_same_text_stays_a_server_reply() {
+        let wire = format!("-DecompressionError {DESCRIPTION} - ClientError: {DETAIL}\r\n");
+        let reply = crate::parse_redis_value(wire.as_bytes()).unwrap();
+        assert!(matches!(reply, Value::ServerError(_)), "{reply:?}");
+        assert_ne!(reply, Value::ClientError(size_limit_error()));
+
+        let error = reply.extract_error().expect_err("an error reply");
+        assert!(error.is_server_reply(), "{error}");
+        assert_eq!(error.kind(), ErrorKind::ExtensionError);
+        assert_eq!(error.code(), Some("DecompressionError"));
+    }
+
+    #[test]
+    #[should_panic(expected = "a client error cannot use the server error description")]
+    fn client_error_rejects_the_server_error_description() {
+        ClientError::new(SERVER_ERROR_DESCRIPTION, None);
+    }
 }
