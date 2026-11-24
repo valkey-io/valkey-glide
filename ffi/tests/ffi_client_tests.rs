@@ -161,7 +161,7 @@ fn execute_command(
     client_ptr: *const c_void,
     index: usize,
     command_bytes: &[u8],
-    arg_count: u64,
+    arg_count: c_ulong,
     command_type: RequestType,
 ) -> Option<Box<CommandResult>> {
     let command_len = command_bytes.len();
@@ -241,13 +241,7 @@ fn test_command(client_ptr: *const c_void, async_client: bool) {
     // Good command: PING IS_WORKING
     let good_cmd_idx = 0;
     let ping_value = b"IS_WORKING";
-    let good_res = execute_command(
-        client_ptr,
-        good_cmd_idx,
-        ping_value,
-        1_u64,
-        RequestType::Ping,
-    );
+    let good_res = execute_command(client_ptr, good_cmd_idx, ping_value, 1, RequestType::Ping);
     let ping_res = if async_client {
         assert!(good_res.is_none()); // result should be returned through callback
         let metrics = ASYNC_METRICS.read().expect(ASYNC_READ_LOCK_ERR);
@@ -264,7 +258,7 @@ fn test_command(client_ptr: *const c_void, async_client: bool) {
         client_ptr,
         bad_cmd_idx,
         b"NOTAREALCMD",
-        1_u64,
+        1,
         RequestType::SAdd,
     );
     let (err_msg, err_type) = if async_client {
@@ -284,7 +278,7 @@ fn execute_command_with_route_info(
     client_ptr: *const c_void,
     index: usize,
     command_bytes: &[u8],
-    arg_count: u64,
+    arg_count: c_ulong,
     command_type: RequestType,
     route_info: *const RouteInfo,
 ) -> Option<Box<CommandResult>> {
@@ -346,7 +340,7 @@ fn test_command_with_route_info(client_ptr: *const c_void, async_client: bool) {
         client_ptr,
         good_cmd_idx,
         ping_value,
-        1_u64,
+        1,
         RequestType::Ping,
         route_info_ptr,
     );
@@ -367,7 +361,7 @@ fn test_command_with_route_info(client_ptr: *const c_void, async_client: bool) {
         client_ptr,
         bad_cmd_idx,
         b"NOTAREALCMD",
-        1_u64,
+        1,
         RequestType::SAdd,
         route_info_ptr,
     );
@@ -390,7 +384,7 @@ fn test_command_with_route_info(client_ptr: *const c_void, async_client: bool) {
         client_ptr,
         null_route_cmd_idx,
         ping_value,
-        1_u64,
+        1,
         RequestType::Ping,
         std::ptr::null(),
     );
@@ -506,6 +500,10 @@ fn test_ffi_rejects_invalid_final_lib_name_before_lazy_creation() {
         let error = parse_error_msg(response.connection_error_message);
         assert!(error.contains("configuration error"), "{error}");
         assert!(error.contains("library name"), "{error}");
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Configuration
+        );
 
         free_connection_response(response_ptr as *mut ConnectionResponse);
     }
@@ -550,6 +548,10 @@ fn test_ffi_monitor_rejects_invalid_final_lib_name_before_connection() {
         assert!(
             error.to_ascii_lowercase().contains("library name"),
             "{error}"
+        );
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Configuration
         );
 
         free_connection_response(response_ptr as *mut ConnectionResponse);
@@ -597,7 +599,170 @@ fn test_ffi_monitor_rejects_unix_socket_with_tls() {
             error.contains("TLS is not supported over Unix domain sockets"),
             "{error}"
         );
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Configuration
+        );
 
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+}
+
+/// A monitor that passes request validation but fails while connecting (here over TLS) keeps the
+/// unspecified type, even though connection setup can report `InvalidClientConfig` (TLS).
+#[test]
+fn test_ffi_monitor_reports_connection_failure_as_unspecified() {
+    unsafe extern "C-unwind" fn no_op_monitor_callback(
+        _client_ptr: usize,
+        _timestamp: f64,
+        _db: i64,
+        _client_addr: *const u8,
+        _client_addr_len: i64,
+        _command: *const u8,
+        _command_len: i64,
+        _args_json: *const u8,
+        _args_json_len: i64,
+    ) {
+    }
+
+    let mut request = ConnectionRequest::new();
+    request.tls_mode = TlsMode::SecureTls.into();
+    request.lib_name = "GlideFfiTest".into();
+    let mut address = NodeAddress::new();
+    address.host = "127.0.0.1".into();
+    address.port = 1;
+    request.addresses.push(address);
+    let request_bytes = request.write_to_bytes().expect("Failed to serialize");
+
+    unsafe {
+        let response_ptr = create_monitor_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            no_op_monitor_callback,
+        );
+
+        assert!(!response_ptr.is_null());
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        let error = parse_error_msg(response.connection_error_message);
+        assert!(error.contains("Failed to create monitor client"), "{error}");
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Unspecified,
+            "{error}"
+        );
+
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+}
+
+fn create_sync_client_response(request: &ConnectionRequest) -> *const ConnectionResponse {
+    let request_bytes = request.write_to_bytes().expect("Failed to serialize");
+    let client_type = ClientType::SyncClient;
+    unsafe {
+        create_client(
+            request_bytes.as_ptr(),
+            request_bytes.len(),
+            &client_type,
+            None,
+            None,
+            0,
+        )
+    }
+}
+
+/// The core's Unix domain socket checks reach the wrapper as a configuration error.
+#[rstest]
+#[case::cluster_mode("/tmp/glide-ffi.sock", true, TlsMode::NoTls)]
+#[case::relative_path("glide-ffi.sock", false, TlsMode::NoTls)]
+#[case::tls("/tmp/glide-ffi.sock", false, TlsMode::SecureTls)]
+fn test_ffi_reports_unix_socket_rejection_as_configuration_error(
+    #[case] path: &str,
+    #[case] cluster_mode: bool,
+    #[case] tls_mode: TlsMode,
+) {
+    let mut request = ConnectionRequest::new();
+    request.tls_mode = tls_mode.into();
+    request.cluster_mode_enabled = cluster_mode;
+    request.lazy_connect = true;
+    let mut address = NodeAddress::new();
+    address.unix_socket_path = Some(path.into());
+    request.addresses.push(address);
+
+    unsafe {
+        let response_ptr = create_sync_client_response(&request);
+        assert!(!response_ptr.is_null());
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        let error = parse_error_msg(response.connection_error_message);
+        assert!(error.contains("configuration error"), "{error}");
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Configuration,
+            "{error}"
+        );
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+}
+
+/// Failures that are not the core's configuration validation keep the unspecified type, so the
+/// wrapper's exception for them is unchanged.
+#[test]
+fn test_ffi_reports_other_creation_errors_as_unspecified() {
+    let mut rejected = ConnectionRequest::new();
+    rejected.lazy_connect = true;
+    rejected.credential_provider_key = Some("key".into());
+    let mut address = NodeAddress::new();
+    address.host = "127.0.0.1".into();
+    address.port = 1;
+    rejected.addresses.push(address);
+
+    unsafe {
+        let response_ptr = create_sync_client_response(&rejected);
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        assert!(!response.connection_error_message.is_null());
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Unspecified
+        );
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+
+    // Compression was reported this way before 2.6; it keeps that type.
+    let mut compression = rejected.clone();
+    compression.credential_provider_key = None;
+    let mut compression_config = glide_core::connection_request::CompressionConfig::new();
+    compression_config.enabled = true;
+    compression_config.compression_level = Some(100);
+    compression_config.min_compression_size = 64;
+    compression.compression_config = Some(compression_config).into();
+    unsafe {
+        let response_ptr = create_sync_client_response(&compression);
+        let response = &*response_ptr;
+        assert!(response.conn_ptr.is_null());
+        let error = parse_error_msg(response.connection_error_message);
+        assert!(error.contains("compression"), "{error}");
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Unspecified,
+            "{error}"
+        );
+        free_connection_response(response_ptr as *mut ConnectionResponse);
+    }
+
+    let mut lazy = rejected.clone();
+    lazy.credential_provider_key = None;
+    unsafe {
+        let response_ptr = create_sync_client_response(&lazy);
+        let response = &*response_ptr;
+        assert!(!response.conn_ptr.is_null());
+        assert!(response.connection_error_message.is_null());
+        assert_eq!(
+            response.connection_error_type,
+            ConnectionErrorType::Unspecified
+        );
+        close_client(response.conn_ptr);
         free_connection_response(response_ptr as *mut ConnectionResponse);
     }
 }
@@ -839,7 +1004,7 @@ fn test_ffi_monitor_credential_boundary_fails_closed_before_address_conversion()
 /// Cancelling with `rdma_close_regions` while other threads are starting and
 /// running transfers. Unlike `close_client`, it never frees the client, so the
 /// transfers can keep using it, and the client still serves other commands.
-#[cfg(feature = "rdma")]
+#[cfg(feature = "rdma-tcp-dev")]
 #[test]
 fn rdma_close_regions_cancels_transfers_and_keeps_the_client() {
     use glide_core::connection_request::{RdmaConfig, TcpProvider};
@@ -976,7 +1141,7 @@ fn rdma_close_regions_cancels_transfers_and_keeps_the_client() {
 
 /// The memory counters answer for a client with an RDMA configuration, and
 /// refuse one without, which has no fabric to count.
-#[cfg(feature = "rdma")]
+#[cfg(feature = "rdma-tcp-dev")]
 #[test]
 fn rdma_memory_counters_answer_only_for_an_rdma_client() {
     use glide_core::connection_request::{RdmaConfig, TcpProvider};
@@ -1025,5 +1190,50 @@ fn rdma_memory_counters_answer_only_for_an_rdma_client() {
         assert!(!rdma_leaked_bytes(plain_client, &mut out));
         assert_eq!(out, 7);
         close_client(plain_client);
+    }
+}
+
+/// Device memory needs a client whose RDMA configuration asked for it. Without it,
+/// a device registration fails naming the setting, before anything is registered.
+#[cfg(feature = "rdma-tcp-dev")]
+#[test]
+fn a_device_region_needs_a_client_with_device_memory() {
+    use glide_core::connection_request::{RdmaConfig, TcpProvider};
+
+    let server = Server::new();
+    let mut request = ConnectionRequest::new();
+    request.tls_mode = TlsMode::NoTls.into();
+    let mut address = NodeAddress::new();
+    address.host = "localhost".into();
+    address.port = server.port as u32;
+    request.addresses.push(address);
+    let mut config = RdmaConfig::new();
+    config.set_tcp(TcpProvider::new());
+    request.rdma_config = protobuf::MessageField::some(config);
+    let request = request.write_to_bytes().expect("Failed to serialize");
+
+    unsafe {
+        let response = create_client(
+            request.as_ptr(),
+            request.len(),
+            Box::into_raw(Box::new(ClientType::SyncClient)),
+            None,
+            None,
+            0,
+        );
+        assert!((*response).connection_error_message.is_null());
+        let client = (*response).conn_ptr;
+        free_connection_response(response.cast_mut());
+
+        // Host memory stands in: the registration is refused before it is used.
+        let mut memory = vec![0u8; 4096];
+        let registration = register_rdma_cuda_region(client, memory.as_mut_ptr(), memory.len());
+        assert!((*registration).region.is_null());
+        let error = CStr::from_ptr((*registration).error_message)
+            .to_string_lossy()
+            .into_owned();
+        assert!(error.contains("device memory"), "{error}");
+        free_rdma_registration(registration);
+        close_client(client);
     }
 }

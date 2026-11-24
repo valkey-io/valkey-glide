@@ -291,6 +291,7 @@ import {
     dropOtelSpan,
     getStatistics,
     compressionConfigToProtobuf,
+    toClientCreationError,
     validateCompressionConfiguration,
     valueFromPointer,
     valueFromSplitPointer,
@@ -1400,6 +1401,8 @@ export interface AdvancedBaseClientConfiguration {
      * such as enabling an insecure mode that bypasses certificate validation.
      */
     tlsAdvancedConfiguration?: {
+        // TODO #7707: Document that root certificates or IAM authentication with `insecure`
+        // is rejected.
         /**
          * Whether to bypass TLS certificate verification.
          *
@@ -1569,7 +1572,7 @@ export class BaseClient {
     protected defaultDecoder = Decoder.String;
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
-    private config: BaseClientConfiguration | undefined;
+    private config: BaseClientConfiguration;
     private addressResolverKey: string | undefined;
     private credentialProviderKey: string | undefined;
     protected clientHandle: GlideClientHandle | null = null;
@@ -1581,6 +1584,7 @@ export class BaseClient {
         configuration: connection_request.IConnectionRequest,
     ) {
         if (options.pubsubSubscriptions) {
+            // TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
             if (options.protocol == ProtocolVersion.RESP2) {
                 throw new ConfigurationError(
                     "PubSub subscriptions require RESP3 protocol, but RESP2 was configured.",
@@ -1752,7 +1756,7 @@ export class BaseClient {
         }
 
         const [callback, context] = this.getPubsubCallbackAndContext(
-            this.config!,
+            this.config,
         );
 
         if (callback) {
@@ -1837,12 +1841,14 @@ export class BaseClient {
         this.dropOtelSpanForCallback(response.callbackIdx);
     };
 
-    protected constructor(options?: BaseClientConfiguration) {
+    protected constructor(
+        options: BaseClientConfiguration = { addresses: [] },
+    ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
 
         this.config = options;
-        this.defaultDecoder = options?.defaultDecoder ?? Decoder.String;
+        this.defaultDecoder = options.defaultDecoder ?? Decoder.String;
     }
 
     protected getCallbackIndex(): number {
@@ -2379,8 +2385,8 @@ export class BaseClient {
 
         // only throw error if BOTH config exists AND callback exists
         if (
-            this.isPubsubConfigured(this.config!) &&
-            this.getPubsubCallbackAndContext(this.config!)[0]
+            this.isPubsubConfigured(this.config) &&
+            this.getPubsubCallbackAndContext(this.config)[0]
         ) {
             throw new ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback.",
@@ -2402,8 +2408,8 @@ export class BaseClient {
 
         // only throw error if BOTH config exists AND callback exists
         if (
-            this.isPubsubConfigured(this.config!) &&
-            this.getPubsubCallbackAndContext(this.config!)[0]
+            this.isPubsubConfigured(this.config) &&
+            this.getPubsubCallbackAndContext(this.config)[0]
         ) {
             throw new ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback.",
@@ -9714,6 +9720,8 @@ export class BaseClient {
         return this.createWritePromise(createAppend(key, value));
     }
 
+    // TODO #7238: Add DELEX command support.
+
     /**
      * Deletes `key` if its value equals `value`.
      *
@@ -10293,7 +10301,7 @@ export class BaseClient {
             // Keep the exact bytes used to connect for scopedConnection().
             setScopeConnectionRequest(this, connectionRequestBytes);
 
-            this.clientHandle = await BaseClient.nativeCreateDirectClient(
+            this.clientHandle = await BaseClient.createNativeClient(
                 connectionRequestBytes,
                 this.handleResponsesAvailable,
             );
@@ -10308,6 +10316,21 @@ export class BaseClient {
         } catch (err) {
             this.cleanupConnectionRegistrations();
             throw err;
+        }
+    }
+
+    /** Creates the native client handle; a failure rejects with a `ValkeyError`. */
+    private static async createNativeClient(
+        connectionRequestBytes: Uint8Array,
+        wakeCallback: () => void,
+    ): Promise<GlideClientHandle> {
+        try {
+            return await BaseClient.nativeCreateDirectClient(
+                connectionRequestBytes,
+                wakeCallback,
+            );
+        } catch (error) {
+            throw toClientCreationError(error);
         }
     }
 
@@ -10468,7 +10491,7 @@ export class BaseClient {
      */
     public static serializeConnectionRequest(
         options: BaseClientConfiguration,
-        constructor: (options?: BaseClientConfiguration) => BaseClient,
+        constructor: (options: BaseClientConfiguration) => BaseClient,
     ): { bytes: Uint8Array; resolverKey: string | undefined } {
         const instance = constructor(options);
         const request = instance.createClientRequest(options);
@@ -10497,7 +10520,7 @@ export class BaseClient {
      */
     protected static async createClientInternal<TConnection extends BaseClient>(
         options: BaseClientConfiguration,
-        constructor: (options?: BaseClientConfiguration) => TConnection,
+        constructor: (options: BaseClientConfiguration) => TConnection,
     ): Promise<TConnection> {
         const overallStart = Date.now();
 
@@ -10545,7 +10568,7 @@ export class BaseClient {
         immediateAuth = false,
     ) {
         // If we’re on IAM, forbid password updates to avoid confusion.
-        const creds = this.config?.credentials;
+        const creds = this.config.credentials;
         const usingIam = !!creds && "iamConfig" in creds;
 
         if (usingIam) {
@@ -10564,11 +10587,10 @@ export class BaseClient {
             updateConnectionPassword,
         );
 
-        if (response === "OK" && !this.config?.credentials) {
+        if (response === "OK" && !this.config.credentials) {
             this.config = {
-                ...this.config!,
+                ...this.config,
                 credentials: {
-                    ...this.config!.credentials,
                     password: password ? password : "",
                 },
             };
@@ -10591,7 +10613,7 @@ export class BaseClient {
      */
     public async refreshIamToken(): Promise<GlideString> {
         if (
-            !this.config?.credentials ||
+            !this.config.credentials ||
             !("iamConfig" in this.config.credentials)
         ) {
             throw new ConfigurationError(

@@ -120,7 +120,7 @@ jobs:
         timeout-minutes: 15
         steps:
             - name: Setup self-hosted runner access
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+              run: sudo chown -R "$USER:$USER" /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -144,16 +144,16 @@ jobs:
 
             - name: Run patch to test with RC
               working-directory: go
-              if: ${{ github.event.inputs.rc-version }}
+              if: ${{ inputs.rc-version }}
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
             - name: Build and test
               working-directory: ./go
               env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
                       make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true

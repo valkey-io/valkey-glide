@@ -127,7 +127,7 @@ FFI wrappers → `glide-core` → Valkey/Redis
     <entry>go/Makefile</entry>
     <bindings>go/callbacks.go</bindings>
     <client>go/base_client.go</client>
-    <commands>go/internal/interfaces/</commands>
+    <commands>go/interfaces/</commands>
     <tests>go/integTest/</tests>
   </language>
   <language name="core">

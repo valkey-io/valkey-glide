@@ -20,7 +20,7 @@ use redis::aio::ConnectionLike;
 use redis::cache::{get_or_create_cache, glide_cache::GlideCache};
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
-    MultipleNodeRoutingInfo, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo,
+    MultipleNodeRoutingInfo, ResponsePolicy, Routable, Route, RoutingInfo, SingleNodeRoutingInfo,
 };
 use redis::cluster_slotmap::ReadFromReplicaStrategy;
 use redis::{
@@ -505,16 +505,32 @@ pub struct ClientShared {
     latency_tracker: Arc<crate::timeout_watchdog::LatencyTracker>,
     // Optional Client-wide circuit breaker
     circuit_breaker: Option<Arc<circuit_breaker::ClientCircuitBreaker>>,
-    // Tracks the current database selected at runtime (updated on SELECT commands).
+    // Tracks the current database selected at runtime (updated on SELECT and RESET).
     // Used by scope connections to inherit the parent's current database.
     current_database: Arc<AtomicU32>,
-    // Set before dispatching any SELECT-bearing command (single or batch); cleared
+    // Set before dispatching any SELECT (single or batch) or batch RESET; cleared
     // only by a successful release reset. `current_database` can under-report the
     // live db — a SELECT can apply on the connection even when the call errors or
     // times out, or when an earlier batch SELECT applied but a later one was
     // rejected. The flag makes `reset_connection_state` fail safe: restore whenever
     // a SELECT may have been issued, not only on observed drift.
     db_maybe_dirty: Arc<AtomicBool>,
+    // Set on dispatch of a command that leaves state no reset command undoes: any
+    // (S|P)SUBSCRIBE, MONITOR, RESET, or `CLIENT REPLY OFF|SKIP`, a WATCH that may
+    // be on a replica, or a blocking command (or batch holding one) that failed with
+    // a timeout or IO error. Never cleared. Fails `reset_connection_state`, which
+    // then discards the client.
+    unresettable: Arc<AtomicBool>,
+    // Set on dispatch of MULTI / WATCH; taken by the release reset to decide on
+    // DISCARD / UNWATCH. Unlike `multi_active`, EXEC/DISCARD never clear them, so a
+    // rejected DISCARD or a concurrent task can't hide an open transaction.
+    multi_seen: Arc<AtomicBool>,
+    watch_seen: Arc<AtomicBool>,
+    // Pooled cluster clients only: each watched slot and its primary's address at
+    // WATCH time, so the release UNWATCH skips nodes the borrow never used. `Any`
+    // when a WATCH could be on any primary (a batch, `RandomPrimary`, an owner
+    // lookup that failed), which falls back to all of them.
+    watch_routes: Arc<std::sync::Mutex<WatchedPrimaries>>,
     // IAM token generation the live connection last authenticated at. Compared by
     // `prepare_for_borrow` on the first command after a borrow to detect a rotation
     // that landed while the client sat idle in a pool, triggering a re-AUTH before
@@ -537,6 +553,8 @@ pub struct ClientShared {
     multi_active: Arc<AtomicBool>,
     // Whether this client is in cluster mode (immutable).
     is_cluster: bool,
+    // Whether this client is in read-only mode (immutable).
+    read_only: bool,
     // TLS certificate material the live connection was built with. Scope
     // connections read it to inherit the parent's mTLS identity and trust roots.
     // A shared write-once cell because the connection is built after
@@ -564,6 +582,86 @@ pub struct ClientShared {
     credentials: credentials::CredentialsHandle,
 }
 
+/// Where the borrow's WATCHes may be, for the release UNWATCH.
+#[derive(Debug, PartialEq)]
+enum WatchedPrimaries {
+    /// Each watched slot and its primary's address at WATCH time, one entry per
+    /// slot however many WATCHes. Only primaries get here: a WATCH that may have
+    /// reached a replica marks the client `unresettable` instead.
+    Known(std::collections::HashMap<u16, String>),
+    /// Any primary: a batch or random-primary WATCH, an unknown owner, or a slot
+    /// seen under two owners during the borrow.
+    Any,
+}
+
+impl Default for WatchedPrimaries {
+    fn default() -> Self {
+        Self::Known(Default::default())
+    }
+}
+
+impl WatchedPrimaries {
+    /// Record a watched slot and its owner now. A slot already recorded under
+    /// another owner moved between WATCHes, so the earlier WATCH may be on the old
+    /// owner: fall back to [`Any`](Self::Any), which sticks until release.
+    fn record(&mut self, slot: u16, owner: String) {
+        if let Self::Known(map) = self
+            && map.entry(slot).or_insert_with(|| owner.clone()) != &owner
+        {
+            *self = Self::Any;
+        }
+    }
+
+    fn mark_any(&mut self) {
+        *self = Self::Any;
+    }
+
+    /// One UNWATCH per primary if every recorded slot is still owned by the
+    /// primary it had at WATCH time; every primary when a slot moved, an owner is
+    /// unknown, or nothing was recorded. An ASK-redirected WATCH isn't seen here
+    /// (ASK doesn't update the slot map).
+    fn unwatch_targets(&self, owner_now: impl Fn(u16) -> Option<String>) -> UnwatchTargets {
+        use redis::cluster_routing::SlotAddr;
+        let Self::Known(recorded) = self else {
+            return UnwatchTargets::AllPrimaries;
+        };
+        let mut by_address = std::collections::HashMap::new();
+        for (&slot, address) in recorded {
+            if owner_now(slot).as_ref() != Some(address) {
+                return UnwatchTargets::AllPrimaries;
+            }
+            // `Master` holds by construction: only primaries are recorded.
+            by_address
+                .entry(address)
+                .or_insert(Route::new(slot, SlotAddr::Master));
+        }
+        if by_address.is_empty() {
+            return UnwatchTargets::AllPrimaries;
+        }
+        UnwatchTargets::Primaries(by_address.into_values().collect())
+    }
+}
+
+/// Where the release reset sends UNWATCH.
+#[derive(Debug, PartialEq)]
+enum UnwatchTargets {
+    /// These primaries, one route each.
+    Primaries(Vec<Route>),
+    /// Default routing: every primary on cluster, the server on standalone.
+    AllPrimaries,
+}
+
+/// Where a WATCH lands, for the pool release reset.
+#[derive(Debug, PartialEq)]
+enum WatchTarget {
+    /// These slot primaries.
+    Primaries(Vec<Route>),
+    /// Some primary, which one unknown.
+    AnyPrimary,
+    /// Possibly a replica, which UNWATCH can't reliably reach.
+    MaybeReplica,
+}
+
 /// Why [`Client::address_for_slot`] / [`Client::try_address_for_slot`] could not
 /// produce a primary address for a hash slot.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -573,9 +671,9 @@ pub enum SlotAddressError {
     /// No primary is mapped for the slot in the current slot map (initial
     /// topology not yet fetched, or mid-resharding).
     Unmapped,
-    /// The client wrapper is write-locked (e.g. mid-reconnect) and the
-    /// non-blocking lookup declined to wait. Only `try_address_for_slot` returns
-    /// this.
+    /// The client wrapper is write-locked (mid-reconnect) or the cluster slot
+    /// map is write-locked (mid-topology-refresh), and the non-blocking lookup
+    /// declined to wait. Only `try_address_for_slot` returns this.
     TopologyLocked,
 }
 
@@ -1152,7 +1250,9 @@ impl Client {
     }
 
     fn is_reset_command(&self, cmd: &Cmd) -> bool {
-        cmd.command().is_some_and(|bytes| bytes == b"RESET")
+        // Same borrowed, case-insensitive check as `is_select_command`.
+        cmd.arg_idx(0)
+            .is_some_and(|name| name.eq_ignore_ascii_case(b"RESET"))
     }
 
     async fn handle_reset_command(&mut self) -> RedisResult<()> {
@@ -1165,6 +1265,8 @@ impl Client {
         //   Sets protocol to RESP2                   -> update_stored_protocol(RESP2)
         //   Aborts Pub/Sub subscription state        -> remove_desired_subscriptions(all kinds)
         //     (prevents synchronizer from resubscribing on reconnect)
+        //   The command itself (pooled clients)      -> flags `unresettable` at dispatch:
+        //                                               release can't re-AUTH, so it discards
         //
         // NOT TRACKED - no glide-core state to update:
         //   Deauthenticates the connection           -> auth credentials kept for reconnect;
@@ -1172,18 +1274,16 @@ impl Client {
         //                                               reconnect or manual AUTH call
         //   Discards current MULTI transaction       -> glide sends MULTI+cmds+EXEC as a
         //                                               single pipeline; no persistent state
-        //   Unwatches all WATCHed keys               -> WATCH state is per-connection,
-        //                                               not tracked by glide-core
+        //   Unwatches all WATCHed keys               -> per-connection; a pooled client
+        //                                               is discarded anyway (see above)
         //   Disables CLIENT TRACKING                 -> not tracked; gap exists if
         //                                               client-side caching is active
         //   Sets connection to READWRITE mode         -> not tracked; glide does not
         //                                               persist read/write mode per connection
         //   Cancels ASKING mode (cluster)             -> one-shot flag sent inline,
         //                                               not persisted by glide-core
-        //   Sets CLIENT REPLY to ON                  -> not tracked; CLIENT REPLY not
-        //                                               yet supported by glide
-        //   Exits MONITOR mode                       -> not tracked; MONITOR not yet
-        //                                               supported by glide
+        //   Sets CLIENT REPLY to ON                  -> a pooled client is discarded
+        //   Exits MONITOR mode                          anyway (see above)
         //   Turns off NO-EVICT mode                  -> not tracked; per-connection hint
         //   Turns off NO-TOUCH mode                  -> not tracked; per-connection hint
         self.update_stored_database_id(0).await?;
@@ -1258,6 +1358,7 @@ impl Client {
                     Some(self.pubsub_synchronizer.clone()),
                 )
                 .await
+                // TODO #7653: Return a connection error, not a request error.
                 .map_err(|e| {
                     RedisError::from((
                         ErrorKind::IoError,
@@ -1334,36 +1435,16 @@ impl Client {
 
         // Post-process: decompress and convert to expected type.
         // Done after the mutable borrow on cmd is released.
-        let processed_value = if let Some(ref compression_manager) = compression_manager {
-            if let Some(request_type) = extract_request_type_from_cmd(&cmd) {
-                match crate::compression::process_response_for_decompression(
-                    raw_value.clone(),
+        let processed_value = match &compression_manager {
+            Some(compression_manager) => match extract_request_type_from_cmd(&cmd) {
+                Some(request_type) => crate::compression::process_response_for_decompression(
+                    raw_value,
                     request_type,
                     Some(compression_manager.as_ref()),
-                ) {
-                    Ok(decompressed_value) => decompressed_value,
-                    Err(e) => {
-                        // Propagate critical errors (size limit exceeded, incompatible command)
-                        // to the user instead of silently falling back to raw value
-                        if e.should_propagate() {
-                            return Err(redis::RedisError::from((
-                                redis::ErrorKind::IoError,
-                                "Decompression error",
-                                e.to_string(),
-                            )));
-                        }
-                        log_warn(
-                            "send_command_decompression",
-                            format!("Failed to decompress response: {}", e),
-                        );
-                        raw_value
-                    }
-                }
-            } else {
-                raw_value
-            }
-        } else {
-            raw_value
+                )?,
+                None => raw_value,
+            },
+            None => raw_value,
         };
 
         let expected_type = expected_type_for_cmd(&cmd);
@@ -1387,26 +1468,56 @@ impl Client {
         Ok(value)
     }
 
-    /// Gated dispatch entry: reconcile pool-borrowed IAM auth and track open-MULTI
-    /// state, then dispatch through `send_command_ungated`.
+    /// Gated dispatch entry: reconcile pool-borrowed IAM auth, then dispatch through
+    /// `send_command_ungated`.
     pub fn send_command<'a>(
         &'a mut self,
         cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            // TODO #7666: Reject empty commands here, replacing the check in `get_redis_command`
+            // (`socket_listener.rs`).
             // `BLOB.*` transfers lend a buffer, so only the rdma methods send them.
             crate::rdma::refuse_direct_command(cmd)?;
             // Refresh IAM auth before the command (see `reconcile_iam_before_dispatch`).
             self.reconcile_iam_before_dispatch().await?;
-            // Track MULTI/EXEC/DISCARD for the borrow-time re-AUTH defer.
-            self.track_transaction_state(cmd);
-            // Flag a possible db change before dispatch (see `db_maybe_dirty`).
-            if self.is_select_command(cmd) {
-                self.shared.db_maybe_dirty.store(true, Ordering::Release);
-            }
             self.send_command_ungated(cmd, routing).await
         })
+    }
+
+    /// Record what an admitted command may change on the connection, for the
+    /// re-AUTH defer and the release reset.
+    fn track_command(&self, cmd: &Cmd, routing: Option<&RoutingInfo>) {
+        // Read-only standalone rejects MULTI/WATCH/EXEC/DISCARD locally, in
+        // pipelines too, so they never reach the server.
+        if self.is_cluster || !self.read_only {
+            self.track_transaction_state(cmd);
+        }
+        // Only the pool reset reads the routes, so other clients don't collect them.
+        if self.is_cluster && self.is_pool_managed.load(Ordering::Acquire) && Self::is_watch(cmd) {
+            self.record_watch_routes(cmd, routing);
+        }
+        self.track_unresettable(cmd);
+        // Flag a possible db change before dispatch (see `db_maybe_dirty`).
+        if self.is_select_command(cmd) {
+            self.shared.db_maybe_dirty.store(true, Ordering::Release);
+        }
+    }
+
+    /// Dispatch for the pool release reset: takes an in-flight slot but skips the
+    /// circuit breaker, which would refuse the reset locally and discard a client
+    /// whose connection is fine, and the tracking and IAM reconcile that serve
+    /// borrower commands.
+    async fn send_reset_command(
+        &mut self,
+        cmd: &mut Cmd,
+        routing: Option<RoutingInfo>,
+    ) -> RedisResult<Value> {
+        let permit = Admission::check_ignoring_breaker(self)
+            .await?
+            .reserve(self)?;
+        self.dispatch(permit, cmd, routing).await
     }
 
     /// Ungated dispatch: everything `send_command` does after the borrow gate. The
@@ -1419,14 +1530,24 @@ impl Client {
         cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> RedisResult<Value> {
+        // Track only once admitted: a command refused here never reached the
+        // server, so it must not mark the client for reset or discard.
         let admission = Admission::check(self).await?;
 
-        // Answered locally, so it never takes an in-flight slot.
+        // Answered locally, so it never takes an in-flight slot; an intercepted
+        // SUBSCRIBE still subscribes, so track it here.
         if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
+            self.track_command(cmd, routing.as_ref());
             return result;
         }
 
         let permit = admission.reserve(self)?;
+        // After the intercept, which answers GLIDE's own pubsub commands, and
+        // before the tracking, so a rejected command leaves no state.
+        self.reject_write_in_read_only(cmd)?;
+        // The request-timeout lookup in `dispatch` refuses only blocking and WAIT
+        // commands, none of which are tracked.
+        self.track_command(cmd, routing.as_ref());
         self.dispatch(permit, cmd, routing).await
     }
 
@@ -1625,6 +1746,7 @@ impl Client {
                 execute.await
             }
         };
+        self.track_blocking_failure(|| is_blocking_cmd, &result);
 
         // Report result to client-wide circuit breaker
         if let Some(cb) = &self.circuit_breaker {
@@ -1775,31 +1897,16 @@ impl Client {
             None => connection.send_packed_command(&cmd_to_send).await?,
         };
 
-        // Apply decompression if compression is enabled
-        let processed_value = if let Some(ref compression_manager) = self.compression_manager {
-            if let Some(request_type) = extract_request_type_from_cmd(cmd) {
-                match crate::compression::process_response_for_decompression(
-                    raw_value.clone(),
+        let processed_value = match &self.compression_manager {
+            Some(compression_manager) => match extract_request_type_from_cmd(cmd) {
+                Some(request_type) => crate::compression::process_response_for_decompression(
+                    raw_value,
                     request_type,
                     Some(compression_manager.as_ref()),
-                ) {
-                    Ok(decompressed) => decompressed,
-                    Err(e) => {
-                        if e.should_propagate() {
-                            return Err(redis::RedisError::from((
-                                redis::ErrorKind::IoError,
-                                "Decompression error",
-                                e.to_string(),
-                            )));
-                        }
-                        raw_value
-                    }
-                }
-            } else {
-                raw_value
-            }
-        } else {
-            raw_value
+                )?,
+                None => raw_value,
+            },
+            None => raw_value,
         };
 
         // Type conversion
@@ -1850,19 +1957,25 @@ impl Client {
         Self::address_for_slot_in(&client, slot)
     }
 
-    /// Variant of [`Client::address_for_slot`] for synchronous callers (the scope
-    /// acquire path runs without a runtime context).
+    /// Variant of [`Client::address_for_slot`] for a caller that must not wait:
+    /// the scope acquire path runs it with the scope pool's lock held, where a
+    /// wait would hold up every other scope acquire and release.
     ///
-    /// Does not wait for the client wrapper lock: if it is write-locked (e.g.
-    /// mid-reconnect) this returns [`SlotAddressError::TopologyLocked`] so the
-    /// caller can retry rather than fall back to a seed node. The slot-map read
-    /// inside the cluster connection is still a short blocking read.
+    /// Neither the client wrapper lock (held across a reconnect) nor the cluster
+    /// slot map's lock (held across a topology refresh) is waited for; a held
+    /// lock is [`SlotAddressError::TopologyLocked`], and the caller retries.
     pub fn try_address_for_slot(&self, slot: u16) -> Result<String, SlotAddressError> {
         let client = self
             .internal_client
             .try_read()
             .map_err(|_| SlotAddressError::TopologyLocked)?;
-        Self::address_for_slot_in(&client, slot)
+        match &*client {
+            ClientWrapper::Cluster { client, .. } => client
+                .try_address_for_slot(slot)
+                .map_err(|redis::cluster_async::SlotMapLocked| SlotAddressError::TopologyLocked)?
+                .ok_or(SlotAddressError::Unmapped),
+            other => Self::address_for_slot_in(other, slot),
+        }
     }
 
     fn address_for_slot_in(wrapper: &ClientWrapper, slot: u16) -> Result<String, SlotAddressError> {
@@ -1881,6 +1994,25 @@ impl Client {
     /// Used by scope connections to determine whether slot validation is needed.
     pub fn is_cluster_mode(&self) -> bool {
         self.shared.is_cluster
+    }
+
+    /// Errors when this is a read-only standalone client and `cmd` can write.
+    /// Runs before `Client`'s pre-dispatch tracking, and on paths that bypass
+    /// `StandaloneClient`, such as isolated scopes.
+    pub(crate) fn reject_write_in_read_only(&self, cmd: &Cmd) -> RedisResult<()> {
+        if self.shared.read_only && !self.shared.is_cluster {
+            standalone_client::reject_write_command(&cmd.command().unwrap_or_default())?;
+        }
+        Ok(())
+    }
+
+    /// True until a lazy client connects, and also whenever its lock cannot be read right away.
+    /// The sync FFI runs a command on a worker while this is true.
+    pub fn is_lazy(&self) -> bool {
+        self.internal_client
+            .try_read()
+            .map(|client| matches!(&*client, ClientWrapper::Lazy(_)))
+            .unwrap_or(true)
     }
 
     /// Returns the cache hit rate (hits / total requests).
@@ -2098,13 +2230,20 @@ impl Client {
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             crate::rdma::refuse_direct_in_batch(pipeline)?;
+            // Before the tracking below, so a rejected batch leaves no state.
+            for cmd in pipeline.cmd_iter() {
+                self.reject_write_in_read_only(cmd)?;
+            }
             self.reconcile_iam_before_dispatch().await?;
-            // Capture the batch's last SELECT now; apply it after dispatch if the
-            // reply shows the server took it, and flag a possible db change (see
-            // `db_maybe_dirty`). No MULTI tracking here: redis-rs brackets MULTI/EXEC
-            // at pack time and it always closes.
-            let drifted_db = self.last_select_db(pipeline);
-            if drifted_db.is_some() {
+            // Capture the batch's SELECTs and RESETs now, flag a possible db change (see
+            // `db_maybe_dirty`), and after dispatch apply the last one the server took.
+            // No MULTI tracking here: redis-rs brackets MULTI/EXEC at pack time and it
+            // always closes.
+            for cmd in pipeline.cmd_iter() {
+                self.track_unresettable(cmd);
+            }
+            let db_changes = self.batch_db_changes(pipeline);
+            if !db_changes.is_empty() {
                 self.shared.db_maybe_dirty.store(true, Ordering::Release);
             }
             let client = self.get_or_initialize_client().await?;
@@ -2121,7 +2260,8 @@ impl Client {
                 async move {
                     match client {
                         ClientWrapper::Standalone(mut client) => {
-                            let values = client.send_pipeline(pipeline, offset, 1).await?;
+                            let values =
+                                client.send_pipeline_to_primary(pipeline, offset, 1).await?;
                             Client::get_transaction_values(
                                 pipeline,
                                 values,
@@ -2137,6 +2277,8 @@ impl Client {
                                         .route_pipeline(pipeline, offset, 1, Some(route), None)
                                         .await?
                                 }
+                                // TODO #7673: Return a client error for `RoutingInfo::MultiNode`;
+                                // keep this path for `None`.
                                 _ => {
                                     client
                                         .req_packed_commands(pipeline, offset, 1, None)
@@ -2158,12 +2300,12 @@ impl Client {
                 },
             )
             .await;
-            // Record the drift only if the SELECT reply applied (see
-            // `batch_reply_applied`).
-            if let Some((idx, db)) = drifted_db
-                && Self::batch_reply_applied(&result, idx)
-            {
-                self.apply_batch_select_db(db).await;
+            self.track_blocking_failure(
+                || pipeline.cmd_iter().any(|c| is_blocking_command(c)),
+                &result,
+            );
+            if let Some(db) = Self::applied_db_change(&db_changes, &result) {
+                self.apply_batch_db_change(db).await;
             }
             result
         })
@@ -2192,15 +2334,44 @@ impl Client {
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
             crate::rdma::refuse_direct_in_batch(pipeline)?;
+            // Before the tracking below, so a rejected batch leaves no state.
+            for cmd in pipeline.cmd_iter() {
+                self.reject_write_in_read_only(cmd)?;
+            }
             self.reconcile_iam_before_dispatch().await?;
             // A raw MULTI stays open after a non-atomic pipeline returns, so track
-            // it pre-dispatch for `prepare_for_borrow`'s defer. The SELECT drift is
-            // applied post-dispatch instead (see the store below).
+            // it pre-dispatch for `prepare_for_borrow`'s defer. The db change is
+            // applied post-dispatch instead (see the store below). A raw MULTI sent
+            // earlier (as a command or in a batch) and not yet closed must queue this
+            // batch, so it also pins this batch to the primary.
+            let multi_open = self.multi_active.load(Ordering::Acquire);
             for cmd in pipeline.cmd_iter() {
                 self.track_transaction_state(cmd);
+                self.track_unresettable(cmd);
+                // A batch may split across nodes, so its WATCH target is unknown,
+                // unless the batch routing may send it to a replica. Unlike a single
+                // command, a `Random`-routed batch is not narrowed to a primary.
+                if self.is_cluster
+                    && self.is_pool_managed.load(Ordering::Acquire)
+                    && Self::is_watch(cmd)
+                {
+                    let maybe_replica = matches!(
+                        routing,
+                        Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
+                    ) || Self::classify_watch(cmd, routing.as_ref())
+                        == WatchTarget::MaybeReplica;
+                    if maybe_replica {
+                        self.unresettable.store(true, Ordering::Release);
+                    } else {
+                        self.watch_routes
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .mark_any();
+                    }
+                }
             }
-            let drifted_db = self.last_select_db(pipeline);
-            if drifted_db.is_some() {
+            let db_changes = self.batch_db_changes(pipeline);
+            if !db_changes.is_empty() {
                 self.shared.db_maybe_dirty.store(true, Ordering::Release);
             }
             let client = self.get_or_initialize_client().await?;
@@ -2217,6 +2388,11 @@ impl Client {
                 Some(to_duration(pipeline_timeout, self.request_timeout)),
                 async move {
                     let values = match client {
+                        ClientWrapper::Standalone(mut client) if multi_open => {
+                            client
+                                .send_pipeline_to_primary(pipeline, 0, command_count)
+                                .await
+                        }
                         ClientWrapper::Standalone(mut client) => {
                             client.send_pipeline(pipeline, 0, command_count).await
                         }
@@ -2233,6 +2409,8 @@ impl Client {
                                     )
                                     .await
                             }
+                            // TODO #7673: Return a client error for `RoutingInfo::MultiNode`;
+                            // keep this path for `None`.
                             _ => {
                                 client
                                     .route_pipeline(
@@ -2259,12 +2437,12 @@ impl Client {
                 },
             )
             .await;
-            // Record the drift only if the SELECT reply applied (see
-            // `batch_reply_applied`).
-            if let Some((idx, db)) = drifted_db
-                && Self::batch_reply_applied(&result, idx)
-            {
-                self.apply_batch_select_db(db).await;
+            self.track_blocking_failure(
+                || pipeline.cmd_iter().any(|c| is_blocking_command(c)),
+                &result,
+            );
+            if let Some(db) = Self::applied_db_change(&db_changes, &result) {
+                self.apply_batch_db_change(db).await;
             }
             result
         })
@@ -2473,6 +2651,7 @@ impl Client {
         tls_mode: TlsMode,
     ) -> Result<Option<std::sync::Arc<crate::iam::IAMTokenManager>>, ConnectionError> {
         if let Some(iam_config) = &auth_info.iam_config {
+            // TODO #7707: Also reject IAM authentication with `TlsMode::InsecureTls`.
             if tls_mode == TlsMode::NoTls {
                 return Err(ConnectionError::IAMError(
                     "IAM authentication requires TLS; refusing to send an IAM token over a plaintext connection".to_string(),
@@ -2549,6 +2728,7 @@ impl Client {
         })
     }
 }
+// TODO #7683: Reject runtime subscribe commands on a RESP2 client.
 /// Trait for executing PubSub commands on the internal client wrapper
 pub trait PubSubCommandApplier: Send + Sync {
     /// Send a subscription command (SUBSCRIBE, UNSUBSCRIBE, etc.)
@@ -2777,6 +2957,7 @@ async fn create_cluster_client(
         // of truth for the initial cluster connection.
         (Some(manager.get_params().await), None)
     } else if has_root_certs || has_client_cert || has_client_key {
+        // TODO #7707: Reject root certificates with `TlsMode::InsecureTls`, which ignores them.
         if tls_mode == TlsMode::NoTls {
             return Err(RedisError::from((
                 ErrorKind::InvalidClientConfig,
@@ -2981,6 +3162,10 @@ pub enum ConnectionError {
     Timeout,
     IoError(std::io::Error),
     Configuration(String),
+    /// The compression configuration was rejected. Kept apart from `Configuration` because
+    /// `is_configuration` must not include it: wrappers reported it like any other creation
+    /// failure before 2.6, and changing its exception type would break callers.
+    CompressionConfiguration(String),
     IAMError(String),
     Rdma(crate::rdma::RdmaUnavailable),
 }
@@ -2999,6 +3184,10 @@ impl std::fmt::Debug for ConnectionError {
             Self::IoError(arg0) => f.debug_tuple("IoError").field(arg0).finish(),
             Self::Timeout => write!(f, "Timeout"),
             Self::Configuration(arg0) => f.debug_tuple("Configuration").field(arg0).finish(),
+            Self::CompressionConfiguration(arg0) => f
+                .debug_tuple("CompressionConfiguration")
+                .field(arg0)
+                .finish(),
             Self::IAMError(arg0) => f.debug_tuple("IAMError").field(arg0).finish(),
             Self::Rdma(arg0) => f.debug_tuple("Rdma").field(arg0).finish(),
         }
@@ -3012,7 +3201,10 @@ impl std::fmt::Display for ConnectionError {
             ConnectionError::Cluster(err) => write!(f, "{err}"),
             ConnectionError::IoError(err) => write!(f, "{err}"),
             ConnectionError::Timeout => f.write_str("connection attempt timed out"),
-            ConnectionError::Configuration(msg) => write!(f, "configuration error: {msg}"),
+            ConnectionError::Configuration(msg)
+            | ConnectionError::CompressionConfiguration(msg) => {
+                write!(f, "configuration error: {msg}")
+            }
             ConnectionError::IAMError(msg) => write!(f, "IAM authentication error: {msg}"),
             ConnectionError::Rdma(reason) => write!(f, "RDMA unavailable: {reason}"),
         }
@@ -3027,6 +3219,15 @@ where
         format!("\n{name}: {value}")
     } else {
         String::new()
+    }
+}
+
+impl ConnectionError {
+    /// Whether the request was rejected by validation, before any connection was attempted.
+    ///
+    /// Excludes `CompressionConfiguration`, whose reported type predates this check.
+    pub fn is_configuration(&self) -> bool {
+        matches!(self, ConnectionError::Configuration(_))
     }
 }
 
@@ -3189,7 +3390,10 @@ fn create_compression_manager(
     };
 
     let manager = CompressionManager::new(backend, config).map_err(|e| {
-        ConnectionError::Configuration(format!("Failed to create compression manager: {}", e))
+        ConnectionError::CompressionConfiguration(format!(
+            "Failed to create compression manager: {}",
+            e
+        ))
     })?;
 
     Ok(Some(Arc::new(manager)))
@@ -3197,9 +3401,13 @@ fn create_compression_manager(
 
 impl Client {
     pub async fn new(
-        request: ConnectionRequest,
+        mut request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
+        // Every binding reaches this through the protobuf conversion, and the Rust client
+        // builds `ConnectionRequest` directly. `StandaloneClient::create_client` repeats it
+        // for direct callers.
+        request.read_from = request.read_from.map(ReadFrom::with_trimmed_client_az);
         // Validate library name and version.
         if let Some(lib_name) = request.lib_name.as_deref() {
             validate_effective_lib_name(lib_name).map_err(ConnectionError::Configuration)?;
@@ -3222,6 +3430,9 @@ impl Client {
             })?;
         }
         validate_unix_socket_addresses(&request).map_err(ConnectionError::Configuration)?;
+        // TODO #7683: Reject Pub/Sub subscriptions combined with RESP2 with a configuration error.
+        // TODO #7690: Reject sharded subscriptions on a standalone client with a configuration
+        // error.
 
         if let Some(conflict) = request.rdma_conflict() {
             return Err(crate::rdma::RdmaUnavailable::IncompatibleSetting(conflict).into());
@@ -3358,11 +3569,16 @@ impl Client {
                     }),
                     current_database: Arc::new(AtomicU32::new(request.database_id as u32)),
                     db_maybe_dirty: Arc::new(AtomicBool::new(false)),
+                    unresettable: Arc::new(AtomicBool::new(false)),
+                    multi_seen: Arc::new(AtomicBool::new(false)),
+                    watch_seen: Arc::new(AtomicBool::new(false)),
+                    watch_routes: Arc::new(std::sync::Mutex::new(Default::default())),
                     last_iam_generation: Arc::new(AtomicU64::new(0)),
                     is_pool_managed: Arc::new(AtomicBool::new(false)),
                     iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                     multi_active: Arc::new(AtomicBool::new(false)),
                     is_cluster: request.cluster_mode_enabled,
+                    read_only: request.read_only,
                     cert_material: cert_material_cell.clone(),
                     address_resolver: request.address_resolver.clone(),
                     configures_cert_material: request_configures_cert_material(&request),
@@ -3385,6 +3601,7 @@ impl Client {
 
             let client_arc = Arc::new(RwLock::new(client));
 
+            // TODO #7707: Warn once when a password is configured with `TlsMode::NoTls`.
             // Create IAM token manager if needed
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
                 Self::create_iam_token_manager(auth_info, request.tls_mode.unwrap_or_default())
@@ -3524,9 +3741,33 @@ impl Client {
         let _ = self.cert_material.set(material);
     }
 
+    /// Open the circuit breaker the way failing commands do.
     #[cfg(test)]
-    pub(crate) fn set_multi_active_for_test(&self, active: bool) {
-        self.multi_active.store(active, Ordering::Release);
+    pub(crate) fn trip_circuit_breaker_for_test(&self) {
+        let cb = self.circuit_breaker.as_ref().expect("breaker configured");
+        for _ in 0..64 {
+            if !cb.is_healthy() {
+                return;
+            }
+            cb.on_result(true, Some("Timeout"), 0);
+        }
+        panic!("the breaker did not open after 64 failures");
+    }
+
+    /// Whether the release reset would have anything to send or would fail.
+    #[cfg(test)]
+    pub(crate) fn borrow_is_dirty_for_test(&self) -> bool {
+        self.multi_seen.load(Ordering::Acquire)
+            || self.watch_seen.load(Ordering::Acquire)
+            || self.unresettable.load(Ordering::Acquire)
+            || self.shared.db_maybe_dirty.load(Ordering::Acquire)
+    }
+
+    /// Mark the borrow as having sent MULTI, as `track_transaction_state` does.
+    #[cfg(test)]
+    pub(crate) fn set_multi_sent_for_test(&self, sent: bool) {
+        self.multi_active.store(sent, Ordering::Release);
+        self.multi_seen.store(sent, Ordering::Release);
     }
 
     /// The configured custom address resolver, if any. Applied to a standalone
@@ -3551,61 +3792,137 @@ impl Client {
     }
 
     /// Reset connection state to a clean baseline after a pool borrow is returned.
+    /// Like the scope pool's `ConnectionState`, it sends only the commands the
+    /// borrow's own dispatches call for, so a clean borrow sends nothing. A reset
+    /// that does send fans out, so an unreachable node can still fail it, which
+    /// discards the client (the safe direction).
     ///
-    /// - DISCARD — always sent (not gated on the intent-tracked `multi_active`,
-    ///   which can desync under concurrent use), to `AllNodes` on cluster. A
-    ///   "DISCARD without MULTI" reply is expected and ignored; any other failure,
-    ///   when a MULTI *was* open, is propagated so release discards the connection
-    ///   rather than reuse it with queued commands. See the error-classification
-    ///   note at the call site for why cluster forces matching by message.
-    /// - SELECT <configured_db> — sent only when the database drifted
+    /// - DISCARD — if the borrow sent MULTI (`multi_seen`); to `AllNodes` on
+    ///   cluster, then a PING to every node to confirm none still has it open. A
+    ///   "DISCARD without MULTI" reply is ignored (see the call site); any other
+    ///   failure, `NOPERM` included, fails the reset.
+    /// - UNWATCH — if the borrow sent WATCH (`watch_seen`): DISCARD only unwatches
+    ///   when a MULTI is still open. On cluster, only to the primaries the WATCHes
+    ///   reached (`watch_routes`) when those are known.
+    /// - SELECT <configured_db> — when the database drifted
     ///   (`current_database() != configured_db`) or a SELECT may have applied
-    ///   untracked during the borrow (`db_maybe_dirty`); a borrow that never sent
-    ///   SELECT skips the round-trip. This is the fix for the cluster discard bug: a
-    ///   clean db-0 pool no longer sends a `SELECT` the cluster server rejects.
-    ///   Topology-independent — cluster supports multiple databases since Valkey 9.0.0
-    ///   (`cluster-databases`), so a drift must be undone there too.
+    ///   untracked (`db_maybe_dirty`). A clean db-0 cluster pool must not send a
+    ///   `SELECT` the cluster server rejects; cluster supports multiple databases
+    ///   since Valkey 9.0.0 (`cluster-databases`), so a drift is undone there too.
     ///
-    /// Does not UNSUBSCRIBE: callers must not subscribe on a pooled client (use the
-    /// parent client's pub/sub API, which keeps dedicated connections).
+    /// Fails without sending anything when the borrow left state no command undoes
+    /// (`unresettable`), or when a read-only standalone client, which rejects
+    /// DISCARD/UNWATCH locally, has MULTI or WATCH tracked as sent. Does not
+    /// UNSUBSCRIBE: callers must not subscribe on a pooled client (use the parent
+    /// client's pub/sub API, which keeps dedicated connections).
     pub async fn reset_connection_state(&mut self, configured_db: u32) -> RedisResult<()> {
-        // Capture multi_active before dispatch: send_command's track_transaction_state
-        // clears it on seeing DISCARD.
-        let multi_was_open = self.multi_active.load(Ordering::Acquire);
-        let discard_routing = self.is_cluster_mode().then_some(RoutingInfo::MultiNode((
-            MultipleNodeRoutingInfo::AllNodes,
-            None,
-        )));
-        let discard_result = self
-            .send_command(&mut redis::cmd("DISCARD"), discard_routing)
-            .await;
-        // Classify the DISCARD outcome by message, not `is_err()`. "DISCARD without
-        // MULTI" (no transaction open) is expected and ignored. On cluster it is
-        // unavoidable even on success: DISCARD fans out to AllNodes but a borrow's
-        // MULTI lives on one node, so the others answer "DISCARD without MULTI" and
-        // the `None`-policy aggregate surfaces that as an Err. Any other failure
-        // (circuit breaker, dead connection, timeout), when a MULTI *was* open, is
-        // propagated so release discards the connection instead of reusing it with
-        // queued commands. A real owner-node failure cannot be masked by a sibling's
-        // no-MULTI error: transport failures short-circuit aggregation before the
-        // per-node reply loop, and an owner node with an open MULTI has no DISCARD
-        // error path (it returns +OK).
-        if multi_was_open
-            && let Err(e) = &discard_result
-            && !Self::is_discard_without_multi(e)
-        {
-            return discard_result.map(|_| ());
+        if self.unresettable.load(Ordering::Acquire) {
+            return Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Pooled client subscribed, ran MONITOR or RESET, changed CLIENT REPLY, \
+                 sent WATCH to a replica, or had a blocking command fail with a timeout \
+                 or IO error during the borrow; its connection cannot be reset",
+            )));
+        }
+        let is_cluster = self.is_cluster_mode();
+        let all_nodes = || RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
+        // Taken, not loaded: a MULTI/WATCH a stray task dispatches during the reset
+        // sets the flag again and is cleaned up on the next release (the borrower
+        // in between can see it; concurrent use of a borrow is out of contract). A
+        // failed reset discards the client, so clearing them early loses nothing.
+        let multi_seen = self.multi_seen.swap(false, Ordering::AcqRel);
+        let watch_seen = self.watch_seen.swap(false, Ordering::AcqRel);
+        if (multi_seen || watch_seen) && !is_cluster && self.read_only {
+            return Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Read-only pooled client sent MULTI or WATCH; its connection cannot be reset",
+            )));
+        }
+        if multi_seen {
+            let discard_result = self
+                .send_reset_command(&mut redis::cmd("DISCARD"), is_cluster.then(all_nodes))
+                .await;
+            // Classify by message, not `is_err()`. "DISCARD without MULTI" means the
+            // borrow already closed its transaction. On cluster it is unavoidable
+            // even on success: DISCARD fans out to AllNodes but a MULTI lives on one
+            // node, so the others answer "without MULTI" and the `None`-policy
+            // aggregate surfaces that as an Err.
+            if let Err(e) = &discard_result
+                && !Self::is_discard_without_multi(e)
+            {
+                return discard_result.map(|_| ());
+            }
+            // The reset isn't tracked, so close the re-AUTH defer here.
+            self.multi_active.store(false, Ordering::Release);
+            // The aggregate keeps only the first node's error, so a sibling's
+            // "without MULTI" can mask a real one from the node holding the MULTI.
+            // Every node must answer PONG: QUEUED means a MULTI is still open.
+            if is_cluster {
+                let pong = Value::SimpleString("PONG".into());
+                let all_pong = match self
+                    .send_reset_command(&mut redis::cmd("PING"), Some(all_nodes()))
+                    .await?
+                {
+                    Value::Map(replies) => replies.iter().all(|(_, v)| *v == pong),
+                    other => other == pong,
+                };
+                if !all_pong {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "Pooled client's MULTI is still open after DISCARD; its connection \
+                         cannot be reset",
+                    )));
+                }
+            }
+        }
+        if watch_seen {
+            // Taken after `watch_seen`: a WATCH racing the reset re-sets the flag, so
+            // its route is cleaned up on this release or the next.
+            let watched =
+                std::mem::take(&mut *self.watch_routes.lock().unwrap_or_else(|e| e.into_inner()));
+            let targets = match &watched {
+                WatchedPrimaries::Known(recorded) if is_cluster => {
+                    let mut owners = std::collections::HashMap::new();
+                    for &slot in recorded.keys() {
+                        if let Ok(address) = self.address_for_slot(slot).await {
+                            owners.insert(slot, address);
+                        }
+                    }
+                    watched.unwatch_targets(|slot| owners.get(&slot).cloned())
+                }
+                _ => UnwatchTargets::AllPrimaries,
+            };
+            match targets {
+                // Only the primaries the WATCHes reached, sent together, so a down
+                // node elsewhere can't fail the reset.
+                UnwatchTargets::Primaries(routes) => {
+                    futures::future::try_join_all(routes.into_iter().map(|route| {
+                        let mut client = self.clone();
+                        async move {
+                            let to =
+                                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route));
+                            client
+                                .send_reset_command(&mut redis::cmd("UNWATCH"), Some(to))
+                                .await
+                        }
+                    }))
+                    .await?;
+                }
+                UnwatchTargets::AllPrimaries => {
+                    self.send_reset_command(&mut redis::cmd("UNWATCH"), None)
+                        .await?;
+                }
+            }
         }
 
         // `None` routing is intentional: SELECT is an AllNodes command, so it fans
-        // out to every node without spelling it out like DISCARD above. Restore on
-        // tracked drift OR a possible untracked SELECT (see `db_maybe_dirty`).
+        // out to every node without spelling it out like DISCARD above.
         if self.current_database() != configured_db
             || self.shared.db_maybe_dirty.load(Ordering::Acquire)
         {
             let mut select_cmd = redis::cmd("SELECT");
             select_cmd.arg(configured_db.to_string());
-            self.send_command(&mut select_cmd, None).await?;
+            self.send_reset_command(&mut select_cmd, None).await?;
         }
         // Cleared only after a successful reset: the connection is now on the
         // configured db.
@@ -3669,51 +3986,195 @@ impl Client {
         self.is_pool_managed.load(Ordering::Acquire)
     }
 
-    /// Track whether a raw MULTI is open on the live connection, so
-    /// [`prepare_for_borrow`](Self::prepare_for_borrow) can defer the re-AUTH while a
-    /// transaction is in flight. `send_transaction` is not tracked: redis-rs adds its
-    /// MULTI/EXEC bracket at pack time, outside `cmd_iter()`, and it always closes.
+    /// Track raw MULTI/WATCH: `multi_active` for
+    /// [`prepare_for_borrow`](Self::prepare_for_borrow)'s re-AUTH defer,
+    /// `multi_seen`/`watch_seen` for the release reset. `send_transaction` is not
+    /// tracked: redis-rs adds its MULTI/EXEC bracket at pack time, outside
+    /// `cmd_iter()`, so it always closes, and the server rejects a WATCH inside it.
     fn track_transaction_state(&self, cmd: &Cmd) {
         match cmd.command().as_deref() {
-            Some(b"MULTI") => self.multi_active.store(true, Ordering::Release),
-            Some(b"EXEC") | Some(b"DISCARD") => self.multi_active.store(false, Ordering::Release),
+            Some(b"MULTI") => {
+                self.multi_active.store(true, Ordering::Release);
+                self.multi_seen.store(true, Ordering::Release);
+            }
+            Some(b"WATCH") => self.watch_seen.store(true, Ordering::Release),
+            // RESET also discards an open transaction.
+            Some(b"EXEC") | Some(b"DISCARD") | Some(b"RESET") => {
+                self.multi_active.store(false, Ordering::Release)
+            }
             _ => {}
         }
     }
 
-    /// The command index and database id of the last `SELECT` in a batch (or
-    /// `None`). The index is the command's `cmd_iter()` position, which is also its
-    /// reply position in the result array — the caller pairs it with
-    /// [`batch_reply_applied`](Self::batch_reply_applied) to record the drift only
-    /// if the server applied it. A pure read; never mutates db state.
+    fn is_watch(cmd: &Cmd) -> bool {
+        cmd.arg_idx(0)
+            .is_some_and(|name| name.eq_ignore_ascii_case(b"WATCH"))
+    }
+
+    /// Where a WATCH will land, from the routing the cluster client would use for it.
+    fn classify_watch(cmd: &Cmd, routing: Option<&RoutingInfo>) -> WatchTarget {
+        use redis::cluster_routing::SlotAddr;
+        let routes = match routing.cloned().or_else(|| RoutingInfo::for_routable(cmd)) {
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                vec![route]
+            }
+            Some(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::MultiSlot((routes, _)), _))) => {
+                routes.into_iter().map(|(route, _)| route).collect()
+            }
+            // `Random` too: the cluster client sends a write such as WATCH to a
+            // random primary.
+            Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::Random | SingleNodeRoutingInfo::RandomPrimary,
+            ))
+            | Some(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, _)))
+            | None => return WatchTarget::AnyPrimary,
+            // By address or all nodes: may include a replica.
+            Some(_) => Vec::new(),
+        };
+        if routes.is_empty() || routes.iter().any(|r| r.slot_addr() != SlotAddr::Master) {
+            WatchTarget::MaybeReplica
+        } else {
+            WatchTarget::Primaries(routes)
+        }
+    }
+
+    /// Add a WATCH's target primaries to `watch_routes`, each with its owner's
+    /// address now, so release can tell if the slot has moved since. A WATCH that
+    /// may have reached a replica can't be undone (UNWATCH is primary-routed and
+    /// replica picks rotate), so it marks the client `unresettable`.
+    fn record_watch_routes(&self, cmd: &Cmd, routing: Option<&RoutingInfo>) {
+        let routes = match Self::classify_watch(cmd, routing) {
+            WatchTarget::MaybeReplica => {
+                self.unresettable.store(true, Ordering::Release);
+                return;
+            }
+            WatchTarget::Primaries(routes) => routes
+                .into_iter()
+                .map(|route| {
+                    self.try_address_for_slot(route.slot())
+                        .ok()
+                        .map(|address| (route.slot(), address))
+                })
+                .collect::<Option<Vec<_>>>(),
+            WatchTarget::AnyPrimary => None,
+        };
+        let mut watched = self.watch_routes.lock().unwrap_or_else(|e| e.into_inner());
+        match routes {
+            Some(routes) => routes
+                .into_iter()
+                .for_each(|(slot, owner)| watched.record(slot, owner)),
+            None => watched.mark_any(),
+        }
+    }
+
+    /// Flag a (S|P)SUBSCRIBE, MONITOR, RESET or `CLIENT REPLY OFF|SKIP` before
+    /// dispatch (see `unresettable`).
+    fn track_unresettable(&self, cmd: &Cmd) {
+        // arg_idx avoids cmd.command()'s allocation on the hot path.
+        let Some(name) = cmd.arg_idx(0) else {
+            return;
+        };
+        let poisoning = [
+            &b"SUBSCRIBE"[..],
+            b"PSUBSCRIBE",
+            b"SSUBSCRIBE",
+            b"SUBSCRIBE_BLOCKING",
+            b"PSUBSCRIBE_BLOCKING",
+            b"SSUBSCRIBE_BLOCKING",
+            b"MONITOR",
+            // Deauthenticates the connection, which the reset can't undo.
+            b"RESET",
+        ];
+        let reply_off = || {
+            name.eq_ignore_ascii_case(b"CLIENT")
+                && cmd
+                    .arg_idx(1)
+                    .is_some_and(|sub| sub.eq_ignore_ascii_case(b"REPLY"))
+                && cmd.arg_idx(2).is_some_and(|mode| {
+                    mode.eq_ignore_ascii_case(b"OFF") || mode.eq_ignore_ascii_case(b"SKIP")
+                })
+        };
+        if poisoning.iter().any(|p| name.eq_ignore_ascii_case(p)) || reply_off() {
+            self.unresettable.store(true, Ordering::Release);
+        }
+    }
+
+    /// Flag a blocking command (or a batch holding one) that failed with a timeout
+    /// or IO error: its server-side waiter may still be armed, so the next borrower
+    /// would queue behind it. Same rule as the scope pool's `blocking_in_flight`.
+    /// `blocking` is only evaluated on such a failure, so a batch's command scan
+    /// stays off the success path.
+    fn track_blocking_failure(&self, blocking: impl FnOnce() -> bool, result: &RedisResult<Value>) {
+        if matches!(result, Err(e) if crate::scope::is_poisoning_error(e)) && blocking() {
+            self.unresettable.store(true, Ordering::Release);
+        }
+    }
+
+    /// The command index and database id of each database change in a batch, in
+    /// order: a `SELECT`, or a `RESET`, which returns the connection to db 0. The
+    /// index is the command's `cmd_iter()` position, which is also its reply
+    /// position in the result array. A pure read; never mutates db state, and does
+    /// not allocate for a batch without a database change.
     ///
-    /// Only `SELECT` is tracked, not `RESET` (which also returns the connection to
-    /// db 0). A batch like `[SELECT 3, RESET]` therefore records db 3 while the live
-    /// connection is on db 0, leaving non-pooled scope/reconnect metadata stale.
-    /// Pooled release is unaffected — `db_maybe_dirty` forces the reset `SELECT`
-    /// regardless — and a `RESET` inside a pooled borrow is an unusual pattern, so
-    /// the narrow non-pooled gap is left as a known limitation rather than tracked.
-    fn last_select_db(&self, pipeline: &redis::Pipeline) -> Option<(usize, u32)> {
+    /// A standalone batch runs on one node, so a batch `RESET` leaves replicas on
+    /// their database; recording it as db 0 makes replica reads wait until each
+    /// replica has selected db 0 again. Only the database is tracked: the client
+    /// name, protocol and subscriptions a batch `RESET` clears are not.
+    fn batch_db_changes(&self, pipeline: &redis::Pipeline) -> Vec<(usize, u32)> {
         pipeline
             .cmd_iter()
             .enumerate()
-            .filter(|(_, cmd)| self.is_select_command(cmd))
             .filter_map(|(idx, cmd)| {
-                self.extract_database_id_from_select(cmd)
-                    .ok()
-                    .map(|db| (idx, db as u32))
+                if self.is_select_command(cmd) {
+                    self.extract_database_id_from_select(cmd)
+                        .ok()
+                        .map(|db| (idx, db as u32))
+                } else if self.is_reset_command(cmd) {
+                    Some((idx, 0))
+                } else {
+                    None
+                }
             })
-            .last()
+            .collect()
     }
 
-    /// Record a batch `SELECT`'s db, mirroring the single-command
+    /// The database left on the connection by a batch's `db_changes`: that of the
+    /// last change whose reply shows it applied (see
+    /// [`batch_reply_applied`](Self::batch_reply_applied)), or `None` if none did.
+    /// In `[RESET, SELECT 99]` with `SELECT 99` rejected, the connection is on db 0.
+    ///
+    /// Only an `Ok` result is inspected. When a batch fails as a whole (a timeout,
+    /// a command error with `raise_on_error=true`, or a `RESET` inside a
+    /// transaction, which Valkey runs at once and which makes `EXEC` fail), a
+    /// change the server applied is not recorded (#7705).
+    fn applied_db_change(db_changes: &[(usize, u32)], result: &RedisResult<Value>) -> Option<u32> {
+        db_changes
+            .iter()
+            .rev()
+            .find(|(idx, _)| Self::batch_reply_applied(result, *idx))
+            .map(|&(_, db)| db)
+    }
+
+    /// Record a batch `SELECT` or `RESET`'s db, mirroring the single-command
     /// `handle_select_command` so all three db trackers stay in step: the reconnect
-    /// db (`update_stored_database_id`), the OTel `db_namespace`, and
+    /// db (through the standalone or cluster client), the OTel `db_namespace`, and
     /// `current_database` (read by scope connections).
-    async fn apply_batch_select_db(&mut self, db: u32) {
-        if let Err(e) = self.update_stored_database_id(db as i64).await {
+    ///
+    /// A standalone batch ran the change on the primary only. The standalone
+    /// client records it without the `internal_client` write lock and selects the
+    /// db on its replicas in the background, so this never waits on a replica.
+    async fn apply_batch_db_change(&mut self, db: u32) {
+        let update_result = match self.get_or_initialize_client().await {
+            Ok(ClientWrapper::Standalone(client)) => {
+                client.update_database_after_batch_db_change(db as i64, self.request_timeout);
+                Ok(())
+            }
+            Ok(_) => self.update_stored_database_id(db as i64).await,
+            Err(e) => Err(e),
+        };
+        if let Err(e) = update_result {
             log_warn(
-                "apply_batch_select_db",
+                "apply_batch_db_change",
                 format!("failed to update reconnect database to {db}: {e}"),
             );
         }
@@ -3721,18 +4182,23 @@ impl Client {
         self.shared.current_database.store(db, Ordering::Release);
     }
 
-    /// Whether the `SELECT` at `idx` in the batch actually executed. An executed
-    /// `SELECT` replies `+OK` (`Value::Okay`); anything else means the db did not
-    /// change: a rejected `SELECT` is a `ServerError` (present in an `Ok` array when
+    /// Whether the `SELECT` or `RESET` at `idx` in the batch actually executed. An
+    /// executed `SELECT` replies `+OK` (`Value::Okay`) and an executed `RESET`
+    /// replies `+RESET`; anything else means the db did not change: a rejected
+    /// `SELECT` is a `ServerError` (present in an `Ok` array when
     /// `raise_on_error=false`), a `SELECT` merely *queued* inside a raw `MULTI` with
     /// no `EXEC` replies `QUEUED` (`SimpleString`), and a WATCH-aborted `EXEC`
     /// returns `Nil`. Recording any of these would poison `current_database`
     /// (authoritative for scope connections, which handshake into it).
     fn batch_reply_applied(result: &RedisResult<Value>, idx: usize) -> bool {
-        matches!(
-            result,
-            Ok(Value::Array(values)) if matches!(values.get(idx), Some(Value::Okay))
-        )
+        let Ok(Value::Array(values)) = result else {
+            return false;
+        };
+        match values.get(idx) {
+            Some(Value::Okay) => true,
+            Some(Value::SimpleString(reply)) => reply == "RESET",
+            _ => false,
+        }
     }
 
     /// Reconcile per-borrow IAM authentication on the first command after a borrow.
@@ -3778,9 +4244,9 @@ impl Client {
         // `update_state_for_command`), so it assumes sequential use within a borrow:
         // it reflects intended transaction state, not the wire outcome. A borrower
         // that fires commands concurrently on one borrowed client, or one whose EXEC
-        // is rejected pre-wire (circuit breaker / inflight limit), can momentarily
-        // desync the flag — both are already out-of-contract usage for a borrowed
-        // client and self-heal on release.
+        // is rejected pre-wire by the inflight limit, can momentarily desync the
+        // flag — both are already out-of-contract usage for a borrowed client and
+        // self-heal on release.
         if self.multi_active.load(Ordering::Acquire) {
             return Ok(());
         }
@@ -3929,11 +4395,16 @@ impl Client {
                 circuit_breaker: None,
                 current_database: Arc::new(AtomicU32::new(0)),
                 db_maybe_dirty: Arc::new(AtomicBool::new(false)),
+                unresettable: Arc::new(AtomicBool::new(false)),
+                multi_seen: Arc::new(AtomicBool::new(false)),
+                watch_seen: Arc::new(AtomicBool::new(false)),
+                watch_routes: Arc::new(std::sync::Mutex::new(Default::default())),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
+                read_only: false,
                 cert_material: Arc::default(),
                 address_resolver: None,
                 configures_cert_material: false,
@@ -4010,11 +4481,16 @@ pub fn create_test_glide_client() -> Client {
             circuit_breaker: None,
             current_database: Arc::new(AtomicU32::new(0)),
             db_maybe_dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            unresettable: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            multi_seen: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            watch_seen: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            watch_routes: Arc::new(std::sync::Mutex::new(Default::default())),
             last_iam_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             is_pool_managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
             multi_active: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             is_cluster: false,
+            read_only: false,
             cert_material: Arc::default(),
             address_resolver: None,
             configures_cert_material: false,
@@ -4042,7 +4518,7 @@ mod tests {
     use redis::Cmd;
 
     use crate::client::types::{
-        ConnectionRequest, ConnectionRetryStrategy, NodeAddress, OTelMetadata, TlsMode,
+        ConnectionRequest, ConnectionRetryStrategy, NodeAddress, OTelMetadata, ReadFrom, TlsMode,
     };
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, RequestTimeoutOption, TimeUnit,
@@ -4407,6 +4883,85 @@ mod tests {
 
         assert!(matches!(error, ConnectionError::Configuration(_)));
         assert!(error.to_string().contains("library name"));
+    }
+
+    /// Builds the lazy request a binding sends, so creation never touches the network.
+    #[cfg(feature = "proto")]
+    fn lazy_request_with_read_from(
+        read_from: crate::connection_request::ReadFrom,
+        client_az: &str,
+    ) -> ConnectionRequest {
+        let mut request = crate::connection_request::ConnectionRequest::new();
+        request
+            .addresses
+            .push(crate::connection_request::NodeAddress {
+                host: "127.0.0.1".into(),
+                port: 1,
+                ..Default::default()
+            });
+        request.lazy_connect = true;
+        request.read_from = read_from.into();
+        request.client_az = client_az.into();
+        request.into()
+    }
+
+    #[rstest::rstest]
+    #[tokio::test]
+    #[cfg(feature = "proto")]
+    async fn test_new_falls_back_to_prefer_replica_without_client_az(
+        #[values(
+            crate::connection_request::ReadFrom::AZAffinity,
+            crate::connection_request::ReadFrom::AZAffinityReplicasAndPrimary,
+            crate::connection_request::ReadFrom::AZAffinityAllNodes
+        )]
+        read_from: crate::connection_request::ReadFrom,
+        #[values("", " \t\n ")] client_az: &str,
+    ) {
+        let client = Client::new(lazy_request_with_read_from(read_from, client_az), None)
+            .await
+            .expect("the strategy falls back instead of failing");
+
+        let ClientWrapper::Lazy(lazy) = &*client.internal_client.read().await else {
+            panic!("a lazy client keeps its configuration until the first command");
+        };
+        assert_eq!(lazy.config.read_from, Some(ReadFrom::PreferReplica));
+    }
+
+    #[tokio::test]
+    async fn test_new_reports_invalid_compression_outside_is_configuration() {
+        use crate::compression::{CompressionBackendType, CompressionConfig};
+
+        let mut compression_config = CompressionConfig::new(CompressionBackendType::Zstd);
+        compression_config.enabled = true;
+        compression_config.compression_level = Some(100);
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+                unix_socket_path: None,
+            }],
+            lazy_connect: true,
+            compression_config: Some(compression_config),
+            ..Default::default()
+        };
+
+        let error = match Client::new(request, None).await {
+            Ok(_) => panic!("invalid compression level should fail client creation"),
+            Err(error) => error,
+        };
+
+        // Wrappers raise this one as before 2.6, so it must stay out of is_configuration.
+        assert!(
+            matches!(error, ConnectionError::CompressionConfiguration(_)),
+            "{error:?}"
+        );
+        assert!(!error.is_configuration());
+        assert!(
+            error
+                .to_string()
+                .starts_with("configuration error: Failed to create compression manager"),
+            "{error}"
+        );
     }
 
     #[tokio::test]
@@ -4847,6 +5402,14 @@ mod tests {
     }
 
     #[test]
+    fn test_is_lazy_until_connected_and_while_the_lock_is_held() {
+        let client = create_test_client();
+        assert!(client.is_lazy());
+        let _write = client.internal_client.try_write().unwrap();
+        assert!(client.is_lazy());
+    }
+
+    #[test]
     fn test_is_select_command_detects_valid_select_commands() {
         // Test detection of valid SELECT commands
         let client = create_test_client();
@@ -4924,12 +5487,17 @@ mod tests {
         use std::sync::atomic::AtomicU64;
         use tokio::sync::RwLock;
 
+        // A port nothing listens on, so connecting always fails (6379 may be taken).
+        let dead_port = std::net::TcpListener::bind("127.0.0.1:0")
+            .and_then(|listener| listener.local_addr())
+            .map(|addr| addr.port())
+            .expect("bind a free port");
         let config = ConnectionRequest {
             database_id: 0,
             cluster_mode_enabled: false,
             addresses: vec![NodeAddress {
                 host: "127.0.0.1".to_string(),
-                port: 6379,
+                port: dead_port,
                 unix_socket_path: None,
             }],
             lazy_connect: true,
@@ -4967,11 +5535,16 @@ mod tests {
                 circuit_breaker: None,
                 current_database: Arc::new(AtomicU32::new(0)),
                 db_maybe_dirty: Arc::new(AtomicBool::new(false)),
+                unresettable: Arc::new(AtomicBool::new(false)),
+                multi_seen: Arc::new(AtomicBool::new(false)),
+                watch_seen: Arc::new(AtomicBool::new(false)),
+                watch_routes: Arc::new(std::sync::Mutex::new(Default::default())),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
+                read_only: false,
                 cert_material: Arc::default(),
                 address_resolver: None,
                 configures_cert_material: false,
@@ -5255,22 +5828,209 @@ mod tests {
             !client.shared.multi_active.load(Ordering::Acquire),
             "DISCARD must clear the open-transaction flag"
         );
+        assert!(
+            client.shared.multi_seen.load(Ordering::Acquire),
+            "EXEC/DISCARD must not clear multi_seen; only a successful reset does"
+        );
+        assert!(!client.shared.watch_seen.load(Ordering::Acquire));
+        client.track_transaction_state(&redis::cmd("WATCH"));
+        assert!(client.shared.watch_seen.load(Ordering::Acquire));
+
+        client.track_transaction_state(&redis::cmd("MULTI"));
+        client.track_transaction_state(&redis::cmd("RESET"));
+        assert!(
+            !client.shared.multi_active.load(Ordering::Acquire),
+            "RESET discards the transaction, so it must clear the open-transaction flag"
+        );
     }
 
-    /// `last_select_db` returns the command index and db of the last `SELECT` in a
-    /// batch (or `None`), as a pure read — it must never touch `current_database`
-    /// (authoritative for scope connections, so it must not move for a SELECT the
-    /// server never applied). The index lets the caller validate the SELECT's reply.
+    /// A WATCH routed to known primaries is recorded; one that could be on any
+    /// primary falls back to all; one that may be on a replica can't be undone.
     #[test]
-    fn last_select_db_extracts_trailing_select() {
+    fn classify_watch_classifies_watch_targets() {
+        use super::WatchTarget;
+        use redis::cluster_routing::{Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr};
+        let node = |addr| {
+            Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::SpecificNode(Route::new(5, addr)),
+            ))
+        };
+        let watch = redis::cmd("WATCH").arg("k").clone();
+        let key_slot = redis::cluster_topology::get_slot(b"k");
+        let cases = [
+            (
+                None,
+                WatchTarget::Primaries(vec![Route::new(key_slot, SlotAddr::Master)]),
+            ),
+            (
+                node(SlotAddr::Master),
+                WatchTarget::Primaries(vec![Route::new(5, SlotAddr::Master)]),
+            ),
+            (
+                Some(RoutingInfo::SingleNode(
+                    SingleNodeRoutingInfo::RandomPrimary,
+                )),
+                WatchTarget::AnyPrimary,
+            ),
+            (node(SlotAddr::ReplicaRequired), WatchTarget::MaybeReplica),
+            (
+                Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
+                WatchTarget::AnyPrimary,
+            ),
+            (
+                Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                    host: "h".into(),
+                    port: 1,
+                })),
+                WatchTarget::MaybeReplica,
+            ),
+        ];
+        for (routing, expected) in cases {
+            assert_eq!(
+                Client::classify_watch(&watch, routing.as_ref()),
+                expected,
+                "{routing:?}"
+            );
+        }
+    }
+
+    /// Repeated WATCHes on a slot keep one entry; a slot seen under a new owner, or
+    /// an unknown target, falls back to every primary.
+    #[test]
+    fn watched_primaries_keeps_one_entry_per_slot() {
+        use super::WatchedPrimaries;
+        let mut watched = WatchedPrimaries::default();
+        for _ in 0..1000 {
+            watched.record(4, "n1:1".to_string());
+            watched.record(9, "n2:1".to_string());
+        }
+        assert!(
+            matches!(&watched, WatchedPrimaries::Known(m) if m.len() == 2),
+            "a WATCH loop must not grow it: {watched:?}"
+        );
+
+        watched.record(4, "n3:1".to_string());
+        assert_eq!(
+            watched,
+            WatchedPrimaries::Any,
+            "a slot seen under a new owner falls back"
+        );
+        watched.record(5, "n1:1".to_string());
+        assert_eq!(
+            watched,
+            WatchedPrimaries::Any,
+            "the fallback sticks until release"
+        );
+
+        let mut watched = WatchedPrimaries::default();
+        watched.mark_any();
+        assert_eq!(
+            watched,
+            WatchedPrimaries::Any,
+            "an unknown target falls back"
+        );
+    }
+
+    /// Release targets one UNWATCH per primary only while every watched slot still
+    /// has its WATCH-time owner; a moved slot or an unknown owner falls back to
+    /// every primary, since the WATCH may be on the old owner.
+    #[test]
+    fn unwatch_targets_falls_back_when_a_slot_moved() {
+        use super::{UnwatchTargets, WatchedPrimaries};
+        let recorded = WatchedPrimaries::Known(
+            [(1, "n1:1"), (2, "n1:1"), (3, "n2:1")]
+                .into_iter()
+                .map(|(slot, owner)| (slot, owner.to_string()))
+                .collect(),
+        );
+        let owner = |moved: Option<u16>| {
+            move |slot: u16| match slot {
+                s if Some(s) == moved => Some("n3:1".to_string()),
+                3 => Some("n2:1".to_string()),
+                _ => Some("n1:1".to_string()),
+            }
+        };
+
+        let UnwatchTargets::Primaries(targets) = recorded.unwatch_targets(owner(None)) else {
+            panic!("unchanged owners target the primaries");
+        };
+        assert_eq!(targets.len(), 2, "one UNWATCH per primary: {targets:?}");
+        assert_eq!(
+            recorded.unwatch_targets(owner(Some(2))),
+            UnwatchTargets::AllPrimaries
+        );
+        assert_eq!(
+            recorded.unwatch_targets(|_| None),
+            UnwatchTargets::AllPrimaries
+        );
+        assert_eq!(
+            WatchedPrimaries::default().unwatch_targets(owner(None)),
+            UnwatchTargets::AllPrimaries,
+            "nothing recorded"
+        );
+        assert_eq!(
+            WatchedPrimaries::Any.unwatch_targets(owner(None)),
+            UnwatchTargets::AllPrimaries
+        );
+    }
+
+    #[test]
+    fn track_unresettable_flags_only_poisoning_commands() {
+        use std::sync::atomic::Ordering;
+        let clean: [&[&str]; 7] = [
+            &["UNSUBSCRIBE"],
+            &["UNSUBSCRIBE_BLOCKING"],
+            &["PUBLISH"],
+            &["GET"],
+            &["CLIENT", "REPLY", "ON"],
+            &["CLIENT", "SETNAME", "OFF"],
+            &["CLIENT"],
+        ];
+        let dirty: [&[&str]; 10] = [
+            &["monitor"],
+            &["reset"],
+            &["subscribe"],
+            &["PSUBSCRIBE"],
+            &["SSUBSCRIBE"],
+            &["SUBSCRIBE_BLOCKING"],
+            &["PSUBSCRIBE_BLOCKING"],
+            &["SSUBSCRIBE_BLOCKING"],
+            &["client", "reply", "off"],
+            &["CLIENT", "REPLY", "SKIP"],
+        ];
+        for (args, expected) in clean
+            .iter()
+            .map(|a| (a, false))
+            .chain(dirty.iter().map(|a| (a, true)))
+        {
+            let client = create_test_client();
+            let mut cmd = redis::cmd(args[0]);
+            for arg in &args[1..] {
+                cmd.arg(*arg);
+            }
+            client.track_unresettable(&cmd);
+            assert_eq!(
+                client.shared.unresettable.load(Ordering::Acquire),
+                expected,
+                "{args:?}"
+            );
+        }
+    }
+
+    /// `batch_db_changes` lists each `SELECT` in a batch with its command index, as
+    /// a pure read — it must never touch `current_database` (authoritative for
+    /// scope connections, so it must not move for a SELECT the server never
+    /// applied). The index lets the caller validate each SELECT's reply.
+    #[test]
+    fn batch_db_changes_lists_each_select() {
         use std::sync::atomic::Ordering;
         let client = create_test_client();
 
         let mut no_select = redis::pipe();
         no_select.cmd("SET").arg("k").arg("v").cmd("GET").arg("k");
         assert_eq!(
-            client.last_select_db(&no_select),
-            None,
+            client.batch_db_changes(&no_select),
+            vec![],
             "a batch with no SELECT must report no drift"
         );
 
@@ -5283,16 +6043,84 @@ mod tests {
             .arg("v")
             .cmd("SELECT")
             .arg("7");
-        assert_eq!(
-            client.last_select_db(&with_select),
-            Some((2, 7)),
-            "the last SELECT's db (at command index 2) is the one left on the connection"
-        );
+        assert_eq!(client.batch_db_changes(&with_select), vec![(0, 3), (2, 7)]);
         assert_eq!(
             client.shared.current_database.load(Ordering::Acquire),
             0,
-            "last_select_db must not mutate current_database"
+            "batch_db_changes must not mutate current_database"
         );
+    }
+
+    /// A batch `RESET`, in any case, returns the connection to db 0, so it is a
+    /// database change like `SELECT`.
+    #[test]
+    fn batch_db_changes_treats_reset_as_database_zero() {
+        let client = create_test_client();
+
+        let mut pipeline = redis::pipe();
+        pipeline
+            .cmd("SELECT")
+            .arg("3")
+            .cmd("GET")
+            .arg("k")
+            .cmd("reset")
+            .cmd("SELECT")
+            .arg("5");
+        assert_eq!(
+            client.batch_db_changes(&pipeline),
+            vec![(0, 3), (2, 0), (3, 5)]
+        );
+    }
+
+    /// The connection is left on the db of the last change whose reply applied,
+    /// even when a later change was rejected.
+    #[test]
+    fn applied_db_change_uses_last_applied_change() {
+        use redis::Value;
+        let rejected = || redis::parse_redis_value(b"-ERR DB index is out of range\r\n").unwrap();
+        let reset = || Value::SimpleString("RESET".to_string());
+        // [SELECT 3, RESET, SELECT 99]
+        let changes = [(0, 3), (1, 0), (2, 99)];
+
+        let all_applied = Ok(Value::Array(vec![Value::Okay, reset(), Value::Okay]));
+        assert_eq!(Client::applied_db_change(&changes, &all_applied), Some(99));
+
+        let last_rejected = Ok(Value::Array(vec![Value::Okay, reset(), rejected()]));
+        assert_eq!(Client::applied_db_change(&changes, &last_rejected), Some(0));
+
+        let none_applied = Ok(Value::Array(vec![rejected(), rejected(), rejected()]));
+        assert_eq!(Client::applied_db_change(&changes, &none_applied), None);
+
+        let failed: redis::RedisResult<Value> = Err(redis::RedisError::from((
+            redis::ErrorKind::ResponseError,
+            "batch failed",
+        )));
+        assert_eq!(Client::applied_db_change(&changes, &failed), None);
+        assert_eq!(Client::applied_db_change(&[], &all_applied), None);
+    }
+
+    /// Only the reply of an executed `SELECT` (`+OK`) or `RESET` (`+RESET`) records
+    /// the change; a rejected, `QUEUED`, other or missing reply does not.
+    #[test]
+    fn batch_reply_applied_accepts_only_executed_database_changes() {
+        use redis::Value;
+        let reply = |value: Value| Ok(Value::Array(vec![value]));
+        assert!(Client::batch_reply_applied(&reply(Value::Okay), 0));
+        assert!(Client::batch_reply_applied(
+            &reply(Value::SimpleString("RESET".to_string())),
+            0
+        ));
+        assert!(!Client::batch_reply_applied(
+            &reply(redis::parse_redis_value(b"-ERR wrong number of arguments\r\n").unwrap()),
+            0
+        ));
+        assert!(!Client::batch_reply_applied(
+            &reply(Value::SimpleString("QUEUED".to_string())),
+            0
+        ));
+        assert!(!Client::batch_reply_applied(&reply(Value::Nil), 0));
+        assert!(!Client::batch_reply_applied(&reply(Value::Okay), 1));
+        assert!(!Client::batch_reply_applied(&Ok(Value::Nil), 0));
     }
 
     /// A batch SELECT that fails to dispatch must NOT move `current_database` --
@@ -5333,21 +6161,18 @@ mod tests {
         );
     }
 
-    /// `send_command` must route through `track_transaction_state` — pins the wiring
-    /// so removing that call is caught. A non-IAM lazy client reconciles to Ok, then
-    /// tracks the MULTI, then fails to connect; the flag must be set regardless of the
-    /// dispatch error.
+    /// A MULTI that fails to connect never reached the server, so `send_command` must
+    /// not track it. Tracking of a sent MULTI is pinned against a live server by the
+    /// pool release tests (`release_discards_a_client_whose_discard_was_denied`).
     #[test]
-    fn send_command_tracks_open_multi() {
+    fn send_command_does_not_track_a_multi_that_never_dispatched() {
         use std::sync::atomic::Ordering;
         let mut client = create_test_client(); // non-IAM, lazy (no network)
         let rt = borrow_test_runtime();
-        let _ = rt.block_on(client.send_command(&mut redis::cmd("MULTI"), None));
-        assert!(
-            client.shared.multi_active.load(Ordering::Acquire),
-            "send_command must track a raw MULTI via track_transaction_state, \
-             even when the dispatch itself fails"
-        );
+        let res = rt.block_on(client.send_command(&mut redis::cmd("MULTI"), None));
+        assert!(res.is_err(), "the lazy client can't connect");
+        assert!(!client.shared.multi_active.load(Ordering::Acquire));
+        assert!(!client.shared.multi_seen.load(Ordering::Acquire));
     }
 
     #[test]
@@ -5371,6 +6196,91 @@ mod tests {
         bracketed.cmd("MULTI").cmd("INCR").arg("a").cmd("EXEC");
         let _ = rt.block_on(client.send_pipeline(&bracketed, None, false, None, strategy));
         assert!(!client.shared.multi_active.load(Ordering::Acquire));
+    }
+
+    /// A read-only standalone client on its own server (the server stops on drop).
+    fn start_read_only_client() -> (
+        crate::pool::scope_pool_tests::TestServer,
+        tokio::runtime::Runtime,
+        Client,
+    ) {
+        use crate::pool::scope_pool_tests::{TestServer, wait_for_server_ready};
+        let server = TestServer::start();
+        let rt = borrow_test_runtime();
+        rt.block_on(wait_for_server_ready(server.port));
+        let request = ConnectionRequest {
+            read_only: true,
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: server.port,
+                unix_socket_path: None,
+            }],
+            ..Default::default()
+        };
+        let client = rt.block_on(Client::new(request, None)).unwrap();
+        (server, rt, client)
+    }
+
+    /// Pool-manage `client` after an IAM token rotation and run the borrow-time
+    /// re-AUTH. `Ok` means it was deferred; the test server has no password, so an
+    /// attempted AUTH errors.
+    fn borrow_after_iam_rotation(
+        rt: &tokio::runtime::Runtime,
+        client: Client,
+    ) -> redis::RedisResult<()> {
+        let mut client = rt.block_on(async move {
+            let manager = test_iam_manager().await;
+            let client = attach_iam(client, manager.clone(), manager.token_generation());
+            manager.refresh_token().await.unwrap();
+            client
+        });
+        client.mark_pool_managed();
+        rt.block_on(client.prepare_for_borrow())
+    }
+
+    /// A rejected read-only `[MULTI, SET]` pipeline never opened a transaction, so
+    /// it must not defer the pooled client's re-AUTH.
+    #[test]
+    fn rejected_read_only_multi_pipeline_does_not_defer_reauth() {
+        let (_server, rt, mut client) = start_read_only_client();
+        let mut pipeline = redis::pipe();
+        pipeline.cmd("MULTI").cmd("SET").arg("k").arg("v");
+        rt.block_on(client.send_pipeline(&pipeline, None, true, None, Default::default()))
+            .expect_err("read-only mode rejects the batch");
+        assert!(borrow_after_iam_rotation(&rt, client).is_err());
+    }
+
+    /// A rejected read-only `[SUBSCRIBE, SET]` batch never subscribed, so the
+    /// pool's release reset must succeed instead of discarding the connection.
+    #[rstest::rstest]
+    fn rejected_read_only_subscribe_batch_keeps_connection_resettable(
+        #[values(false, true)] atomic: bool,
+    ) {
+        let (_server, rt, mut client) = start_read_only_client();
+        let mut batch = redis::pipe();
+        batch
+            .cmd("SUBSCRIBE")
+            .arg("ch")
+            .cmd("SET")
+            .arg("k")
+            .arg("v");
+        let result = if atomic {
+            rt.block_on(client.send_transaction(&batch, None, None, true))
+        } else {
+            rt.block_on(client.send_pipeline(&batch, None, true, None, Default::default()))
+        };
+        result.expect_err("read-only mode rejects the batch");
+        rt.block_on(client.reset_connection_state(0)).unwrap();
+    }
+
+    /// A rejected read-only `MONITOR` never started monitoring, so the pool's
+    /// release reset must succeed instead of discarding the connection.
+    #[test]
+    fn rejected_read_only_monitor_keeps_connection_resettable() {
+        let (_server, rt, mut client) = start_read_only_client();
+        rt.block_on(client.send_command(&mut redis::cmd("MONITOR"), None))
+            .expect_err("read-only mode rejects MONITOR");
+        rt.block_on(client.reset_connection_state(0)).unwrap();
     }
 
     #[test]
@@ -5696,6 +6606,10 @@ mod tests {
 
         let mut cmd = Cmd::new();
         cmd.arg("RESET");
+        assert!(client.is_reset_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("reset");
         assert!(client.is_reset_command(&cmd));
 
         let mut cmd = Cmd::new();
@@ -6123,6 +7037,7 @@ mod tests {
     ///
     /// A-B: the same request over TLS succeeds, so the failure is the `NoTls` guard
     /// firing, not IAM config being rejected unconditionally.
+    // TODO #7707: Add a test that IAM authentication with `TlsMode::InsecureTls` is rejected.
     #[tokio::test]
     #[cfg(feature = "proto")]
     async fn test_iam_without_tls_is_rejected() {

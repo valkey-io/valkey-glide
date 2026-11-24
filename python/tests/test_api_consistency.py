@@ -123,8 +123,6 @@ EXCLUDED_TESTS = {
         "test_pool_abandon_detection",
         "test_pool_abandon_detection_disabled",
         "test_pool_abandon_skips_client_whose_scope_is_blocking",
-        # Scope release test — async-only (cancelled await pins an executor thread)
-        "test_release_frees_thread_of_cancelled_blocking_command",
         # Async provider scheduling has no sync equivalent.
         "test_iam_custom_async_provider_forms",
         "test_iam_close_during_provider_refresh_does_not_block_owner_runtime",
@@ -137,9 +135,16 @@ EXCLUDED_TESTS = {
         # event-loop pipe transport, which the sync client does not have.
         "test_unreferenced_client_releases_connection",
         "dropped_client_gone",
+        # Async clients refuse a scope in a forked child; sync clients rebuild theirs
+        "test_scope_on_inherited_client_raises_in_child",
     ],
     "sync_only": [
         "test_sync_fork",
+        # Only the sync client registers an os.register_at_fork hook.
+        "test_sync_fork_after_failed_create_does_not_reconnect",
+        "spy",
+        # Sync clients rebuild their native client in a forked child; async clients refuse
+        "test_scope_on_inherited_client_in_child",
         # RDMA is sync-only, and async clients refuse it at creation
         "test_pool_rejects_rdma_config",
         # `closed` exists so RDMA callers can tell whether a region can be
@@ -182,6 +187,8 @@ EXCLUDED_TESTS_FILENAMES = {
         "test_async_freethreading.py",
         "test_fork_safety.py",
         "test_async_scope_backends.py",
+        "test_async_pool_backends.py",
+        "test_pipe_reader.py",
     ],
     "sync_only": [
         "test_sync_rdma.py",

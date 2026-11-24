@@ -65,6 +65,29 @@ ffi/
 - Each client is built and released independently, with its own isolated package name and pyproject.toml.
 - Shared logic remains fully decoupled from both clients and reusable between them.
 
+### Windows wheel CI (experimental)
+
+The `Python - Windows wheel builds` workflow builds both `valkey-glide` (async)
+and `valkey-glide-sync` on native Windows runners:
+
+| Architecture | CPython versions | Runner |
+| --- | --- | --- |
+| AMD64 | 3.9–3.14 | `windows-latest` |
+| ARM64 | 3.11–3.14 | `windows-11-arm` |
+
+Pull requests build CPython 3.14 on both architectures; a manual workflow run
+builds the full matrix. PyPy and free-threaded Python wheels are not included.
+The workflow checks wheel imports, connection-error and timeout handling, FFI
+layouts, and response-pipe regressions under asyncio and trio.
+Async PubSub callbacks run on the client's owning asyncio loop or trio run,
+not on the Windows response-pipe reader thread.
+
+These are **build-only CI artifacts**, named `windows-ci-*`, not published
+Windows packages. Successful commands against a real Valkey server on Windows
+are not yet covered. Windows integration CI must land before enabling PyPI
+publishing or claiming supported Windows releases. This workflow does not start
+the PyPI CD matrix or its self-hosted EC2 runner.
+
 ## Prerequisites
 
 ---
@@ -198,7 +221,7 @@ After installing prerequisites and cloning the repository, you can build the asy
 # Build the async client in release mode
 python3 dev.py build --client async --mode release
 
-# Build the sync client with RDMA support
+# Build the sync client with RDMA support (debug mode also has the tcp provider)
 python3 dev.py build --client sync --rdma
 ```
 
@@ -309,10 +332,11 @@ If the environment variable is not set, DNS tests will be skipped.
 
 ### RDMA Tests
 
-RDMA is only in the sync client, and only when it is built with `--rdma`. `libfabric` 2.4 or
-newer is loaded when a client first opens a fabric, so it only has to be installed where the
-tests run. Set `GLIDE_LIBFABRIC_PATH` to the library file to use a copy the default search does
-not find.
+RDMA is only in the sync client, and only when it is built with `--rdma`. The tcp tests
+need a debug-mode build; a `--mode release` build has no tcp provider and they skip.
+`libfabric` 2.4 or newer is loaded when a client first opens a fabric, so it only has to be
+installed where the tests run. Set `GLIDE_LIBFABRIC_PATH` to the library file to use a copy
+the default search does not find.
 
 [`tests/sync_tests/test_sync_rdma.py`](tests/sync_tests/test_sync_rdma.py) and
 [`tests/test_rdma_config.py`](tests/test_rdma_config.py) run without fabric hardware, including
