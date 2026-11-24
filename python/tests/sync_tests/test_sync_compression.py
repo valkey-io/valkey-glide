@@ -94,20 +94,36 @@ def exec_gets(
 
 
 def exec_size_limit_batch(
-    client: TGlideClient, is_atomic: bool, big_key: str, marker_key: str
+    client: TGlideClient,
+    is_atomic: bool,
+    big_key: str,
+    marker_key: str,
+    raise_on_error: bool = False,
 ) -> Optional[List[Any]]:
-    """Runs SET marker, GET big, GET marker, MGET [marker, big] with raise_on_error=False."""
+    """Runs SET marker, GET big, GET marker, MGET [marker, big]."""
     if isinstance(client, GlideClient):
         batch = Batch(is_atomic=is_atomic)
         batch.set(marker_key, "written").get(big_key).get(marker_key).mget(
             [marker_key, big_key]
         )
-        return client.exec(batch, raise_on_error=False)
+        return client.exec(batch, raise_on_error=raise_on_error)
     cluster_batch = ClusterBatch(is_atomic=is_atomic)
     cluster_batch.set(marker_key, "written").get(big_key).get(marker_key).mget(
         [marker_key, big_key]
     )
-    return cast(GlideClusterClient, client).exec(cluster_batch, raise_on_error=False)
+    return cast(GlideClusterClient, client).exec(
+        cluster_batch, raise_on_error=raise_on_error
+    )
+
+
+def raised_size_limit_message(
+    client: TGlideClient, is_atomic: bool, big_key: str, marker_key: str
+) -> str:
+    """Returns the message of the error the size-limit batch raises with raise_on_error=True."""
+    with pytest.raises(RequestError, match="size limit exceeded") as raised:
+        exec_size_limit_batch(client, is_atomic, big_key, marker_key, True)
+    assert type(raised.value) is RequestError
+    return str(raised.value)
 
 
 def generate_mixed_size_list(count: int, min_size: int, max_size: int) -> List[str]:
@@ -1913,7 +1929,8 @@ class TestCompressionMaxDecompressedSize:
         self, request, cluster_mode: bool, protocol: ProtocolVersion, is_atomic: bool
     ):
         """With raise_on_error=False, an oversized reply is a RequestError in its
-        position and the other replies of the batch are kept."""
+        position and the other replies of the batch are kept. The in-place error
+        carries the same message the batch raises with raise_on_error=True."""
         unlimited_client = create_sync_client(
             request,
             cluster_mode,
@@ -1946,6 +1963,9 @@ class TestCompressionMaxDecompressedSize:
                 limited_client = GlideClient.create(limited_config)
 
             try:
+                raised_message = raised_size_limit_message(
+                    limited_client, is_atomic, big_key, marker_key
+                )
                 results = exec_size_limit_batch(
                     limited_client, is_atomic, big_key, marker_key
                 )
@@ -1953,12 +1973,13 @@ class TestCompressionMaxDecompressedSize:
                 assert results is not None
                 assert len(results) == 4
                 assert results[0] == OK
-                assert isinstance(results[1], RequestError)
+                assert type(results[1]) is RequestError
                 assert "size limit exceeded" in str(results[1])
+                assert str(results[1]) == raised_message
                 assert results[2] == b"written"
                 # An MGET reply fails as a whole, as the same MGET does outside a batch.
-                assert isinstance(results[3], RequestError)
-                assert "size limit exceeded" in str(results[3])
+                assert type(results[3]) is RequestError
+                assert str(results[3]) == raised_message
             finally:
                 limited_client.close()
 

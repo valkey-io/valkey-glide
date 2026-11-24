@@ -4628,6 +4628,17 @@ impl ResponseArena {
         (ptr, len)
     }
 
+    /// Write `error` into the node at `idx` as an `Error` node holding its message.
+    ///
+    /// Server and client errors share this representation, so the error's origin does
+    /// not cross the FFI boundary.
+    fn store_error(&mut self, idx: usize, error: RedisError) {
+        let (ptr, len) = self.store_string(error_message(&error).into_bytes());
+        self.nodes[idx].response_type = ResponseType::Error;
+        self.nodes[idx].string_value = ptr;
+        self.nodes[idx].string_value_len = len;
+    }
+
     /// Build the response tree into the arena. Returns index of the root node.
     fn build(&mut self, value: Value, bufs: &[(*mut u8, usize)]) -> RedisResult<usize> {
         let idx = self.alloc_node();
@@ -4761,13 +4772,8 @@ impl ResponseArena {
                 self.nodes[idx].sets_value_len = child_count as i64;
                 self.nodes[idx].sets_value = child_start as *mut CommandResponse;
             }
-            Value::ServerError(server_error) => {
-                let msg = error_message(&server_error.into()).into_bytes();
-                let (ptr, len) = self.store_string(msg);
-                self.nodes[idx].response_type = ResponseType::Error;
-                self.nodes[idx].string_value = ptr;
-                self.nodes[idx].string_value_len = len;
-            }
+            Value::ServerError(server_error) => self.store_error(idx, server_error.into()),
+            Value::ClientError(client_error) => self.store_error(idx, client_error.into()),
             Value::Push { kind, data } => {
                 // Encode as Map with 2 entries using wrapper nodes
                 let wrapper_start = self.nodes.len();
@@ -5018,6 +5024,58 @@ mod tests_response_arena {
             }
             free_response_arena(arena_ptr);
         }
+    }
+
+    /// Reads the bytes a `String` or `Error` node points to.
+    ///
+    /// # Safety
+    ///
+    /// `node` must belong to a live arena response.
+    unsafe fn node_text(node: &CommandResponse) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                node.string_value as *const u8,
+                node.string_value_len as usize,
+            )
+        }
+    }
+
+    /// A batch with `raise_on_error=false` holds a client error in a failed command's
+    /// slot. It must become an `Error` node in that slot with its message, like a server
+    /// error, and leave its neighbors intact.
+    #[test]
+    fn client_error_in_batch_slot_becomes_error_node() {
+        let client_error = redis::ClientError::new(
+            "Decompression error",
+            Some("Decompression size limit exceeded".to_string()),
+        );
+        let expected_message = error_message(&client_error.clone().into());
+        let value = Value::Array(vec![
+            Value::Okay,
+            Value::ClientError(client_error),
+            Value::BulkString(bytes::Bytes::from_static(b"neighbor")),
+            Value::Int(7),
+        ]);
+
+        let (root, arena_ptr) = valkey_value_to_arena_response(value, &[]).expect("build failed");
+        unsafe {
+            let root_ref = &*root;
+            assert!(matches!(root_ref.response_type, ResponseType::Array));
+            assert_eq!(root_ref.array_value_len, 4);
+            let slots = std::slice::from_raw_parts(root_ref.array_value, 4);
+            assert!(matches!(slots[0].response_type, ResponseType::Ok));
+            assert!(matches!(slots[1].response_type, ResponseType::Error));
+            assert_eq!(node_text(&slots[1]), expected_message.as_bytes());
+            assert!(matches!(slots[2].response_type, ResponseType::String));
+            assert_eq!(node_text(&slots[2]), b"neighbor");
+            assert!(matches!(slots[3].response_type, ResponseType::Int));
+            assert_eq!(slots[3].int_value, 7);
+            free_response_arena(arena_ptr);
+        }
+        assert!(
+            expected_message.contains("Decompression size limit exceeded"),
+            "{expected_message}"
+        );
     }
 }
 

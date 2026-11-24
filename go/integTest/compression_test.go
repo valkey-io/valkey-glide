@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -1495,6 +1496,77 @@ func (suite *GlideTestSuite) TestCompressionMaxDecompressedSizeWithMGet() {
 
 	// Cleanup
 	unlimitedClient.Del(context.Background(), keys)
+}
+
+// assertSizeLimitBatchSlots checks the replies of SET marker, GET big, GET marker, MGET [marker, big]
+// run with raiseOnError=false against the error the same batch returns with raiseOnError=true.
+// Both are the general request error, carry the same message, and the neighbors are intact.
+func (suite *GlideTestSuite) assertSizeLimitBatchSlots(raised error, results []any) {
+	t := suite.T()
+	generalRequestError := errors.New("")
+	suite.Require().Error(raised)
+	assert.IsType(t, generalRequestError, raised)
+	assert.Contains(t, raised.Error(), "size limit exceeded")
+
+	suite.Require().Len(results, 4)
+	assert.Equal(t, "OK", results[0])
+	assert.IsType(t, generalRequestError, results[1])
+	assert.EqualError(t, glide.IsError(results[1]), raised.Error())
+	assert.Equal(t, "written", results[2])
+	// An MGET reply fails as a whole, as the same MGET does outside a batch.
+	assert.IsType(t, generalRequestError, results[3])
+	assert.EqualError(t, glide.IsError(results[3]), raised.Error())
+}
+
+func (suite *GlideTestSuite) runSizeLimitBatchStandalone(isAtomic bool) {
+	unlimitedClient := suite.compressionClient()
+	defer unlimitedClient.Close()
+	tag := fmt.Sprintf("{batch_no_raise_%s}", randomString(8))
+	bigKey, markerKey := tag+"big", tag+"marker"
+	_, err := unlimitedClient.Set(context.Background(), bigKey, generateCompressibleText(10000))
+	suite.Require().NoError(err)
+	defer unlimitedClient.Del(context.Background(), []string{bigKey, markerKey})
+
+	limitedClient, err := suite.compressionClientWithMaxSize(100)
+	suite.Require().NoError(err)
+	defer limitedClient.Close()
+
+	batch := pipeline.NewStandaloneBatch(isAtomic).
+		Set(markerKey, "written").Get(bigKey).Get(markerKey).MGet([]string{markerKey, bigKey})
+	_, raised := limitedClient.Exec(context.Background(), *batch, true)
+	results, err := limitedClient.Exec(context.Background(), *batch, false)
+	suite.Require().NoError(err)
+	suite.assertSizeLimitBatchSlots(raised, results)
+}
+
+func (suite *GlideTestSuite) runSizeLimitBatchCluster(isAtomic bool) {
+	unlimitedClient := suite.compressionClusterClient()
+	defer unlimitedClient.Close()
+	tag := fmt.Sprintf("{batch_no_raise_%s}", randomString(8))
+	bigKey, markerKey := tag+"big", tag+"marker"
+	_, err := unlimitedClient.Set(context.Background(), bigKey, generateCompressibleText(10000))
+	suite.Require().NoError(err)
+	defer unlimitedClient.Del(context.Background(), []string{bigKey, markerKey})
+
+	limitedClient, err := suite.compressionClusterClientWithMaxSize(100)
+	suite.Require().NoError(err)
+	defer limitedClient.Close()
+
+	batch := pipeline.NewClusterBatch(isAtomic).
+		Set(markerKey, "written").Get(bigKey).Get(markerKey).MGet([]string{markerKey, bigKey})
+	_, raised := limitedClient.Exec(context.Background(), *batch, true)
+	results, err := limitedClient.Exec(context.Background(), *batch, false)
+	suite.Require().NoError(err)
+	suite.assertSizeLimitBatchSlots(raised, results)
+}
+
+// With raiseOnError=false, an oversized reply is the general request error in its own slot and the
+// other replies are kept; with raiseOnError=true the batch returns that same error.
+func (suite *GlideTestSuite) TestCompressionMaxDecompressedSizeBatchErrorInPlace() {
+	for _, isAtomic := range []bool{true, false} {
+		suite.runSizeLimitBatchStandalone(isAtomic)
+		suite.runSizeLimitBatchCluster(isAtomic)
+	}
 }
 
 func (suite *GlideTestSuite) TestCompressionMaxDecompressedSizeAllowsWithinLimit() {

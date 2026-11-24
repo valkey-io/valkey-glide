@@ -2,7 +2,9 @@
 
 use glide_telemetry::GlideSpan;
 pub use redis::AddressResolver;
-pub use redis::{ErrorKind, ObjectType, PushKind, RedisError, RedisFuture, RedisResult, Value};
+pub use redis::{
+    ClientError, ErrorKind, ObjectType, PushKind, RedisError, RedisFuture, RedisResult, Value,
+};
 use std::sync::Arc;
 
 #[derive(Clone, Default, PartialEq)]
