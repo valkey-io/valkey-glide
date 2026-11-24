@@ -594,6 +594,8 @@ type ConnectionsContainer<C> =
 pub(crate) struct Connections<C> {
     /// Set by `dispose`.
     closed: bool,
+    /// The slot refresh a partial-results fan-out started; `dispose` aborts it.
+    background_refresh: Option<JoinHandle<RedisResult<()>>>,
     container: ConnectionsContainer<C>,
 }
 
@@ -601,6 +603,7 @@ impl<C> Connections<C> {
     fn new(container: ConnectionsContainer<C>) -> Self {
         Connections {
             closed: false,
+            background_refresh: None,
             container,
         }
     }
@@ -839,6 +842,9 @@ impl<C> Dispose for ClusterConnInner<C> {
         // A task that is mid-poll on another thread may still ask for a reconnect;
         // `closed` makes that a no-op.
         conn_lock.closed = true;
+        if let Some(refresh) = conn_lock.background_refresh.take() {
+            refresh.abort();
+        }
         conn_lock.refresh_conn_state.clear_refresh_state();
         drop(conn_lock);
 
@@ -3504,10 +3510,18 @@ where
             if matches!(collected, Ok((_, true))) {
                 // The node may have failed over, so ask for a throttled slot
                 // refresh in the background. The command is not retried.
-                drop(Self::spawn_refresh_slots_task(
-                    core,
-                    &RefreshPolicy::Throttable,
-                ));
+                let mut connections = core.conn_lock.write();
+                if !connections.closed
+                    && connections
+                        .background_refresh
+                        .as_ref()
+                        .map_or(true, JoinHandle::is_finished)
+                {
+                    connections.background_refresh = Some(Self::spawn_refresh_slots_task(
+                        core.clone(),
+                        &RefreshPolicy::Throttable,
+                    ));
+                }
             }
             collected.map(|(value, _)| value)
         } else {
@@ -6949,6 +6963,38 @@ pub(super) mod refresh_task_resolution_tests {
         })
         .await
         .expect("disposing the connection must release the core and its connections");
+    }
+
+    #[tokio::test]
+    async fn dispose_aborts_the_partial_results_refresh() {
+        let core = core_with_non_idempotent_resolver();
+        let refresh = tokio::spawn({
+            let core = core.clone();
+            async move {
+                std::future::pending::<()>().await;
+                drop(core);
+                Ok(())
+            }
+        });
+        core.conn_lock.write().background_refresh = Some(refresh);
+        let weak_core = Arc::downgrade(&core);
+        drop(Disposable::new(ClusterConnInner {
+            inner: core,
+            in_flight_requests: Default::default(),
+            refresh_error: None,
+            state: ConnectionState::PollComplete,
+            periodic_checks_handler: None,
+            connections_validation_handler: None,
+            recovery_queue: std::collections::VecDeque::new(),
+        }));
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while weak_core.strong_count() > 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("disposing the connection must stop the partial results refresh");
     }
 
     #[tokio::test]
