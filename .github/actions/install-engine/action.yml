@@ -41,11 +41,9 @@ runs:
               git clone https://github.com/valkey-io/valkey.git "$VALKEY_DIR"
               cd "$VALKEY_DIR/src"
               git checkout $ENGINE_VERSION
-              SOURCES_VERSION=`grep ' VALKEY_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]'` || :
-              if [[ -z $SOURCES_VERSION ]]; then
-                  SOURCES_VERSION=`grep ' REDIS_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]'`
-              fi
-              echo "SOURCES_VERSION=$SOURCES_VERSION" >> "$GITHUB_OUTPUT"
+
+              # Use commit SHA to cache Valkey source.
+              echo "SOURCES_SHA=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
         - name: Identify the runner image
           id: runner-image
@@ -85,7 +83,7 @@ runs:
                   ${{ runner.temp }}/valkey-engine/src/valkey-cli
                   ${{ runner.temp }}/valkey-engine/src/redis-server
                   ${{ runner.temp }}/valkey-engine/src/redis-cli
-              key: valkey-${{ steps.prepare-sources.outputs.SOURCES_VERSION }}-${{ inputs.target }}-${{ steps.runner-image.outputs.IMAGE_ID }}
+              key: valkey-${{ steps.prepare-sources.outputs.SOURCES_SHA }}-${{ inputs.target }}-${{ steps.runner-image.outputs.IMAGE_ID }}
 
         # Manual install, because makefile target rebuilds everything, we want to avoid that
         - name: Install cached engine
@@ -138,15 +136,17 @@ runs:
           run: |
               cd "$VALKEY_DIR"
               MAKE_ARGS=(BUILD_TLS=yes)
+
+              # On macOS, install openssl@3 because OpenSSL 4 deprecates APIs that
+              # Valkey 9.x calls and Valkey builds with -Werror=deprecated-declarations.
               if [[ "$(uname -s)" == "Darwin" ]]; then
-                  # Homebrew's `openssl` is OpenSSL 4, and valkey 9.x fails to build against it
-                  # (-Werror=deprecated-declarations), so build against openssl@3. Pass the prefix to
-                  # `make install` too: the 6.2, 7.0 and 9.2.0-rc1 Makefiles do not save it in
-                  # .make-settings, so a bare `make install` falls back to Homebrew's `openssl` and rebuilds.
-                  # pypi-cd's test-release job calls this action without install-shared-dependencies.
                   brew list openssl@3 &> /dev/null || brew install openssl@3
+
+                  # Add OPENSSL_PREFIX to MAKE_ARGS so that `make` and `make install`
+                  # use openssl@3 instead of the GitHub runner's default OpenSSL 4.
                   MAKE_ARGS+=("OPENSSL_PREFIX=$(brew --prefix openssl@3)")
               fi
+
               make "${MAKE_ARGS[@]}" -j4
               if command -v sudo &> /dev/null
               then

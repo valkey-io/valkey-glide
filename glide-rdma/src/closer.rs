@@ -90,6 +90,12 @@ impl Closer {
     pub(crate) fn queue(&self) -> Arc<CloseQueue> {
         self.queue.clone()
     }
+
+    /// Whether the calling thread is the closing thread, running a close. Reads
+    /// no lock, so any drop can ask.
+    pub(crate) fn is_current_thread(&self) -> bool {
+        thread::current().id() == self.thread_id
+    }
 }
 
 impl Drop for Closer {
@@ -116,6 +122,13 @@ impl CloseQueue {
         state.submitted += 1;
         drop(state);
         self.work.notify_one();
+    }
+
+    /// How many threads are in [`Self::wait_until_idle`], for a test that has to
+    /// queue a close only once a wait has counted the closes before it.
+    #[cfg(test)]
+    pub(crate) fn waiting(&self) -> usize {
+        self.state().waiting
     }
 
     /// Return once every close queued before this call has finished. Closes

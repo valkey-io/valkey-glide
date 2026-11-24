@@ -10,18 +10,21 @@ on:
             - release-*
             - v*
         paths:
-            - glide-core/src/**
-            - glide-core/redis-rs/redis/src/**
-            - glide-core/Cargo.toml
-            - glide-core/build.rs
-            - glide-core/redis-rs/redis/Cargo.toml
+            - glide-core/**
             - glide-logger/**
             - glide-telemetry/**
+            - glide-rdma/**
+            - .cargo/config.toml
+            - deny.toml
             - java/**
             - utils/cluster_manager.py
             - .github/workflows/java.yml
             - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-zig/action.yml
+            - .github/actions/setup-dns-tests/**
             - .github/actions/test-benchmark/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
@@ -32,18 +35,21 @@ on:
 
     pull_request:
         paths:
-            - glide-core/src/**
-            - glide-core/redis-rs/redis/src/**
-            - glide-core/Cargo.toml
-            - glide-core/build.rs
-            - glide-core/redis-rs/redis/Cargo.toml
+            - glide-core/**
             - glide-logger/**
             - glide-telemetry/**
+            - glide-rdma/**
+            - .cargo/config.toml
+            - deny.toml
             - java/**
             - utils/cluster_manager.py
             - .github/workflows/java.yml
             - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-zig/action.yml
+            - .github/actions/setup-dns-tests/**
             - .github/actions/test-benchmark/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
@@ -225,8 +231,8 @@ jobs:
               shell: bash
               run: |
                   ulimit -n 65536 2>/dev/null || true
-                  export AWS_ACCESS_KEY_ID=test_access_key 
-                  export AWS_SECRET_ACCESS_KEY=test_secret_key 
+                  export AWS_ACCESS_KEY_ID=test_access_key
+                  export AWS_SECRET_ACCESS_KEY=test_secret_key
                   export AWS_SESSION_TOKEN=test_session_token
                   if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
                       if [[ "${{ matrix.java }}" == "8" ]]; then

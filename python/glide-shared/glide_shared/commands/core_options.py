@@ -97,12 +97,10 @@ class ValueComparison(ABC):
 class OnlyIfEqual(ValueComparison):
     """
     A condition that is met if the key exists and its current value is equal to the comparison value.
-    Used by the `SET` command. Equivalent to the `IFEQ comparison-value` in the Valkey API.
+    Used by the `SET` and `DELEX` commands. Equivalent to the `IFEQ comparison-value` in the Valkey API.
 
     Not supported when compression is enabled. See
     `Valkey GLIDE - Data Compression <https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands>`_.
-
-    Since: Valkey 8.1.0.
     """
 
     def _to_args(self) -> List[TEncodable]:
@@ -112,12 +110,10 @@ class OnlyIfEqual(ValueComparison):
 class OnlyIfNotEqual(ValueComparison):
     """
     A condition that is met if the key does not exist or its current value is not equal to the comparison value.
-    Used by the `SET` command. Equivalent to the `IFNE comparison-value` in the Valkey API.
+    Used by the `SET` and `DELEX` commands. Equivalent to the `IFNE comparison-value` in the Valkey API.
 
     Not supported when compression is enabled. See
     `Valkey GLIDE - Data Compression <https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands>`_.
-
-    Since: Valkey 9.2.0.
     """
 
     def _to_args(self) -> List[TEncodable]:

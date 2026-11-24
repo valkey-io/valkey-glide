@@ -17,6 +17,7 @@ on:
             - glide-telemetry/**
             - glide-rdma/**
             - deny.toml
+            - .cargo/config.toml
 
             # GitHub workflows
             - .github/workflows/glide-core-engine.yml
@@ -37,6 +38,7 @@ on:
             - glide-telemetry/**
             - glide-rdma/**
             - deny.toml
+            - .cargo/config.toml
 
             # GitHub workflows
             - .github/workflows/glide-core-engine.yml

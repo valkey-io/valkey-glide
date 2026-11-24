@@ -18,6 +18,7 @@ on:
             - glide-telemetry/**
             - glide-logger/**
             - deny.toml
+            - .cargo/config.toml
 
             # GitHub workflows
             - .github/workflows/ffi.yml
@@ -41,6 +42,7 @@ on:
             - glide-telemetry/**
             - glide-logger/**
             - deny.toml
+            - .cargo/config.toml
 
             # GitHub workflows
             - .github/workflows/ffi.yml
