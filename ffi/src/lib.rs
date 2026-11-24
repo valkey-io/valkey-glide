@@ -3210,10 +3210,9 @@ mod tests_parse_proto_json_request {
         "client_key": "a2V5"
     }"#;
 
-    /// One hand-computed expectation per ProtoJSON value encoding. This is the external
-    /// anchor for the floating `protobuf-json-mapping` dependency: it outlives the
-    /// URI-equivalence corpus (deleted with the URI path) and catches the symmetric
-    /// encode/decode bugs the self-consistent reflection round-trip cannot.
+    /// One hand-computed expectation per ProtoJSON value encoding: the external anchor
+    /// for the floating `protobuf-json-mapping` dependency, and the one that outlives the
+    /// URI-equivalence corpus (deleted with the URI path).
     #[test]
     fn value_encodings_map_to_expected_proto_values() {
         let request = parse(FULL_CAMEL_CASE).unwrap();
