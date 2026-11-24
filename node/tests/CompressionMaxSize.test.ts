@@ -305,27 +305,40 @@ describe("Compression MaxDecompressedSize", () => {
                         .get(bigKey)
                         .get(markerKey)
                         .mget([markerKey, bigKey]);
-                    const result = clusterMode
-                        ? await (limitedClient as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          )
-                        : await (limitedClient as GlideClient).exec(
-                              batch as Batch,
-                              false,
-                          );
+                    const execBatch = (raiseOnError: boolean) =>
+                        clusterMode
+                            ? (limitedClient as GlideClusterClient).exec(
+                                  batch as ClusterBatch,
+                                  raiseOnError,
+                              )
+                            : (limitedClient as GlideClient).exec(
+                                  batch as Batch,
+                                  raiseOnError,
+                              );
+
+                    const raisedError = await execBatch(true).then(
+                        () => {
+                            throw new Error("expected the batch to throw");
+                        },
+                        (error: unknown) => error,
+                    );
+                    expect(raisedError).toBeInstanceOf(RequestError);
+                    const raisedMessage = (raisedError as RequestError).message;
+                    expect(raisedMessage).toMatch(/size limit exceeded/i);
+
+                    const result = await execBatch(false);
 
                     expect(result).toHaveLength(4);
                     expect(result?.[0]).toEqual("OK");
                     expect(result?.[1]).toBeInstanceOf(RequestError);
-                    expect((result?.[1] as RequestError).message).toMatch(
-                        /size limit exceeded/i,
+                    expect((result?.[1] as RequestError).message).toEqual(
+                        raisedMessage,
                     );
                     expect(result?.[2]).toEqual("written");
                     // An MGET reply fails as a whole, as the same MGET does outside a batch.
                     expect(result?.[3]).toBeInstanceOf(RequestError);
-                    expect((result?.[3] as RequestError).message).toMatch(
-                        /size limit exceeded/i,
+                    expect((result?.[3] as RequestError).message).toEqual(
+                        raisedMessage,
                     );
                 } finally {
                     limitedClient.close();

@@ -2740,14 +2740,18 @@ fn resp_value_to_js<'a>(val: Value, js_env: &'a Env, string_decoder: bool) -> Re
             obj.set_named_property("values", js_array_view)?;
             obj.into_unknown(js_env)
         }
-        Value::ServerError(error) => {
-            let err_msg = error_message(&error.into());
-            let err = Error::new(Status::Ok, err_msg);
-            let mut js_error = js_env.create_error(err)?;
-            js_error.set_named_property("name", "RequestError")?;
-            js_error.into_unknown(js_env)
-        }
+        Value::ServerError(error) => request_error_to_js(error.into(), js_env),
+        Value::ClientError(error) => request_error_to_js(error.into(), js_env),
     }
+}
+
+/// Builds the JS error placed in a batch result slot. The TS layer re-classes errors
+/// named `RequestError` as `RequestError` instances.
+fn request_error_to_js<'a>(error: RedisError, js_env: &'a Env) -> Result<Unknown<'a>> {
+    let error = Error::new(Status::Ok, error_message(&error));
+    let mut js_error = js_env.create_error(error)?;
+    js_error.set_named_property("name", "RequestError")?;
+    js_error.into_unknown(js_env)
 }
 
 /// Dereference a response pointer passed as a single JS number.
