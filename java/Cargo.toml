@@ -22,7 +22,7 @@ anyhow = "1.0"
 bytes = { version = "1.6.0" }
 dashmap = "~6.2.1"
 jni = "0.21.1"
-log = "0.4.30"
+log = { version = "0.4.30", features = ["release_max_level_warn"] }
 parking_lot = "0.12"
 protobuf = "3.7"
 scopeguard = "1.2"
