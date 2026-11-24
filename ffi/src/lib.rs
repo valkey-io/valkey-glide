@@ -3348,6 +3348,11 @@ mod tests_create_client_from_proto_json_errors {
 
 /// Creates a new client from a URI string and optional JSON configuration.
 ///
+/// **Deprecated** in favor of [`create_client_from_proto_json`]: the URI and JSON-options
+/// schema below is a hand-maintained copy of `connection_request.proto` and has drifted
+/// from it (valkey-io/valkey-glide#7157). It is frozen — new connection options are not
+/// added here — and it will be removed once the remaining bindings have migrated.
+///
 /// This is an alternative to [`create_client`] that accepts a connection URI instead of protobuf bytes.
 /// The URI parsing and configuration building happens in Rust, making it easier to add new connection
 /// options without changing FFI signatures across all language bindings.
@@ -3484,6 +3489,10 @@ mod tests_create_client_from_proto_json_errors {
 /// * If `extra_options_json` is non-null, it must be a valid null-terminated C string containing valid JSON.
 /// * `client_type` must be a valid pointer to a `ClientType`.
 /// * If `pubsub_callback` is non-zero, it must be a valid function pointer that lives while the client is open/active.
+#[deprecated(
+    since = "2.7.0",
+    note = "use create_client_from_proto_json; the URI/JSON-options schema drifts from connection_request.proto (#7157)"
+)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn create_client_from_uri(
     uri_str: *const c_char,

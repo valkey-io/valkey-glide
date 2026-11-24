@@ -92,6 +92,7 @@ fn create_client_test() {
 }
 
 #[test]
+#[allow(deprecated)] // The deprecated entry point stays covered until it is removed.
 fn create_client_from_uri_test() {
     let uri = CString::new("redis://localhost:6378").unwrap();
     let client_type = Box::new(ClientType::SyncClient);
