@@ -22,19 +22,13 @@ fn node_address_default_is_localhost_6379() {
 }
 
 #[test]
-fn node_address_unix_lowers_to_socket_only_core_address() {
+fn unix_socket_lowers_to_socket_only_core_address() {
     let path = std::path::Path::new("/run/valkey/valkey.sock");
-    let with_host_and_port = NodeAddress {
-        unix_socket_path: Some(path.into()),
-        ..NodeAddress::default()
-    };
-
-    for a in [NodeAddress::unix(path), with_host_and_port] {
-        let req = GlideClientConfiguration::new(vec![a]).to_request();
-        let core = &req.addresses[0];
-        assert_eq!(core.unix_socket_path.as_deref(), Some(path));
-        assert_eq!((core.host.as_str(), core.port), ("", 0));
-    }
+    let req = GlideClientConfiguration::with_unix_socket(path).to_request();
+    assert_eq!(req.addresses.len(), 1);
+    let core = &req.addresses[0];
+    assert_eq!(core.unix_socket_path.as_deref(), Some(path));
+    assert_eq!((core.host.as_str(), core.port), ("", 0));
 }
 
 #[test]
@@ -866,10 +860,11 @@ fn from_url_unix_socket() {
     ] {
         let cfg = GlideClientConfiguration::from_url(url).unwrap();
         assert_eq!(
-            cfg.addresses,
-            vec![NodeAddress::unix("/run/valkey/valkey.sock")],
+            cfg.unix_socket_path.as_deref(),
+            Some(std::path::Path::new("/run/valkey/valkey.sock")),
             "{url}"
         );
+        assert!(cfg.addresses.is_empty(), "{url}");
         assert_eq!(cfg.tls, TlsConfig::NoTls, "{url}");
         assert_eq!(cfg.database_id, 2, "{url}");
         let creds = cfg.credentials.expect("credentials parsed");
@@ -883,8 +878,8 @@ fn from_url_unix_socket() {
 fn from_url_unix_socket_decodes_path() {
     let cfg = GlideClientConfiguration::from_url("unix:///run/my%20dir/a%23b.sock").unwrap();
     assert_eq!(
-        cfg.addresses,
-        vec![NodeAddress::unix("/run/my dir/a#b.sock")]
+        cfg.unix_socket_path.as_deref(),
+        Some(std::path::Path::new("/run/my dir/a#b.sock"))
     );
 }
 

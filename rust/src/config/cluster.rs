@@ -132,11 +132,6 @@ impl GlideClusterClientConfiguration {
         for url in urls {
             let info = to_redis_connection_info(url)?;
             let (address, tls) = split_connection_addr(info.addr)?;
-            if address.unix_socket_path.is_some() {
-                return Err(crate::error::GlideError::Configuration(
-                    "Unix domain socket addresses are not supported in cluster mode".into(),
-                ));
-            }
             addresses.push(address);
 
             // Reject conflicting per-URL settings, matching the fork's

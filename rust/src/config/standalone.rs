@@ -8,7 +8,9 @@ use super::common::{
     split_connection_addr, to_redis_connection_info,
 };
 use glide_core::client::ConnectionRequest;
+use glide_core::client::NodeAddress as CoreNodeAddress;
 use std::borrow::Cow;
+use std::path::PathBuf;
 use std::time::Duration;
 
 /// Configuration for a **standalone** (non-cluster) GLIDE client.
@@ -17,6 +19,10 @@ use std::time::Duration;
 pub struct GlideClientConfiguration {
     /// Seed node addresses.
     pub addresses: Vec<NodeAddress>,
+    /// Absolute path of the server's Unix domain socket, to connect through it instead of TCP
+    /// (Unix platforms only). Set via [`Self::with_unix_socket`]; `addresses` must then be
+    /// empty. Not supported with TLS or `DiscoverAll`.
+    pub unix_socket_path: Option<PathBuf>,
     /// TLS mode.
     pub tls: TlsConfig,
     /// Optional credentials.
@@ -64,6 +70,7 @@ impl GlideClientConfiguration {
     pub fn new(addresses: Vec<NodeAddress>) -> Self {
         GlideClientConfiguration {
             addresses,
+            unix_socket_path: None,
             tls: TlsConfig::NoTls,
             credentials: None,
             read_from: ReadFrom::Primary,
@@ -81,6 +88,14 @@ impl GlideClientConfiguration {
             root_certs: Vec::new(),
             client_identity: None,
         }
+    }
+
+    /// Create a standalone configuration that connects through the server's Unix domain
+    /// socket at the absolute `path` (Unix platforms only).
+    pub fn with_unix_socket(path: impl Into<PathBuf>) -> Self {
+        let mut cfg = Self::new(Vec::new());
+        cfg.unix_socket_path = Some(path.into());
+        cfg
     }
 
     /// Build a configuration from a connection URL.
@@ -105,9 +120,13 @@ impl GlideClientConfiguration {
     pub fn from_url(url: impl AsRef<str>) -> crate::ValkeyResult<Self> {
         let url = check_unix_socket_url(url.as_ref())?;
         let info = to_redis_connection_info(url)?;
-        let (address, tls) = split_connection_addr(info.addr)?;
-
-        let mut cfg = Self::new(vec![address]).tls(tls);
+        let mut cfg = match info.addr {
+            redis::ConnectionAddr::Unix(path) => Self::with_unix_socket(path),
+            addr => {
+                let (address, tls) = split_connection_addr(addr)?;
+                Self::new(vec![address]).tls(tls)
+            }
+        };
         cfg.database_id = info.redis.db;
         cfg.protocol = from_redis_protocol(info.redis.protocol);
         cfg.client_name = info.redis.client_name;
@@ -130,6 +149,13 @@ impl GlideClientConfiguration {
 
     pub(crate) fn to_request(&self) -> ConnectionRequest {
         let mut req = self.common_request();
+        // Kept next to `addresses`, so the core rejects a socket combined with TCP addresses.
+        req.addresses
+            .extend(self.unix_socket_path.iter().map(|path| CoreNodeAddress {
+                host: String::new(),
+                port: 0,
+                unix_socket_path: Some(path.clone()),
+            }));
         req.cluster_mode_enabled = false;
         req.database_id = self.database_id;
         req.node_discovery_mode = self.node_discovery_mode.to_core();

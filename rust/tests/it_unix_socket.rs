@@ -7,8 +7,7 @@ mod common;
 
 use common::TestServer;
 use glide::{
-    AsyncCommands, GlideClient, GlideClientConfiguration, GlideClusterClient,
-    GlideClusterClientConfiguration, GlideError, NodeAddress, TlsConfig, cmd,
+    AsyncCommands, GlideClient, GlideClientConfiguration, GlideError, NodeAddress, TlsConfig, cmd,
 };
 use std::os::unix::fs::DirBuilderExt;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -50,7 +49,7 @@ fn unix_socket_server() -> UnixSocketServer {
 }
 
 fn socket_config(path: &str) -> GlideClientConfiguration {
-    GlideClientConfiguration::new(vec![NodeAddress::unix(path)])
+    GlideClientConfiguration::with_unix_socket(path)
         .request_timeout(Duration::from_secs(5))
         .connection_timeout(Duration::from_secs(5))
 }
@@ -95,24 +94,14 @@ fn assert_configuration_error<T>(result: Result<T, GlideError>, expected: &str) 
 timed_tokio_test!(
     async fn connect_rejects_unix_socket_misconfiguration() {
         // The core rejects these before any I/O, so no server is needed.
-        let socket = || NodeAddress::unix("/run/valkey/valkey.sock");
+        let socket = || GlideClientConfiguration::with_unix_socket("/run/valkey/valkey.sock");
+        let mut mixed = socket();
+        mixed.addresses.push(NodeAddress::default());
         for (config, expected) in [
-            (
-                GlideClientConfiguration::new(vec![socket()]).tls(TlsConfig::SecureTls),
-                "TLS is not supported",
-            ),
-            (
-                GlideClientConfiguration::new(vec![socket(), NodeAddress::default()]),
-                "cannot be combined with TCP addresses",
-            ),
+            (socket().tls(TlsConfig::SecureTls), "TLS is not supported"),
+            (mixed, "cannot be combined with TCP addresses"),
         ] {
             assert_configuration_error(GlideClient::connect(config).await, expected);
         }
-
-        let cluster = GlideClusterClientConfiguration::new(vec![socket()]);
-        assert_configuration_error(
-            GlideClusterClient::connect(cluster).await,
-            "not supported in cluster mode",
-        );
     }
 );

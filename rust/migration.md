@@ -118,9 +118,9 @@ Notes:
   Without building a `Cmd`, `client.custom_command(&["X", "arg"])` sends the
   arguments directly and returns a `ValkeyValue`.
 - Unix sockets: standalone clients connect through the server's socket with
-  `NodeAddress::unix("/run/valkey/valkey.sock")` or a `unix://` /
-  `redis+unix://` URL (not in cluster mode, with TLS, with `DiscoverAll`, or
-  mixed with TCP addresses).
+  `GlideClientConfiguration::with_unix_socket("/run/valkey/valkey.sock")` or a
+  `unix://` / `redis+unix://` URL (not in cluster mode, with TLS, with
+  `DiscoverAll`, or together with TCP addresses).
 - Accepted gaps: no Sentinel / async-std (unsupported by
   glide-core); Pub/Sub stays client-integrated by design; generic code
   bounded on redis-rs's `ConnectionLike`-based traits should re-bound on
