@@ -247,12 +247,31 @@ class _LegacyModule(types.ModuleType):
         super().__init__(name)
         self._warned = False
 
+    def _no_attribute(self, name):
+        # Same message as a normal module's. name/obj give Python's "Did you mean" hint;
+        # obj is glide, where the proxy's names actually live.
+        err = AttributeError(f"module '{self.__name__}' has no attribute '{name}'")
+        err.name, err.obj = name, _glide_module
+        return err
+
     def __getattr__(self, name):
         """Forward attribute lookups to top-level glide module, warning on deprecated access while exempting dunders."""
         if name == "__all__":
             return _glide_module.__all__
         if name.startswith("__") and name.endswith("__"):
-            raise AttributeError(f"module '{self.__name__}' has no attribute '{name}'")
+            raise self._no_attribute(name)
+        # Resolve the name before warning, so a probe for a name that doesn't exist
+        # (e.g. IPython's `_repr_html_`) raises AttributeError without warning or using
+        # up the one-shot warning.
+        try:
+            value = getattr(_glide_module, name)
+        except AttributeError:
+            # A proxied legacy package's submodules are proxies too (e.g.
+            # glide.async_commands.server_modules.ft_options). Resolving them here keeps
+            # `from glide.async_commands.server_modules import ft_options` warning, as before.
+            value = sys.modules.get(f"{self.__name__}.{name}")
+            if not isinstance(value, _LegacyModule):
+                raise self._no_attribute(name) from None
         if not self._warned:
             warnings.warn(
                 f"Importing from '{self.__name__}' is deprecated. "
@@ -261,9 +280,7 @@ class _LegacyModule(types.ModuleType):
                 stacklevel=2,
             )
             self._warned = True
-
-        # Access the attribute from the real top-level glide module
-        return getattr(_glide_module, name)
+        return value
 
 
 # Replace old modules with lazy proxy modules
