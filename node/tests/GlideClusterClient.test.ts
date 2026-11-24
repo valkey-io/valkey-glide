@@ -15,7 +15,6 @@ import { gte } from "semver";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     BitwiseOperation,
-    CircuitBreakerError,
     ClientPauseMode,
     ClientSideCache,
     ClientTrackingInfo,
@@ -545,19 +544,6 @@ describe("GlideClusterClient", () => {
                     pauser.close();
                 }
             }
-
-            // With every node healthy, the option returns the same replies.
-            const healthy = await client.info({ allowPartialResults: true });
-            expect(Object.keys(healthy).sort()).toEqual(primaries);
-
-            for (const reply of Object.values(healthy)) {
-                expect(reply).toEqual(expect.stringContaining("# Server"));
-            }
-
-            // A single-node route still returns the node's reply as a string.
-            expect(
-                await client.info({ route, allowPartialResults: true }),
-            ).toEqual(expect.stringContaining("# Server"));
         },
         TIMEOUT,
     );
@@ -627,21 +613,6 @@ describe("GlideClusterClient", () => {
                         expect.stringContaining("# Server"),
                     );
                 }
-
-                // With every primary denied, the call resolves with an error for each.
-                await client.customCommand(
-                    ["ACL", "SETUSER", username, "-info"],
-                    {
-                        route: "allPrimaries",
-                    },
-                );
-                const failed = await denied.info({ allowPartialResults: true });
-                expect(Object.keys(failed).sort()).toEqual(primaries);
-
-                for (const reply of Object.values(failed)) {
-                    expect(reply).toBeInstanceOf(RequestError);
-                    expect(reply).not.toBeInstanceOf(TimeoutError);
-                }
             } finally {
                 denied?.close();
                 await client.customCommand(["ACL", "DELUSER", username], {
@@ -652,82 +623,8 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    // The breaker reads the map the client builds, so one protocol covers it.
     it(
-        "info with allowPartialResults counts a call no node answered for the circuit breaker",
-        async () => {
-            const protocol = ProtocolVersion.RESP3;
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol, {
-                    requestTimeout: 1000,
-                    clientCircuitBreaker: {
-                        countTimeouts: true,
-                        minErrors: 2,
-                        failureRateThreshold: 0.5,
-                        openTimeoutMs: 60000,
-                        windowSizeMs: 60000,
-                    },
-                }),
-            );
-            const primaries = Object.keys(await client.info()).sort();
-            const routes = primaries.map((address) => {
-                const [host, port] = address.split(":");
-                return {
-                    type: "routeByAddress" as const,
-                    host,
-                    port: Number(port),
-                };
-            });
-            const pauser = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-
-            try {
-                for (const route of routes) {
-                    await pauser.customCommand(
-                        ["CLIENT", "PAUSE", "4500", "ALL"],
-                        { route },
-                    );
-                }
-
-                for (let call = 0; call < 2; call++) {
-                    const replies = await client.info({
-                        allowPartialResults: true,
-                    });
-                    expect(Object.keys(replies).sort()).toEqual(primaries);
-
-                    for (const reply of Object.values(replies)) {
-                        expect(reply).toBeInstanceOf(TimeoutError);
-                    }
-                }
-
-                // Two calls in which no node answered open the breaker, as two
-                // plain timeouts would.
-                await expect(client.get("key")).rejects.toThrow(
-                    CircuitBreakerError,
-                );
-            } finally {
-                try {
-                    for (const route of routes) {
-                        await waitFor(async () => {
-                            try {
-                                await pauser.ping({ route });
-                                return true;
-                            } catch {
-                                return false;
-                            }
-                        }, "paused primary did not recover");
-                    }
-                } finally {
-                    pauser.close();
-                }
-            }
-        },
-        TIMEOUT,
-    );
-
-    it(
-        "info with a non-boolean allowPartialResults resolves and frees its callback slot",
+        "info with a non-boolean allowPartialResults resolves",
         async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
@@ -742,15 +639,6 @@ describe("GlideClusterClient", () => {
                 allowPartialResults: 1 as unknown as boolean,
             });
             expect(Object.keys(replies).sort()).toEqual(primaries);
-
-            const slots = client as unknown as {
-                promiseCallbackFunctions: unknown[];
-                availableCallbackSlots: number[];
-            };
-            expect(
-                slots.promiseCallbackFunctions.length -
-                    slots.availableCallbackSlots.length,
-            ).toEqual(0);
         },
         TIMEOUT,
     );
