@@ -303,6 +303,30 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
+    it("setLoggerConfig_throws_on_unwritable_path", async () => {
+        const fs = await import("fs");
+        const path = await import("path");
+        const os = await import("os");
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "glide-logger-test-"));
+        const blockedFile = path.join(tmpDir, "regular_file");
+        fs.writeFileSync(blockedFile, "content");
+        const invalidPath = path.join(blockedFile, "app.log");
+        try {
+            expect(() => {
+                Logger.setLoggerConfig("error", invalidPath);
+            }).toThrow();
+            // Subsequent log calls must still succeed without crashing
+            Logger.log("error", "test", "should survive unwritable path error");
+        } finally {
+            Logger.setLoggerConfig("error", "log.log");
+            try {
+                fs.rmSync(tmpDir, { recursive: true, force: true });
+            } catch {
+                // Ignore cleanup error in test
+            }
+        }
+    });
+
     it("clientInfoTag_rejects_whitespace", async () => {
         await expect(
             GlideClient.createClient(
