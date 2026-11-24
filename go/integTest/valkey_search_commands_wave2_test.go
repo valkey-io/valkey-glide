@@ -16,26 +16,13 @@ import (
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
+	"github.com/valkey-io/valkey-glide/go/v2/internal"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 	"github.com/valkey-io/valkey-glide/go/v2/servermodules/glideft"
 )
 
-// Wave 2 of the valkey-search 1.3 stable surface: scoring (WITHSCORES/SCORER on FT.SEARCH,
-// ADDSCORES/SCORER on FT.AGGREGATE), cursors (FT.AGGREGATE/FT.HYBRID WITHCURSOR, FT.CURSOR
-// READ/DEL, primary-pinned routing regardless of ReadFrom), and FT.HYBRID. Gated behind
-// probeSearch13CapabilityCluster, the same capability probe wave 1 already established in this
-// file -- no wave-2 test here calls getEmulateReleaseLevel, since this wave reports the same
-// pass/skip counts at both the default and the 1.3.0 emulate-release level. Mirrors
-// python/tests/async_tests/tests_server_modules/test_ft.py's test_ft_search_with_scores*,
-// test_ft_aggregate_add_scores*, test_ft_cursor_affinity*, test_ft_aggregate_typed_cursor*, and
-// test_ft_hybrid_* live tests.
-
-// packFloat32Vector packs a sequence of float32 values into a little-endian byte string, the
-// same wire representation FT.CREATE's FLOAT32 vector fields expect. Go's HSet takes
-// map[string]string, and a Go string is a byte sequence (not UTF-8 validated), so this is the
-// same "string holds raw bytes" convention this file's other tests already rely on.
 func packFloat32Vector(values ...float32) string {
 	buf := make([]byte, 4*len(values))
 	for i, v := range values {
@@ -44,10 +31,6 @@ func packFloat32Vector(values ...float32) string {
 	return string(buf)
 }
 
-// float32ToFloat16Bits converts an IEEE754 float32 to IEEE754 binary16 (half-precision) bits.
-// Only exercised against exact binary powers of two (0.0, 1.0, 2.0) in this file's tests, so
-// this is not a fully general rounding implementation -- it is correct for those exact values
-// and for normal values generally, but does not handle subnormal-range rounding or NaN payloads.
 func float32ToFloat16Bits(f float32) uint16 {
 	bits := math.Float32bits(f)
 	sign := uint16((bits >> 16) & 0x8000)
@@ -62,8 +45,6 @@ func float32ToFloat16Bits(f float32) uint16 {
 	return sign | uint16(exp)<<10 | uint16(mant>>13)
 }
 
-// packFloat16Vector packs a sequence of float32 values into a little-endian binary16 byte
-// string, the wire representation FT.CREATE's FLOAT16 vector fields expect.
 func packFloat16Vector(values ...float32) string {
 	buf := make([]byte, 2*len(values))
 	for i, v := range values {
@@ -72,11 +53,6 @@ func packFloat16Vector(values ...float32) string {
 	return string(buf)
 }
 
-// packBfloat16Vector packs a sequence of float32 values into a little-endian bfloat16 byte
-// string (the high-order 16 bits of each float32, i.e. truncation rather than
-// round-to-nearest-ties-to-even), the wire representation FT.CREATE's BFLOAT16 vector fields
-// expect. Test values are restricted to exact binary powers of two so this simple truncation
-// agrees with the server's own round-to-nearest-ties-to-even (src/indexes/bfloat16.h).
 func packBfloat16Vector(values ...float32) string {
 	buf := make([]byte, 2*len(values))
 	for i, v := range values {
@@ -95,11 +71,6 @@ const (
 
 var hybridQueryVector = [2]float32{1.0, 1.0}
 
-// createHybridIndex creates an index with a TEXT field ("title") and a 2-dimensional FLAT
-// FLOAT32 VECTOR field ("vec"), seeds two documents -- one the SEARCH arm strongly favours
-// (hybridDocTextWinner, matching "hello" and far from the query vector) and one the VSIM arm
-// strongly favours (hybridDocVectorWinner, not matching "hello" and near the query vector) --
-// and waits briefly for indexing. Mirrors Python's _create_hybrid_index/HYBRID_DOCS fixture.
 func createHybridIndex(ctx context.Context, client *glide.ClusterClient, prefix string) string {
 	index := prefix + "index"
 	_, err := glideft.ClusterFtCreate(
@@ -123,8 +94,6 @@ func createHybridIndex(ctx context.Context, client *glide.ClusterClient, prefix 
 	return index
 }
 
-// --- ft_search scoring ---
-
 func (suite *GlideTestSuite) TestModuleFtSearchWithScoresAndScorer() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
@@ -140,9 +109,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithScoresAndScorer() {
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
 	require.NoError(suite.T(), err)
 
-	// Repeat the search term in one document so BM25STD scores it strictly higher -- two
-	// documents with identical term counts would score identically even if the scorer silently
-	// fell back to a constant/no-op.
 	_, err = client.HSet(ctx, prefix+"1", map[string]string{"title": "hello hello hello world"})
 	require.NoError(suite.T(), err)
 	_, err = client.HSet(ctx, prefix+"2", map[string]string{"title": "hello there"})
@@ -204,8 +170,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithScoresAndWithSortKeysCombined
 		assert.NotEmpty(suite.T(), doc.SortKey)
 		assert.Contains(suite.T(), doc.Fields, "title")
 	}
-	// Assert the actual SORTBY price ASC order and the SortKey values, not just that
-	// Score/SortKey/Fields are present.
 	assert.Equal(suite.T(), []string{prefix + "1", prefix + "2"}, []string{
 		result.Documents[0].Key, result.Documents[1].Key,
 	}, "must be sorted by price ascending (10 before 20)")
@@ -215,14 +179,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithScoresAndWithSortKeysCombined
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
-// TestModuleFtSearchPureVectorKnnWithScoresOrdersByDistanceNotScore is the regression test for
-// the WITHSCORES ordering bug jamesx-improving found in review: a pure-vector KNN query (no
-// text/tag/numeric pre-filter) always reports 0 for every document's WITHSCORES value
-// (ft_search.cc: `has_relevance ? neighbor.score : 0.0f`, server test
-// pure_vector_with_scores_reports_zero), so sorting on Score alone can't distinguish documents
-// and silently falls back to the key tiebreak instead of the server's own nearest-first KNN
-// order. Three points at increasing distance from the query vector (0, 0) confirm the real
-// order comes from the __<field>_score Fields entry, not Score.
 func (suite *GlideTestSuite) TestModuleFtSearchPureVectorKnnWithScoresOrdersByDistanceNotScore() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
@@ -239,8 +195,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchPureVectorKnnWithScoresOrdersByDi
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
 	require.NoError(suite.T(), err)
 
-	// Keys deliberately inserted out of distance order, so a fallback to the key tiebreak (or to
-	// insertion order) would not coincidentally match the correct nearest-first order.
 	points := map[string][2]float32{"far": {5.0, 0.0}, "near": {1.0, 0.0}, "mid": {3.0, 0.0}}
 	for name, coords := range points {
 		_, err = client.HSet(ctx, prefix+name, map[string]string{vecField: packFloat32Vector(coords[0], coords[1])})
@@ -282,14 +236,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchPureVectorKnnWithScoresOrdersByDi
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
-// TestModuleFtSearchPureVectorKnnWithScoresAndKnnAsAliasOrdersByDistance is
-// TestModuleFtSearchPureVectorKnnWithScoresOrdersByDistanceNotScore's companion for a KNN
-// clause that names its own distance field via `AS` (docs/topics/search-query.md: `[ KNN <K>
-// @<field> $<parameter> ... [AS <name>] ]`) rather than falling back to the default
-// `__<field>_score`. knnDistanceFieldName must read that in-clause alias and not assume the
-// default name -- otherwise the lookup for `__<field>_score` finds nothing (not present on the
-// wire once the query names its own alias), every document compares equal, and the result
-// silently falls back to key order.
 func (suite *GlideTestSuite) TestModuleFtSearchPureVectorKnnWithScoresAndKnnAsAliasOrdersByDistance() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
@@ -359,8 +305,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchScorerTfidfRejected() {
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
-// --- ft_aggregate scoring ---
-
 func (suite *GlideTestSuite) TestModuleFtAggregateAddScoresSortableByScore() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
@@ -404,15 +348,12 @@ func (suite *GlideTestSuite) TestModuleFtAggregateAddScoresSortableByScore() {
 		assert.Greater(suite.T(), score, 0.0)
 		scores[i] = score
 	}
-	// Sorted descending by __score -- the fused ordering must be stable and monotonic.
 	for i := 1; i < len(scores); i++ {
 		assert.GreaterOrEqual(suite.T(), scores[i-1], scores[i])
 	}
 
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
-
-// --- ft_aggregate typed cursor ---
 
 func (suite *GlideTestSuite) TestModuleFtAggregateTypedCursorPagedToExhaustion() {
 	client := suite.defaultClusterClient()
@@ -512,8 +453,6 @@ func (suite *GlideTestSuite) TestModuleFtAggregateTypedCursorDelAndErrors() {
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
-// --- cursor affinity: FT.AGGREGATE WITHCURSOR and FT.CURSOR always pin to the PRIMARY ---
-
 func (suite *GlideTestSuite) TestModuleFtCursorAffinityPreferReplicaClient() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
@@ -572,7 +511,6 @@ func (suite *GlideTestSuite) TestModuleFtCursorAffinityPreferReplicaClient() {
 	assert.Equal(suite.T(), expectedN, seenN,
 		"paging returned the right row COUNT but the wrong SET of rows")
 
-	// FT.CURSOR DEL on an open cursor.
 	_, openCursorID, err := glideft.ClusterFtAggregateWithCursor(ctx, preferReplicaClient, index, "*",
 		&options.FtAggregateOptions{LoadFields: []string{"n"}, WithCursor: &options.FtWithCursor{Count: &count}})
 	require.NoError(suite.T(), err)
@@ -585,8 +523,6 @@ func (suite *GlideTestSuite) TestModuleFtCursorAffinityPreferReplicaClient() {
 	_, _, err = glideft.ClusterFtCursorRead(ctx, preferReplicaClient, index, openCursorID, nil)
 	assert.ErrorContains(suite.T(), err, "Cursor")
 
-	// Negative control, mirroring Python's test: a read explicitly routed to a REPLICA of the
-	// index's OWN slot fails, confirming the cursor really is node-local.
 	_, anotherCursorID, err := glideft.ClusterFtAggregateWithCursor(ctx, preferReplicaClient, index, "*",
 		&options.FtAggregateOptions{LoadFields: []string{"n"}, WithCursor: &options.FtWithCursor{Count: &count}})
 	require.NoError(suite.T(), err)
@@ -610,14 +546,6 @@ type hostPort struct {
 	Port int
 }
 
-// unwrapClusterCustomCommand unwraps a models.ClusterValue[any] for an unrouted command like
-// CLUSTER KEYSLOT/CLUSTER SHARDS: the single answering node's own reply lands under
-// MultiValue() keyed by the reply's own content rather than a node address (confirmed
-// empirically against a live cluster). Unlike getEmulateReleaseLevel's inline unwrap (which
-// always rebuilds a map, since CONFIG GET's single-entry map has a meaningful key -- the config
-// name -- worth preserving for readMapField), this returns the lone value directly when exactly
-// one entry is present, since CLUSTER KEYSLOT/CLUSTER SHARDS have no analogous per-entry key to
-// keep; only a genuine multi-node fan-out falls through to the rebuilt-map case below.
 func unwrapClusterCustomCommand(result models.ClusterValue[any]) any {
 	if !result.IsMultiValue() {
 		return result.SingleValue()
@@ -635,18 +563,14 @@ func unwrapClusterCustomCommand(result models.ClusterValue[any]) any {
 	return unwrapped
 }
 
-// findReplicaAddrsForKey returns the addresses of every REPLICA node serving the shard that
-// owns indexKey's slot, by walking CLUSTER SHARDS' raw reply generically (any-typed, since the
-// shape returned through CustomCommand is a nested []any/map[string]any tree, not a typed
-// struct). Mirrors Python's test's inline CLUSTER SHARDS walk.
 func (suite *GlideTestSuite) findReplicaAddrsForKey(
 	ctx context.Context, client *glide.ClusterClient, indexKey string,
 ) []hostPort {
 	t := suite.T()
 	slotResult, err := client.CustomCommand(ctx, []string{"CLUSTER", "KEYSLOT", indexKey})
 	require.NoError(t, err)
-	slot, ok := toInt64(unwrapClusterCustomCommand(slotResult))
-	require.True(t, ok, "unexpected CLUSTER KEYSLOT reply type: %T", unwrapClusterCustomCommand(slotResult))
+	slot, err := internal.ConvertToInt64(unwrapClusterCustomCommand(slotResult))
+	require.NoError(t, err, "unexpected CLUSTER KEYSLOT reply type: %T", unwrapClusterCustomCommand(slotResult))
 
 	shardsResult, err := client.CustomCommand(ctx, []string{"CLUSTER", "SHARDS"})
 	require.NoError(t, err)
@@ -660,9 +584,9 @@ func (suite *GlideTestSuite) findReplicaAddrsForKey(
 		slots, _ := shardMap["slots"].([]any)
 		owns := false
 		for i := 0; i+1 < len(slots); i += 2 {
-			lo, loOk := toInt64(slots[i])
-			hi, hiOk := toInt64(slots[i+1])
-			if loOk && hiOk && lo <= slot && slot <= hi {
+			lo, loErr := internal.ConvertToInt64(slots[i])
+			hi, hiErr := internal.ConvertToInt64(slots[i+1])
+			if loErr == nil && hiErr == nil && lo <= slot && slot <= hi {
 				owns = true
 				break
 			}
@@ -678,20 +602,13 @@ func (suite *GlideTestSuite) findReplicaAddrsForKey(
 				continue
 			}
 			host, _ := nodeMap["ip"].(string)
-			port, _ := toInt64(nodeMap["port"])
+			port, _ := internal.ConvertToInt64(nodeMap["port"])
 			replicas = append(replicas, hostPort{Host: host, Port: int(port)})
 		}
 	}
 	return replicas
 }
 
-// flatToMap normalizes either a map[string]any or a flat []any [k1, v1, k2, v2, ...] (the shape
-// a raw CustomCommand reply may come back as, depending on RESP2 vs RESP3) into a
-// map[string]any. Shares its flat-pair-walk logic with readMapField
-// (valkey_search_commands_test.go), which looks up a single field rather than building the
-// whole map; the two are kept as separate functions since one returns a map and the other a
-// single (value, ok) pair, but the underlying "odd index is key, even index is value" walk is
-// identical.
 func flatToMap(v any) map[string]any {
 	if m, ok := v.(map[string]any); ok {
 		return m
@@ -703,26 +620,13 @@ func flatToMap(v any) map[string]any {
 	m := make(map[string]any, len(arr)/2)
 	for i := 0; i+1 < len(arr); i += 2 {
 		if key, ok := arr[i].(string); ok {
-			m[key] = arr[i+1]
+			if _, seen := m[key]; !seen {
+				m[key] = arr[i+1]
+			}
 		}
 	}
 	return m
 }
-
-func toInt64(v any) (int64, bool) {
-	switch n := v.(type) {
-	case int64:
-		return n, true
-	case int:
-		return int64(n), true
-	case float64:
-		return int64(n), true
-	default:
-		return 0, false
-	}
-}
-
-// --- FT.HYBRID ---
 
 func (suite *GlideTestSuite) TestModuleFtHybridBasicQuery() {
 	client := suite.defaultClusterClient()
@@ -755,12 +659,6 @@ func (suite *GlideTestSuite) TestModuleFtHybridBasicQuery() {
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
-// TestModuleFtHybridAggregateClauseFiltersPostFusionRegression is the dedicated regression
-// test for the FT.HYBRID tail-ordering bug: a post-fusion FILTER clause with NO LOAD clause in
-// between, placed directly after the VSIM arm's own argv (a LOAD clause in between would mask
-// the bug even if PARAMS were missing). With the ordering bug present, the server's VSIM parser
-// misparses this as its own pre-filter and the query fails outright; with the fix, the FILTER
-// clause only keeps rows where the SEARCH arm's "ss" alias scored positively.
 func (suite *GlideTestSuite) TestModuleFtHybridAggregateClauseFiltersPostFusionRegression() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
@@ -945,7 +843,7 @@ func (suite *GlideTestSuite) TestModuleFtHybridPerArmAndCombineYieldScoreAsColum
 		rowsByKey[fmt.Sprintf("%v", row["__key"])] = row
 		assert.Contains(suite.T(), row, hybridVsimAlias)
 		assert.Contains(suite.T(), row, "fused")
-		assert.NotContains(suite.T(), row, "__score") // renamed via YieldScoreAs
+		assert.NotContains(suite.T(), row, "__score")
 	}
 	assert.Contains(suite.T(), rowsByKey[prefix+hybridDocTextWinner], hybridSearchAlias)
 	assert.NotContains(suite.T(), rowsByKey[prefix+hybridDocVectorWinner], hybridSearchAlias)
@@ -1053,7 +951,7 @@ func (suite *GlideTestSuite) TestModuleFtHybridWithoutKUsesEngineDefault() {
 
 	rows, err := glideft.ClusterFtHybrid(ctx, client, index,
 		options.FtHybridSearchArm{Query: "nonexistentterm12345"},
-		options.FtHybridVsimArm{Field: "vec", Vector: []byte(packFloat32Vector(1.0, 1.0))}, // no K
+		options.FtHybridVsimArm{Field: "vec", Vector: []byte(packFloat32Vector(1.0, 1.0))},
 		nil,
 	)
 	require.NoError(suite.T(), err)
@@ -1085,14 +983,6 @@ func (suite *GlideTestSuite) TestModuleFtHybridInsideMultiExecRejected() {
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
-// TestModuleFtHybridVsimRangeRejected ports Python's test_ft_hybrid_vsim_range_rejected
-// tripwire: FT.HYBRID's VSIM ... RANGE form parses for shape but is rejected at execution
-// (ParseFtHybridCommand returns an UnimplementedError after parse completes). RANGE stays
-// excluded from the typed FtHybridVsimArm API entirely (EfRuntime's own docstring notes "RANGE
-// is not currently supported by this typed API"), so this goes through CustomCommand directly
-// rather than the typed glideft.FtHybrid wrapper -- this test exists so that if this
-// limitation is ever lifted upstream, it fails loudly instead of the exclusion silently going
-// stale.
 func (suite *GlideTestSuite) TestModuleFtHybridVsimRangeRejected() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
@@ -1126,20 +1016,6 @@ func (suite *GlideTestSuite) TestModuleFtHybridVsimRangeRejected() {
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
-// --- ft_aggregate LOAD ... AS (LoadField) ---
-
-// TestModuleFtAggregateLoadFieldAlias covers FT.AGGREGATE's LOAD ... AS form (valkey-search
-// 1.3.0, src/commands/ft_aggregate_parser.cc, compat flag ft_aggregate_load_as). Confirmed via
-// the live emulate-release level that the alias takes effect as the output column name at
-// search.emulate-release >= 1.3.0. Mixes a plain string LoadFields entry with a LoadFieldEntries
-// entry in the same aggregate call to confirm the two forms compose (non-breaking addition:
-// existing []string LoadFields callers keep working unchanged).
-//
-// Below search.emulate-release 1.3.0, the legacy branch never consumes AS as a rename keyword --
-// it falls through and gets parsed as its own LOAD field, which doesn't exist on the schema,
-// failing the clause outright (ConstructLoadParser()). Asserts that legacy failure directly,
-// rather than skipping, since the two branches intentionally produce different outcomes and both
-// are worth pinning down. Mirrors Python's test_ft_aggregate_load_as.
 func (suite *GlideTestSuite) TestModuleFtAggregateLoadFieldAlias() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
@@ -1180,13 +1056,6 @@ func (suite *GlideTestSuite) TestModuleFtAggregateLoadFieldAlias() {
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
-// --- ft_create float16/bfloat16: real KNN query, not acceptance-only ---
-
-// TestModuleFtCreateFloat16VectorKnnReturnsRealNeighbors covers FLOAT16 vector fields
-// (valkey-search 1.3, src/indexes/vector_base.h -- 2-byte-per-element format) with an actual KNN
-// query, confirming the server returns real neighbors rather than merely accepting the schema.
-// Test values (0.0, 1.0, 2.0) are exact binary powers, so FLOAT16 round-trips them exactly.
-// Mirrors Python's test_ft_create_float16_bfloat16_vector (FLOAT16 branch).
 func (suite *GlideTestSuite) TestModuleFtCreateFloat16VectorKnnReturnsRealNeighbors() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
@@ -1232,9 +1101,6 @@ func (suite *GlideTestSuite) TestModuleFtCreateFloat16VectorKnnReturnsRealNeighb
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
-// TestModuleFtCreateBfloat16VectorKnnReturnsRealNeighbors is
-// TestModuleFtCreateFloat16VectorKnnReturnsRealNeighbors for BFLOAT16. Mirrors Python's
-// test_ft_create_float16_bfloat16_vector (BFLOAT16 branch).
 func (suite *GlideTestSuite) TestModuleFtCreateBfloat16VectorKnnReturnsRealNeighbors() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
@@ -1285,12 +1151,6 @@ func (suite *GlideTestSuite) TestModuleFtCreateBfloat16VectorKnnReturnsRealNeigh
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
-// --- ft_create score_field: real ranking effect, not acceptance-only ---
-
-// TestModuleFtCreateScoreFieldAffectsRanking covers FtCreateOptions.ScoreField actually
-// affecting ranking, as opposed to merely being accepted. Two otherwise-identical documents, one
-// with a much higher score_field value, must rank first and score higher under WithScores.
-// Mirrors Python's test_ft_create_score_field_affects_ranking.
 func (suite *GlideTestSuite) TestModuleFtCreateScoreFieldAffectsRanking() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
@@ -1319,8 +1179,6 @@ func (suite *GlideTestSuite) TestModuleFtCreateScoreFieldAffectsRanking() {
 	require.Equal(suite.T(), int64(2), result.TotalResults)
 	require.Len(suite.T(), result.Documents, 2)
 
-	// The high-boost document must rank first (FtSearchResult.Documents preserves the server's
-	// ranking order) and score strictly higher than the low-boost one.
 	assert.Equal(suite.T(), highKey, result.Documents[0].Key)
 	byKey := make(map[string]float64, len(result.Documents))
 	for _, doc := range result.Documents {

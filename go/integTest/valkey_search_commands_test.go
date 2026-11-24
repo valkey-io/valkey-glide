@@ -2393,34 +2393,14 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortByReturnExcludesSortFieldStan
 	glideft.FtDropIndex(ctx, client, index)
 }
 
-// --- valkey-search 1.3 stable surface ---
-//
-// WITHSCORES/SCORER, ADDSCORES, WITHCURSOR/FT.CURSOR and FT.HYBRID live in
-// valkey_search_commands_wave2_test.go, which also covers the LoadField (LOAD ... AS) alias.
-
-// classifyInkeysProbeError mirrors Python's classify_inkeys_probe_error / Node's
-// classifyInkeysProbeError / Java's VectorSearch13Tests.classifyInkeysProbeError.
 func classifyInkeysProbeError(msg string) bool {
 	return strings.Contains(msg, "Unexpected") && strings.Contains(msg, "INKEYS")
 }
 
-// classifyBfloat16SimdCapabilityError matches valkey-search's own error text (see
-// CheckSimsimdBf16Capability in its src/indexes/vector_base.cc) for a host whose CPU lacks a
-// SIMD-safe BF16 path -- a server-side capability gap distinct from the module being pre-1.3.
-// Matching distinctive substrings from that message (rather than the bare word "BFLOAT16", which
-// also appears in unrelated errors such as a malformed schema) keeps this from masking real
-// FT.CREATE failures as a missing-capability skip.
 func classifyBfloat16SimdCapabilityError(msg string) bool {
 	return strings.Contains(msg, "BFLOAT16") && strings.Contains(msg, "SIMD")
 }
 
-// probeSearch13CapabilityCluster probes a connected cluster client for valkey-search 1.3
-// capability using a real command plus a 1.3-only argument (INKEYS, added in rc1 / PR #967),
-// classified by error text rather than a version string -- a version string can be present
-// without the specific capability a test needs being live. The server-version-string gate
-// (SkipIfServerVersionLowerThan) used elsewhere in this suite can't tell apart a module's own
-// version from the server's, which is why this port needs its own probe. Fails the test loudly
-// (never returns a false "incapable") if the search module appears entirely absent.
 func (suite *GlideTestSuite) probeSearch13CapabilityCluster(
 	ctx context.Context, client *glide.ClusterClient,
 ) bool {
@@ -2432,9 +2412,6 @@ func (suite *GlideTestSuite) probeSearch13CapabilityCluster(
 	)
 	defer func() {
 		if _, dropErr := client.CustomCommand(ctx, []string{"FT.DROPINDEX", probeIndex}); dropErr != nil {
-			// Retry once -- FT.CREATE and FT.DROPINDEX both use probeIndex as their own first
-			// argument, so they always route to the same primary; a cluster-routing mismatch is
-			// not a possible explanation for a retry also failing.
 			_, retryErr := client.CustomCommand(ctx, []string{"FT.DROPINDEX", probeIndex})
 			require.NoError(
 				suite.T(), retryErr,
@@ -2454,29 +2431,11 @@ func (suite *GlideTestSuite) probeSearch13CapabilityCluster(
 	return false
 }
 
-// readMapField reads one field out of a reply that may be a flat []any slice (odd-index keys,
-// even-index values -- the shape FT.INFO's nested index_definition value comes back as, since
-// glide-core's FTInfoReturnType converter does not recurse into that specific key the way it does
-// fields/vector_params) or an already-flattened map[string]any. Returns (value, true) if found,
-// (nil, false) otherwise. Mirrors Node's readMapField / Java's equivalent inline lookup.
 func readMapField(reply any, field string) (any, bool) {
-	switch r := reply.(type) {
-	case map[string]any:
-		v, ok := r[field]
-		return v, ok
-	case []any:
-		for i := 0; i+1 < len(r); i += 2 {
-			key, ok := r[i].(string)
-			if ok && key == field {
-				return r[i+1], true
-			}
-		}
-	}
-	return nil, false
+	v, ok := flatToMap(reply)[field]
+	return v, ok
 }
 
-// parseEmulateReleaseLevel parses CONFIG GET search.emulate-release's reply into a string, or
-// ("", false) if the key is absent or the reply shape isn't recognised.
 func parseEmulateReleaseLevel(configGetReply any) (string, bool) {
 	value, ok := readMapField(configGetReply, "search.emulate-release")
 	if !ok || value == nil {
@@ -2492,8 +2451,6 @@ func parseEmulateReleaseLevel(configGetReply any) (string, bool) {
 	}
 }
 
-// checkVersionLt returns true if level is strictly less than minLevel, both dotted X.Y.Z (an
-// optional -rcN suffix is stripped). Mirrors Node's checkVersionLt / Python's level comparison.
 func checkVersionLt(level string, minLevel string) bool {
 	strip := func(v string) []int {
 		base := strings.SplitN(v, "-", 2)[0]
@@ -2526,18 +2483,9 @@ func checkVersionLt(level string, minLevel string) bool {
 	return false
 }
 
-// getEmulateReleaseLevel reads the active search.emulate-release level from a connected,
-// 1.3-capable client. Fails the test loudly if the level can't be parsed -- a capable module with
-// an unparseable level is a harness bug, not something to silently skip past.
 func (suite *GlideTestSuite) getEmulateReleaseLevel(ctx context.Context, client *glide.ClusterClient) string {
 	reply, err := client.CustomCommand(ctx, []string{"CONFIG", "GET", "search.emulate-release"})
 	require.NoError(suite.T(), err, "CONFIG GET search.emulate-release failed on a 1.3-capable module")
-	// For an unrouted command like CONFIG GET or FT.INFO, the single node that answers returns
-	// its own map-shaped reply, and ClusterValue stores that single map under MultiValue()
-	// rather than SingleValue() (confirmed empirically against a live cluster: IsMultiValue() is
-	// true with exactly one entry whose key is the config key itself, e.g.
-	// "search.emulate-release", not a node address) -- so the multi-value map IS the reply's own
-	// contents here, not a per-node breakdown.
 	var unwrapped any
 	if reply.IsMultiValue() {
 		multi := reply.MultiValue()
@@ -2554,8 +2502,6 @@ func (suite *GlideTestSuite) getEmulateReleaseLevel(ctx context.Context, client 
 	}
 	return level
 }
-
-// --- ft_search_inkeys ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchInKeys() {
 	client := suite.defaultClusterClient()
@@ -2581,17 +2527,14 @@ func (suite *GlideTestSuite) TestModuleFtSearchInKeys() {
 	}
 	time.Sleep(time.Second)
 
-	// absent -> no restriction, all 3 match
 	all, err := glideft.ClusterFtSearch(ctx, client, index, "*", nil)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(3), all.TotalResults)
 
-	// empty slice -> INKEYS 0, excludes every result
 	none, err := glideft.ClusterFtSearch(ctx, client, index, "*", &options.FtSearchOptions{InKeys: []string{}})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(0), none.TotalResults)
 
-	// a list -> restricts to just those keys
 	some, err := glideft.ClusterFtSearch(
 		ctx, client, index, "*", &options.FtSearchOptions{InKeys: []string{key1, key2}},
 	)
@@ -2606,12 +2549,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchInKeys() {
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
-// --- ft_search_count ---
-
-// TestModuleFtSearchCountMapsToLimitZeroZero is NOT gated behind the 1.3
-// capability probe: a bare COUNT token is invalid FT.SEARCH syntax on search
-// 1.2.x too, so this must run against whatever module version CI's own image
-// actually has (matches Node's and Java's equivalent tests).
 func (suite *GlideTestSuite) TestModuleFtSearchCountMapsToLimitZeroZero() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
@@ -2630,11 +2567,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchCountMapsToLimitZeroZero() {
 	assert.NoError(suite.T(), err)
 	time.Sleep(time.Second)
 
-	// A real field-filter query, not a bare "*" wildcard: search 1.2.x
-	// rejects a bare "*" for non-vector queries ("Invalid query string
-	// syntax") -- unrelated to this test's actual target, the COUNT ->
-	// LIMIT 0 0 serialization, so using "*" would fail on CI's pre-1.3
-	// image for the wrong reason.
 	result, err := glideft.ClusterFtSearch(ctx, client, index, "@title:hello", &options.FtSearchOptions{Count: true})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(2), result.TotalResults)
@@ -2642,8 +2574,6 @@ func (suite *GlideTestSuite) TestModuleFtSearchCountMapsToLimitZeroZero() {
 
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
-
-// --- ft_aggregate typed reducers ---
 
 func (suite *GlideTestSuite) TestModuleFtAggregateTypedReducers() {
 	client := suite.defaultClusterClient()
@@ -2700,8 +2630,6 @@ func (suite *GlideTestSuite) TestModuleFtAggregateTypedReducers() {
 
 	assert.Equal(suite.T(), "30", fmt.Sprintf("%v", row["max_price"]))
 
-	// The group has 3 price values (10, 30, 10); RANDOM_SAMPLE with size=2 must cap its output at
-	// 2 and draw only from the group's actual values.
 	sampleAny, ok := row["sample"].([]any)
 	assert.True(suite.T(), ok, "sample should be an array")
 	assert.Equal(suite.T(), 2, len(sampleAny), "RANDOM_SAMPLE output should be capped at the configured size")
@@ -2712,38 +2640,6 @@ func (suite *GlideTestSuite) TestModuleFtAggregateTypedReducers() {
 
 	glideft.ClusterFtDropIndex(ctx, client, index)
 }
-
-// --- ft_create float16/bfloat16 ---
-
-func (suite *GlideTestSuite) TestModuleFtCreateFloat16Bfloat16Vector() {
-	client := suite.defaultClusterClient()
-	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
-		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
-	}
-
-	prefix := "{" + uuid.New().String() + "}:"
-	index := prefix + "index"
-
-	_, err := glideft.ClusterFtCreate(ctx, client, index,
-		[]options.Field{
-			options.NewVectorFieldFlat("vec16", constants.DistanceMetricL2, 2).
-				SetType(constants.VectorDataTypeFloat16),
-			options.NewVectorFieldFlat("vecb16", constants.DistanceMetricL2, 2).
-				SetType(constants.VectorDataTypeBfloat16),
-		},
-		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
-	assert.NoError(suite.T(), err)
-
-	info, err := glideft.ClusterFtInfo(ctx, client, index)
-	assert.NoError(suite.T(), err)
-	assert.NotEmpty(suite.T(), info)
-
-	_, err = glideft.ClusterFtDropIndex(ctx, client, index)
-	assert.NoError(suite.T(), err)
-}
-
-// --- ft_create filter/score_field/nohl ---
 
 func (suite *GlideTestSuite) TestModuleFtCreateFilterScoreFieldNoHighlight() {
 	client := suite.defaultClusterClient()
@@ -2771,7 +2667,6 @@ func (suite *GlideTestSuite) TestModuleFtCreateFilterScoreFieldNoHighlight() {
 
 	_, err = client.HSet(ctx, prefix+"1", map[string]string{"title": "hello", "boost": "5"})
 	assert.NoError(suite.T(), err)
-	// FILTER excludes documents with an empty title; this key must never appear in results.
 	_, err = client.HSet(ctx, prefix+"2", map[string]string{"title": "", "boost": "7"})
 	assert.NoError(suite.T(), err)
 	time.Sleep(time.Second)

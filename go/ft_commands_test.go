@@ -280,12 +280,8 @@ func Example_ftAggregate() {
 	// 2
 }
 
-// Example_clusterFtSearchInKeys exercises the valkey-search 1.3 INKEYS option: absent (no
-// restriction), an explicit empty slice (INKEYS 0, excludes every result), and a list
-// (restricts to just those keys).
 func Example_clusterFtSearchInKeys() {
 	if !*vssTest {
-		// Requires a search 1.3-capable server. Run with -vss-test to enable.
 		fmt.Println("3 0 2")
 		return
 	}
@@ -293,7 +289,6 @@ func Example_clusterFtSearchInKeys() {
 	ctx := context.Background()
 
 	if !probeSearch13CapabilityCluster(ctx, client) {
-		// INKEYS is a valkey-search 1.3 addition; skip gracefully against an older server.
 		fmt.Println("3 0 2")
 		return
 	}
@@ -342,11 +337,8 @@ func Example_clusterFtSearchInKeys() {
 	// 3 0 2
 }
 
-// Example_ftSearchCount exercises the valkey-search 1.3 Count option, which serializes to
-// LIMIT 0 0 -- a bare COUNT token is not a real FT.SEARCH keyword.
 func Example_ftSearchCount() {
 	if !*vssTest {
-		// Requires a search 1.3-capable server. Run with -vss-test to enable.
 		fmt.Println(2)
 		return
 	}
@@ -354,7 +346,6 @@ func Example_ftSearchCount() {
 	ctx := context.Background()
 
 	if !probeSearch13Capability(ctx, client) {
-		// Count is a valkey-search 1.3 addition; skip gracefully against an older server.
 		fmt.Println(2)
 		return
 	}
@@ -387,11 +378,8 @@ func Example_ftSearchCount() {
 	// 2
 }
 
-// Example_ftCreateFloat16Vector exercises the valkey-search 1.3 FLOAT16/BFLOAT16 vector data
-// types, replacing the hard-coded FLOAT32 default.
 func Example_ftCreateFloat16Vector() {
 	if !*vssTest {
-		// Requires a search 1.3-capable server. Run with -vss-test to enable.
 		fmt.Println("OK")
 		return
 	}
@@ -399,8 +387,6 @@ func Example_ftCreateFloat16Vector() {
 	ctx := context.Background()
 
 	if !probeSearch13Capability(ctx, client) {
-		// FLOAT16/BFLOAT16 vector types are a valkey-search 1.3 addition; skip gracefully
-		// against an older server.
 		fmt.Println("OK")
 		return
 	}
@@ -426,11 +412,8 @@ func Example_ftCreateFloat16Vector() {
 	// OK
 }
 
-// Example_ftCreateFilterScoreFieldNoHighlight exercises the valkey-search 1.3 FT.CREATE FILTER,
-// SCORE_FIELD and NOHL options.
 func Example_ftCreateFilterScoreFieldNoHighlight() {
 	if !*vssTest {
-		// Requires a search 1.3-capable server. Run with -vss-test to enable.
 		fmt.Println("OK")
 		return
 	}
@@ -438,8 +421,6 @@ func Example_ftCreateFilterScoreFieldNoHighlight() {
 	ctx := context.Background()
 
 	if !probeSearch13Capability(ctx, client) {
-		// FILTER/SCORE_FIELD/NOHL are a valkey-search 1.3 addition; skip gracefully against an
-		// older server.
 		fmt.Println("OK")
 		return
 	}
@@ -470,17 +451,291 @@ func Example_ftCreateFilterScoreFieldNoHighlight() {
 	// OK
 }
 
-// classifyInkeysProbeError reports whether err came from a server that does not recognise
-// FT.SEARCH's 1.3-only INKEYS option, as opposed to some other failure.
+func Example_ftHybrid() {
+	if !*vssTest {
+		fmt.Println(2)
+		return
+	}
+	var client *Client = getExampleClient()
+	ctx := context.Background()
+
+	if !probeSearch13Capability(ctx, client) {
+		fmt.Println(2)
+		return
+	}
+
+	prefix := "hybrid-" + uuid.New().String() + ":"
+	index := prefix + "index"
+
+	_, err := glideft.FtCreate(
+		ctx, client, index,
+		[]options.Field{
+			options.NewTextField("title"),
+			options.NewVectorFieldFlat("vec", constants.DistanceMetricL2, 2),
+		},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	client.HSet(ctx, prefix+"textwinner", map[string]string{
+		"title": "hello hello hello world", "vec": "\x00\x00\xc8\x42\x00\x00\xc8\x42",
+	})
+	client.HSet(ctx, prefix+"vectorwinner", map[string]string{
+		"title": "goodbye", "vec": "\x00\x00\x80\x3f\x00\x00\x80\x3f",
+	})
+
+	time.Sleep(time.Second)
+
+	k := 5
+	rows, err := glideft.FtHybrid(
+		ctx, client, index,
+		options.FtHybridSearchArm{Query: "hello"},
+		options.FtHybridVsimArm{Field: "vec", Vector: []byte("\x00\x00\x80\x3f\x00\x00\x80\x3f"), K: &k},
+		nil,
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(len(rows))
+
+	glideft.FtDropIndex(ctx, client, index)
+
+	// Output:
+	// 2
+}
+
+func Example_clusterFtHybrid() {
+	if !*vssTest {
+		fmt.Println(2)
+		return
+	}
+	var client *ClusterClient = getExampleClusterClient()
+	ctx := context.Background()
+
+	if !probeSearch13CapabilityCluster(ctx, client) {
+		fmt.Println(2)
+		return
+	}
+
+	prefix := "{hybrid-" + uuid.New().String() + "}:"
+	index := prefix + "index"
+
+	_, err := glideft.ClusterFtCreate(
+		ctx, client, index,
+		[]options.Field{
+			options.NewTextField("title"),
+			options.NewVectorFieldFlat("vec", constants.DistanceMetricL2, 2),
+		},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	client.HSet(ctx, prefix+"textwinner", map[string]string{
+		"title": "hello hello hello world", "vec": "\x00\x00\xc8\x42\x00\x00\xc8\x42",
+	})
+	client.HSet(ctx, prefix+"vectorwinner", map[string]string{
+		"title": "goodbye", "vec": "\x00\x00\x80\x3f\x00\x00\x80\x3f",
+	})
+
+	time.Sleep(time.Second)
+
+	k := 5
+	rows, err := glideft.ClusterFtHybrid(
+		ctx, client, index,
+		options.FtHybridSearchArm{Query: "hello"},
+		options.FtHybridVsimArm{Field: "vec", Vector: []byte("\x00\x00\x80\x3f\x00\x00\x80\x3f"), K: &k},
+		nil,
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(len(rows))
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+
+	// Output:
+	// 2
+}
+
+func Example_clusterFtAggregateWithCursor() {
+	if !*vssTest {
+		fmt.Println(5)
+		fmt.Println(5)
+		fmt.Println("OK")
+		return
+	}
+	var client *ClusterClient = getExampleClusterClient()
+	ctx := context.Background()
+
+	if !probeSearch13CapabilityCluster(ctx, client) {
+		fmt.Println(5)
+		fmt.Println(5)
+		fmt.Println("OK")
+		return
+	}
+
+	prefix := "{cursor-" + uuid.New().String() + "}:"
+	index := prefix + "index"
+
+	_, err := glideft.ClusterFtCreate(
+		ctx, client, index,
+		[]options.Field{
+			options.NewNumericField("n").SetSortable(true),
+		},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	for i := 1; i <= 20; i++ {
+		client.HSet(ctx, prefix+fmt.Sprint("d", i), map[string]string{"n": fmt.Sprint(i)})
+	}
+
+	time.Sleep(time.Second)
+
+	count := 5
+	rows, cursorID, err := glideft.ClusterFtAggregateWithCursor(
+		ctx, client, index, "*",
+		&options.FtAggregateOptions{
+			LoadFields: []string{"n"},
+			WithCursor: &options.FtWithCursor{Count: &count},
+		},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(len(rows))
+
+	page, _, err := glideft.ClusterFtCursorRead(ctx, client, index, cursorID, &count)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(len(page))
+
+	deleted, err := glideft.ClusterFtCursorDel(ctx, client, index, cursorID)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(deleted)
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+
+	// Output:
+	// 5
+	// 5
+	// OK
+}
+
+func Example_clusterFtSearchWithScores() {
+	if !*vssTest {
+		fmt.Println(2)
+		fmt.Println(true)
+		return
+	}
+	var client *ClusterClient = getExampleClusterClient()
+	ctx := context.Background()
+
+	if !probeSearch13CapabilityCluster(ctx, client) {
+		fmt.Println(2)
+		fmt.Println(true)
+		return
+	}
+
+	prefix := "{scores-" + uuid.New().String() + "}:"
+	index := prefix + "index"
+
+	_, err := glideft.ClusterFtCreate(
+		ctx, client, index,
+		[]options.Field{options.NewTextField("title")},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	client.HSet(ctx, prefix+"1", map[string]string{"title": "hello hello hello world"})
+	client.HSet(ctx, prefix+"2", map[string]string{"title": "hello there"})
+
+	time.Sleep(time.Second)
+
+	result, err := glideft.ClusterFtSearch(
+		ctx, client, index, "hello",
+		&options.FtSearchOptions{WithScores: true, Scorer: "BM25STD"},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.TotalResults)
+	fmt.Println(len(result.Documents) > 0 && result.Documents[0].Key == prefix+"1")
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+
+	// Output:
+	// 2
+	// true
+}
+
+func Example_clusterFtAggregateLoadField() {
+	if !*vssTest {
+		fmt.Println("widget 9")
+		return
+	}
+	var client *ClusterClient = getExampleClusterClient()
+	ctx := context.Background()
+
+	if !probeSearch13CapabilityCluster(ctx, client) {
+		fmt.Println("widget 9")
+		return
+	}
+
+	prefix := "{loadfield-" + uuid.New().String() + "}:"
+	index := prefix + "index"
+
+	_, err := glideft.ClusterFtCreate(
+		ctx, client, index,
+		[]options.Field{
+			options.NewTextField("title"),
+			options.NewNumericField("price"),
+		},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	client.HSet(ctx, prefix+"1", map[string]string{"title": "widget", "price": "9"})
+
+	time.Sleep(time.Second)
+
+	rows, err := glideft.ClusterFtAggregate(
+		ctx, client, index, "*",
+		&options.FtAggregateOptions{
+			LoadFields:       []string{"title"},
+			LoadFieldEntries: []options.LoadField{{FieldIdentifier: "price", Alias: "cost"}},
+		},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	for _, row := range rows {
+		fmt.Println(row["title"], row["cost"])
+	}
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+
+	// Output:
+	// widget 9
+}
+
 func classifyInkeysProbeError(msg string) bool {
 	return strings.Contains(msg, "Unexpected") && strings.Contains(msg, "INKEYS")
 }
 
-// probeSearch13Capability probes a connected standalone client for valkey-search 1.3
-// capability using a real command plus a 1.3-only argument (INKEYS), classified by error text
-// rather than a version string. Go's Example_ functions can't call t.Skip(), so callers check
-// the returned bool themselves and print whatever their own doc comment's "// Output:" expects
-// before returning early, rather than skipping the example outright.
 func probeSearch13Capability(ctx context.Context, client *Client) bool {
 	probeIndex := "__glide_search_1_3_probe_" + uuid.New().String()
 	if _, err := client.CustomCommand(ctx, []string{"FT.CREATE", probeIndex, "SCHEMA", "title", "TEXT"}); err != nil {
@@ -496,7 +751,6 @@ func probeSearch13Capability(ctx context.Context, client *Client) bool {
 	return !classifyInkeysProbeError(err.Error())
 }
 
-// probeSearch13CapabilityCluster is probeSearch13Capability for a cluster client.
 func probeSearch13CapabilityCluster(ctx context.Context, client *ClusterClient) bool {
 	probeIndex := "__glide_search_1_3_probe_" + uuid.New().String()
 	if _, err := client.CustomCommand(ctx, []string{"FT.CREATE", probeIndex, "SCHEMA", "title", "TEXT"}); err != nil {

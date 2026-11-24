@@ -3,17 +3,13 @@
 package options
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 )
-
-// Argv-serialization tests for the valkey-search 1.3 stable surface added to the FT.* options:
-// INKEYS, FLOAT16/BFLOAT16 vector types, FT.CREATE FILTER/SCORE_FIELD/NOHL, per-field UNF,
-// Count's LIMIT 0 0 serialization, and the typed reducer factories. Mirrors Node's
-// GlideFtOptions.test.ts and Python's test_options.py.
 
 func TestFtSearchOptionsToArgs_InKeysAbsent(t *testing.T) {
 	opts := &FtSearchOptions{}
@@ -26,7 +22,7 @@ func TestFtSearchOptionsToArgs_InKeysEmptySlice(t *testing.T) {
 	opts := &FtSearchOptions{InKeys: []string{}}
 	args, err := opts.ToArgs()
 	assert.NoError(t, err)
-	idx := indexOf(args, "INKEYS")
+	idx := slices.Index(args, "INKEYS")
 	assert.GreaterOrEqual(t, idx, 0)
 	assert.Equal(t, "0", args[idx+1])
 }
@@ -35,7 +31,7 @@ func TestFtSearchOptionsToArgs_InKeysWithList(t *testing.T) {
 	opts := &FtSearchOptions{InKeys: []string{"key1", "key2"}}
 	args, err := opts.ToArgs()
 	assert.NoError(t, err)
-	idx := indexOf(args, "INKEYS")
+	idx := slices.Index(args, "INKEYS")
 	assert.Equal(t, []string{"INKEYS", "2", "key1", "key2"}, args[idx:idx+4])
 }
 
@@ -44,7 +40,7 @@ func TestFtSearchOptionsToArgs_CountMapsToLimitZeroZero(t *testing.T) {
 	args, err := opts.ToArgs()
 	assert.NoError(t, err)
 	assert.NotContains(t, args, "COUNT")
-	idx := indexOf(args, "LIMIT")
+	idx := slices.Index(args, "LIMIT")
 	assert.Equal(t, []string{"LIMIT", "0", "0"}, args[idx:idx+3])
 }
 
@@ -58,7 +54,7 @@ func TestFtSearchOptionsToArgs_LimitStillWorks(t *testing.T) {
 	opts := &FtSearchOptions{Limit: &FtSearchLimit{Offset: 5, Count: 10}}
 	args, err := opts.ToArgs()
 	assert.NoError(t, err)
-	idx := indexOf(args, "LIMIT")
+	idx := slices.Index(args, "LIMIT")
 	assert.Equal(t, []string{"LIMIT", "5", "10"}, args[idx:idx+3])
 }
 
@@ -66,7 +62,7 @@ func TestTextFieldToArgs_SortableThenUnf(t *testing.T) {
 	f := NewTextField("title").SetSortable(true).SetUnf(true)
 	args, err := f.ToArgs()
 	assert.NoError(t, err)
-	idx := indexOf(args, "SORTABLE")
+	idx := slices.Index(args, "SORTABLE")
 	assert.GreaterOrEqual(t, idx, 0)
 	assert.Equal(t, "UNF", args[idx+1])
 }
@@ -81,7 +77,7 @@ func TestTagFieldToArgs_SortableThenUnf(t *testing.T) {
 	f := NewTagField("tags").SetSortable(true).SetUnf(true)
 	args, err := f.ToArgs()
 	assert.NoError(t, err)
-	idx := indexOf(args, "SORTABLE")
+	idx := slices.Index(args, "SORTABLE")
 	assert.GreaterOrEqual(t, idx, 0)
 	assert.Equal(t, "UNF", args[idx+1])
 }
@@ -96,7 +92,7 @@ func TestNumericFieldToArgs_SortableThenUnf(t *testing.T) {
 	f := NewNumericField("price").SetSortable(true).SetUnf(true)
 	args, err := f.ToArgs()
 	assert.NoError(t, err)
-	idx := indexOf(args, "SORTABLE")
+	idx := slices.Index(args, "SORTABLE")
 	assert.GreaterOrEqual(t, idx, 0)
 	assert.Equal(t, "UNF", args[idx+1])
 }
@@ -140,9 +136,9 @@ func TestFtCreateOptionsToArgs_FilterScoreFieldNoHighlight(t *testing.T) {
 	}
 	args, err := opts.ToArgs()
 	assert.NoError(t, err)
-	fIdx := indexOf(args, "FILTER")
+	fIdx := slices.Index(args, "FILTER")
 	assert.Equal(t, "@price > 0", args[fIdx+1])
-	sIdx := indexOf(args, "SCORE_FIELD")
+	sIdx := slices.Index(args, "SCORE_FIELD")
 	assert.Equal(t, "boost", args[sIdx+1])
 	assert.Contains(t, args, "NOHL")
 }
@@ -155,9 +151,6 @@ func TestFtCreateOptionsToArgs_NoHighlightOmittedWhenUnset(t *testing.T) {
 }
 
 func TestFtCreateOptionsToArgs_EmptyFilterOmitsFilter(t *testing.T) {
-	// Go's convention for every other optional string field here (Language, Punctuation) is
-	// "empty string means unset" -- Filter follows the same convention rather than raising, since
-	// Go has no null/undefined distinction for strings the way Python/Node/Java do.
 	opts := &FtCreateOptions{DataType: constants.IndexDataTypeHash, Filter: ""}
 	args, err := opts.ToArgs()
 	assert.NoError(t, err)
@@ -203,13 +196,4 @@ func TestNewRandomSampleReducer(t *testing.T) {
 		Args:     []string{"@score", "5"},
 		Name:     "score_sample",
 	}, r)
-}
-
-func indexOf(s []string, v string) int {
-	for i, x := range s {
-		if x == v {
-			return i
-		}
-	}
-	return -1
 }
