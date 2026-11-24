@@ -1990,6 +1990,28 @@ func TestConfig_AzAffinityAllNodes_RequiresClientAZ(t *testing.T) {
 	assert.Contains(t, err.Error(), "client AZ must be set")
 }
 
+func TestConfig_WhitespaceOnlyClientAZ_IsRejectedLikeEmpty(t *testing.T) {
+	type configBuilder func(readFrom ReadFrom, clientAZ string) (*protobuf.ConnectionRequest, error)
+	builders := map[string]configBuilder{
+		"standalone": func(readFrom ReadFrom, clientAZ string) (*protobuf.ConnectionRequest, error) {
+			return NewClientConfiguration().WithReadFrom(readFrom).WithClientAZ(clientAZ).ToProtobuf()
+		},
+		"cluster": func(readFrom ReadFrom, clientAZ string) (*protobuf.ConnectionRequest, error) {
+			return NewClusterClientConfiguration().WithReadFrom(readFrom).WithClientAZ(clientAZ).ToProtobuf()
+		},
+	}
+	for name, build := range builders {
+		for _, readFrom := range []ReadFrom{AzAffinity, AzAffinityReplicaAndPrimary, AzAffinityAllNodes} {
+			t.Run(fmt.Sprintf("%s/%v", name, readFrom), func(t *testing.T) {
+				_, emptyErr := build(readFrom, "")
+				_, blankErr := build(readFrom, " \t\n ")
+				assert.ErrorContains(t, emptyErr, "client AZ must be set")
+				assert.Equal(t, emptyErr, blankErr)
+			})
+		}
+	}
+}
+
 func TestConfig_AzAffinityAllNodes_MapsToProtobuf(t *testing.T) {
 	// AzAffinityAllNodes with ClientAZ must map to ReadFrom_AZAffinityAllNodes
 	az := "us-east-1a"
