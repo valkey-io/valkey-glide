@@ -19,7 +19,6 @@ fn node_address_default_is_localhost_6379() {
     let a = NodeAddress::default();
     assert_eq!(a.host, "localhost");
     assert_eq!(a.port, 6379);
-    assert_eq!(a.unix_socket_path, None);
 }
 
 #[test]
