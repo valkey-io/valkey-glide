@@ -154,8 +154,9 @@ fn resolver_runs_on_the_blocked_caller() {
     run_child("child_creates_standalone_clients", &standalone.node, None);
 }
 
-/// Creates an eager sync, an eager async and a lazy sync client on a musl-sized thread: the
-/// connect must stay off its stack, and the resolver must run on it.
+/// Creates an eager sync and an eager async client on a musl-sized thread: the connect must stay
+/// off its stack, and the resolver must run on it. A lazy client's first command is covered by
+/// `test_lazy_sync_connect_stack.rs`.
 fn create_clients_on_a_musl_sized_thread(cluster: bool) {
     let node = std::env::var(NODE_ENV)
         .unwrap_or_else(|_| panic!("run by its parent test, which sets {NODE_ENV}"));
@@ -173,17 +174,7 @@ fn create_clients_on_a_musl_sized_thread(cluster: bool) {
         };
         let async_client = create(&request, async_type, resolver, 2);
         assert_resolved_on_the_caller(2, "eager async create");
-
-        let mut lazy_request = request;
-        lazy_request.lazy_connect = true;
-        let lazy = create(&lazy_request, ClientType::SyncClient, resolver, 3);
-        assert!(
-            take_threads(3).is_empty(),
-            "the lazy client connected early"
-        );
-        assert_eq!(send(&lazy, RequestType::Ping, &[]), Ok(()));
-        assert_resolved_on_the_caller(3, "lazy sync first command");
-        (sync, async_client, lazy)
+        (sync, async_client)
     });
     drop(clients);
 }
