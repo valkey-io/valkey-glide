@@ -13,6 +13,7 @@ import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.utils.Java8Utils.createMap;
+import static glide.utils.Java8Utils.repeat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -37,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
@@ -224,6 +226,39 @@ public class ClusterBatchTests {
 
         Object[] result = clusterClient.exec(batch, true).get();
         assertArrayEquals(expectedResult, result);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsWithAtomic")
+    public void test_batch_many_arguments(GlideClusterClient clusterClient, boolean isAtomic) {
+        // ~52k arguments in one batch: far past the JNI default local reference capacity, and
+        // every argument goes through the native per-argument copy. Value lengths vary and
+        // include an empty value, so bytes left over in a reused native buffer would show up.
+        String key = UUID.randomUUID().toString();
+        int fieldCount = 50;
+        int commandCount = 1_000;
+        String[] fields = new String[fieldCount];
+        String[] expectedValues = new String[fieldCount];
+        Map<String, String> fieldValues = new LinkedHashMap<>();
+        for (int i = 0; i < fieldCount; i++) {
+            fields[i] = "field" + i;
+            expectedValues[i] = repeat("v", (i * 37) % 200);
+            fieldValues.put(fields[i], expectedValues[i]);
+        }
+
+        ClusterBatch batch = new ClusterBatch(isAtomic);
+        batch.hset(key, fieldValues);
+        for (int i = 0; i < commandCount; i++) {
+            batch.hmget(key, fields);
+        }
+
+        Object[] result = clusterClient.exec(batch, true).get();
+        assertEquals(commandCount + 1, result.length);
+        assertEquals((long) fieldCount, result[0]);
+        for (int i = 1; i <= commandCount; i++) {
+            assertArrayEquals(expectedValues, (Object[]) result[i]);
+        }
     }
 
     @ParameterizedTest(autoCloseArguments = false)

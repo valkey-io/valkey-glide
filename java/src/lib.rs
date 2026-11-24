@@ -1495,8 +1495,25 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
     span_ptr: jlong,
 ) {
     run_ffi(|| {
+        // Rust owns the span once Java passes it in. The spawned task ends and frees it;
+        // every synchronous error return below must do the same.
+        let release_span = move || {
+            if span_ptr != 0
+                && let Ok(span) =
+                    unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(span_ptr as u64) }
+            {
+                span.end();
+                unsafe {
+                    drop(std::sync::Arc::from_raw(
+                        span_ptr as *const glide_core::GlideSpan,
+                    ));
+                }
+            }
+        };
+
         let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeBatchAsync")
         else {
+            release_span();
             return Some(());
         };
 
@@ -1514,6 +1531,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                     &format!("Failed to get request types length: {e}"),
                     0,
                 );
+                release_span();
                 return Some(());
             }
         };
@@ -1525,11 +1543,24 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                 &format!("Failed to read request types: {e}"),
                 0,
             );
+            release_span();
             return Some(());
         }
 
         // Build every Cmd once, directly from the JNI arrays.
         let built_cmds: Result<Vec<redis::Cmd>, String> = (|| {
+            // The raw loop below indexes `args` by request-type position, so check its
+            // shape first: a null or short array would otherwise be undefined behaviour
+            // or a misleading error.
+            if args.is_null() {
+                return Err("batch args array is null".to_string());
+            }
+            let args_len = env.get_array_length(&args).map_err(|e| e.to_string())? as usize;
+            if args_len != cmd_count {
+                return Err(format!(
+                    "batch has {cmd_count} request types but {args_len} argument arrays"
+                ));
+            }
             let raw = env.get_raw();
             let mut cmds = Vec::with_capacity(cmd_count);
             let mut scratch: Vec<u8> = Vec::new();
@@ -1587,6 +1618,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                     &format!("Failed to extract batch args: {e}"),
                     0,
                 );
+                release_span();
                 return Some(());
             }
         };
@@ -1602,6 +1634,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
         let retry_connection = retry_connection_error != 0;
         let expect_utf8_bool = expect_utf8 != 0;
 
+        // Extract route parameters
         let has_route_bool = has_route != 0;
         let route_type_val: i32 = route_type;
         let route_param_str: Option<String> = if !route_param.is_null() {
@@ -1613,6 +1646,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
             None
         };
 
+        // Synchronously detect if any command in the batch is a blocking command and
+        // raise the counter BEFORE spawning, so the abandon monitor cannot observe
+        // is_blocking=0 in the window between spawn() and task execution.
         let batch_pre_blocking_arc: Option<Arc<AtomicU32>> = {
             let has_blocking = built_cmds
                 .iter()
@@ -1654,7 +1690,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                     }
 
                     let result: Result<redis::Value, redis::RedisError> = async {
-                        // Build pipeline directly from arrays
+                        // Build the pipeline from the commands built above
                         let mut pipeline = redis::Pipeline::with_capacity(cmd_count);
                         if is_atomic_bool {
                             pipeline.atomic();
