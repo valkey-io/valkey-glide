@@ -408,15 +408,16 @@ type NonNullAddressResolverCallback = unsafe extern "C-unwind" fn(
 /// # Threads
 /// While an FFI call blocks its caller on the client's work, the callback runs on the thread of
 /// a caller blocked on the client. That covers creating the client, a lazy client's first
-/// command, and every resolution made while a synchronous command waits, such as for a redirect
-/// or a topology refresh. When several threads are blocked on one client, it runs on one of
-/// them, not necessarily the one whose call needed it. With no caller blocked, for example during
-/// a periodic topology check between commands or a command of an asynchronous client, it runs on
-/// a GLIDE runtime thread.
+/// command, and every resolution made while a command, batch or script of a synchronous client
+/// waits, such as for a redirect or a topology refresh. When several threads are blocked on one
+/// client, it runs on one of them, not necessarily the one whose call needed it. Otherwise, for
+/// example during a periodic topology check between commands, an RDMA transfer, or a command of
+/// an asynchronous client, it runs on a GLIDE runtime thread.
 ///
 /// The callback must not call back into GLIDE. On a blocked caller's thread, creating a client
-/// or running a synchronous command from inside it fails with an error. It should also return
-/// quickly, since the client waits for it.
+/// with a `create_client` function, or running a command, batch or script on a synchronous
+/// client, from inside it fails with an error; other calls are not checked. It should also
+/// return quickly, since the client waits for it.
 pub type AddressResolverCallback = Option<
     unsafe extern "C-unwind" fn(
         client_id: usize,
