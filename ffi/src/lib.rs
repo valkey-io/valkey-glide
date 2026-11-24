@@ -3135,8 +3135,11 @@ pub unsafe extern "C-unwind" fn create_client_from_proto_json(
 
 #[cfg(test)]
 mod tests_parse_proto_json_request {
-    //! Direct unit tests for `parse_proto_json_request`: the ProtoJSON → `ConnectionRequest`
-    //! mapping and the shared post-parse rules, with no client creation involved.
+    //! Unit tests for `parse_proto_json_request`, scoped to what this crate owns: the UTF-8
+    //! guard, the shared post-parse rules, and the ProtoJSON contract advertised to bindings
+    //! (strict parsing, both naming styles, one anchor per value encoding). Library failure
+    //! modes with no contract attached are not retested here; downstream validation and
+    //! defaulting belong to glide-core.
     use super::*;
 
     fn parse(json: &str) -> Result<connection_request::ConnectionRequest, String> {
@@ -3207,67 +3210,44 @@ mod tests_parse_proto_json_request {
         "client_key": "a2V5"
     }"#;
 
+    /// One hand-computed expectation per ProtoJSON value encoding. This is the external
+    /// anchor for the floating `protobuf-json-mapping` dependency: it outlives the
+    /// URI-equivalence corpus (deleted with the URI path) and catches the symmetric
+    /// encode/decode bugs the self-consistent reflection round-trip cannot.
     #[test]
-    fn minimal_document_parses() {
-        let request = parse(r#"{"addresses": [{"host": "localhost", "port": 6379}]}"#).unwrap();
-        assert_eq!(request.addresses.len(), 1);
-        assert_eq!(&*request.addresses[0].host, "localhost");
-        assert_eq!(request.addresses[0].port, 6379);
-        assert!(!request.cluster_mode_enabled);
-    }
-
-    #[test]
-    fn full_document_maps_every_field() {
+    fn value_encodings_map_to_expected_proto_values() {
         let request = parse(FULL_CAMEL_CASE).unwrap();
+        // Repeated message (multi-address has no URI equivalent, so it is anchored here)
         assert_eq!(request.addresses.len(), 2);
         assert_eq!(&*request.addresses[1].host, "replica.example.com");
         assert_eq!(request.addresses[1].port, 6381);
+        // Scalars
+        assert!(request.cluster_mode_enabled);
+        assert_eq!(request.request_timeout, 2500);
+        assert_eq!(&*request.client_az, "us-east-1a");
+        // Enum by value name
         assert_eq!(
             request.tls_mode.enum_value_or_default(),
             connection_request::TlsMode::SecureTls
         );
-        assert!(request.cluster_mode_enabled);
-        assert_eq!(request.request_timeout, 2500);
-        assert_eq!(
-            request.read_from.enum_value_or_default(),
-            connection_request::ReadFrom::AZAffinity
-        );
-        assert_eq!(&*request.client_az, "us-east-1a");
+        // Nested message with an optional scalar
         let retry = request.connection_retry_strategy.as_ref().unwrap();
         assert_eq!(retry.number_of_retries, 5);
-        assert_eq!(retry.factor, 100);
-        assert_eq!(retry.exponent_base, 2);
         assert_eq!(retry.jitter_percent, Some(20));
-        assert_eq!(&*request.authentication_info.username, "user name");
-        assert_eq!(&*request.authentication_info.password, "p@ss/wo?rd näï");
-        assert_eq!(request.database_id, 4);
-        assert_eq!(
-            request.protocol.enum_value_or_default(),
-            connection_request::ProtocolVersion::RESP2
-        );
-        assert_eq!(&*request.client_name, "my-client");
-        assert_eq!(&*request.lib_name, "GlideRuby");
+        // Oneof arm selection
         assert!(request.has_periodic_checks_manual_interval());
         assert_eq!(
             request.periodic_checks_manual_interval().duration_in_sec,
             30
         );
+        // Map with stringified integer key, Base64 bytes values
         let subscriptions = &request.pubsub_subscriptions.channels_or_patterns_by_type;
         assert_eq!(
             subscriptions.get(&0).unwrap().channels_or_patterns[0].as_ref(),
             b"news"
         );
-        assert_eq!(request.inflight_requests_limit, 500);
-        assert_eq!(request.connection_timeout, 800);
-        assert!(request.lazy_connect);
-        assert_eq!(
-            request.node_discovery_mode.enum_value_or_default(),
-            connection_request::NodeDiscoveryMode::Static
-        );
-        assert_eq!(request.root_certs.len(), 1);
-        assert_eq!(request.root_certs[0].as_ref(), b"root");
+        // Base64 bytes field
         assert_eq!(request.client_cert.as_ref(), b"cert");
-        assert_eq!(request.client_key.as_ref(), b"key");
     }
 
     #[test]
@@ -3276,12 +3256,6 @@ mod tests_parse_proto_json_request {
             parse(FULL_CAMEL_CASE).unwrap(),
             parse(FULL_SNAKE_CASE).unwrap()
         );
-    }
-
-    #[test]
-    fn periodic_checks_disabled_arm_parses() {
-        let request = parse(r#"{"addresses": [], "periodicChecksDisabled": {}}"#).unwrap();
-        assert!(request.has_periodic_checks_disabled());
     }
 
     #[test]
@@ -3306,11 +3280,6 @@ mod tests_parse_proto_json_request {
     }
 
     #[test]
-    fn malformed_json_is_rejected() {
-        assert!(parse("{not json").is_err());
-    }
-
-    #[test]
     fn invalid_utf8_is_rejected() {
         let err = parse_proto_json_request(&[0xff, 0xfe, 0x7b]).unwrap_err();
         assert!(err.contains("UTF-8"), "unexpected error: {err}");
@@ -3321,26 +3290,6 @@ mod tests_parse_proto_json_request {
         // Strictness is the drift guard: a misspelled or unsupported field must fail
         // loudly, never be silently dropped.
         assert!(parse(r#"{"addresses": [], "notARealField": 1}"#).is_err());
-    }
-
-    #[test]
-    fn wrong_type_is_rejected() {
-        assert!(parse(r#"{"addresses": [], "requestTimeout": true}"#).is_err());
-    }
-
-    #[test]
-    fn out_of_range_uint32_is_rejected() {
-        assert!(parse(r#"{"addresses": [], "requestTimeout": 4294967296}"#).is_err());
-    }
-
-    #[test]
-    fn invalid_base64_is_rejected() {
-        assert!(parse(r#"{"addresses": [], "clientCert": "!!!not-base64!!!"}"#).is_err());
-    }
-
-    #[test]
-    fn invalid_enum_name_is_rejected() {
-        assert!(parse(r#"{"addresses": [], "tlsMode": "SuperTls"}"#).is_err());
     }
 }
 
