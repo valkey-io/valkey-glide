@@ -1932,8 +1932,8 @@ pub fn scope_parent_id(scope_id: u64) -> Option<u64> {
 /// Global client registry: client_id → Client.
 /// Language bindings register their Client instances here so that
 /// scope execution can access timeout, decompression, and IAM features.
-static CLIENT_REGISTRY: std::sync::OnceLock<dashmap::DashMap<u64, Client>> =
-    std::sync::OnceLock::new();
+static CLIENT_REGISTRY: crate::fork_slot::ForkSlot<dashmap::DashMap<u64, Client>> =
+    crate::fork_slot::ForkSlot::new();
 
 pub fn get_client_registry() -> &'static dashmap::DashMap<u64, Client> {
     CLIENT_REGISTRY.get_or_init(dashmap::DashMap::new)
