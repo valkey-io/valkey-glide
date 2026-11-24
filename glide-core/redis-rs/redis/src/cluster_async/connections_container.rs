@@ -751,6 +751,17 @@ where
         (connections, unconnected)
     }
 
+    /// Takes over the reconnect tasks of slot-map nodes that have no connection here, so a
+    /// node that is still down is reconnected when it comes back. The other tasks are
+    /// dropped, which aborts them.
+    pub(crate) fn adopt_reconnect_tasks(&mut self, mut tasks: HashMap<String, RefreshTaskState>) {
+        let slot_map_nodes = self.slot_map.all_node_addresses();
+        tasks.retain(|address, _| {
+            slot_map_nodes.contains(address) && !self.connection_map.contains_key(address)
+        });
+        self.refresh_conn_state.refresh_address_in_progress = tasks;
+    }
+
     pub(crate) fn node_for_address(&self, address: &str) -> Option<ClusterNode<Connection>> {
         self.connection_map
             .get(address)
@@ -1772,6 +1783,36 @@ mod tests {
         connections.sort();
 
         assert_eq!(vec![2, 3], connections);
+    }
+
+    #[tokio::test]
+    async fn adopt_reconnect_tasks_keeps_only_unconnected_slot_map_nodes() {
+        let mut container = create_container();
+        remove_nodes(&container, &["primary1"]);
+        let task = || {
+            RefreshTaskState::new(
+                tokio::spawn(futures::future::pending()),
+                RefreshTaskNotifier::new(),
+                Arc::new(()),
+                false,
+            )
+        };
+
+        container.adopt_reconnect_tasks(HashMap::from([
+            // In the slot map with no connection: kept.
+            ("primary1".to_owned(), task()),
+            // Connected: dropped.
+            ("primary2".to_owned(), task()),
+            // Not in the slot map: dropped.
+            ("removed".to_owned(), task()),
+        ]));
+
+        let kept: Vec<_> = container
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .keys()
+            .collect();
+        assert_eq!(kept, vec!["primary1"]);
     }
 
     #[test]
