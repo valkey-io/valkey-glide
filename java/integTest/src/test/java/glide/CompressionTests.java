@@ -1124,14 +1124,30 @@ public class CompressionTests {
         }
     }
 
-    private static void assertSizeLimitException(Object result) {
+    private static void assertSizeLimitException(Object result, String expectedMessage) {
         assertTrue(
                 result instanceof RequestException,
                 "Expected the size-limit error in place, got " + result);
-        String message = ((RequestException) result).getMessage();
-        assertTrue(
-                message.toLowerCase().contains("size limit exceeded"),
-                "Error should name the size limit: " + message);
+        assertEquals(expectedMessage, ((RequestException) result).getMessage());
+    }
+
+    @SneakyThrows
+    private static Object[] execSizeLimitBatch(
+            BaseClient client, boolean atomic, boolean raiseOnError, String markerKey, String bigKey) {
+        if (client instanceof GlideClusterClient) {
+            glide.api.models.ClusterBatch batch = new glide.api.models.ClusterBatch(atomic);
+            batch.set(markerKey, "written");
+            batch.get(bigKey);
+            batch.get(markerKey);
+            batch.mget(new String[] {markerKey, bigKey});
+            return ((GlideClusterClient) client).exec(batch, raiseOnError).get();
+        }
+        glide.api.models.Batch batch = new glide.api.models.Batch(atomic);
+        batch.set(markerKey, "written");
+        batch.get(bigKey);
+        batch.get(markerKey);
+        batch.mget(new String[] {markerKey, bigKey});
+        return ((GlideClient) client).exec(batch, raiseOnError).get();
     }
 
     @SneakyThrows
@@ -1149,29 +1165,25 @@ public class CompressionTests {
             String markerKey = tag + "marker";
             assertEquals(OK, writer.set(bigKey, generateCompressibleText(10_000)).get());
 
-            Object[] results;
-            if (clusterMode) {
-                glide.api.models.ClusterBatch batch = new glide.api.models.ClusterBatch(atomic);
-                batch.set(markerKey, "written");
-                batch.get(bigKey);
-                batch.get(markerKey);
-                batch.mget(new String[] {markerKey, bigKey});
-                results = ((GlideClusterClient) reader).exec(batch, false).get();
-            } else {
-                glide.api.models.Batch batch = new glide.api.models.Batch(atomic);
-                batch.set(markerKey, "written");
-                batch.get(bigKey);
-                batch.get(markerKey);
-                batch.mget(new String[] {markerKey, bigKey});
-                results = ((GlideClient) reader).exec(batch, false).get();
-            }
+            Throwable raised =
+                    assertThrows(
+                                    ExecutionException.class,
+                                    () -> execSizeLimitBatch(reader, atomic, true, markerKey, bigKey))
+                            .getCause();
+            assertTrue(
+                    raised instanceof RequestException, "Should throw RequestException, got " + raised);
+            assertTrue(
+                    raised.getMessage().toLowerCase().contains("size limit exceeded"),
+                    "Error should name the size limit: " + raised.getMessage());
+
+            Object[] results = execSizeLimitBatch(reader, atomic, false, markerKey, bigKey);
 
             assertEquals(4, results.length);
             assertEquals(OK, results[0]);
-            assertSizeLimitException(results[1]);
+            assertSizeLimitException(results[1], raised.getMessage());
             assertEquals("written", results[2]);
             // An MGET reply fails as a whole, as the same MGET does outside a batch.
-            assertSizeLimitException(results[3]);
+            assertSizeLimitException(results[3], raised.getMessage());
 
             writer.del(new String[] {bigKey, markerKey}).get();
         }

@@ -467,24 +467,31 @@ fn resp_value_to_java<'local>(
 
             Ok(hash_map)
         }
-        Value::ServerError(server_error) => {
-            let err_msg = error_message(&server_error.into());
-            let jmsg = env.new_string(err_msg)?;
-            let cache = get_java_value_conversion_cache_safe(env)?;
-            let cls = to_local_jclass(env, &cache.request_exception_class)?;
-            let raw = jmsg.into_raw();
-            let obj = unsafe {
-                env.new_object_unchecked(
-                    cls,
-                    cache.request_exception_ctor,
-                    &[jni::sys::jvalue { l: raw }],
-                )?
-            };
-            // Recreate to allow drop and avoid leaking the local ref
-            let _ = unsafe { JString::from_raw(raw) };
-            Ok(obj)
-        }
+        Value::ServerError(server_error) => request_exception_to_java(env, server_error.into()),
+        Value::ClientError(client_error) => request_exception_to_java(env, client_error.into()),
     }
+}
+
+/// Converts an error held in place of a reply into a Java `RequestException`, using the
+/// message the same error carries when it fails the whole call.
+fn request_exception_to_java<'local>(
+    env: &mut JNIEnv<'local>,
+    error: redis::RedisError,
+) -> Result<JObject<'local>, FFIError> {
+    let message = env.new_string(error_message(&error))?;
+    let cache = get_java_value_conversion_cache_safe(env)?;
+    let class = to_local_jclass(env, &cache.request_exception_class)?;
+    let raw_message = message.into_raw();
+    let exception = unsafe {
+        env.new_object_unchecked(
+            class,
+            cache.request_exception_ctor,
+            &[jni::sys::jvalue { l: raw_message }],
+        )?
+    };
+    // Recreate to allow drop and avoid leaking the local ref
+    let _ = unsafe { JString::from_raw(raw_message) };
+    Ok(exception)
 }
 
 /// Convert an array of values into java array of corresponding values.
