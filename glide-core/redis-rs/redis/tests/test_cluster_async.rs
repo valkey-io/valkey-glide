@@ -5408,6 +5408,108 @@ mod cluster_async {
 
     #[test]
     #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_refresh_keeps_reconnecting_a_down_node() {
+        let name = "test_async_cluster_partial_results_refresh_keeps_reconnecting_a_down_node";
+        let outage = Arc::new(AtomicBool::new(false));
+        let handler_outage = outage.clone();
+        // During the outage the topology also lists 6382, a replica of 6380, so the
+        // test can tell when a slot refresh has swapped in a new slot map.
+        let with_replica = vec![
+            MockSlotRange {
+                primary_port: 6379,
+                replica_ports: vec![],
+                slot_range: 0..8191,
+            },
+            MockSlotRange {
+                primary_port: 6380,
+                replica_ports: vec![6382],
+                slot_range: 8192..16383,
+            },
+        ];
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(0)
+                .slots_refresh_rate_limit(Duration::ZERO, 0),
+            name,
+            move |received_cmd: &[u8], port| {
+                if !handler_outage.load(Ordering::SeqCst) {
+                    respond_startup_two_nodes(name, received_cmd)?;
+                } else if port == 6380 {
+                    return Err(Err(std::io::Error::from(
+                        std::io::ErrorKind::ConnectionRefused,
+                    )
+                    .into()));
+                } else {
+                    respond_startup_with_replica_using_config(
+                        name,
+                        received_cmd,
+                        Some(with_replica.clone()),
+                    )?;
+                }
+                Err(Ok(info_reply(port)))
+            },
+        );
+        let info = cmd("INFO");
+        let mut partial_info = cmd("INFO");
+        partial_info.set_allow_partial_results(true);
+        let addresses = |value: Value| -> Vec<String> {
+            sorted_map(value)
+                .into_iter()
+                .map(|(address, _)| address)
+                .collect()
+        };
+
+        runtime.block_on(async {
+            outage.store(true, Ordering::SeqCst);
+            // The plain call fails on 6380, so the client starts reconnecting it.
+            let primaries = per_node_route(MultipleNodeRoutingInfo::AllMasters);
+            assert!(connection
+                .route_command(&info, primaries.clone())
+                .await
+                .is_err());
+            // The partial call requests a slot refresh, which cannot connect 6380.
+            connection
+                .route_command(&partial_info, primaries.clone())
+                .await
+                .unwrap();
+            let replica = format!("{name}:6382");
+            let swapped = tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    let all_nodes = per_node_route(MultipleNodeRoutingInfo::AllNodes);
+                    if let Ok(value) = connection.route_command(&info, all_nodes).await {
+                        if addresses(value).contains(&replica) {
+                            return;
+                        }
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await;
+            assert!(swapped.is_ok(), "the slot refresh never ran");
+
+            outage.store(false, Ordering::SeqCst);
+            let reconnected = tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    if let Ok(value) = connection.route_command(&info, primaries.clone()).await {
+                        if addresses(value).len() == 2 {
+                            return;
+                        }
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await;
+            assert!(reconnected.is_ok(), "6380 was never reconnected");
+        });
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_partial_results_drop_a_failed_over_primary() {
         // No periodic topology checks, so only the refresh a partial result requests can
         // update the slot map.
