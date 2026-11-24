@@ -93,15 +93,16 @@ pub enum GlideIAMError {
 }
 
 /// AWS service type for IAM authentication
+#[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, IntoStaticStr)]
 pub enum ServiceType {
     /// Amazon ElastiCache service
     #[strum(serialize = "elasticache")]
-    ElastiCache,
+    ElastiCache = 0,
 
     /// Amazon MemoryDB service
     #[strum(serialize = "memorydb")]
-    MemoryDB,
+    MemoryDB = 1,
 }
 
 /// Validate refresh interval (1 second to 12 hours, defaults to 5 minutes)
