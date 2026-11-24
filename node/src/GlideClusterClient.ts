@@ -21,7 +21,10 @@ import {
     isGlideRecord,
     restoreErrorPrototype,
 } from "./BaseClient";
-import { RequestError } from "./Errors";
+import {
+    RequestError,
+    TimeoutError, // eslint-disable-line @typescript-eslint/no-unused-vars
+} from "./Errors";
 import { ClusterBatch } from "./Batch";
 import {
     ClientPauseMode,
