@@ -216,6 +216,12 @@ public class ConnectionManager {
         }
     }
 
+    /** Stop using a pooled handle without closing it; see {@link #closeConnectionSync()}. */
+    public void detachFromPool() {
+        isClosed = true;
+        nativeClientHandle = 0;
+    }
+
     /** Get the native client handle for use by CommandManager. */
     public long getNativeClientHandle() {
         return nativeClientHandle;

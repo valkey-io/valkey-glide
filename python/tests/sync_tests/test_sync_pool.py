@@ -8,6 +8,7 @@ Parameterized over cluster_mode (True/False) to ensure both standalone and
 cluster deployments behave identically.
 """
 
+import gc
 import os
 import signal
 import threading
@@ -81,6 +82,15 @@ def _wait_for_pool_ready(pool, min_idle=1, timeout_s=30):
         time.sleep(0.05)
 
 
+def _pooled_id(pool, lease_id: int) -> int:
+    """The pooled client a current borrow uses; its lease id changes per borrow."""
+    out = pool._ffi.new("uint64_t *")
+    ref = pool._lib.glide_pool_lease_client(pool.pool_id, lease_id, out)
+    assert ref != 0, "the borrow is current"
+    pool._lib.glide_pool_release_client_ref(ref)
+    return out[0]
+
+
 class TestClientPool:
     """Tests for the ClientPool class backed by glide-core::pool via FFI."""
 
@@ -122,7 +132,7 @@ class TestClientPool:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_pool_reuse(self, cluster_mode):
-        """LIFO reuse: same client_id returned after release."""
+        """LIFO reuse: same pooled client returned after release, under a new lease."""
         config = _get_pool_client_config(cluster_mode)
         pool = ClientPool(
             config, PoolConfig(max_size=5, min_idle=1, acquire_timeout_s=10.0)
@@ -131,11 +141,102 @@ class TestClientPool:
 
         try:
             id1 = pool.acquire()
+            conn1 = _pooled_id(pool, id1)
             pool.release(id1)
             time.sleep(0.05)
             id2 = pool.acquire()
+            conn2 = _pooled_id(pool, id2)
             pool.release(id2)
-            assert id1 == id2, f"Expected LIFO reuse: {id1} != {id2}"
+            assert conn1 == conn2, f"Expected LIFO reuse: {conn1} != {conn2}"
+            assert id1 != id2, "each borrow gets its own lease"
+        finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_stale_release_leaves_the_next_borrow_alone(self, cluster_mode):
+        """Releasing an ended borrow again, after its connection was lent on,
+        must not free the new borrow."""
+        config = _get_pool_client_config(cluster_mode)
+        pool = ClientPool(config, PoolConfig(max_size=1, min_idle=1))
+        _wait_for_pool_ready(pool, 1)
+        try:
+            first = pool.acquire()
+            pool.release(first)
+            second = pool.acquire()
+            client = pool._get_or_create_client(second)
+
+            pool.release(first)
+
+            with pytest.raises(TimeoutError):
+                pool.acquire(timeout=0.5)
+            assert client.ping() == b"PONG"
+            pool.release(second)
+        finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_close_on_borrowed_client_ends_only_the_borrow(self, cluster_mode):
+        """close() on a borrowed client returns it to the pool; it must not
+        close or free the connection the next borrower gets."""
+        config = _get_pool_client_config(cluster_mode)
+        pool = ClientPool(config, PoolConfig(max_size=1, min_idle=1))
+        _wait_for_pool_ready(pool, 1)
+        try:
+            with pool.borrow() as client:
+                client.close()
+                with pytest.raises(ClosingError):
+                    client.ping()
+            # Run the wrapper's finalizer now, so an extra adapter release
+            # would free the connection before the next borrow uses it.
+            del client
+            gc.collect()
+            for _ in range(3):
+                with pool.borrow() as client:
+                    assert client.ping() == b"PONG"
+        finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_released_client_raises_closing_error(self, cluster_mode):
+        """A client kept past its borrow fails instead of using the connection's
+        next borrow."""
+        config = _get_pool_client_config(cluster_mode)
+        pool = ClientPool(config, PoolConfig(max_size=1, min_idle=1))
+        _wait_for_pool_ready(pool, 1)
+        try:
+            with pool.borrow() as client:
+                kept = client
+            lease = pool.acquire()
+            with pytest.raises(ClosingError):
+                kept.custom_command(["CLIENT", "SETNAME", "stale-writer"])
+            pool.release(lease)
+        finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    def test_reclaimed_client_raises_closing_error(self, cluster_mode):
+        """A reclaimed borrow's client fails, also after the pool frees the
+        connection's adapter (once a use-after-free)."""
+        config = _get_pool_client_config(cluster_mode)
+        pool = ClientPool(
+            config, PoolConfig(max_size=1, min_idle=1, abandon_timeout_ms=300)
+        )
+        _wait_for_pool_ready(pool, 1)
+        try:
+            lease = pool.acquire()
+            client = pool._get_or_create_client(lease)
+            deadline = time.monotonic() + 5
+            while pool.total_count > 0 and time.monotonic() < deadline:
+                time.sleep(0.1)
+            assert pool.total_count == 0, "the abandon monitor reclaimed the borrow"
+
+            with pytest.raises(ClosingError):
+                client.ping()
+            # The next acquire drains the discard and frees the pool's adapter reference.
+            pool.release(pool.acquire())
+            with pytest.raises(ClosingError):
+                client.ping()
+            pool.release(lease)
         finally:
             pool.close()
 

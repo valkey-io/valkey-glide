@@ -10,6 +10,7 @@ cluster deployments behave identically.
 """
 
 import asyncio
+import gc
 import multiprocessing
 import os
 import queue
@@ -92,6 +93,15 @@ async def _wait_for_pool_ready(pool, min_idle=1, timeout_s=30):
     )
 
 
+def _pooled_id(pool, lease_id: int) -> int:
+    """The pooled client a current borrow uses; its lease id changes per borrow."""
+    out = pool._ffi.new("uint64_t *")
+    ref = pool._lib.glide_pool_lease_client(pool.pool_id, lease_id, out)
+    assert ref != 0, "the borrow is current"
+    pool._lib.glide_pool_release_client_ref(ref)
+    return out[0]
+
+
 class TestAsyncClientPool:
     """Async pool lifecycle tests."""
 
@@ -133,20 +143,23 @@ class TestAsyncClientPool:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_pool_reuse(self, cluster_mode):
-        """LIFO: same client_id returned after release."""
+        """LIFO: same pooled client returned after release, under a new lease."""
         config = _get_pool_client_config(cluster_mode)
         pool = await AsyncClientPool.create(config, PoolConfig(max_size=3, min_idle=1))
         await _wait_for_pool_ready(pool, 1)
 
         try:
             id1 = await pool.acquire()
+            conn1 = _pooled_id(pool, id1)
             pool.release(id1)
             await asyncio.sleep(0.05)
 
             id2 = await pool.acquire()
+            conn2 = _pooled_id(pool, id2)
             pool.release(id2)
 
-            assert id1 == id2
+            assert conn1 == conn2
+            assert id1 != id2
         finally:
             pool.close()
 
@@ -426,12 +439,113 @@ class TestAsyncClientPool:
             new_client_id = await pool.acquire(timeout=5)
             assert new_client_id is not None
 
-            # That acquire drains core's discarded ids, which is when the binding
-            # must release the abandoned client's adapter entry.
-            assert pool._lib.glide_pool_get_client_ptr(abandoned_id) == 0
-            assert pool._lib.glide_pool_get_client_ptr(new_client_id) != 0
+            # The abandoned lease ended with the discard; the new one is current.
+            assert (
+                pool._lib.glide_pool_lease_client(
+                    pool.pool_id, abandoned_id, pool._ffi.NULL
+                )
+                == 0
+            )
+            assert _pooled_id(pool, new_client_id) > 0
             pool.release(new_client_id)
         finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_stale_release_leaves_the_next_borrow_alone(self, cluster_mode):
+        """Releasing an ended borrow again, after its connection was lent on,
+        must not free the new borrow."""
+        config = _get_pool_client_config(cluster_mode)
+        pool = await AsyncClientPool.create(config, PoolConfig(max_size=1, min_idle=1))
+        await _wait_for_pool_ready(pool, 1)
+        try:
+            first = await pool.acquire()
+            pool.release(first)
+            second = await pool.acquire()
+            client = pool._get_or_create_client(second)
+
+            pool.release(first)
+
+            with pytest.raises(TimeoutError):
+                await pool.acquire(timeout=0.5)
+            assert await client.ping() == b"PONG"
+            pool.release(second)
+        finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_close_on_borrowed_client_ends_only_the_borrow(self, cluster_mode):
+        """close() on a borrowed client returns it to the pool; it must not
+        close or free the connection the next borrower gets."""
+        config = _get_pool_client_config(cluster_mode)
+        pool = await AsyncClientPool.create(config, PoolConfig(max_size=1, min_idle=1))
+        await _wait_for_pool_ready(pool, 1)
+        try:
+            async with pool.borrow() as client:
+                await client.close()
+                with pytest.raises(ClosingError):
+                    await client.ping()
+            # Run the wrapper's finalizer now, so an extra adapter release
+            # would free the connection before the next borrow uses it.
+            del client
+            gc.collect()
+            for _ in range(3):
+                async with pool.borrow() as client:
+                    assert await client.ping() == b"PONG"
+        finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_released_client_raises_closing_error(self, cluster_mode):
+        """A client kept past its borrow fails instead of using the connection's
+        next borrow."""
+        config = _get_pool_client_config(cluster_mode)
+        pool = await AsyncClientPool.create(config, PoolConfig(max_size=1, min_idle=1))
+        await _wait_for_pool_ready(pool, 1)
+        try:
+            async with pool.borrow() as client:
+                kept = client
+            lease = await pool.acquire()
+            with pytest.raises(ClosingError):
+                await kept.custom_command(["CLIENT", "SETNAME", "stale-writer"])
+            pool.release(lease)
+        finally:
+            pool.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_abandon_reclaim_fences_the_borrower(self, cluster_mode):
+        """A reclaimed borrow's client fails, and its connection closes, so the
+        pool's counts match the server."""
+        config = _get_pool_client_config(cluster_mode)
+        pool = await AsyncClientPool.create(
+            config, PoolConfig(max_size=1, min_idle=1, abandon_timeout_ms=300)
+        )
+        await _wait_for_pool_ready(pool, 1)
+        observer = await GlideClient.create(config)
+        try:
+            lease = await pool.acquire()
+            client = pool._get_or_create_client(lease)
+            connection = await client.custom_command(["CLIENT", "ID"])
+
+            deadline = asyncio.get_event_loop().time() + 5
+            while pool.total_count > 0 and asyncio.get_event_loop().time() < deadline:
+                await asyncio.sleep(0.1)
+            assert pool.total_count == 0, "the abandon monitor reclaimed the borrow"
+
+            with pytest.raises(ClosingError):
+                await client.ping()
+            listed = await observer.custom_command(
+                ["CLIENT", "LIST", "ID", str(connection)]
+            )
+            while listed and asyncio.get_event_loop().time() < deadline:
+                await asyncio.sleep(0.1)
+                listed = await observer.custom_command(
+                    ["CLIENT", "LIST", "ID", str(connection)]
+                )
+            assert not listed, f"the reclaimed connection is still open: {listed!r}"
+            pool.release(lease)
+        finally:
+            await observer.close()
             pool.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])

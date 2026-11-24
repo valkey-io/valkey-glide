@@ -387,6 +387,9 @@ public final class AsyncRegistry {
             case 4:
                 ex = new CircuitBreakerException(msg);
                 break;
+            case 5:
+                ex = new ClosingException(msg);
+                break;
             default:
                 ex = new RequestException(msg);
                 break;

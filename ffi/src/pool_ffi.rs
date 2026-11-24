@@ -177,12 +177,10 @@ fn create_pool_client(
     // Enable the borrow-time IAM reconcile in send_command for pooled clients.
     client.mark_pool_managed();
     let ptr = adapter_ptr as usize;
-    // Deliberately keep a second strong reference. Binding wrappers cache the
-    // raw pointer and are never told when the drain releases the pool's
-    // reference, so freeing the adapter there would leave them dangling
-    // (use-after-free). Until wrappers own their own reference the adapter
-    // must outlive the pool; the cost is one leaked adapter per pooled client.
-    std::mem::forget(adapter);
+    // The pool keeps the reference create_client_internal returned. A binding
+    // wrapper takes its own through glide_pool_lease_client, so the pool can
+    // free the adapter on discard while a stale wrapper still holds it.
+    drop(adapter);
 
     Ok((ptr, client))
 }
@@ -361,7 +359,31 @@ pub unsafe extern "C" fn glide_pool_create(
     pool_id as i64
 }
 
-/// Non-blocking acquire. Returns client_id >= 0, -1 if exhausted, -2 if invalid pool.
+/// Take the adapters of clients core has discarded out of the binding maps.
+/// Call under the pool lock; drop the returned references after releasing it,
+/// since dropping the last one shuts down the adapter's runtimes.
+fn take_discarded_adapters(pool: &mut ClientPool) -> Vec<usize> {
+    let mut adapters = Vec::new();
+    for cid in pool.drain_discarded_ids() {
+        if let Some((_, entry)) = get_pool_clients().remove(&cid) {
+            get_pool_adapter_map().remove(&entry.adapter_ptr);
+            glide_core::scope::unregister_client(entry.adapter_ptr as u64);
+            adapters.push(entry.adapter_ptr);
+        }
+    }
+    adapters
+}
+
+/// Drop the pool's references to adapters from [`take_discarded_adapters`].
+fn release_pool_adapters(adapters: Vec<usize>) {
+    for adapter_ptr in adapters {
+        // SAFETY: the pool's reference, from Arc::into_raw in create_client_internal.
+        unsafe { drop(Arc::from_raw(adapter_ptr as *const ClientAdapter)) };
+    }
+}
+
+/// Non-blocking acquire. Returns the borrow's lease id >= 0 (see
+/// [`glide_pool_lease_client`]), -1 if closed, -3 if exhausted, -2 if invalid pool.
 #[unsafe(no_mangle)]
 pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
     let pool_arc = match pool::get_pool(pool_id) {
@@ -369,23 +391,11 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
         None => return -2,
     };
 
-    let mut pool = pool_arc.lock();
-    // Reclaim the adapters of clients core has discarded
-    let discarded = pool.drain_discarded_ids();
-    for cid in discarded {
-        if let Some((_, entry)) = get_pool_clients().remove(&cid) {
-            get_pool_adapter_map().remove(&entry.adapter_ptr);
-            glide_core::scope::unregister_client(entry.adapter_ptr as u64);
-            // Release the pool's reference. The adapter itself stays
-            // alive (see create_pool_client) because a binding wrapper
-            // may still hold its raw pointer.
-            unsafe {
-                drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
-            }
-        }
-    }
+    let discarded = take_discarded_adapters(&mut pool_arc.lock());
+    release_pool_adapters(discarded);
 
-    let result = pool.try_acquire();
+    let mut pool = pool_arc.lock();
+    let result = pool.try_acquire_lease();
 
     // Record OTel metrics for pool hit/miss
     if result >= 0 {
@@ -457,7 +467,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
 /// Blocking acquire with timeout. Waits on a condvar until a client becomes
 /// available or the timeout expires.
 ///
-/// Returns client_id >= 0 on success, -1 on timeout, -2 on invalid pool.
+/// Returns the borrow's lease id >= 0 on success, -1 on timeout, -2 on invalid pool.
 /// This eliminates the polling loop in language bindings — single FFI call
 /// instead of N retries.
 #[unsafe(no_mangle)]
@@ -471,21 +481,11 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
     let notify = pool_arc.lock().release_notify.clone();
 
     loop {
+        let discarded = take_discarded_adapters(&mut pool_arc.lock());
+        release_pool_adapters(discarded);
         let result = {
             let mut pool = pool_arc.lock();
-            // Reclaim the adapters of clients core has discarded
-            let discarded = pool.drain_discarded_ids();
-            for cid in discarded {
-                if let Some((_, entry)) = get_pool_clients().remove(&cid) {
-                    get_pool_adapter_map().remove(&entry.adapter_ptr);
-                    glide_core::scope::unregister_client(entry.adapter_ptr as u64);
-                    unsafe {
-                        drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
-                    }
-                }
-            }
-
-            let r = pool.try_acquire();
+            let r = pool.try_acquire_lease();
             if r >= 0 {
                 let _ = GlideOpenTelemetry::record_pool_hit();
             }
@@ -565,11 +565,12 @@ pub extern "C" fn glide_pool_acquire_blocking(pool_id: u64, timeout_ms: u64) -> 
     }
 }
 
-/// Release a borrowed client back to the pool. Returns before the release has
-/// landed: the connection-state reset is a server round-trip, so it runs on the
-/// pool runtime and the client rejoins idle when that finishes.
+/// Release a borrow back to the pool. The lease ends before this returns; the
+/// connection-state reset is a server round-trip, so it runs on the pool
+/// runtime and the client rejoins idle when that finishes. A lease whose
+/// borrow already ended is ignored.
 #[unsafe(no_mangle)]
-pub extern "C" fn glide_pool_release(pool_id: u64, client_id: u64) -> i32 {
+pub extern "C" fn glide_pool_release(pool_id: u64, lease_id: u64) -> i32 {
     let pool_arc = match pool::get_pool(pool_id) {
         Some(arc) => arc,
         None => return -1,
@@ -583,7 +584,9 @@ pub extern "C" fn glide_pool_release(pool_id: u64, client_id: u64) -> i32 {
     // in glide_pool_destroy, in the discard loop inside glide_pool_try_acquire, and
     // in release_client_async's discard (failed reset) path.
     let rt = get_pool_runtime();
-    rt.spawn(pool::release_client_async(pool_arc, client_id));
+    if let Some(release) = pool::release_lease(pool_arc, lease_id) {
+        rt.spawn(release);
+    }
     0
 }
 
@@ -617,30 +620,67 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
         .chain(pool.in_use.keys().copied())
         .chain(discarded)
         .collect();
+    let mut adapters = Vec::new();
     for cid in client_ids {
         glide_core::pool::unregister_blocking_flag(cid);
         if let Some((_, entry)) = get_pool_clients().remove(&cid) {
             get_pool_adapter_map().remove(&entry.adapter_ptr);
             glide_core::scope::unregister_client(entry.adapter_ptr as u64);
-            unsafe {
-                drop(Arc::from_raw(entry.adapter_ptr as *const ClientAdapter));
-            }
+            adapters.push(entry.adapter_ptr);
         }
     }
     ClientPool::destroy(pool);
+    release_pool_adapters(adapters);
     // Clean up stored ClientType for this pool
     get_pool_client_types().remove(&pool_id);
     0
 }
 
-/// Get the ClientAdapter pointer for a borrowed client_id.
-/// Language bindings pass this to `command()` for dispatch.
+/// The `ClientAdapter` of a current borrow, for `command()` dispatch, or null
+/// once that borrow has ended. Writes the pooled client's id to
+/// `client_id_out` (for [`glide_pool_set_pipe_client_id`]).
+///
+/// The pointer carries its own reference, so the adapter outlives a pool
+/// discard while the binding still holds it; give it back once with
+/// [`glide_pool_release_client_ref`].
+///
+/// # Safety
+/// `client_id_out` must be null or point to a writable `u64`.
 #[unsafe(no_mangle)]
-pub extern "C" fn glide_pool_get_client_ptr(client_id: u64) -> *const c_void {
-    get_pool_clients()
-        .get(&client_id)
-        .map(|e| e.adapter_ptr as *const c_void)
-        .unwrap_or(std::ptr::null())
+pub unsafe extern "C" fn glide_pool_lease_client(
+    pool_id: u64,
+    lease_id: u64,
+    client_id_out: *mut u64,
+) -> *const c_void {
+    let Some(pool_arc) = pool::get_pool(pool_id) else {
+        return std::ptr::null();
+    };
+    // Under the pool lock, so a drain cannot free the adapter before the increment.
+    let pool = pool_arc.lock();
+    let Some(client_id) = pool.client_for_lease(lease_id) else {
+        return std::ptr::null();
+    };
+    let Some(adapter_ptr) = get_pool_clients().get(&client_id).map(|e| e.adapter_ptr) else {
+        return std::ptr::null();
+    };
+    // SAFETY: the pool holds a reference until the drain, which needs this lock.
+    unsafe { Arc::increment_strong_count(adapter_ptr as *const ClientAdapter) };
+    drop(pool);
+    if !client_id_out.is_null() {
+        unsafe { *client_id_out = client_id };
+    }
+    adapter_ptr as *const c_void
+}
+
+/// Give back a reference taken by [`glide_pool_lease_client`].
+///
+/// # Safety
+/// `adapter_ptr` must come from `glide_pool_lease_client` and be given back once.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn glide_pool_release_client_ref(adapter_ptr: *const c_void) {
+    if !adapter_ptr.is_null() {
+        unsafe { drop(Arc::from_raw(adapter_ptr as *const ClientAdapter)) };
+    }
 }
 
 /// Set the pipe_client_id on a pooled client adapter.
@@ -648,20 +688,15 @@ pub extern "C" fn glide_pool_get_client_ptr(client_id: u64) -> *const c_void {
 /// for response delivery. Call this after acquire, before sending commands.
 #[unsafe(no_mangle)]
 pub extern "C" fn glide_pool_set_pipe_client_id(client_id: u64, pipe_client_id: u64) -> i32 {
-    let adapter_ptr = match get_pool_clients().get(&client_id) {
-        Some(e) => e.adapter_ptr,
-        None => return -1,
+    let Some(entry) = get_pool_clients().get(&client_id) else {
+        return -1;
     };
-
-    // Safety: adapter_ptr was created via Arc::into_raw in create_pool_client.
-    unsafe {
-        Arc::increment_strong_count(adapter_ptr as *const ClientAdapter);
-        let adapter = Arc::from_raw(adapter_ptr as *const ClientAdapter);
-        adapter
-            .pipe_client_id
-            .store(pipe_client_id, std::sync::atomic::Ordering::Release);
-        std::mem::forget(adapter);
-    }
+    // SAFETY: the pool's reference keeps the adapter alive while the entry is
+    // in the map, and a drain must take this entry's shard to remove it.
+    let adapter = unsafe { &*(entry.adapter_ptr as *const ClientAdapter) };
+    adapter
+        .pipe_client_id
+        .store(pipe_client_id, std::sync::atomic::Ordering::Release);
     0
 }
 
@@ -1346,11 +1381,7 @@ mod adapter_ownership_tests {
         let (ptr, client) =
             create_pool_client(&bytes, ClientType::SyncClient, 1).expect("lazy client");
         drop(client);
-        let raw = ptr as *const ClientAdapter;
-        // Give back the hold create_pool_client keeps for binding wrappers so
-        // the drop below is the one that runs ClientAdapter::drop.
-        unsafe { Arc::decrement_strong_count(raw) };
-        let adapter = unsafe { Arc::from_raw(raw) };
+        let adapter = unsafe { Arc::from_raw(ptr as *const ClientAdapter) };
         assert_eq!(Arc::strong_count(&adapter), 1);
 
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -1590,10 +1621,14 @@ mod pool_destroy_tests {
             );
             get_pool_adapter_map().insert(adapter_ptr, (pool_id, client_id));
         }
-        assert_eq!(glide_pool_try_acquire(pool_id), client_id as i64);
+        let lease = glide_pool_try_acquire(pool_id);
+        assert_eq!(
+            pool_arc.lock().client_for_lease(lease as u64),
+            Some(client_id)
+        );
         assert!(scope::get_parent_client(adapter_ptr as u64).is_some());
 
-        assert_eq!(glide_pool_release(pool_id, client_id), 0);
+        assert_eq!(glide_pool_release(pool_id, lease as u64), 0);
         let deadline = Instant::now() + Duration::from_secs(5);
         while pool_arc.lock().in_use.contains_key(&client_id) {
             assert!(Instant::now() < deadline, "release never took the client");
@@ -1611,6 +1646,112 @@ mod pool_destroy_tests {
             "the scope parent of a client mid-release survived destroy"
         );
         drop(blackhole);
+    }
+}
+
+#[cfg(test)]
+mod pool_lease_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    /// A pool with one lazily-connecting client seated idle, as warmup seats it.
+    fn pool_with_one_client() -> (u64, u64, usize) {
+        let mut request = connection_request::ConnectionRequest::new();
+        let mut addr = connection_request::NodeAddress::new();
+        addr.host = "127.0.0.1".into();
+        addr.port = 1;
+        request.addresses.push(addr);
+        request.lazy_connect = true;
+        let bytes = request.write_to_bytes().unwrap();
+        let pool_id = pool::register_pool(
+            ClientPool::new(PoolConfig {
+                max_size: 1,
+                min_idle: 0,
+                idle_timeout: Duration::from_secs(300),
+                request_timeout: Duration::from_secs(5),
+                test_on_borrow: false,
+                connection_request: bytes.clone(),
+                is_async: false,
+                configured_database_id: 0,
+                abandon_timeout: Duration::ZERO,
+            })
+            .unwrap(),
+        );
+        let client_id = glide_core::pool::allocate_client_id();
+        let (adapter_ptr, client) =
+            create_pool_client(&bytes, ClientType::SyncClient, client_id as usize)
+                .expect("lazy client");
+        let pool_arc = pool::get_pool(pool_id).unwrap();
+        let mut pool = pool_arc.lock();
+        let flag = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        pool.idle.push_back(PooledClient {
+            client_id,
+            client: client.clone(),
+            created_at: Instant::now(),
+            last_idle_at: Instant::now(),
+            borrowed_at: None,
+            state: ClientState::Idle,
+            is_blocking: flag.clone(),
+        });
+        pool.total_count += 1;
+        glide_core::pool::register_blocking_flag(client_id, flag);
+        get_pool_clients().insert(
+            client_id,
+            PoolClientEntry {
+                adapter_ptr,
+                client,
+                created_at: Instant::now(),
+            },
+        );
+        get_pool_adapter_map().insert(adapter_ptr, (pool_id, client_id));
+        (pool_id, client_id, adapter_ptr)
+    }
+
+    /// A wrapper's reference keeps the adapter alive after the pool discards
+    /// the client and frees its own reference, and the lease no longer
+    /// resolves. Freeing it while a wrapper still held the raw pointer was a
+    /// use-after-free.
+    #[test]
+    fn wrapper_reference_outlives_a_discard() {
+        let (pool_id, client_id, adapter_ptr) = pool_with_one_client();
+        let lease = glide_pool_try_acquire(pool_id) as u64;
+        let mut leased_id = 0u64;
+        let held = unsafe { glide_pool_lease_client(pool_id, lease, &mut leased_id) };
+        assert_eq!(held as usize, adapter_ptr);
+        assert_eq!(leased_id, client_id);
+
+        {
+            let pool_arc = pool::get_pool(pool_id).unwrap();
+            let mut pool = pool_arc.lock();
+            let entry = pool.take_for_release(client_id).expect("borrowed");
+            pool.discard_entry(entry);
+        }
+        // The next acquire drains the discard and frees the pool's reference.
+        assert!(glide_pool_try_acquire(pool_id) < 0);
+        assert!(get_pool_clients().get(&client_id).is_none());
+        assert!(unsafe { glide_pool_lease_client(pool_id, lease, std::ptr::null_mut()) }.is_null());
+
+        // SAFETY: `held` is the wrapper's reference, still live.
+        let adapter = unsafe {
+            Arc::increment_strong_count(held as *const ClientAdapter);
+            Arc::from_raw(held as *const ClientAdapter)
+        };
+        assert_eq!(
+            Arc::strong_count(&adapter),
+            2,
+            "only the wrapper and this test hold it"
+        );
+        let mut client = adapter.core.client.clone();
+        let err = adapter
+            .runtime
+            .block_on(client.send_command(&mut redis::cmd("PING"), None))
+            .unwrap_err();
+        assert_eq!(err.kind(), redis::ErrorKind::ClientClosed);
+        drop(client);
+        drop(adapter);
+
+        unsafe { glide_pool_release_client_ref(held) };
+        assert_eq!(glide_pool_destroy(pool_id), 0);
     }
 }
 

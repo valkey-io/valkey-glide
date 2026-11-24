@@ -19,13 +19,13 @@ public class PooledGlideClient implements AutoCloseable {
 
     private final GlideClient delegate;
     private final ClientPool pool;
-    private final long clientId;
+    private final long leaseId;
     private volatile boolean released = false;
 
-    PooledGlideClient(GlideClient delegate, ClientPool pool, long clientId) {
+    PooledGlideClient(GlideClient delegate, ClientPool pool, long leaseId) {
         this.delegate = delegate;
         this.pool = pool;
-        this.clientId = clientId;
+        this.leaseId = leaseId;
     }
 
     /** Get the underlying GlideClient for command dispatch. */
@@ -34,9 +34,12 @@ public class PooledGlideClient implements AutoCloseable {
         return delegate;
     }
 
-    /** Get the client_id handle. */
+    /**
+     * Get this borrow's lease id, for {@link ClientPool#getClient(long)} and {@link
+     * ClientPool#release(long)}. Each borrow gets a new one, even of the same connection.
+     */
     public long getClientId() {
-        return clientId;
+        return leaseId;
     }
 
     // ========== Delegate common commands for convenience ==========
@@ -67,7 +70,7 @@ public class PooledGlideClient implements AutoCloseable {
     public void close() {
         if (!released) {
             released = true;
-            pool.release(clientId);
+            pool.release(leaseId);
         }
     }
 }

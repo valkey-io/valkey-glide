@@ -35,10 +35,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  *     .build();
  *
  * ClientPool pool = ClientPool.create(config);
- * long clientId = pool.acquire().get();
- * GlideClient client = pool.getClient(clientId);
- * client.set("key", "value").get();
- * pool.release(clientId);
+ * try (PooledGlideClient client = pool.acquire().get()) {
+ *     client.set("key", "value").get();
+ * }
  * pool.close();
  * }</pre>
  */
@@ -51,7 +50,9 @@ public class ClientPool implements AutoCloseable {
     private final ClientPoolConfig config;
     private final byte[] connectionRequestBytes;
     private final AtomicInteger state = new AtomicInteger(RUNNING);
-    private final java.util.concurrent.ConcurrentHashMap<Long, GlideClient> clientCache =
+
+    /** The client of each current borrow, by lease id. A borrow's client is never reused. */
+    private final java.util.concurrent.ConcurrentHashMap<Long, GlideClient> borrows =
             new java.util.concurrent.ConcurrentHashMap<>();
 
     private ClientPool(long poolId, ClientPoolConfig config, byte[] connectionRequestBytes) {
@@ -164,67 +165,82 @@ public class ClientPool implements AutoCloseable {
      * client to the pool instead of destroying the native connection.
      */
     public CompletableFuture<PooledGlideClient> acquire(Duration timeout) {
+        CompletableFuture<PooledGlideClient> result = new CompletableFuture<>();
         if (state.get() != RUNNING) {
-            CompletableFuture<PooledGlideClient> f = new CompletableFuture<>();
-            f.completeExceptionally(new ClosingException("Pool is closed"));
-            return f;
+            result.completeExceptionally(new ClosingException("Pool is closed"));
+            return result;
         }
 
-        return CompletableFuture.supplyAsync(
-                () -> {
-                    long deadlineNanos = System.nanoTime() + timeout.toNanos();
-                    long backoffMs = 1;
+        // cancel() on a supplyAsync future does not stop the supplier, so the caller gets its own
+        // future and a client won after a cancel goes straight back.
+        CompletableFuture.supplyAsync(
+                        () -> {
+                            long deadlineNanos = System.nanoTime() + timeout.toNanos();
+                            long backoffMs = 1;
 
-                    while (System.nanoTime() < deadlineNanos) {
-                        if (state.get() != RUNNING) {
-                            throw new RuntimeException(new ClosingException("Pool is closed"));
-                        }
-
-                        long clientId = GlidePoolResolver.glidePoolTryAcquire(poolId);
-                        if (clientId >= 0) {
-                            // test_on_borrow: PING to verify connection health
-                            if (config.isTestOnBorrow()) {
-                                try {
-                                    GlideClient client = getClient(clientId);
-                                    client.ping().get(2, java.util.concurrent.TimeUnit.SECONDS);
-                                } catch (Exception e) {
-                                    // Dead connection — release and retry
-                                    release(clientId);
-                                    continue;
+                            while (System.nanoTime() < deadlineNanos) {
+                                if (result.isDone()) return null;
+                                if (state.get() != RUNNING) {
+                                    throw new RuntimeException(new ClosingException("Pool is closed"));
                                 }
+
+                                long clientId = GlidePoolResolver.glidePoolTryAcquire(poolId);
+                                if (clientId >= 0) {
+                                    // test_on_borrow: PING to verify connection health
+                                    if (config.isTestOnBorrow()) {
+                                        try {
+                                            GlideClient client = getClient(clientId);
+                                            client.ping().get(2, java.util.concurrent.TimeUnit.SECONDS);
+                                        } catch (Exception e) {
+                                            // Dead connection — release and retry
+                                            release(clientId);
+                                            continue;
+                                        }
+                                    }
+                                    return new PooledGlideClient(getClient(clientId), ClientPool.this, clientId);
+                                }
+                                if (clientId == -2) throw new RuntimeException("Pool was destroyed");
+
+                                long remainingMs = (deadlineNanos - System.nanoTime()) / 1_000_000;
+                                long sleepMs = Math.min(backoffMs, Math.max(remainingMs, 0));
+                                if (sleepMs <= 0) break;
+                                try {
+                                    Thread.sleep(sleepMs);
+                                } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    throw new RuntimeException("Acquire interrupted", e);
+                                }
+                                backoffMs = Math.min(backoffMs * 2, 50);
                             }
-                            return new PooledGlideClient(getClient(clientId), ClientPool.this, clientId);
-                        }
-                        if (clientId == -2) throw new RuntimeException("Pool was destroyed");
 
-                        long remainingMs = (deadlineNanos - System.nanoTime()) / 1_000_000;
-                        long sleepMs = Math.min(backoffMs, Math.max(remainingMs, 0));
-                        if (sleepMs <= 0) break;
-                        try {
-                            Thread.sleep(sleepMs);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new RuntimeException("Acquire interrupted", e);
-                        }
-                        backoffMs = Math.min(backoffMs * 2, 50);
-                    }
-
-                    throw new RuntimeException(
-                            new java.util.concurrent.TimeoutException(
-                                    "Pool exhausted: could not acquire within " + timeout));
-                });
+                            throw new RuntimeException(
+                                    new java.util.concurrent.TimeoutException(
+                                            "Pool exhausted: could not acquire within " + timeout));
+                        })
+                .whenComplete(
+                        (client, error) -> {
+                            if (error != null) {
+                                result.completeExceptionally(error);
+                            } else if (client != null && !result.complete(client)) {
+                                client.close();
+                            }
+                        });
+        return result;
     }
 
     /**
-     * Get a usable GlideClient for the given client_id. Cached — no allocation on subsequent calls
-     * for the same client_id.
+     * Get the GlideClient of a current borrow, by the lease id from {@link
+     * PooledGlideClient#getClientId()}. Each borrow has its own client, which fails with {@link
+     * ClosingException} once the borrow is released.
      *
      * <p><b>Important:</b> Do NOT call {@code close()} on the returned client. The pool manages the
      * client's lifecycle. Call {@link #release(long)} instead to return the client to the pool.
+     *
+     * @throws ClosingException if the borrow has ended
      */
-    public GlideClient getClient(long clientId) {
-        GlideClient cached = clientCache.get(clientId);
-        if (cached != null) return cached;
+    public GlideClient getClient(long leaseId) {
+        GlideClient borrowed = borrows.get(leaseId);
+        if (borrowed != null) return borrowed;
         // Resolve the Java-side inflight limiter and request timeout the same way ConnectionManager
         // does for direct clients, so a pooled client fast-fails excess requests and times out
         // commands per its own config instead of the pool's defaults. The wire ConnectionRequest
@@ -246,16 +262,32 @@ public class ClientPool implements AutoCloseable {
         // Carry the config's credentials so the borrowed client's IAM guards (refreshIamToken,
         // updateConnectionPassword) see them, as they do on a directly-created client.
         ServerCredentials credentials = config.getClientConfig().getCredentials();
-        return clientCache.computeIfAbsent(
-                clientId,
-                id ->
-                        GlideClient.fromPoolHandle(
-                                id, maxInflight, requestTimeoutMs, credentials, connectionRequestBytes));
+        // Keyed on the lease, so this and release() run one at a time per borrow: the lookup
+        // either sees the lease current and the release detaches the client, or sees it ended.
+        return borrows.computeIfAbsent(
+                leaseId,
+                id -> {
+                    long clientId = GlidePoolResolver.glidePoolLeaseClient(poolId, id);
+                    if (clientId < 0) {
+                        throw new ClosingException("Pooled client was returned to the pool");
+                    }
+                    return GlideClient.fromPoolHandle(
+                            clientId, maxInflight, requestTimeoutMs, credentials, connectionRequestBytes);
+                });
     }
 
-    /** Release a client back to the pool. */
-    public void release(long clientId) {
-        GlidePoolResolver.glidePoolRelease(poolId, clientId);
+    /**
+     * Release a borrow back to the pool by its lease id. Its client fails from then on. Releasing a
+     * borrow that has already ended does nothing.
+     */
+    public void release(long leaseId) {
+        borrows.compute(
+                leaseId,
+                (id, client) -> {
+                    if (client != null) client.detachFromPool();
+                    GlidePoolResolver.glidePoolRelease(poolId, id);
+                    return null;
+                });
     }
 
     /** Get pool metrics. */
@@ -282,7 +314,8 @@ public class ClientPool implements AutoCloseable {
     public void close() {
         if (state.compareAndSet(RUNNING, CLOSED)) {
             GlidePoolResolver.glidePoolDestroy(poolId);
-            clientCache.clear();
+            borrows.values().forEach(GlideClient::detachFromPool);
+            borrows.clear();
         }
     }
 

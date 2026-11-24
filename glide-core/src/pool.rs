@@ -162,6 +162,11 @@ pub struct ClientPool {
     pub release_notify: Arc<(std::sync::Mutex<()>, std::sync::Condvar)>,
     /// Only `discard_client` pushes here; bindings read it via `drain_discarded_ids`.
     discarded_ids: Vec<u64>,
+    /// Current borrow of each in-use client: lease_id → client_id, and back.
+    /// Each acquire gets a fresh lease id, so a handle that outlived its borrow
+    /// names no lease and cannot release or reach the client's next borrow.
+    leases: HashMap<u64, u64>,
+    client_leases: HashMap<u64, u64>,
 }
 
 /// Whether the serialized `ConnectionRequest` asks for RDMA. Bytes that do not
@@ -206,6 +211,8 @@ impl ClientPool {
             state: PoolState::Running,
             release_notify: Arc::new((std::sync::Mutex::new(()), std::sync::Condvar::new())),
             discarded_ids: Vec::new(),
+            leases: HashMap::new(),
+            client_leases: HashMap::new(),
         })
     }
 
@@ -229,12 +236,13 @@ impl ClientPool {
         while let Some(mut entry) = self.idle.pop_back() {
             let idle_duration = Instant::now().duration_since(entry.last_idle_at);
             if idle_duration > self.config.idle_timeout {
-                self.discard_client(entry.client_id);
+                let client_id = entry.client_id;
+                self.discard_entry(entry);
                 glide_logger::log_debug(
                     "pool",
                     format!(
                         "Evicted idle client {} (idle {:?}, threshold {:?})",
-                        entry.client_id, idle_duration, self.config.idle_timeout
+                        client_id, idle_duration, self.config.idle_timeout
                     ),
                 );
                 continue;
@@ -243,10 +251,36 @@ impl ClientPool {
             entry.state = ClientState::InUse;
             entry.borrowed_at = Some(Instant::now());
             self.in_use.insert(client_id, entry);
+            let lease_id = self.next_id();
+            self.leases.insert(lease_id, client_id);
+            self.client_leases.insert(client_id, lease_id);
             return client_id as i64;
         }
 
         -3
+    }
+
+    /// [`try_acquire`](Self::try_acquire), returning the borrow's lease id
+    /// instead of the client id. Bindings hand the lease id to callers.
+    pub fn try_acquire_lease(&mut self) -> i64 {
+        let client_id = self.try_acquire();
+        if client_id < 0 {
+            return client_id;
+        }
+        self.client_leases[&(client_id as u64)] as i64
+    }
+
+    /// The client a current lease borrows, or `None` once the borrow ended.
+    pub fn client_for_lease(&self, lease_id: u64) -> Option<u64> {
+        self.leases.get(&lease_id).copied()
+    }
+
+    fn remove_in_use(&mut self, client_id: u64) -> Option<PooledClient> {
+        let entry = self.in_use.remove(&client_id)?;
+        if let Some(lease_id) = self.client_leases.remove(&client_id) {
+            self.leases.remove(&lease_id);
+        }
+        Some(entry)
     }
 
     /// Whether background creation should be triggered (room below max_size).
@@ -326,13 +360,20 @@ impl ClientPool {
     /// 2. Calling `return_to_idle(entry)` to put it back in the idle pool
     ///    Or on failure, calling `discard_client(client_id)` to remove it for good.
     pub fn take_for_release(&mut self, client_id: u64) -> Option<PooledClient> {
-        self.in_use.remove(&client_id)
+        self.remove_in_use(client_id)
+    }
+
+    /// [`take_for_release`](Self::take_for_release) by lease. `None` for a
+    /// lease that already ended, so a repeated release is a no-op.
+    pub fn take_lease_for_release(&mut self, lease_id: u64) -> Option<PooledClient> {
+        let client_id = self.client_for_lease(lease_id)?;
+        self.remove_in_use(client_id)
     }
 
     /// Return a client to the idle pool after successful state reset.
     pub fn return_to_idle(&mut self, mut entry: PooledClient) {
         if self.state != PoolState::Running {
-            self.discard_client(entry.client_id);
+            self.discard_entry(entry);
             return;
         }
         entry.state = ClientState::Idle;
@@ -356,6 +397,14 @@ impl ClientPool {
         unregister_blocking_flag(client_id);
         let (_, condvar) = &*self.release_notify;
         condvar.notify_one();
+    }
+
+    /// [`discard_client`](Self::discard_client) for a client the pool still
+    /// holds: also fails every clone of it, so a borrower's handle cannot keep
+    /// using a connection the pool no longer counts.
+    pub fn discard_entry(&mut self, entry: PooledClient) {
+        entry.client.mark_pool_discarded();
+        self.discard_client(entry.client_id);
     }
 
     /// Give back a slot reserved by a binding that never became a client.
@@ -399,8 +448,13 @@ impl ClientPool {
             destroy_client_scope_pool(client_id);
         }
 
+        for entry in pool.idle.iter().chain(pool.in_use.values()) {
+            entry.client.mark_pool_discarded();
+        }
         pool.idle.clear();
         pool.in_use.clear();
+        pool.leases.clear();
+        pool.client_leases.clear();
         pool.total_count = 0;
         drop(pool);
 
@@ -468,40 +522,73 @@ pub fn pool_counts(pool_id: u64) -> Option<PoolCounts> {
 ///
 /// Call this from a spawned task. The pool_arc should already be cloned for the task.
 pub async fn release_client_async(pool_arc: Arc<PoolMutex>, client_id: u64) {
-    let (mut entry, configured_db, timeout_duration) = {
+    if let Some(release) = release_taken(pool_arc, move |pool| pool.take_for_release(client_id)) {
+        release.await;
+    }
+}
+
+/// Release by lease. Ends the lease before returning, so a later lookup or
+/// release of it finds nothing; the reset runs in the returned future.
+/// `None` for a lease whose borrow already ended.
+pub fn release_lease(
+    pool_arc: Arc<PoolMutex>,
+    lease_id: u64,
+) -> Option<impl Future<Output = ()> + Send + 'static> {
+    release_taken(pool_arc, move |pool| pool.take_lease_for_release(lease_id))
+}
+
+/// Discards a taken client unless disarmed, so a release dropped before it
+/// records its outcome loses neither the slot nor the id.
+struct LeakGuard {
+    pool: Option<Arc<PoolMutex>>,
+    client_id: u64,
+    client: GlideClient,
+}
+
+impl Drop for LeakGuard {
+    fn drop(&mut self) {
+        if let Some(pool_arc) = self.pool.take() {
+            self.client.mark_pool_discarded();
+            pool_arc.lock().discard_client(self.client_id);
+        }
+    }
+}
+
+fn release_taken(
+    pool_arc: Arc<PoolMutex>,
+    take: impl FnOnce(&mut ClientPool) -> Option<PooledClient>,
+) -> Option<impl Future<Output = ()> + Send + 'static> {
+    let (entry, configured_db, timeout_duration) = {
         let mut pool = pool_arc.lock();
         let configured_db = pool.config.configured_database_id;
         let timeout = pool.config.request_timeout * 2;
-        match pool.take_for_release(client_id) {
-            Some(e) => (e, configured_db, timeout),
-            None => return,
-        }
+        (take(&mut pool)?, configured_db, timeout)
     };
 
     // Remove client→pool mapping so refresh_activity_by_client no-ops from here on.
-    unregister_pool_client(client_id);
+    unregister_pool_client(entry.client_id);
 
-    // If this task is cancelled after take_for_release but before the outcome is
-    // recorded, the guard discards the client so neither the slot nor the id is
-    // lost.
-    let pool_for_guard = pool_arc.clone();
-    let guard_client_id = entry.client_id;
-    struct LeakGuard {
-        pool: Option<Arc<PoolMutex>>,
-        client_id: u64,
-    }
-    impl Drop for LeakGuard {
-        fn drop(&mut self) {
-            if let Some(pool_arc) = self.pool.take() {
-                pool_arc.lock().discard_client(self.client_id);
-            }
-        }
-    }
-    let mut guard = LeakGuard {
-        pool: Some(pool_for_guard),
-        client_id: guard_client_id,
+    let guard = LeakGuard {
+        pool: Some(pool_arc.clone()),
+        client_id: entry.client_id,
+        client: entry.client.clone(),
     };
+    Some(finish_release(
+        pool_arc,
+        entry,
+        configured_db,
+        timeout_duration,
+        guard,
+    ))
+}
 
+async fn finish_release(
+    pool_arc: Arc<PoolMutex>,
+    mut entry: PooledClient,
+    configured_db: u32,
+    timeout_duration: Duration,
+    mut guard: LeakGuard,
+) {
     // A blocking command still in flight (the caller gave up waiting) holds the
     // node's connection, so the next borrower's commands there would queue behind
     // it; nothing a reset sends can cancel it. Like the scope pool's
@@ -538,7 +625,7 @@ pub async fn release_client_async(pool_arc: Arc<PoolMutex>, client_id: u64) {
     guard.pool = None;
     match reset_result {
         Ok(Ok(_)) => pool.return_to_idle(entry),
-        _ => pool.discard_client(entry.client_id),
+        _ => pool.discard_entry(entry),
     }
 }
 
@@ -832,8 +919,8 @@ pub fn start_abandon_monitor(pool_id: u64, runtime_handle: &tokio::runtime::Hand
                         continue;
                     }
                 }
-                if pool.in_use.remove(&client_id).is_some() {
-                    pool.discard_client(client_id);
+                if let Some(entry) = pool.remove_in_use(client_id) {
+                    pool.discard_entry(entry);
                 }
             }
         }
@@ -4895,9 +4982,10 @@ mod abandon_monitor_tests {
 
         // ── 3. Insert a test client (is_blocking stays false) ──────────────────
         let client_id: u64;
+        let glide_client = crate::client::create_test_glide_client();
+        let mut borrower = glide_client.clone();
         {
             let mut pool = pool_arc.lock();
-            let glide_client = crate::client::create_test_glide_client();
             let cid = pool.add_client(glide_client);
             client_id = cid;
 
@@ -4936,6 +5024,14 @@ mod abandon_monitor_tests {
             get_blocking_flag(client_id).is_none(),
             "Client {} should have been removed from BLOCKING_FLAG_REGISTRY by the monitor",
             client_id
+        );
+        let reclaimed = rt
+            .block_on(borrower.send_command(&mut redis::cmd("PING"), None))
+            .unwrap_err();
+        assert_eq!(
+            reclaimed.kind(),
+            redis::ErrorKind::ClientClosed,
+            "the borrower's handle must fail once its client is reclaimed"
         );
 
         // ── 7. Cleanup ─────────────────────────────────────────────────────────
@@ -5394,6 +5490,92 @@ mod client_pool_tests {
             assert!(get_blocking_flag(client_id).is_none());
         });
         drop(blackhole);
+    }
+
+    /// Each borrow gets its own lease, and a lease ends with its borrow: a
+    /// repeated release, arriving after the client was lent again, must leave
+    /// the new borrow alone.
+    #[test]
+    fn stale_lease_cannot_release_the_next_borrow() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let pool_arc = Arc::new(PoolMutex::new(
+            ClientPool::new(test_pool_config(Duration::from_secs(5))).unwrap(),
+        ));
+        let client_id = add_idle_client(
+            &mut pool_arc.lock(),
+            crate::client::create_test_glide_client(),
+        );
+
+        let first = pool_arc.lock().try_acquire_lease() as u64;
+        assert_eq!(pool_arc.lock().client_for_lease(first), Some(client_id));
+        let release = release_lease(pool_arc.clone(), first).expect("current lease");
+        assert!(
+            pool_arc.lock().client_for_lease(first).is_none(),
+            "the lease must end before the reset runs"
+        );
+        rt.block_on(release);
+        let second = pool_arc.lock().try_acquire_lease() as u64;
+        assert_ne!(first, second);
+
+        assert!(release_lease(pool_arc.clone(), first).is_none());
+
+        let pool = pool_arc.lock();
+        assert!(pool.client_for_lease(first).is_none());
+        assert!(
+            pool.in_use.contains_key(&client_id),
+            "the stale release took the new borrow"
+        );
+        assert_eq!(pool.client_for_lease(second), Some(client_id));
+    }
+
+    /// A discarded client is never lent again, so every clone of it, such as a
+    /// borrower's handle, must fail rather than send on it.
+    #[test]
+    fn discard_fails_every_clone_without_sending() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let dead_port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        rt.block_on(async {
+            let mut pool = ClientPool::new(test_pool_config(Duration::from_secs(5))).unwrap();
+            let client = lazy_client_to(dead_port).await;
+            let mut borrower = client.clone();
+            let client_id = pool.add_client(client);
+            let lease = pool.try_acquire_lease() as u64;
+
+            let before = borrower
+                .send_command(&mut redis::cmd("PING"), None)
+                .await
+                .unwrap_err();
+            assert_ne!(before.kind(), redis::ErrorKind::ClientClosed);
+
+            let entry = pool.remove_in_use(client_id).expect("borrowed");
+            pool.discard_entry(entry);
+
+            assert!(pool.client_for_lease(lease).is_none());
+            let after = borrower
+                .send_command(&mut redis::cmd("PING"), None)
+                .await
+                .unwrap_err();
+            assert_eq!(after.kind(), redis::ErrorKind::ClientClosed);
+            assert_eq!(
+                crate::errors::error_type(&after),
+                crate::errors::RequestErrorType::Closing
+            );
+            let pipeline = redis::pipe().cmd("PING").to_owned();
+            let batch = borrower
+                .send_pipeline(&pipeline, None, false, None, Default::default())
+                .await
+                .unwrap_err();
+            assert_eq!(batch.kind(), redis::ErrorKind::ClientClosed);
+            let auth = borrower
+                .update_connection_password(Some("secret".into()), true)
+                .await
+                .unwrap_err();
+            assert_eq!(auth.kind(), redis::ErrorKind::ClientClosed);
+        });
     }
 }
 

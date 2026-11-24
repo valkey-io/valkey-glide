@@ -78,6 +78,7 @@ impl GlideError {
             match err.kind() {
                 ErrorKind::ExecAbortError => GlideError::ExecAbort(msg),
                 ErrorKind::CircuitBreakerOpen => GlideError::CircuitBreaker(msg),
+                ErrorKind::ClientClosed => GlideError::Closing(msg),
                 ErrorKind::InvalidClientConfig => GlideError::Configuration(msg),
                 _ => GlideError::Request(msg),
             }
@@ -122,6 +123,13 @@ mod tests {
         let g = GlideError::from_redis_error(err);
         assert!(matches!(g, GlideError::CircuitBreaker(_)));
         assert_eq!(g.class_name(), "CircuitBreakerError");
+    }
+
+    #[test]
+    fn redis_client_closed_maps_to_closing() {
+        let err = RedisError::from((ErrorKind::ClientClosed, "reclaimed"));
+        let g = GlideError::from_redis_error(err);
+        assert!(matches!(g, GlideError::Closing(_)));
     }
 
     #[test]

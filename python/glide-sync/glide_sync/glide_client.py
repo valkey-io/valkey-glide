@@ -601,6 +601,8 @@ class RdmaRegion:
 
 
 class BaseClient(CoreCommands):
+    # Set by ClientPool on a borrowed client: close() ends the borrow instead.
+    _pool_release: Optional[Callable[[], None]] = None
 
     def __init__(self, config: BaseClientConfiguration):
         """
@@ -2152,6 +2154,9 @@ class BaseClient(CoreCommands):
             raise RuntimeError(
                 "Cannot close a client from its own credential provider callback"
             )
+        if self._pool_release is not None:
+            self._pool_release()
+            return
         with self._client_lock:
             if not self._is_closed:
                 self._is_closed = True

@@ -9,8 +9,11 @@ shared async pipe (same as normal GlideClient.create() clients).
 """
 
 import asyncio
+import functools
+import itertools
 import os
 import threading
+import weakref
 from dataclasses import dataclass
 from typing import Optional
 
@@ -31,6 +34,12 @@ from .glide_client import (
     _async_pipe_lock,
     _client_registry,
 )
+
+
+def _release_adapter_ref(lib, adapter_ptr, create_pid: int) -> None:
+    """Give back a borrowed client's adapter reference (same fork guard as a direct client)."""
+    if create_pid == os.getpid():
+        lib.glide_pool_release_client_ref(adapter_ptr)
 
 
 @dataclass
@@ -60,6 +69,7 @@ class AsyncClientPool:
         "_pool_config",
         "_closed",
         "_client_cache",
+        "_callback_ids",
         "_conn_req_bytes",
         "_pool_id",
         "_cache_lock",
@@ -131,6 +141,9 @@ class AsyncClientPool:
         self._pool_config = pool_config or PoolConfig()
         self._closed = False
         self._client_cache: dict = {}
+        # Request ids per pooled connection, shared by its borrows so a late
+        # reply to a released borrow never matches a later borrow's request.
+        self._callback_ids: dict = {}
         self._cache_lock = threading.Lock()
         self._is_cluster = isinstance(client_config, GlideClusterClientConfiguration)
 
@@ -198,7 +211,9 @@ class AsyncClientPool:
             )
 
     async def acquire(self, timeout: Optional[float] = None) -> int:
-        """Acquire a client_id using non-blocking try_acquire with async backoff.
+        """Acquire a borrow, returning its lease id for borrow-scoped calls.
+
+        Each borrow gets a new lease id, even of the same connection.
 
         Uses glide_pool_try_acquire (non-blocking) instead of
         glide_pool_acquire_blocking to avoid blocking thread pool threads.
@@ -234,17 +249,29 @@ class AsyncClientPool:
             await anyio.sleep(min(backoff, remaining))
             backoff = min(backoff * 2, 0.05)  # Cap at 50ms
 
+    def _release_borrow(self, client_id: int) -> None:
+        if self._create_pid == os.getpid():
+            self.release(client_id)
+
     def release(self, client_id: int) -> None:
-        """Release a borrowed client back to the pool."""
+        """Release a borrow back to the pool by its lease id.
+
+        Its client raises ClosingError from then on. Releasing a borrow that
+        has already ended does nothing.
+        """
         self._check_same_process()
-        self._lib.glide_pool_release(self._pool_id, client_id)
+        with self._cache_lock:
+            client = self._client_cache.pop(client_id, None)
+            if client is not None:
+                _detach(client)
+            self._lib.glide_pool_release(self._pool_id, client_id)
 
     def borrow(self, timeout: Optional[float] = None):
         """Async context manager."""
         return _AsyncBorrowContext(self, timeout)
 
     def _get_or_create_client(self, client_id: int) -> BaseClient:
-        """Get/create a client wrapper with pipe registration."""
+        """Get/create the client of a current borrow, with pipe registration."""
         cached = self._client_cache.get(client_id)
         if cached is not None:
             _bind_to_running_loop(cached)
@@ -256,14 +283,26 @@ class AsyncClientPool:
                 _bind_to_running_loop(cached)
                 return cached
 
-            adapter_ptr = self._lib.glide_pool_get_client_ptr(client_id)
+            pooled_id = self._ffi.new("uint64_t *")
+            adapter_ptr = self._lib.glide_pool_lease_client(
+                self._pool_id, client_id, pooled_id
+            )
             if adapter_ptr == 0:
-                raise RuntimeError(
-                    f"Pool client_id {client_id} has no associated ClientAdapter"
-                )
+                raise ClosingError("Pooled client was returned to the pool")
+            connection_id = pooled_id[0]
 
             ClientClass = GlideClusterClient if self._is_cluster else GlideClient
             client = object.__new__(ClientClass)
+            # The borrow holds its own adapter reference; give it back once the
+            # client is gone, so a call racing a release never sees a freed adapter.
+            finalizer = weakref.finalize(
+                client, _release_adapter_ref, self._lib, adapter_ptr, os.getpid()
+            )
+            # typeshed gives finalize empty __slots__; atexit is settable at runtime.
+            finalizer.atexit = False  # type: ignore[misc]
+            # close() on a borrowed client ends the borrow rather than closing
+            # the connection the pool lends on.
+            client._pool_release = functools.partial(self._release_borrow, client_id)
             client.config = self._client_config
             client._is_closed = False
             client._ffi = self._ffi
@@ -273,21 +312,23 @@ class AsyncClientPool:
             client._pubsub_futures = []
             client._pubsub_lock = threading.Lock()
             client._pubsub_callback_ref = None
-            client._callback_id_gen = __import__("itertools").count(1)
+            client._callback_id_gen = self._callback_ids.setdefault(
+                connection_id, itertools.count(1)
+            )
             client._lock = threading.Lock()
             client._core_client = self._ffi.cast("void*", adapter_ptr)
             client._conn_req_bytes = self._conn_req_bytes
             client._create_pid = os.getpid()
 
-            # The pool created this client with pipe_client_id = client_id
+            # The pool created this client with pipe_client_id = its pooled id
             # (set in create_client_internal via the pre-assigned ID).
             # Register so the pipe reader routes responses here.
-            client._pipe_client_id = client_id
+            client._pipe_client_id = connection_id
             client._loop = None
             client._trio_token = None
             client._is_asyncio = True
 
-            _client_registry[client_id] = client
+            _client_registry[connection_id] = client
             _bind_to_running_loop(client)
 
             self._client_cache[client_id] = client
@@ -324,10 +365,12 @@ class AsyncClientPool:
     def close(self):
         if not self._closed:
             self._closed = True
-            for cid in list(self._client_cache.keys()):
-                _client_registry.pop(cid, None)
+            with self._cache_lock:
+                for client in self._client_cache.values():
+                    _detach(client)
+                self._client_cache.clear()
+                self._callback_ids.clear()
             self._lib.glide_pool_destroy(self._pool_id)
-            self._client_cache.clear()
 
     async def aclose(self):
         self.close()
@@ -344,6 +387,23 @@ class AsyncClientPool:
         # can race with active callbacks from the Rust side, causing segfaults.
         # Users must call close() explicitly or use async context manager.
         pass
+
+
+def _detach(client: BaseClient) -> None:
+    """End a borrow's client: later calls raise ClosingError, and requests it
+    still has in flight fail rather than wait on a connection lent on."""
+    with client._lock:
+        if client._is_closed:
+            return
+        client._is_closed = True
+        for fut in client._pending_futures.values():
+            if not fut.done():
+                fut.set_exception(
+                    ClosingError("Pooled client was returned to the pool")
+                )
+        client._pending_futures.clear()
+    if _client_registry.get(client._pipe_client_id) is client:
+        _client_registry.pop(client._pipe_client_id, None)
 
 
 def _bind_to_running_loop(client: BaseClient) -> None:

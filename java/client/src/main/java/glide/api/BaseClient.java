@@ -693,6 +693,15 @@ public abstract class BaseClient
         connectionManager.closeConnectionSync();
     }
 
+    /**
+     * Internal: called by {@link glide.api.models.pool.ClientPool} when a borrow ends. The client
+     * fails later calls as a closed client does, while the pool lends its connection on.
+     */
+    public void detachFromPool() {
+        commandManager.detachFromPool();
+        connectionManager.detachFromPool();
+    }
+
     /** Check if the client is connected and ready for commands. */
     public boolean isConnected() {
         return connectionManager.isConnected();

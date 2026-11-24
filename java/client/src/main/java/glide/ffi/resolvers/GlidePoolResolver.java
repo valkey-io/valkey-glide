@@ -18,7 +18,10 @@ public class GlidePoolResolver {
 
     public static native long glidePoolTryAcquire(long poolId);
 
-    public static native int glidePoolRelease(long poolId, long clientId);
+    /** The pooled client id a current lease borrows, or -1 once that borrow has ended. */
+    public static native long glidePoolLeaseClient(long poolId, long leaseId);
+
+    public static native int glidePoolRelease(long poolId, long leaseId);
 
     public static native int glidePoolDestroy(long poolId);
 

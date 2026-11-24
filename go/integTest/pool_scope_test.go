@@ -251,14 +251,24 @@ func (suite *GlideTestSuite) TestPoolReuse() {
 			waitForPoolReady(t, pool, 1)
 
 			ctx := context.Background()
+			serverID := func(id int64) any {
+				client, err := pool.GetClient(id)
+				require.NoError(t, err)
+				reply, err := client.CustomCommand(ctx, []string{"CLIENT", "ID"})
+				require.NoError(t, err)
+				return reply
+			}
 			id1, _ := pool.Acquire(ctx)
+			conn1 := serverID(id1)
 			pool.Release(id1)
 			time.Sleep(50 * time.Millisecond)
 
 			id2, _ := pool.Acquire(ctx)
+			conn2 := serverID(id2)
 			pool.Release(id2)
 
-			assert.Equal(t, id1, id2)
+			assert.Equal(t, conn1, conn2, "LIFO: same connection after release")
+			assert.NotEqual(t, id1, id2, "each borrow gets its own lease")
 		})
 	}
 }
@@ -1589,5 +1599,142 @@ func (suite *GlideTestSuite) TestScopeAcquireAbandonedByCallerReturnsItsSlot() {
 		scope, err := client.ScopedConnection(context.Background(), 2*time.Second, "")
 		require.NoError(t, err, "slot %d of %d unavailable after an abandoned acquire", i+1, scopePoolMaxTotal)
 		refilled = append(refilled, scope)
+	}
+}
+
+// A second Close of an ended borrow, after its connection was lent again,
+// must leave the new borrow alone.
+func (suite *GlideTestSuite) TestPoolStaleCloseLeavesTheNextBorrowAlone() {
+	t := suite.T()
+	for _, tc := range scopeModes() {
+		t.Run(tc.name, func(t *testing.T) {
+			suite.skipMode(t, tc.cluster)
+			pool := suite.newPool(t, tc.cluster, glide.PoolConfig{MaxSize: 1, MinIdle: 1, AcquireTimeout: 10 * time.Second})
+			defer pool.Close()
+			waitForPoolReady(t, pool, 1)
+			ctx := context.Background()
+
+			idA, err := pool.Acquire(ctx)
+			require.NoError(t, err)
+			a, err := pool.GetClient(idA)
+			require.NoError(t, err)
+			a.Close()
+
+			idB, err := pool.Acquire(ctx)
+			require.NoError(t, err)
+			b, err := pool.GetClient(idB)
+			require.NoError(t, err)
+			defer b.Close()
+
+			a.Close()
+			pool.Release(idA)
+
+			_, err = pool.AcquireWithTimeout(ctx, 500*time.Millisecond)
+			assert.Error(t, err, "a stale release freed the live borrow")
+			_, err = b.Ping(ctx)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+// A released PooledClient, including through its embedded Client, fails
+// instead of sending on a connection the pool has lent on.
+func (suite *GlideTestSuite) TestPoolReleasedClientFailsWithClosingError() {
+	t := suite.T()
+	for _, tc := range scopeModes() {
+		t.Run(tc.name, func(t *testing.T) {
+			suite.skipMode(t, tc.cluster)
+			pool := suite.newPool(t, tc.cluster, glide.PoolConfig{MaxSize: 1, MinIdle: 1, AcquireTimeout: 10 * time.Second})
+			defer pool.Close()
+			waitForPoolReady(t, pool, 1)
+			ctx := context.Background()
+
+			idA, err := pool.Acquire(ctx)
+			require.NoError(t, err)
+			a, err := pool.GetClient(idA)
+			require.NoError(t, err)
+			embedded := a.Client
+			a.Close()
+
+			idB, err := pool.Acquire(ctx)
+			require.NoError(t, err)
+			defer pool.Release(idB)
+
+			var closing *glide.ClosingError
+			_, err = a.Ping(ctx)
+			assert.True(t, errors.As(err, &closing), "got %v", err)
+			_, err = embedded.CustomCommand(ctx, []string{"CLIENT", "SETNAME", "stale-writer"})
+			assert.True(t, errors.As(err, &closing), "got %v", err)
+			_, err = pool.GetClient(idA)
+			assert.True(t, errors.As(err, &closing), "got %v", err)
+		})
+	}
+}
+
+// An abandon-reclaimed borrow's client fails, also after the pool frees the
+// connection's adapter (once a use-after-free).
+func (suite *GlideTestSuite) TestPoolReclaimedClientFailsWithClosingError() {
+	t := suite.T()
+	suite.skipMode(t, false)
+	pool := suite.newPool(t, false, glide.PoolConfig{
+		MaxSize: 1, MinIdle: 1, AcquireTimeout: 10 * time.Second, AbandonTimeout: 300 * time.Millisecond,
+	})
+	defer pool.Close()
+	waitForPoolReady(t, pool, 1)
+	ctx := context.Background()
+
+	id, err := pool.Acquire(ctx)
+	require.NoError(t, err)
+	held, err := pool.GetClient(id)
+	require.NoError(t, err)
+	defer held.Close()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for pool.TotalCount() != 0 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	require.Equal(t, 0, pool.TotalCount(), "the abandon monitor reclaimed the borrow")
+
+	var closing *glide.ClosingError
+	_, err = held.Ping(ctx)
+	assert.True(t, errors.As(err, &closing), "got %v", err)
+
+	// The next acquire drains the discard and frees the pool's adapter reference.
+	next, err := pool.Acquire(ctx)
+	require.NoError(t, err)
+	pool.Release(next)
+	_, err = held.Ping(ctx)
+	assert.True(t, errors.As(err, &closing), "got %v", err)
+}
+
+// A command in flight when the pool closes fails instead of waiting forever:
+// dropping the adapter cancels it without a callback.
+func (suite *GlideTestSuite) TestPoolCloseFailsInFlightCommands() {
+	t := suite.T()
+	suite.skipMode(t, false)
+	pool := suite.newPool(t, false, glide.PoolConfig{MaxSize: 1, MinIdle: 1, AcquireTimeout: 10 * time.Second})
+	waitForPoolReady(t, pool, 1)
+
+	id, err := pool.Acquire(context.Background())
+	require.NoError(t, err)
+	client, err := pool.GetClient(id)
+	require.NoError(t, err)
+
+	done := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		_, err := client.BLPop(ctx, []string{"pool-close-inflight-" + strconv.FormatInt(id, 10)}, 0)
+		done <- err
+	}()
+	time.Sleep(300 * time.Millisecond)
+	pool.Close()
+
+	select {
+	case err := <-done:
+		var closing *glide.ClosingError
+		assert.True(t, errors.As(err, &closing), "got %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("the in-flight command never returned after pool.Close")
 	}
 }

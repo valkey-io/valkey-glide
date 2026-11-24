@@ -542,6 +542,10 @@ pub struct ClientShared {
     // connection can hold a token that rotated in the gap; a direct client stays
     // hot and keeps the existing reconnect-deferred `token_changed` refresh.
     is_pool_managed: Arc<AtomicBool>,
+    // Set when the pool discards this client (abandon reclaim, failed reset,
+    // destroy). A discarded connection is never lent again, so every clone,
+    // including a borrower's stale handle, fails instead of sending on it.
+    pool_discarded: Arc<AtomicBool>,
     // Serializes the borrow-time IAM reconcile so concurrent commands on the same
     // client don't each re-AUTH; see `prepare_for_borrow` for the full protocol.
     iam_reconcile_lock: Arc<tokio::sync::Mutex<()>>,
@@ -1306,6 +1310,9 @@ impl Client {
     }
 
     async fn get_or_initialize_client(&self) -> RedisResult<ClientWrapper> {
+        // Every path to the connection comes here, so a discarded client's
+        // non-send calls (scripts, scans, AUTH) fail as its sends do.
+        self.reject_if_pool_discarded()?;
         {
             let guard = self.internal_client.read().await;
             if !matches!(&*guard, ClientWrapper::Lazy(_)) {
@@ -1479,6 +1486,7 @@ impl Client {
             // TODO #7666: Reject empty commands here, replacing the check in `get_redis_command`
             // (`socket_listener.rs`).
             // `BLOB.*` transfers lend a buffer, so only the rdma methods send them.
+            self.reject_if_pool_discarded()?;
             crate::rdma::refuse_direct_command(cmd)?;
             // Refresh IAM auth before the command (see `reconcile_iam_before_dispatch`).
             self.reconcile_iam_before_dispatch().await?;
@@ -2232,6 +2240,7 @@ impl Client {
         raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            self.reject_if_pool_discarded()?;
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             // Before the tracking below, so a rejected batch leaves no state.
             for cmd in pipeline.cmd_iter() {
@@ -2336,6 +2345,7 @@ impl Client {
         pipeline_retry_strategy: PipelineRetryStrategy,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            self.reject_if_pool_discarded()?;
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             // Before the tracking below, so a rejected batch leaves no state.
             for cmd in pipeline.cmd_iter() {
@@ -3579,6 +3589,7 @@ impl Client {
                     watch_routes: Arc::new(std::sync::Mutex::new(Default::default())),
                     last_iam_generation: Arc::new(AtomicU64::new(0)),
                     is_pool_managed: Arc::new(AtomicBool::new(false)),
+                    pool_discarded: Arc::new(AtomicBool::new(false)),
                     iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                     multi_active: Arc::new(AtomicBool::new(false)),
                     is_cluster: request.cluster_mode_enabled,
@@ -3982,6 +3993,40 @@ impl Client {
     /// `send_command`; direct clients leave it unset.
     pub fn mark_pool_managed(&self) {
         self.is_pool_managed.store(true, Ordering::Release);
+    }
+
+    /// Mark this client discarded by its pool: every clone's later sends fail
+    /// with [`ErrorKind::ClientClosed`]. Sends already in flight complete.
+    ///
+    /// Also drops the connection for every clone, so a borrower's handle that
+    /// still holds a clone does not keep the socket open. A send in flight keeps
+    /// its own clone of the connection until it returns.
+    pub fn mark_pool_discarded(&self) {
+        self.pool_discarded.store(true, Ordering::Release);
+        let closed = || {
+            ClientWrapper::Lazy(Box::new(LazyClient {
+                config: ConnectionRequest::default(),
+                push_sender: None,
+            }))
+        };
+        let internal_client = self.internal_client.clone();
+        if let Ok(mut wrapper) = internal_client.try_write() {
+            *wrapper = closed();
+        } else if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            runtime.spawn(async move {
+                *internal_client.write().await = closed();
+            });
+        }
+    }
+
+    fn reject_if_pool_discarded(&self) -> RedisResult<()> {
+        if self.pool_discarded.load(Ordering::Acquire) {
+            return Err(RedisError::from((
+                ErrorKind::ClientClosed,
+                "Pooled client was reclaimed by the pool",
+            )));
+        }
+        Ok(())
     }
 
     /// Whether this client has been marked pool-managed (test/introspection helper).
@@ -4405,6 +4450,7 @@ impl Client {
                 watch_routes: Arc::new(std::sync::Mutex::new(Default::default())),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
+                pool_discarded: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
@@ -4491,6 +4537,7 @@ pub fn create_test_glide_client() -> Client {
             watch_routes: Arc::new(std::sync::Mutex::new(Default::default())),
             last_iam_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             is_pool_managed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            pool_discarded: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
             multi_active: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             is_cluster: false,
@@ -5545,6 +5592,7 @@ mod tests {
                 watch_routes: Arc::new(std::sync::Mutex::new(Default::default())),
                 last_iam_generation: Arc::new(AtomicU64::new(0)),
                 is_pool_managed: Arc::new(AtomicBool::new(false)),
+                pool_discarded: Arc::new(AtomicBool::new(false)),
                 iam_reconcile_lock: Arc::new(tokio::sync::Mutex::new(())),
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,

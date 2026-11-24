@@ -522,9 +522,10 @@ class _GlideFFI:
             );
             int64_t glide_pool_try_acquire(uint64_t pool_id);
             int64_t glide_pool_acquire_blocking(uint64_t pool_id, uint64_t timeout_ms);
-            int32_t glide_pool_release(uint64_t pool_id, uint64_t client_id);
+            int32_t glide_pool_release(uint64_t pool_id, uint64_t lease_id);
             int32_t glide_pool_destroy(uint64_t pool_id);
-            size_t glide_pool_get_client_ptr(uint64_t client_id);
+            size_t glide_pool_lease_client(uint64_t pool_id, uint64_t lease_id, uint64_t *client_id_out);
+            void glide_pool_release_client_ref(size_t adapter_ptr);
             int32_t glide_pool_set_pipe_client_id(uint64_t client_id, uint64_t pipe_client_id);
             typedef enum {
                 Read = 0,

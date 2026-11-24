@@ -19,6 +19,7 @@
 * Python: avoid deprecation warning on legacy module introspection ([#7452](https://github.com/valkey-io/valkey-glide/pull/7452))
 * Core: keep timeout watchdog pending counts isolated from retired workers and losing singleton initialization candidates ([#7762](https://github.com/valkey-io/valkey-glide/pull/7762))
 * Core: prevent missed refresh completion notifications ([#7766](https://github.com/valkey-io/valkey-glide/pull/7766))
+* Core, Go, Java, Node, Python: A pooled-client handle works only for its own borrow. After release or abandon reclaim it fails with `ClosingError`, a second release no longer frees a later borrow, and a reclaimed connection closes. Java: a cancelled `acquire()` no longer leaks a slot ([#7545](https://github.com/valkey-io/valkey-glide/issues/7545))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
 * Core, Python, Go: trim the client availability zone and reject a whitespace-only one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))
 * Core: release connections when a reconnecting client closes ([#7492](https://github.com/valkey-io/valkey-glide/pull/7492))

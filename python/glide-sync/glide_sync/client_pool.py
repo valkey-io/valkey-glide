@@ -23,8 +23,10 @@ Usage:
     pool.close()
 """
 
+import functools
 import os
 import threading
+import weakref
 from dataclasses import dataclass
 from typing import Optional
 
@@ -34,6 +36,12 @@ from glide_shared.connection_request import _create_sync_connection_request
 from glide_shared.exceptions import ClosingError
 
 from .glide_client import BaseClient, GlideClient
+
+
+def _release_adapter_ref(lib, adapter_ptr, create_pid: int) -> None:
+    """Give back a borrowed client's adapter reference (same fork guard as a direct client)."""
+    if create_pid == os.getpid():
+        lib.glide_pool_release_client_ref(adapter_ptr)
 
 
 @dataclass
@@ -69,7 +77,7 @@ class ClientPool:
     The Rust pool owns client lifecycle (creation, bounded size).
     This Python class provides:
     - acquire-with-timeout retry loop (exponential backoff)
-    - Cached GlideClient wrappers (one per client_id, reused across borrows)
+    - One GlideClient wrapper per borrow, failing once that borrow ends
     - Zero-overhead borrow() context manager
     """
 
@@ -210,7 +218,8 @@ class ClientPool:
         Single FFI call — no polling loop.
 
         Returns:
-            client_id (positive integer) for use with borrow() or get_client().
+            The borrow's lease id, for borrow-scoped calls and release(). Each
+            borrow gets a new one, even of the same connection.
 
         Raises:
             TimeoutError: If no client available within timeout.
@@ -237,10 +246,23 @@ class ClientPool:
             f"Pool exhausted: could not acquire client within {timeout}s"
         )
 
+    def _release_borrow(self, client_id: int) -> None:
+        if self._create_pid == os.getpid():
+            self.release(client_id)
+
     def release(self, client_id: int) -> None:
-        """Release a borrowed client back to the pool."""
+        """Release a borrow back to the pool by its lease id.
+
+        Its client raises ClosingError from then on. Releasing a borrow that
+        has already ended does nothing.
+        """
         self._check_same_process()
-        self._lib.glide_pool_release(self._pool_id, client_id)
+        with self._cache_lock:
+            client = self._client_cache.pop(client_id, None)
+            if client is not None:
+                with client._client_lock:
+                    client._is_closed = True
+            self._lib.glide_pool_release(self._pool_id, client_id)
 
     def borrow(self, timeout: Optional[float] = None):
         """
@@ -258,11 +280,10 @@ class ClientPool:
 
     def _get_or_create_client(self, client_id: int) -> BaseClient:
         """
-        Get a usable GlideClient wrapper for the given client_id.
+        Get the client of a current borrow, by its lease id.
 
-        On first borrow of a client_id, creates a thin wrapper pointing to the
-        Rust-managed ClientAdapter. Subsequent borrows of the same client_id
-        reuse the cached wrapper (zero allocation).
+        Each borrow gets its own thin wrapper around the Rust-managed
+        ClientAdapter, so a released borrow's client cannot reach the next one.
         """
         cached = self._client_cache.get(client_id)
         if cached is not None:
@@ -274,17 +295,26 @@ class ClientPool:
             if cached is not None:
                 return cached
 
-            # Get the native ClientAdapter pointer from the Rust pool
-            adapter_ptr = self._lib.glide_pool_get_client_ptr(client_id)
+            adapter_ptr = self._lib.glide_pool_lease_client(
+                self._pool_id, client_id, self._ffi.NULL
+            )
             if adapter_ptr == 0:
-                raise RuntimeError(
-                    f"Pool client_id {client_id} has no associated ClientAdapter"
-                )
+                raise ClosingError("Pooled client was returned to the pool")
 
             # Create a GlideClient shell pointing to the pooled adapter.
             cast_ptr = self._ffi.cast("void*", adapter_ptr)
 
             client = GlideClient.__new__(GlideClient)  # type: ignore[type-abstract]
+            # The borrow holds its own adapter reference; give it back once the
+            # client is gone, so a call racing a release never sees a freed adapter.
+            finalizer = weakref.finalize(
+                client, _release_adapter_ref, self._lib, adapter_ptr, os.getpid()
+            )
+            # typeshed gives finalize empty __slots__; atexit is settable at runtime.
+            finalizer.atexit = False  # type: ignore[misc]
+            # close() on a borrowed client ends the borrow rather than closing
+            # the connection the pool lends on.
+            client._pool_release = functools.partial(self._release_borrow, client_id)
             client._ffi = self._ffi
             client._lib = self._lib
             client._config = self._client_config
@@ -324,8 +354,12 @@ class ClientPool:
         """Destroy the pool. All idle clients are closed."""
         if not self._closed:
             self._closed = True
+            with self._cache_lock:
+                for client in self._client_cache.values():
+                    with client._client_lock:
+                        client._is_closed = True
+                self._client_cache.clear()
             self._lib.glide_pool_destroy(self._pool_id)
-            self._client_cache.clear()
 
     def __enter__(self):
         return self

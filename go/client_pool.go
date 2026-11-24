@@ -68,7 +68,8 @@ type ClientPool struct {
 	connReq    []byte // serialized ConnectionRequest protobuf
 	mu         sync.Mutex
 	closed     bool
-	// pooledCache maps client_id → *PooledClient wrapper (reused across borrows)
+	// pooledCache maps lease id → the *PooledClient of that borrow. A borrow's
+	// wrapper is never reused, so a stale one cannot reach the next borrow.
 	pooledCache map[int64]*PooledClient
 }
 
@@ -77,15 +78,38 @@ type ClientPool struct {
 // the underlying connection. This prevents accidentally destroying pooled connections.
 type PooledClient struct {
 	*Client
-	pool     *ClientPool
-	clientID int64
+	pool      *ClientPool
+	leaseID   int64
+	closeOnce sync.Once
 }
 
 // Close returns the client to the pool. It does NOT destroy the underlying connection.
-// Safe to call multiple times (idempotent).
+// Safe to call multiple times (idempotent). After Close, commands on this
+// PooledClient, or on its embedded Client, fail with a ClosingError.
 func (pc *PooledClient) Close() {
-	if pc.pool != nil {
-		pc.pool.Release(pc.clientID)
+	pc.closeOnce.Do(func() {
+		pc.detach()
+		pc.pool.release(pc.leaseID)
+	})
+}
+
+// detach makes later commands fail as on a closed client, fails the ones in
+// flight (dropping the last adapter reference cancels them without a
+// callback), and gives back this wrapper's adapter reference without closing
+// the connection.
+func (pc *PooledClient) detach() {
+	pc.mu.Lock()
+	adapter := pc.coreClient
+	pc.coreClient = nil
+	if adapter != nil {
+		if getClientByPtr(uintptr(adapter)) == &pc.baseClient {
+			unregisterClient(uintptr(adapter))
+		}
+		pc.failPendingRequests(NewClosingError("pooled client was returned to the pool"))
+	}
+	pc.mu.Unlock()
+	if adapter != nil {
+		C.glide_pool_release_client_ref(adapter)
 	}
 }
 
@@ -192,7 +216,8 @@ func NewClientPool(clientConfig *config.ClientConfiguration, poolConfig PoolConf
 }
 
 // Acquire borrows a client from the pool with the configured timeout.
-// Returns the client_id handle.
+// Returns the borrow's lease id, for [ClientPool.GetClient] and [ClientPool.Release].
+// Each borrow gets a new one, even of the same connection.
 func (p *ClientPool) Acquire(ctx context.Context) (int64, error) {
 	return p.AcquireWithTimeout(ctx, p.config.AcquireTimeout)
 }
@@ -238,27 +263,47 @@ func (p *ClientPool) AcquireWithTimeout(ctx context.Context, timeout time.Durati
 	}
 }
 
-// Release returns a borrowed client to the pool.
-func (p *ClientPool) Release(clientID int64) {
-	C.glide_pool_release(C.uint64_t(p.poolID), C.uint64_t(clientID))
+// Release returns a borrow to the pool by its lease id. Releasing a borrow
+// that has already ended does nothing.
+func (p *ClientPool) Release(leaseID int64) {
+	p.mu.Lock()
+	pooled := p.pooledCache[leaseID]
+	p.mu.Unlock()
+	if pooled != nil {
+		pooled.Close()
+		return
+	}
+	p.release(leaseID)
 }
 
-// GetClient returns a usable Client wrapper for the given client_id.
-// The wrapper is cached and reused across borrows of the same client_id.
+// release ends the lease under p.mu, which GetClient also holds, so GetClient
+// never wraps a lease that ends before the wrapper is cached.
+func (p *ClientPool) release(leaseID int64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.pooledCache, leaseID)
+	C.glide_pool_release(C.uint64_t(p.poolID), C.uint64_t(leaseID))
+}
+
+// GetClient returns the PooledClient of a current borrow, by its lease id.
+// Repeated calls for one borrow return the same wrapper; a borrow that has
+// ended returns a ClosingError.
 //
 // The pooled client uses synchronous command dispatch (not async callbacks).
-// Do NOT call Close() on the returned Client — use Release(clientID) instead.
-func (p *ClientPool) GetClient(clientID int64) (*PooledClient, error) {
+func (p *ClientPool) GetClient(leaseID int64) (*PooledClient, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if cached, ok := p.pooledCache[clientID]; ok {
+	if p.closed {
+		return nil, NewClosingError("pool is closed")
+	}
+	if cached, ok := p.pooledCache[leaseID]; ok {
 		return cached, nil
 	}
 
-	adapterPtr := C.glide_pool_get_client_ptr(C.uint64_t(clientID))
+	adapterPtr := C.glide_pool_lease_client(C.uint64_t(p.poolID), C.uint64_t(leaseID), nil)
 	if adapterPtr == nil {
-		return nil, errors.New("client_id has no associated client")
+		return nil, NewClosingError("pooled client was returned to the pool")
 	}
 
 	// Create a Client wrapper pointing to the pooled adapter.
@@ -280,12 +325,12 @@ func (p *ClientPool) GetClient(clientID int64) (*PooledClient, error) {
 	registerClient(&client.baseClient, uintptr(unsafe.Pointer(adapterPtr)))
 
 	pooled := &PooledClient{
-		Client:   client,
-		pool:     p,
-		clientID: clientID,
+		Client:  client,
+		pool:    p,
+		leaseID: leaseID,
 	}
 
-	p.pooledCache[clientID] = pooled
+	p.pooledCache[leaseID] = pooled
 	return pooled, nil
 }
 
@@ -318,6 +363,10 @@ func (p *ClientPool) Close() {
 	}
 	p.closed = true
 	C.glide_pool_destroy(C.uint64_t(p.poolID))
+	for _, pooled := range p.pooledCache {
+		// Not closeOnce: a PooledClient.Close in progress waits on p.mu.
+		pooled.detach()
+	}
 	p.pooledCache = nil
 }
 
