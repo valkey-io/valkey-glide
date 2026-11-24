@@ -109,8 +109,8 @@ pub(crate) fn convert_to_expected_type(
                 let result = map
                     .into_iter()
                     .map(|(key, inner_value)| {
-                        let key_str = convert_to_expected_type(key, Some(ExpectedReturnType::BulkString)).unwrap();
-                        let value_converted = convert_to_expected_type(inner_value, Some(ExpectedReturnType::Double)).unwrap();
+                        let key_str = convert_to_expected_type(key, Some(ExpectedReturnType::BulkString))?;
+                        let value_converted = convert_to_expected_type(inner_value, Some(ExpectedReturnType::Double))?;
                         Ok((key_str, value_converted))
                     })
                     .collect::<RedisResult<_>>();
@@ -5174,6 +5174,20 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[rstest::rstest]
+    #[case(Value::Array(vec![]), Value::Double(1.0))]
+    #[case(Value::BulkString(b"key".to_vec().into()), Value::BulkString(b"not-a-number".to_vec().into()))]
+    fn test_convert_to_map_of_string_to_double_propagates_errors(
+        #[case] key: Value,
+        #[case] value: Value,
+    ) {
+        let result = convert_to_expected_type(
+            Value::Map(vec![(key, value)]),
+            Some(ExpectedReturnType::MapOfStringToDouble),
+        );
+        assert!(result.is_err());
     }
 
     #[test]
