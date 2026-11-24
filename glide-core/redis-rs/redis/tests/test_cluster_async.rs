@@ -5167,10 +5167,20 @@ mod cluster_async {
         );
     }
 
-    // INFO to all primaries where 6379 replies and 6381 times out.
-    fn run_info_with_one_timed_out_primary(
+    // Routes INFO to all primaries of a mock cluster answered by `handler`.
+    fn info_to_all_primaries(
         name: &'static str,
         partial: bool,
+        handler: impl Fn(&[u8], u16) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
+    ) -> RedisResult<Value> {
+        info_to_nodes(name, MultipleNodeRoutingInfo::AllMasters, partial, handler)
+    }
+
+    fn info_to_nodes(
+        name: &'static str,
+        routing: MultipleNodeRoutingInfo,
+        partial: bool,
+        handler: impl Fn(&[u8], u16) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
     ) -> RedisResult<Value> {
         let mut info = cmd("INFO");
         info.set_allow_partial_results(partial);
@@ -5182,25 +5192,55 @@ mod cluster_async {
         } = MockEnv::with_client_builder(
             ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(0),
             name,
-            move |received_cmd: &[u8], port| {
-                respond_startup_with_replica_using_config(name, received_cmd, None)?;
-                if port == 6381 {
-                    return Err(Err(
-                        std::io::Error::from(std::io::ErrorKind::TimedOut).into()
-                    ));
-                }
-                Err(Ok(Value::BulkString(
-                    format!("info: {port}").into_bytes().into(),
-                )))
-            },
+            handler,
         );
-        runtime.block_on(connection.route_command(
-            &info,
-            RoutingInfo::MultiNode((
-                MultipleNodeRoutingInfo::AllMasters,
-                Some(redis::cluster_routing::ResponsePolicy::Special),
-            )),
+        runtime.block_on(connection.route_command(&info, per_node_route(routing)))
+    }
+
+    // `routing` with the `Special` response policy, which keeps one entry per node.
+    fn per_node_route(routing: MultipleNodeRoutingInfo) -> RoutingInfo {
+        RoutingInfo::MultiNode((
+            routing,
+            Some(redis::cluster_routing::ResponsePolicy::Special),
         ))
+    }
+
+    fn info_reply(port: u16) -> Value {
+        Value::BulkString(format!("info: {port}").into_bytes().into())
+    }
+
+    // 6379 replies and 6381 times out.
+    fn info_with_one_timed_out_primary(name: &'static str, partial: bool) -> RedisResult<Value> {
+        info_to_all_primaries(name, partial, move |received_cmd, port| {
+            respond_startup_with_replica_using_config(name, received_cmd, None)?;
+            if port == 6381 {
+                return Err(Err(
+                    std::io::Error::from(std::io::ErrorKind::TimedOut).into()
+                ));
+            }
+            Err(Ok(info_reply(port)))
+        })
+    }
+
+    fn info_with_one_unconnected_primary(name: &'static str, partial: bool) -> RedisResult<Value> {
+        info_to_all_primaries(name, partial, one_unconnected_primary(name))
+    }
+
+    // 6379 replies and 6380 refuses every command, so the client never gets a
+    // connection to it.
+    fn one_unconnected_primary(
+        name: &'static str,
+    ) -> impl Fn(&[u8], u16) -> Result<(), RedisResult<Value>> + Send + Sync + 'static {
+        move |received_cmd, port| {
+            if port == 6380 {
+                return Err(Err(std::io::Error::from(
+                    std::io::ErrorKind::ConnectionRefused,
+                )
+                .into()));
+            }
+            respond_startup_two_nodes(name, received_cmd)?;
+            Err(Ok(info_reply(port)))
+        }
     }
 
     fn sorted_map(value: Value) -> Vec<(String, Value)> {
@@ -5219,11 +5259,10 @@ mod cluster_async {
     #[serial_test::parallel(otel)]
     fn test_async_cluster_partial_results_keep_replies_and_report_timeout() {
         let name = "test_async_cluster_partial_results_keep_replies_and_report_timeout";
-        let pairs = sorted_map(run_info_with_one_timed_out_primary(name, true).unwrap());
+        let pairs = sorted_map(info_with_one_timed_out_primary(name, true).unwrap());
 
         assert_eq!(pairs.len(), 2, "{pairs:?}");
-        assert_eq!(pairs[0].0, format!("{name}:6379"));
-        assert_eq!(pairs[0].1, Value::BulkString(b"info: 6379".to_vec().into()));
+        assert_eq!(pairs[0], (format!("{name}:6379"), info_reply(6379)));
         assert_eq!(pairs[1].0, format!("{name}:6381"));
         let Value::ServerError(err) = &pairs[1].1 else {
             panic!("expected an error for 6381, got {:?}", pairs[1].1);
@@ -5237,57 +5276,18 @@ mod cluster_async {
     #[serial_test::parallel(otel)]
     fn test_async_cluster_without_partial_results_fails_on_node_timeout() {
         let name = "test_async_cluster_without_partial_results_fails_on_node_timeout";
-        let err = run_info_with_one_timed_out_primary(name, false).unwrap_err();
+        let err = info_with_one_timed_out_primary(name, false).unwrap_err();
         assert!(err.is_timeout(), "{err:?}");
-    }
-
-    // INFO to both primaries (6379, 6380) where 6380 refuses every command, so
-    // the client never gets a connection to it.
-    fn run_info_with_one_unconnected_primary(
-        name: &'static str,
-        partial: bool,
-    ) -> RedisResult<Value> {
-        let mut info = cmd("INFO");
-        info.set_allow_partial_results(partial);
-        let MockEnv {
-            runtime,
-            async_connection: mut connection,
-            handler: _handler,
-            ..
-        } = MockEnv::with_client_builder(
-            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(0),
-            name,
-            move |received_cmd: &[u8], port| {
-                if port == 6380 {
-                    return Err(Err(std::io::Error::from(
-                        std::io::ErrorKind::ConnectionRefused,
-                    )
-                    .into()));
-                }
-                respond_startup_two_nodes(name, received_cmd)?;
-                Err(Ok(Value::BulkString(
-                    format!("info: {port}").into_bytes().into(),
-                )))
-            },
-        );
-        runtime.block_on(connection.route_command(
-            &info,
-            RoutingInfo::MultiNode((
-                MultipleNodeRoutingInfo::AllMasters,
-                Some(redis::cluster_routing::ResponsePolicy::Special),
-            )),
-        ))
     }
 
     #[test]
     #[serial_test::parallel(otel)]
     fn test_async_cluster_partial_results_report_unconnected_primary() {
         let name = "test_async_cluster_partial_results_report_unconnected_primary";
-        let pairs = sorted_map(run_info_with_one_unconnected_primary(name, true).unwrap());
+        let pairs = sorted_map(info_with_one_unconnected_primary(name, true).unwrap());
 
         assert_eq!(pairs.len(), 2, "{pairs:?}");
-        assert_eq!(pairs[0].0, format!("{name}:6379"));
-        assert_eq!(pairs[0].1, Value::BulkString(b"info: 6379".to_vec().into()));
+        assert_eq!(pairs[0], (format!("{name}:6379"), info_reply(6379)));
         assert_eq!(pairs[1].0, format!("{name}:6380"));
         let Value::ServerError(err) = &pairs[1].1 else {
             panic!("expected an error for 6380, got {:?}", pairs[1].1);
@@ -5303,21 +5303,67 @@ mod cluster_async {
     #[serial_test::parallel(otel)]
     fn test_async_cluster_without_partial_results_skips_unconnected_primary() {
         let name = "test_async_cluster_without_partial_results_skips_unconnected_primary";
-        let pairs = sorted_map(run_info_with_one_unconnected_primary(name, false).unwrap());
+        let pairs = sorted_map(info_with_one_unconnected_primary(name, false).unwrap());
+        assert_eq!(pairs, vec![(format!("{name}:6379"), info_reply(6379))]);
+    }
 
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_to_all_nodes_keep_replicas() {
+        let name = "test_async_cluster_partial_results_to_all_nodes_keep_replicas";
+        let value = info_to_nodes(
+            name,
+            MultipleNodeRoutingInfo::AllNodes,
+            true,
+            move |received_cmd, port| {
+                respond_startup_with_replica_using_config(name, received_cmd, None)?;
+                Err(Ok(info_reply(port)))
+            },
+        )
+        .unwrap();
+
+        let addresses: Vec<_> = sorted_map(value)
+            .into_iter()
+            .map(|(address, _)| address)
+            .collect();
         assert_eq!(
-            pairs,
-            vec![(
-                format!("{name}:6379"),
-                Value::BulkString(b"info: 6379".to_vec().into())
-            )]
+            addresses,
+            [6379, 6380, 6381, 6382].map(|port| format!("{name}:{port}"))
         );
     }
 
     #[test]
     #[serial_test::parallel(otel)]
-    fn test_async_cluster_partial_results_return_map_when_all_nodes_fail() {
-        let name = "test_async_cluster_partial_results_return_map_when_all_nodes_fail";
+    fn test_async_cluster_partial_results_fail_when_no_primary_is_connected() {
+        let name = "test_async_cluster_partial_results_fail_when_no_primary_is_connected";
+        // The client connects to the replica 6379; its primary 6380 refuses every command.
+        let slots = vec![MockSlotRange {
+            primary_port: 6380,
+            replica_ports: vec![6379],
+            slot_range: 0..16383,
+        }];
+        let err = info_to_all_primaries(name, true, move |received_cmd, port| {
+            if port == 6380 {
+                return Err(Err(std::io::Error::from(
+                    std::io::ErrorKind::ConnectionRefused,
+                )
+                .into()));
+            }
+            respond_startup_with_replica_using_config(name, received_cmd, Some(slots.clone()))?;
+            Err(Ok(info_reply(port)))
+        })
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ConnectionNotFoundForRoute, "{err:?}");
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_refresh_slots_after_an_unconnected_primary() {
+        let name = "test_async_cluster_partial_results_refresh_slots_after_an_unconnected_primary";
+        let slot_queries = Arc::new(atomic::AtomicUsize::new(0));
+        let queries = slot_queries.clone();
+        let unconnected_primary = one_unconnected_primary(name);
         let mut info = cmd("INFO");
         info.set_allow_partial_results(true);
         let MockEnv {
@@ -5326,26 +5372,239 @@ mod cluster_async {
             handler: _handler,
             ..
         } = MockEnv::with_client_builder(
-            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(0),
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(0)
+                .slots_refresh_rate_limit(Duration::ZERO, 0),
             name,
             move |received_cmd: &[u8], port| {
-                respond_startup_with_replica_using_config(name, received_cmd, None)?;
-                Err(Err(RedisError::from((
-                    ErrorKind::ResponseError,
-                    "An error was signalled by the server:",
-                    format!("boom {port}"),
-                ))))
+                if contains_slice(received_cmd, b"SLOTS") {
+                    queries.fetch_add(1, Ordering::SeqCst);
+                }
+                unconnected_primary(received_cmd, port)
             },
         );
-        let value = runtime
-            .block_on(connection.route_command(
-                &info,
-                RoutingInfo::MultiNode((
-                    MultipleNodeRoutingInfo::AllMasters,
-                    Some(redis::cluster_routing::ResponsePolicy::Special),
-                )),
-            ))
+        let before = slot_queries.load(Ordering::SeqCst);
+
+        runtime
+            .block_on(
+                connection
+                    .route_command(&info, per_node_route(MultipleNodeRoutingInfo::AllMasters)),
+            )
             .unwrap();
+
+        let refreshed = runtime.block_on(async {
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while slot_queries.load(Ordering::SeqCst) == before {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+        });
+        assert!(
+            refreshed.is_ok(),
+            "no slot refresh after the unconnected entry"
+        );
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_refresh_keeps_reconnecting_a_down_node() {
+        let name = "test_async_cluster_partial_results_refresh_keeps_reconnecting_a_down_node";
+        let outage = Arc::new(AtomicBool::new(false));
+        let handler_outage = outage.clone();
+        // During the outage the topology also lists 6382, a replica of 6380, so the
+        // test can tell when a slot refresh has swapped in a new slot map.
+        let with_replica = vec![
+            MockSlotRange {
+                primary_port: 6379,
+                replica_ports: vec![],
+                slot_range: 0..8191,
+            },
+            MockSlotRange {
+                primary_port: 6380,
+                replica_ports: vec![6382],
+                slot_range: 8192..16383,
+            },
+        ];
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(0)
+                .slots_refresh_rate_limit(Duration::ZERO, 0),
+            name,
+            move |received_cmd: &[u8], port| {
+                if !handler_outage.load(Ordering::SeqCst) {
+                    respond_startup_two_nodes(name, received_cmd)?;
+                } else if port == 6380 {
+                    return Err(Err(std::io::Error::from(
+                        std::io::ErrorKind::ConnectionRefused,
+                    )
+                    .into()));
+                } else {
+                    respond_startup_with_replica_using_config(
+                        name,
+                        received_cmd,
+                        Some(with_replica.clone()),
+                    )?;
+                }
+                Err(Ok(info_reply(port)))
+            },
+        );
+        let info = cmd("INFO");
+        let mut partial_info = cmd("INFO");
+        partial_info.set_allow_partial_results(true);
+        let addresses = |value: Value| -> Vec<String> {
+            sorted_map(value)
+                .into_iter()
+                .map(|(address, _)| address)
+                .collect()
+        };
+
+        runtime.block_on(async {
+            outage.store(true, Ordering::SeqCst);
+            // The plain call fails on 6380, so the client starts reconnecting it.
+            let primaries = per_node_route(MultipleNodeRoutingInfo::AllMasters);
+            assert!(connection
+                .route_command(&info, primaries.clone())
+                .await
+                .is_err());
+            // The partial call requests a slot refresh, which cannot connect 6380.
+            connection
+                .route_command(&partial_info, primaries.clone())
+                .await
+                .unwrap();
+            let replica = format!("{name}:6382");
+            let swapped = tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    let all_nodes = per_node_route(MultipleNodeRoutingInfo::AllNodes);
+                    if let Ok(value) = connection.route_command(&info, all_nodes).await {
+                        if addresses(value).contains(&replica) {
+                            return;
+                        }
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await;
+            assert!(swapped.is_ok(), "the slot refresh never ran");
+
+            outage.store(false, Ordering::SeqCst);
+            let reconnected = tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    if let Ok(value) = connection.route_command(&info, primaries.clone()).await {
+                        if addresses(value).len() == 2 {
+                            return;
+                        }
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await;
+            assert!(reconnected.is_ok(), "6380 was never reconnected");
+        });
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_drop_a_failed_over_primary() {
+        // No periodic topology checks, so only the refresh a partial result requests can
+        // update the slot map.
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            6,
+            1,
+            |builder| {
+                builder
+                    .retries(0)
+                    .slots_refresh_rate_limit(Duration::ZERO, 0)
+            },
+            false,
+        );
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+            let mut info = cmd("INFO");
+            info.arg("SERVER").set_allow_partial_results(true);
+            let all_primaries = per_node_route(MultipleNodeRoutingInfo::AllMasters);
+            let slot_0 = |slot_addr| {
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    0, slot_addr,
+                )))
+            };
+
+            let server: String = redis::from_owned_redis_value(
+                connection
+                    .route_command(cmd("INFO").arg("SERVER"), slot_0(SlotAddr::Master))
+                    .await?,
+            )?;
+            let port = server
+                .lines()
+                .find_map(|line| line.strip_prefix("tcp_port:"))
+                .unwrap()
+                .trim()
+                .to_string();
+            let primaries = sorted_map(
+                connection
+                    .route_command(&info, all_primaries.clone())
+                    .await?,
+            );
+            let victim = primaries
+                .iter()
+                .map(|(address, _)| address.clone())
+                .find(|address| address.ends_with(&format!(":{port}")))
+                .unwrap();
+
+            // Kill slot 0's primary, then promote its replica.
+            let _ = connection
+                .route_command(cmd("SHUTDOWN").arg("NOSAVE"), slot_0(SlotAddr::Master))
+                .await;
+            connection
+                .route_command(
+                    cmd("CLUSTER").arg("FAILOVER").arg("TAKEOVER"),
+                    slot_0(SlotAddr::ReplicaRequired),
+                )
+                .await?;
+
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            loop {
+                let addresses: Vec<_> = sorted_map(
+                    connection
+                        .route_command(&info, all_primaries.clone())
+                        .await?,
+                )
+                .into_iter()
+                .map(|(address, _)| address)
+                .collect();
+                if !addresses.contains(&victim) {
+                    assert_eq!(addresses.len(), 3, "{addresses:?}");
+                    return Ok::<_, RedisError>(());
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "{victim} is still listed: {addresses:?}"
+                );
+                sleep(futures_time::time::Duration::from_millis(100)).await;
+            }
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_return_map_when_all_nodes_fail() {
+        let name = "test_async_cluster_partial_results_return_map_when_all_nodes_fail";
+        let value = info_to_all_primaries(name, true, move |received_cmd, port| {
+            respond_startup_with_replica_using_config(name, received_cmd, None)?;
+            Err(Err(RedisError::from((
+                ErrorKind::ResponseError,
+                "An error was signalled by the server:",
+                format!("boom {port}"),
+            ))))
+        })
+        .unwrap();
 
         let pairs = sorted_map(value);
         assert_eq!(pairs.len(), 2, "{pairs:?}");
@@ -5841,6 +6100,67 @@ mod cluster_async {
                 Ok::<_, RedisError>(())
             })
             .unwrap();
+    }
+
+    /// Runs `command` against two mock primaries, failing the first command
+    /// that reaches port 6380 with `FatalReceiveError` while retries remain.
+    /// Returns the error the caller got and how many commands 6380 received.
+    fn query_with_one_fatal_receive_error(
+        name: &'static str,
+        command: redis::Cmd,
+    ) -> (RedisError, usize) {
+        let received = Arc::new(atomic::AtomicUsize::new(0));
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            {
+                let received = received.clone();
+                move |cmd: &[u8], port| {
+                    respond_startup_two_nodes(name, cmd)?;
+                    if port == 6380 && received.fetch_add(1, atomic::Ordering::SeqCst) == 0 {
+                        return Err(Err(RedisError::from((
+                            ErrorKind::FatalReceiveError,
+                            "mock-fatal-receive-error",
+                        ))));
+                    }
+                    Err(Ok(Value::Okay))
+                }
+            },
+        );
+        let err = runtime
+            .block_on(command.query_async::<_, Value>(&mut connection))
+            .unwrap_err();
+        (err, received.load(atomic::Ordering::SeqCst))
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fan_out_gets_reconnect_error_with_retries_left() {
+        let (err, received) = query_with_one_fatal_receive_error(
+            "test_async_cluster_fan_out_gets_reconnect_error_with_retries_left",
+            cmd("FLUSHALL"),
+        );
+        assert_eq!(err.kind(), ErrorKind::FatalReceiveError, "{err}");
+        assert_eq!(received, 1, "the failed sub-request must not be retried");
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_single_node_gets_reconnect_error_with_retries_left() {
+        let mut set = cmd("SET");
+        // "foo" hashes to slot 12182, served by port 6380.
+        set.arg("foo").arg("bar");
+        let (err, received) = query_with_one_fatal_receive_error(
+            "test_async_cluster_single_node_gets_reconnect_error_with_retries_left",
+            set,
+        );
+        assert_eq!(err.kind(), ErrorKind::FatalReceiveError, "{err}");
+        assert_eq!(received, 1, "the failed request must not be retried");
     }
 
     /// The RDMA transfer command used by the tests below; the arguments only

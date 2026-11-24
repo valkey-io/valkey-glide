@@ -266,6 +266,7 @@ pub fn aggregate_array(values: Vec<Value>, op: ArrayAggregateOp) -> RedisResult<
     Ok(Value::Array(results.into_iter().map(Value::Int).collect()))
 }
 /// Aggregate array responses into a single map.
+// TODO #7689: Count each channel once per node reply before summing across nodes.
 pub fn combine_map_results(values: Vec<Value>) -> RedisResult<Value> {
     let mut map: HashMap<bytes::Bytes, i64> = HashMap::new();
 
@@ -1639,6 +1640,7 @@ impl IntoIterator for &ShardAddrs {
 pub struct Route(u16, SlotAddr);
 
 impl Route {
+    // TODO #7681: Reject slot IDs above 16383 when building a slot-ID route.
     /// Returns a new Route.
     pub fn new(slot: u16, slot_addr: SlotAddr) -> Self {
         Self(slot, slot_addr)
@@ -2302,6 +2304,7 @@ mod tests_routing {
         );
     }
 
+    // TODO #7689: Add a case with a channel repeated within one node's reply.
     #[test]
     fn test_combine_map_results() {
         let input = vec![];

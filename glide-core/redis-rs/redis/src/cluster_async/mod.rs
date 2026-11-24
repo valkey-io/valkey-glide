@@ -115,6 +115,7 @@ use futures::{future::BoxFuture, prelude::*, ready};
 use parking_lot::RwLock as ParkingLotRwLock;
 use pin_project_lite::pin_project;
 use tokio::sync::{
+    futures::OwnedNotified,
     mpsc,
     oneshot::{self, Receiver},
 };
@@ -146,6 +147,14 @@ fn no_fan_out_connections_error() -> RedisError {
         "Connection not found for route",
         "No connections available for multi-node fan-out".to_string(),
     ))
+}
+
+/// Whether a node's `error` means the client could not reach it: an I/O error
+/// other than a timeout, a dropped connection, or no connection to it.
+fn is_node_unreachable(error: &RedisError) -> bool {
+    (error.is_io_error() && !error.is_timeout())
+        || error.is_connection_dropped()
+        || error.kind() == ErrorKind::ConnectionNotFoundForRoute
 }
 
 /// Sets the routed node's address on the command span for OTel reporting.
@@ -579,8 +588,43 @@ type ConnectionMap<C> = connections_container::ConnectionsMap<ConnectionFuture<C
 type ConnectionsContainer<C> =
     self::connections_container::ConnectionsContainer<ConnectionFuture<C>>;
 
+/// What `conn_lock` guards: the connections, and whether the client is closed. The flag is
+/// behind the lock so a refresh task can't start a reconnect after `dispose` cleared the refresh
+/// state. It isn't in the container because `refresh_slots` replaces the container.
+pub(crate) struct Connections<C> {
+    /// Set by `dispose`.
+    closed: bool,
+    /// The slot refresh a partial-results fan-out started; `dispose` aborts it.
+    background_refresh: Option<JoinHandle<RedisResult<()>>>,
+    container: ConnectionsContainer<C>,
+}
+
+impl<C> Connections<C> {
+    fn new(container: ConnectionsContainer<C>) -> Self {
+        Connections {
+            closed: false,
+            background_refresh: None,
+            container,
+        }
+    }
+}
+
+impl<C> std::ops::Deref for Connections<C> {
+    type Target = ConnectionsContainer<C>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.container
+    }
+}
+
+impl<C> std::ops::DerefMut for Connections<C> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.container
+    }
+}
+
 pub(crate) struct InnerCore<C> {
-    pub(crate) conn_lock: ParkingLotRwLock<ConnectionsContainer<C>>,
+    pub(crate) conn_lock: ParkingLotRwLock<Connections<C>>,
     cluster_params: ParkingLotRwLock<ClusterParams>,
     pending_requests_tx: mpsc::UnboundedSender<PendingRequest<C>>,
     pending_requests_rx: std::sync::Mutex<mpsc::UnboundedReceiver<PendingRequest<C>>>,
@@ -787,6 +831,23 @@ impl<C> Dispose for ClusterConnInner<C> {
             handle.abort()
         }
 
+        // Recovery and per-node reconnect tasks each hold the core, and with it the
+        // connection to every node. A task reconnecting a node that stays down retries
+        // forever, so stop them here or the client's connections outlive the client.
+        if let ConnectionState::Recover(recover) = &self.state {
+            recover.abort();
+        }
+        // A blocking write on purpose: skipping the clear would leak the connections.
+        let mut conn_lock = self.inner.conn_lock.write();
+        // A task that is mid-poll on another thread may still ask for a reconnect;
+        // `closed` makes that a no-op.
+        conn_lock.closed = true;
+        if let Some(refresh) = conn_lock.background_refresh.take() {
+            refresh.abort();
+        }
+        conn_lock.refresh_conn_state.clear_refresh_state();
+        drop(conn_lock);
+
         // Fail any requests buffered in the recovery queue
         fail_queued_senders(&mut self.recovery_queue, "Connection dropped");
 
@@ -983,6 +1044,19 @@ enum RecoverFuture {
     RefreshingSlots(JoinHandle<RedisResult<()>>),
     ReconnectToInitialNodes(JoinHandle<()>),
     Reconnect(JoinHandle<()>),
+}
+
+impl RecoverFuture {
+    /// Stops the recovery task. Dropping a `JoinHandle` only detaches its task, which keeps
+    /// running and keeps the core alive.
+    fn abort(&self) {
+        match self {
+            RecoverFuture::RefreshingSlots(handle) => handle.abort(),
+            RecoverFuture::ReconnectToInitialNodes(handle) | RecoverFuture::Reconnect(handle) => {
+                handle.abort()
+            }
+        }
+    }
 }
 
 enum ConnectionState {
@@ -1263,7 +1337,7 @@ mod iam_token_refresh_tests {
 
         let (pending_requests_tx, pending_requests_rx) = tokio::sync::mpsc::unbounded_channel();
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::default()),
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::default())),
             cluster_params: ParkingLotRwLock::new(params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -1663,18 +1737,23 @@ where
                         self.poll(cx)
                     }
                     RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
-                        let mut request = this.request.take().unwrap();
-                        // TODO should we reset the redirect here?
-                        request.info.reset_routing();
                         log_warn_rate_limited!(
                             "cluster",
                             5,
                             format!("disconnected from {:?}", address)
                         );
-                        let should_retry =
-                            matches!(err.retry_method(), RetryMethod::ReconnectAndRetry);
+                        let request = if matches!(retry_method, RetryMethod::ReconnectAndRetry) {
+                            let mut request = this.request.take().unwrap();
+                            // TODO should we reset the redirect here?
+                            request.info.reset_routing();
+                            Some(request)
+                        } else {
+                            // Not retried, so the caller must get this error instead of a dropped sender.
+                            self.respond(Err(err));
+                            None
+                        };
                         Next::Reconnect {
-                            request: should_retry.then_some(request),
+                            request,
                             target: address,
                             mode: ReconnectMode::CheckExisting,
                         }
@@ -1795,12 +1874,12 @@ where
         let slots_refresh_rate_limiter = cluster_params.slots_refresh_rate_limit;
         let (pending_tx, pending_rx) = mpsc::unbounded_channel();
         let inner = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 Default::default(),
                 connections,
                 cluster_params.read_from_replicas.clone(),
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params.clone()),
             pending_requests_tx: pending_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_rx),
@@ -2145,30 +2224,26 @@ where
             "cluster",
             "refresh_and_update_connections: Await on all tasks' refresh notifier"
         );
-        futures::future::join_all(
-            refresh_task_notifiers
-                .iter()
-                .map(|notify| notify.notified()),
-        )
-        .await;
+        futures::future::join_all(refresh_task_notifiers).await;
     }
 
     // Triggers a reconnection Tokio task for each supplied address.
     // If a refresh task is already running for an address, no new task is created;
-    // instead, the notifier from the existing task is returned.
-    // Returns a vector of notifiers for the refresh tasks (new or existing) corresponding to the supplied addresses.
+    // instead, a wait future for the existing task is returned.
+    // Wait futures are created under conn_lock before completion can notify them.
+    // Callers may safely await them after the task has finished or been superseded.
     async fn trigger_refresh_connection_tasks(
         inner: Arc<InnerCore<C>>,
         addresses: HashSet<ClusterAddress>,
         conn_type: RefreshConnectionType,
         existing_conn: ExistingConnection,
-    ) -> Vec<Arc<Notify>> {
+    ) -> Vec<OwnedNotified> {
         log_debug_lazy!(
             "cluster",
             format!("Triggering refresh connections tasks to {:?} ", addresses)
         );
 
-        let mut notifiers = Vec::<Arc<Notify>>::new();
+        let mut notifiers = Vec::<OwnedNotified>::new();
 
         let resolver = inner.get_cluster_param(|p| p.address_resolver.clone());
         let mut prepared_addresses = HashSet::new();
@@ -2179,6 +2254,13 @@ where
                 continue;
             }
             let mut conn_lock = inner.conn_lock.write();
+            if conn_lock.closed {
+                log_debug_lazy!(
+                    "cluster",
+                    format!("Skipping refresh for {}: the client is closed", address)
+                );
+                break;
+            }
             // A request to replace the connection doesn't join a task that may keep the existing
             // one; the new task supersedes it (dropping the old state aborts it and wakes waiters).
             let existing_task = conn_lock
@@ -2189,7 +2271,9 @@ where
                     existing_conn != ExistingConnection::Replace || !task.may_keep_existing_conn
                 })
                 .map(|task| match &task.status {
-                    RefreshTaskStatus::Reconnecting(notifier) => Some(notifier.get_notifier()),
+                    RefreshTaskStatus::Reconnecting(notifier) => {
+                        Some(notifier.get_notifier().notified_owned())
+                    }
                     RefreshTaskStatus::ReconnectingTooLong => {
                         log_debug_lazy!(
                             "cluster",
@@ -2221,7 +2305,7 @@ where
             let may_keep_existing_conn = node_option.is_some();
 
             let notifier = RefreshTaskNotifier::new();
-            notifiers.push(notifier.get_notifier());
+            notifiers.push(notifier.get_notifier().notified_owned());
             let task_identity = Arc::new(());
             let task_identity_for_task = task_identity.clone();
 
@@ -2547,11 +2631,13 @@ where
     /// at the connection's response timeout. Errors are stored as
     /// `Value::ServerError`, and timeouts keep [`crate::TIMEOUT_ERROR_CODE`].
     /// The map has an entry for every node even when all of them failed.
+    ///
+    /// Also returns whether any node was unreachable ([`is_node_unreachable`]).
     async fn collect_partial_results(
         receivers: Vec<(Option<String>, oneshot::Receiver<RedisResult<Response>>)>,
         deadline: Option<std::time::Instant>,
-    ) -> RedisResult<Value> {
-        let pairs = future::try_join_all(receivers.into_iter().map(
+    ) -> RedisResult<(Value, bool)> {
+        let entries = future::try_join_all(receivers.into_iter().map(
             |(address, receiver)| async move {
                 let address = address.ok_or_else(|| {
                     RedisError::from((
@@ -2569,6 +2655,7 @@ where
                     }
                     None => receiver.await,
                 };
+                let node_unreachable = matches!(&result, Ok(Err(err)) if is_node_unreachable(err));
                 let value = match result {
                     Ok(Ok(Response::Single(value))) => value,
                     Ok(Ok(_)) => unreachable!(
@@ -2583,11 +2670,18 @@ where
                         .into(),
                     ),
                 };
-                Ok::<_, RedisError>((Value::BulkString(address.into_bytes().into()), value))
+                Ok::<_, RedisError>((
+                    (Value::BulkString(address.into_bytes().into()), value),
+                    node_unreachable,
+                ))
             },
         ))
         .await?;
-        Ok(Value::Map(pairs))
+        let any_unreachable = entries
+            .iter()
+            .any(|(_, node_unreachable)| *node_unreachable);
+        let pairs = entries.into_iter().map(|(pair, _)| pair).collect();
+        Ok((Value::Map(pairs), any_unreachable))
     }
 
     /// Synchronously folds a fully‐collected `Vec<(Option<String>, Value)>` according to `response_policy`.
@@ -3142,18 +3236,18 @@ where
         // Reset the current slot map and connection vector with the new ones
         let mut write_guard = inner.conn_lock.write();
         let old_topology_hash = write_guard.get_current_topology_hash();
-        // Clear the refresh tasks of the prev instance
-        // TODO - Maybe we can take the running refresh tasks and use them instead of running new connection creation
-        write_guard.refresh_conn_state.clear_refresh_state();
+        let reconnecting =
+            std::mem::take(&mut write_guard.refresh_conn_state.refresh_address_in_progress);
         new_slots.carry_over_ips_from(&write_guard.slot_map);
         let read_from_replicas =
             inner.get_cluster_param(|params| params.read_from_replicas.clone());
-        *write_guard = ConnectionsContainer::new(
+        write_guard.container = ConnectionsContainer::new(
             new_slots,
             new_connections,
             read_from_replicas,
             topology_hash,
         );
+        write_guard.adopt_reconnect_tasks(reconnecting);
 
         // Notify the PubSub synchronizer about the new topology (using same lock)
         // Since handle_topology_refresh is sync, no other task can benefit from us
@@ -3341,11 +3435,9 @@ where
                 MultipleNodeRoutingInfo::AllNodes | MultipleNodeRoutingInfo::AllMasters
                     if partial_results =>
                 {
-                    let (connections, unconnected) = connections_container
-                        .connections_and_unconnected_nodes(matches!(
-                            routing,
-                            MultipleNodeRoutingInfo::AllMasters
-                        ));
+                    let primaries_only = matches!(routing, MultipleNodeRoutingInfo::AllMasters);
+                    let (connections, unconnected) =
+                        connections_container.connections_and_unconnected_nodes(primaries_only);
                     // With no node reachable, fail as the default path does, so
                     // the request refreshes slots and retries.
                     if connections.is_empty() {
@@ -3407,7 +3499,24 @@ where
         }
 
         let result = if partial_results {
-            Self::collect_partial_results(receivers, cmd.fan_out_deadline()).await
+            let collected = Self::collect_partial_results(receivers, cmd.fan_out_deadline()).await;
+            if matches!(collected, Ok((_, true))) {
+                // The node may have failed over, so ask for a throttled slot
+                // refresh in the background. The command is not retried.
+                let mut connections = core.conn_lock.write();
+                if !connections.closed
+                    && connections
+                        .background_refresh
+                        .as_ref()
+                        .map_or(true, JoinHandle::is_finished)
+                {
+                    connections.background_refresh = Some(Self::spawn_refresh_slots_task(
+                        core.clone(),
+                        &RefreshPolicy::Throttable,
+                    ));
+                }
+            }
+            collected.map(|(value, _)| value)
         } else {
             Self::aggregate_results(receivers, routing, response_policy).await
         };
@@ -3874,7 +3983,7 @@ where
                         )
                     );
                     // Wait for the refresh task to notify that it's done reconnecting (or transitioning).
-                    refresh_notifier.notified().await;
+                    refresh_notifier.await;
                     log_debug_lazy!(
                         "cluster",
                         format!(
@@ -5166,9 +5275,18 @@ mod partial_results_tests {
         (Some(address.to_string()), receiver)
     }
 
-    async fn collect(receivers: Receivers, deadline: Option<Instant>) -> RedisResult<Value> {
+    async fn collect_with_flag(
+        receivers: Receivers,
+        deadline: Option<Instant>,
+    ) -> RedisResult<(Value, bool)> {
         ClusterConnInner::<MultiplexedConnection>::collect_partial_results(receivers, deadline)
             .await
+    }
+
+    async fn collect(receivers: Receivers, deadline: Option<Instant>) -> RedisResult<Value> {
+        collect_with_flag(receivers, deadline)
+            .await
+            .map(|(value, _)| value)
     }
 
     fn entries(value: Value) -> Vec<(String, Value)> {
@@ -5197,24 +5315,7 @@ mod partial_results_tests {
             ready("a:1", Ok(Value::BulkString(b"info a".to_vec().into()))),
             ready(
                 "b:1",
-                Err(RedisError::from((
-                    ErrorKind::ResponseError,
-                    "An error was signalled by the server:",
-                    "boom".to_string(),
-                ))),
-            ),
-            ready(
-                "c:1",
                 Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into()),
-            ),
-            // A target with no connection, as `into_channels` reports it.
-            ready(
-                "d:1",
-                Err((
-                    ErrorKind::ConnectionNotFoundForRoute,
-                    "Connection not found",
-                )
-                    .into()),
             ),
         ];
         let entries = entries(collect(receivers, None).await.unwrap());
@@ -5224,14 +5325,7 @@ mod partial_results_tests {
             ("a:1".into(), Value::BulkString(b"info a".to_vec().into()))
         );
         let b = error_of(&entries[1].1);
-        assert_eq!(b.kind(), ErrorKind::ResponseError);
-        assert!(b.to_string().contains("boom"), "{b}");
-        let c = error_of(&entries[2].1);
-        assert!(c.is_timeout(), "timeout kind must survive: {c:?}");
-        assert_eq!(entries[3].0, "d:1");
-        assert!(error_of(&entries[3].1)
-            .to_string()
-            .contains("ConnectionNotFoundForRoute"));
+        assert!(b.is_timeout(), "timeout kind must survive: {b:?}");
     }
 
     #[tokio::test]
@@ -5254,6 +5348,46 @@ mod partial_results_tests {
         assert!(error_of(&entries[1].1).is_timeout());
         // Dropping the receiver is what stops the node's sub-request.
         assert!(silent_sender.is_closed());
+    }
+
+    #[tokio::test]
+    async fn flags_only_nodes_the_client_could_not_reach() {
+        let Value::ServerError(server) =
+            crate::parse_redis_value(b"-NOPERM no permissions\r\n").unwrap()
+        else {
+            panic!("expected a server error");
+        };
+        let cases: Vec<(RedisResult<Value>, bool)> = vec![
+            (
+                Err(std::io::Error::from(std::io::ErrorKind::ConnectionRefused).into()),
+                true,
+            ),
+            (
+                Err((
+                    ErrorKind::ConnectionNotFoundForRoute,
+                    "Connection not found",
+                )
+                    .into()),
+                true,
+            ),
+            (
+                Err((ErrorKind::FatalSendError, "Connection dropped").into()),
+                true,
+            ),
+            (
+                Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into()),
+                false,
+            ),
+            (Err(server.into()), false),
+            (Ok(Value::Okay), false),
+        ];
+        for (result, expected) in cases {
+            let label = format!("{result:?}");
+            let (_, any_unreachable) = collect_with_flag(vec![ready("a:1", result)], None)
+                .await
+                .unwrap();
+            assert_eq!(any_unreachable, expected, "{label}");
+        }
     }
 
     #[tokio::test]
@@ -5907,12 +6041,12 @@ mod circular_moved_address_normalization_tests {
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
 
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(ClusterParams::default_for_test(None)),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6003,12 +6137,12 @@ mod circular_moved_address_normalization_tests {
         let (tx, rx) =
             mpsc::unbounded_channel::<PendingRequest<crate::aio::MultiplexedConnection>>();
         let core = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(ClusterParams::default_for_test(None)),
             pending_requests_tx: tx,
             pending_requests_rx: std::sync::Mutex::new(rx),
@@ -6284,12 +6418,12 @@ pub(super) mod refresh_task_resolution_tests {
         );
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
         let core = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 connection_map,
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6456,12 +6590,12 @@ pub(super) mod refresh_task_resolution_tests {
         cluster_params.address_resolver = Some(resolver);
 
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6509,12 +6643,12 @@ pub(super) mod refresh_task_resolution_tests {
         cluster_params.address_resolver = Some(Arc::new(SeedAddressResolver));
 
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6634,12 +6768,12 @@ pub(super) mod refresh_task_resolution_tests {
         params.address_resolver = Some(Arc::new(SeedAddressResolver));
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 connections,
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6699,9 +6833,12 @@ pub(super) mod refresh_task_resolution_tests {
         )
         .await;
 
-        tokio::time::timeout(Duration::from_secs(1), notifiers[0].notified())
-            .await
-            .expect("raw seed refresh should complete");
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            notifiers.into_iter().next().expect("one refresh waiter"),
+        )
+        .await
+        .expect("raw seed refresh should complete");
 
         let connection = core
             .conn_lock
@@ -6744,8 +6881,8 @@ pub(super) mod refresh_task_resolution_tests {
         assert_eq!(first.len(), 1);
         assert_eq!(second.len(), 1);
 
-        let first_done = first[0].notified();
-        let second_done = second[0].notified();
+        let first_done = first.into_iter().next().expect("first refresh waiter");
+        let second_done = second.into_iter().next().expect("second refresh waiter");
         RELEASE_POISON_CONNECT.add_permits(2);
 
         tokio::time::timeout(Duration::from_secs(1), async {
@@ -6771,6 +6908,203 @@ pub(super) mod refresh_task_resolution_tests {
         .expect("already-resolved refresh should install a connection");
 
         assert_eq!(connected_port, 6381);
+    }
+
+    #[tokio::test]
+    async fn dispose_stops_recovery_and_refresh_tasks_and_releases_the_core() {
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+
+        // The connect to port 6381 parks until the test releases it, like a node that
+        // stays down.
+        ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial("resolved-node:6381".to_owned())]),
+            RefreshConnectionType::AllConnections,
+            ExistingConnection::Ignore,
+        )
+        .await;
+        tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
+            .await
+            .expect("the refresh task should start connecting");
+
+        // A recovery task that never finishes on its own.
+        let recovery = tokio::spawn({
+            let core = core.clone();
+            async move {
+                std::future::pending::<()>().await;
+                drop(core);
+            }
+        });
+
+        let weak_core = Arc::downgrade(&core);
+        let connection = Disposable::new(ClusterConnInner {
+            inner: core,
+            in_flight_requests: Default::default(),
+            refresh_error: None,
+            state: ConnectionState::Recover(RecoverFuture::Reconnect(recovery)),
+            periodic_checks_handler: None,
+            connections_validation_handler: None,
+            recovery_queue: std::collections::VecDeque::new(),
+        });
+        drop(connection);
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while weak_core.strong_count() > 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("disposing the connection must release the core and its connections");
+    }
+
+    #[tokio::test]
+    async fn dispose_aborts_the_partial_results_refresh() {
+        let core = core_with_non_idempotent_resolver();
+        let refresh = tokio::spawn({
+            let core = core.clone();
+            async move {
+                std::future::pending::<()>().await;
+                drop(core);
+                Ok(())
+            }
+        });
+        core.conn_lock.write().background_refresh = Some(refresh);
+        let weak_core = Arc::downgrade(&core);
+        drop(Disposable::new(ClusterConnInner {
+            inner: core,
+            in_flight_requests: Default::default(),
+            refresh_error: None,
+            state: ConnectionState::PollComplete,
+            periodic_checks_handler: None,
+            connections_validation_handler: None,
+            recovery_queue: std::collections::VecDeque::new(),
+        }));
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while weak_core.strong_count() > 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("disposing the connection must stop the partial results refresh");
+    }
+
+    #[tokio::test]
+    async fn no_reconnect_starts_after_dispose() {
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        drop(Disposable::new(ClusterConnInner {
+            inner: core.clone(),
+            in_flight_requests: Default::default(),
+            refresh_error: None,
+            state: ConnectionState::PollComplete,
+            periodic_checks_handler: None,
+            connections_validation_handler: None,
+            recovery_queue: std::collections::VecDeque::new(),
+        }));
+
+        // A task that was mid-poll on another thread when the client went away asks
+        // for a reconnect to a node that stays down.
+        let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial("resolved-node:6381".to_owned())]),
+            RefreshConnectionType::AllConnections,
+            ExistingConnection::Ignore,
+        )
+        .await;
+
+        assert!(notifiers.is_empty());
+        assert!(core
+            .conn_lock
+            .read()
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .is_empty());
+        assert_eq!(Arc::strong_count(&core), 1, "no task may hold the core");
+    }
+
+    async fn refresh_completion_before_wait(join_existing: bool) {
+        use futures::FutureExt;
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381".to_owned();
+        let first = ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
+            RefreshConnectionType::AllConnections,
+            ExistingConnection::Ignore,
+        )
+        .await;
+        tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
+            .await
+            .expect("refresh should enter connection creation");
+        let identity = core
+            .conn_lock
+            .read()
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .get(&address)
+            .unwrap()
+            .identity
+            .clone();
+        let completion = if join_existing {
+            let joined = ClusterConnInner::trigger_refresh_connection_tasks(
+                core.clone(),
+                HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
+                RefreshConnectionType::AllConnections,
+                ExistingConnection::Ignore,
+            )
+            .await;
+            assert!(refresh_is_same_generation(&core, &address, &identity));
+            joined
+        } else {
+            first
+        };
+        assert_eq!(completion.len(), 1);
+        RELEASE_POISON_CONNECT.add_permits(2);
+        // Observing removal under the lock guarantees the state's Drop has
+        // already sent its notifications. Do not poll completion until then.
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if !core
+                    .conn_lock
+                    .read()
+                    .refresh_conn_state
+                    .refresh_address_in_progress
+                    .contains_key(&address)
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("refresh task should finish before the caller waits");
+        assert!(core
+            .conn_lock
+            .read()
+            .connection_for_address(&address)
+            .is_some());
+        assert!(
+            completion
+                .into_iter()
+                .next()
+                .unwrap()
+                .now_or_never()
+                .is_some(),
+            "completion must remain observable after the refresh task finishes"
+        );
+    }
+
+    #[tokio::test]
+    async fn started_refresh_completion_before_wait_is_observable() {
+        refresh_completion_before_wait(false).await;
+    }
+
+    #[tokio::test]
+    async fn joined_refresh_completion_before_wait_is_observable() {
+        refresh_completion_before_wait(true).await;
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
@@ -6851,9 +7185,10 @@ pub(super) mod refresh_task_resolution_tests {
             "old generation must not remove new state"
         );
 
+        let completed = new.into_iter().next().expect("new refresh waiter");
         gate.release_new.release();
 
-        tokio::time::timeout(Duration::from_secs(1), new[0].notified())
+        tokio::time::timeout(Duration::from_secs(1), completed)
             .await
             .expect("new generation should complete");
 
@@ -7098,7 +7433,7 @@ pub(super) mod refresh_task_resolution_tests {
             "equivalent raw/ready addresses share a task"
         );
         assert_eq!(RESOLVER_CALLS.load(Ordering::SeqCst), 1);
-        let done = notifiers[0].notified();
+        let done = notifiers.into_iter().next().expect("one refresh waiter");
         RELEASE_POISON_CONNECT.add_permits(2);
         tokio::time::timeout(Duration::from_secs(1), done)
             .await
@@ -7144,12 +7479,12 @@ pub(super) mod refresh_task_resolution_tests {
         let mut cluster_params = ClusterParams::default_for_test(None);
         cluster_params.address_resolver = Some(Arc::new(InitialRecoveryResolver));
         let core = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),

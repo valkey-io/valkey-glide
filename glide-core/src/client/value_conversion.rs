@@ -1590,7 +1590,10 @@ pub(crate) fn convert_to_expected_type(
         ExpectedReturnType::SingleOrMultiNode(value_type, value_checker) =>  match value {
             Value::Map(ref map) => match value_checker {
                     Some(func) => {
-                        if !map.is_empty() && func(map[0].clone().1) {
+                        // A partial result can hold a failed node's error, so
+                        // check the shape of the first node that replied.
+                        let reply = map.iter().map(|(_, v)| v).find(|v| !matches!(v, Value::ServerError(_)));
+                        if reply.is_some_and(|v| func(v.clone())) {
                             convert_to_expected_type(value, Some(ExpectedReturnType::Map { key_type: &None, value_type }))
                         } else {
                             Ok(value)
@@ -1665,6 +1668,8 @@ fn convert_lolwut_string(data: &str) -> String {
     }
 }
 
+// TODO #7631: Propagate conversion errors instead of calling `unwrap()`, which panics on a
+// mismatched reply.
 /// Converts elements in an array to the specified type.
 ///
 /// `array` is an array of values.
@@ -2383,6 +2388,8 @@ fn ft_hybrid_option_tail_contains_flag(cmd: &Cmd, flag: &[u8]) -> bool {
     ft_aggregate_option_tail_contains_flag(cmd, tail_start, flag)
 }
 
+// TODO #7631: Match option keywords (`JUSTID`, `IDX`, `WITHSCORES`, ...) only among each command's
+// option arguments, not every argument (as `ft_search_option_tail_contains_flag` does).
 pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>> {
     let command = cmd.command()?;
 
@@ -2439,23 +2446,24 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             key_type: &Some(ExpectedReturnType::SimpleString),
             value_type: &None,
         }),
-        b"INCRBYFLOAT" | b"HINCRBYFLOAT" | b"ZINCRBY" => Some(ExpectedReturnType::Double),
-        b"HEXISTS"
-        | b"HSETNX"
+        b"HINCRBYFLOAT" | b"INCRBYFLOAT" | b"ZINCRBY" => Some(ExpectedReturnType::Double),
+        b"COPY"
+        | b"DELEX"
+        | b"DELIFEQ"
         | b"EXPIRE"
         | b"EXPIREAT"
+        | b"HEXISTS"
+        | b"HSETNX"
+        | b"MOVE"
+        | b"MSETNX"
+        | b"PERSIST"
         | b"PEXPIRE"
         | b"PEXPIREAT"
-        | b"PERSIST"
-        | b"SMOVE"
         | b"PFADD"
         | b"RENAMENX"
-        | b"MOVE"
-        | b"COPY"
-        | b"MSETNX"
-        | b"DELIFEQ"
-        | b"XGROUP DESTROY"
-        | b"XGROUP CREATECONSUMER" => Some(ExpectedReturnType::Boolean),
+        | b"SMOVE"
+        | b"XGROUP CREATECONSUMER"
+        | b"XGROUP DESTROY" => Some(ExpectedReturnType::Boolean),
         b"SMISMEMBER" | b"SCRIPT EXISTS" => Some(ExpectedReturnType::ArrayOfBools),
         b"SMEMBERS" | b"SINTER" | b"SDIFF" | b"SUNION" => Some(ExpectedReturnType::Set),
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
@@ -3158,6 +3166,7 @@ mod tests {
         assert!(converted_4.is_err());
     }
 
+    // TODO #7631: Add cases where a key, member, group or consumer equals an option keyword.
     #[test]
     fn convert_xclaim() {
         assert!(matches!(
@@ -6035,6 +6044,29 @@ mod tests {
 
         let result = convert_to_expected_type(multi_node_input, conversion_type).unwrap();
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_memory_stats_multi_node_resp2_converts_past_a_failed_node() {
+        let cmd = redis::cmd("MEMORY STATS");
+        let node = |address: &[u8], value| (Value::BulkString(address.to_vec().into()), value);
+        let failed = Value::ServerError(redis::ServerError::ExtensionError {
+            code: redis::TIMEOUT_ERROR_CODE.into(),
+            detail: None,
+        });
+        let stat = || Value::BulkString(b"keys.count".to_vec().into());
+        let partial = Value::Map(vec![
+            node(b"node1:6379", failed.clone()),
+            node(b"node2:6379", Value::Array(vec![stat(), Value::Int(3)])),
+        ]);
+
+        assert_eq!(
+            convert_to_expected_type(partial, expected_type_for_cmd(&cmd)).unwrap(),
+            Value::Map(vec![
+                node(b"node1:6379", failed),
+                node(b"node2:6379", Value::Map(vec![(stat(), Value::Int(3))])),
+            ])
+        );
     }
 
     // valkey-search 1.3 added array-valued FT.AGGREGATE reducers (TOLIST, RANDOM_SAMPLE),

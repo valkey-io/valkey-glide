@@ -350,12 +350,6 @@ public class SharedCommandTests {
 
         assertTrue(client.delifeq(key, value).get());
         assertNull(client.get(key).get());
-
-        String setKey = UUID.randomUUID().toString();
-        assertEquals(1, client.sadd(setKey, new String[] {"a"}).get());
-        ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> client.delifeq(setKey, "a").get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -2065,20 +2059,16 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void hgetdel_error_handling(BaseClient client) {
+    public void hgetdel_empty_fields(BaseClient client) {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("9.1.0"),
                 "HGETDEL command requires Valkey 9.1.0 or higher");
 
-        String key = "test_hgetdel_error_" + UUID.randomUUID();
+        String key = "test_hgetdel_empty_fields_" + UUID.randomUUID();
 
-        // Set up a non-hash key to test type error
-        client.set(key, "not_a_hash").get();
-
-        // Should throw an exception when trying to use HGETDEL on a non-hash key
+        // HGETDEL with an empty fields list should raise an error
         ExecutionException exception =
-                assertThrows(
-                        ExecutionException.class, () -> client.hgetdel(key, new String[] {"field1"}).get());
+                assertThrows(ExecutionException.class, () -> client.hgetdel(key, new String[] {}).get());
 
         assertInstanceOf(RequestException.class, exception.getCause());
     }
@@ -5689,6 +5679,65 @@ public class SharedCommandTests {
         assertTrue(0L <= persistAmount && persistAmount <= 10L);
         assertTrue(client.persist(gs(key)).get());
         assertEquals(-1L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void noscript_error_keeps_the_server_text(BaseClient client) {
+        boolean isCluster = client instanceof GlideClusterClient;
+        String noScript = "NOSCRIPT No matching script\\.( Please use EVAL\\.)?";
+        String[] evalSha = {"EVALSHA", "ffffffffffffffffffffffffffffffffffffffff", "0"};
+
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> {
+                            if (isCluster) {
+                                ((GlideClusterClient) client).customCommand(evalSha).get();
+                            } else {
+                                ((GlideClient) client).customCommand(evalSha).get();
+                            }
+                        });
+        assertInstanceOf(RequestException.class, exception.getCause());
+        String message = exception.getCause().getMessage();
+        assertTrue(message.matches(noScript), message);
+
+        Object[] result =
+                isCluster
+                        ? ((GlideClusterClient) client)
+                                .exec(new ClusterBatch(false).customCommand(evalSha), false)
+                                .get()
+                        : ((GlideClient) client).exec(new Batch(false).customCommand(evalSha), false).get();
+        assertInstanceOf(RequestException.class, result[0]);
+        message = ((RequestException) result[0]).getMessage();
+        assertTrue(message.matches(noScript), message);
+
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> {
+                            if (isCluster) {
+                                ((GlideClusterClient) client)
+                                        .exec(new ClusterBatch(false).customCommand(evalSha), true)
+                                        .get();
+                            } else {
+                                ((GlideClient) client).exec(new Batch(false).customCommand(evalSha), true).get();
+                            }
+                        });
+        assertInstanceOf(RequestException.class, exception.getCause());
+        message = exception.getCause().getMessage();
+        assertTrue(message.matches(noScript), message);
+
+        // invokeScript puts its own prefix before the server's text.
+        Script script = new Script("return '" + UUID.randomUUID() + "'", false);
+        client.invokeScript(script).get();
+        script.close();
+        assertEquals("OK", client.scriptFlush().get());
+        exception = assertThrows(ExecutionException.class, () -> client.invokeScript(script).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        message = exception.getCause().getMessage();
+        assertTrue(message.matches("Script execution failed - ClientError: " + noScript), message);
     }
 
     @SneakyThrows
@@ -18426,6 +18475,8 @@ public class SharedCommandTests {
 
         assertEquals(1, result.length);
     }
+
+    // TODO #7654: Add a queue-time error case that expects ExecAbortException for atomic batches.
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)

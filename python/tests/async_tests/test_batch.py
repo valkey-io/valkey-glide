@@ -269,10 +269,12 @@ class TestBatch:
             else ClusterBatch(is_atomic=True)
         )
         transaction.custom_command(["WATCH", key])
+
+        # TODO #7654: Expect ExecAbortError instead of RequestError.
         with pytest.raises(RequestError) as e:
             await exec_batch(glide_client, transaction)
 
-        assert "not allowed" in str(e)  # TODO : add an assert on EXEC ABORT
+        assert "not allowed" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -289,7 +291,7 @@ class TestBatch:
         transaction.custom_command(["DISCARD"])
         with pytest.raises(RequestError) as e:
             await exec_batch(glide_client, transaction)
-        assert "EXEC without MULTI" in str(e)  # TODO : add an assert on EXEC ABORT
+        assert "EXEC without MULTI" in str(e)
         value = await glide_client.get(key)
         assert value == b"1"
 
@@ -303,7 +305,7 @@ class TestBatch:
             await exec_batch(glide_client, transaction)
         assert "wrong number of arguments" in str(
             e
-        )  # TODO : add an assert on EXEC ABORT
+        )  # TODO #7654: Expect ExecAbortError instead of RequestError.
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("is_atomic", [True, False])

@@ -158,6 +158,7 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    // TODO #7673: Add a test that a batch with a multi-node route returns an error.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -373,6 +374,8 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    // TODO #7698: Add a test that a password updated during a reconnect is used by the next
+    // reconnect attempt, for standalone and cluster.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -1727,6 +1730,72 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// A scope on a read-only standalone client, its parent's error for a `SET`
+    /// of `key`, and a normal client on the same server.
+    async fn read_only_scope(key: &str) -> (ScopeHandle, redis::RedisError, TestBasics) {
+        let config = TestConfiguration {
+            shared_server: true,
+            ..Default::default()
+        };
+        let checker = setup_test_basics(false, config.clone()).await;
+        let bytes = scope_request_bytes(&checker.server, &config);
+        let mut request = create_connection_request(&[get_shared_server_address(false)], &config);
+        request.read_only = Some(true);
+        let mut parent = Client::new(request.into(), None).await.unwrap();
+        let parent_err = parent
+            .send_command(cmd("SET").arg(key).arg("v"), None)
+            .await
+            .expect_err("a read-only client rejects SET");
+        (
+            ScopeHandle::setup(parent, bytes, 0).await,
+            parent_err,
+            checker,
+        )
+    }
+
+    /// A scope of a read-only standalone client rejects a write with its parent's
+    /// error and sends nothing.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_scope_rejects_write() {
+        block_on_all(async move {
+            let key = generate_random_string(10);
+            let (scope, parent_err, mut checker) = read_only_scope(&key).await;
+            let err = scope
+                .send("set", &mut [key.clone().into_bytes(), b"v".to_vec()])
+                .await
+                .expect_err("a read-only scope rejects SET");
+            assert_eq!(err.kind(), redis::ErrorKind::ReadOnly, "got: {err}");
+            assert_eq!(err.to_string(), parent_err.to_string());
+            assert_eq!(
+                checker
+                    .client
+                    .send_command(cmd("EXISTS").arg(&key), None)
+                    .await,
+                Ok(Value::Int(0)),
+                "the rejected scope write must not reach the server"
+            );
+            scope.release();
+        });
+    }
+
+    /// A scope of a read-only standalone client still runs reads.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_scope_runs_read() {
+        block_on_all(async move {
+            let key = generate_random_string(10);
+            let (scope, _, _checker) = read_only_scope(&key).await;
+            assert_eq!(
+                scope.send("GET", &mut [key.into_bytes()]).await,
+                Ok(Value::Nil)
+            );
+            scope.release();
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -2861,7 +2930,7 @@ pub(crate) mod shared_client_tests {
                     };
 
                     assert!(
-                        result.iter().all(|r| matches!(r, Value::ServerError(e) if e.err_code().contains("BrokenPipe"))
+                        result.iter().all(|r| matches!(r, Value::ServerError(e) if e.err_code() == "FatalReceiveError")
                             ),
                         "Not all responses are ServerError: {result:?}"
                     );
@@ -6376,8 +6445,9 @@ pub(crate) mod shared_client_tests {
     ///    the siblings answer "DISCARD without MULTI" and the aggregate is `Err` —
     ///    which must be tolerated, not read as a reset failure that discards the
     ///    connection. Exercises the classify-by-message branch on a live cluster.
-    ///    A primary left with `CLIENT REPLY OFF` must instead be discarded, even
-    ///    though a sibling's "DISCARD without MULTI" can return before it times out.
+    ///    Then (2b) `CLIENT REPLY OFF` and (2c) a MULTI whose DISCARD the holder
+    ///    denies must be discarded, while (2d) a clean borrow and (2e) a WATCH
+    ///    borrow must be reused with an unused primary paused, the WATCH cleared.
     /// 3. (Valkey 9.0+ multi-db clusters) A borrow that `SELECT`ed another db must
     ///    be restored to the configured db on release — guards against the wrong
     ///    fix of skipping `SELECT` by topology, which would leak db 7.
@@ -6579,7 +6649,7 @@ pub(crate) mod shared_client_tests {
             }
 
             // ── 2b. a node left unable to reply must be discarded, not re-idled ──
-            // Short timeout: CLIENT REPLY OFF and the release liveness PING time out.
+            // Short timeout: CLIENT REPLY OFF itself times out.
             let short_timeout = create_connection_request(
                 &addresses,
                 &TestConfiguration {
@@ -6610,6 +6680,340 @@ pub(crate) mod shared_client_tests {
                     "a CLIENT REPLY OFF node must fail the reset and be discarded"
                 );
             }
+
+            // ── 2c. a MULTI left open on one primary must be discarded ──
+            // Only the holder denies DISCARD, so the release DISCARD gets NOPERM there
+            // and "without MULTI" elsewhere, and the aggregate keeps whichever comes
+            // first. A holder on each primary puts a sibling first at least once, which
+            // only the post-DISCARD PING catches. A-B: re-idled without it.
+            let mut admin = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster admin client");
+            for slot in [0u16, 8000, 16000] {
+                let user = format!("nodisc{slot}");
+                let holder = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                    Route::new(slot, SlotAddr::Master),
+                ));
+                admin
+                    .send_command(
+                        redis::cmd("ACL")
+                            .arg("SETUSER")
+                            .arg(&user)
+                            .arg("on")
+                            .arg("nopass")
+                            .arg("+@all"),
+                        Some(all_nodes()),
+                    )
+                    .await
+                    .expect("create the user on every node");
+                admin
+                    .send_command(
+                        redis::cmd("ACL").arg("SETUSER").arg(&user).arg("-discard"),
+                        Some(holder.clone()),
+                    )
+                    .await
+                    .expect("deny DISCARD on the holder only");
+
+                let as_user = create_connection_request(
+                    &addresses,
+                    &TestConfiguration {
+                        cluster_mode: ClusterMode::Enabled,
+                        request_timeout: Some(10_000),
+                        connection_info: Some(redis::RedisConnectionInfo {
+                            username: Some(user.clone()),
+                            password: Some("unused".into()),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    },
+                );
+                let client = Client::new(as_user.into(), None)
+                    .await
+                    .expect("cluster client as the restricted user");
+                let client_id = add_and_acquire(&pool_arc, client);
+                {
+                    let mut client = borrowed(&pool_arc, client_id);
+                    client
+                        .send_command(&mut redis::cmd("MULTI"), Some(holder.clone()))
+                        .await
+                        .expect("MULTI on the holder");
+                    let denied = client
+                        .send_command(&mut redis::cmd("DISCARD"), Some(holder.clone()))
+                        .await;
+                    assert_eq!(
+                        denied.map_err(|e| e.kind()),
+                        Err(redis::ErrorKind::PermissionDenied),
+                        "slot {slot}: the holder must deny DISCARD"
+                    );
+                }
+                release_client_async(pool_arc.clone(), client_id).await;
+                let mut pool = pool_arc.lock();
+                assert_eq!(
+                    pool.drain_discarded_ids(),
+                    vec![client_id],
+                    "slot {slot}: a MULTI left open on the holder must be discarded"
+                );
+            }
+
+            // ── 2d. a clean borrow must be reused while a primary it never used is
+            // paused. A-B: discarded when release sent DISCARD/PING to every node ──
+            let short_timeout = create_connection_request(
+                &addresses,
+                &TestConfiguration {
+                    cluster_mode: ClusterMode::Enabled,
+                    request_timeout: Some(500),
+                    ..Default::default()
+                },
+            );
+            let client = Client::new(short_timeout.into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(&pool_arc, client);
+            let paused = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                0,
+                SlotAddr::Master,
+            )));
+            admin
+                .send_command(
+                    redis::cmd("CLIENT").arg("PAUSE").arg(2000),
+                    Some(paused.clone()),
+                )
+                .await
+                .expect("pause one primary");
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock();
+                assert!(pool.drain_discarded_ids().is_empty(), "nothing to reset");
+                // Re-borrow it so later sections start from the same pool state.
+                assert_eq!(
+                    pool.try_acquire(),
+                    client_id as i64,
+                    "the clean client must be re-idled"
+                );
+            }
+            // Let the pause lapse before later sections use that primary.
+            tokio::time::sleep(Duration::from_millis(2100)).await;
+
+            // ── 2e. a WATCH borrow must be reused while a primary it never used is
+            // paused, and its WATCH must still be cleared. A-B: discarded when the
+            // release UNWATCH went to every primary ──
+            // Cross-slot: two slots on one healthy primary and one on another, so
+            // the release UNWATCH must reach both primaries, once each.
+            let tag_in = |lo: u16, hi: u16, skip: Option<u16>| {
+                (0..)
+                    .map(|i| format!("{{w{i}}}"))
+                    .find(|tag| {
+                        let slot = get_slot(tag.as_bytes());
+                        (lo..=hi).contains(&slot) && Some(slot) != skip
+                    })
+                    .expect("a hash tag in the slot range")
+            };
+            let shard3_a = tag_in(10_923, 16_383, None);
+            let shard3_b = tag_in(10_923, 16_383, Some(get_slot(shard3_a.as_bytes())));
+            let shard2 = tag_in(5_461, 10_922, None);
+            let watched: Vec<String> = [&shard3_a, &shard3_b, &shard2]
+                .iter()
+                .map(|tag| format!("{tag}:watched"))
+                .collect();
+            let mut watch = redis::cmd("WATCH");
+            for key in &watched {
+                watch.arg(key);
+            }
+            borrowed(&pool_arc, client_id)
+                .send_command(&mut watch, None)
+                .await
+                .expect("WATCH keys on two healthy primaries");
+            admin
+                .send_command(
+                    redis::cmd("CLIENT").arg("PAUSE").arg(2000),
+                    Some(paused.clone()),
+                )
+                .await
+                .expect("pause another primary");
+            release_client_async(pool_arc.clone(), client_id).await;
+            {
+                let mut pool = pool_arc.lock();
+                assert!(
+                    pool.drain_discarded_ids().is_empty(),
+                    "a WATCH borrow is resettable"
+                );
+                assert_eq!(
+                    pool.try_acquire(),
+                    client_id as i64,
+                    "the client must be re-idled"
+                );
+            }
+            tokio::time::sleep(Duration::from_millis(2100)).await;
+            let mut client = borrowed(&pool_arc, client_id);
+            for tag in [&shard3_a, &shard2] {
+                admin
+                    .send_command(
+                        redis::cmd("SET").arg(format!("{tag}:watched")).arg("x"),
+                        None,
+                    )
+                    .await
+                    .expect("touch a watched key from another connection");
+                let primary = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                    Route::new(get_slot(tag.as_bytes()), SlotAddr::Master),
+                ));
+                client
+                    .send_command(&mut redis::cmd("MULTI"), Some(primary.clone()))
+                    .await
+                    .expect("MULTI");
+                client
+                    .send_command(redis::cmd("SET").arg(format!("{tag}:other")).arg("v"), None)
+                    .await
+                    .expect("queue SET");
+                let exec = client
+                    .send_command(&mut redis::cmd("EXEC"), Some(primary))
+                    .await
+                    .expect("EXEC");
+                assert_ne!(
+                    exec,
+                    Value::Nil,
+                    "{tag}: the WATCH must be cleared on release"
+                );
+            }
+
+            // ── 2f. a WATCH borrow released with its circuit breaker open must be
+            // reused with the breaker still open: the targeted UNWATCH skips the
+            // breaker. A-B: discarded when it went through the breaker ──
+            let mut breaker_request = create_connection_request(
+                &addresses,
+                &TestConfiguration {
+                    cluster_mode: ClusterMode::Enabled,
+                    request_timeout: Some(500),
+                    ..Default::default()
+                },
+            );
+            breaker_request.client_circuit_breaker = protobuf::MessageField::some(
+                glide_core::connection_request::ClientCircuitBreakerConfig {
+                    window_size_ms: 60_000,
+                    failure_rate_threshold: 0.5,
+                    min_errors: 1,
+                    open_timeout_ms: 60_000,
+                    count_timeouts: true,
+                    consecutive_successes: 1,
+                    ..Default::default()
+                },
+            );
+            let client = Client::new(breaker_request.into(), None)
+                .await
+                .expect("cluster client with a breaker");
+            let breaker_id = add_and_acquire(&pool_arc, client);
+            let mut client = borrowed(&pool_arc, breaker_id);
+            client
+                .send_command(redis::cmd("WATCH").arg(format!("{shard3_a}:watched")), None)
+                .await
+                .expect("WATCH on a healthy shard");
+            // Trip the breaker with a timeout on another primary.
+            admin
+                .send_command(
+                    redis::cmd("CLIENT").arg("PAUSE").arg(1000),
+                    Some(paused.clone()),
+                )
+                .await
+                .expect("pause another primary");
+            let on_paused = format!("{}:k", tag_in(0, 5_460, None));
+            let _ = client
+                .send_command(redis::cmd("GET").arg(on_paused), None)
+                .await;
+            assert!(
+                !client.is_circuit_breaker_healthy(),
+                "the timeout trips the breaker"
+            );
+            release_client_async(pool_arc.clone(), breaker_id).await;
+            {
+                let mut pool = pool_arc.lock();
+                assert!(
+                    pool.drain_discarded_ids().is_empty(),
+                    "the WATCH borrow is resettable"
+                );
+                assert_eq!(
+                    pool.try_acquire(),
+                    breaker_id as i64,
+                    "the client must be re-idled"
+                );
+            }
+            assert!(
+                !client.is_circuit_breaker_healthy(),
+                "its open breaker is kept"
+            );
+            tokio::time::sleep(Duration::from_millis(1100)).await;
+
+            // ── 2g. a WATCH routed by address may be on a replica, which the release
+            // UNWATCH can't reliably reach, so the client must be discarded. A-B:
+            // re-idled when the replica-routed WATCH wasn't flagged ──
+            let (host, port) = match &addresses[0] {
+                redis::ConnectionAddr::Tcp(host, port) => (host.clone(), *port),
+                other => panic!("tcp address expected: {other:?}"),
+            };
+            let by_address = || {
+                Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                    host: host.clone(),
+                    port,
+                }))
+            };
+            let client = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(&pool_arc, client);
+            let _ = borrowed(&pool_arc, client_id)
+                .send_command(redis::cmd("WATCH").arg("by-address"), by_address())
+                .await;
+            release_client_async(pool_arc.clone(), client_id).await;
+            assert_eq!(
+                pool_arc.lock().drain_discarded_ids(),
+                vec![client_id],
+                "a WATCH that may be on a replica must be discarded"
+            );
+
+            // Same for a batch's WATCH. A-B: re-idled when a batch WATCH was always
+            // treated as any primary.
+            let client = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(&pool_arc, client);
+            let mut watch_batch = redis::pipe();
+            watch_batch.cmd("WATCH").arg("by-address");
+            let _ = borrowed(&pool_arc, client_id)
+                .send_pipeline(
+                    &watch_batch,
+                    by_address(),
+                    false,
+                    None,
+                    redis::PipelineRetryStrategy::default(),
+                )
+                .await;
+            release_client_async(pool_arc.clone(), client_id).await;
+            assert_eq!(
+                pool_arc.lock().drain_discarded_ids(),
+                vec![client_id],
+                "a batch WATCH that may be on a replica must be discarded"
+            );
+
+            // A `Random`-routed batch goes to any node, replicas included (only a
+            // single command is narrowed to a random primary). A-B: re-idled when
+            // `Random` was classified as any primary for a batch too.
+            let client = Client::new(connection_request.clone().into(), None)
+                .await
+                .expect("cluster client creation");
+            let client_id = add_and_acquire(&pool_arc, client);
+            let _ = borrowed(&pool_arc, client_id)
+                .send_pipeline(
+                    &watch_batch,
+                    Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
+                    false,
+                    None,
+                    redis::PipelineRetryStrategy::default(),
+                )
+                .await;
+            release_client_async(pool_arc.clone(), client_id).await;
+            assert_eq!(
+                pool_arc.lock().drain_discarded_ids(),
+                vec![client_id],
+                "a Random-routed batch WATCH must be discarded"
+            );
 
             // ── 3. db drift must be restored (Valkey 9.0+ multi-db cluster) ──
             let mut version_probe = Client::new(connection_request.clone().into(), None)

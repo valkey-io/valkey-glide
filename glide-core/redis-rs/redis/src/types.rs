@@ -417,23 +417,22 @@ impl ServerError {
     /// and a server's error reply keeps its message as the server sent it.
     pub(crate) fn from_error_keeping_timeout(error: RedisError) -> Self {
         if error.is_timeout() {
-            ServerError::ExtensionError {
+            return ServerError::ExtensionError {
                 code: TIMEOUT_ERROR_CODE.into(),
                 detail: Some(error.to_string()),
-            }
-        } else if let (true, Some(kind)) = (
-            error.is_server_reply(),
-            Option::<ServerErrorKind>::from(error.kind()),
-        ) {
-            // `ServerError::from` would put the server-error description into
-            // the detail, and converting back adds it a second time.
-            ServerError::KnownError {
-                kind,
-                detail: error.detail().map(str::to_string),
-            }
-        } else {
-            error.into()
+            };
         }
+        if error.is_server_reply() {
+            if let Some(kind) = Option::<ServerErrorKind>::from(error.kind()) {
+                // `ServerError::from` would put the server-error description into
+                // the detail, and converting back adds it a second time.
+                return ServerError::KnownError {
+                    kind,
+                    detail: error.detail().map(str::to_string),
+                };
+            }
+        }
+        error.into()
     }
 }
 
@@ -450,6 +449,11 @@ impl From<tokio::time::error::Elapsed> for RedisError {
 /// [`RedisError::command_not_sent`] rather than this description.
 pub const SERVER_ERROR_DESCRIPTION: &str = "An error was signalled by the server:";
 
+/// Only [`TIMEOUT_ERROR_CODE`] restores a client-side error. Any other
+/// client-side error held in a [`ServerError`] comes back as a server reply
+/// (`is_server_reply()` is true): an [`ErrorKind::ExtensionError`] whose code
+/// names the error (`IoError`, for example), or, for a kind that servers also
+/// send such as `ResponseError`, that kind with the server-error description.
 impl From<ServerError> for RedisError {
     fn from(value: ServerError) -> Self {
         // TODO - Consider changing RedisError to explicitly represent whether an error came from the server or not. Today it is only implied.
