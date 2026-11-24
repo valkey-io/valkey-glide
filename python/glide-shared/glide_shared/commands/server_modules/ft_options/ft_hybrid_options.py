@@ -20,14 +20,10 @@ from glide_shared.constants import TEncodable
 class HybridFilterPolicy(Enum):
     """
     Controls how a VSIM pre-filter (see `FtHybridVsimFilter`) is applied against the vector
-    search. Only meaningful inside a counted VSIM FILTER block -- valkey-search's existing
-    uncounted ``FILTER <expr>`` extension on VSIM (no leading token count) cannot carry a policy at
-    all; the server requires the counted form to accept POLICY, confirmed live
-    (``src/commands/ft_hybrid_parser.cc``: POLICY and BATCH_SIZE are only recognised inside the
-    counted VSIM FILTER block's own sub-argument scan). This is a genuinely different grammar
-    axis from `FtHybridCombine`'s RRF/LINEAR/FUNCTION method -- one controls how the vector search
-    itself is pre-filtered, the other controls how the SEARCH and VSIM arms' scores are fused
-    after both arms have already run.
+    search. It is only meaningful inside a counted VSIM FILTER block, because the uncounted
+    ``FILTER <expr>`` form on VSIM cannot carry a policy. This is a different axis from
+    `FtHybridCombine`'s RRF/LINEAR/FUNCTION method, which controls how the SEARCH and VSIM arms'
+    scores are fused after both arms have run.
 
     Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
@@ -35,20 +31,18 @@ class HybridFilterPolicy(Enum):
     ADHOC = "ADHOC"
     """Evaluates the filter against every candidate as it is produced (brute-force), rather than
     pre-restricting the vector index's own search space. ``EF_RUNTIME`` on the same VSIM arm is
-    rejected when this policy is set (confirmed live: "EF_RUNTIME is irrelevant for POLICY
-    ADHOC")."""
+    rejected when this policy is set."""
     BATCHES = "BATCHES"
     """Evaluates the filter in batches drawn from the vector index. Required for `batch_size` to
-    be set on `FtHybridVsimFilter` (confirmed live: "BATCH_SIZE requires POLICY BATCHES")."""
+    be set on `FtHybridVsimFilter`."""
 
 
 class FtHybridVsimFilter:
     """
     A pre-filter on the VSIM arm's vector search, written in the same query language the SEARCH
-    arm uses (e.g. ``@title:hello``). Confirmed live: with a filter present, the VSIM arm becomes
-    an ordinary FT.SEARCH-style vector query under the hood (``<filter>=>[KNN ...]``), so the
-    filter decides membership and the arm's score stays the vector distance -- it is never
-    replaced by a text-relevance score the way a plain hybrid text query's score would be.
+    arm uses (e.g. ``@title:hello``). With a filter present, the VSIM arm runs as an ordinary
+    FT.SEARCH-style vector query (``<filter>=>[KNN ...]``). The filter decides membership, and the
+    arm's score stays the vector distance.
 
     Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
@@ -66,14 +60,13 @@ class FtHybridVsimFilter:
             expression (TEncodable): The filter expression, in the same query language FT.SEARCH
                 uses (e.g. ``@title:hello``).
             policy (Optional[HybridFilterPolicy]): Controls how the filter is applied. See
-                `HybridFilterPolicy`. Setting this forces the wire-level counted VSIM FILTER form
-                (required for the server to recognise POLICY at all -- confirmed live).
+                `HybridFilterPolicy`. Setting this uses the counted VSIM FILTER form, which the
+                server requires in order to recognise POLICY.
             batch_size (Optional[int]): Tunes how many candidates ``POLICY BATCHES`` draws per
-                batch. Requires ``policy=HybridFilterPolicy.BATCHES``. Confirmed live: the value is
-                accepted but currently discarded by the server (valkey-search issue #1457 is
-                referenced directly in ``src/commands/ft_hybrid_parser.cc`` for this), so this
-                currently has no observable effect; included for forward compatibility and because
-                the server still validates its presence/ordering against ``policy``.
+                batch. Requires ``policy=HybridFilterPolicy.BATCHES``. The server accepts the value
+                but currently discards it (valkey-search issue #1457), so it has no observable
+                effect yet. It is still sent, and the server validates its presence and ordering
+                against ``policy``.
 
         Raises:
             ValueError: If `batch_size` is set without ``policy=HybridFilterPolicy.BATCHES``.
@@ -98,8 +91,6 @@ class FtHybridVsimFilter:
         if self.batch_size is not None:
             sub_args.extend([FtHybridKeywords.BATCH_SIZE, str(self.batch_size)])
         if not sub_args:
-            # Uncounted extension: a bare expression, no POLICY/BATCH_SIZE
-            # possible in this form (confirmed live).
             return [FtHybridKeywords.FILTER, self.expression]
         token_count = 1 + len(sub_args)
         return [
@@ -113,8 +104,9 @@ class FtHybridSearchArm:
     """
     The SEARCH arm of an FT.HYBRID query: an ordinary (non-vector) FT.SEARCH-style text/tag/
     numeric query, run alongside the VSIM arm and fused with it. A vector query (e.g. a
-    ``=>[KNN ...]`` clause) is rejected here -- confirmed live and in
-    ``src/commands/ft_hybrid_parser.cc`` -- use `FtHybridVsimArm` for the vector half instead.
+    ``=>[KNN ...]`` clause) is rejected by the server here; use `FtHybridVsimArm` for the vector
+    half instead. The SEARCH arm does not substitute ``$name`` parameters: a ``$name`` written in
+    this query is sent as literal text.
 
     Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
@@ -132,18 +124,16 @@ class FtHybridSearchArm:
             query (TEncodable): The text/tag/numeric query, in the same language FT.SEARCH uses.
                 Must not be a vector query (e.g. must not contain a ``=>[KNN ...]`` clause); the
                 server rejects that combination.
-            scorer (Optional[TEncodable]): The scoring function used to rank this arm's results
-                (``src/indexes/scoring/scorer.h``). ``"BM25STD"`` is the only
-                value currently registered and selectable; any other value is rejected by the
-                server.
+            scorer (Optional[TEncodable]): The scoring function used to rank this arm's results.
+                ``"BM25STD"`` is the only value currently registered and selectable; any other
+                value is rejected by the server.
             yield_score_as (Optional[TEncodable]): Exposes this arm's score under the given
                 column name, reachable from `FtAggregateApply`, `FtAggregateSortProperty`,
                 `FtAggregateGroupBy`/`FtAggregateReducer` expressions, and `FtHybridCombine`'s
-                ``Function`` variant's ``expr``. Confirmed live: this alias cannot itself be named
-                inside a `LoadField`/`FtHybridOptions.load_fields` entry (the server rejects it
-                with "Index field `<alias>` does not exist") -- it is already present in the
-                default reply with no LOAD needed, and remains reachable from every other clause
-                type regardless of whether a LOAD clause is present.
+                ``Function`` variant's ``expr``. This alias cannot be named inside a
+                `LoadField`/`FtHybridOptions.load_fields` entry; the server rejects it with
+                "Index field `<alias>` does not exist". The score is already present in the default
+                reply without a LOAD clause.
         """
         self.query = query
         self.scorer = scorer
@@ -173,11 +163,10 @@ class FtHybridVsimArm:
     code written against RediSearch's typed client ports over with the same two call shapes:
 
     - As raw bytes (or any other `TEncodable`): the client generates an internal ``$``-prefixed
-      PARAMS entry under the hood and references it on the wire. Confirmed live and in
-      ``src/commands/ft_hybrid_parser.cc``: FT.HYBRID's VSIM clause has no wire-level inline
-      vector literal at all -- the parameter token must start with ``$`` or the server rejects it
-      outright ("VSIM: vector parameter must start with '$'"), so an auto-generated PARAMS entry
-      is the only way to offer a "just pass the bytes" call shape.
+      PARAMS entry under the hood and references it on the wire. FT.HYBRID's VSIM clause has no
+      inline vector literal: the parameter token must start with ``$``, or the server rejects it
+      ("VSIM: vector parameter must start with '$'"). An auto-generated PARAMS entry is therefore
+      the only way to offer a "just pass the bytes" call shape.
     - As an explicit ``$name`` string: the caller manages their own entry in
       `FtHybridOptions.params`, exactly like `FtSearchOptions.params`/`FtAggregateOptions.params`
       already work for every other PARAMS-driven query.
@@ -206,17 +195,16 @@ class FtHybridVsimArm:
                 string referencing an entry the caller has placed in `FtHybridOptions.params`.
                 A string starting with ``$`` is always treated as a parameter reference, never as
                 literal vector bytes.
-            k (Optional[int]): The number of nearest neighbours to return. Confirmed live:
-                optional on the wire -- omitting the whole KNN block (which happens when `k`,
-                `ef_runtime` and `shard_k_ratio` are all unset) defaults to 10
-                (``src/commands/ft_hybrid_parser.cc`` ``kDefaultKnnK``), the same default RediSearch
+            k (Optional[int]): The number of nearest neighbours to return. Optional on the wire:
+                omitting the whole KNN block (which happens when `k`, `ef_runtime` and
+                `shard_k_ratio` are all unset) defaults to 10, the same default RediSearch
                 documents for FT.HYBRID's VSIM clause.
             ef_runtime (Optional[int]): HNSW search-time effort parameter. Only valid when the KNN
                 block is written (RANGE is not currently supported by this typed API).
             shard_k_ratio (Optional[float]): Tunes how much of `k` each shard returns during a
-                cluster fanout. Confirmed live: parsed and accepted but does not change query
-                results, only how much work each shard does to produce them -- accepted here so a
-                query written for RediSearch is not rejected by this client either.
+                cluster fanout. The server parses and accepts it but does not change query results,
+                only how much work each shard does to produce them. It is accepted here so a query
+                written for RediSearch is not rejected by this client.
             yield_score_as (Optional[TEncodable]): Exposes this arm's score (the vector distance)
                 under the given column name. See `FtHybridSearchArm.yield_score_as`'s docstring for
                 the LOAD-clause restriction that applies identically here.
@@ -258,13 +246,9 @@ class FtHybridVsimArm:
                 raw vector bytes that `to_args` requires a generated parameter name for.
 
         Note:
-            Only a `str` starting with ``$`` is treated as a parameter reference. A raw vector's
-            packed binary representation is arbitrary and can legitimately start with the byte
-            ``0x24`` (``$``) by coincidence; treating `bytes`/`bytearray` the same way as `str`
-            here would misclassify that vector as a parameter reference, skip generating the
-            internal `PARAMS` entry in `to_args`, and send the raw vector bytes in the
-            parameter-reference position, which the server cannot resolve. `bytes`/`bytearray` is
-            therefore always raw vector data regardless of its first byte.
+            Only a `str` starting with ``$`` is a parameter reference. A raw vector's packed bytes
+            can legitimately start with ``0x24`` (``$``), so `bytes`/`bytearray` are always raw
+            vector data, whatever their first byte.
         """
         return isinstance(self.vector, str) and self.vector.startswith("$")
 
@@ -364,8 +348,8 @@ class FtHybridRrf(FtHybridCombine):
         Initialize a new FtHybridRrf instance.
 
         Args:
-            constant (Optional[float]): The RRF constant. Must be non-negative (confirmed live:
-                the server rejects a negative value -- it places a pole at ``rank == -constant``).
+            constant (Optional[float]): The RRF constant. Must be non-negative: the server rejects a
+                negative value.
             window (Optional[int]): How many of each arm's results take part in fusion (and, in
                 cluster mode, how many each shard is asked to fetch). Bounded by the server's
                 ``max-combine-window`` config.
@@ -398,10 +382,9 @@ class FtHybridRrf(FtHybridCombine):
 
 class FtHybridLinear(FtHybridCombine):
     """
-    Fuses the two arms' results linearly: ``alpha * search_score + beta * vsim_score``. Confirmed
-    live: writing neither `alpha` nor `beta` defaults both to 0.3/0.7 respectively; writing exactly
-    one without the other is rejected by the server as more likely a typo than an intentional
-    default.
+    Fuses the two arms' results linearly: ``alpha * search_score + beta * vsim_score``. When
+    neither `alpha` nor `beta` is written, the server defaults them to 0.3 and 0.7. Writing exactly
+    one without the other is rejected by the server.
 
     Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
@@ -462,11 +445,9 @@ class FtHybridFunction(FtHybridCombine):
     written in the same expression language `FtAggregateApply`'s ``expression`` uses -- the server
     compiles it against a context where each arm's score is reachable via its own
     ``YIELD_SCORE_AS`` alias (if any), a positional default ``@__arm<i>_score``, and (for this
-    SEARCH+VSIM two-arm shape) ``@__search_score`` / ``@__vector_score`` specifically. Confirmed
-    live and in ``src/commands/ft_hybrid_parser.cc``.
+    SEARCH+VSIM two-arm shape) ``@__search_score`` / ``@__vector_score`` specifically.
 
-    This is a valkey-search extension not present in RediSearch's FT.HYBRID (included here
-    anyway rather than dropped).
+    This is a valkey-search extension not present in RediSearch's FT.HYBRID.
 
     Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
@@ -484,10 +465,10 @@ class FtHybridFunction(FtHybridCombine):
             expr (TEncodable): The fusion expression, as a raw string (e.g.
                 ``"@__search_score + @__vector_score"`` or, with explicit arm aliases,
                 ``"@ss + @vs"``).
-            window (Optional[int]): How many of each arm's results take part in fusion. Confirmed
-                live: if left unset, the server defaults this to the widest window allowed rather
-                than the usual RRF/LINEAR default, since a caller-written expression typically
-                expects to see every matching candidate, not a top-window slice.
+            window (Optional[int]): How many of each arm's results take part in fusion. If left
+                unset, the server uses the widest window allowed rather than the usual RRF/LINEAR
+                default, since a caller-written expression typically expects to see every matching
+                candidate.
             yield_score_as (Optional[TEncodable]): Exposes the fused score under the given column
                 name instead of the default ``__score``.
         """
@@ -508,8 +489,6 @@ class FtHybridFunction(FtHybridCombine):
         ] + sub_args
 
 
-# Namespaced access (FtHybridCombine.RRF(...), .Linear(...), .Function(...)) alongside the
-# importable top-level names above, mirroring how callers may prefer either style.
 FtHybridCombine.RRF = FtHybridRrf
 FtHybridCombine.Linear = FtHybridLinear
 FtHybridCombine.Function = FtHybridFunction
@@ -546,54 +525,44 @@ class FtHybridOptions:
                 `FtHybridCombine.Function`. If omitted, the server's own default fusion method
                 applies.
             load_all (Optional[bool]): Loads every field declared in the index, plus both arms'
-                score aliases automatically. Confirmed live: unlike a named `load_fields` list,
-                ``LOAD *`` cannot name an arm's score alias at all (there is nothing to name), so
-                this form has no equivalent of the LOAD-clause alias restriction described on
-                `FtHybridSearchArm.yield_score_as`.
+                score aliases. Because ``LOAD *`` names no fields, it has no equivalent of the
+                LOAD-clause alias restriction described on `FtHybridSearchArm.yield_score_as`.
             load_fields (Optional[List[Union[TEncodable, LoadField]]]): Loads only the fields
                 passed in this list, reusing `LoadField` from the FT.AGGREGATE options module
                 verbatim (the LOAD clause's grammar is byte-identical between the two commands).
-                Must NOT include either arm's `yield_score_as` alias -- confirmed live, the server
-                rejects it outright even though the alias is otherwise freely reachable; see
-                `FtHybridSearchArm.yield_score_as`'s docstring. With no LOAD clause at all (both
-                `load_all` and `load_fields` left unset), FT.HYBRID's default reply is the
-                document key and the fused score -- a default FT.AGGREGATE has no equivalent of.
+                Must NOT include either arm's `yield_score_as` alias: the server rejects it, even
+                though the alias is otherwise reachable from other clauses; see
+                `FtHybridSearchArm.yield_score_as`. With no LOAD clause at all (both `load_all` and
+                `load_fields` left unset), FT.HYBRID's default reply is the document key and the
+                fused score, which a default FT.AGGREGATE does not return.
             clauses (Optional[List[FtAggregateClause]]): FILTER, LIMIT, GROUPBY, SORTBY and APPLY
-                clauses, reusing `FtAggregateClause` and its subclasses verbatim from the
-                FT.AGGREGATE options module (confirmed: FT.HYBRID forwards this whole tail to the
-                exact same aggregate pipeline parser FT.AGGREGATE uses). Confirmed live: every arm
-                alias is freely reachable from these clauses (APPLY, SORTBY, GROUPBY/REDUCE) --
-                only the LOAD clause has the restriction described above. FT.HYBRID also applies
-                its own default LIMIT of 10 rows when no `FtAggregateLimit` clause is given here
-                (confirmed live and in source) -- FT.AGGREGATE has no such default and returns
-                everything. `to_args` always emits `clauses` after `params`'s own serialized
-                arguments (PARAMS is always present for FT.HYBRID, so this tail is never empty) --
-                emitting a leading FILTER clause right after the VSIM arm would otherwise let the
-                server's VSIM parser claim it as a VSIM pre-filter instead (confirmed live,
-                `ft_hybrid_parser.cc`'s `vsim_scoped` FILTER handling).
+                clauses, reusing `FtAggregateClause` and its subclasses from the FT.AGGREGATE options
+                module. FT.HYBRID passes this tail to the same aggregate pipeline parser FT.AGGREGATE
+                uses. Every arm alias is reachable from these clauses (APPLY, SORTBY, GROUPBY/REDUCE);
+                only the LOAD clause has the restriction described above. FT.HYBRID applies its own
+                default LIMIT of 10 rows when no `FtAggregateLimit` clause is given here, whereas
+                FT.AGGREGATE returns every row. `to_args` emits `clauses` after `params`. PARAMS is
+                present whenever the VSIM arm carries a vector, so a leading FILTER clause never lands
+                directly after the VSIM arm, where the server would read it as a VSIM pre-filter.
             with_cursor (Optional[FtWithCursor]): Requests a paged reply. See
                 `FtWithCursor`.
-            local_only (Optional[bool]): Restricts the query to the local shard rather than
-                fanning out across the cluster. This is a valkey-search extension not present in
-                RediSearch's FT.HYBRID (included here anyway rather than
-                dropped). Confirmed live: LOCALONLY is accepted anywhere in this tail BEFORE
-                PARAMS (including after DIALECT or a LOAD clause) but is rejected
-                ("Unexpected argument `LOCALONLY`") once PARAMS has been parsed, regardless of
-                what follows PARAMS. `to_args` always emits it before `params` and `clauses`
-                (PARAMS always follows it immediately), so this restriction is handled
-                transparently regardless of the order its own arguments were given in.
+            local_only (Optional[bool]): Restricts the query to the local shard rather than fanning
+                out across the cluster. This is a valkey-search extension not present in RediSearch's
+                FT.HYBRID. LOCALONLY is accepted only before PARAMS on the wire, and the server rejects
+                it once PARAMS has been parsed. `to_args` always emits it before `params` and `clauses`,
+                so the order of the options does not affect it.
             timeout (Optional[int]): Overrides the timeout parameter of the module, in
                 milliseconds.
             params (Optional[Mapping[TEncodable, TEncodable]]): Param key/value pairs referenced
-                from within the SEARCH query, a VSIM arm's ``$name`` vector reference, or any
-                clause's expression text. If a `FtHybridVsimArm` in the same call is given raw
-                vector bytes rather than an explicit ``$name`` string, an internally generated
-                entry is merged into this mapping automatically -- a name collision with a
-                caller-supplied entry here raises `ValueError` rather than silently overwriting
-                either one.
+                from a VSIM arm's ``$name`` vector reference, or from FILTER and APPLY clause
+                expressions. The SEARCH arm never substitutes parameters: a ``$name`` written in the
+                SEARCH query is passed through as literal text. If a `FtHybridVsimArm` in the same
+                call is given raw vector bytes rather than an explicit ``$name`` string, an internally
+                generated entry is merged into this mapping automatically. A name collision with a
+                caller-supplied entry here raises `ValueError` rather than silently overwriting either
+                one.
             dialect (Optional[int]): The query dialect version to use. FT.HYBRID is fixed at
-                dialect 2 server-side (confirmed in source); passing any other value is rejected
-                by the server.
+                dialect 2 server-side; passing any other value is rejected by the server.
         """
         self.combine = combine
         self.load_all = load_all
@@ -608,8 +577,6 @@ class FtHybridOptions:
     def _merge_params(
         self, generated_vsim_param: Optional[Mapping[TEncodable, TEncodable]]
     ) -> dict:
-        """Merge `params` with an internally generated VSIM PARAMS entry, raising if the
-        generated name collides with a caller-supplied one."""
         merged_params: dict = dict(self.params) if self.params else {}
         if generated_vsim_param:
             for name, value in generated_vsim_param.items():
@@ -643,9 +610,6 @@ class FtHybridOptions:
         """
         args: List[TEncodable] = []
         if self.local_only:
-            # Must come before PARAMS -- confirmed live, see the docstring
-            # above. `to_args` always emits it this early regardless of
-            # argument order, so this restriction is handled transparently.
             args.append(FtHybridKeywords.LOCALONLY)
         if self.load_all:
             args.extend([FtAggregateKeywords.LOAD, "*"])
@@ -660,10 +624,6 @@ class FtHybridOptions:
             )
         )
         if self.clauses:
-            # Must come after PARAMS -- a leading FILTER clause emitted
-            # right after the VSIM arm would otherwise be claimed by the
-            # server's VSIM parser as a VSIM pre-filter instead (confirmed
-            # live, see the docstring above).
             for clause in self.clauses:
                 args.extend(clause.to_args())
         if self.with_cursor is not None:

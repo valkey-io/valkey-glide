@@ -4,7 +4,6 @@
 
 import argparse
 import ipaddress
-
 try:
     import fcntl  # POSIX only — not available on Windows
 except ImportError:
@@ -14,7 +13,6 @@ import logging
 import os
 import random
 import re
-import shlex
 import signal
 import socket
 import string
@@ -473,36 +471,6 @@ def create_cluster_folder(path: str, prefix: str) -> str:
     return cluster_folder
 
 
-def build_loadmodule_args(module_path: str) -> List[str]:
-    """Build the ``--loadmodule`` argv for one ``--load-module`` entry.
-
-    Valkey's module loader requires each trailing config arg (e.g.
-    ``--emulate-release 1.3.0``) to be its own argv token starting with
-    ``--``, not one combined string -- confirmed via valkey_search
-    1.3.0-rc1. Only a trailing ``--...`` config suffix, if present, is
-    split into separate tokens; a plain module path (the common case, and
-    the only case when no config suffix is given) is passed through
-    unchanged.
-
-    Splitting every path through ``shlex.split`` unconditionally, even
-    when there is no config suffix to split out, is wrong: ``shlex.split``
-    tokenizes its input as shell syntax, so a path containing a single
-    apostrophe (e.g. a directory named after a user called ``o'brien``,
-    legal on both Linux and macOS) raises ``ValueError: No closing
-    quotation`` even though nothing needed splitting. A module path is
-    only run through ``shlex.split`` when it actually contains a trailing
-    ``--`` config token to isolate -- detected by a literal, un-tokenized
-    search for ``" --"`` in the path, so a plain path is never shell-
-    tokenized at all, apostrophes included.
-    """
-    config_start = module_path.find(" --")
-    if config_start == -1:
-        return [module_path]
-    path_part = module_path[:config_start]
-    config_part = module_path[config_start:]
-    return [path_part, *shlex.split(config_part)]
-
-
 def start_server(
     host: str,
     port: Optional[int],
@@ -588,7 +556,7 @@ def start_server(
                 "Please provide the path(s) to the module(s) you want to load."
             )
         for module_path in load_module:
-            cmd_args.extend(["--loadmodule", *build_loadmodule_args(module_path)])
+            cmd_args.extend(["--loadmodule", module_path])
     cmd_args += tls_args
     p = subprocess.Popen(
         cmd_args,
@@ -1543,13 +1511,7 @@ def main():
     parser_start.add_argument(
         "--load-module",
         action="append",
-        help="The path of a server module to load. Use multiple times for "
-        "multiple modules. May include trailing module config args as one "
-        "space-separated string, e.g. "
-        "'/path/libsearch.dylib --emulate-release 1.3.0' or "
-        "'/path/libsearch.dylib --use-coordinator yes' -- each arg must "
-        "start with '--' (Valkey module-loader requirement) and is split "
-        "into its own argv token before exec.",
+        help="The paths of the server modules to load.",
         required=False,
     )
 
