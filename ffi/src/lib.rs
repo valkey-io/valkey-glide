@@ -3344,6 +3344,275 @@ mod tests_parse_proto_json_request {
     }
 }
 
+#[cfg(test)]
+mod tests_proto_json_uri_equivalence {
+    //! Proves the ProtoJSON path produces exactly the same `ConnectionRequest` as the URI
+    //! path for every configuration the URI path can express. Both paths are pure parsers,
+    //! so equality of the parsed messages implies identical core behavior — no server needed.
+    //!
+    //! Intentional differences are normalized where they appear:
+    //! - credentials: the URI side must percent-encode userinfo; ProtoJSON passes plain
+    //!   strings (the #6659 bug class is unrepresentable).
+    //! - `client_side_cache.cache_id` is random per parse and cleared before comparison.
+    //!
+    //! Multi-address configs have no URI equivalent and are covered in
+    //! `tests_parse_proto_json_request` instead.
+    use super::*;
+
+    fn from_uri(uri: &str, extra_json: Option<&str>) -> connection_request::ConnectionRequest {
+        let uri_c = CString::new(uri).unwrap();
+        let json_c = extra_json.map(|json| CString::new(json).unwrap());
+        let json_ptr = json_c
+            .as_ref()
+            .map_or(std::ptr::null(), |json| json.as_ptr());
+        create_client_from_uri_internal(uri_c.as_ptr(), json_ptr).expect("URI path failed")
+    }
+
+    fn from_proto_json(json: &str) -> connection_request::ConnectionRequest {
+        parse_proto_json_request(json.as_bytes()).expect("ProtoJSON path failed")
+    }
+
+    #[track_caller]
+    fn assert_equivalent(uri: &str, extra_json: Option<&str>, proto_json: &str) {
+        let via_uri = from_uri(uri, extra_json);
+        let via_proto_json = from_proto_json(proto_json);
+        assert_eq!(
+            via_uri, via_proto_json,
+            "URI path and ProtoJSON path disagree.\nuri: {uri}\nextra_json: {extra_json:?}"
+        );
+    }
+
+    #[test]
+    fn defaults_only() {
+        assert_equivalent(
+            "valkey://localhost:6379",
+            None,
+            r#"{"addresses": [{"host": "localhost", "port": 6379}]}"#,
+        );
+    }
+
+    #[test]
+    fn exotic_credentials() {
+        // Username "user name", password "p@ss/wo?rd näï" — percent-encoded on the URI
+        // side, plain strings on the ProtoJSON side (the #6659 bug class).
+        assert_equivalent(
+            "valkey://user%20name:p%40ss%2Fwo%3Frd%20n%C3%A4%C3%AF@localhost:6379",
+            None,
+            r#"{
+                "addresses": [{"host": "localhost", "port": 6379}],
+                "authenticationInfo": {"username": "user name", "password": "p@ss/wo?rd näï"}
+            }"#,
+        );
+    }
+
+    #[test]
+    fn database_index_from_path() {
+        assert_equivalent(
+            "valkey://localhost:6379/4",
+            None,
+            r#"{"addresses": [{"host": "localhost", "port": 6379}], "databaseId": 4}"#,
+        );
+    }
+
+    #[test]
+    fn tls_scheme_and_certs() {
+        let root_pem = "-----BEGIN CERTIFICATE-----\nroot\n-----END CERTIFICATE-----";
+        let cert_pem = "-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----";
+        let key_pem = "-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----";
+        let extra = format!(
+            r#"{{"root_certs": [{root:?}], "client_cert": {cert:?}, "client_key": {key:?}}}"#,
+            root = root_pem,
+            cert = cert_pem,
+            key = key_pem
+        );
+        // Base64 of the three PEM strings above (ProtoJSON encodes bytes fields as Base64).
+        let proto_json = r#"{
+            "addresses": [{"host": "secure.example.com", "port": 6380}],
+            "tlsMode": "SecureTls",
+            "rootCerts": ["LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCnJvb3QKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQ=="],
+            "clientCert": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCmNlcnQKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQ==",
+            "clientKey": "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCmtleQotLS0tLUVORCBQUklWQVRFIEtFWS0tLS0t"
+        }"#.to_string();
+        assert_equivalent(
+            "valkeys://secure.example.com:6380",
+            Some(&extra),
+            &proto_json,
+        );
+    }
+
+    #[test]
+    fn cluster_mode_timeouts_protocol_names() {
+        assert_equivalent(
+            "valkey://localhost:6379",
+            Some(
+                r#"{
+                    "cluster_mode_enabled": true,
+                    "request_timeout": 2500,
+                    "connection_timeout": 800,
+                    "protocol": "RESP2",
+                    "client_name": "my-client",
+                    "lib_name": "GlideRuby"
+                }"#,
+            ),
+            r#"{
+                "addresses": [{"host": "localhost", "port": 6379}],
+                "clusterModeEnabled": true,
+                "requestTimeout": 2500,
+                "connectionTimeout": 800,
+                "protocol": "RESP2",
+                "clientName": "my-client",
+                "libName": "GlideRuby"
+            }"#,
+        );
+    }
+
+    #[test]
+    fn retry_strategy() {
+        assert_equivalent(
+            "valkey://localhost:6379",
+            Some(
+                r#"{"connection_retry_strategy":
+                    {"number_of_retries": 5, "factor": 100, "exponent_base": 2, "jitter_percent": 20}}"#,
+            ),
+            r#"{
+                "addresses": [{"host": "localhost", "port": 6379}],
+                "connectionRetryStrategy":
+                    {"numberOfRetries": 5, "factor": 100, "exponentBase": 2, "jitterPercent": 20}
+            }"#,
+        );
+    }
+
+    #[test]
+    fn read_from_and_client_az() {
+        assert_equivalent(
+            "valkey://localhost:6379",
+            Some(r#"{"read_from": "AZAffinity", "client_az": "us-east-1a"}"#),
+            r#"{
+                "addresses": [{"host": "localhost", "port": 6379}],
+                "readFrom": "AZAffinity",
+                "clientAz": "us-east-1a"
+            }"#,
+        );
+    }
+
+    #[test]
+    fn pubsub_subscriptions() {
+        // URI path: map of channel-type digit to channel-name strings.
+        // ProtoJSON: same map with Base64 channel bytes ("news" = bmV3cw==, "events:*" = ZXZlbnRzOio=).
+        assert_equivalent(
+            "valkey://localhost:6379",
+            Some(r#"{"pubsub_subscriptions": {"0": ["news"], "1": ["events:*"]}}"#),
+            r#"{
+                "addresses": [{"host": "localhost", "port": 6379}],
+                "pubsubSubscriptions": {"channelsOrPatternsByType": {
+                    "0": {"channelsOrPatterns": ["bmV3cw=="]},
+                    "1": {"channelsOrPatterns": ["ZXZlbnRzOio="]}
+                }}
+            }"#,
+        );
+    }
+
+    #[test]
+    fn behavior_flags() {
+        assert_equivalent(
+            "valkey://localhost:6379",
+            Some(
+                r#"{"lazy_connect": true, "inflight_requests_limit": 500,
+                    "tcp_nodelay": true, "read_only": true,
+                    "pubsub_reconciliation_interval_ms": 1500}"#,
+            ),
+            r#"{
+                "addresses": [{"host": "localhost", "port": 6379}],
+                "lazyConnect": true, "inflightRequestsLimit": 500,
+                "tcpNodelay": true, "readOnly": true,
+                "pubsubReconciliationIntervalMs": 1500
+            }"#,
+        );
+    }
+
+    #[test]
+    fn periodic_checks_manual_interval() {
+        assert_equivalent(
+            "valkey://localhost:6379",
+            Some(r#"{"periodic_checks": {"manual_interval": {"duration_in_sec": 30}}}"#),
+            r#"{
+                "addresses": [{"host": "localhost", "port": 6379}],
+                "periodicChecksManualInterval": {"durationInSec": 30}
+            }"#,
+        );
+    }
+
+    #[test]
+    fn periodic_checks_disabled() {
+        assert_equivalent(
+            "valkey://localhost:6379",
+            Some(r#"{"periodic_checks": {"disabled": true}}"#),
+            r#"{
+                "addresses": [{"host": "localhost", "port": 6379}],
+                "periodicChecksDisabled": {}
+            }"#,
+        );
+    }
+
+    #[test]
+    fn compression_config() {
+        assert_equivalent(
+            "valkey://localhost:6379",
+            Some(
+                r#"{"compression_config": {"enabled": true, "backend": "ZSTD",
+                    "compression_level": 3, "min_compression_size": 1024}}"#,
+            ),
+            r#"{
+                "addresses": [{"host": "localhost", "port": 6379}],
+                "compressionConfig": {"enabled": true, "backend": "ZSTD",
+                    "compressionLevel": 3, "minCompressionSize": 1024}
+            }"#,
+        );
+    }
+
+    #[test]
+    fn iam_credentials() {
+        assert_equivalent(
+            "valkey://iam-user@my-cluster.aws.com:6379",
+            Some(
+                r#"{"iam_credentials": {"cluster_name": "my-cluster", "region": "us-east-1",
+                    "service_type": "ELASTICACHE", "refresh_interval_seconds": 900}}"#,
+            ),
+            r#"{
+                "addresses": [{"host": "my-cluster.aws.com", "port": 6379}],
+                "authenticationInfo": {"username": "iam-user", "iamCredentials": {
+                    "clusterName": "my-cluster", "region": "us-east-1",
+                    "serviceType": "ELASTICACHE", "refreshIntervalSeconds": 900}}
+            }"#,
+        );
+    }
+
+    #[test]
+    fn client_side_cache_with_normalized_cache_id() {
+        let mut via_uri = from_uri(
+            "valkey://localhost:6379",
+            Some(
+                r#"{"client_side_cache": {"max_cache_kb": 2048, "entry_ttl_ms": 60000,
+                    "eviction_policy": "LFU", "enable_metrics": true}}"#,
+            ),
+        );
+        let mut via_proto_json = from_proto_json(
+            r#"{
+                "addresses": [{"host": "localhost", "port": 6379}],
+                "clientSideCache": {"maxCacheKb": 2048, "entryTtlMs": 60000,
+                    "evictionPolicy": "LFU", "enableMetrics": true}
+            }"#,
+        );
+        // The cache_id is generated randomly by both paths; equality is meaningless for it.
+        for request in [&mut via_uri, &mut via_proto_json] {
+            let cache = request.client_side_cache.as_mut().unwrap();
+            assert!(!cache.cache_id.is_empty());
+            cache.cache_id = "normalized".into();
+        }
+        assert_eq!(via_uri, via_proto_json);
+    }
+}
+
 /// Creates a new client from a URI string and optional JSON configuration.
 ///
 /// This is an alternative to [`create_client`] that accepts a connection URI instead of protobuf bytes.
