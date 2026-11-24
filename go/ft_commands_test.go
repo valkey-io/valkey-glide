@@ -288,7 +288,7 @@ func Example_clusterFtSearchInKeys() {
 	var client *ClusterClient = getExampleClusterClient()
 	ctx := context.Background()
 
-	if !probeSearch13CapabilityCluster(ctx, client) {
+	if !probeSearchInKeysSupportCluster(ctx, client) {
 		fmt.Println("3 0 2")
 		return
 	}
@@ -345,7 +345,7 @@ func Example_ftSearchCount() {
 	var client *Client = getExampleClient()
 	ctx := context.Background()
 
-	if !probeSearch13Capability(ctx, client) {
+	if !probeSearchInKeysSupport(ctx, client) {
 		fmt.Println(2)
 		return
 	}
@@ -386,7 +386,7 @@ func Example_ftCreateFloat16Vector() {
 	var client *Client = getExampleClient()
 	ctx := context.Background()
 
-	if !probeSearch13Capability(ctx, client) {
+	if !probeSearchInKeysSupport(ctx, client) {
 		fmt.Println("OK")
 		return
 	}
@@ -420,7 +420,7 @@ func Example_ftCreateFilterScoreFieldNoHighlight() {
 	var client *Client = getExampleClient()
 	ctx := context.Background()
 
-	if !probeSearch13Capability(ctx, client) {
+	if !probeSearchInKeysSupport(ctx, client) {
 		fmt.Println("OK")
 		return
 	}
@@ -459,7 +459,7 @@ func Example_ftHybrid() {
 	var client *Client = getExampleClient()
 	ctx := context.Background()
 
-	if !probeSearch13Capability(ctx, client) {
+	if !probeSearchInKeysSupport(ctx, client) {
 		fmt.Println(2)
 		return
 	}
@@ -514,7 +514,7 @@ func Example_clusterFtHybrid() {
 	var client *ClusterClient = getExampleClusterClient()
 	ctx := context.Background()
 
-	if !probeSearch13CapabilityCluster(ctx, client) {
+	if !probeSearchInKeysSupportCluster(ctx, client) {
 		fmt.Println(2)
 		return
 	}
@@ -571,7 +571,7 @@ func Example_clusterFtAggregateWithCursor() {
 	var client *ClusterClient = getExampleClusterClient()
 	ctx := context.Background()
 
-	if !probeSearch13CapabilityCluster(ctx, client) {
+	if !probeSearchInKeysSupportCluster(ctx, client) {
 		fmt.Println(5)
 		fmt.Println(5)
 		fmt.Println("OK")
@@ -640,7 +640,7 @@ func Example_clusterFtSearchWithScores() {
 	var client *ClusterClient = getExampleClusterClient()
 	ctx := context.Background()
 
-	if !probeSearch13CapabilityCluster(ctx, client) {
+	if !probeSearchInKeysSupportCluster(ctx, client) {
 		fmt.Println(2)
 		fmt.Println(true)
 		return
@@ -688,7 +688,7 @@ func Example_clusterFtAggregateLoadField() {
 	var client *ClusterClient = getExampleClusterClient()
 	ctx := context.Background()
 
-	if !probeSearch13CapabilityCluster(ctx, client) {
+	if !probeSearchInKeysSupportCluster(ctx, client) {
 		fmt.Println("widget 9")
 		return
 	}
@@ -736,8 +736,10 @@ func classifyInkeysProbeError(msg string) bool {
 	return strings.Contains(msg, "Unexpected") && strings.Contains(msg, "INKEYS")
 }
 
-func probeSearch13Capability(ctx context.Context, client *Client) bool {
-	probeIndex := "__glide_search_1_3_probe_" + uuid.New().String()
+// probeSearchInKeysSupport reports whether the standalone server's search module accepts
+// FT.SEARCH ... INKEYS, the capability probe for valkey-search 1.3.0 or later.
+func probeSearchInKeysSupport(ctx context.Context, client *Client) bool {
+	probeIndex := "__glide_search_inkeys_probe_" + uuid.New().String()
 	if _, err := client.CustomCommand(ctx, []string{"FT.CREATE", probeIndex, "SCHEMA", "title", "TEXT"}); err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return false
@@ -751,8 +753,10 @@ func probeSearch13Capability(ctx context.Context, client *Client) bool {
 	return !classifyInkeysProbeError(err.Error())
 }
 
-func probeSearch13CapabilityCluster(ctx context.Context, client *ClusterClient) bool {
-	probeIndex := "__glide_search_1_3_probe_" + uuid.New().String()
+// probeSearchInKeysSupportCluster is the cluster variant of probeSearchInKeysSupport, the
+// capability probe for valkey-search 1.3.0 or later.
+func probeSearchInKeysSupportCluster(ctx context.Context, client *ClusterClient) bool {
+	probeIndex := "__glide_search_inkeys_probe_" + uuid.New().String()
 	if _, err := client.CustomCommand(ctx, []string{"FT.CREATE", probeIndex, "SCHEMA", "title", "TEXT"}); err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return false

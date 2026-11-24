@@ -1,5 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+// Unit tests for the FT.CREATE, FT.SEARCH and FT.AGGREGATE options added for valkey-search 1.3.
+
 package options
 
 import (

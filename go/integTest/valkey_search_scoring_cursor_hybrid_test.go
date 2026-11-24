@@ -1,5 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+// Integration tests for valkey-search 1.3 scoring, FT.AGGREGATE cursors, FT.HYBRID and FLOAT16/BFLOAT16 vectors.
+
 package integTest
 
 import (
@@ -97,7 +99,7 @@ func createHybridIndex(ctx context.Context, client *glide.ClusterClient, prefix 
 func (suite *GlideTestSuite) TestModuleFtSearchWithScoresAndScorer() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -137,7 +139,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithScoresAndScorer() {
 func (suite *GlideTestSuite) TestModuleFtSearchWithScoresAndWithSortKeysCombinedShape() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -182,7 +184,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithScoresAndWithSortKeysCombined
 func (suite *GlideTestSuite) TestModuleFtSearchPureVectorKnnWithScoresOrdersByDistanceNotScore() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -239,7 +241,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchPureVectorKnnWithScoresOrdersByDi
 func (suite *GlideTestSuite) TestModuleFtSearchPureVectorKnnWithScoresAndKnnAsAliasOrdersByDistance() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -283,7 +285,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchPureVectorKnnWithScoresAndKnnAsAl
 func (suite *GlideTestSuite) TestModuleFtSearchScorerTfidfRejected() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -308,7 +310,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchScorerTfidfRejected() {
 func (suite *GlideTestSuite) TestModuleFtAggregateAddScoresSortableByScore() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -358,7 +360,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateAddScoresSortableByScore() {
 func (suite *GlideTestSuite) TestModuleFtAggregateTypedCursorPagedToExhaustion() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -415,7 +417,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateTypedCursorPagedToExhaustion()
 func (suite *GlideTestSuite) TestModuleFtAggregateTypedCursorDelAndErrors() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -456,7 +458,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateTypedCursorDelAndErrors() {
 func (suite *GlideTestSuite) TestModuleFtCursorAffinityPreferReplicaClient() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 	if len(suite.clusterHosts) < 2 {
@@ -631,7 +633,7 @@ func flatToMap(v any) map[string]any {
 func (suite *GlideTestSuite) TestModuleFtHybridBasicQuery() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -662,7 +664,7 @@ func (suite *GlideTestSuite) TestModuleFtHybridBasicQuery() {
 func (suite *GlideTestSuite) TestModuleFtHybridAggregateClauseFiltersPostFusionRegression() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -686,7 +688,7 @@ func (suite *GlideTestSuite) TestModuleFtHybridAggregateClauseFiltersPostFusionR
 func (suite *GlideTestSuite) TestModuleFtHybridCombineMethodsFuseResults() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -735,7 +737,7 @@ func (suite *GlideTestSuite) TestModuleFtHybridCombineMethodsFuseResults() {
 func (suite *GlideTestSuite) TestModuleFtHybridVectorInlineBytesAndParamReference() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -789,7 +791,7 @@ func (suite *GlideTestSuite) TestModuleFtHybridVectorInlineBytesAndParamReferenc
 func (suite *GlideTestSuite) TestModuleFtHybridVsimFilterWithPolicy() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -820,7 +822,7 @@ func (suite *GlideTestSuite) TestModuleFtHybridVsimFilterWithPolicy() {
 func (suite *GlideTestSuite) TestModuleFtHybridPerArmAndCombineYieldScoreAsColumns() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -854,7 +856,7 @@ func (suite *GlideTestSuite) TestModuleFtHybridPerArmAndCombineYieldScoreAsColum
 func (suite *GlideTestSuite) TestModuleFtHybridWithCursorPreferReplicaClientPagedToExhaustion() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 	if len(suite.clusterHosts) < 2 {
@@ -905,7 +907,7 @@ func (suite *GlideTestSuite) TestModuleFtHybridWithCursorPreferReplicaClientPage
 func (suite *GlideTestSuite) TestModuleFtHybridLocalOnlyAccepted() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -926,7 +928,7 @@ func (suite *GlideTestSuite) TestModuleFtHybridLocalOnlyAccepted() {
 func (suite *GlideTestSuite) TestModuleFtHybridWithoutKUsesEngineDefault() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -963,7 +965,7 @@ func (suite *GlideTestSuite) TestModuleFtHybridWithoutKUsesEngineDefault() {
 func (suite *GlideTestSuite) TestModuleFtHybridInsideMultiExecRejected() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -986,7 +988,7 @@ func (suite *GlideTestSuite) TestModuleFtHybridInsideMultiExecRejected() {
 func (suite *GlideTestSuite) TestModuleFtHybridVsimRangeRejected() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -1019,7 +1021,7 @@ func (suite *GlideTestSuite) TestModuleFtHybridVsimRangeRejected() {
 func (suite *GlideTestSuite) TestModuleFtAggregateLoadFieldAlias() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -1059,7 +1061,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateLoadFieldAlias() {
 func (suite *GlideTestSuite) TestModuleFtCreateFloat16VectorKnnReturnsRealNeighbors() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -1104,7 +1106,7 @@ func (suite *GlideTestSuite) TestModuleFtCreateFloat16VectorKnnReturnsRealNeighb
 func (suite *GlideTestSuite) TestModuleFtCreateBfloat16VectorKnnReturnsRealNeighbors() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -1154,7 +1156,7 @@ func (suite *GlideTestSuite) TestModuleFtCreateBfloat16VectorKnnReturnsRealNeigh
 func (suite *GlideTestSuite) TestModuleFtCreateScoreFieldAffectsRanking() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 

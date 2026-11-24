@@ -1,5 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+// Integration tests for valkey-search 1.3 VECTOR_RANGE queries, the bare * wildcard and SORTBY with LIMIT.
+
 package integTest
 
 import (
@@ -20,7 +22,7 @@ import (
 func (suite *GlideTestSuite) TestModuleFtSearchWildcard() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -66,7 +68,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchWildcard() {
 func (suite *GlideTestSuite) TestModuleFtSearchVectorRangeYieldDistanceAs() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -174,7 +176,7 @@ func keySetFromDocs(docs []models.FtSearchDocument) map[string]bool {
 func (suite *GlideTestSuite) TestModuleFtAggregateVectorRangeYieldDistanceAs() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -224,7 +226,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateVectorRangeYieldDistanceAs() {
 func (suite *GlideTestSuite) TestModuleFtAggregateSortByAdjacentLimitWidensRetainedRows() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 

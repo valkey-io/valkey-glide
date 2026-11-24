@@ -2401,10 +2401,12 @@ func classifyBfloat16SimdCapabilityError(msg string) bool {
 	return strings.Contains(msg, "BFLOAT16") && strings.Contains(msg, "SIMD")
 }
 
-func (suite *GlideTestSuite) probeSearch13CapabilityCluster(
+// probeSearchInKeysSupportCluster reports whether the cluster's search module accepts
+// FT.SEARCH ... INKEYS, the capability probe for valkey-search 1.3.0 or later.
+func (suite *GlideTestSuite) probeSearchInKeysSupportCluster(
 	ctx context.Context, client *glide.ClusterClient,
 ) bool {
-	probeIndex := "__glide_search_1_3_probe_" + uuid.New().String()
+	probeIndex := "__glide_search_inkeys_probe_" + uuid.New().String()
 	_, err := client.CustomCommand(ctx, []string{"FT.CREATE", probeIndex, "SCHEMA", "title", "TEXT"})
 	require.NoError(
 		suite.T(), err,
@@ -2506,7 +2508,7 @@ func (suite *GlideTestSuite) getEmulateReleaseLevel(ctx context.Context, client 
 func (suite *GlideTestSuite) TestModuleFtSearchInKeys() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -2578,7 +2580,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchCountMapsToLimitZeroZero() {
 func (suite *GlideTestSuite) TestModuleFtAggregateTypedReducers() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
@@ -2644,7 +2646,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateTypedReducers() {
 func (suite *GlideTestSuite) TestModuleFtCreateFilterScoreFieldNoHighlight() {
 	client := suite.defaultClusterClient()
 	ctx := context.Background()
-	if !suite.probeSearch13CapabilityCluster(ctx, client) {
+	if !suite.probeSearchInKeysSupportCluster(ctx, client) {
 		suite.T().Skip("search module present but pre-1.3 (INKEYS probe rejected it)")
 	}
 
