@@ -2920,38 +2920,47 @@ mod tests_block_on_worker {
         assert_ne!(polled_on.unwrap(), caller);
     }
 
-    /// Raises a callback on a new thread, and returns the thread it was raised on and the thread
-    /// it ran on.
+    /// Raises a callback on a new thread. The receiver gets the thread it was raised on and the
+    /// thread it ran on.
     fn raise_on_another_thread(
-        dispatch: &CallerDispatch,
-    ) -> (std::thread::ThreadId, std::thread::ThreadId) {
-        std::thread::scope(|scope| {
-            scope
-                .spawn(|| {
-                    let ran_on = dispatch.run(|| std::thread::current().id());
-                    (std::thread::current().id(), ran_on)
-                })
-                .join()
-                .unwrap()
-        })
+        dispatch: &Arc<CallerDispatch>,
+    ) -> std::sync::mpsc::Receiver<(std::thread::ThreadId, std::thread::ThreadId)> {
+        let (sent, received) = std::sync::mpsc::channel();
+        let dispatch = dispatch.clone();
+        std::thread::spawn(move || {
+            let ran_on = dispatch.run(|| std::thread::current().id());
+            let _ = sent.send((std::thread::current().id(), ran_on));
+        });
+        received
+    }
+
+    /// Waits for `received` with a deadline, so a callback that never returns fails the test
+    /// instead of hanging it.
+    fn within_deadline<T>(received: &std::sync::mpsc::Receiver<T>) -> T {
+        received
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("the callback did not return in time")
     }
 
     #[test]
     fn a_callback_raised_after_its_caller_left_runs_where_it_is_raised() {
-        let dispatch = CallerDispatch::default();
+        let dispatch = Arc::new(CallerDispatch::default());
         drop(dispatch.register());
-        let (raised_on, ran_on) = raise_on_another_thread(&dispatch);
+        let (raised_on, ran_on) = within_deadline(&raise_on_another_thread(&dispatch));
         assert_eq!(ran_on, raised_on);
     }
 
     #[test]
     fn a_callback_raised_on_the_blocked_caller_runs_inline() {
-        let dispatch = CallerDispatch::default();
-        let _caller = dispatch.register();
-        assert_eq!(
-            dispatch.run(|| std::thread::current().id()),
-            std::thread::current().id()
-        );
+        let (sent, received) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let dispatch = CallerDispatch::default();
+            let _caller = dispatch.register();
+            let ran_on = dispatch.run(|| std::thread::current().id());
+            let _ = sent.send((std::thread::current().id(), ran_on));
+        });
+        let (caller, ran_on) = within_deadline(&received);
+        assert_eq!(ran_on, caller);
     }
 
     /// Waits until another thread has queued a callback on `dispatch`.
@@ -2968,14 +2977,12 @@ mod tests_block_on_worker {
 
     #[test]
     fn a_callback_queued_as_its_caller_leaves_runs_on_that_caller() {
-        let dispatch = CallerDispatch::default();
+        let dispatch = Arc::new(CallerDispatch::default());
         let caller = dispatch.register();
-        let ran_on = std::thread::scope(|scope| {
-            let raiser = scope.spawn(|| dispatch.run(|| std::thread::current().id()));
-            wait_until_queued(&dispatch);
-            drop(caller);
-            raiser.join().unwrap()
-        });
+        let ran = raise_on_another_thread(&dispatch);
+        wait_until_queued(&dispatch);
+        drop(caller);
+        let (_, ran_on) = within_deadline(&ran);
         assert_eq!(ran_on, std::thread::current().id());
     }
 
