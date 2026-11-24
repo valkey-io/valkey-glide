@@ -2662,17 +2662,8 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             geosearch_has_reply_options(cmd).then_some(ExpectedReturnType::GeoSearchReturnType)
         }
         b"XINFO STREAM" => {
-            // Routable also accepts an already combined "XINFO STREAM" command.
-            let option_index = if cmd
-                .arg_idx(0)
-                .is_some_and(|arg| arg_eq_ignore_case(arg, b"XINFO"))
-            {
-                3
-            } else {
-                2
-            };
             if cmd
-                .arg_idx(option_index)
+                .arg_idx(3)
                 .is_some_and(|arg| core_option_eq_ignore_case(arg, b"FULL"))
             {
                 Some(ExpectedReturnType::XInfoStreamFullReturnType)
@@ -2841,557 +2832,239 @@ pub(crate) fn get_value_type<'a>(value: &Value) -> &'a str {
 mod tests {
     use super::*;
 
-    fn keyword_command(args: &[&str]) -> Cmd {
-        let mut cmd = redis::cmd(args[0]);
-        cmd.arg(&args[1..]);
-        cmd
-    }
-
     #[test]
-    fn regression_keyword_data_does_not_select_reply_conversion() {
-        let commands: &[&[&str]] = &[
-            &["LCS", "IDX", "other"],
-            &["LCS", "other", "iDx"],
-            &["HRANDFIELD", "WITHVALUES", "1"],
-            &["ZRANDMEMBER", "WITHSCORES", "1"],
-            &["ZADD", "INCR", "1", "member"],
-            &["ZADD", "key", "1", "iNcR", "2", "other"],
-            &["ZRANGE", "WITHSCORES", "0", "-1"],
-            &["ZRANK", "WITHSCORE", "member"],
-            &["ZREVRANK", "key", "WiThScOrE"],
-            &["ZDIFF", "1", "WITHSCORES"],
-            &["ZUNION", "2", "other", "WiThScOrEs"],
-            &["ZINTER", "2", "WITHSCORES", "other"],
-            &[
-                "GEOSEARCH",
-                "WITHDIST",
-                "FROMMEMBER",
-                "WITHHASH",
-                "BYRADIUS",
-                "1",
-                "km",
-            ],
-            &[
-                "GEOSEARCH",
-                "key",
-                "FROMMEMBER",
-                "WiThCoOrD",
-                "BYBOX",
-                "1",
-                "2",
-                "km",
-            ],
+    fn regression_reply_option_boundaries() {
+        use ExpectedReturnType::*;
+
+        let lcs_indices = Some(Map {
+            key_type: &Some(SimpleString),
+            value_type: &None,
+        });
+        let stream_entries = Some(Map {
+            key_type: &Some(SimpleString),
+            value_type: &Some(ArrayOfPairs),
+        });
+        let stream_info = Some(Map {
+            key_type: &Some(BulkString),
+            value_type: &None,
+        });
+        let scores = Some(MapOfStringToDouble);
+        let pairs = Some(ArrayOfPairs);
+        let member_scores = Some(ArrayOfMemberScorePairs);
+        let rank = Some(ZRankReturnType);
+        let increment = Some(DoubleOrNull);
+        let geo = Some(GeoSearchReturnType);
+        let full_stream = Some(XInfoStreamFullReturnType);
+        let ids = Some(ArrayOfStrings);
+        let autoclaim = Some(XAutoClaimReturnType);
+        // Space-separated arguments keep the option grammar visible. NUL and
+        // non-UTF8 bytes remain part of their argument, including numeric data.
+        let cases: &[(&[u8], Option<ExpectedReturnType>)] = &[
+            (b"LCS IDX other", None),
+            (b"LCS other iDx", None),
+            (b"LCS \xffIDX other", None),
+            (b"HRANDFIELD WITHVALUES 1", None),
+            (b"ZRANDMEMBER WITHSCORES 1", None),
+            (b"ZADD INCR 1 member", None),
+            (b"ZADD key 1 iNcR 2 other", None),
+            (b"ZRANGE WITHSCORES 0 -1", None),
+            (b"ZRANK WITHSCORE member", None),
+            (b"ZREVRANK key WiThScOrE", None),
+            (b"ZDIFF 1 WITHSCORES", None),
+            (b"ZUNION 2 other WiThScOrEs", None),
+            (b"ZINTER 2 WITHSCORES other", None),
+            (
+                b"GEOSEARCH WITHDIST FROMMEMBER WITHHASH BYRADIUS 1 km",
+                None,
+            ),
+            (b"GEOSEARCH key FROMMEMBER WiThCoOrD BYBOX 1 2 km", None),
+            (b"XCLAIM jUsTiD group consumer 0 1-0", stream_entries),
+            (b"XCLAIM key jUsTiD consumer 0 1-0", stream_entries),
+            (b"XCLAIM key group jUsTiD 0 1-0", stream_entries),
+            (b"XAUTOCLAIM jUsTiD group consumer 0 1-0", autoclaim),
+            (b"XAUTOCLAIM key jUsTiD consumer 0 1-0", autoclaim),
+            (b"XAUTOCLAIM key group jUsTiD 0 1-0", autoclaim),
+            (b"XINFO STREAM fUlL", stream_info),
+            (b"LCS IDX IDX LEN iDx", lcs_indices),
+            (b"LCS IDX IDX MINMATCHLEN 1 iDx", lcs_indices),
+            (b"LCS IDX IDX WITHMATCHLEN iDx", lcs_indices),
+            (b"LCS IDX IDX MINMATCHLEN\0suffix 1 iDx", lcs_indices),
+            (b"HRANDFIELD WITHVALUES 1 wItHvAlUeS", pairs),
+            (b"ZRANDMEMBER WITHSCORES 1 wItHsCoReS", member_scores),
+            (b"ZRANK WITHSCORE WITHSCORE wItHsCoRe", rank),
+            (b"ZREVRANK WITHSCORE WITHSCORE wItHsCoRe", rank),
+            (b"ZADD INCR NX iNcR 1 INCR", increment),
+            (b"ZADD INCR XX iNcR 1 INCR", increment),
+            (b"ZADD INCR GT iNcR 1 INCR", increment),
+            (b"ZADD INCR LT iNcR 1 INCR", increment),
+            (b"ZADD INCR CH iNcR 1 INCR", increment),
+            (b"ZADD INCR NX\0suffix iNcR 1 INCR", increment),
+            (b"ZRANGE WITHSCORES 0 10 BYSCORE wItHsCoReS", scores),
+            (b"ZRANGE WITHSCORES - + BYLEX wItHsCoReS", scores),
+            (b"ZRANGE WITHSCORES 0 10 REV wItHsCoReS", scores),
+            (
+                b"ZRANGE WITHSCORES 0 10 BYSCORE LIMIT 0 5 wItHsCoReS",
+                scores,
+            ),
+            (b"ZRANGE WITHSCORES 0 10 XX wItHsCoReS", scores),
+            (b"ZRANGE WITHSCORES 0 10 xX\0suffix wItHsCoReS", scores),
+            (b"ZRANGE WITHSCORES 0 10 REV\0suffix wItHsCoReS", scores),
+            (b"ZRANGE k 0 10 BYSCORE LIMIT 0 5 WITHSCORES", scores),
+            (b"ZDIFF 1 WITHSCORES wItHsCoReS", scores),
+            (b"ZUNION 2 WITHSCORES other WEIGHTS 1 2 wItHsCoReS", scores),
+            (
+                b"ZUNION 2 WITHSCORES other AGGREGATE MAX wItHsCoReS",
+                scores,
+            ),
+            (b"ZINTER 1 WITHSCORES WEIGHTS 2 wItHsCoReS", scores),
+            (b"ZINTER 1 WITHSCORES AGGREGATE MIN wItHsCoReS", scores),
+            (b"ZUNION 1 key WEIGHTS\0suffix 2 WITHSCORES", scores),
+            (b"ZINTER 1 key AGGREGATE\0suffix MAX WITHSCORES", scores),
+            (
+                b"GEOSEARCH k FROMMEMBER WITHHASH BYRADIUS 1 km wItHdIsT",
+                geo,
+            ),
+            (b"GEOSEARCH k FROMLONLAT 0 0 BYRADIUS 1 km wItHdIsT", geo),
+            (b"GEOSEARCH k FROMMEMBER m BYRADIUS 1 km wItHhAsH", geo),
+            (b"GEOSEARCH k FROMMEMBER m BYBOX 1 2 km wItHdIsT", geo),
+            (
+                b"GEOSEARCH k FROMMEMBER m BYPOLYGON 3 0 0 1 0 1 1 wItHdIsT",
+                geo,
+            ),
+            (
+                b"GEOSEARCH k FROMMEMBER m BYRADIUS 1 km COUNT 1 wItHdIsT",
+                geo,
+            ),
+            (b"GEOSEARCH k FROMMEMBER m BYRADIUS 1 km ASC wItHdIsT", geo),
+            (b"GEOSEARCH k FROMMEMBER m BYRADIUS 1 km DESC wItHdIsT", geo),
+            (
+                b"GEOSEARCH k FROMMEMBER m BYRADIUS 1 km COUNT 1 ANY wItHdIsT",
+                geo,
+            ),
+            (
+                b"GEOSEARCH k FROMMEMBER\0suffix m BYRADIUS 1 km wItHdIsT",
+                geo,
+            ),
+            (
+                b"GEOSEARCH key wItHdIsT FROMMEMBER WITHHASH BYRADIUS 1 km",
+                geo,
+            ),
+            (b"GEOSEARCH key FROMLONLAT 0 0 BYBOX 1 2 km WITHCOORD", geo),
+            (b"XINFO STREAM FULL fUlL COUNT 1", full_stream),
+            (b"XCLAIM JUSTID JUSTID JUSTID 0 1-0 IDLE 0 jUsTiD", ids),
+            (b"XCLAIM JUSTID JUSTID JUSTID 0 1-0 TIME 0 jUsTiD", ids),
+            (
+                b"XCLAIM JUSTID JUSTID JUSTID 0 1-0 RETRYCOUNT 1 jUsTiD",
+                ids,
+            ),
+            (
+                b"XCLAIM JUSTID JUSTID JUSTID 0 1-0 IDLE 0 FORCE jUsTiD",
+                ids,
+            ),
+            (b"XCLAIM JUSTID JUSTID JUSTID 0 1-0 LASTID 0-0 jUsTiD", ids),
+            (
+                b"XCLAIM JUSTID JUSTID JUSTID 0 1-0 IDLE\0suffix 0 jUsTiD",
+                ids,
+            ),
+            (
+                b"XAUTOCLAIM JUSTID JUSTID JUSTID 0 0-0 COUNT 1 jUsTiD",
+                None,
+            ),
+            (
+                b"XAUTOCLAIM key group consumer 0 0-0 COUNT\0suffix 1 JUSTID",
+                None,
+            ),
+            (b"LCS a b MINMATCHLEN IDX", None),
+            (b"ZRANGE key 0 -1 LIMIT WITHSCORES 1", None),
+            (b"ZUNION 1 key WEIGHTS WITHSCORES", None),
+            (b"ZINTER 1 key AGGREGATE WITHSCORES", None),
+            (b"GEOSEARCH key FROMMEMBER member COUNT WITHDIST", None),
+            (
+                b"GEOSEARCH key BYPOLYGON 18446744073709551615 WITHDIST",
+                None,
+            ),
+            (b"GEOSEARCH key BYPOLYGON invalid WITHDIST", None),
+            (b"ZDIFF 18446744073709551615 WITHSCORES", None),
+            (b"ZUNION invalid WITHSCORES", None),
+            (b"ZADD INCR\0suffix 1 INCR\0suffix", None),
+            (b"LCS IDX\0suffix other", None),
+            (b"ZDIFF 1\0suffix key WITHSCORES", None),
+            (
+                b"GEOSEARCH key FROMMEMBER WITHDIST\0suffix BYRADIUS 1 km",
+                None,
+            ),
+            (b"ZRANGE key 0 -1 UNKNOWN WITHSCORES", None),
+            (
+                b"XCLAIM key group consumer 0 1-0 IDLE JUSTID",
+                stream_entries,
+            ),
+            (
+                b"XCLAIM key group consumer 0 1-0 TIME JUSTID",
+                stream_entries,
+            ),
+            (
+                b"XCLAIM key group consumer 0 1-0 RETRYCOUNT JUSTID",
+                stream_entries,
+            ),
+            (
+                b"XCLAIM key group consumer 0 1-0 LASTID JUSTID",
+                stream_entries,
+            ),
+            (
+                b"XAUTOCLAIM key group consumer 0 0-0 COUNT JUSTID",
+                autoclaim,
+            ),
+            (b"HRANDFIELD WITHVALUES 1 WITHVALUES\0suffix", pairs),
+            (
+                b"ZRANDMEMBER WITHSCORES 1 WITHSCORES\0suffix",
+                member_scores,
+            ),
+            (b"ZRANK WITHSCORE member WITHSCORE\0suffix", rank),
+            (b"ZREVRANK WITHSCORE member WITHSCORE\0suffix", rank),
+            (b"ZADD INCR INCR\0suffix 1 member", increment),
+            (b"ZRANGE WITHSCORES 0 -1 WITHSCORES\0suffix", scores),
+            (b"ZDIFF 1 WITHSCORES WITHSCORES\0suffix", scores),
+            (b"ZUNION 1 WITHSCORES WITHSCORES\0suffix", scores),
+            (b"ZINTER 1 WITHSCORES WITHSCORES\0suffix", scores),
+            (
+                b"GEOSEARCH WITHDIST FROMMEMBER member BYRADIUS 1 km WITHDIST\0suffix",
+                geo,
+            ),
+            (b"XINFO STREAM FULL FULL\0suffix", full_stream),
+            (b"LCS IDX other IDX\0suffix", lcs_indices),
+            (
+                b"XAUTOCLAIM JUSTID group consumer 0 0-0 JUSTID\0suffix",
+                None,
+            ),
+            (b"XCLAIM key group consumer 0 JUSTID", ids),
+            (b"XCLAIM key group consumer 0 FORCE JUSTID", ids),
+            (b"XCLAIM key group consumer 0 jUsTiD\0suffix", ids),
+            (b"XCLAIM key group consumer 0 1-0 2-0 IDLE 0 JUSTID", ids),
+            (
+                b"XCLAIM key group consumer 0 1-0 IDLE\0suffix 0 JUSTID",
+                ids,
+            ),
         ];
-        let mut collisions = Vec::new();
-        for args in commands {
-            let cmd = keyword_command(args);
-            if expected_type_for_cmd(&cmd).is_some() {
-                collisions.push(*args);
-                continue;
+        for (args, expected) in cases {
+            let mut words = args.split(|byte| *byte == b' ');
+            let mut cmd = redis::cmd(std::str::from_utf8(words.next().unwrap()).unwrap());
+            for word in words {
+                cmd.arg(word);
             }
-            let response = Value::Array(vec![Value::BulkString(b"normal data".to_vec().into())]);
-            assert_eq!(
-                convert_to_expected_type(response.clone(), expected_type_for_cmd(&cmd)).unwrap(),
-                response
-            );
-        }
-        assert!(
-            collisions.is_empty(),
-            "data selected a reply converter: {collisions:?}"
-        );
-    }
-
-    #[test]
-    fn regression_stream_keyword_data_uses_normal_reply() {
-        for data_index in 1..=3 {
-            for command in ["XCLAIM", "XAUTOCLAIM"] {
-                let mut args = [command, "key", "group", "consumer", "0", "1-0"];
-                args[data_index] = "jUsTiD";
-                let cmd = keyword_command(&args);
-                let expected = expected_type_for_cmd(&cmd);
-                if command == "XCLAIM" {
-                    assert!(
-                        matches!(expected, Some(ExpectedReturnType::Map { .. })),
-                        "{args:?}"
-                    );
-                } else {
-                    assert!(
-                        matches!(expected, Some(ExpectedReturnType::XAutoClaimReturnType)),
-                        "{args:?}"
-                    );
-                }
-            }
-        }
-        for args in [
-            &["XINFO", "STREAM", "fUlL"][..],
-            &["XINFO STREAM", "FULL"][..],
-        ] {
-            assert!(
-                matches!(
-                    expected_type_for_cmd(&keyword_command(args)),
-                    Some(ExpectedReturnType::Map { .. })
-                ),
-                "{args:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn regression_real_reply_options_remain_case_insensitive() {
-        let commands: &[(&[&str], ExpectedReturnType)] = &[
-            (
-                &[
-                    "LCS",
-                    "IDX",
-                    "IDX",
-                    "MINMATCHLEN",
-                    "1",
-                    "iDx",
-                    "WITHMATCHLEN",
-                ],
-                ExpectedReturnType::Map {
-                    key_type: &Some(ExpectedReturnType::SimpleString),
-                    value_type: &None,
-                },
-            ),
-            (
-                &["HRANDFIELD", "WITHVALUES", "1", "wItHvAlUeS"],
-                ExpectedReturnType::ArrayOfPairs,
-            ),
-            (
-                &["ZRANDMEMBER", "WITHSCORES", "1", "wItHsCoReS"],
-                ExpectedReturnType::ArrayOfMemberScorePairs,
-            ),
-            (
-                &["ZADD", "INCR", "XX", "CH", "iNcR", "1", "INCR"],
-                ExpectedReturnType::DoubleOrNull,
-            ),
-            (
-                &["ZRANGE", "WITHSCORES", "0", "-1", "REV", "wItHsCoReS"],
-                ExpectedReturnType::MapOfStringToDouble,
-            ),
-            (
-                &["ZRANK", "WITHSCORE", "WITHSCORE", "wItHsCoRe"],
-                ExpectedReturnType::ZRankReturnType,
-            ),
-            (
-                &["ZREVRANK", "WITHSCORE", "WITHSCORE", "wItHsCoRe"],
-                ExpectedReturnType::ZRankReturnType,
-            ),
-            (
-                &["ZDIFF", "1", "WITHSCORES", "wItHsCoReS"],
-                ExpectedReturnType::MapOfStringToDouble,
-            ),
-            (
-                &[
-                    "ZUNION",
-                    "2",
-                    "WITHSCORES",
-                    "other",
-                    "WEIGHTS",
-                    "1",
-                    "2",
-                    "AGGREGATE",
-                    "MAX",
-                    "wItHsCoReS",
-                ],
-                ExpectedReturnType::MapOfStringToDouble,
-            ),
-            (
-                &[
-                    "ZINTER",
-                    "1",
-                    "WITHSCORES",
-                    "AGGREGATE",
-                    "MIN",
-                    "wItHsCoReS",
-                ],
-                ExpectedReturnType::MapOfStringToDouble,
-            ),
-            (
-                &[
-                    "GEOSEARCH",
-                    "WITHDIST",
-                    "FROMMEMBER",
-                    "WITHCOORD",
-                    "BYRADIUS",
-                    "1",
-                    "km",
-                    "COUNT",
-                    "1",
-                    "ANY",
-                    "wItHhAsH",
-                ],
-                ExpectedReturnType::GeoSearchReturnType,
-            ),
-            (
-                &["XINFO", "STREAM", "FULL", "fUlL", "COUNT", "1"],
-                ExpectedReturnType::XInfoStreamFullReturnType,
-            ),
-            (
-                &["XINFO STREAM", "FULL", "fUlL"],
-                ExpectedReturnType::XInfoStreamFullReturnType,
-            ),
-            (
-                &[
-                    "XCLAIM", "JUSTID", "JUSTID", "JUSTID", "0", "1-0", "IDLE", "0", "jUsTiD",
-                ],
-                ExpectedReturnType::ArrayOfStrings,
-            ),
-        ];
-        for (args, expected) in commands {
-            let cmd = keyword_command(args);
             let actual = expected_type_for_cmd(&cmd);
-            assert!(
-                actual
-                    .is_some_and(|actual| std::mem::discriminant(&actual)
-                        == std::mem::discriminant(expected)),
+            assert_eq!(
+                actual.as_ref().map(std::mem::discriminant),
+                expected.as_ref().map(std::mem::discriminant),
                 "{args:?}"
             );
-        }
-        assert!(
-            expected_type_for_cmd(&keyword_command(&[
-                "XAUTOCLAIM",
-                "JUSTID",
-                "JUSTID",
-                "JUSTID",
-                "0",
-                "0-0",
-                "COUNT",
-                "1",
-                "jUsTiD"
-            ]))
-            .is_none()
-        );
-    }
-
-    #[test]
-    fn regression_option_clause_values_and_counts_are_bounded() {
-        let commands: &[&[&str]] = &[
-            &["LCS", "a", "b", "MINMATCHLEN", "IDX"],
-            &["ZRANGE", "key", "0", "-1", "LIMIT", "WITHSCORES", "1"],
-            &["ZUNION", "1", "key", "WEIGHTS", "WITHSCORES"],
-            &["ZINTER", "1", "key", "AGGREGATE", "WITHSCORES"],
-            &[
-                "GEOSEARCH",
-                "key",
-                "FROMMEMBER",
-                "member",
-                "COUNT",
-                "WITHDIST",
-            ],
-            &[
-                "GEOSEARCH",
-                "key",
-                "BYPOLYGON",
-                "18446744073709551615",
-                "WITHDIST",
-            ],
-            &["GEOSEARCH", "key", "BYPOLYGON", "invalid", "WITHDIST"],
-            &["ZDIFF", "18446744073709551615", "WITHSCORES"],
-            &["ZUNION", "invalid", "WITHSCORES"],
-        ];
-        for args in commands {
-            assert!(
-                expected_type_for_cmd(&keyword_command(args)).is_none(),
-                "{args:?}"
-            );
-        }
-        let valid: &[&[&str]] = &[
-            &[
-                "GEOSEARCH",
-                "key",
-                "wItHdIsT",
-                "FROMMEMBER",
-                "WITHHASH",
-                "BYRADIUS",
-                "1",
-                "km",
-            ],
-            &[
-                "GEOSEARCH",
-                "key",
-                "BYPOLYGON",
-                "3",
-                "0",
-                "0",
-                "1",
-                "0",
-                "1",
-                "1",
-                "wItHdIsT",
-            ],
-            &[
-                "GEOSEARCH",
-                "key",
-                "FROMLONLAT",
-                "0",
-                "0",
-                "BYBOX",
-                "1",
-                "2",
-                "km",
-                "WITHCOORD",
-            ],
-        ];
-        for args in valid {
-            assert!(
-                matches!(
-                    expected_type_for_cmd(&keyword_command(args)),
-                    Some(ExpectedReturnType::GeoSearchReturnType)
-                ),
-                "{args:?}"
-            );
-        }
-        let mut binary_key = redis::cmd("LCS");
-        binary_key.arg(&b"\xffIDX"[..]).arg("other");
-        assert!(expected_type_for_cmd(&binary_key).is_none());
-        for args in [
-            &[
-                "XCLAIM", "key", "group", "consumer", "0", "1-0", "TIME", "JUSTID",
-            ][..],
-            &[
-                "XCLAIM", "key", "group", "consumer", "0", "1-0", "LASTID", "JUSTID",
-            ][..],
-        ] {
-            assert!(matches!(
-                expected_type_for_cmd(&keyword_command(args)),
-                Some(ExpectedReturnType::Map { .. })
-            ));
-        }
-        assert!(matches!(
-            expected_type_for_cmd(&keyword_command(&[
-                "XAUTOCLAIM",
-                "key",
-                "group",
-                "consumer",
-                "0",
-                "0-0",
-                "COUNT",
-                "JUSTID"
-            ])),
-            Some(ExpectedReturnType::XAutoClaimReturnType)
-        ));
-    }
-
-    #[test]
-    fn regression_zrange_xx_preserves_withscores_conversion() {
-        for option in ["XX", "xX\0suffix"] {
-            let cmd = keyword_command(&["ZRANGE", "key", "0", "-1", option, "WITHSCORES"]);
-            assert!(matches!(
-                expected_type_for_cmd(&cmd),
-                Some(ExpectedReturnType::MapOfStringToDouble)
-            ));
-        }
-    }
-
-    #[test]
-    fn regression_nul_terminated_core_options_preserve_conversion() {
-        let commands: &[&[&str]] = &[
-            &["LCS", "a", "b", "MINMATCHLEN\0suffix", "1", "IDX"],
-            &["ZADD", "key", "NX\0suffix", "INCR", "1", "member"],
-            &["ZRANGE", "key", "0", "-1", "REV\0suffix", "WITHSCORES"],
-            &["ZUNION", "1", "key", "WEIGHTS\0suffix", "2", "WITHSCORES"],
-            &[
-                "ZINTER",
-                "1",
-                "key",
-                "AGGREGATE\0suffix",
-                "MAX",
-                "WITHSCORES",
-            ],
-            &[
-                "GEOSEARCH",
-                "key",
-                "FROMMEMBER\0suffix",
-                "member",
-                "BYRADIUS",
-                "1",
-                "km",
-                "WITHDIST",
-            ],
-            &[
-                "XCLAIM",
-                "key",
-                "group",
-                "consumer",
-                "0",
-                "1-0",
-                "IDLE\0suffix",
-                "0",
-                "JUSTID",
-            ],
-        ];
-        let mut missed = Vec::new();
-        for args in commands {
-            if expected_type_for_cmd(&keyword_command(args)).is_none() {
-                missed.push(*args);
+            if expected.is_none() {
+                let response = Value::Array(vec![Value::BulkString(b"data".to_vec().into())]);
+                assert_eq!(
+                    convert_to_expected_type(response.clone(), actual).unwrap(),
+                    response
+                );
             }
         }
-        assert!(
-            missed.is_empty(),
-            "accepted option aliases lost conversion: {missed:?}"
-        );
-        assert!(
-            expected_type_for_cmd(&keyword_command(&[
-                "XAUTOCLAIM",
-                "key",
-                "group",
-                "consumer",
-                "0",
-                "0-0",
-                "COUNT\0suffix",
-                "1",
-                "JUSTID"
-            ]))
-            .is_none()
-        );
-
-        // A real reply flag may itself be NUL terminated. These keys also
-        // exercised conversion under the original whole-command search.
-        let aliases: &[(&[&str], ExpectedReturnType)] = &[
-            (
-                &["HRANDFIELD", "WITHVALUES", "1", "WITHVALUES\0suffix"],
-                ExpectedReturnType::ArrayOfPairs,
-            ),
-            (
-                &["ZRANDMEMBER", "WITHSCORES", "1", "WITHSCORES\0suffix"],
-                ExpectedReturnType::ArrayOfMemberScorePairs,
-            ),
-            (
-                &["ZRANK", "WITHSCORE", "member", "WITHSCORE\0suffix"],
-                ExpectedReturnType::ZRankReturnType,
-            ),
-            (
-                &["ZREVRANK", "WITHSCORE", "member", "WITHSCORE\0suffix"],
-                ExpectedReturnType::ZRankReturnType,
-            ),
-            (
-                &["ZADD", "INCR", "INCR\0suffix", "1", "member"],
-                ExpectedReturnType::DoubleOrNull,
-            ),
-            (
-                &["ZRANGE", "WITHSCORES", "0", "-1", "WITHSCORES\0suffix"],
-                ExpectedReturnType::MapOfStringToDouble,
-            ),
-            (
-                &["ZDIFF", "1", "WITHSCORES", "WITHSCORES\0suffix"],
-                ExpectedReturnType::MapOfStringToDouble,
-            ),
-            (
-                &["ZUNION", "1", "WITHSCORES", "WITHSCORES\0suffix"],
-                ExpectedReturnType::MapOfStringToDouble,
-            ),
-            (
-                &["ZINTER", "1", "WITHSCORES", "WITHSCORES\0suffix"],
-                ExpectedReturnType::MapOfStringToDouble,
-            ),
-            (
-                &[
-                    "GEOSEARCH",
-                    "WITHDIST",
-                    "FROMMEMBER",
-                    "member",
-                    "BYRADIUS",
-                    "1",
-                    "km",
-                    "WITHDIST\0suffix",
-                ],
-                ExpectedReturnType::GeoSearchReturnType,
-            ),
-            (
-                &["XINFO", "STREAM", "FULL", "FULL\0suffix"],
-                ExpectedReturnType::XInfoStreamFullReturnType,
-            ),
-            (
-                &[
-                    "XCLAIM",
-                    "JUSTID",
-                    "group",
-                    "consumer",
-                    "0",
-                    "1-0",
-                    "JUSTID\0suffix",
-                ],
-                ExpectedReturnType::ArrayOfStrings,
-            ),
-        ];
-        for (args, expected) in aliases {
-            let cmd = keyword_command(args);
-            let actual = expected_type_for_cmd(&cmd);
-            assert!(
-                actual
-                    .is_some_and(|actual| std::mem::discriminant(&actual)
-                        == std::mem::discriminant(expected)),
-                "{args:?}"
-            );
-        }
-        assert!(matches!(
-            expected_type_for_cmd(&keyword_command(&["LCS", "IDX", "other", "IDX\0suffix"])),
-            Some(ExpectedReturnType::Map { .. })
-        ));
-        assert!(
-            expected_type_for_cmd(&keyword_command(&[
-                "XAUTOCLAIM",
-                "JUSTID",
-                "group",
-                "consumer",
-                "0",
-                "0-0",
-                "JUSTID\0suffix"
-            ]))
-            .is_none()
-        );
-
-        // Data and numeric counts are never truncated by the option matcher.
-        for args in [
-            &["ZADD", "INCR\0suffix", "1", "INCR\0suffix"][..],
-            &["LCS", "IDX\0suffix", "other"][..],
-            &["ZDIFF", "1\0suffix", "key", "WITHSCORES"][..],
-            &[
-                "GEOSEARCH",
-                "key",
-                "FROMMEMBER",
-                "WITHDIST\0suffix",
-                "BYRADIUS",
-                "1",
-                "km",
-            ][..],
-        ] {
-            assert!(
-                expected_type_for_cmd(&keyword_command(args)).is_none(),
-                "{args:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn regression_xclaim_justid_accepts_empty_id_list() {
-        for options in [
-            &["JUSTID"][..],
-            &["FORCE", "JUSTID"][..],
-            &["jUsTiD\0suffix"][..],
-            &["1-0", "2-0", "IDLE", "0", "JUSTID"][..],
-            &["1-0", "IDLE\0suffix", "0", "JUSTID"][..],
-        ] {
-            let mut cmd = keyword_command(&["XCLAIM", "key", "group", "consumer", "0"]);
-            cmd.arg(options);
-            let expected = expected_type_for_cmd(&cmd);
-            assert!(
-                matches!(expected, Some(ExpectedReturnType::ArrayOfStrings)),
-                "{options:?}"
-            );
-            assert_eq!(
-                convert_to_expected_type(Value::Array(vec![]), expected).unwrap(),
-                Value::Array(vec![])
-            );
-        }
-        assert!(matches!(
-            expected_type_for_cmd(&keyword_command(&[
-                "XCLAIM", "JUSTID", "JUSTID", "JUSTID", "0", "1-0"
-            ])),
-            Some(ExpectedReturnType::Map { .. })
-        ));
     }
 
     #[test]

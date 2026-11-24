@@ -13,7 +13,7 @@
 
 ### Fixes
 
-* Core: Decode replies correctly when command arguments match option keywords and propagate array conversion errors ([#7631](https://github.com/valkey-io/valkey-glide/issues/7631))
+* Core: respect command option boundaries in reply conversion ([#7748](https://github.com/valkey-io/valkey-glide/pull/7748))
 * Core: keep timeout watchdog pending counts isolated from retired workers and losing singleton initialization candidates ([#7762](https://github.com/valkey-io/valkey-glide/pull/7762))
 * Core: prevent missed refresh completion notifications ([#7766](https://github.com/valkey-io/valkey-glide/pull/7766))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
