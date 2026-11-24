@@ -21,6 +21,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
+	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
 const (
@@ -1758,11 +1759,9 @@ func (suite *GlideTestSuite) TestHGetDel() {
 		assert.True(suite.T(), values3[0].IsNil())
 		assert.True(suite.T(), values3[1].IsNil())
 
-		// HGETDEL on a key holding a non-hash value returns a WRONGTYPE error
-		stringKey := uuid.NewString()
-		suite.verifyOK(client.Set(context.Background(), stringKey, "not_a_hash"))
-		_, err = client.HGetDel(context.Background(), stringKey, []string{"field1"})
-		suite.ErrorContains(err, "WRONGTYPE")
+		// HGETDEL with an empty fields list should return an error
+		_, err = client.HGetDel(context.Background(), key, []string{})
+		assert.Error(suite.T(), err)
 	})
 }
 
@@ -12122,6 +12121,64 @@ func (suite *GlideTestSuite) TestScriptFlush() {
 		assert.Equal(suite.T(), []bool{false}, result)
 
 		script.Close()
+	})
+}
+
+// noScriptPattern matches the server's NOSCRIPT reply: Valkey 8.0+ sends the first sentence only,
+// Valkey 7.2 and Redis OSS also append "Please use EVAL.".
+const noScriptPattern = `^NOSCRIPT No matching script\.( Please use EVAL\.)?$`
+
+func (suite *GlideTestSuite) TestNoScriptErrorKeepsServerText() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		ctx := context.Background()
+		t := suite.T()
+		unknownHash := strings.Repeat("f", 40)
+		evalSha := []string{"EVALSHA", unknownHash, "0"}
+
+		var err, batchExecErr, batchErr error
+		var batchResults []any
+		switch c := client.(type) {
+		case *glide.Client:
+			_, err = c.CustomCommand(ctx, evalSha)
+			batchResults, batchExecErr = c.Exec(ctx, *pipeline.NewStandaloneBatch(false).CustomCommand(evalSha), false)
+			_, batchErr = c.Exec(ctx, *pipeline.NewStandaloneBatch(false).CustomCommand(evalSha), true)
+		case *glide.ClusterClient:
+			_, err = c.CustomCommand(ctx, evalSha)
+			batchResults, batchExecErr = c.Exec(ctx, *pipeline.NewClusterBatch(false).CustomCommand(evalSha), false)
+			_, batchErr = c.Exec(ctx, *pipeline.NewClusterBatch(false).CustomCommand(evalSha), true)
+		default:
+			suite.Failf("unexpected client type", "%T", client)
+			return
+		}
+
+		if suite.Error(err) {
+			assert.Regexp(t, noScriptPattern, err.Error())
+		}
+
+		suite.NoError(batchExecErr)
+		if suite.Len(batchResults, 1) {
+			resultErr, ok := batchResults[0].(error)
+			if suite.True(ok, "expected an error in the batch result, got %#v", batchResults[0]) {
+				assert.Regexp(t, noScriptPattern, resultErr.Error())
+			}
+		}
+
+		if suite.Error(batchErr) {
+			assert.Regexp(t, noScriptPattern, batchErr.Error())
+		}
+
+		// InvokeScript reloads the script while it is open; once closed, the server's NOSCRIPT reaches the caller.
+		script := options.NewScript(fmt.Sprintf("return '%s'", uuid.NewString()))
+		_, err = client.InvokeScript(ctx, *script)
+		suite.NoError(err)
+		script.Close()
+		_, err = client.ScriptFlush(ctx)
+		suite.NoError(err)
+
+		_, err = client.InvokeScript(ctx, *script)
+		if suite.Error(err) {
+			assert.Regexp(t, noScriptPattern, err.Error())
+		}
 	})
 }
 

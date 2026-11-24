@@ -321,6 +321,7 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClientUsageError> {
         }
     };
 
+    // TODO #7666: Remove this check once `Client::send_command` rejects empty commands.
     if cmd.args_iter().next().is_none() {
         return Err(ClientUsageError::User(
             "Received command without a command name or arguments".into(),
@@ -403,40 +404,19 @@ fn process_command_for_compression(
 
     // Extract command name to determine request type
     let command_name = &all_args[0];
-    let command_str = String::from_utf8_lossy(command_name).to_uppercase();
-    let request_type = match command_str.as_str() {
-        // Commands that support compression
-        "GETSET" => crate::request_type::RequestType::GetSet,
-        "MSET" => crate::request_type::RequestType::MSet,
-        "MSETNX" => crate::request_type::RequestType::MSetNX,
-        "PSETEX" => crate::request_type::RequestType::PSetEx,
-        "SET" => crate::request_type::RequestType::Set,
-        "SETEX" => crate::request_type::RequestType::SetEx,
-        "SETNX" => crate::request_type::RequestType::SetNX,
-        // Incompatible commands - string manipulation
-        "APPEND" => crate::request_type::RequestType::Append,
-        "DELIFEQ" => crate::request_type::RequestType::DelIfEq,
-        "GETRANGE" => crate::request_type::RequestType::GetRange,
-        "LCS" => crate::request_type::RequestType::LCS,
-        "SETRANGE" => crate::request_type::RequestType::SetRange,
-        "STRLEN" => crate::request_type::RequestType::Strlen,
-        "SUBSTR" => crate::request_type::RequestType::Substr,
-        // Incompatible commands - numeric operations
-        "DECR" => crate::request_type::RequestType::Decr,
-        "DECRBY" => crate::request_type::RequestType::DecrBy,
-        "INCR" => crate::request_type::RequestType::Incr,
-        "INCRBY" => crate::request_type::RequestType::IncrBy,
-        "INCRBYFLOAT" => crate::request_type::RequestType::IncrByFloat,
-        // Incompatible commands - bit operations
-        "BITCOUNT" => crate::request_type::RequestType::BitCount,
-        "BITFIELD" => crate::request_type::RequestType::BitField,
-        "BITFIELD_RO" => crate::request_type::RequestType::BitFieldReadOnly,
-        "BITOP" => crate::request_type::RequestType::BitOp,
-        "BITPOS" => crate::request_type::RequestType::BitPos,
-        "GETBIT" => crate::request_type::RequestType::GetBit,
-        "SETBIT" => crate::request_type::RequestType::SetBit,
-        _ => return Ok(()), // Unknown command, no compression processing needed
+    let command_str = String::from_utf8_lossy(command_name);
+    let request_type = match crate::request_type::RequestType::from_command_name(&command_str) {
+        Some(request_type) => request_type,
+        None => return Ok(()), // Unknown command, no compression processing needed
     };
+
+    // Reply-only commands need no argument processing; keep the original command.
+    if matches!(
+        request_type.compression_behavior(),
+        crate::compression::CommandCompressionBehavior::DecompressValues
+    ) {
+        return Ok(());
+    }
 
     // Get arguments excluding the command name
     let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
@@ -643,6 +623,8 @@ fn get_route(
         ))),
         Value::SlotIdRoute(slot_id_route) => Ok(Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
+                // TODO #7681: Use a checked conversion (`u16::try_from`) and reject out-of-range
+                // slots.
                 slot_id_route.slot_id as u16,
                 get_slot_addr(&slot_id_route.slot_type)?,
             )),

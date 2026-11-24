@@ -1534,6 +1534,8 @@ fn convert_lolwut_string(data: &str) -> String {
     }
 }
 
+// TODO #7631: Propagate conversion errors instead of calling `unwrap()`, which panics on a
+// mismatched reply.
 /// Converts elements in an array to the specified type.
 ///
 /// `array` is an array of values.
@@ -2088,6 +2090,8 @@ fn ft_hybrid_option_tail_contains_flag(cmd: &Cmd, flag: &[u8]) -> bool {
     ft_aggregate_option_tail_contains_flag(cmd, tail_start, flag)
 }
 
+// TODO #7631: Match option keywords (`JUSTID`, `IDX`, `WITHSCORES`, ...) only among each command's
+// option arguments, not every argument (as `ft_search_option_tail_contains_flag` does).
 pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>> {
     let command = cmd.command()?;
 
@@ -2144,23 +2148,24 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             key_type: &Some(ExpectedReturnType::SimpleString),
             value_type: &None,
         }),
-        b"INCRBYFLOAT" | b"HINCRBYFLOAT" | b"ZINCRBY" => Some(ExpectedReturnType::Double),
-        b"HEXISTS"
-        | b"HSETNX"
+        b"HINCRBYFLOAT" | b"INCRBYFLOAT" | b"ZINCRBY" => Some(ExpectedReturnType::Double),
+        b"COPY"
+        | b"DELEX"
+        | b"DELIFEQ"
         | b"EXPIRE"
         | b"EXPIREAT"
+        | b"HEXISTS"
+        | b"HSETNX"
+        | b"MOVE"
+        | b"MSETNX"
+        | b"PERSIST"
         | b"PEXPIRE"
         | b"PEXPIREAT"
-        | b"PERSIST"
-        | b"SMOVE"
         | b"PFADD"
         | b"RENAMENX"
-        | b"MOVE"
-        | b"COPY"
-        | b"MSETNX"
-        | b"DELIFEQ"
-        | b"XGROUP DESTROY"
-        | b"XGROUP CREATECONSUMER" => Some(ExpectedReturnType::Boolean),
+        | b"SMOVE"
+        | b"XGROUP CREATECONSUMER"
+        | b"XGROUP DESTROY" => Some(ExpectedReturnType::Boolean),
         b"SMISMEMBER" | b"SCRIPT EXISTS" => Some(ExpectedReturnType::ArrayOfBools),
         b"SMEMBERS" | b"SINTER" | b"SDIFF" | b"SUNION" => Some(ExpectedReturnType::Set),
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
@@ -2818,6 +2823,7 @@ mod tests {
         assert!(converted_4.is_err());
     }
 
+    // TODO #7631: Add cases where a key, member, group or consumer equals an option keyword.
     #[test]
     fn convert_xclaim() {
         assert!(matches!(

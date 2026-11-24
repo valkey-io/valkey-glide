@@ -34,6 +34,7 @@ pub mod address_resolver_registry;
 pub mod compression;
 pub mod credential_provider_registry;
 pub mod errors;
+pub mod fork_slot;
 pub mod rdma;
 pub mod scripts_container;
 pub mod timeout_watchdog;

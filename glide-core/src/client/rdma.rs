@@ -12,8 +12,10 @@ use super::{Client, DispatchPermit};
 
 /// What an RDMA transfer hands back: the buffer when the server is known to be
 /// done with it, and how the transfer went.
+///
+/// `M` is the kind of memory the buffer is over; see [`glide_rdma::MemoryKind`].
 #[derive(Debug)]
-pub enum RdmaOutcome<T> {
+pub enum RdmaOutcome<T, M: glide_rdma::MemoryKind = glide_rdma::Host> {
     /// The server is known to be done with the memory, so the buffer comes back.
     ///
     /// This happens in three ways:
@@ -35,7 +37,7 @@ pub enum RdmaOutcome<T> {
     ///   replaced and a cluster client sends the transfer again on the new one).
     Settled {
         /// The buffer that was passed in, ready for the next transfer.
-        buffer: glide_rdma::RdmaBuffer,
+        buffer: glide_rdma::RdmaBuffer<M>,
         /// The transfer's result, or why it was refused or failed.
         result: Result<T, redis::RedisError>,
     },
@@ -61,7 +63,7 @@ pub enum RdmaOutcome<T> {
 
 /// A RDMA transfer command: how it lends the buffer, how it reads the server's reply,
 /// and what it makes of the bytes once the buffer is back.
-trait Transfer {
+trait Transfer<M: glide_rdma::MemoryKind> {
     type Reply;
 
     /// Build the command and lend the buffer, or hand it back with why not.
@@ -70,10 +72,10 @@ trait Transfer {
     #[allow(clippy::result_large_err)]
     fn lend(
         &self,
-        buffer: glide_rdma::RdmaBuffer,
+        buffer: glide_rdma::RdmaBuffer<M>,
     ) -> Result<
-        (glide_rdma::RdmaCommand, glide_rdma::LentBuffer),
-        (glide_rdma::RdmaBuffer, glide_rdma::RdmaError),
+        (glide_rdma::RdmaCommand, glide_rdma::LentBuffer<M>),
+        (glide_rdma::RdmaBuffer<M>, glide_rdma::RdmaError),
     >;
 
     /// Read the server's answer into what ends the loan.
@@ -82,7 +84,7 @@ trait Transfer {
     /// Turn a reclaimed loan's receipt into the caller's result.
     fn finish(
         &self,
-        buffer: &glide_rdma::RdmaBuffer,
+        buffer: &glide_rdma::RdmaBuffer<M>,
         receipt: Option<glide_rdma::ReadReceipt>,
     ) -> redis::RedisResult<Self::Reply>;
 }
@@ -94,7 +96,7 @@ struct Get<'a> {
     length: usize,
 }
 
-impl Transfer for Get<'_> {
+impl Transfer<glide_rdma::Host> for Get<'_> {
     type Reply = Option<glide_rdma::ReadReceipt>;
 
     fn lend(
@@ -126,23 +128,56 @@ impl Transfer for Get<'_> {
     }
 }
 
+impl Transfer<glide_rdma::Device> for Get<'_> {
+    type Reply = Option<glide_rdma::ReadReceipt>;
+
+    fn lend(
+        &self,
+        buffer: glide_rdma::RdmaBuffer<glide_rdma::Device>,
+    ) -> Result<
+        (
+            glide_rdma::RdmaCommand,
+            glide_rdma::LentBuffer<glide_rdma::Device>,
+        ),
+        (
+            glide_rdma::RdmaBuffer<glide_rdma::Device>,
+            glide_rdma::RdmaError,
+        ),
+    > {
+        buffer.lend_for_get(self.key, self.offset, self.length)
+    }
+
+    fn parse(value: redis::Value) -> redis::RedisResult<glide_rdma::TransferReply> {
+        crate::rdma::protocol::parse_read_reply(value)
+    }
+
+    /// Device memory cannot be read here, so the receipt goes back unchecked.
+    fn finish(
+        &self,
+        _buffer: &glide_rdma::RdmaBuffer<glide_rdma::Device>,
+        receipt: Option<glide_rdma::ReadReceipt>,
+    ) -> redis::RedisResult<Self::Reply> {
+        Ok(receipt)
+    }
+}
+
 /// `BLOB.RDMA_SET` out of the `[offset, offset + length)` window.
-struct Set<'a> {
+struct Set<'a, M: glide_rdma::MemoryKind> {
     key: &'a [u8],
     offset: usize,
     length: usize,
-    checksum: glide_rdma::SetChecksum,
+    checksum: M::SetChecksum,
 }
 
-impl Transfer for Set<'_> {
+impl<M: glide_rdma::MemoryKind> Transfer<M> for Set<'_, M> {
     type Reply = ();
 
     fn lend(
         &self,
-        buffer: glide_rdma::RdmaBuffer,
+        buffer: glide_rdma::RdmaBuffer<M>,
     ) -> Result<
-        (glide_rdma::RdmaCommand, glide_rdma::LentBuffer),
-        (glide_rdma::RdmaBuffer, glide_rdma::RdmaError),
+        (glide_rdma::RdmaCommand, glide_rdma::LentBuffer<M>),
+        (glide_rdma::RdmaBuffer<M>, glide_rdma::RdmaError),
     > {
         buffer.lend_for_set(self.key, self.offset, self.length, self.checksum)
     }
@@ -153,7 +188,7 @@ impl Transfer for Set<'_> {
 
     fn finish(
         &self,
-        _buffer: &glide_rdma::RdmaBuffer,
+        _buffer: &glide_rdma::RdmaBuffer<M>,
         _receipt: Option<glide_rdma::ReadReceipt>,
     ) -> redis::RedisResult<()> {
         Ok(())
@@ -163,10 +198,10 @@ impl Transfer for Set<'_> {
 /// End a loan the server is done with. `reply` is what the server answered: the
 /// transfer's result or the error it replied with. A handshake failure that kept
 /// the transfer from being sent counts as an error reply.
-fn reclaim_rdma_loan(
-    loan: glide_rdma::LentBuffer,
+fn reclaim_rdma_loan<M: glide_rdma::MemoryKind>(
+    loan: glide_rdma::LentBuffer<M>,
     reply: Result<glide_rdma::TransferReply, redis::RedisError>,
-) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
+) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>, M> {
     let (reply, error) = match reply {
         Ok(reply) => (reply, None),
         Err(error) => {
@@ -193,7 +228,10 @@ fn reclaim_rdma_loan(
 /// End a loan the server may still be using: close the region, then free its
 /// memory on efa-direct or park it until the fabric closes on tcp. No buffer comes
 /// back.
-fn recall_rdma_loan<T>(loan: glide_rdma::LentBuffer, error: redis::RedisError) -> RdmaOutcome<T> {
+fn recall_rdma_loan<T, M: glide_rdma::MemoryKind>(
+    loan: glide_rdma::LentBuffer<M>,
+    error: redis::RedisError,
+) -> RdmaOutcome<T, M> {
     // If the region fails to close, the server may still reach the memory. The
     // loan that comes back is dropped here, which keeps that memory for the life
     // of the process and counts it as leaked; the close is never tried again.
@@ -248,6 +286,34 @@ impl Client {
         // SAFETY: the caller upholds `register_raw`'s contract.
         self.rdma_regions
             .register(|| unsafe { rdma_fabric.register_raw(memory, owner) })
+    }
+
+    /// Register device memory, such as CUDA memory, owned outside Rust, by its
+    /// address. `runtime` names the device runtime it belongs to.
+    ///
+    /// The client must have been created with device memory enabled in its RDMA
+    /// configuration. The buffer that comes back is never read or written here, so
+    /// [`Self::rdma_set_device`] takes a [`glide_rdma::DeviceSetChecksum`] for it,
+    /// and [`Self::rdma_get_device`] leaves checking the landed bytes to the caller.
+    /// Synchronizing device work with transfers is also left to the caller; see
+    /// [`glide_rdma::RdmaFabric::register_device_raw`].
+    ///
+    /// `owner` is dropped as for [`Self::register_rdma_region_raw`], and the region
+    /// is revoked when the client is closed with [`Self::close_rdma`].
+    ///
+    /// # Safety
+    ///
+    /// The same as [`glide_rdma::RdmaFabric::register_device_raw`].
+    pub unsafe fn register_rdma_device_region_raw(
+        &self,
+        memory: std::ptr::NonNull<[u8]>,
+        runtime: glide_rdma::DeviceRuntime,
+        owner: impl Send + 'static,
+    ) -> Result<glide_rdma::RdmaBuffer<glide_rdma::Device>, redis::RedisError> {
+        let rdma_fabric = self.require_rdma_fabric()?;
+        // SAFETY: the caller upholds `register_device_raw`'s contract.
+        self.rdma_regions
+            .register(|| unsafe { rdma_fabric.register_device_raw(memory, runtime, owner) })
     }
 
     /// Bytes of registered memory this client is holding back because transfers
@@ -329,6 +395,29 @@ impl Client {
         self.transfer(&get, buffer).await
     }
 
+    /// [`Self::rdma_get`] into device memory from
+    /// [`Self::register_rdma_device_region_raw`].
+    ///
+    /// Device memory cannot be read here, so the landed bytes are not checked.
+    /// `Ok(Some(receipt))` means they are in the window, and `receipt.checksum` is
+    /// the server's CRC-32c of them, for the caller to check if it wants to. When
+    /// device work may read them is as [`glide_rdma::RdmaFabric::register_device_raw`]
+    /// says.
+    pub async fn rdma_get_device(
+        &mut self,
+        key: &[u8],
+        buffer: glide_rdma::RdmaBuffer<glide_rdma::Device>,
+        offset: usize,
+        length: usize,
+    ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>, glide_rdma::Device> {
+        let get = Get {
+            key,
+            offset,
+            length,
+        };
+        self.transfer(&get, buffer).await
+    }
+
     /// Store a value the server reads directly out of the `[offset, offset + length)`
     /// window of registered memory.
     ///
@@ -354,6 +443,30 @@ impl Client {
         self.transfer(&set, buffer).await
     }
 
+    /// [`Self::rdma_set`] out of device memory from
+    /// [`Self::register_rdma_device_region_raw`].
+    ///
+    /// Device memory cannot be read here, so `checksum` is a
+    /// [`glide_rdma::DeviceSetChecksum`]: none, or one the caller computed. Device
+    /// work that writes the window must have finished first; see
+    /// [`glide_rdma::RdmaFabric::register_device_raw`].
+    pub async fn rdma_set_device(
+        &mut self,
+        key: &[u8],
+        buffer: glide_rdma::RdmaBuffer<glide_rdma::Device>,
+        offset: usize,
+        length: usize,
+        checksum: glide_rdma::DeviceSetChecksum,
+    ) -> RdmaOutcome<(), glide_rdma::Device> {
+        let set = Set::<glide_rdma::Device> {
+            key,
+            offset,
+            length,
+            checksum,
+        };
+        self.transfer(&set, buffer).await
+    }
+
     /// The steps every transfer runs, in this order:
     ///
     /// 1. [`Self::check_rdma_buffer`], then [`Self::rdma_preflight`].
@@ -364,11 +477,11 @@ impl Client {
     ///
     /// A refusal in step 1 or 2 hands the buffer straight back since nothing has
     /// been lent yet. So a check that every transfer needs belongs in step 1.
-    async fn transfer<T: Transfer>(
+    async fn transfer<M: glide_rdma::MemoryKind, T: Transfer<M>>(
         &mut self,
         transfer: &T,
-        buffer: glide_rdma::RdmaBuffer,
-    ) -> RdmaOutcome<T::Reply> {
+        buffer: glide_rdma::RdmaBuffer<M>,
+    ) -> RdmaOutcome<T::Reply, M> {
         if let Err(error) = self.check_rdma_buffer(&buffer) {
             // A close marks the client closed before it revokes each region, so
             // the buffer may not be revoked yet. Wait for the close to reach it, so
@@ -439,13 +552,13 @@ impl Client {
     /// before the buffer was lent.
     ///
     /// If this future is dropped, so is the loan, which also closes the region.
-    async fn rdma_transfer(
+    async fn rdma_transfer<M: glide_rdma::MemoryKind>(
         &mut self,
         command: glide_rdma::RdmaCommand,
-        loan: glide_rdma::LentBuffer,
+        loan: glide_rdma::LentBuffer<M>,
         permit: DispatchPermit,
         parse: fn(redis::Value) -> redis::RedisResult<glide_rdma::TransferReply>,
-    ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>> {
+    ) -> RdmaOutcome<Option<glide_rdma::ReadReceipt>, M> {
         let mut command = crate::rdma::protocol::redis_command(&command);
         let reply = tokio::select! {
             // A reply that is ready wins over a revoke that is also ready: the
@@ -513,9 +626,9 @@ impl Client {
     /// A closing client wins over a revoked region, since closing is what revoked
     /// it. While the client is closing, this waits until the close has tried every
     /// region.
-    fn rdma_cancel_cause(
+    fn rdma_cancel_cause<M: glide_rdma::MemoryKind>(
         &self,
-        loan: &glide_rdma::LentBuffer,
+        loan: &glide_rdma::LentBuffer<M>,
     ) -> impl std::future::Future<Output = Option<crate::rdma::CancelCause>> + '_ {
         // Both are read before the wait: a `LentBuffer` is not `Sync`, so holding
         // `loan` across an `.await` would stop the transfer's future being `Send`.
@@ -534,7 +647,10 @@ impl Client {
     }
 
     /// Refuse a buffer this client cannot transfer through, naming why.
-    fn check_rdma_buffer(&self, buffer: &glide_rdma::RdmaBuffer) -> Result<(), redis::RedisError> {
+    fn check_rdma_buffer<M: glide_rdma::MemoryKind>(
+        &self,
+        buffer: &glide_rdma::RdmaBuffer<M>,
+    ) -> Result<(), redis::RedisError> {
         let rdma_fabric = self.require_rdma_fabric()?;
         if !buffer.is_registered_on(rdma_fabric) {
             return Err(crate::rdma::protocol::configuration_error(
