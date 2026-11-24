@@ -3401,9 +3401,13 @@ fn create_compression_manager(
 
 impl Client {
     pub async fn new(
-        request: ConnectionRequest,
+        mut request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
+        // Every binding reaches this through the protobuf conversion, and the Rust client
+        // builds `ConnectionRequest` directly. `StandaloneClient::create_client` repeats it
+        // for direct callers.
+        request.read_from = request.read_from.map(ReadFrom::with_trimmed_client_az);
         // Validate library name and version.
         if let Some(lib_name) = request.lib_name.as_deref() {
             validate_effective_lib_name(lib_name).map_err(ConnectionError::Configuration)?;
@@ -4514,7 +4518,7 @@ mod tests {
     use redis::Cmd;
 
     use crate::client::types::{
-        ConnectionRequest, ConnectionRetryStrategy, NodeAddress, OTelMetadata, TlsMode,
+        ConnectionRequest, ConnectionRetryStrategy, NodeAddress, OTelMetadata, ReadFrom, TlsMode,
     };
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, ClientShared, RequestTimeoutOption, TimeUnit,
@@ -4879,6 +4883,48 @@ mod tests {
 
         assert!(matches!(error, ConnectionError::Configuration(_)));
         assert!(error.to_string().contains("library name"));
+    }
+
+    /// Builds the lazy request a binding sends, so creation never touches the network.
+    #[cfg(feature = "proto")]
+    fn lazy_request_with_read_from(
+        read_from: crate::connection_request::ReadFrom,
+        client_az: &str,
+    ) -> ConnectionRequest {
+        let mut request = crate::connection_request::ConnectionRequest::new();
+        request
+            .addresses
+            .push(crate::connection_request::NodeAddress {
+                host: "127.0.0.1".into(),
+                port: 1,
+                ..Default::default()
+            });
+        request.lazy_connect = true;
+        request.read_from = read_from.into();
+        request.client_az = client_az.into();
+        request.into()
+    }
+
+    #[rstest::rstest]
+    #[tokio::test]
+    #[cfg(feature = "proto")]
+    async fn test_new_falls_back_to_prefer_replica_without_client_az(
+        #[values(
+            crate::connection_request::ReadFrom::AZAffinity,
+            crate::connection_request::ReadFrom::AZAffinityReplicasAndPrimary,
+            crate::connection_request::ReadFrom::AZAffinityAllNodes
+        )]
+        read_from: crate::connection_request::ReadFrom,
+        #[values("", " \t\n ")] client_az: &str,
+    ) {
+        let client = Client::new(lazy_request_with_read_from(read_from, client_az), None)
+            .await
+            .expect("the strategy falls back instead of failing");
+
+        let ClientWrapper::Lazy(lazy) = &*client.internal_client.read().await else {
+            panic!("a lazy client keeps its configuration until the first command");
+        };
+        assert_eq!(lazy.config.read_from, Some(ReadFrom::PreferReplica));
     }
 
     #[tokio::test]
