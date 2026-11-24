@@ -21,6 +21,7 @@ bytes = "1"
 libc = "0.2"
 percent-encoding = "2"
 protobuf = { version = "3", features = [] }
+protobuf-json-mapping = "3"
 serde_json = "1.0"
 url = "2"
 uuid = { version = "1", features = ["v4", "fast-rng"] }

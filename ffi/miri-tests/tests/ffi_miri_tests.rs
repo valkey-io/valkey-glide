@@ -4,7 +4,7 @@ use glide_core::connection_request::{ConnectionRequest, NodeAddress, TlsMode};
 use glide_core::request_type::RequestType;
 use miri_tests::{
     ClientType, ConnectionResponse, PushKind, close_client, create_client, create_client_from_uri,
-    free_connection_response,
+    create_client_from_proto_json, free_connection_response,
 };
 use miri_tests::{Level, LogResult, free_log_result, glide_log, init};
 use miri_tests::{
@@ -107,6 +107,57 @@ fn create_client_from_uri_test() {
         let conn_ptr = (*connection_response_ptr).conn_ptr;
         close_client(conn_ptr);
         free_connection_response(connection_response_ptr as *mut ConnectionResponse);
+        let _ = Box::from_raw(client_type_ptr);
+    }
+}
+
+#[test]
+fn create_client_from_proto_json_test() {
+    let json = br#"{"addresses": [{"host": "localhost", "port": 6378}]}"#;
+    let client_type = Box::new(ClientType::SyncClient);
+    let client_type_ptr = Box::into_raw(client_type);
+
+    unsafe {
+        let connection_response_ptr = create_client_from_proto_json(
+            json.as_ptr(),
+            json.len(),
+            client_type_ptr,
+            Some(pubsub_callback),
+            Some(noop_address_resolver),
+            0usize,
+        );
+        let conn_ptr = (*connection_response_ptr).conn_ptr;
+        close_client(conn_ptr);
+        free_connection_response(connection_response_ptr as *mut ConnectionResponse);
+        let _ = Box::from_raw(client_type_ptr);
+    }
+}
+
+#[test]
+fn create_client_from_proto_json_error_paths_test() {
+    let client_type = Box::new(ClientType::SyncClient);
+    let client_type_ptr = Box::into_raw(client_type);
+    // Zero length (valid non-null pointer), then non-UTF-8 bytes: both must come back as
+    // error responses, never aborts, and the response must free cleanly.
+    let zero_len: &[u8] = b"x";
+    let non_utf8: &[u8] = &[0xff, 0xfe, 0x7b];
+
+    for (bytes, len) in [(zero_len, 0usize), (non_utf8, non_utf8.len())] {
+        unsafe {
+            let connection_response_ptr = create_client_from_proto_json(
+                bytes.as_ptr(),
+                len,
+                client_type_ptr,
+                Some(pubsub_callback),
+                Some(noop_address_resolver),
+                0usize,
+            );
+            assert!((*connection_response_ptr).conn_ptr.is_null());
+            assert!(!(*connection_response_ptr).connection_error_message.is_null());
+            free_connection_response(connection_response_ptr as *mut ConnectionResponse);
+        }
+    }
+    unsafe {
         let _ = Box::from_raw(client_type_ptr);
     }
 }
