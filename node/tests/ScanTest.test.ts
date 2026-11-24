@@ -543,39 +543,26 @@ describe("Scan GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "fails with RequestError if cursor is not an instance of ClusterScanCursor_%p",
-        async (protocol) => {
+    it.each([
+        ["0", "string"],
+        [null, "null"],
+        [undefined, "undefined"],
+        [{}, "object"],
+        [[], "array"],
+    ])(
+        "fails with RequestError if cursor is not a ClusterScanCursor (input: %p, type: %s)",
+        async (invalidCursor, expectedType) => {
             client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
             );
-            await expect(client.scan("0" as never)).rejects.toThrow(
-                RequestError,
-            );
-            await expect(client.scan("0" as never)).rejects.toThrow(
-                "Invalid cursor parameter: expected instance of ClusterScanCursor, received string. " +
-                    "Use 'new ClusterScanCursor()' to start a cluster scan.",
-            );
-            await expect(client.scan(null as never)).rejects.toThrow(
-                RequestError,
-            );
-            await expect(client.scan(null as never)).rejects.toThrow(
-                "Invalid cursor parameter: expected instance of ClusterScanCursor, received null. " +
-                    "Use 'new ClusterScanCursor()' to start a cluster scan.",
-            );
-            await expect(client.scan(undefined as never)).rejects.toThrow(
-                RequestError,
-            );
-            await expect(client.scan(undefined as never)).rejects.toThrow(
-                "Invalid cursor parameter: expected instance of ClusterScanCursor, received undefined. " +
-                    "Use 'new ClusterScanCursor()' to start a cluster scan.",
-            );
-            await expect(client.scan({} as never)).rejects.toThrow(
-                RequestError,
-            );
-            await expect(client.scan({} as never)).rejects.toThrow(
-                "Invalid cursor parameter: expected instance of ClusterScanCursor, received object. " +
-                    "Use 'new ClusterScanCursor()' to start a cluster scan.",
+            const scanPromise = client.scan(invalidCursor as never);
+            await expect(scanPromise).rejects.toBeInstanceOf(RequestError);
+            await expect(scanPromise).rejects.toThrow(
+                `Invalid cursor parameter: expected instance of ClusterScanCursor, received ${expectedType}. ` +
+                    `Use 'new ClusterScanCursor()' to start a cluster scan.`,
             );
         },
         TIMEOUT,

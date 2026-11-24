@@ -967,7 +967,7 @@ export class GlideClusterClient extends BaseClient {
         cursor: ClusterScanCursor,
         options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
-        if (!(cursor instanceof ClusterScanCursor)) {
+        if (typeof cursor?.getCursor !== "function") {
             const cursorType =
                 cursor === null
                     ? "null"
