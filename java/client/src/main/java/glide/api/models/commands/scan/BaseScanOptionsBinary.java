@@ -45,6 +45,7 @@ public abstract class BaseScanOptionsBinary {
      * @return a String array that holds the options and their arguments.
      */
     public String[] toArgs() {
+        // TODO #7447: Converts `matchPattern` lossily. Add a binary-safe `toGlideStringArgs()`.
         List<String> optionArgs = new ArrayList<>();
 
         if (matchPattern != null) {

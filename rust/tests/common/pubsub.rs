@@ -31,6 +31,8 @@ fn numsub_count(v: &glide::ValkeyValue, channel: &str) -> Option<i64> {
     }
 }
 
+// TODO #7686: Replace with an `assert_subscribed` helper, like the C# client's
+// `AssertSubscribedAsync`, once `subscribe` waits for server confirmation.
 /// Poll `PUBSUB NUMSUB <channel>` on `c` until the subscriber count for
 /// `channel` satisfies `pred`, or `timeout` elapses; returns whether the
 /// predicate was met. Use instead of a fixed sleep after (un)subscribe so a test

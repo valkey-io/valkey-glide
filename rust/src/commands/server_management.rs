@@ -4,6 +4,7 @@
 use crate::ValkeyResult;
 use crate::cmd::cmd;
 use crate::commands::options::ClientPauseMode;
+use crate::commands::options::InfoSection;
 use crate::executor::CommandExecutor;
 use crate::value::FromValkeyValue;
 use crate::value::ValkeyValue;
@@ -24,10 +25,7 @@ pub trait ServerManagementCommands: CommandExecutor {
 
     // TODO #7362: Return per-node replies for cluster clients.
     /// Get server information for specific sections (`INFO section...`).
-    async fn info_sections<S: ToValkeyArgs + Send + Sync>(
-        &self,
-        sections: &[S],
-    ) -> ValkeyResult<String> {
+    async fn info_sections(&self, sections: &[InfoSection]) -> ValkeyResult<String> {
         let cmd = cmd("INFO").with_arg(sections);
         String::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
@@ -172,12 +170,14 @@ pub trait ServerManagementCommands: CommandExecutor {
         <()>::from_owned_valkey_value(self.execute_command(cmd, None).await?)
     }
 
+    // TODO #7362: Return per-node replies for cluster clients.
     /// Get latency time series for an event (`LATENCY HISTORY`).
     async fn latency_history<E: ToValkeyArgs + Send>(&self, event: E) -> ValkeyResult<ValkeyValue> {
         let cmd = cmd("LATENCY").with_arg("HISTORY").with_arg(event);
         self.execute_command(cmd, None).await
     }
 
+    // TODO #7362: Return per-node replies for cluster clients.
     /// Get the latest latency samples for all events (`LATENCY LATEST`).
     async fn latency_latest(&self) -> ValkeyResult<ValkeyValue> {
         let cmd = cmd("LATENCY").with_arg("LATEST");

@@ -67,7 +67,7 @@ jobs:
               shell: bash
               run: |
                   cd glide-core
-                  cargo build --release
+                  cargo build --release --locked
 
             # Go Build
             - name: Install protoc-gen-go
@@ -75,7 +75,7 @@ jobs:
               shell: bash
               run: |
                   # Ensure Go bin directory is in PATH
-                  export PATH=$PATH:$(go env GOPATH)/bin
+                  PATH="$PATH:$(go env GOPATH)/bin"
                   # Check if protoc-gen-go is already installed
                   if ! command -v protoc-gen-go &> /dev/null; then
                       echo "Installing protoc-gen-go..."
@@ -104,15 +104,17 @@ jobs:
               shell: bash
               run: |
                   # Ensure Go bin directory is in PATH
-                  export PATH=$PATH:$(go env GOPATH)/bin
+                  PATH="$PATH:$(go env GOPATH)/bin"
 
                   # Create minimal lib.h to satisfy CGO imports for CodeQL analysis
                   echo "Creating minimal lib.h for CodeQL analysis..."
-                  echo "// Minimal header for CodeQL analysis" > go/lib.h
-                  echo "#ifndef LIB_H" >> go/lib.h
-                  echo "#define LIB_H" >> go/lib.h
-                  echo "// Placeholder definitions for CodeQL analysis" >> go/lib.h
-                  echo "#endif" >> go/lib.h
+                  {
+                      echo "// Minimal header for CodeQL analysis"
+                      echo "#ifndef LIB_H"
+                      echo "#define LIB_H"
+                      echo "// Placeholder definitions for CodeQL analysis"
+                      echo "#endif"
+                  } > go/lib.h
 
                   # Generate protobuf files
                   cd go

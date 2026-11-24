@@ -149,12 +149,10 @@ redis-rs silently ignores a `unix://` URL's userinfo, a `localhost` host, the
 fragment and unknown query keys; GLIDE rejects them. Pass credentials as `?user=...&pass=...`, write the
 path with no host (`unix:///run/valkey/valkey.sock`), and encode `#` as `%23`.
 
-### `ValueComparison` supports only `IFEQ`
+### `ValueComparison` has no digest comparisons
 
 Valkey has no `DIGEST` command, so redis-rs's `IFDEQ` and `IFDNE` digest
-comparisons (and `digest`) are not available. `IFNE` requires Valkey 9.2 and is
-not supported yet.
-<!-- TODO #7237: Update once `IFNE` is supported. -->
+comparisons (and `digest`) are not available.
 
 ### `StreamAddOptions` supports only `NOMKSTREAM` and trimming
 

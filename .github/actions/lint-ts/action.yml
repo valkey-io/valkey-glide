@@ -1,0 +1,25 @@
+name: Lint TypeScript
+description: Run ESLint on a TypeScript package
+
+inputs:
+    package-folder:
+        description: "folder that contains the target Cargo.toml file"
+        required: true
+
+runs:
+    using: "composite"
+
+    steps:
+        - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+        - name: Copy config
+          shell: bash
+          env:
+              PACKAGE_FOLDER: ${{ inputs.package-folder }}
+          run: cp eslint.config.mjs "$PACKAGE_FOLDER"
+
+        - run: |
+              npm ci
+              npx eslint . --max-warnings=0
+          working-directory: ${{ inputs.package-folder }}
+          shell: bash

@@ -420,7 +420,7 @@ public interface ServerManagementClusterCommands {
      * Aborts all in-progress and scheduled background saves.<br>
      * The command will be routed to all primary nodes.
      *
-     * @since Valkey 8.1
+     * @since Valkey 8.1.0
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
      * @return A <code>ClusterValue&lt;String&gt;</code> containing status strings.
      * @example
@@ -437,7 +437,7 @@ public interface ServerManagementClusterCommands {
      * Aborts all in-progress and scheduled background saves.<br>
      * The command will be routed to the nodes defined by <code>route</code>.
      *
-     * @since Valkey 8.1
+     * @since Valkey 8.1.0
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -831,7 +831,7 @@ public interface ServerManagementClusterCommands {
      * <code>timeout</code> is reached, the command returns even if the specified number of replicas
      * were not yet reached.
      *
-     * @since Valkey 7.2 and above.
+     * @since Valkey 7.2.0.
      * @apiNote <code>WAITAOF</code> cannot be used on replica instances. The <code>route</code>
      *     parameter is required in cluster mode to specify which primary node to check. Typically,
      *     you should route to the primary that handled the write operation you want to wait for.

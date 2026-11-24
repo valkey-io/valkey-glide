@@ -94,8 +94,14 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideScopeResolver_glideScopeExe
 
     let runtime = get_runtime();
     let jvm = JVM.get().unwrap().clone();
+    // The scope's parent id is its pooled client_id; marked before spawning so the
+    // abandon monitor never sees the gap.
+    let blocking_guard = glide_core::scope::scope_parent_id(sid).and_then(|parent| {
+        glide_core::pool::track_scope_command_by_client(parent, &cmd_name, &args)
+    });
 
     runtime.spawn(async move {
+        let _blocking_guard = blocking_guard;
         let mut args = args;
         let result =
             glide_core::scope::send_scope_command(sid, &cmd_name, &mut args, &client).await;

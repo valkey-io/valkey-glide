@@ -534,6 +534,7 @@ public abstract class BaseClient
     protected static <T extends BaseClient> CompletableFuture<T> createClient(
             @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
         // Validate protocol compatibility for PubSub subscriptions
+        // TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
         if (config.getSubscriptionConfiguration() != null
                 && config.getProtocol() == glide.api.models.configuration.ProtocolVersion.RESP2) {
             throw new ConfigurationError("PubSub subscriptions require RESP3 protocol");
@@ -1392,6 +1393,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> set(
             @NonNull String key, @NonNull String value, @NonNull SetOptions options) {
+        // TODO #7447: Build binary arguments, so a binary comparison value is not converted lossily.
         String[] arguments = ArrayUtils.addAll(new String[] {key, value}, options.toArgs());
         return commandManager.submitNewCommand(Set, arguments, this::handleStringOrNullResponse);
     }

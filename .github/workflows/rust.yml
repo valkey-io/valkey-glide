@@ -13,10 +13,12 @@ on:
             - rust/**
 
             # Rust dependencies
-            - glide-core/**
-            - glide-telemetry/**
             - glide-logger/**
+            - glide-telemetry/**
+            - glide-rdma/**
+            - glide-core/**
             - deny.toml
+            - .cargo/config.toml
 
             # GitHub workflows
             - .github/workflows/rust.yml
@@ -25,8 +27,11 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/lint-rust/action.yml
+
             - utils/cluster_manager.py
+
+            # Exclusions
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
             # Re-include: compiled as doctests by rust/src/lib.rs
@@ -37,10 +42,12 @@ on:
             - rust/**
 
             # Rust dependencies
-            - glide-core/**
-            - glide-telemetry/**
             - glide-logger/**
+            - glide-telemetry/**
+            - glide-rdma/**
+            - glide-core/**
             - deny.toml
+            - .cargo/config.toml
 
             # GitHub workflows
             - .github/workflows/rust.yml
@@ -49,8 +56,11 @@ on:
             - .github/actions/install-rust/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-zig/action.yml
-            - .github/workflows/lint-rust/action.yml
+            - .github/actions/lint-rust/action.yml
+
             - utils/cluster_manager.py
+
+            # Exclusions
             - "!**/*.md"
             - "!**/THIRD_PARTY_LICENSES*"
             # Re-include: compiled as doctests by rust/src/lib.rs
@@ -60,7 +70,7 @@ on:
     workflow_call:
 
 concurrency:
-    group: rust-${{ github.head_ref || github.ref }}
+    group: rust-${{ github.head_ref || github.ref }}-${{ github.workflow }}
     cancel-in-progress: true
 
 env:
@@ -76,7 +86,7 @@ jobs:
               with:
                   persist-credentials: false
 
-            - uses: ./.github/workflows/lint-rust
+            - uses: ./.github/actions/lint-rust
               with:
                   cargo-toml-folder: rust
                   github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -98,9 +108,8 @@ jobs:
                       runner: ubuntu-24.04-arm
                       target: aarch64-unknown-linux-gnu
                 engine:
-                    # TODO #7312: Bump to 9.2.0 once released
                     - type: valkey
-                      version: "9.2.0-rc1"
+                      version: "9.2"
                     - type: redis
                       version: "6.2"
         steps:

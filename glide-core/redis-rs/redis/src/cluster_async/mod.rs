@@ -115,6 +115,7 @@ use futures::{future::BoxFuture, prelude::*, ready};
 use parking_lot::RwLock as ParkingLotRwLock;
 use pin_project_lite::pin_project;
 use tokio::sync::{
+    futures::OwnedNotified,
     mpsc,
     oneshot::{self, Receiver},
 };
@@ -187,6 +188,11 @@ where
 
 /// Default maximum number of requests to buffer during a cluster reconnect window.
 pub const DEFAULT_RECOVERY_REQUESTS_QUEUE_SIZE: u32 = 1000;
+
+/// A topology refresh holds, or is waiting for, the slot map's lock, so a
+/// lookup that must not wait could not look. Distinct from "slot not mapped".
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SlotMapLocked;
 
 /// This represents an async Cluster connection. It stores the
 /// underlying connections maintained for each node in the cluster, as well
@@ -478,10 +484,19 @@ where
     /// Get the primary node address for a given hash slot.
     /// Used by isolated execution to open scoped connections to the correct node.
     /// Returns None if the slot is not mapped to any known node.
+    ///
+    /// Waits for the slot map's lock, so it can block behind a topology refresh.
     pub fn address_for_slot(&self, slot: u16) -> Option<String> {
         use crate::cluster_routing::{Route, SlotAddr};
         let route = Route::new(slot, SlotAddr::Master);
         self.inner_core.conn_lock.read().address_for_route(&route)
+    }
+
+    /// [`ClusterConnection::address_for_slot`] for a caller that must not wait:
+    /// `Err(SlotMapLocked)` when a topology refresh holds, or is waiting for, the
+    /// slot map's lock; `Ok(None)` when the slot is not mapped.
+    pub fn try_address_for_slot(&self, slot: u16) -> Result<Option<String>, SlotMapLocked> {
+        self.inner_core.try_address_for_slot(slot)
     }
 
     /// Routes an operation request to the appropriate handler.
@@ -551,8 +566,40 @@ type ConnectionMap<C> = connections_container::ConnectionsMap<ConnectionFuture<C
 type ConnectionsContainer<C> =
     self::connections_container::ConnectionsContainer<ConnectionFuture<C>>;
 
+/// What `conn_lock` guards: the connections, and whether the client is closed. The flag is
+/// behind the lock so a refresh task can't start a reconnect after `dispose` cleared the refresh
+/// state. It isn't in the container because `refresh_slots` replaces the container.
+pub(crate) struct Connections<C> {
+    /// Set by `dispose`.
+    closed: bool,
+    container: ConnectionsContainer<C>,
+}
+
+impl<C> Connections<C> {
+    fn new(container: ConnectionsContainer<C>) -> Self {
+        Connections {
+            closed: false,
+            container,
+        }
+    }
+}
+
+impl<C> std::ops::Deref for Connections<C> {
+    type Target = ConnectionsContainer<C>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.container
+    }
+}
+
+impl<C> std::ops::DerefMut for Connections<C> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.container
+    }
+}
+
 pub(crate) struct InnerCore<C> {
-    pub(crate) conn_lock: ParkingLotRwLock<ConnectionsContainer<C>>,
+    pub(crate) conn_lock: ParkingLotRwLock<Connections<C>>,
     cluster_params: ParkingLotRwLock<ClusterParams>,
     pending_requests_tx: mpsc::UnboundedSender<PendingRequest<C>>,
     pending_requests_rx: std::sync::Mutex<mpsc::UnboundedReceiver<PendingRequest<C>>>,
@@ -595,6 +642,16 @@ where
                 cluster::resolve_address(address, params.address_resolver.as_deref())
             })
         })
+    }
+
+    /// Non-blocking slot lookup; see [`ClusterConnection::try_address_for_slot`].
+    fn try_address_for_slot(&self, slot: u16) -> Result<Option<String>, SlotMapLocked> {
+        use crate::cluster_routing::{Route, SlotAddr};
+        let route = Route::new(slot, SlotAddr::Master);
+        // parking_lot's try_read also fails while a writer is queued, which is
+        // exactly when read() would block.
+        let conn_lock = self.conn_lock.try_read().ok_or(SlotMapLocked)?;
+        Ok(conn_lock.address_for_route(&route))
     }
 
     fn reverse_lookup_address(&self, address: &str) -> Option<String> {
@@ -749,6 +806,20 @@ impl<C> Dispose for ClusterConnInner<C> {
             handle.abort()
         }
 
+        // Recovery and per-node reconnect tasks each hold the core, and with it the
+        // connection to every node. A task reconnecting a node that stays down retries
+        // forever, so stop them here or the client's connections outlive the client.
+        if let ConnectionState::Recover(recover) = &self.state {
+            recover.abort();
+        }
+        // A blocking write on purpose: skipping the clear would leak the connections.
+        let mut conn_lock = self.inner.conn_lock.write();
+        // A task that is mid-poll on another thread may still ask for a reconnect;
+        // `closed` makes that a no-op.
+        conn_lock.closed = true;
+        conn_lock.refresh_conn_state.clear_refresh_state();
+        drop(conn_lock);
+
         // Fail any requests buffered in the recovery queue
         fail_queued_senders(&mut self.recovery_queue, "Connection dropped");
 
@@ -869,6 +940,17 @@ enum CmdArg<C> {
     OperationRequest(Operation),
 }
 
+impl<C> CmdArg<C> {
+    fn lends_memory(&self) -> bool {
+        match self {
+            CmdArg::Cmd { cmd, .. } => cmd
+                .command()
+                .is_some_and(|name| crate::cluster_routing::lends_memory(&name)),
+            _ => false,
+        }
+    }
+}
+
 // Operation requests which are connected to the internal state of the connection and not send as a command to the server.
 #[derive(Clone)]
 enum Operation {
@@ -934,6 +1016,19 @@ enum RecoverFuture {
     RefreshingSlots(JoinHandle<RedisResult<()>>),
     ReconnectToInitialNodes(JoinHandle<()>),
     Reconnect(JoinHandle<()>),
+}
+
+impl RecoverFuture {
+    /// Stops the recovery task. Dropping a `JoinHandle` only detaches its task, which keeps
+    /// running and keeps the core alive.
+    fn abort(&self) {
+        match self {
+            RecoverFuture::RefreshingSlots(handle) => handle.abort(),
+            RecoverFuture::ReconnectToInitialNodes(handle) | RecoverFuture::Reconnect(handle) => {
+                handle.abort()
+            }
+        }
+    }
 }
 
 enum ConnectionState {
@@ -1188,6 +1283,8 @@ mod iam_token_refresh_tests {
         provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
     ) -> GlideConnectionOptions {
         GlideConnectionOptions {
+            #[cfg(feature = "rdma")]
+            rdma_fabric: None,
             push_sender: None,
             disconnect_notifier: None,
             discover_az: false,
@@ -1212,7 +1309,7 @@ mod iam_token_refresh_tests {
 
         let (pending_requests_tx, pending_requests_rx) = tokio::sync::mpsc::unbounded_channel();
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::default()),
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::default())),
             cluster_params: ParkingLotRwLock::new(params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -1542,7 +1639,16 @@ where
                     format!("Received request error {} on node {:?}.", err, address)
                 );
 
-                match err.retry_method() {
+                let retry_method = match err.retry_method() {
+                    // The error does not say whether the server got the command. If
+                    // it did, it may still be using the client's memory, and a reply
+                    // to a second attempt would not say when the first one stops.
+                    RetryMethod::RetryImmediately if request.info.cmd.lends_memory() => {
+                        RetryMethod::NoRetry
+                    }
+                    retry_method => retry_method,
+                };
+                match retry_method {
                     RetryMethod::AskRedirect => {
                         let mut request = this.request.take().unwrap();
                         request
@@ -1603,18 +1709,23 @@ where
                         self.poll(cx)
                     }
                     RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
-                        let mut request = this.request.take().unwrap();
-                        // TODO should we reset the redirect here?
-                        request.info.reset_routing();
                         log_warn_rate_limited!(
                             "cluster",
                             5,
                             format!("disconnected from {:?}", address)
                         );
-                        let should_retry =
-                            matches!(err.retry_method(), RetryMethod::ReconnectAndRetry);
+                        let request = if matches!(retry_method, RetryMethod::ReconnectAndRetry) {
+                            let mut request = this.request.take().unwrap();
+                            // TODO should we reset the redirect here?
+                            request.info.reset_routing();
+                            Some(request)
+                        } else {
+                            // Not retried, so the caller must get this error instead of a dropped sender.
+                            self.respond(Err(err));
+                            None
+                        };
                         Next::Reconnect {
-                            request: should_retry.then_some(request),
+                            request,
                             target: address,
                             mode: ReconnectMode::CheckExisting,
                         }
@@ -1711,6 +1822,8 @@ where
         let connection_retry_strategy = cluster_params.reconnect_retry_strategy.unwrap_or_default();
 
         let glide_connection_options = GlideConnectionOptions {
+            #[cfg(feature = "rdma")]
+            rdma_fabric: cluster_params.rdma_fabric.clone(),
             push_sender,
             disconnect_notifier,
             discover_az,
@@ -1733,12 +1846,12 @@ where
         let slots_refresh_rate_limiter = cluster_params.slots_refresh_rate_limit;
         let (pending_tx, pending_rx) = mpsc::unbounded_channel();
         let inner = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 Default::default(),
                 connections,
                 cluster_params.read_from_replicas.clone(),
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params.clone()),
             pending_requests_tx: pending_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_rx),
@@ -2083,30 +2196,26 @@ where
             "cluster",
             "refresh_and_update_connections: Await on all tasks' refresh notifier"
         );
-        futures::future::join_all(
-            refresh_task_notifiers
-                .iter()
-                .map(|notify| notify.notified()),
-        )
-        .await;
+        futures::future::join_all(refresh_task_notifiers).await;
     }
 
     // Triggers a reconnection Tokio task for each supplied address.
     // If a refresh task is already running for an address, no new task is created;
-    // instead, the notifier from the existing task is returned.
-    // Returns a vector of notifiers for the refresh tasks (new or existing) corresponding to the supplied addresses.
+    // instead, a wait future for the existing task is returned.
+    // Wait futures are created under conn_lock before completion can notify them.
+    // Callers may safely await them after the task has finished or been superseded.
     async fn trigger_refresh_connection_tasks(
         inner: Arc<InnerCore<C>>,
         addresses: HashSet<ClusterAddress>,
         conn_type: RefreshConnectionType,
         existing_conn: ExistingConnection,
-    ) -> Vec<Arc<Notify>> {
+    ) -> Vec<OwnedNotified> {
         log_debug_lazy!(
             "cluster",
             format!("Triggering refresh connections tasks to {:?} ", addresses)
         );
 
-        let mut notifiers = Vec::<Arc<Notify>>::new();
+        let mut notifiers = Vec::<OwnedNotified>::new();
 
         let resolver = inner.get_cluster_param(|p| p.address_resolver.clone());
         let mut prepared_addresses = HashSet::new();
@@ -2117,6 +2226,13 @@ where
                 continue;
             }
             let mut conn_lock = inner.conn_lock.write();
+            if conn_lock.closed {
+                log_debug_lazy!(
+                    "cluster",
+                    format!("Skipping refresh for {}: the client is closed", address)
+                );
+                break;
+            }
             // A request to replace the connection doesn't join a task that may keep the existing
             // one; the new task supersedes it (dropping the old state aborts it and wakes waiters).
             let existing_task = conn_lock
@@ -2127,7 +2243,9 @@ where
                     existing_conn != ExistingConnection::Replace || !task.may_keep_existing_conn
                 })
                 .map(|task| match &task.status {
-                    RefreshTaskStatus::Reconnecting(notifier) => Some(notifier.get_notifier()),
+                    RefreshTaskStatus::Reconnecting(notifier) => {
+                        Some(notifier.get_notifier().notified_owned())
+                    }
                     RefreshTaskStatus::ReconnectingTooLong => {
                         log_debug_lazy!(
                             "cluster",
@@ -2159,7 +2277,7 @@ where
             let may_keep_existing_conn = node_option.is_some();
 
             let notifier = RefreshTaskNotifier::new();
-            notifiers.push(notifier.get_notifier());
+            notifiers.push(notifier.get_notifier().notified_owned());
             let task_identity = Arc::new(());
             let task_identity_for_task = task_identity.clone();
 
@@ -3044,7 +3162,7 @@ where
         new_slots.carry_over_ips_from(&write_guard.slot_map);
         let read_from_replicas =
             inner.get_cluster_param(|params| params.read_from_replicas.clone());
-        *write_guard = ConnectionsContainer::new(
+        write_guard.container = ConnectionsContainer::new(
             new_slots,
             new_connections,
             read_from_replicas,
@@ -3609,8 +3727,6 @@ where
                     // - For non-key-based commands, avoid attempting redirection to a random node
                     //   as it wouldn't result in MOVED hints and can lead to unwanted results
                     //   (e.g., sending management command to a different node than the user asked for); instead, raise the error.
-                    let mut conn_check = ConnectionCheck::RandomConnection;
-
                     let routable_cmd = cmd.and_then(|cmd| Routable::command(&*cmd));
                     if routable_cmd.is_some()
                         && !RoutingInfo::is_key_routing_command(&routable_cmd.unwrap())
@@ -3631,33 +3747,47 @@ where
                         )
                     );
 
-                    // Step 3: Obtain the reconnect notifier, ensuring the lock is released immediately after.
-                    let reconnect_notifier = {
-                        let conn_lock = core.conn_lock.read();
-                        conn_lock.notifier_for_route(&route).clone()
+                    // Step 3: Wait for any in-progress reconnect tasks for this route.
+                    // The node may be missing while its connection is being refreshed, e.g. replaced
+                    // after a circular MOVED or during topology reconnection. Register for each
+                    // notification under the same read guard as the lookup, so that no refresh-state
+                    // transition or superseding task can fire the notifier in between. Keep waiting
+                    // while a refresh for the route is still in progress across supersessions.
+                    let conn_option = loop {
+                        let refreshed = {
+                            let conn_lock = core.conn_lock.read();
+                            if let Some(found) = conn_lock.connection_for_route(&route) {
+                                break Some(found);
+                            }
+                            conn_lock
+                                .notifier_for_route(&route)
+                                .map(|notifier| notifier.notified_owned())
+                        };
+                        match refreshed {
+                            Some(refreshed) => {
+                                log_debug_lazy!(
+                                    "cluster",
+                                    format!("SpecificNode: Waiting on reconnect notifier for route `{route:?}`.")
+                                );
+                                refreshed.await;
+                                log_debug_lazy!(
+                                    "cluster",
+                                    format!("SpecificNode: Finished waiting on notifier for route `{route:?}`. Retrying connection lookup.")
+                                );
+                            }
+                            None => break None,
+                        }
                     };
 
-                    // Step 4: If a notifier exists, wait for it to signal completion.
-                    if let Some(notifier) = reconnect_notifier {
-                        log_debug_lazy!("cluster", format!("SpecificNode: Waiting on reconnect notifier for route `{route:?}`."));
-
-                        notifier.notified().await;
-
-                        log_debug_lazy!("cluster", format!("SpecificNode: Finished waiting on notifier for route `{route:?}`. Retrying connection lookup."));
-
-                        // Step 5: Retry the connection lookup after waiting for the reconnect task.
-                        if let Some((conn, address)) =
-                            core.conn_lock.read().connection_for_route(&route)
-                        {
-                            conn_check = ConnectionCheck::Found((conn, address));
-                        } else {
-                            log_debug_lazy!("cluster", format!("SpecificNode: No connection found for route `{route:?}` after waiting on reconnect notifier. Proceeding to random node."));
-                        }
+                    if let Some(found) = conn_option {
+                        ConnectionCheck::Found(found)
                     } else {
-                        log_debug_lazy!("cluster", format!("SpecificNode: No active reconnect task for route `{route:?}`. Proceeding to random node."));
+                        log_debug_lazy!(
+                            "cluster",
+                            format!("SpecificNode: No active reconnect task for route `{route:?}`. Proceeding to random node.")
+                        );
+                        ConnectionCheck::RandomConnection
                     }
-
-                    conn_check
                 }
             }
             InternalSingleNodeRouting::Random => ConnectionCheck::RandomConnection,
@@ -3723,7 +3853,7 @@ where
                         )
                     );
                     // Wait for the refresh task to notify that it's done reconnecting (or transitioning).
-                    refresh_notifier.notified().await;
+                    refresh_notifier.await;
                     log_debug_lazy!(
                         "cluster",
                         format!(
@@ -5605,12 +5735,12 @@ mod circular_moved_address_normalization_tests {
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
 
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(ClusterParams::default_for_test(None)),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -5701,12 +5831,12 @@ mod circular_moved_address_normalization_tests {
         let (tx, rx) =
             mpsc::unbounded_channel::<PendingRequest<crate::aio::MultiplexedConnection>>();
         let core = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(ClusterParams::default_for_test(None)),
             pending_requests_tx: tx,
             pending_requests_rx: std::sync::Mutex::new(rx),
@@ -5721,6 +5851,29 @@ mod circular_moved_address_normalization_tests {
         assert_eq!(
             core.reverse_lookup_address("10.0.0.1:6380").unwrap(),
             "node-b:6380"
+        );
+    }
+
+    #[test]
+    fn try_address_for_slot_declines_while_the_slot_map_is_write_locked() {
+        let core = core_with_ip_mapping();
+        let write_guard = core.conn_lock.write();
+        let (started_tx, started_rx) = std_mpsc::channel();
+        let (result_tx, result_rx) = std_mpsc::channel();
+        let lookup_core = core.clone();
+        let lookup_thread = std::thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            result_tx.send(lookup_core.try_address_for_slot(0)).unwrap();
+        });
+
+        started_rx.recv().unwrap();
+        let locked_result = result_rx.recv_timeout(Duration::from_secs(2));
+        drop(write_guard);
+        lookup_thread.join().unwrap();
+        assert_eq!(locked_result.unwrap(), Err(SlotMapLocked));
+        assert_eq!(
+            core.try_address_for_slot(0),
+            Ok(Some("node1:6379".to_owned()))
         );
     }
 
@@ -5959,12 +6112,12 @@ pub(super) mod refresh_task_resolution_tests {
         );
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
         let core = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 connection_map,
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6131,12 +6284,12 @@ pub(super) mod refresh_task_resolution_tests {
         cluster_params.address_resolver = Some(resolver);
 
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6184,12 +6337,12 @@ pub(super) mod refresh_task_resolution_tests {
         cluster_params.address_resolver = Some(Arc::new(SeedAddressResolver));
 
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6309,12 +6462,12 @@ pub(super) mod refresh_task_resolution_tests {
         params.address_resolver = Some(Arc::new(SeedAddressResolver));
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
         Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 connections,
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6374,9 +6527,12 @@ pub(super) mod refresh_task_resolution_tests {
         )
         .await;
 
-        tokio::time::timeout(Duration::from_secs(1), notifiers[0].notified())
-            .await
-            .expect("raw seed refresh should complete");
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            notifiers.into_iter().next().expect("one refresh waiter"),
+        )
+        .await
+        .expect("raw seed refresh should complete");
 
         let connection = core
             .conn_lock
@@ -6419,8 +6575,8 @@ pub(super) mod refresh_task_resolution_tests {
         assert_eq!(first.len(), 1);
         assert_eq!(second.len(), 1);
 
-        let first_done = first[0].notified();
-        let second_done = second[0].notified();
+        let first_done = first.into_iter().next().expect("first refresh waiter");
+        let second_done = second.into_iter().next().expect("second refresh waiter");
         RELEASE_POISON_CONNECT.add_permits(2);
 
         tokio::time::timeout(Duration::from_secs(1), async {
@@ -6446,6 +6602,171 @@ pub(super) mod refresh_task_resolution_tests {
         .expect("already-resolved refresh should install a connection");
 
         assert_eq!(connected_port, 6381);
+    }
+
+    #[tokio::test]
+    async fn dispose_stops_recovery_and_refresh_tasks_and_releases_the_core() {
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+
+        // The connect to port 6381 parks until the test releases it, like a node that
+        // stays down.
+        ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial("resolved-node:6381".to_owned())]),
+            RefreshConnectionType::AllConnections,
+            ExistingConnection::Ignore,
+        )
+        .await;
+        tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
+            .await
+            .expect("the refresh task should start connecting");
+
+        // A recovery task that never finishes on its own.
+        let recovery = tokio::spawn({
+            let core = core.clone();
+            async move {
+                std::future::pending::<()>().await;
+                drop(core);
+            }
+        });
+
+        let weak_core = Arc::downgrade(&core);
+        let connection = Disposable::new(ClusterConnInner {
+            inner: core,
+            in_flight_requests: Default::default(),
+            refresh_error: None,
+            state: ConnectionState::Recover(RecoverFuture::Reconnect(recovery)),
+            periodic_checks_handler: None,
+            connections_validation_handler: None,
+            recovery_queue: std::collections::VecDeque::new(),
+        });
+        drop(connection);
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while weak_core.strong_count() > 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("disposing the connection must release the core and its connections");
+    }
+
+    #[tokio::test]
+    async fn no_reconnect_starts_after_dispose() {
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        drop(Disposable::new(ClusterConnInner {
+            inner: core.clone(),
+            in_flight_requests: Default::default(),
+            refresh_error: None,
+            state: ConnectionState::PollComplete,
+            periodic_checks_handler: None,
+            connections_validation_handler: None,
+            recovery_queue: std::collections::VecDeque::new(),
+        }));
+
+        // A task that was mid-poll on another thread when the client went away asks
+        // for a reconnect to a node that stays down.
+        let notifiers = ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial("resolved-node:6381".to_owned())]),
+            RefreshConnectionType::AllConnections,
+            ExistingConnection::Ignore,
+        )
+        .await;
+
+        assert!(notifiers.is_empty());
+        assert!(core
+            .conn_lock
+            .read()
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .is_empty());
+        assert_eq!(Arc::strong_count(&core), 1, "no task may hold the core");
+    }
+
+    async fn refresh_completion_before_wait(join_existing: bool) {
+        use futures::FutureExt;
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381".to_owned();
+        let first = ClusterConnInner::trigger_refresh_connection_tasks(
+            core.clone(),
+            HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
+            RefreshConnectionType::AllConnections,
+            ExistingConnection::Ignore,
+        )
+        .await;
+        tokio::time::timeout(Duration::from_secs(1), POISON_CONNECT_STARTED.notified())
+            .await
+            .expect("refresh should enter connection creation");
+        let identity = core
+            .conn_lock
+            .read()
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .get(&address)
+            .unwrap()
+            .identity
+            .clone();
+        let completion = if join_existing {
+            let joined = ClusterConnInner::trigger_refresh_connection_tasks(
+                core.clone(),
+                HashSet::from([ClusterAddress::ReadyToDial(address.clone())]),
+                RefreshConnectionType::AllConnections,
+                ExistingConnection::Ignore,
+            )
+            .await;
+            assert!(refresh_is_same_generation(&core, &address, &identity));
+            joined
+        } else {
+            first
+        };
+        assert_eq!(completion.len(), 1);
+        RELEASE_POISON_CONNECT.add_permits(2);
+        // Observing removal under the lock guarantees the state's Drop has
+        // already sent its notifications. Do not poll completion until then.
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if !core
+                    .conn_lock
+                    .read()
+                    .refresh_conn_state
+                    .refresh_address_in_progress
+                    .contains_key(&address)
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("refresh task should finish before the caller waits");
+        assert!(core
+            .conn_lock
+            .read()
+            .connection_for_address(&address)
+            .is_some());
+        assert!(
+            completion
+                .into_iter()
+                .next()
+                .unwrap()
+                .now_or_never()
+                .is_some(),
+            "completion must remain observable after the refresh task finishes"
+        );
+    }
+
+    #[tokio::test]
+    async fn started_refresh_completion_before_wait_is_observable() {
+        refresh_completion_before_wait(false).await;
+    }
+
+    #[tokio::test]
+    async fn joined_refresh_completion_before_wait_is_observable() {
+        refresh_completion_before_wait(true).await;
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
@@ -6526,9 +6847,10 @@ pub(super) mod refresh_task_resolution_tests {
             "old generation must not remove new state"
         );
 
+        let completed = new.into_iter().next().expect("new refresh waiter");
         gate.release_new.release();
 
-        tokio::time::timeout(Duration::from_secs(1), new[0].notified())
+        tokio::time::timeout(Duration::from_secs(1), completed)
             .await
             .expect("new generation should complete");
 
@@ -6773,7 +7095,7 @@ pub(super) mod refresh_task_resolution_tests {
             "equivalent raw/ready addresses share a task"
         );
         assert_eq!(RESOLVER_CALLS.load(Ordering::SeqCst), 1);
-        let done = notifiers[0].notified();
+        let done = notifiers.into_iter().next().expect("one refresh waiter");
         RELEASE_POISON_CONNECT.add_permits(2);
         tokio::time::timeout(Duration::from_secs(1), done)
             .await
@@ -6819,12 +7141,12 @@ pub(super) mod refresh_task_resolution_tests {
         let mut cluster_params = ClusterParams::default_for_test(None);
         cluster_params.address_resolver = Some(Arc::new(InitialRecoveryResolver));
         let core = Arc::new(InnerCore {
-            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::new(
+            conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
                 ReadFromReplicaStrategy::AlwaysFromPrimary,
                 0,
-            )),
+            ))),
             cluster_params: ParkingLotRwLock::new(cluster_params),
             pending_requests_tx,
             pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
@@ -6862,5 +7184,88 @@ pub(super) mod refresh_task_resolution_tests {
                 .port,
             6390
         );
+    }
+
+    fn get_connection_by_specific_route(
+        core: &Arc<InnerCore<RecordingConnection>>,
+        route: Route,
+    ) -> Pin<Box<impl Future<Output = RedisResult<(String, RecordingConnection)>>>> {
+        Box::pin(ClusterConnInner::get_connection(
+            InternalSingleNodeRouting::SpecificNode(route),
+            core.clone(),
+            None,
+        ))
+    }
+
+    #[tokio::test]
+    async fn specific_node_routing_waits_for_in_progress_refresh() {
+        use crate::cluster_routing::{Route, SlotAddr};
+        use futures::FutureExt;
+
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381";
+        core.conn_lock.write().slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, address.to_owned(), vec![])],
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        let route = Route::new(0, SlotAddr::Master);
+
+        // Without a refresh in progress, a missing node fails right away.
+        let Some(Err(err)) = get_connection_by_specific_route(&core, route).now_or_never() else {
+            panic!("expected no connection for the route");
+        };
+        assert_eq!(err.kind(), ErrorKind::AllConnectionsUnavailable);
+
+        // With a refresh in progress for the route's address, the lookup waits for it.
+        insert_in_progress_refresh(&core, address, false);
+        let mut lookup = get_connection_by_specific_route(&core, route);
+        assert!(
+            (&mut lookup).now_or_never().is_none(),
+            "lookup should wait for the in-progress refresh"
+        );
+
+        complete_refresh(&core, address, 6381);
+        let (found_address, connection) = lookup.await.expect("connection found after refresh");
+        assert_eq!(found_address, address);
+        assert_eq!(connection.port, 6381);
+    }
+
+    #[tokio::test]
+    async fn specific_node_routing_waits_across_superseded_refresh() {
+        use crate::cluster_routing::{Route, SlotAddr};
+        use futures::FutureExt;
+
+        let _guard = gated_test_guard().await;
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381";
+        core.conn_lock.write().slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, address.to_owned(), vec![])],
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        let route = Route::new(0, SlotAddr::Master);
+
+        // Insert first in-progress refresh
+        insert_in_progress_refresh(&core, address, true);
+        let mut lookup = get_connection_by_specific_route(&core, route);
+        assert!((&mut lookup).now_or_never().is_none());
+
+        // A newer refresh supersedes the old one, which wakes the waiters before the new
+        // connection exists. The lookup keeps waiting for the newer refresh.
+        insert_in_progress_refresh(&core, address, false);
+        assert!(
+            (&mut lookup).now_or_never().is_none(),
+            "lookup should continue waiting for the superseding refresh"
+        );
+
+        // Complete the new refresh
+        complete_refresh(&core, address, 6381);
+        let (found_address, connection) = lookup
+            .await
+            .expect("connection found after superseding refresh");
+        assert_eq!(found_address, address);
+        assert_eq!(connection.port, 6381);
     }
 }

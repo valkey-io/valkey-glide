@@ -74,6 +74,14 @@ class CircuitBreakerError(RequestError):
     pass
 
 
+class RdmaError(RequestError):
+    """
+    Thrown when an RDMA transfer cannot be completed or RDMA is not supported.
+    """
+
+    pass
+
+
 class LoggerError(GlideError):
     """
     Errors that are thrown when the logger has an error initializing.
@@ -96,3 +104,21 @@ def get_request_error_class(
     if error_type == RequestErrorType.Unspecified:
         return RequestError
     return RequestError
+
+
+# Mirrors `ConnectionErrorType::Configuration` in ffi/src/lib.rs.
+_CONNECTION_ERROR_TYPE_CONFIGURATION = 1
+
+
+def get_connection_error_class(
+    error_type: int, default: Type[Exception] = ClosingError
+) -> Type[Exception]:
+    """
+    The exception to raise for a failed client creation reported by the FFI.
+
+    The core's configuration validation raises ConfigurationError; any other failure raises
+    `default`, so its type is unchanged.
+    """
+    if error_type == _CONNECTION_ERROR_TYPE_CONFIGURATION:
+        return ConfigurationError
+    return default

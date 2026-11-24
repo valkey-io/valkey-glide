@@ -21,6 +21,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
+	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
 const (
@@ -185,23 +186,75 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfEquals() {
 	suite.SkipIfServerVersionLowerThan("8.1.0", suite.T())
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.New().String()
-		suite.verifyOK(client.Set(context.Background(), key, initialValue))
+		suite.verifyOK(client.Set(context.Background(), key, "value"))
 
-		// successful set
-		opts := options.NewSetOptions().SetOnlyIfEquals(initialValue)
-		result, err := client.SetWithOptions(context.Background(), key, anotherValue, *opts)
+		// Value not equal
+		opts := options.NewSetOptions().SetOnlyIfEquals("other")
+		result, err := client.SetWithOptions(context.Background(), key, "other", *opts)
+		suite.NoError(err)
+		assert.True(suite.T(), result.IsNil())
+
+		result, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "value", result.Value())
+
+		// Value equal
+		opts = options.NewSetOptions().SetOnlyIfEquals("value")
+		result, err = client.SetWithOptions(context.Background(), key, "other", *opts)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "OK", result.Value())
 
 		result, err = client.Get(context.Background(), key)
 		suite.NoError(err)
-		assert.Equal(suite.T(), anotherValue, result.Value())
+		assert.Equal(suite.T(), "other", result.Value())
 
-		// unsuccessful set
-		opts = options.NewSetOptions().SetOnlyIfEquals(initialValue)
-		result, err = client.SetWithOptions(context.Background(), key, initialValue, *opts)
+		// Non-existent key
+		missing := uuid.New().String()
+		result, err = client.SetWithOptions(context.Background(), missing, "value", *opts)
 		suite.NoError(err)
 		assert.True(suite.T(), result.IsNil())
+
+		exists, err := client.Exists(context.Background(), []string{missing})
+		suite.NoError(err)
+		assert.Equal(suite.T(), int64(0), exists)
+	})
+}
+
+func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfNotEquals() {
+	suite.SkipIfServerVersionLowerThan("9.2.0", suite.T())
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.New().String()
+		suite.verifyOK(client.Set(context.Background(), key, "value"))
+
+		// Value equal
+		opts := options.NewSetOptions().SetOnlyIfNotEquals("value")
+		result, err := client.SetWithOptions(context.Background(), key, "other", *opts)
+		suite.NoError(err)
+		assert.True(suite.T(), result.IsNil())
+
+		result, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "value", result.Value())
+
+		// Value not equal
+		opts = options.NewSetOptions().SetOnlyIfNotEquals("other")
+		result, err = client.SetWithOptions(context.Background(), key, "other", *opts)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "OK", result.Value())
+
+		result, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "other", result.Value())
+
+		// Non-existent key
+		missing := uuid.New().String()
+		result, err = client.SetWithOptions(context.Background(), missing, "value", *opts)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "OK", result.Value())
+
+		result, err = client.Get(context.Background(), missing)
+		suite.NoError(err)
+		assert.Equal(suite.T(), "value", result.Value())
 	})
 }
 
@@ -571,6 +624,36 @@ func (suite *GlideTestSuite) TestAppend_existingAndNonExistingKeys() {
 		res1, err = client.Get(context.Background(), key)
 		suite.NoError(err)
 		assert.Equal(suite.T(), value1+value2, res1.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestDelIfEq() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.New().String()
+		value := uuid.New().String()
+		wrongValue := uuid.New().String()
+
+		res, err := client.DelIfEq(context.Background(), key, value)
+		suite.NoError(err)
+		assert.False(suite.T(), res)
+
+		suite.verifyOK(client.Set(context.Background(), key, value))
+
+		res, err = client.DelIfEq(context.Background(), key, wrongValue)
+		suite.NoError(err)
+		assert.False(suite.T(), res)
+		res1, err := client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.Equal(suite.T(), value, res1.Value())
+
+		res, err = client.DelIfEq(context.Background(), key, value)
+		suite.NoError(err)
+		assert.True(suite.T(), res)
+		res1, err = client.Get(context.Background(), key)
+		suite.NoError(err)
+		assert.True(suite.T(), res1.IsNil())
 	})
 }
 
@@ -1518,6 +1601,74 @@ func (suite *GlideTestSuite) TestHSetEx_WithExpiration() {
 	})
 }
 
+func (suite *GlideTestSuite) TestHSetEx_WithKeyConditionalSet() {
+	suite.SkipIfServerVersionLowerThan("9.1.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		ctx := context.Background()
+		key := "test_hsetex_key_conditional_" + uuid.NewString()
+		fields := map[string]string{"field1": "value1"}
+
+		// NX: key does not exist, so the hash is created
+		nxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfDoesNotExist)
+		result, err := client.HSetEx(ctx, key, fields, nxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+		value, err := client.HGet(ctx, key, "field1")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "value1", value.Value())
+
+		// NX: key now exists, so a second NX call should not modify the hash
+		result, err = client.HSetEx(ctx, key, map[string]string{"field1": "should_not_be_set"}, nxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+		value, err = client.HGet(ctx, key, "field1")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "value1", value.Value())
+
+		// XX: key exists, so the field is updated
+		xxOptions := options.NewHSetExOptions().SetConditionalSet(constants.OnlyIfExists)
+		result, err = client.HSetEx(ctx, key, map[string]string{"field1": "updated_value1"}, xxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+		value, err = client.HGet(ctx, key, "field1")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "updated_value1", value.Value())
+
+		// XX: key does not exist, so the hash is not created
+		missingKey := "test_hsetex_key_conditional_missing_" + uuid.NewString()
+		result, err = client.HSetEx(ctx, missingKey, fields, xxOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
+		exists, err := client.Exists(ctx, []string{missingKey})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), exists)
+	})
+}
+
+func (suite *GlideTestSuite) TestHSetEx_WithAll() {
+	suite.SkipIfServerVersionLowerThan("9.1.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		ctx := context.Background()
+		fields := map[string]string{"field1": "value1"}
+
+		// Key conditional change can be combined with field conditional change and expiry
+		combinedKey := "test_hsetex_key_and_field_conditional_" + uuid.NewString()
+		combinedOptions := options.NewHSetExOptions().
+			SetConditionalSet(constants.OnlyIfDoesNotExist).
+			SetFieldConditionalSet(constants.HashFieldsDoNotExist).
+			SetExpiry(options.NewExpiryIn(60 * time.Second))
+		result, err := client.HSetEx(ctx, combinedKey, fields, combinedOptions)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+		ttls, err := client.HTtl(ctx, combinedKey, []string{"field1"})
+		assert.NoError(suite.T(), err)
+		assert.Len(suite.T(), ttls, 1)
+		assert.True(suite.T(), ttls[0] > 0 && ttls[0] <= 60)
+	})
+}
+
 func (suite *GlideTestSuite) TestHGetEx_WithExpiration() {
 	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
 
@@ -1608,11 +1759,9 @@ func (suite *GlideTestSuite) TestHGetDel() {
 		assert.True(suite.T(), values3[0].IsNil())
 		assert.True(suite.T(), values3[1].IsNil())
 
-		// HGETDEL on a key holding a non-hash value returns a WRONGTYPE error
-		stringKey := uuid.NewString()
-		suite.verifyOK(client.Set(context.Background(), stringKey, "not_a_hash"))
-		_, err = client.HGetDel(context.Background(), stringKey, []string{"field1"})
-		suite.ErrorContains(err, "WRONGTYPE")
+		// HGETDEL with an empty fields list should return an error
+		_, err = client.HGetDel(context.Background(), key, []string{})
+		assert.Error(suite.T(), err)
 	})
 }
 
@@ -7557,7 +7706,7 @@ func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
 		suite.NoError(err)
 		suite.False(destroyed)
 
-		// ENTRIESREAD option was added in valkey 7.0.0
+		// ENTRIESREAD option was added in Valkey 7.0.0
 		opts = options.NewXGroupCreateOptions().SetEntriesRead(100)
 		// TODO #5368: Compare versions semantically, not as strings.
 		if suite.serverVersion >= "7.0.0" {
@@ -11972,6 +12121,64 @@ func (suite *GlideTestSuite) TestScriptFlush() {
 		assert.Equal(suite.T(), []bool{false}, result)
 
 		script.Close()
+	})
+}
+
+// noScriptPattern matches the server's NOSCRIPT reply: Valkey 8.0+ sends the first sentence only,
+// Valkey 7.2 and Redis OSS also append "Please use EVAL.".
+const noScriptPattern = `^NOSCRIPT No matching script\.( Please use EVAL\.)?$`
+
+func (suite *GlideTestSuite) TestNoScriptErrorKeepsServerText() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		ctx := context.Background()
+		t := suite.T()
+		unknownHash := strings.Repeat("f", 40)
+		evalSha := []string{"EVALSHA", unknownHash, "0"}
+
+		var err, batchExecErr, batchErr error
+		var batchResults []any
+		switch c := client.(type) {
+		case *glide.Client:
+			_, err = c.CustomCommand(ctx, evalSha)
+			batchResults, batchExecErr = c.Exec(ctx, *pipeline.NewStandaloneBatch(false).CustomCommand(evalSha), false)
+			_, batchErr = c.Exec(ctx, *pipeline.NewStandaloneBatch(false).CustomCommand(evalSha), true)
+		case *glide.ClusterClient:
+			_, err = c.CustomCommand(ctx, evalSha)
+			batchResults, batchExecErr = c.Exec(ctx, *pipeline.NewClusterBatch(false).CustomCommand(evalSha), false)
+			_, batchErr = c.Exec(ctx, *pipeline.NewClusterBatch(false).CustomCommand(evalSha), true)
+		default:
+			suite.Failf("unexpected client type", "%T", client)
+			return
+		}
+
+		if suite.Error(err) {
+			assert.Regexp(t, noScriptPattern, err.Error())
+		}
+
+		suite.NoError(batchExecErr)
+		if suite.Len(batchResults, 1) {
+			resultErr, ok := batchResults[0].(error)
+			if suite.True(ok, "expected an error in the batch result, got %#v", batchResults[0]) {
+				assert.Regexp(t, noScriptPattern, resultErr.Error())
+			}
+		}
+
+		if suite.Error(batchErr) {
+			assert.Regexp(t, noScriptPattern, batchErr.Error())
+		}
+
+		// InvokeScript reloads the script while it is open; once closed, the server's NOSCRIPT reaches the caller.
+		script := options.NewScript(fmt.Sprintf("return '%s'", uuid.NewString()))
+		_, err = client.InvokeScript(ctx, *script)
+		suite.NoError(err)
+		script.Close()
+		_, err = client.ScriptFlush(ctx)
+		suite.NoError(err)
+
+		_, err = client.InvokeScript(ctx, *script)
+		if suite.Error(err) {
+			assert.Regexp(t, noScriptPattern, err.Error())
+		}
 	})
 }
 

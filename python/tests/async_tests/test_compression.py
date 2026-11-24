@@ -21,13 +21,20 @@ from glide_shared.commands.core_options import (
 from glide_shared.config import (
     CompressionBackend,
     CompressionConfiguration,
+    GlideClientConfiguration,
+    NodeAddress,
     ProtocolVersion,
 )
 from glide_shared.constants import OK, TEncodable
+from glide_shared.exceptions import ClosingError, RequestError
 from pytest import param
 
 from tests.async_tests.conftest import create_client
-from tests.utils.utils import create_client_config, get_random_string
+from tests.utils.utils import (
+    check_if_server_version_lt,
+    create_client_config,
+    get_random_string,
+)
 
 
 # Data Generation Functions
@@ -68,6 +75,26 @@ def generate_unicode_text(size_bytes: int) -> str:
     chars = "Hello世界🌍Привет مرحبا"
     result = chars * (size_bytes // len(chars.encode("utf-8")) + 1)
     return result.encode("utf-8")[:size_bytes].decode("utf-8", errors="ignore")
+
+
+# Names a real backend so the decoder runs, on a payload it rejects.
+HEADER_SHAPED_PLAIN = b"\x00\x01\x02\x00\x01zzzz"
+
+
+async def exec_gets(
+    client: TGlideClient, is_atomic: bool, keys: List[str]
+) -> Optional[List[Any]]:
+    if isinstance(client, GlideClient):
+        batch = Batch(is_atomic=is_atomic)
+        for key in keys:
+            batch.get(key)
+        return await client.exec(batch, raise_on_error=True)
+    cluster_batch = ClusterBatch(is_atomic=is_atomic)
+    for key in keys:
+        cluster_batch.get(key)
+    return await cast(GlideClusterClient, client).exec(
+        cluster_batch, raise_on_error=True
+    )
 
 
 def generate_mixed_size_list(count: int, min_size: int, max_size: int) -> List[str]:
@@ -186,6 +213,30 @@ class TestBasicCompression:
 
         # Cleanup
         await compression_client.delete(cast(List[Union[str, bytes]], keys))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_mget_keeps_header_shaped_neighbour(
+        self, compression_client: TGlideClient, no_compression_client: TGlideClient
+    ):
+        compressed_key = f"{{mget_collision}}_compressed_{get_random_string(8)}"
+        plain_key = f"{{mget_collision}}_plain_{get_random_string(8)}"
+        value = generate_compressible_text(1024)
+        assert await compression_client.set(compressed_key, value) == OK
+        assert await no_compression_client.set(plain_key, HEADER_SHAPED_PLAIN) == OK
+
+        for keys, expected in (
+            ([compressed_key, plain_key], [value.encode(), HEADER_SHAPED_PLAIN]),
+            ([plain_key, compressed_key], [HEADER_SHAPED_PLAIN, value.encode()]),
+        ):
+            assert (
+                await compression_client.mget(cast(List[Union[str, bytes]], keys))
+                == expected
+            )
+
+        await no_compression_client.delete(
+            cast(List[Union[str, bytes]], [compressed_key, plain_key])
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1076,6 +1127,30 @@ class TestCompressionBatch:
             cast(List[Union[str, bytes]], [key1, key2, key3])
         )
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("is_atomic", [True, False])
+    async def test_compression_batch_keeps_header_shaped_neighbour(
+        self,
+        compression_client: TGlideClient,
+        no_compression_client: TGlideClient,
+        is_atomic: bool,
+    ):
+        compressed_key = f"{{batch_collision}}_compressed_{get_random_string(8)}"
+        plain_key = f"{{batch_collision}}_plain_{get_random_string(8)}"
+        value = generate_compressible_text(1024)
+        assert await compression_client.set(compressed_key, value) == OK
+        assert await no_compression_client.set(plain_key, HEADER_SHAPED_PLAIN) == OK
+
+        results = await exec_gets(
+            compression_client, is_atomic, [compressed_key, plain_key]
+        )
+        assert results == [value.encode(), HEADER_SHAPED_PLAIN]
+
+        await no_compression_client.delete(
+            cast(List[Union[str, bytes]], [compressed_key, plain_key])
+        )
+
 
 @pytest.mark.anyio
 class TestCompressionEdgeCases:
@@ -1447,55 +1522,42 @@ class TestCompressionIncompatibleCommands:
     of the original values.
     """
 
-    # Command name, arguments array, and expected result for incompatible commands.
-    # Expected results are used by test_incompatible_commands_compression_disabled,
-    # and depend on the test key being populated with "10".
+    # Command name, arguments array, expected result, and minimum server version for
+    # incompatible commands. Expected results and minimum versions are only used by
+    # test_incompatible_commands_compression_disabled, which sends the commands to the
+    # server. Expected results depend on the test key being populated with "10".
     INCOMPATIBLE_COMMANDS = [
-        param("append", ["0"], 3, id="append"),
-        param("bitcount", [], 5, id="bitcount"),
-        param("bitpos", [1], 2, id="bitpos"),
-        param("decr", [], 9, id="decr"),
-        param("decrby", [5], 5, id="decrby"),
-        param(
-            "delifeq",
-            ["10"],
-            True,
-            id="delifeq",
-            marks=pytest.mark.skip_if_version_below("9.0.0"),
-        ),
-        param("getbit", [0], 0, id="getbit"),
-        param("getrange", [0, 0], b"1", id="getrange"),
-        param("incr", [], 11, id="incr"),
-        param("incrby", [5], 15, id="incrby"),
-        param("incrbyfloat", [0.5], 10.5, id="incrbyfloat"),
-        param(
-            "set",
-            ["20", OnlyIfEqual("10")],
-            OK,
-            id="set_ifeq",
-            marks=pytest.mark.skip_if_version_below("8.1.0"),
-        ),
-        param(
-            "set",
-            ["20", OnlyIfNotEqual("20")],
-            OK,
-            id="set_ifne",
-            marks=pytest.mark.skip_if_version_below("9.2.0"),
-        ),
-        param("setbit", [0, 1], 0, id="setbit"),
-        param("setrange", [1, "5"], 2, id="setrange"),
-        param("strlen", [], 2, id="strlen"),
+        param("append", ["0"], 3, None, id="append"),
+        param("bitcount", [], 5, None, id="bitcount"),
+        param("bitpos", [1], 2, None, id="bitpos"),
+        param("decr", [], 9, None, id="decr"),
+        param("decrby", [5], 5, None, id="decrby"),
+        param("delex", [OnlyIfEqual("10")], True, "9.2.0", id="delex_ifeq"),
+        param("delifeq", ["10"], True, "9.0.0", id="delifeq"),
+        param("getbit", [0], 0, None, id="getbit"),
+        param("getrange", [0, 0], b"1", None, id="getrange"),
+        param("incr", [], 11, None, id="incr"),
+        param("incrby", [5], 15, None, id="incrby"),
+        param("incrbyfloat", [0.5], 10.5, None, id="incrbyfloat"),
+        param("set", ["20", OnlyIfEqual("10")], OK, "8.1.0", id="set_ifeq"),
+        param("set", ["20", OnlyIfNotEqual("20")], OK, "9.2.0", id="set_ifne"),
+        param("setbit", [0, 1], 0, None, id="setbit"),
+        param("setrange", [1, "5"], 2, None, id="setrange"),
+        param("strlen", [], 2, None, id="strlen"),
     ]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("method, args, expected", INCOMPATIBLE_COMMANDS)
+    @pytest.mark.parametrize(
+        "method, args, expected, min_version", INCOMPATIBLE_COMMANDS
+    )
     async def test_incompatible_commands(
         self,
         compression_client: TGlideClient,
         method: str,
         args: List[Any],
         expected: Any,
+        min_version: Optional[str],
     ):
         with pytest.raises(Exception) as exc_info:
             await getattr(compression_client, method)("key", *args)
@@ -1503,13 +1565,16 @@ class TestCompressionIncompatibleCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("method, args, expected", INCOMPATIBLE_COMMANDS)
+    @pytest.mark.parametrize(
+        "method, args, expected, min_version", INCOMPATIBLE_COMMANDS
+    )
     async def test_incompatible_commands_custom(
         self,
         compression_client: TGlideClient,
         method: str,
         args: List[Any],
         expected: Any,
+        min_version: Optional[str],
     ):
         command: List[TEncodable] = [method.upper(), "key"]
         for arg in args:
@@ -1525,7 +1590,9 @@ class TestCompressionIncompatibleCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("is_atomic", [True, False])
-    @pytest.mark.parametrize("method, args, expected", INCOMPATIBLE_COMMANDS)
+    @pytest.mark.parametrize(
+        "method, args, expected, min_version", INCOMPATIBLE_COMMANDS
+    )
     async def test_incompatible_commands_batch(
         self,
         compression_client: TGlideClient,
@@ -1533,6 +1600,7 @@ class TestCompressionIncompatibleCommands:
         method: str,
         args: List[Any],
         expected: Any,
+        min_version: Optional[str],
     ):
         # Create batch with incompatible command
         batch = (
@@ -1558,15 +1626,23 @@ class TestCompressionIncompatibleCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("method, args, expected", INCOMPATIBLE_COMMANDS)
+    @pytest.mark.parametrize(
+        "method, args, expected, min_version", INCOMPATIBLE_COMMANDS
+    )
     async def test_incompatible_commands_compression_disabled(
         self,
         no_compression_client: TGlideClient,
         method: str,
         args: List[Any],
         expected: Any,
+        min_version: Optional[str],
     ):
         """Test that incompatible commands work when compression is disabled."""
+        if min_version and await check_if_server_version_lt(
+            no_compression_client, min_version
+        ):
+            pytest.skip(f"Requires server version {min_version} or later")
+
         key = f"no_compression_test_{get_random_string(8)}"
         assert await no_compression_client.set(key, "10") == OK
 
@@ -1742,6 +1818,51 @@ class TestCompressionMaxDecompressedSize:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("is_atomic", [True, False])
+    async def test_max_decompressed_size_enforced_on_batch(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion, is_atomic: bool
+    ):
+        unlimited_client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            enable_compression=True,
+        )
+        try:
+            key = f"batch_max_test_{get_random_string(8)}"
+            await unlimited_client.set(key, generate_compressible_text(10000))
+
+            limited_config = create_client_config(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                enable_compression=False,
+            )
+            limited_config.compression = CompressionConfiguration(
+                enabled=True,
+                backend=CompressionBackend.ZSTD,
+                compression_level=3,
+                min_compression_size=64,
+                max_decompressed_size=100,
+            )
+            limited_client: GlideClient | GlideClusterClient
+            if cluster_mode:
+                limited_client = await GlideClusterClient.create(limited_config)
+            else:
+                limited_client = await GlideClient.create(limited_config)
+
+            try:
+                with pytest.raises(RequestError, match="size limit exceeded"):
+                    await exec_gets(limited_client, is_atomic, [key])
+            finally:
+                await limited_client.close()
+
+            await unlimited_client.delete([key])
+        finally:
+            await unlimited_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_max_decompressed_size_allows_values_within_limit(
         self, request, cluster_mode: bool, protocol: ProtocolVersion
     ):
@@ -1882,3 +2003,20 @@ def assert_incompatible(exc_info: pytest.ExceptionInfo[Exception]) -> None:
     assert (
         "incompatible with compression" in error_msg
     ), f"Error should mention incompatibility with compression: {exc_info.value}"
+
+
+@pytest.mark.anyio
+async def test_invalid_compression_level_raises_closing_error():
+    """
+    The core rejects the level before connecting, so no server is needed. This error raised
+    ClosingError before 2.6 and must keep that type, unlike the core's newer configuration
+    checks, which raise ConfigurationError.
+    """
+    config = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1", 1)],
+        compression=CompressionConfiguration(
+            enabled=True, backend=CompressionBackend.ZSTD, compression_level=100
+        ),
+    )
+    with pytest.raises(ClosingError, match="compression"):
+        await GlideClient.create(config)

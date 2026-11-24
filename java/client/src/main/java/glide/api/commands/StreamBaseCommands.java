@@ -420,16 +420,14 @@ public interface StreamBaseCommands {
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -460,16 +458,14 @@ public interface StreamBaseCommands {
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -501,16 +497,14 @@ public interface StreamBaseCommands {
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -541,16 +535,14 @@ public interface StreamBaseCommands {
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -583,16 +575,14 @@ public interface StreamBaseCommands {
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
@@ -626,16 +616,14 @@ public interface StreamBaseCommands {
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
@@ -669,16 +657,14 @@ public interface StreamBaseCommands {
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
@@ -711,16 +697,14 @@ public interface StreamBaseCommands {
      * @param end Ending stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param start Starting stream entry ID bound for range.
      *     <ul>
      *       <li>Use {@link IdBound#of} to specify a stream entry ID.
-     *       <li>Since Valkey 6.2.0, use {@link IdBound#ofExclusive} to specify an exclusive bounded
-     *           stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
@@ -962,7 +946,7 @@ public interface StreamBaseCommands {
     /**
      * Sets the last delivered ID for a consumer group.
      *
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The consumer group name.
@@ -981,7 +965,7 @@ public interface StreamBaseCommands {
     /**
      * Sets the last delivered ID for a consumer group.
      *
-     * @since Valkey 7.0 and above
+     * @since Valkey 7.0.0
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The consumer group name.
@@ -2178,7 +2162,6 @@ public interface StreamBaseCommands {
      * Returns verbose information about the stream stored at key <code>key</code>.<br>
      * The output is limited by first <code>10</code> PEL entries.
      *
-     * @since Valkey 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @return A <code>Map</code> of detailed stream information for the given <code>key</code>. See
@@ -2252,7 +2235,6 @@ public interface StreamBaseCommands {
      * Returns verbose information about the stream stored at key <code>key</code>.<br>
      * The output is limited by first <code>10</code> PEL entries.
      *
-     * @since Valkey 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @return A <code>Map</code> of detailed stream information for the given <code>key</code>. See
@@ -2325,7 +2307,6 @@ public interface StreamBaseCommands {
     /**
      * Returns verbose information about the stream stored at key <code>key</code>.
      *
-     * @since Valkey 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
@@ -2343,7 +2324,6 @@ public interface StreamBaseCommands {
     /**
      * Returns verbose information about the stream stored at key <code>key</code>.
      *
-     * @since Valkey 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>

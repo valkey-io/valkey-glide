@@ -20,6 +20,7 @@ import {
     BitwiseOperation,
     ClientTrackingInfo,
     ClusterBatch,
+    ConditionalChange,
     Decoder,
     FlushMode,
     FunctionListResponse,
@@ -547,7 +548,7 @@ export const INFO_DEFAULT_FIELDS = [
 /**
  * Expected server responses for the "rdb_*_bgsave_type" INFO persistence fields.
  *
- * @remarks Since Valkey version 9.2.0.
+ * @since Valkey 9.2.0.
  */
 export const BGSAVE_TYPES = ["fork", "forkless", "none"];
 
@@ -1088,7 +1089,9 @@ export async function batchTest(
         key26, // sorted set
         key27, // sorted set
         key28, // move
-    ] = Array.from({ length: 28 }, () =>
+        key29, // string
+        key30, // string
+    ] = Array.from({ length: 30 }, () =>
         decodeString("{key}" + getRandomKey(), decoder),
     );
 
@@ -1220,6 +1223,68 @@ export async function batchTest(
     baseBatch.set(key2, baz, { returnOldValue: true });
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
 
+    if (!cluster.checkIfServerVersionLessThan("8.1.0")) {
+        baseBatch.set(key29, foo, {
+            conditionalSet: "onlyIfEqual",
+            comparisonValue: bar,
+        });
+        responseData.push([
+            'set(key29, "foo", {conditionalSet: "onlyIfEqual", comparisonValue: "bar"}) non-existent key',
+            null,
+        ]);
+        baseBatch.set(key29, foo);
+        responseData.push(['set(key29, "foo")', "OK"]);
+        baseBatch.set(key29, bar, {
+            conditionalSet: "onlyIfEqual",
+            comparisonValue: bar,
+        });
+        responseData.push([
+            'set(key29, "bar", {conditionalSet: "onlyIfEqual", comparisonValue: "bar"}) value not equal',
+            null,
+        ]);
+        baseBatch.set(key29, bar, {
+            conditionalSet: "onlyIfEqual",
+            comparisonValue: foo,
+        });
+        responseData.push([
+            'set(key29, "bar", {conditionalSet: "onlyIfEqual", comparisonValue: "foo"}) value equal',
+            "OK",
+        ]);
+        baseBatch.get(key29);
+        responseData.push(["get(key29)", "bar"]);
+    }
+
+    if (!cluster.checkIfServerVersionLessThan("9.2.0")) {
+        baseBatch.set(key30, foo, {
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: bar,
+        });
+        responseData.push([
+            'set(key30, "foo", {conditionalSet: "onlyIfNotEqual", comparisonValue: "bar"}) non-existent key',
+            "OK",
+        ]);
+        baseBatch.set(key30, foo);
+        responseData.push(['set(key30, "foo")', "OK"]);
+        baseBatch.set(key30, bar, {
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: foo,
+        });
+        responseData.push([
+            'set(key30, "bar", {conditionalSet: "onlyIfNotEqual", comparisonValue: "foo"}) value equal',
+            null,
+        ]);
+        baseBatch.set(key30, bar, {
+            conditionalSet: "onlyIfNotEqual",
+            comparisonValue: bar,
+        });
+        responseData.push([
+            'set(key30, "bar", {conditionalSet: "onlyIfNotEqual", comparisonValue: "bar"}) value not equal',
+            "OK",
+        ]);
+        baseBatch.get(key30);
+        responseData.push(["get(key30)", "bar"]);
+    }
+
     if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
         baseBatch.set(key28, foo);
         responseData.push(['set(key1, "foo")', "OK"]);
@@ -1245,6 +1310,19 @@ export async function batchTest(
     responseData.push(["append(key1, value)", 3]);
     baseBatch.del([key1]);
     responseData.push(["del([key1])", 1]);
+
+    if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
+        const delIfEqKey = decodeString("{key}" + getRandomKey(), decoder);
+        baseBatch.set(delIfEqKey, value);
+        responseData.push(["set(delIfEqKey, value)", "OK"]);
+
+        baseBatch.delifeq(delIfEqKey, "wrong-value");
+        responseData.push(["delifeq(delIfEqKey, 'wrong-value')", false]);
+
+        baseBatch.delifeq(delIfEqKey, value);
+        responseData.push(["delifeq(delIfEqKey, value)", true]);
+    }
+
     baseBatch.hset(key4, [{ field, value }]);
     responseData.push(["hset(key4, { [field]: value })", 1]);
     baseBatch.hscan(key4, "0");
@@ -1422,6 +1500,36 @@ export async function batchTest(
         responseData.push([
             "hgetdel(hgetdelKey, [field, field2])",
             [null, null],
+        ]);
+
+        // HSETEX key conditional change tests - only run if server version is 9.1.0 or higher
+        // hgetdelKey no longer exists at this point, so it can be used to test NX.
+        baseBatch.hsetex(
+            hgetdelKey,
+            { [field.toString()]: value },
+            { keyConditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST },
+        );
+        responseData.push([
+            "hsetex(hgetdelKey, { [field]: value }, { keyConditionalChange: ONLY_IF_DOES_NOT_EXIST })",
+            1,
+        ]);
+        baseBatch.hsetex(
+            hgetdelKey,
+            { [field.toString()]: "value2" },
+            { keyConditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST },
+        );
+        responseData.push([
+            "hsetex(hgetdelKey, { [field]: value2 }, { keyConditionalChange: ONLY_IF_DOES_NOT_EXIST })",
+            0,
+        ]);
+        baseBatch.hsetex(
+            hgetdelKey,
+            { [field.toString()]: "value2" },
+            { keyConditionalChange: ConditionalChange.ONLY_IF_EXISTS },
+        );
+        responseData.push([
+            "hsetex(hgetdelKey, { [field]: value2 }, { keyConditionalChange: ONLY_IF_EXISTS })",
+            1,
         ]);
     }
 
@@ -2760,13 +2868,25 @@ export function assertMemoryStatsFields(
 
     expect(stats.allocatorActive).toBeGreaterThan(0);
     expect(stats.allocatorAllocated).toBeGreaterThan(0);
-    expect(stats.allocatorFragmentationBytes).toBeGreaterThanOrEqual(0);
+    // Before 8.0 this is allocator.active - allocator.allocated. Without jemalloc (macOS), active
+    // is the RAM in use, which can be less than what was allocated, so it can go negative.
+    expect(Number.isInteger(stats.allocatorFragmentationBytes)).toBe(true);
+
+    if (serverVersion < "8.0.0") {
+        expect(stats.allocatorFragmentationBytes).toBe(
+            stats.allocatorActive - stats.allocatorAllocated,
+        );
+    } else {
+        expect(stats.allocatorFragmentationBytes).toBeGreaterThanOrEqual(0);
+    }
+
     expect(stats.allocatorResident).toBeGreaterThan(0);
     expect(typeof stats.allocatorRssBytes).toBe("number");
     expect(stats.aofBuffer).toBeGreaterThanOrEqual(0);
     expect(stats.clientsNormal).toBeGreaterThanOrEqual(0);
     expect(stats.clientsSlaves).toBeGreaterThanOrEqual(0);
-    expect(stats.datasetBytes).toBeGreaterThanOrEqual(0);
+    // dataset.bytes can be negative depending on engine memory accounting, so only check its type.
+    expect(typeof stats.datasetBytes).toBe("number");
     expect(typeof stats.fragmentationBytes).toBe("number");
     expect(stats.keysBytesPerKey).toBeGreaterThanOrEqual(0);
     expect(stats.keysCount).toBeGreaterThanOrEqual(0);

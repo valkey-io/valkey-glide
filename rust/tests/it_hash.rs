@@ -29,6 +29,7 @@ matrix_test!(hset, c, {
     assert_eq!(v.as_deref(), Some("v2"));
 });
 
+// TODO #7641: Update the expected type to `Vec<Option<String>>`.
 matrix_test!(hset_multiple, c, {
     let k = common::key("h");
 
@@ -101,6 +102,7 @@ matrix_test!(hgetall_missing_is_empty, c, {
     assert!(all.is_empty());
 });
 
+// TODO #7641: Update the expected type to `Vec<Option<String>>`.
 matrix_test!(hmget, c, {
     let k = common::key("h");
     let _: usize = c
@@ -111,6 +113,9 @@ matrix_test!(hmget, c, {
     assert_eq!(vals, vec!["v1", "v2"]);
 });
 
+// TODO #7641:
+// - Cover a missing field in `hmget`.
+// - Remove `hmget_typed_with_nil` and `hmget_untyped_with_nil`.
 // Valkey returns `nil` when a requested field does not exist.
 // Typed `hmget` raises an error if this happens. Callers
 // need to use the untyped version if they want to handle this
@@ -324,9 +329,46 @@ matrix_test!(hpersist, c, {
 });
 
 // ---------------------------------------------------------------------------
+// HGETDEL (Valkey 9.1+).
+// ---------------------------------------------------------------------------
+
+matrix_test!(hget_del, c, {
+    skip_if_version_below!(c, 9, 1, 0);
+
+    let k = common::key("h_getdel");
+    let _: usize = c
+        .hset_multiple(&k, &[("f1", "v1"), ("f2", "v2"), ("f3", "v3")])
+        .await
+        .unwrap();
+
+    // Get and delete an existing field and a non-existing field.
+    let vals: Vec<Option<String>> = c.hget_del(&k, &["f1", "missing"]).await.unwrap();
+    assert_eq!(vals, vec![Some("v1".to_string()), None]);
+
+    // Verify f1 was deleted while other fields remain.
+    assert!(!c.hexists(&k, "f1").await.unwrap());
+    assert_eq!(c.hlen(&k).await.unwrap(), 2);
+
+    // Get and delete the remaining fields; the key should be removed automatically.
+    let vals: Vec<Option<String>> = c.hget_del(&k, &["f2", "f3"]).await.unwrap();
+    assert_eq!(vals, vec![Some("v2".to_string()), Some("v3".to_string())]);
+    assert!(!c.exists(&k).await.unwrap());
+
+    // HGETDEL on a non-existing key returns `None` for each requested field.
+    let vals: Vec<Option<String>> = c.hget_del(&k, &["f1", "f2"]).await.unwrap();
+    assert_eq!(vals, vec![None, None]);
+
+    // HGETDEL with an empty fields list should return an error.
+    let no_fields: [&str; 0] = [];
+    let res: glide::ValkeyResult<Vec<Option<String>>> = c.hget_del(&k, &no_fields).await;
+    assert!(res.is_err());
+});
+
+// ---------------------------------------------------------------------------
 // HGETEX / HSETEX (Valkey/Redis 9.0+).
 // ---------------------------------------------------------------------------
 
+// TODO #7641: Update the expected type to `Vec<Option<String>>`.
 matrix_test!(hget_ex, c, {
     skip_if_version_below!(c, 9, 0, 0);
 
@@ -373,6 +415,9 @@ matrix_test!(hget_ex, c, {
     assert_eq!(ttl, vec![IntegerReplyOrNoOp::ExistsButNotRelevant]);
 });
 
+// TODO #7641:
+// - Cover a missing field in `hget_ex`.
+// - Remove `hget_ex_typed_with_nil` and `hget_ex_untyped_with_nil`.
 // Valkey returns `nil` when a requested field does not exist.
 // Typed `hget_ex` raises an error if this happens. Callers
 // need to use the untyped version if they want to handle this

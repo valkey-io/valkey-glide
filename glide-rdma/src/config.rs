@@ -3,9 +3,14 @@
 //! How to open the local fabric endpoint.
 
 /// A libfabric provider the client can drive.
+///
+/// Non-exhaustive because `Tcp` is only there with the `tcp-dev` feature.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum Provider {
     /// Software transport, for tests and development on hosts without RDMA hardware.
+    /// Only with the `tcp-dev` feature; a release build does not carry it.
+    #[cfg(any(test, feature = "tcp-dev"))]
     Tcp,
     /// EFA's `efa-direct` fabric.
     #[default]
@@ -18,6 +23,7 @@ impl Provider {
     /// The libfabric provider name, as `fabric_attr.prov_name`.
     pub(crate) fn as_str(self) -> &'static str {
         match self {
+            #[cfg(any(test, feature = "tcp-dev"))]
             Provider::Tcp => "tcp",
             Provider::EfaDirect => "efa",
         }
@@ -27,6 +33,7 @@ impl Provider {
     pub(crate) fn fabric_name(self) -> Option<&'static str> {
         match self {
             Provider::EfaDirect => Some("efa-direct"),
+            #[cfg(any(test, feature = "tcp-dev"))]
             Provider::Tcp => None,
         }
     }
@@ -57,11 +64,12 @@ impl Provider {
 }
 
 /// How to open the local fabric endpoint.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FabricConfig {
     provider: Provider,
     interface: Option<String>,
     bind: Option<String>,
+    device_memory: bool,
 }
 
 impl FabricConfig {
@@ -71,6 +79,7 @@ impl FabricConfig {
             provider,
             interface: None,
             bind: None,
+            device_memory: false,
         }
     }
 
@@ -88,6 +97,16 @@ impl FabricConfig {
         self
     }
 
+    /// Open the endpoint able to register device memory, such as CUDA memory, as
+    /// well as host memory; see `RdmaFabric::register_device_raw`.
+    ///
+    /// The provider must offer `FI_HMEM`, as efa-direct does on a host whose libfabric
+    /// was built with the device's runtime. Opening fails otherwise.
+    pub fn with_device_memory(mut self) -> Self {
+        self.device_memory = true;
+        self
+    }
+
     /// The provider to open.
     pub fn provider(&self) -> Provider {
         self.provider
@@ -102,15 +121,59 @@ impl FabricConfig {
     pub fn bind(&self) -> Option<&str> {
         self.bind.as_deref()
     }
+
+    /// Whether the endpoint can register device memory.
+    pub fn device_memory(&self) -> bool {
+        self.device_memory
+    }
+
+    /// This configuration without device memory, to tell whether that is what a
+    /// provider lacks.
+    #[cfg(feature = "libfabric")]
+    pub(crate) fn without_device_memory(&self) -> Self {
+        Self {
+            device_memory: false,
+            ..self.clone()
+        }
+    }
+}
+
+/// As the connection log names it, e.g. `Tcp, interface: lo, bind: 127.0.0.1`.
+impl std::fmt::Display for FabricConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{:?}", self.provider)?;
+        if let Some(interface) = &self.interface {
+            write!(formatter, ", interface: {interface}")?;
+        }
+        if let Some(bind) = &self.bind {
+            write!(formatter, ", bind: {bind}")?;
+        }
+        if self.device_memory {
+            write!(formatter, ", device memory")?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(all(test, feature = "libfabric"))]
 mod tests {
-    use super::Provider;
+    use super::{FabricConfig, Provider};
 
     #[test]
     fn only_efa_direct_stops_writes_when_a_region_closes() {
         assert!(Provider::EfaDirect.close_stops_writes());
         assert!(!Provider::Tcp.close_stops_writes());
+    }
+
+    /// A fabric group refuses a client whose configuration differs, and names
+    /// both in the error, so every field compared must show here.
+    #[test]
+    fn display_names_every_field_a_group_compares() {
+        let config = FabricConfig::new(Provider::EfaDirect);
+        assert_eq!(config.to_string(), "EfaDirect");
+        assert_eq!(
+            config.with_device_memory().to_string(),
+            "EfaDirect, device memory"
+        );
     }
 }

@@ -1,9 +1,11 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -12,7 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.GlideString;
 import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.CompressionBackend;
 import glide.api.models.configuration.CompressionConfiguration;
 import glide.api.models.exceptions.ConfigurationError;
@@ -22,7 +26,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
@@ -533,301 +539,61 @@ public class CompressionTests {
     // Incompatible Commands Tests
     // ============================================================================
 
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getCompressionClients")
-    public void compression_append_incompatible(BaseClient client) {
-        try {
-            String key = randomKey("append_test");
-            assertEquals(OK, client.set(key, "initial_value").get());
+    /**
+     * Commands that are incompatible with compression, called on a key that does not need to exist.
+     */
+    static Stream<Arguments> getIncompatibleCommands() {
+        return Stream.of(
+                        incompatible("append", c -> c.append("key", "0")),
+                        incompatible("bitcount", c -> c.bitcount("key")),
+                        incompatible("bitpos", c -> c.bitpos("key", 1)),
+                        incompatible("decr", c -> c.decr("key")),
+                        incompatible("decrby", c -> c.decrBy("key", 5)),
+                        incompatible("getbit", c -> c.getbit("key", 0)),
+                        incompatible("getrange", c -> c.getrange("key", 0, 0)),
+                        incompatible("incr", c -> c.incr("key")),
+                        incompatible("incrby", c -> c.incrBy("key", 5)),
+                        incompatible("incrbyfloat", c -> c.incrByFloat("key", 0.5)),
+                        incompatible(
+                                "set_ifeq",
+                                c ->
+                                        c.set(
+                                                "key",
+                                                "20",
+                                                SetOptions.builder().conditionalSetOnlyIfEqualTo("10").build())),
+                        incompatible(
+                                "set_ifne",
+                                c ->
+                                        c.set(
+                                                "key",
+                                                "20",
+                                                SetOptions.builder().conditionalSetOnlyIfNotEqualTo("20").build())),
+                        incompatible("setbit", c -> c.setbit("key", 0, 1)),
+                        incompatible("setrange", c -> c.setrange("key", 1, "5")),
+                        incompatible("strlen", c -> c.strlen("key")))
+                .flatMap(
+                        command ->
+                                Stream.of(false, true)
+                                        .map(clusterMode -> Arguments.of(clusterMode, command[0], command[1])));
+    }
 
-            // APPEND should fail with compression enabled
-            ExecutionException ex =
-                    assertThrows(ExecutionException.class, () -> client.append(key, "_appended").get());
-            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
-            String errorMsg = ex.getCause().getMessage().toLowerCase();
-            assertTrue(
-                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
-                    "Error should mention incompatibility: " + errorMsg);
-
-            client.del(new String[] {key}).get();
-        } finally {
-            client.close();
-        }
+    private static Object[] incompatible(
+            String name, Function<BaseClient, CompletableFuture<?>> command) {
+        return new Object[] {name, command};
     }
 
     @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getCompressionClients")
-    public void compression_getrange_incompatible(BaseClient client) {
-        try {
-            String key = randomKey("getrange_test");
-            assertEquals(OK, client.set(key, generateCompressibleText(1024)).get());
-
-            // GETRANGE should fail with compression enabled
-            ExecutionException ex =
-                    assertThrows(ExecutionException.class, () -> client.getrange(key, 0, 10).get());
-            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
-            String errorMsg = ex.getCause().getMessage().toLowerCase();
+    @ParameterizedTest(name = "{1} clusterMode={0}")
+    @MethodSource("getIncompatibleCommands")
+    public void compression_incompatible_command(
+            boolean clusterMode, String name, Function<BaseClient, CompletableFuture<?>> command) {
+        try (BaseClient client = clusterMode ? compressionClusterClient() : compressionClient()) {
+            Throwable cause =
+                    assertThrows(ExecutionException.class, () -> command.apply(client).get()).getCause();
+            assertTrue(cause instanceof RequestException, "Should throw RequestException");
             assertTrue(
-                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
-                    "Error should mention incompatibility: " + errorMsg);
-
-            client.del(new String[] {key}).get();
-        } finally {
-            client.close();
-        }
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getCompressionClients")
-    public void compression_setrange_incompatible(BaseClient client) {
-        try {
-            String key = randomKey("setrange_test");
-            assertEquals(OK, client.set(key, generateCompressibleText(1024)).get());
-
-            // SETRANGE should fail with compression enabled
-            ExecutionException ex =
-                    assertThrows(
-                            ExecutionException.class, () -> client.setrange(key, 5, "replacement").get());
-            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
-            String errorMsg = ex.getCause().getMessage().toLowerCase();
-            assertTrue(
-                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
-                    "Error should mention incompatibility: " + errorMsg);
-
-            client.del(new String[] {key}).get();
-        } finally {
-            client.close();
-        }
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getCompressionClients")
-    public void compression_strlen_incompatible(BaseClient client) {
-        try {
-            String key = randomKey("strlen_test");
-            assertEquals(OK, client.set(key, generateCompressibleText(1024)).get());
-
-            // STRLEN should fail with compression enabled
-            ExecutionException ex =
-                    assertThrows(ExecutionException.class, () -> client.strlen(key).get());
-            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
-            String errorMsg = ex.getCause().getMessage().toLowerCase();
-            assertTrue(
-                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
-                    "Error should mention incompatibility: " + errorMsg);
-
-            client.del(new String[] {key}).get();
-        } finally {
-            client.close();
-        }
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getCompressionClients")
-    public void compression_incr_incompatible(BaseClient client) {
-        try {
-            String key = randomKey("incr_test");
-            assertEquals(OK, client.set(key, "100").get());
-
-            // INCR should fail with compression enabled
-            ExecutionException ex = assertThrows(ExecutionException.class, () -> client.incr(key).get());
-            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
-            String errorMsg = ex.getCause().getMessage().toLowerCase();
-            assertTrue(
-                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
-                    "Error should mention incompatibility: " + errorMsg);
-
-            client.del(new String[] {key}).get();
-        } finally {
-            client.close();
-        }
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getCompressionClients")
-    public void compression_incrby_incompatible(BaseClient client) {
-        try {
-            String key = randomKey("incrby_test");
-            assertEquals(OK, client.set(key, "100").get());
-
-            // INCRBY should fail with compression enabled
-            ExecutionException ex =
-                    assertThrows(ExecutionException.class, () -> client.incrBy(key, 10).get());
-            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
-            String errorMsg = ex.getCause().getMessage().toLowerCase();
-            assertTrue(
-                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
-                    "Error should mention incompatibility: " + errorMsg);
-
-            client.del(new String[] {key}).get();
-        } finally {
-            client.close();
-        }
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getCompressionClients")
-    public void compression_incrbyfloat_incompatible(BaseClient client) {
-        try {
-            String key = randomKey("incrbyfloat_test");
-            assertEquals(OK, client.set(key, "100.5").get());
-
-            // INCRBYFLOAT should fail with compression enabled
-            ExecutionException ex =
-                    assertThrows(ExecutionException.class, () -> client.incrByFloat(key, 0.5).get());
-            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
-            String errorMsg = ex.getCause().getMessage().toLowerCase();
-            assertTrue(
-                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
-                    "Error should mention incompatibility: " + errorMsg);
-
-            client.del(new String[] {key}).get();
-        } finally {
-            client.close();
-        }
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getCompressionClients")
-    public void compression_decr_incompatible(BaseClient client) {
-        try {
-            String key = randomKey("decr_test");
-            assertEquals(OK, client.set(key, "100").get());
-
-            // DECR should fail with compression enabled
-            ExecutionException ex = assertThrows(ExecutionException.class, () -> client.decr(key).get());
-            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
-            String errorMsg = ex.getCause().getMessage().toLowerCase();
-            assertTrue(
-                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
-                    "Error should mention incompatibility: " + errorMsg);
-
-            client.del(new String[] {key}).get();
-        } finally {
-            client.close();
-        }
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getCompressionClients")
-    public void compression_decrby_incompatible(BaseClient client) {
-        try {
-            String key = randomKey("decrby_test");
-            assertEquals(OK, client.set(key, "100").get());
-
-            // DECRBY should fail with compression enabled
-            ExecutionException ex =
-                    assertThrows(ExecutionException.class, () -> client.decrBy(key, 10).get());
-            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
-            String errorMsg = ex.getCause().getMessage().toLowerCase();
-            assertTrue(
-                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
-                    "Error should mention incompatibility: " + errorMsg);
-
-            client.del(new String[] {key}).get();
-        } finally {
-            client.close();
-        }
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getCompressionClients")
-    public void compression_getbit_incompatible(BaseClient client) {
-        try {
-            String key = randomKey("getbit_test");
-            assertEquals(OK, client.set(key, "test_value").get());
-
-            // GETBIT should fail with compression enabled
-            ExecutionException ex =
-                    assertThrows(ExecutionException.class, () -> client.getbit(key, 0).get());
-            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
-            String errorMsg = ex.getCause().getMessage().toLowerCase();
-            assertTrue(
-                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
-                    "Error should mention incompatibility: " + errorMsg);
-
-            client.del(new String[] {key}).get();
-        } finally {
-            client.close();
-        }
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getCompressionClients")
-    public void compression_setbit_incompatible(BaseClient client) {
-        try {
-            String key = randomKey("setbit_test");
-            assertEquals(OK, client.set(key, "test_value").get());
-
-            // SETBIT should fail with compression enabled
-            ExecutionException ex =
-                    assertThrows(ExecutionException.class, () -> client.setbit(key, 0, 1).get());
-            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
-            String errorMsg = ex.getCause().getMessage().toLowerCase();
-            assertTrue(
-                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
-                    "Error should mention incompatibility: " + errorMsg);
-
-            client.del(new String[] {key}).get();
-        } finally {
-            client.close();
-        }
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getCompressionClients")
-    public void compression_bitcount_incompatible(BaseClient client) {
-        try {
-            String key = randomKey("bitcount_test");
-            assertEquals(OK, client.set(key, "test_value").get());
-
-            // BITCOUNT should fail with compression enabled
-            ExecutionException ex =
-                    assertThrows(ExecutionException.class, () -> client.bitcount(key).get());
-            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
-            String errorMsg = ex.getCause().getMessage().toLowerCase();
-            assertTrue(
-                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
-                    "Error should mention incompatibility: " + errorMsg);
-
-            client.del(new String[] {key}).get();
-        } finally {
-            client.close();
-        }
-    }
-
-    @SneakyThrows
-    @ParameterizedTest
-    @MethodSource("getCompressionClients")
-    public void compression_bitpos_incompatible(BaseClient client) {
-        try {
-            String key = randomKey("bitpos_test");
-            assertEquals(OK, client.set(key, "test_value").get());
-
-            // BITPOS should fail with compression enabled
-            ExecutionException ex =
-                    assertThrows(ExecutionException.class, () -> client.bitpos(key, 1).get());
-            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
-            String errorMsg = ex.getCause().getMessage().toLowerCase();
-            assertTrue(
-                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
-                    "Error should mention incompatibility: " + errorMsg);
-
-            client.del(new String[] {key}).get();
-        } finally {
-            client.close();
+                    cause.getMessage().toLowerCase().contains("incompatible with compression"),
+                    "Error should mention incompatibility with compression");
         }
     }
 
@@ -875,6 +641,20 @@ public class CompressionTests {
 
             // BITCOUNT
             assertTrue(client.bitcount(key).get() >= 0);
+
+            // SET with IFEQ
+            if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
+                assertEquals(OK, client.set(key, "hello").get());
+                SetOptions options = SetOptions.builder().conditionalSetOnlyIfEqualTo("hello").build();
+                assertEquals(OK, client.set(key, "world", options).get());
+            }
+
+            // SET with IFNE
+            if (SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0")) {
+                assertEquals(OK, client.set(key, "hello").get());
+                SetOptions options = SetOptions.builder().conditionalSetOnlyIfNotEqualTo("world").build();
+                assertEquals(OK, client.set(key, "world", options).get());
+            }
 
             client.del(new String[] {key}).get();
         }
@@ -1270,6 +1050,98 @@ public class CompressionTests {
 
             // Cleanup
             client.del(new String[] {key1, key2, key3}).get();
+        }
+    }
+
+    // ============================================================================
+    // Batch Decompression Per Element Tests
+    // ============================================================================
+
+    private static Stream<Arguments> batchModes() {
+        return Stream.of(false, true)
+                .flatMap(
+                        clusterMode -> Stream.of(false, true).map(atomic -> Arguments.of(clusterMode, atomic)));
+    }
+
+    @SneakyThrows
+    private static BaseClient clientWithCompression(
+            boolean clusterMode, CompressionConfiguration compression) {
+        return clusterMode
+                ? GlideClusterClient.createClient(
+                                commonClusterClientConfig().compressionConfiguration(compression).build())
+                        .get()
+                : GlideClient.createClient(
+                                commonClientConfig().compressionConfiguration(compression).build())
+                        .get();
+    }
+
+    @SneakyThrows
+    private static BaseClient plainClient(boolean clusterMode) {
+        return clusterMode
+                ? GlideClusterClient.createClient(commonClusterClientConfig().build()).get()
+                : GlideClient.createClient(commonClientConfig().build()).get();
+    }
+
+    @SneakyThrows
+    private static Object[] execGets(BaseClient client, boolean atomic, GlideString... keys) {
+        if (client instanceof GlideClusterClient) {
+            glide.api.models.ClusterBatch batch =
+                    new glide.api.models.ClusterBatch(atomic).withBinaryOutput();
+            for (GlideString key : keys) batch.get(key);
+            return ((GlideClusterClient) client).exec(batch, true).get();
+        }
+        glide.api.models.Batch batch = new glide.api.models.Batch(atomic).withBinaryOutput();
+        for (GlideString key : keys) batch.get(key);
+        return ((GlideClient) client).exec(batch, true).get();
+    }
+
+    /** Names a real backend so the decoder runs, on a payload it rejects. */
+    private static final byte[] HEADER_SHAPED_PLAIN = {
+        0x00, 0x01, 0x02, 0x00, 0x01, 'z', 'z', 'z', 'z'
+    };
+
+    @SneakyThrows
+    @ParameterizedTest(name = "clusterMode={0} atomic={1}")
+    @MethodSource("batchModes")
+    public void compression_batch_surfaces_size_limit(boolean clusterMode, boolean atomic) {
+        CompressionConfiguration unlimited = CompressionConfiguration.builder().enabled(true).build();
+        CompressionConfiguration limited =
+                CompressionConfiguration.builder().enabled(true).maxDecompressedSize(100L).build();
+        try (BaseClient writer = clientWithCompression(clusterMode, unlimited);
+                BaseClient reader = clientWithCompression(clusterMode, limited)) {
+            String key = randomKey("{batch_limit}");
+            assertEquals(OK, writer.set(key, generateCompressibleText(10_000)).get());
+
+            Throwable cause =
+                    assertThrows(ExecutionException.class, () -> execGets(reader, atomic, gs(key)))
+                            .getCause();
+            assertTrue(cause instanceof RequestException, "Should throw RequestException, got " + cause);
+            assertTrue(
+                    cause.getMessage().toLowerCase().contains("size limit exceeded"),
+                    "Error should name the size limit: " + cause.getMessage());
+
+            writer.del(new String[] {key}).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "clusterMode={0} atomic={1}")
+    @MethodSource("batchModes")
+    public void compression_batch_keeps_header_shaped_neighbour(boolean clusterMode, boolean atomic) {
+        CompressionConfiguration enabled = CompressionConfiguration.builder().enabled(true).build();
+        try (BaseClient compressed = clientWithCompression(clusterMode, enabled);
+                BaseClient plain = plainClient(clusterMode)) {
+            String compressedKey = randomKey("{batch_collision}_compressed");
+            String plainKey = randomKey("{batch_collision}_plain");
+            String value = generateCompressibleText(1024);
+            assertEquals(OK, compressed.set(compressedKey, value).get());
+            assertEquals(OK, plain.set(gs(plainKey), gs(HEADER_SHAPED_PLAIN)).get());
+
+            Object[] results = execGets(compressed, atomic, gs(compressedKey), gs(plainKey));
+            assertEquals(gs(value), results[0]);
+            assertEquals(gs(HEADER_SHAPED_PLAIN), results[1]);
+
+            plain.del(new String[] {compressedKey, plainKey}).get();
         }
     }
 

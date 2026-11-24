@@ -26,7 +26,7 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 - `go/` - Go client bindings (CGO). See [go/AGENTS.md](./go/AGENTS.md).
 - `glide-telemetry/` - OpenTelemetry integration crate.
 - `glide-logger/` - Shared logging infrastructure.
-- `glide-rdma/` - RDMA transfer layer over libfabric (not yet used by clients).
+- `glide-rdma/` - RDMA transfer layer over libfabric (used by glide-core behind the `rdma` feature, exposed over the C ABI by glide-ffi behind its own `rdma` feature, and used by the Python sync client).
 - `utils/` - Shared utilities and cluster management tools (`cluster_manager.py`).
 - `benchmarks/` - Performance benchmarks across languages.
 - `examples/` - Usage examples for each language binding.
@@ -94,6 +94,7 @@ make java-lint     # Run Java spotlessApply
 make python-lint   # Run Python linters via dev.py
 make node-lint     # Run Node.js linters
 make go-lint       # Run Go linters
+make action-lint   # Run GitHub Actions linters
 
 # Formatting (Markdown/YAML/JSON via prettier)
 make prettier-check
@@ -260,9 +261,11 @@ Use conventional commit format for all commit messages:
 [optional footer(s)]
 ```
 
-**Common types:** `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+**Common types:** `feat`, `fix`, `perf`, `docs`, `style`, `refactor`, `test`, `chore`
 
 **Example:** `feat(java): add cluster scan support for Java client`
+
+The PR title uses the same format with a lowercase type; it is checked and becomes the release notes entry. A backport keeps the original PR's type, e.g. `fix(core): ... (backport #123)`; porting already-released fixes to `main` is `chore:`.
 
 ## Guardrails & Policies
 
@@ -321,7 +324,7 @@ valkey-glide/
 - [ ] Tests pass: `make *-test` succeeds (bindings), the crate's documented test invocation succeeds (touched Rust crates — see glide-core/AGENTS.md and rust/AGENTS.md for feature flags and thread-count requirements)
 - [ ] No generated outputs committed (check `.gitignore`)
 - [ ] DCO signoff present: `git log --format="%B" -n 1 | grep "Signed-off-by"`
-- [ ] Conventional commit format used
+- [ ] Conventional commit format used for commits and the PR title
 - [ ] Cross-language API consistency maintained
 - [ ] Security scan passes (no secrets committed)
 

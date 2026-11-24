@@ -43,7 +43,7 @@ use std::sync::Condvar;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::{
     ffi::{CString, c_void},
-    os::raw::{c_char, c_double, c_long, c_ulong},
+    os::raw::{c_char, c_double, c_ulong},
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
@@ -209,13 +209,13 @@ pub struct CommandResponse {
     /// recycled afterwards, so a stale pointer reads (or corrupts) unrelated
     /// future response data rather than faulting.
     pub string_value: *mut c_char,
-    pub string_value_len: c_long,
+    pub string_value_len: i64,
 
     /// Below two values are related to each other.
     /// `array_value` represents the array of CommandResponse.
     /// `array_value_len` represents the length of the array.
     pub array_value: *mut CommandResponse,
-    pub array_value_len: c_long,
+    pub array_value_len: i64,
 
     /// Below two values represent the Map structure inside CommandResponse.
     /// The map is transformed into an array of (map_key: CommandResponse, map_value: CommandResponse) and passed to the foreign language.
@@ -227,7 +227,7 @@ pub struct CommandResponse {
     /// `sets_value` represents the set of CommandResponse.
     /// `sets_value_len` represents the length of the set.
     pub sets_value: *mut CommandResponse,
-    pub sets_value_len: c_long,
+    pub sets_value_len: i64,
 
     /// Pointer to the `ResponseArena` that owns this response tree.
     /// Non-null when this response was allocated via the arena allocator.
@@ -480,6 +480,36 @@ impl redis::AddressResolver for FFIAddressResolver {
 pub struct ConnectionResponse {
     pub conn_ptr: *const c_void,
     pub connection_error_message: *const c_char,
+    /// The kind of error in `connection_error_message`; [`ConnectionErrorType::Unspecified`] on success.
+    /// Appended last so callers built against the two-field layout still read the first two fields.
+    pub connection_error_type: ConnectionErrorType,
+}
+
+/// The kind of error a [`ConnectionResponse`] carries, so the wrapper can raise a matching exception.
+///
+/// cbindgen:prefix-with-name
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionErrorType {
+    /// Any other failure, including failing to connect or authenticate.
+    Unspecified = 0,
+    /// The connection request was rejected by validation, before any connection was attempted.
+    Configuration = 1,
+}
+
+/// A client creation failure and its [`ConnectionErrorType`].
+struct CreateClientError {
+    error_type: ConnectionErrorType,
+    message: String,
+}
+
+impl From<String> for CreateClientError {
+    fn from(message: String) -> Self {
+        CreateClientError {
+            error_type: ConnectionErrorType::Unspecified,
+            message,
+        }
+    }
 }
 
 /// Represents an error returned from a command execution.
@@ -834,9 +864,46 @@ pub unsafe extern "C" fn reinit_async_pipe(pipe_write_fd: i32) {
     // Replace the stale writer. The old one is intentionally leaked —
     // its mutex/condvar are in undefined state post-fork.
     ASYNC_PIPE.store(ptr, std::sync::atomic::Ordering::Release);
+}
 
-    // Also reinitialize the timeout watchdog — its thread is dead post-fork.
-    glide_core::timeout_watchdog::TimeoutWatchdog::reinit_global();
+#[cfg(windows)]
+fn pipe_write_len(remaining: usize) -> libc::c_uint {
+    remaining.min(libc::c_uint::MAX as usize) as libc::c_uint
+}
+
+#[cfg(not(windows))]
+fn pipe_write_len(remaining: usize) -> usize {
+    remaining
+}
+
+#[cfg(test)]
+mod pipe_write_tests {
+    use super::pipe_write_len;
+
+    #[test]
+    fn oversized_write_is_split_at_platform_limit() {
+        #[cfg(windows)]
+        {
+            let total = libc::c_uint::MAX as usize + 17;
+            let first_write = pipe_write_len(total);
+            let second_write = pipe_write_len(total - first_write as usize);
+            assert_eq!(first_write, libc::c_uint::MAX);
+            assert_eq!(second_write, 17);
+        }
+        #[cfg(not(windows))]
+        assert_eq!(
+            pipe_write_len(libc::c_uint::MAX as usize + 1),
+            libc::c_uint::MAX as usize + 1
+        );
+    }
+}
+
+/// Allocate a client id from core's one global sequence, shared by pooled
+/// clients and every id-keyed registry. Bindings must draw pipe/registry ids
+/// from here rather than a local counter, or ids collide across the process.
+#[unsafe(no_mangle)]
+pub extern "C" fn glide_allocate_client_id() -> u64 {
+    glide_core::pool::allocate_client_id()
 }
 
 /// Create a new `SharedPipeWriter` and spawn its flush thread.
@@ -1925,12 +1992,9 @@ fn create_pipe_writer(pipe_write_fd: i32) -> &'static SharedPipeWriter {
                 }
                 let mut off = 0;
                 while off < data.len() {
+                    let write_len = pipe_write_len(data.len() - off);
                     let w = unsafe {
-                        libc::write(
-                            fd,
-                            data[off..].as_ptr() as *const libc::c_void,
-                            data.len() - off,
-                        )
+                        libc::write(fd, data[off..].as_ptr() as *const libc::c_void, write_len)
                     };
                     if w > 0 {
                         off += w as usize;
@@ -2099,19 +2163,32 @@ impl ClientAdapter {
                 std::ptr::null_mut()
             }
             ClientType::SyncClient => {
-                // Enter background runtime context inside the future so tokio::spawn
-                // calls within the command (e.g. reconnection, lazy subscribe) land
-                // on the background runtime where TCP I/O is registered.
-                // Note: block_on overrides any context entered before it, so the
-                // guard must be held inside the future being polled.
-                let bg = self
-                    .background_runtime
-                    .as_ref()
-                    .map(|rt| rt.handle().clone());
-                let result = self.runtime.block_on(async {
-                    let _guard = bg.as_ref().map(|h| h.enter());
-                    request_future.await
-                });
+                // A lazy client connects inside this command, so keep that off the caller's stack.
+                let result = if self.core.client.is_lazy()
+                    && let Some(bg) = self.background_runtime.as_ref()
+                {
+                    block_on_worker(bg, request_future).unwrap_or_else(|err| {
+                        Err(RedisError::from((
+                            ErrorKind::ClientError,
+                            "Command task on the runtime worker failed",
+                            err,
+                        )))
+                    })
+                } else {
+                    // Enter background runtime context inside the future so tokio::spawn
+                    // calls within the command (e.g. reconnection, lazy subscribe) land
+                    // on the background runtime where TCP I/O is registered.
+                    // Note: block_on overrides any context entered before it, so the
+                    // guard must be held inside the future being polled.
+                    let bg = self
+                        .background_runtime
+                        .as_ref()
+                        .map(|rt| rt.handle().clone());
+                    self.runtime.block_on(async {
+                        let _guard = bg.as_ref().map(|h| h.enter());
+                        request_future.await
+                    })
+                };
                 Self::handle_result(result, None, None, request_id, response_buf, false)
             }
         }
@@ -2167,12 +2244,12 @@ impl ClientAdapter {
                                     Value::BulkString(data) => {
                                         resp.response_type = ResponseType::String;
                                         resp.string_value = data.as_ptr() as *mut c_char;
-                                        resp.string_value_len = data.len() as c_long;
+                                        resp.string_value_len = data.len() as i64;
                                     }
                                     Value::SimpleString(text) => {
                                         resp.response_type = ResponseType::String;
                                         resp.string_value = text.as_ptr() as *mut c_char;
-                                        resp.string_value_len = text.len() as c_long;
+                                        resp.string_value_len = text.len() as i64;
                                     }
                                     _ => unreachable!(),
                                 }
@@ -2567,6 +2644,73 @@ fn dispatch_async_push_notification(
     true
 }
 
+/// Stack size of every runtime thread that runs a connect. It is exact: `RUST_MIN_STACK` in the
+/// host process neither shrinks nor grows these threads.
+const RUNTIME_THREAD_STACK_SIZE: usize = 2 * 1024 * 1024;
+
+/// Builds a multi-thread runtime whose threads have [`RUNTIME_THREAD_STACK_SIZE`] stacks.
+/// `worker_threads` of `None` keeps tokio's default worker count.
+#[allow(clippy::disallowed_methods)] // the one place allowed to build a multi-thread runtime
+fn worker_runtime(name: &str, worker_threads: Option<usize>) -> std::io::Result<Runtime> {
+    let mut builder = Builder::new_multi_thread();
+    builder
+        .enable_all()
+        .thread_name(name)
+        .thread_stack_size(RUNTIME_THREAD_STACK_SIZE);
+    if let Some(count) = worker_threads {
+        builder.worker_threads(count);
+    }
+    builder.build()
+}
+
+/// Runs `future` on a worker thread of `rt` and blocks the caller until it finishes.
+///
+/// Foreign callers choose the calling thread, and its stack can be too small for a connect:
+/// musl gives non-main threads 128 KiB, while a TLS cluster connect needs more. Runtimes built
+/// by [`worker_runtime`] give their workers [`RUNTIME_THREAD_STACK_SIZE`]. A panic in `future`
+/// resumes on the caller, as if the caller had polled it.
+fn block_on_worker<F>(rt: &Runtime, future: F) -> Result<F::Output, String>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    assert!(
+        rt.handle().runtime_flavor() != tokio::runtime::RuntimeFlavor::CurrentThread,
+        "block_on_worker needs worker threads; current_thread polls on the caller"
+    );
+    match rt.block_on(rt.spawn(future)) {
+        Ok(output) => Ok(output),
+        Err(err) if err.is_panic() => std::panic::resume_unwind(err.into_panic()),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+#[cfg(all(test, not(miri)))]
+mod tests_block_on_worker {
+    use super::*;
+
+    fn runtime() -> Runtime {
+        worker_runtime("test worker", Some(1)).unwrap()
+    }
+
+    #[test]
+    fn runs_the_future_off_the_calling_thread() {
+        let caller = std::thread::current().id();
+        let polled_on = block_on_worker(&runtime(), async { std::thread::current().id() });
+        assert_ne!(polled_on.unwrap(), caller);
+    }
+
+    #[test]
+    fn a_panic_resumes_on_the_caller_with_its_payload() {
+        let rt = runtime();
+        let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            block_on_worker(&rt, async { std::panic::panic_any("connect panicked") })
+        }))
+        .unwrap_err();
+        assert_eq!(payload.downcast_ref::<&str>(), Some(&"connect panicked"));
+    }
+}
+
 fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
@@ -2574,7 +2718,7 @@ fn create_client_internal(
     address_resolver: AddressResolverCallback,
     credential_provider: Option<NonNullCredentialProviderCallback>,
     client_id: usize,
-) -> Result<*const ClientAdapter, String> {
+) -> Result<*const ClientAdapter, CreateClientError> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
     if request.credential_provider_key.is_some() {
@@ -2582,7 +2726,8 @@ fn create_client_internal(
             "Direct C FFI clients cannot mix the credential_provider callback with the unsupported credential_provider_key protobuf field".to_string()
         } else {
             "The credential_provider_key protobuf field is not supported by direct C FFI clients; pass a credential_provider callback instead".to_string()
-        });
+        }
+        .into());
     }
     let has_external_blocking_provider = credential_provider.is_some();
     let runtime = match &client_type {
@@ -2608,15 +2753,10 @@ fn create_client_internal(
                 .and_then(|s| s.parse::<usize>().ok())
                 .unwrap_or(1)
                 .max(1);
-            Builder::new_multi_thread()
-                .enable_all()
-                .worker_threads(worker_threads)
-                .thread_name("Valkey-GLIDE thread")
-                .build()
-                .map_err(|err| {
-                    let redis_error: redis::RedisError = err.into();
-                    errors::error_message(&redis_error)
-                })?
+            worker_runtime("Valkey-GLIDE thread", Some(worker_threads)).map_err(|err| {
+                let redis_error: redis::RedisError = err.into();
+                errors::error_message(&redis_error)
+            })?
         }
     };
 
@@ -2626,15 +2766,10 @@ fn create_client_internal(
     // current_thread runtime which only polls tasks inside block_on.
     let background_runtime = match &client_type {
         ClientType::SyncClient => Some(
-            Builder::new_multi_thread()
-                .enable_all()
-                .worker_threads(1)
-                .thread_name("Valkey-GLIDE background")
-                .build()
-                .map_err(|err| {
-                    let redis_error: redis::RedisError = err.into();
-                    errors::error_message(&redis_error)
-                })?,
+            worker_runtime("Valkey-GLIDE background", Some(1)).map_err(|err| {
+                let redis_error: redis::RedisError = err.into();
+                errors::error_message(&redis_error)
+            })?,
         ),
         _ => None,
     };
@@ -2657,7 +2792,8 @@ fn create_client_internal(
         {
             return Err(
                 "A credential_provider callback was supplied but the connection request contains no IAM configuration"
-                    .to_string(),
+                    .to_string()
+                    .into(),
             );
         }
 
@@ -2683,9 +2819,21 @@ fn create_client_internal(
                 .credentials_provider = Some(Arc::new(move || provider.call()));
         }
 
-        create_rt
-            .block_on(GlideClient::new(connection_request, Some(push_tx)))
-            .map_err(|err| err.to_string())
+        block_on_worker(
+            create_rt,
+            GlideClient::new(connection_request, Some(push_tx)),
+        )
+        .map_err(CreateClientError::from)
+        .and_then(|client| {
+            client.map_err(|err| CreateClientError {
+                error_type: if err.is_configuration() {
+                    ConnectionErrorType::Configuration
+                } else {
+                    ConnectionErrorType::Unspecified
+                },
+                message: err.to_string(),
+            })
+        })
     };
     let client = match client {
         Ok(client) => client,
@@ -2795,12 +2943,14 @@ unsafe fn create_client_response(
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
-                CString::new(err).expect("Couldn't convert error message to CString"),
+                CString::new(err.message).expect("Couldn't convert error message to CString"),
             ),
+            connection_error_type: err.error_type,
         },
         Ok(client) => ConnectionResponse {
             conn_ptr: client as *const c_void,
             connection_error_message: std::ptr::null(),
+            connection_error_type: ConnectionErrorType::Unspecified,
         },
     };
     Box::into_raw(Box::new(response))
@@ -3020,6 +3170,7 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
             connection_error_message: CString::into_raw(
                 CString::new(err).expect("Couldn't convert error message to CString"),
             ),
+            connection_error_type: ConnectionErrorType::Unspecified,
         },
         Ok(connection_request) => {
             // Convert ConnectionRequest to protobuf bytes to reuse existing logic
@@ -3033,6 +3184,7 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
                     connection_error_message: CString::into_raw(
                         CString::new(err).expect("Couldn't convert error message to CString"),
                     ),
+                    connection_error_type: ConnectionErrorType::Unspecified,
                 },
                 Ok(bytes) => {
                     match create_client_internal(
@@ -3046,13 +3198,15 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
                         Err(err) => ConnectionResponse {
                             conn_ptr: std::ptr::null(),
                             connection_error_message: CString::into_raw(
-                                CString::new(err)
+                                CString::new(err.message)
                                     .expect("Couldn't convert error message to CString"),
                             ),
+                            connection_error_type: err.error_type,
                         },
                         Ok(client) => ConnectionResponse {
                             conn_ptr: client as *const c_void,
                             connection_error_message: std::ptr::null(),
+                            connection_error_type: ConnectionErrorType::Unspecified,
                         },
                     }
                 }
@@ -4178,6 +4332,16 @@ fn apply_json_options(
 ///
 /// `client_adapter_ptr` is a pointer to a valid `GlideClient` returned in the `ConnectionResponse` from [`create_client`].
 ///
+/// With RDMA, this also revokes every region the client registered, as
+/// `rdma_close_regions` does, and only logs a region that fails to close. It
+/// does not free the regions: the caller still owns each one and frees it with
+/// `free_rdma_region`.
+///
+/// This is not a way to cancel a transfer, since it frees the client the
+/// transfer may still be using. To cancel one, call `rdma_close_regions` from
+/// another thread, and call this only once every `rdma_get` and `rdma_set` on
+/// the client has returned.
+///
 /// # Panics
 ///
 /// This function panics when called with a null `client_adapter_ptr`.
@@ -4188,6 +4352,8 @@ fn apply_json_options(
 /// * `close_client` must be called after `free_connection_response` has been called to avoid creating a dangling pointer in the `ConnectionResponse`.
 /// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be valid until `close_client` is called.
+/// * No `rdma_get`, `rdma_set`, `register_rdma_region`, or `rdma_close_regions`
+///   call on the client may be running or start after this is called.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
@@ -4197,6 +4363,21 @@ pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     {
         let client_id = client_adapter_ptr as usize as u64;
         glide_core::scope::unregister_client(client_id);
+    }
+
+    // Revoke RDMA regions so the server can no longer reach the caller's memory.
+    #[cfg(feature = "rdma")]
+    {
+        // SAFETY: the caller's reference is still held until the decrement below.
+        let adapter = unsafe { &*(client_adapter_ptr as *const ClientAdapter) };
+        if let Err(error) = adapter.core.client.close_rdma() {
+            glide_logger::log_error(
+                "close_client",
+                format!(
+                    "could not revoke every RDMA region, so a transfer may still be waiting: {error}"
+                ),
+            );
+        }
     }
 
     // This will bring the strong count down to 0 once all client requests are done.
@@ -4338,10 +4519,10 @@ unsafe fn convert_double_pointer_to_vec<'a>(
     result
 }
 
-fn convert_vec_to_pointer<T>(vec: Vec<T>) -> (*mut T, c_long) {
+fn convert_vec_to_pointer<T>(vec: Vec<T>) -> (*mut T, i64) {
     // into_boxed_slice guarantees capacity == len (unlike shrink_to_fit which is a hint).
     // This is critical because from_raw_parts later uses len as capacity for dealloc.
-    let len = vec.len() as c_long;
+    let len = vec.len() as i64;
     let ptr = Box::into_raw(vec.into_boxed_slice()) as *mut T;
     (ptr, len)
 }
@@ -4439,10 +4620,10 @@ impl ResponseArena {
     /// `buf_pool` after release. It is therefore read-only and valid only
     /// until the arena releases its strings (`return_to_pool`); see the
     /// `CommandResponse::string_value` contract.
-    fn store_string(&mut self, data: impl Into<bytes::Bytes>) -> (*mut c_char, c_long) {
+    fn store_string(&mut self, data: impl Into<bytes::Bytes>) -> (*mut c_char, i64) {
         let data = data.into();
         let ptr = data.as_ptr() as *mut c_char;
-        let len = data.len() as c_long;
+        let len = data.len() as i64;
         self.strings.push(data);
         (ptr, len)
     }
@@ -4542,7 +4723,7 @@ impl ResponseArena {
                     self.build_into(ci, item, child_bufs)?;
                 }
                 self.nodes[idx].response_type = ResponseType::Array;
-                self.nodes[idx].array_value_len = child_count as c_long;
+                self.nodes[idx].array_value_len = child_count as i64;
                 self.nodes[idx].array_value = child_start as *mut CommandResponse;
             }
             Value::Map(map) => {
@@ -4563,7 +4744,7 @@ impl ResponseArena {
                     self.nodes[wrapper_start + i].map_value = vi as *mut CommandResponse;
                 }
                 self.nodes[idx].response_type = ResponseType::Map;
-                self.nodes[idx].array_value_len = num_entries as c_long;
+                self.nodes[idx].array_value_len = num_entries as i64;
                 self.nodes[idx].array_value = wrapper_start as *mut CommandResponse;
             }
             Value::Set(arr) => {
@@ -4577,7 +4758,7 @@ impl ResponseArena {
                     self.build_into(ci, item, &[])?;
                 }
                 self.nodes[idx].response_type = ResponseType::Sets;
-                self.nodes[idx].sets_value_len = child_count as c_long;
+                self.nodes[idx].sets_value_len = child_count as i64;
                 self.nodes[idx].sets_value = child_start as *mut CommandResponse;
             }
             Value::ServerError(server_error) => {
@@ -5474,6 +5655,8 @@ fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo
         ))),
         Value::SlotIdRoute(slot_id_route) => Ok(Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
+                // TODO #7681: Use a checked conversion (`u16::try_from`) and reject out-of-range
+                // slots.
                 slot_id_route.slot_id as u16,
                 get_slot_addr(&slot_id_route.slot_type)?,
             )),
@@ -6217,21 +6400,11 @@ pub unsafe extern "C" fn batch(
         let _ = batch_pool_ids;
         let _ = batch_blocking_arc;
 
-        // Process batch response for decompression if compression is enabled
-        match result {
-            Ok(value) => glide_core::compression::try_decompress_batch_response(
-                value,
-                compression_manager_for_decompression.as_deref(),
-            )
-            .map_err(|e| {
-                redis::RedisError::from((
-                    redis::ErrorKind::IoError,
-                    "Decompression error",
-                    e.to_string(),
-                ))
-            }),
-            Err(e) => Err(e),
-        }
+        let decompressed = glide_core::compression::try_decompress_batch_response(
+            result?,
+            compression_manager_for_decompression.as_deref(),
+        )?;
+        Ok(decompressed)
     })
 }
 
@@ -6274,6 +6447,8 @@ pub(crate) unsafe fn create_route(
         ))),
         RouteType::SlotId => Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
+                // TODO #7681: Use a checked conversion (`u16::try_from`) and reject out-of-range
+                // slots.
                 route.slot_id as u16,
                 (&route.slot_type).into(),
             )),
@@ -7090,6 +7265,7 @@ pub struct OpenTelemetryMetricsConfig {
 pub unsafe extern "C" fn init_open_telemetry(
     open_telemetry_config: *const OpenTelemetryConfig,
 ) -> *const c_char {
+    // TODO #7706: Remove once glide-telemetry's validate_config rejects this.
     // At least one of traces or metrics must be provided
     if unsafe { (*open_telemetry_config).traces.is_null() }
         && unsafe { (*open_telemetry_config).metrics.is_null() }
@@ -7414,29 +7590,30 @@ pub unsafe extern "C" fn free_log_result(result_ptr: *mut LogResult) {
 /// Statistics structure containing telemetry data.
 ///
 /// This struct provides compression and connection statistics for the client.
+/// All fields use fixed-width integers to preserve counters and timestamps on Windows.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Statistics {
     /// Total number of connections opened to Valkey
-    pub total_connections: c_ulong,
+    pub total_connections: u64,
     /// Total number of GLIDE clients
-    pub total_clients: c_ulong,
+    pub total_clients: u64,
     /// Total number of values compressed
-    pub total_values_compressed: c_ulong,
+    pub total_values_compressed: u64,
     /// Total number of values decompressed
-    pub total_values_decompressed: c_ulong,
+    pub total_values_decompressed: u64,
     /// Total original bytes before compression
-    pub total_original_bytes: c_ulong,
+    pub total_original_bytes: u64,
     /// Total bytes after compression
-    pub total_bytes_compressed: c_ulong,
+    pub total_bytes_compressed: u64,
     /// Total bytes after decompression
-    pub total_bytes_decompressed: c_ulong,
+    pub total_bytes_decompressed: u64,
     /// Number of times compression was skipped
-    pub compression_skipped_count: c_ulong,
+    pub compression_skipped_count: u64,
     /// Number of times subscriptions were out of sync during reconciliation
-    pub subscription_out_of_sync_count: c_ulong,
+    pub subscription_out_of_sync_count: u64,
     /// Timestamp of last successful subscription sync (milliseconds since epoch)
-    pub subscription_last_sync_timestamp: c_ulong,
+    pub subscription_last_sync_timestamp: u64,
 }
 
 /// Get compression and connection statistics.
@@ -7450,16 +7627,16 @@ pub struct Statistics {
 #[unsafe(no_mangle)]
 pub extern "C" fn get_statistics() -> Statistics {
     Statistics {
-        total_connections: Telemetry::total_connections() as c_ulong,
-        total_clients: Telemetry::total_clients() as c_ulong,
-        total_values_compressed: Telemetry::total_values_compressed() as c_ulong,
-        total_values_decompressed: Telemetry::total_values_decompressed() as c_ulong,
-        total_original_bytes: Telemetry::total_original_bytes() as c_ulong,
-        total_bytes_compressed: Telemetry::total_bytes_compressed() as c_ulong,
-        total_bytes_decompressed: Telemetry::total_bytes_decompressed() as c_ulong,
-        compression_skipped_count: Telemetry::compression_skipped_count() as c_ulong,
-        subscription_out_of_sync_count: Telemetry::subscription_out_of_sync_count() as c_ulong,
-        subscription_last_sync_timestamp: Telemetry::subscription_last_sync_timestamp() as c_ulong,
+        total_connections: Telemetry::total_connections() as u64,
+        total_clients: Telemetry::total_clients() as u64,
+        total_values_compressed: Telemetry::total_values_compressed() as u64,
+        total_values_decompressed: Telemetry::total_values_decompressed() as u64,
+        total_original_bytes: Telemetry::total_original_bytes() as u64,
+        total_bytes_compressed: Telemetry::total_bytes_compressed() as u64,
+        total_bytes_decompressed: Telemetry::total_bytes_decompressed() as u64,
+        compression_skipped_count: Telemetry::compression_skipped_count() as u64,
+        subscription_out_of_sync_count: Telemetry::subscription_out_of_sync_count() as u64,
+        subscription_last_sync_timestamp: Telemetry::subscription_last_sync_timestamp(),
     }
 }
 
@@ -7609,6 +7786,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
                 return Box::into_raw(Box::new(ConnectionResponse {
                     conn_ptr: std::ptr::null(),
                     connection_error_message: err_msg.into_raw(),
+                    connection_error_type: ConnectionErrorType::Unspecified,
                 }));
             }
         };
@@ -7625,6 +7803,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         return Box::into_raw(Box::new(ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: err_msg.into_raw(),
+            connection_error_type: ConnectionErrorType::Unspecified,
         }));
     }
     // Extract address, tls, and auth from the protobuf ConnectionRequest BEFORE .into(),
@@ -7634,6 +7813,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         return Box::into_raw(Box::new(ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: err_msg.into_raw(),
+            connection_error_type: ConnectionErrorType::Unspecified,
         }));
     };
     let address = NodeAddress {
@@ -7691,7 +7871,20 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         cache: None,
     };
 
-    let runtime = match Builder::new_multi_thread().enable_all().build() {
+    // Only the request validation is a configuration error. `MonitorClient::new` can also fail
+    // with `InvalidClientConfig` while setting up the connection (for example TLS), and those
+    // failures keep the unspecified type they had before 2.6.
+    if let Err(e) = MonitorClient::validate(&address, &redis_conn_info, tls_mode) {
+        let err_msg =
+            CString::new(format!("Failed to create monitor client: {e}")).unwrap_or_default();
+        return Box::into_raw(Box::new(ConnectionResponse {
+            conn_ptr: std::ptr::null(),
+            connection_error_message: err_msg.into_raw(),
+            connection_error_type: ConnectionErrorType::Configuration,
+        }));
+    }
+
+    let runtime = match worker_runtime("Valkey-GLIDE monitor", None) {
         Ok(r) => r,
         Err(e) => {
             let err_msg =
@@ -7699,6 +7892,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
             return Box::into_raw(Box::new(ConnectionResponse {
                 conn_ptr: std::ptr::null(),
                 connection_error_message: err_msg.into_raw(),
+                connection_error_type: ConnectionErrorType::Unspecified,
             }));
         }
     };
@@ -7734,8 +7928,10 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         }
     });
 
-    let monitor_client = match runtime
-        .block_on(async { MonitorClient::new(&address, redis_conn_info, tls_mode, on_line).await })
+    let monitor_client = match block_on_worker(&runtime, async move {
+        MonitorClient::new(&address, redis_conn_info, tls_mode, on_line).await
+    })
+    .and_then(|client| client.map_err(|err| err.to_string()))
     {
         Ok(c) => c,
         Err(e) => {
@@ -7744,6 +7940,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
             return Box::into_raw(Box::new(ConnectionResponse {
                 conn_ptr: std::ptr::null(),
                 connection_error_message: err_msg.into_raw(),
+                connection_error_type: ConnectionErrorType::Unspecified,
             }));
         }
     };
@@ -7765,6 +7962,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
     Box::into_raw(Box::new(ConnectionResponse {
         conn_ptr,
         connection_error_message: std::ptr::null(),
+        connection_error_type: ConnectionErrorType::Unspecified,
     }))
 }
 
@@ -8309,3 +8507,6 @@ mod tests_push_notification_safety {
 mod pool_ffi;
 #[cfg(feature = "pool-support")]
 pub use pool_ffi::*;
+
+mod rdma_ffi;
+pub use rdma_ffi::*;

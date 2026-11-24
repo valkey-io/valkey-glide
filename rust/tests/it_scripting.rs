@@ -8,6 +8,8 @@ use glide::{
     ValkeyValue,
 };
 
+// TODO #7362: Add a `matrix_test!` test for `function_stats`.
+
 resp_test!(eval_returns_argv, c, {
     let result = c
         .eval::<&str, &str>("return ARGV[1]", &[], &["hello"])

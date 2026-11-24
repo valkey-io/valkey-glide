@@ -270,7 +270,7 @@ public interface SetBaseCommands {
      * Returns if <code>member</code> is a member of the set stored at <code>key</code>, or <code>-1
      * </code> if <code>key</code> does not exist.
      *
-     * @since Valkey 9.2.0 and above.
+     * @since Valkey 9.2.0.
      * @see <a href="https://valkey.io/commands/sismember/">valkey.io</a> for details.
      * @param key The key of the set.
      * @param member The member to check for existence in the set.
@@ -299,7 +299,7 @@ public interface SetBaseCommands {
      * Returns if <code>member</code> is a member of the set stored at <code>key</code>, or <code>-1
      * </code> if <code>key</code> does not exist.
      *
-     * @since Valkey 9.2.0 and above.
+     * @since Valkey 9.2.0.
      * @see <a href="https://valkey.io/commands/sismember/">valkey.io</a> for details.
      * @param key The key of the set.
      * @param member The member to check for existence in the set.
@@ -433,7 +433,7 @@ public interface SetBaseCommands {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
@@ -453,7 +453,7 @@ public interface SetBaseCommands {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
@@ -473,7 +473,7 @@ public interface SetBaseCommands {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
@@ -499,7 +499,7 @@ public interface SetBaseCommands {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * @since Valkey 7.0 and above.
+     * @since Valkey 7.0.0.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
