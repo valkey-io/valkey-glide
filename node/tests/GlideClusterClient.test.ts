@@ -755,6 +755,29 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
+    it(
+        "allowPartialResults has no effect outside info",
+        async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            // A variable passes the type check, and plain JavaScript has none.
+            const options = {
+                route: "allPrimaries" as const,
+                allowPartialResults: true,
+            };
+
+            // ECHO without its argument fails on every primary.
+            await expect(
+                client.customCommand(["ECHO"], options),
+            ).rejects.toThrow(RequestError);
+        },
+        TIMEOUT,
+    );
+
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `route by address reaches correct node_%p`,
         async (protocol) => {

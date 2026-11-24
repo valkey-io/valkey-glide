@@ -57,7 +57,6 @@ import {
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     MigrateOptions,
     OpenTelemetry,
-    PartialResultsOption,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -1551,7 +1550,7 @@ export interface PubSubMsg {
  * @see {@link ClusterBatchOptions}
  * @see {@link BatchOptions}
  */
-type BaseOptions = RouteOption & DecoderOption & PartialResultsOption;
+type BaseOptions = RouteOption & DecoderOption;
 type WritePromiseOptions =
     BaseOptions | (BaseOptions & (ClusterBatchOptions | BatchOptions));
 
@@ -1909,6 +1908,7 @@ export class BaseClient {
      * @param options - Optional settings for the write operation, including route, batch options and decoder.
      * @param isAtomic - Indicates whether the operation should be executed atomically (AKA as a Transaction, in the case of a batch). Defaults to `false`.
      * @param raiseOnError - Determines whether to raise an error if any of the commands fails, in the case of a Batch and not a single command. Defaults to `false`.
+     * @param allowPartialResults - Whether a single command sent to several nodes returns each node's reply or error instead of failing on the first node error. Defaults to `false`.
      * @returns A promise that resolves with the result of the command(s) or rejects with an error.
      */
     protected createWritePromise<T>(
@@ -1918,11 +1918,13 @@ export class BaseClient {
         isAtomic = false,
 
         raiseOnError = false,
+
+        allowPartialResults = false,
     ): Promise<T> {
         this.ensureClientIsUsable();
 
         if (!Array.isArray(command)) {
-            return this.sendCommand<T>(command, options);
+            return this.sendCommand<T>(command, options, allowPartialResults);
         }
 
         // Batch commands
@@ -2069,6 +2071,7 @@ export class BaseClient {
     private sendCommand<T>(
         command: command_request.Command,
         options: WritePromiseOptions = {},
+        allowPartialResults = false,
     ): Promise<T> {
         let routeBytes: Uint8Array | undefined;
 
@@ -2135,9 +2138,7 @@ export class BaseClient {
                 argsPointerLow,
                 spanPtr,
                 routeBytes,
-                // A non-boolean from plain JS would throw in NAPI and leak the
-                // callback slot and the args vector.
-                !!options.allowPartialResults,
+                allowPartialResults,
             );
 
             if (command.argsVecPointer) {

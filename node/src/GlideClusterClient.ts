@@ -1188,6 +1188,11 @@ export class GlideClusterClient extends BaseClient {
         return this.createWritePromise<ClusterGlideRecord<string>>(
             createInfo(options?.sections),
             { decoder: Decoder.String, ...options },
+            false,
+            false,
+            // A non-boolean from plain JS would throw in NAPI and leak the
+            // callback slot and the args vector.
+            !!options?.allowPartialResults,
         ).then((res) => {
             const result = convertClusterGlideRecord(
                 res,
