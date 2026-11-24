@@ -107,6 +107,17 @@ tuples, maps, and sets. Its explicit per-type impls match redis-rs's
 `FromRedisValue` semantics. `ToValkeyArgs` encodes Rust values into command
 arguments. Downstream users can implement both traits for their own types.
 
+A pipeline run with `raise_on_error = false` returns one `ValkeyValue` per
+command, with failed commands in place. `ValkeyValue::ServerError` holds an
+error reply from the server. `ValkeyValue::ClientError` holds an error the
+client raised for that command's reply, such as a decompressed value over
+`max_decompressed_size`. It keeps the origin distinct and leaves the other
+slots intact. Decoding either into a Rust type fails with
+`GlideError::Request`. With `raise_on_error = true`, the same client error
+fails the call as `GlideError::Request`. Adding the variant breaks exhaustive
+`match`es on `ValkeyValue`. The crate is pre-1.0, so the next minor release
+can include that change.
+
 ## Routing (cluster)
 
 `routes::Route` enum → `redis::cluster_routing::RoutingInfo`:

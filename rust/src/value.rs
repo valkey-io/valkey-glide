@@ -60,6 +60,13 @@ pub enum ValkeyValue {
 
     /// An error reply from the server (e.g. a failed element within a reply).
     ServerError(ValkeyServerError),
+
+    /// An error this client raised in place of one command's reply; never sent by the server.
+    ///
+    /// A pipeline executed with `raise_on_error = false` keeps each command's outcome in its
+    /// own slot. When the client fails one reply, such as a decompressed value that exceeds
+    /// the configured maximum size, that slot holds this error and the other slots are kept.
+    ClientError(ValkeyClientError),
 }
 
 /// The text format of a [`ValkeyValue::VerbatimString`].
@@ -90,6 +97,30 @@ impl ValkeyServerError {
     /// The error code (e.g. `WRONGTYPE`, `MOVED`).
     pub fn err_code(&self) -> &str {
         &self.code
+    }
+
+    /// The human-readable detail.
+    pub fn details(&self) -> Option<&str> {
+        self.detail.as_deref()
+    }
+}
+
+/// An error the client raised in place of a command's reply.
+///
+/// Unlike [`ValkeyServerError`], it did not come from the server.
+/// Decoding it into a Rust type fails with [`GlideError::Request`].
+///
+/// Mirrors the GLIDE engine's `ClientError`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ValkeyClientError {
+    description: &'static str,
+    detail: Option<String>,
+}
+
+impl ValkeyClientError {
+    /// The short description of the error (e.g. `Decompression error`).
+    pub fn description(&self) -> &str {
+        self.description
     }
 
     /// The human-readable detail.
@@ -144,6 +175,10 @@ impl ValkeyValue {
             Value::ServerError(e) => ValkeyValue::ServerError(ValkeyServerError {
                 code: e.err_code().to_string(),
                 detail: e.details().map(str::to_string),
+            }),
+            Value::ClientError(error) => ValkeyValue::ClientError(ValkeyClientError {
+                description: error.description(),
+                detail: error.detail().map(str::to_string),
             }),
 
             // There a currently no known cases where a response would include
@@ -225,6 +260,56 @@ mod tests {
             }
             other => panic!("expected ServerError, got {other:?}"),
         }
+    }
+
+    fn size_limit_client_error() -> redis::ClientError {
+        redis::ClientError::new(
+            "Decompression error",
+            Some("size limit exceeded".to_string()),
+        )
+    }
+
+    #[test]
+    fn from_redis_keeps_a_client_error_in_its_slot() {
+        let server_error = RedisError::from((ErrorKind::ResponseError, "boom"));
+        let batch = Value::Array(vec![
+            Value::Okay,
+            Value::ClientError(size_limit_client_error()),
+            Value::Int(3),
+            Value::ServerError(server_error.into()),
+        ]);
+        let ValkeyValue::Array(slots) = ValkeyValue::from_redis(batch).unwrap() else {
+            panic!("expected an array");
+        };
+        assert_eq!(slots.len(), 4);
+        assert_eq!(slots[0], ValkeyValue::Okay);
+        assert_eq!(
+            slots[1],
+            ValkeyValue::ClientError(ValkeyClientError {
+                description: "Decompression error",
+                detail: Some("size limit exceeded".to_string()),
+            })
+        );
+        assert_eq!(slots[2], ValkeyValue::Int(3));
+        assert!(matches!(slots[3], ValkeyValue::ServerError(_)));
+    }
+
+    #[test]
+    fn from_redis_reads_client_error_description_and_detail() {
+        let value = Value::ClientError(size_limit_client_error());
+        let ValkeyValue::ClientError(error) = ValkeyValue::from_redis(value).unwrap() else {
+            panic!("expected a client error");
+        };
+        assert_eq!(error.description(), "Decompression error");
+        assert_eq!(error.details(), Some("size limit exceeded"));
+
+        let without_detail =
+            Value::ClientError(redis::ClientError::new("Decompression error", None));
+        let ValkeyValue::ClientError(error) = ValkeyValue::from_redis(without_detail).unwrap()
+        else {
+            panic!("expected a client error");
+        };
+        assert_eq!(error.details(), None);
     }
 
     #[test]
@@ -1070,5 +1155,33 @@ mod from_valkey_value_tests {
 
         assert_eq!(request_err.class_name(), "RequestError");
         assert!(request_err.message().contains("WRONGTYPE"));
+    }
+
+    #[test]
+    fn from_owned_valkey_value_client_error() {
+        let client_error = || {
+            ValkeyValue::ClientError(ValkeyClientError {
+                description: "Decompression error",
+                detail: Some("size limit exceeded".into()),
+            })
+        };
+        let errors = [
+            i64::from_owned_valkey_value(client_error()).unwrap_err(),
+            String::from_owned_valkey_value(client_error()).unwrap_err(),
+            Option::<Bytes>::from_owned_valkey_value(client_error()).unwrap_err(),
+            Vec::<String>::from_owned_valkey_value(client_error()).unwrap_err(),
+        ];
+        for request_err in errors {
+            assert_eq!(request_err.class_name(), "RequestError");
+            assert!(
+                request_err.message().contains("ClientError"),
+                "{request_err}"
+            );
+            assert!(
+                request_err.message().contains("size limit exceeded"),
+                "{request_err}"
+            );
+        }
+        assert_eq!(decode::<ValkeyValue>(client_error()), client_error());
     }
 }
