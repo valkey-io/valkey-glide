@@ -1137,12 +1137,24 @@ pub fn decompress_batch_response(
     };
     let mut processed = Vec::with_capacity(replies.len());
     for reply in replies {
-        processed.push(match decompress_batch_reply(reply, manager) {
-            Err(limit) if !raise_on_error => size_limit_error_reply(limit),
-            result => result?,
-        });
+        processed.push(decompress_batch_reply_or_error(
+            reply,
+            manager,
+            raise_on_error,
+        )?);
     }
     Ok(Value::Array(processed))
+}
+
+fn decompress_batch_reply_or_error(
+    reply: redis::Value,
+    manager: &CompressionManager,
+    raise_on_error: bool,
+) -> Result<redis::Value, SizeLimitExceeded> {
+    match decompress_batch_reply(reply, manager) {
+        Err(limit) if !raise_on_error => Ok(redis::Value::ServerError(limit.into())),
+        result => result,
+    }
 }
 
 /// Decompresses one command's reply within a batch response, recursing into nested arrays.
@@ -1164,10 +1176,6 @@ fn decompress_batch_reply(
         }
         other => decompress_single_value_response(other, manager),
     }
-}
-
-fn size_limit_error_reply(limit: SizeLimitExceeded) -> redis::Value {
-    redis::Value::ServerError(limit.into())
 }
 
 /// Attempts to decompress a batch response if a compression manager is provided.
