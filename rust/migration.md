@@ -148,6 +148,8 @@ GLIDE's connection-description type.
 redis-rs silently ignores a `unix://` URL's userinfo, a `localhost` host, the
 fragment and unknown query keys; GLIDE rejects them. Pass credentials as `?user=...&pass=...`, write the
 path with no host (`unix:///run/valkey/valkey.sock`), and encode `#` as `%23`.
+A `+` in a query value stays a `+`, where redis-rs reads it as a space; encode a
+space as `%20`.
 
 ### `ValueComparison` has no digest comparisons
 

@@ -903,6 +903,17 @@ fn from_url_unix_socket_treats_empty_credentials_as_absent() {
     assert!(cfg.credentials.is_none());
 }
 
+#[cfg(unix)]
+#[test]
+fn from_url_unix_socket_keeps_plus_in_credentials() {
+    let cfg =
+        GlideClientConfiguration::from_url("unix:///run/valkey/valkey.sock?user=a+b&pass=c+d%2Be")
+            .unwrap();
+    let creds = cfg.credentials.expect("credentials parsed");
+    assert_eq!(creds.username(), Some("a+b"));
+    assert_eq!(creds.password.as_deref(), Some("c+d+e"));
+}
+
 #[cfg(not(unix))]
 #[test]
 fn from_url_unix_socket_unsupported_off_unix() {

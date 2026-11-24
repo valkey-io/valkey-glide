@@ -8,6 +8,7 @@ use super::common::{
     split_connection_addr, to_redis_connection_info,
 };
 use glide_core::client::ConnectionRequest;
+use std::borrow::Cow;
 use std::time::Duration;
 
 /// Configuration for a **standalone** (non-cluster) GLIDE client.
@@ -97,12 +98,12 @@ impl GlideClientConfiguration {
     /// `rediss://…/#insecure` disables certificate verification.
     ///
     /// `unix:///path/to/valkey.sock` (or `redis+unix://`) connects through a Unix domain socket;
-    /// pass `db`, `user`, `pass` and `resp3=true` as query parameters (encode `+` as `%2B`).
+    /// pass `db`, `user`, `pass` and `resp3=true` as query parameters.
     ///
     /// Does not support Valkey URLs (`valkey://`, `valkeys://` or `valkey+unix://`).
     // TODO #7031: Accept `valkey://` and `valkeys://` schemes.
     pub fn from_url(url: impl AsRef<str>) -> crate::ValkeyResult<Self> {
-        reject_misread_unix_socket_url(url.as_ref())?;
+        let url = check_unix_socket_url(url.as_ref())?;
         let info = to_redis_connection_info(url)?;
         let (address, tls) = split_connection_addr(info.addr)?;
 
@@ -137,13 +138,14 @@ impl GlideClientConfiguration {
 }
 
 /// redis-rs ignores a Unix socket URL's userinfo, a `localhost` host, the fragment and unknown
-/// query keys, so reject the forms it would silently misread.
-fn reject_misread_unix_socket_url(url: &str) -> crate::ValkeyResult<()> {
-    let Some(parsed) = redis::parse_redis_url(url) else {
-        return Ok(());
+/// query keys, so reject the forms it would silently misread. It also form-decodes the query,
+/// turning `+` into a space, so return the URL with `+` percent-encoded to keep it literal.
+fn check_unix_socket_url(url: &str) -> crate::ValkeyResult<Cow<'_, str>> {
+    let Some(mut parsed) = redis::parse_redis_url(url) else {
+        return Ok(Cow::Borrowed(url));
     };
     if !matches!(parsed.scheme(), "unix" | "redis+unix") {
-        return Ok(());
+        return Ok(Cow::Borrowed(url));
     }
     if !parsed.username().is_empty() || parsed.password().is_some() {
         return Err(crate::error::GlideError::Configuration(
@@ -170,5 +172,12 @@ fn reject_misread_unix_socket_url(url: &str) -> crate::ValkeyResult<()> {
                 .into(),
         ));
     }
-    Ok(())
+    match parsed.query().filter(|query| query.contains('+')) {
+        Some(query) => {
+            let query = query.replace('+', "%2B");
+            parsed.set_query(Some(&query));
+            Ok(Cow::Owned(parsed.into()))
+        }
+        None => Ok(Cow::Borrowed(url)),
+    }
 }
