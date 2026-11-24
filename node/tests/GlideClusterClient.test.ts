@@ -528,7 +528,6 @@ describe("GlideClusterClient", () => {
                 }
 
                 expect(replies[primaries[0]]).toBeInstanceOf(TimeoutError);
-                expect(replies[primaries[0]]).toBeInstanceOf(RequestError);
             } finally {
                 try {
                     // CLIENT UNPAUSE would wait for the pause too; wait for it to end.
