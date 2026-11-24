@@ -1254,6 +1254,8 @@ class BaseClientConfiguration:
         self.client_info_tag = client_info_tag
         self.protocol = protocol
         self.inflight_requests_limit = inflight_requests_limit
+        # A whitespace-only AZ is rejected below like an empty one.
+        client_az = client_az.strip() if client_az is not None else None
         self.client_az = client_az
         self.advanced_config = advanced_config
         self.lazy_connect = lazy_connect
