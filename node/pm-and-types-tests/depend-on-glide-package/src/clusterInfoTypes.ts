@@ -6,7 +6,10 @@ import {
 
 // Parameters<> and ReturnType<> read the last overload of `info`, so they
 // must keep the type of the call without `allowPartialResults`.
-export async function clusterInfoTypes(client: GlideClusterClient) {
+export async function clusterInfoTypes(
+    client: GlideClusterClient,
+    allowPartialResults?: boolean,
+) {
     const info = (...args: Parameters<GlideClusterClient["info"]>) =>
         client.info(...args);
     const plain: ClusterResponse<string> = await info();
@@ -14,5 +17,8 @@ export async function clusterInfoTypes(client: GlideClusterClient) {
     const plainReturn: Promise<ClusterResponse<string>> = returned;
     const partial: string | Record<string, string | RequestError> =
         await client.info({ allowPartialResults: true });
-    return [plain, plainReturn, partial];
+    // An optional boolean also gets the type of the call with the option.
+    const optional: string | Record<string, string | RequestError> =
+        await client.info({ allowPartialResults });
+    return [plain, plainReturn, partial, optional];
 }

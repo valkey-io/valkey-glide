@@ -1140,8 +1140,9 @@ export class GlideClusterClient extends BaseClient {
      *     answer in time, or a {@link RequestError} for any other failure.
      */
     public async info(
-        options: { sections?: InfoOptions[] } & RouteOption &
-            Required<PartialResultsOption>,
+        options: { sections?: InfoOptions[] } & RouteOption & {
+                allowPartialResults: boolean | undefined;
+            },
     ): Promise<string | Record<string, string | RequestError>>;
     /**
      * Gets information and statistics about the server.
