@@ -3233,18 +3233,11 @@ where
         // then carry over any IPs from the previous slot map that weren't re-resolved.
         new_slots.populate_ips(resolved_ips);
 
-        let slot_map_nodes = new_slots.all_node_addresses();
-
         // Reset the current slot map and connection vector with the new ones
         let mut write_guard = inner.conn_lock.write();
         let old_topology_hash = write_guard.get_current_topology_hash();
-        // A slot-map node this refresh could not connect to keeps its reconnect task, so it
-        // is reconnected when it comes back. Dropping the other tasks aborts them.
-        let mut reconnecting =
+        let reconnecting =
             std::mem::take(&mut write_guard.refresh_conn_state.refresh_address_in_progress);
-        reconnecting.retain(|address, _| {
-            slot_map_nodes.contains(address) && !new_connections.0.contains_key(address)
-        });
         new_slots.carry_over_ips_from(&write_guard.slot_map);
         let read_from_replicas =
             inner.get_cluster_param(|params| params.read_from_replicas.clone());
@@ -3254,7 +3247,7 @@ where
             read_from_replicas,
             topology_hash,
         );
-        write_guard.refresh_conn_state.refresh_address_in_progress = reconnecting;
+        write_guard.adopt_reconnect_tasks(reconnecting);
 
         // Notify the PubSub synchronizer about the new topology (using same lock)
         // Since handle_topology_refresh is sync, no other task can benefit from us
