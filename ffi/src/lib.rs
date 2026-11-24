@@ -3345,6 +3345,61 @@ mod tests_parse_proto_json_request {
 }
 
 #[cfg(test)]
+mod tests_create_client_from_proto_json_errors {
+    //! Tests for the extern `create_client_from_proto_json` error surface: a document that
+    //! fails parsing must come back as a `Configuration` error with a safe C-string message,
+    //! before any connection is attempted — no server needed.
+    use super::*;
+
+    /// Calls the extern with a document that must fail before connecting, asserts the
+    /// error-response invariants, and returns the error type and message with the
+    /// response freed.
+    fn error_response_for(json: &str) -> (ConnectionErrorType, String) {
+        let client_type_ptr = Box::into_raw(Box::new(ClientType::SyncClient));
+        let response_ptr = unsafe {
+            create_client_from_proto_json(json.as_ptr(), json.len(), client_type_ptr, None, None, 0)
+        };
+        let response = unsafe { &*response_ptr };
+        assert!(response.conn_ptr.is_null());
+        assert!(!response.connection_error_message.is_null());
+        let error_type = response.connection_error_type;
+        let message = unsafe { CStr::from_ptr(response.connection_error_message) }
+            .to_str()
+            .expect("error message must be valid UTF-8")
+            .to_owned();
+        unsafe {
+            free_connection_response(response_ptr as *mut ConnectionResponse);
+            drop(Box::from_raw(client_type_ptr));
+        }
+        (error_type, message)
+    }
+
+    #[test]
+    fn invalid_json_returns_configuration_error() {
+        let (error_type, message) = error_response_for("{not json");
+        assert_eq!(error_type, ConnectionErrorType::Configuration);
+        assert!(
+            message.contains("Invalid ProtoJSON"),
+            "unexpected message: {message}"
+        );
+    }
+
+    #[test]
+    fn nul_byte_in_error_detail_is_escaped() {
+        // The parse error echoes the invalid enum value, which contains a real NUL byte;
+        // without the escape in `connection_error_response`, `CString::new` would panic
+        // (issue #7848) instead of returning an error response.
+        let (error_type, message) =
+            error_response_for(r#"{"addresses": [], "tlsMode": "Su\u0000per"}"#);
+        assert_eq!(error_type, ConnectionErrorType::Configuration);
+        assert!(
+            message.contains("\\0"),
+            "NUL byte should be escaped as \\0: {message}"
+        );
+    }
+}
+
+#[cfg(test)]
 mod tests_proto_json_uri_equivalence {
     //! Proves the ProtoJSON path produces exactly the same `ConnectionRequest` as the URI
     //! path for every configuration the URI path can express. Both paths are pure parsers,
@@ -3610,6 +3665,61 @@ mod tests_proto_json_uri_equivalence {
             cache.cache_id = "normalized".into();
         }
         assert_eq!(via_uri, via_proto_json);
+    }
+
+    #[test]
+    fn refresh_topology_from_initial_nodes() {
+        assert_equivalent(
+            "valkey://localhost:6379",
+            Some(r#"{"cluster_mode_enabled": true, "refresh_topology_from_initial_nodes": true}"#),
+            r#"{
+                "addresses": [{"host": "localhost", "port": 6379}],
+                "clusterModeEnabled": true,
+                "refreshTopologyFromInitialNodes": true
+            }"#,
+        );
+    }
+
+    #[test]
+    fn node_discovery_mode() {
+        assert_equivalent(
+            "valkey://localhost:6379",
+            Some(r#"{"node_discovery_mode": "Static"}"#),
+            r#"{
+                "addresses": [{"host": "localhost", "port": 6379}],
+                "nodeDiscoveryMode": "Static"
+            }"#,
+        );
+    }
+
+    #[test]
+    fn tls_mode_json_override() {
+        // The JSON option overrides the plain `valkey://` scheme's NoTls on the URI side.
+        assert_equivalent(
+            "valkey://localhost:6379",
+            Some(r#"{"tls_mode": "InsecureTls"}"#),
+            r#"{
+                "addresses": [{"host": "localhost", "port": 6379}],
+                "tlsMode": "InsecureTls"
+            }"#,
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_socket_with_db_and_credentials() {
+        // `apply_unix_socket_uri` sets only `unix_socket_path` on the address (host and
+        // port stay at their defaults), and the URI path's explicit `tls_mode = NoTls`
+        // equals the ProtoJSON default.
+        assert_equivalent(
+            "valkey+unix:///tmp/valkey.sock?db=2&user=alice&pass=secret",
+            None,
+            r#"{
+                "addresses": [{"unixSocketPath": "/tmp/valkey.sock"}],
+                "databaseId": 2,
+                "authenticationInfo": {"username": "alice", "password": "secret"}
+            }"#,
+        );
     }
 }
 

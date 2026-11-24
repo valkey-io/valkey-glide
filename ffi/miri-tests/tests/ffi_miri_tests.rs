@@ -3,8 +3,8 @@
 use glide_core::connection_request::{ConnectionRequest, NodeAddress, TlsMode};
 use glide_core::request_type::RequestType;
 use miri_tests::{
-    ClientType, ConnectionResponse, PushKind, close_client, create_client, create_client_from_uri,
-    create_client_from_proto_json, free_connection_response,
+    ClientType, ConnectionErrorType, ConnectionResponse, PushKind, close_client, create_client,
+    create_client_from_uri, create_client_from_proto_json, free_connection_response,
 };
 use miri_tests::{Level, LogResult, free_log_result, glide_log, init};
 use miri_tests::{
@@ -154,6 +154,10 @@ fn create_client_from_proto_json_error_paths_test() {
             );
             assert!((*connection_response_ptr).conn_ptr.is_null());
             assert!(!(*connection_response_ptr).connection_error_message.is_null());
+            assert_eq!(
+                (*connection_response_ptr).connection_error_type,
+                ConnectionErrorType::Configuration
+            );
             free_connection_response(connection_response_ptr as *mut ConnectionResponse);
         }
     }
