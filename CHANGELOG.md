@@ -10,6 +10,7 @@
 * Core, Python: Add support for Valkey 9.2 commands:
   * `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
 * Core: use atomics for telemetry instead of shared lock ([#7497](https://github.com/valkey-io/valkey-glide/pull/7497))
+* Java: build batch commands once from the JNI arrays instead of copying each argument through jni-rs ([#7866](https://github.com/valkey-io/valkey-glide/pull/7866))
 
 ### Fixes
 
