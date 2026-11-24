@@ -4229,7 +4229,10 @@ where
             .pending_requests_rx
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        while let Ok(request) = rx_guard.try_recv() {
+        // `poll_recv` registers this task's waker, so a request queued while the in-flight
+        // requests are polled below (a multi-node command or pipeline queues one per node)
+        // wakes the driver to send it.
+        while let Poll::Ready(Some(request)) = rx_guard.poll_recv(cx) {
             pending_requests.push(request);
         }
         drop(rx_guard);

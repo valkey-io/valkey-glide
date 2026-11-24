@@ -1943,6 +1943,72 @@ mod cluster_async {
 
     #[test]
     #[serial_test::parallel(otel)]
+    fn test_async_cluster_multi_shard_commands_while_other_request_pending() {
+        // A multi-shard command or pipeline queues its per-node requests from inside the
+        // connection's driver. They must be sent right away, even while another request on
+        // the same connection is still waiting for its reply.
+        let cluster = TestClusterContext::new(3, 0);
+
+        block_on_all(async move {
+            let mut connection = cluster.async_connection(None).await;
+            let mut observer = cluster.async_connection(None).await;
+            let _: () = connection.mset(&[("{b}key", "b"), ("{c}key", "c")]).await?;
+
+            let blocked_key = "{a}blocked-list";
+            let blocked_node = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                Route::new(get_slot(blocked_key.as_bytes()), SlotAddr::Master),
+            ));
+            let mut blocker = connection.clone();
+            let blpop = tokio::spawn(async move {
+                blocker
+                    .blpop::<_, (String, String)>(blocked_key, 10.0)
+                    .await
+            });
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            loop {
+                let info: InfoDict = from_owned_redis_value(
+                    observer
+                        .route_command(cmd("INFO").arg("CLIENTS"), blocked_node.clone())
+                        .await?,
+                )?;
+                if info.get::<i64>("blocked_clients") == Some(1) {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "BLPOP never blocked on the server"
+                );
+                sleep(Duration::from_millis(10).into()).await;
+            }
+
+            let mget = connection.mget::<_, Vec<String>>(&["{b}key", "{c}key"]);
+            let res = tokio::time::timeout(Duration::from_secs(2), mget)
+                .await
+                .expect("MGET was not sent while BLPOP was pending")?;
+            assert_eq!(res, vec!["b", "c"]);
+
+            let mut pipe = redis::pipe();
+            pipe.get("{b}key").get("{c}key");
+            let res = tokio::time::timeout(
+                Duration::from_secs(2),
+                pipe.query_async::<_, Vec<String>>(&mut connection),
+            )
+            .await
+            .expect("pipeline was not sent while BLPOP was pending")?;
+            assert_eq!(res, vec!["b", "c"]);
+
+            let _: () = observer.lpush(blocked_key, "done").await?;
+            assert_eq!(
+                blpop.await.unwrap()?,
+                (blocked_key.to_string(), "done".to_string())
+            );
+            Ok::<_, RedisError>(())
+        })
+        .unwrap()
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_basic_failover() {
         block_on_all(async move {
             test_failover(&TestClusterContext::new(6, 1), 10, 123, false).await;
