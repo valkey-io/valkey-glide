@@ -557,22 +557,19 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                     .into_any()
                     .unbind())
             }
-            Value::ServerError(error) => {
-                let err_msg = error_message(&error.into());
-                // Load the module that defines the request error.
-                let module = py.import("glide_shared.exceptions")?;
-                // Retrieve the request error type.
-                let request_error_type = module.getattr("RequestError")?;
-                // Create an instance of the request error with the error message.
-                let instance = request_error_type.call1((err_msg,))?;
-                // Return the error instance as a PyObject.
-                Ok(instance
-                    .into_pyobject(py)
-                    .expect("ServerError: expected a proper conversion into a Python int.")
-                    .into_any()
-                    .unbind())
-            }
+            Value::ServerError(error) => request_error_to_py(py, &error.into()),
+            Value::ClientError(error) => request_error_to_py(py, &error.into()),
         }
+    }
+
+    fn request_error_to_py(py: Python, error: &redis::RedisError) -> PyResult<PyObject> {
+        let request_error_type = py
+            .import("glide_shared.exceptions")?
+            .getattr("RequestError")?;
+        Ok(request_error_type
+            .call1((error_message(error),))?
+            .into_any()
+            .unbind())
     }
 
     #[pyfunction]
