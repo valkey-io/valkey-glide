@@ -1,3 +1,8 @@
+/**
+ * Live tests for the search query features added in valkey-search 1.3.0: INKEYS, scoring, cursors,
+ * FT.HYBRID, typed reducers and the new FT.CREATE options.
+ */
+
 import {
     afterAll,
     afterEach,
@@ -157,7 +162,7 @@ const HYBRID_SEARCH_ALIAS = "ss";
 const HYBRID_VSIM_ALIAS = "vs";
 
 describe("GlideFt", () => {
-    describe("1.3 stable surface", () => {
+    describe("search query features", () => {
         let cluster: ValkeyCluster;
         let standalone: ValkeyCluster | undefined;
         let capability: boolean;

@@ -4,10 +4,13 @@
 
 import { GlideClient, GlideClusterClient } from "../build-ts";
 
-async function probeSearch13Capability(
+/**
+ * Probes for the valkey-search 1.3.0 query features by checking that FT.SEARCH accepts INKEYS.
+ */
+async function probeSearchQueryFeatureSupport(
     client: GlideClient | GlideClusterClient,
 ): Promise<boolean> {
-    const probeIndex = `__glide_search_1_3_probe_${Date.now()}_${Math.random()
+    const probeIndex = `__glide_search_feature_probe_${Date.now()}_${Math.random()
         .toString(36)
         .slice(2)}`;
 
@@ -134,7 +137,7 @@ export function checkVersionLt(level: string, minLevel: string): boolean {
 export async function probeCapabilityAndLevel(
     client: GlideClient | GlideClusterClient,
 ): Promise<{ capability: boolean; emulateReleaseLevel: string | undefined }> {
-    const capability = await probeSearch13Capability(client);
+    const capability = await probeSearchQueryFeatureSupport(client);
     let emulateReleaseLevel: string | undefined;
 
     if (capability) {

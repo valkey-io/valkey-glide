@@ -23,7 +23,7 @@ function mockClient() {
     };
 }
 
-describe("GlideFt 1.3 argv serialization", () => {
+describe("GlideFt query option argv serialization", () => {
     describe("FT.SEARCH", () => {
         it("omits INKEYS when inKeys is undefined", async () => {
             const { client, customCommand } = mockClient();
