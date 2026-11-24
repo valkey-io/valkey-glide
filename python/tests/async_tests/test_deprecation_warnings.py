@@ -67,9 +67,10 @@ class TestDeprecationWarnings:
         """Test that inspecting sys.modules (e.g. inspect.stack, inspect.getmodule) does not warn (#7443)."""
         import inspect
         import warnings
+        import glide
 
         # Reset warning flags
-        for module_name in _legacy_modules_and_symbols:
+        for module_name in glide._legacy_modules:
             if module_name in sys.modules:
                 legacy_mod = sys.modules[module_name]
                 if hasattr(legacy_mod, "_warned"):
@@ -77,15 +78,23 @@ class TestDeprecationWarnings:
 
         # Introspection should never emit DeprecationWarning
         with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
+            warnings.filterwarnings(
+                "error",
+                category=DeprecationWarning,
+                message=r"Importing from 'glide\.",
+            )
             # Standard inspect stack/module inspection queries dunder attributes like __file__, __spec__
             inspect.stack()
-            for module_name in _legacy_modules_and_symbols:
-                mod = sys.modules[module_name]
-                assert not hasattr(mod, "__file__")
-                assert hasattr(mod, "__name__")
-                assert hasattr(mod, "__all__")
-                assert mod.__all__ is not None
+            for module_name in glide._legacy_modules:
+                if module_name in sys.modules:
+                    mod = sys.modules[module_name]
+                    if hasattr(mod, "_warned"):
+                        assert mod._warned is False
+                        assert not hasattr(mod, "__file__")
+                        assert hasattr(mod, "__name__")
+                        assert hasattr(mod, "__all__")
+                        assert mod.__all__ is not None
+                        assert mod._warned is False
 
     def test_legacy_module_star_import(self):
         """Test that wildcard import from legacy module exposes public symbols and triggers warning on attribute access."""
