@@ -1630,10 +1630,10 @@ mod compression_tests {
     #[test]
     fn batch_reply_without_raise_on_error_keeps_server_errors_and_replaces_each_oversized_reply() {
         let manager = size_limited_manager();
-        let wrong_type = Value::ServerError(redis::ServerError::ExtensionError {
-            code: "WRONGTYPE".to_string(),
-            detail: Some("Operation against a key holding the wrong kind of value".to_string()),
-        });
+        let wrong_type = redis::parse_redis_value(
+            b"-WRONGTYPE Operation against a key holding the wrong kind of value\r\n",
+        )
+        .unwrap();
         let batch = Value::Array(vec![
             compressed(&manager, &"A".repeat(200).into_bytes()),
             wrong_type.clone(),

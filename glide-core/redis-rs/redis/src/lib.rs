@@ -386,7 +386,6 @@ pub use crate::types::{
     RedisError,
     RedisResult,
     RedisWrite,
-    ServerError,
     ToRedisArgs,
     SERVER_ERROR_DESCRIPTION,
     ServerError,
@@ -399,6 +398,11 @@ pub use crate::types::{
     ProtocolVersion,
     AddressResolver,
 };
+
+/// Creates an extension error with the supplied code and detail.
+pub fn make_extension_error(code: String, detail: Option<String>) -> RedisError {
+    crate::types::make_extension_error(code, detail)
+}
 
 #[cfg(feature = "aio")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aio")))]

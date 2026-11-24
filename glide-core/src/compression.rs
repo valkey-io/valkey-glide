@@ -144,17 +144,6 @@ impl From<SizeLimitExceeded> for redis::RedisError {
     }
 }
 
-/// In-place batch error when `raise_on_error` is false. Built directly: via `RedisError` the
-/// code would be `IoError`. The code is one token, as `err_code()` expects.
-impl From<SizeLimitExceeded> for redis::ServerError {
-    fn from(limit: SizeLimitExceeded) -> Self {
-        redis::ServerError::ExtensionError {
-            code: "DecompressionError".to_string(),
-            detail: Some(limit.to_string()),
-        }
-    }
-}
-
 impl CompressionError {
     pub fn compression_failed(
         backend: &str,
@@ -1152,7 +1141,13 @@ fn decompress_batch_reply_or_error(
     raise_on_error: bool,
 ) -> Result<redis::Value, SizeLimitExceeded> {
     match decompress_batch_reply(reply, manager) {
-        Err(limit) if !raise_on_error => Ok(redis::Value::ServerError(limit.into())),
+        Err(limit) if !raise_on_error => {
+            let error = redis::make_extension_error(
+                "DecompressionError".to_string(),
+                Some(limit.to_string()),
+            );
+            Ok(redis::Value::ServerError(error.into()))
+        }
         result => result,
     }
 }
