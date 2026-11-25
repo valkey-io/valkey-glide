@@ -114,6 +114,8 @@ class _CompatFuture:
     the trio thread via ``run_sync_soon``.
     """
 
+    __slots__ = ("_is_done", "_result", "_exception", "_token", "__weakref__")
+
     def __init__(self) -> None:
         if not HAS_ANYIO:
             raise RuntimeError(

@@ -11,6 +11,7 @@ import re
 import sys
 import time
 import warnings
+import weakref
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union, cast, get_type_hints
 
@@ -13821,6 +13822,34 @@ class TestCompatFutureThreadSafety:
         with anyio.fail_after(5):
             while fut._is_done.statistics().tasks_waiting == 0:
                 await anyio.sleep(0)
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("state", ["pending", "result", "self_result", "exception"])
+    async def test_future_is_weak_referenceable_and_collectible(self, state):
+        from glide.glide_client import _CompatFuture
+
+        async def _make_future():
+            fut = _CompatFuture()
+            reference = weakref.ref(fut)
+            if state == "result":
+                fut.set_result("value")
+                assert await fut == "value"
+                assert fut.result() == "value"
+            elif state == "self_result":
+                fut.set_result(fut)
+                assert await fut is fut
+                assert fut.result() is fut
+            elif state == "exception":
+                fut.set_exception(ValueError("boom"))
+                with pytest.raises(ValueError, match="boom"):
+                    await fut
+                with pytest.raises(ValueError, match="boom"):
+                    fut.result()
+            return reference
+
+        reference = await _make_future()
+        gc.collect()
+        assert reference() is None
 
     @pytest.mark.anyio
     async def test_set_result_from_worker_thread_wakes_waiter(self):
