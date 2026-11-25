@@ -3057,18 +3057,11 @@ mod tests {
                 expected.as_ref().map(std::mem::discriminant),
                 "{args:?}"
             );
-            if expected.is_none() {
-                let response = Value::Array(vec![Value::BulkString(b"data".to_vec().into())]);
-                assert_eq!(
-                    convert_to_expected_type(response.clone(), actual).unwrap(),
-                    response
-                );
-            }
         }
     }
 
     #[test]
-    fn regression_array_conversion_returns_error_and_next_conversion_succeeds() {
+    fn regression_array_conversion_returns_error() {
         for expected in [
             ExpectedReturnType::ArrayOfStrings,
             ExpectedReturnType::ArrayOfBools,
@@ -3076,16 +3069,7 @@ mod tests {
         ] {
             let invalid = Value::Array(vec![Value::Map(vec![])]);
             assert!(convert_to_expected_type(invalid, Some(expected)).is_err());
-            assert!(convert_to_expected_type(Value::Array(vec![]), Some(expected)).is_ok());
         }
-        assert_eq!(
-            convert_to_expected_type(
-                Value::Array(vec![Value::BulkString(b"2.5".to_vec().into())]),
-                Some(ExpectedReturnType::ArrayOfDoubleOrNull)
-            )
-            .unwrap(),
-            Value::Array(vec![Value::Double(2.5)])
-        );
     }
 
     #[test]

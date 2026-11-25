@@ -372,12 +372,12 @@ pub(crate) mod shared_client_tests {
                 response_option_string("field"),
                 response_option_string("value"),
             ])]);
-            let has_lcs = version_greater_or_equal(client, "7.0.0").await;
+            let is_7_0_or_newer = version_greater_or_equal(client, "7.0.0").await;
             let mut autoclaim = vec![
                 response_option_string("0-0"),
                 Value::Map(vec![(response_option_string("1-0"), fields.clone())]),
             ];
-            if has_lcs {
+            if is_7_0_or_newer {
                 autoclaim.push(Value::Array(vec![]));
             }
             // One regression per command in #7631; option order, case and NUL
@@ -418,7 +418,7 @@ pub(crate) mod shared_client_tests {
                 (&["ZRANK", "WITHSCORES", "WITHSCORE"], Value::Int(0)),
                 (&["ZADD", "members", "1", "INCR"], Value::Int(1)),
             ];
-            if has_lcs {
+            if is_7_0_or_newer {
                 cases.push((&["LCS", "IDX", "other"], response_option_string("abc")));
             }
             for (args, expected) in cases {
