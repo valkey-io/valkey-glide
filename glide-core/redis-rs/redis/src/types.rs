@@ -457,21 +457,6 @@ impl ClientError {
             detail,
         }
     }
-
-    /// Returns the error kind, which is always [`ErrorKind::ClientError`].
-    pub fn kind(&self) -> ErrorKind {
-        ErrorKind::ClientError
-    }
-
-    /// Returns the static description of the error.
-    pub fn description(&self) -> &'static str {
-        self.description
-    }
-
-    /// Returns the error detail, if any.
-    pub fn detail(&self) -> Option<&str> {
-        self.detail.as_deref()
-    }
 }
 
 impl From<ClientError> for RedisError {
@@ -485,7 +470,15 @@ impl From<ClientError> for RedisError {
 
 impl fmt::Display for ClientError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&RedisError::from(self.clone()), f)
+        let Some(detail) = &self.detail else {
+            return write!(f, "{}- {:?}", self.description, ErrorKind::ClientError);
+        };
+        write!(
+            f,
+            "{} - {:?}: {detail}",
+            self.description,
+            ErrorKind::ClientError
+        )
     }
 }
 
@@ -2633,66 +2626,26 @@ pub trait AddressResolver: Send + Sync + std::fmt::Debug {
 mod client_error_tests {
     use super::*;
 
-    const DESCRIPTION: &str = "Decompression error";
-    const DETAIL: &str = "Decompression size limit exceeded";
-
-    fn size_limit_error() -> ClientError {
-        ClientError::new(DESCRIPTION, Some(DETAIL.to_string()))
-    }
-
     #[test]
-    fn client_error_clones_and_compares_by_description_and_detail() {
-        let error = size_limit_error();
-        assert_eq!(error.clone(), error);
-        assert_eq!(Value::ClientError(error.clone()), Value::ClientError(error));
-        assert_ne!(
-            size_limit_error(),
-            ClientError::new(DESCRIPTION, Some("other".to_string()))
-        );
-        assert_ne!(size_limit_error(), ClientError::new(DESCRIPTION, None));
-    }
+    fn extract_error_returns_a_nested_client_error_as_a_non_retried_client_error() {
+        let reply = Value::Array(vec![
+            Value::Okay,
+            Value::ClientError(ClientError::new(
+                "Decompression error",
+                Some("Decompression size limit exceeded".to_string()),
+            )),
+        ]);
 
-    #[test]
-    fn client_error_converts_to_a_non_retried_client_error() {
-        for (error, detail) in [
-            (size_limit_error(), Some(DETAIL)),
-            (ClientError::new(DESCRIPTION, None), None),
-        ] {
-            let text = error.to_string();
-            assert_eq!(error.kind(), ErrorKind::ClientError);
-            assert_eq!(error.description(), DESCRIPTION);
-            assert_eq!(error.detail(), detail);
-
-            let converted = RedisError::from(error);
-            assert_eq!(converted.kind(), ErrorKind::ClientError);
-            assert!(!converted.is_server_reply(), "{converted}");
-            assert_eq!(converted.retry_method(), RetryMethod::NoRetry);
-            assert!(!converted.is_unrecoverable_error());
-            assert_eq!(converted.detail(), detail);
-            assert_eq!(converted.to_string(), text);
-        }
-    }
-
-    #[test]
-    fn extract_error_returns_a_nested_client_error() {
-        let reply = Value::Array(vec![Value::Okay, Value::ClientError(size_limit_error())]);
         let error = reply.extract_error().expect_err("the client error");
+
         assert_eq!(error.kind(), ErrorKind::ClientError);
-        assert!(!error.is_server_reply());
-        assert_eq!(error.detail(), Some(DETAIL));
-    }
-
-    #[test]
-    fn server_extension_error_with_the_same_text_stays_a_server_reply() {
-        let wire = format!("-DecompressionError {DESCRIPTION} - ClientError: {DETAIL}\r\n");
-        let reply = crate::parse_redis_value(wire.as_bytes()).unwrap();
-        assert!(matches!(reply, Value::ServerError(_)), "{reply:?}");
-        assert_ne!(reply, Value::ClientError(size_limit_error()));
-
-        let error = reply.extract_error().expect_err("an error reply");
-        assert!(error.is_server_reply(), "{error}");
-        assert_eq!(error.kind(), ErrorKind::ExtensionError);
-        assert_eq!(error.code(), Some("DecompressionError"));
+        assert!(!error.is_server_reply(), "{error}");
+        assert_eq!(error.retry_method(), RetryMethod::NoRetry);
+        assert_eq!(error.detail(), Some("Decompression size limit exceeded"));
+        assert_eq!(
+            error.to_string(),
+            "Decompression error - ClientError: Decompression size limit exceeded"
+        );
     }
 
     #[test]

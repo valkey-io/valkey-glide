@@ -134,8 +134,7 @@ impl From<SizeLimitExceeded> for CompressionError {
     }
 }
 
-/// The client, not the server, rejects the reply, so the error never claims to be a server
-/// reply, whether it fails the whole call or sits in a batch slot.
+/// The client rejects the reply, so the error is never a server reply.
 impl From<SizeLimitExceeded> for redis::ClientError {
     fn from(limit: SizeLimitExceeded) -> Self {
         redis::ClientError::new("Decompression error", Some(limit.to_string()))

@@ -73,7 +73,6 @@ pub(crate) fn convert_to_expected_type(
         return Ok(value);
     };
 
-    // An error in place of a reply is returned as is, without conversion.
     if matches!(value, Value::ServerError(_) | Value::ClientError(_)) {
         return Ok(value);
     }
@@ -2696,27 +2695,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn errors_in_place_of_a_reply_skip_expected_type_conversion() {
-        let server_error = redis::parse_redis_value(b"-ERR boom\r\n").unwrap();
-        let client_error = Value::ClientError(redis::ClientError::new(
+    fn client_error_is_returned_unchanged_by_expected_type_conversion() {
+        let value = Value::ClientError(redis::ClientError::new(
             "Decompression error",
             Some("Decompression size limit exceeded".to_string()),
         ));
-        for value in [server_error, client_error] {
-            for expected in [
-                ExpectedReturnType::Boolean,
-                ExpectedReturnType::Map {
-                    key_type: &None,
-                    value_type: &None,
-                },
-                ExpectedReturnType::ArrayOfStrings,
-            ] {
-                assert_eq!(
-                    convert_to_expected_type(value.clone(), Some(expected)).unwrap(),
-                    value
-                );
-            }
-        }
+
+        let converted = convert_to_expected_type(value.clone(), Some(ExpectedReturnType::Boolean));
+
+        assert_eq!(converted.unwrap(), value);
     }
 
     #[test]

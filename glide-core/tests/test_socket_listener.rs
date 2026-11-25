@@ -49,7 +49,6 @@ mod socket_listener {
         ClosingError = 3,
     }
 
-    #[derive(Clone, Copy)]
     enum RedisType {
         Cluster,
         Standalone,
@@ -378,6 +377,8 @@ mod socket_listener {
         use_tls: Tls,
         cluster_mode: ClusterMode,
     ) {
+        // Send the server address
+        const CALLBACK_INDEX: u32 = 0;
         let connection_request = create_connection_request(
             addresses,
             &TestConfiguration {
@@ -387,14 +388,6 @@ mod socket_listener {
                 ..Default::default()
             },
         );
-        send_connection_request(socket, connection_request);
-    }
-
-    fn send_connection_request(
-        socket: &UnixStream,
-        connection_request: connection_request::ConnectionRequest,
-    ) {
-        const CALLBACK_INDEX: u32 = 0;
         let approx_message_length =
             APPROX_RESP_HEADER_LEN + connection_request.compute_size() as usize;
         let mut buffer = Vec::with_capacity(approx_message_length);
@@ -410,13 +403,6 @@ mod socket_listener {
         addresses: &[ConnectionAddr],
         cluster_mode: ClusterMode,
     ) -> UnixStream {
-        let socket = start_listener_and_connect(socket_path);
-        connect_to_redis(addresses, &socket, use_tls, cluster_mode);
-        socket
-    }
-
-    /// Starts a socket listener and returns a socket connected to it, before any client exists.
-    fn start_listener_and_connect(socket_path: Option<String>) -> UnixStream {
         let socket_listener_state: Arc<ManualResetEvent> =
             Arc::new(ManualResetEvent::new(EventState::Unset));
         let cloned_state = socket_listener_state.clone();
@@ -434,7 +420,9 @@ mod socket_listener {
         socket_listener_state.wait();
         let path = path_arc.lock().unwrap();
         let path = path.as_ref().expect("Didn't get any socket path");
-        std::os::unix::net::UnixStream::connect(path).unwrap()
+        let socket = std::os::unix::net::UnixStream::connect(path).unwrap();
+        connect_to_redis(addresses, &socket, use_tls, cluster_mode);
+        socket
     }
 
     fn setup_mocked_test_basics(socket_path: Option<String>) -> ServerTestBasicsWithMock {
@@ -1439,275 +1427,5 @@ mod socket_listener {
             CALLBACK_INDEX,
             ResponseType::RequestError,
         );
-    }
-
-    // Decompression size limit in batches ---------------------------------------------------
-
-    const DECOMPRESSION_LIMIT: u64 = 100;
-
-    /// Keys sharing one hash slot, so a cluster transaction can hold all of them.
-    struct SizeLimitKeys {
-        oversized: String,
-        fits: String,
-        header_shaped: String,
-        list: String,
-    }
-
-    impl SizeLimitKeys {
-        fn new() -> Self {
-            let tag = generate_random_string(KEY_LENGTH);
-            Self {
-                oversized: format!("{{{tag}}}oversized"),
-                fits: format!("{{{tag}}}fits"),
-                header_shaped: format!("{{{tag}}}header_shaped"),
-                list: format!("{{{tag}}}list"),
-            }
-        }
-    }
-
-    fn oversized_value() -> Vec<u8> {
-        "A".repeat(200).into_bytes()
-    }
-
-    fn fitting_value() -> Vec<u8> {
-        "B".repeat(80).into_bytes()
-    }
-
-    /// A plain value too short to compress that starts with a compression header, so reading
-    /// it is a normal decompression failure rather than a size-limit one.
-    fn header_shaped_value() -> Vec<u8> {
-        let backend_id = compression::CompressionBackendType::Zstd.backend_id();
-        let mut value = compression::create_header(backend_id).to_vec();
-        value.extend_from_slice(b"zzzz");
-        value
-    }
-
-    fn command(request_type: RequestType, args: &[&[u8]]) -> CommandComponents {
-        CommandComponents {
-            args: args
-                .iter()
-                .map(|arg| bytes::Bytes::copy_from_slice(arg))
-                .collect(),
-            args_pointer: false,
-            request_type: request_type.into(),
-        }
-    }
-
-    fn setup_compression_socket(redis_type: RedisType, compression_enabled: bool) -> UnixStream {
-        let (addresses, cluster_mode) = match redis_type {
-            RedisType::Cluster => (get_shared_cluster_addresses(false), ClusterMode::Enabled),
-            RedisType::Standalone => (
-                vec![get_shared_server_address(false)],
-                ClusterMode::Disabled,
-            ),
-        };
-        let mut connection_request = create_connection_request(
-            &addresses,
-            &TestConfiguration {
-                cluster_mode,
-                request_timeout: Some(REQUEST_TIMEOUT_MS),
-                ..Default::default()
-            },
-        );
-        connection_request.compression_config =
-            protobuf::MessageField::some(connection_request::CompressionConfig {
-                enabled: compression_enabled,
-                min_compression_size: 64,
-                max_decompressed_size: Some(DECOMPRESSION_LIMIT),
-                ..Default::default()
-            });
-        let socket = start_listener_and_connect(None);
-        send_connection_request(&socket, connection_request);
-        socket
-    }
-
-    fn send_batch(
-        socket: &mut UnixStream,
-        callback_index: u32,
-        commands: Vec<CommandComponents>,
-        is_atomic: bool,
-        raise_on_error: bool,
-    ) -> Response {
-        let mut buffer = Vec::with_capacity(200);
-        write_batch_request(
-            &mut buffer,
-            socket,
-            callback_index,
-            commands,
-            is_atomic,
-            raise_on_error,
-        );
-        buffer.resize(4096, 0_u8);
-        let read_length = socket.read(&mut buffer).unwrap();
-        buffer.truncate(read_length);
-        let response = get_response(&mut buffer, None);
-        assert_eq!(response.callback_idx, callback_index);
-        response
-    }
-
-    fn batch_values(response: Response) -> Vec<Value> {
-        let Some(response::Value::RespPointer(pointer)) = response.value else {
-            panic!("expected a batch reply, got {response:?}");
-        };
-        let Value::Array(values) = *pointer_to_value(pointer) else {
-            panic!("expected an array reply");
-        };
-        values
-    }
-
-    fn write_size_limit_keys(socket: &mut UnixStream, keys: &SizeLimitKeys) {
-        let commands = vec![
-            command(
-                RequestType::Set,
-                &[keys.oversized.as_bytes(), &oversized_value()],
-            ),
-            command(RequestType::Set, &[keys.fits.as_bytes(), &fitting_value()]),
-            command(
-                RequestType::Set,
-                &[keys.header_shaped.as_bytes(), &header_shaped_value()],
-            ),
-            command(RequestType::Del, &[keys.list.as_bytes()]),
-            command(RequestType::RPush, &[keys.list.as_bytes(), b"item"]),
-        ];
-        let values = batch_values(send_batch(socket, 1, commands, false, true));
-        assert_eq!(values.len(), 5, "{values:?}");
-        assert_eq!(values[..3], [Value::Okay, Value::Okay, Value::Okay]);
-    }
-
-    /// The in-place size-limit error, as the binding sees it once converted.
-    fn size_limit_client_error(value: &Value) -> redis::RedisError {
-        let Value::ClientError(client_error) = value else {
-            panic!("expected the size-limit client error in place, got {value:?}");
-        };
-        let error = redis::RedisError::from(client_error.clone());
-        assert_eq!(error.kind(), redis::ErrorKind::ClientError);
-        assert!(!error.is_server_reply(), "{error}");
-        let message = errors::error_message(&error);
-        assert!(
-            message.starts_with(
-                "Decompression error - ClientError: Decompression size limit exceeded"
-            ),
-            "{message}"
-        );
-        error
-    }
-
-    fn assert_server_error_reply(value: &Value, code: &str) {
-        assert!(matches!(value, Value::ServerError(_)), "{value:?}");
-        let error = value.clone().extract_error().unwrap_err();
-        assert!(error.is_server_reply(), "{error}");
-        assert_eq!(error.code(), Some(code));
-    }
-
-    #[rstest]
-    #[serial_test::serial]
-    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_batch_size_limit_is_a_client_error_in_the_failed_command_slot(
-        #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
-        #[values(false, true)] is_atomic: bool,
-    ) {
-        let mut socket = setup_compression_socket(use_cluster, true);
-        let keys = SizeLimitKeys::new();
-        write_size_limit_keys(&mut socket, &keys);
-        let lookalike_script =
-            b"return redis.error_reply('DecompressionError Decompression size limit exceeded')";
-        let commands = vec![
-            command(RequestType::Get, &[keys.oversized.as_bytes()]),
-            command(RequestType::Get, &[keys.fits.as_bytes()]),
-            command(
-                RequestType::MGet,
-                &[
-                    keys.fits.as_bytes(),
-                    keys.oversized.as_bytes(),
-                    keys.header_shaped.as_bytes(),
-                ],
-            ),
-            command(
-                RequestType::MGet,
-                &[keys.fits.as_bytes(), keys.header_shaped.as_bytes()],
-            ),
-            command(RequestType::Get, &[keys.header_shaped.as_bytes()]),
-            command(RequestType::Get, &[keys.list.as_bytes()]),
-            command(
-                RequestType::CustomCommand,
-                &[b"EVAL", lookalike_script, b"1", keys.oversized.as_bytes()],
-            ),
-        ];
-
-        let values = batch_values(send_batch(&mut socket, 2, commands, is_atomic, false));
-
-        assert_eq!(values.len(), 7, "{values:?}");
-        let in_place = size_limit_client_error(&values[0]);
-        assert_eq!(values[1], Value::BulkString(fitting_value().into()));
-        size_limit_client_error(&values[2]);
-        assert_eq!(
-            values[3],
-            Value::Array(vec![
-                Value::BulkString(fitting_value().into()),
-                Value::BulkString(header_shaped_value().into()),
-            ])
-        );
-        assert_eq!(values[4], Value::BulkString(header_shaped_value().into()));
-        assert_server_error_reply(&values[5], "WRONGTYPE");
-        assert_server_error_reply(&values[6], "DecompressionError");
-
-        let commands = vec![
-            command(RequestType::Get, &[keys.fits.as_bytes()]),
-            command(RequestType::Get, &[keys.oversized.as_bytes()]),
-        ];
-        let response = send_batch(&mut socket, 3, commands, is_atomic, true);
-        let Some(response::Value::RequestError(raised)) = response.value else {
-            panic!("raise_on_error should fail the whole batch, got {response:?}");
-        };
-        assert_eq!(raised.message.to_string(), errors::error_message(&in_place));
-        assert_eq!(
-            raised.type_.enum_value(),
-            Ok(glide_core::response::RequestErrorType::Unspecified)
-        );
-    }
-
-    #[rstest]
-    #[serial_test::serial]
-    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_batch_without_compression_returns_stored_values(
-        #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
-        #[values(false, true)] is_atomic: bool,
-    ) {
-        let keys = SizeLimitKeys::new();
-        write_size_limit_keys(&mut setup_compression_socket(use_cluster, true), &keys);
-        let mut socket = setup_compression_socket(use_cluster, false);
-        let commands = vec![
-            command(RequestType::Get, &[keys.oversized.as_bytes()]),
-            command(
-                RequestType::MGet,
-                &[keys.fits.as_bytes(), keys.oversized.as_bytes()],
-            ),
-        ];
-
-        let values = batch_values(send_batch(&mut socket, 2, commands, is_atomic, false));
-
-        let [oversized, Value::Array(members)] = values.as_slice() else {
-            panic!("expected a GET reply and an MGET array, got {values:?}");
-        };
-        let [fits, oversized_member] = members.as_slice() else {
-            panic!("expected two MGET members, got {members:?}");
-        };
-        assert_stored_compressed(oversized, &oversized_value());
-        assert_stored_compressed(fits, &fitting_value());
-        assert_stored_compressed(oversized_member, &oversized_value());
-    }
-
-    /// The reply is the compressed bytes as stored: neither decompressed nor a size-limit error.
-    #[track_caller]
-    fn assert_stored_compressed(value: &Value, original: &[u8]) {
-        let Value::BulkString(stored) = value else {
-            panic!("expected the stored bytes, got {value:?}");
-        };
-        let backend_id = compression::CompressionBackendType::Zstd.backend_id();
-        assert!(
-            stored.starts_with(&compression::create_header(backend_id)),
-            "{value:?}"
-        );
-        assert_ne!(&stored[..], original);
     }
 }

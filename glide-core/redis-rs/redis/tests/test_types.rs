@@ -634,4 +634,15 @@ mod types {
             vec![b"KEEPTTL".to_vec()]
         );
     }
+
+    #[test]
+    fn make_extension_error_is_publicly_importable() {
+        use redis::make_extension_error;
+
+        let error = make_extension_error("MYCODE".to_string(), Some("my detail".to_string()));
+
+        assert_eq!(error.kind(), redis::ErrorKind::ExtensionError);
+        assert_eq!(error.code(), Some("MYCODE"));
+        assert_eq!(error.detail(), Some("my detail"));
+    }
 }
