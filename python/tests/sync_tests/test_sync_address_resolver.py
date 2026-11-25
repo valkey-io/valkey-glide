@@ -20,6 +20,7 @@ from glide_sync import GlideClusterClient as SyncGlideClusterClient
 TSyncGlideClient = Union[SyncGlideClient, SyncGlideClusterClient]
 
 
+@pytest.mark.requires_tcp
 @pytest.mark.parametrize("cluster_mode", [True, False])
 class TestSyncAddressResolver:
     """Sync address resolver tests."""

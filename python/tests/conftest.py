@@ -2,7 +2,7 @@
 
 import sys
 import uuid
-from typing import List, Optional, cast
+from typing import Iterator, List, Optional, cast
 
 import pytest
 from glide_shared.exceptions import RequestError
@@ -103,6 +103,15 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
+        "--unix-socket",
+        default=False,
+        action="store_true",
+        help="Run the standalone tests over Unix domain sockets with TCP disabled (--port 0) "
+        "and no replicas. Cluster mode tests and tests marked requires_tcp are "
+        "skipped. Not with --tls or existing endpoints.",
+    )
+
+    parser.addoption(
         "--mock-pubsub",
         default=False,
         action="store_true",
@@ -131,10 +140,24 @@ def parse_endpoints(endpoints_str: str) -> List[List[str]]:
         raise ValueError("Invalid endpoints format: " + str(e))
 
 
-def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
+def create_clusters(
+    tls, load_module, cluster_endpoints, standalone_endpoints, unix_socket=False
+):
     """
     Create Valkey clusters based on the provided options.
     """
+    if unix_socket:
+        # Cluster, TLS and replication tests are skipped in this mode.
+        pytest.standalone_cluster = ValkeyCluster(
+            tls=False,
+            cluster_mode=False,
+            shard_count=1,
+            replica_count=0,
+            load_module=load_module,
+            unix_socket=True,
+        )
+        return
+
     if cluster_endpoints or standalone_endpoints:
         # Endpoints were passed by the caller, not creating clusters internally
         if cluster_endpoints:
@@ -218,7 +241,25 @@ def call_before_all_pytests(request):
         "asyncio",
     )
 
-    create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints)
+    create_clusters(
+        tls,
+        load_module,
+        cluster_endpoints,
+        standalone_endpoints,
+        request.config.getoption("--unix-socket"),
+    )
+
+
+def pytest_configure(config):
+    if config.getoption("--unix-socket") and (
+        config.getoption("--tls")
+        or config.getoption("--cluster-endpoints")
+        or config.getoption("--standalone-endpoints")
+    ):
+        raise pytest.UsageError(
+            "--unix-socket can't be combined with --tls, --cluster-endpoints or "
+            "--standalone-endpoints"
+        )
 
 
 def pytest_sessionstart(session):
@@ -253,10 +294,24 @@ def pytest_collection_modifyitems(config, items):
     """
     Modify collected test items.
 
-    This function checks if cluster or standalone endpoints are provided. If so, it checks if the test requires
+    With --unix-socket, it skips cluster mode tests and tests marked requires_tcp.
+    If cluster or standalone endpoints are provided, it checks if the test requires
     cluster mode and skips it accordingly.
     """
+    unix_socket = config.getoption("--unix-socket")
     for item in items:
+        if (
+            unix_socket
+            and "cluster_mode" in item.fixturenames
+            and item.callspec.params.get("cluster_mode") is True
+        ):
+            item.add_marker(
+                pytest.mark.skip(reason="Cluster mode doesn't support Unix sockets")
+            )
+            continue
+        if unix_socket and item.get_closest_marker("requires_tcp"):
+            item.add_marker(pytest.mark.skip(reason="Test requires a TCP address"))
+            continue
         if config.getoption("--cluster-endpoints") or config.getoption(
             "--standalone-endpoints"
         ):
@@ -647,6 +702,24 @@ def valkey_mtls_cluster_cluster(request) -> ValkeyCluster:
         replica_count=1,
         tls_auth_clients=True,
     )
+
+
+@pytest.fixture(scope="session")
+def unix_socket_path(request) -> Iterator[str]:
+    """The socket of a standalone node with TCP disabled."""
+    if request.config.getoption("--cluster-endpoints") or request.config.getoption(
+        "--standalone-endpoints"
+    ):
+        pytest.skip(reason="Unix socket tests require an internally-created server")
+    cluster = ValkeyCluster(
+        tls=False,
+        cluster_mode=False,
+        shard_count=1,
+        replica_count=0,
+        unix_socket=True,
+    )
+    yield cluster.unix_socket_paths[0]
+    del cluster
 
 
 @pytest.fixture
