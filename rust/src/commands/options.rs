@@ -70,7 +70,7 @@ impl ToValkeyArgs for SetExpiry {
     }
 }
 
-/// Existence check for `SET` and `GEOADD`.
+/// Existence check for `SET`, `GEOADD` and `HSETEX`.
 ///
 /// Mirrors redis-rs's `ExistenceCheck` type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,14 +116,25 @@ impl ToSingleValkeyArg for FieldExistenceCheck {}
 
 /// Options for the `HSETEX` command.
 ///
-/// Mirrors redis-rs's `HashFieldExpirationOptions` type.
+/// Mirrors redis-rs's `HashFieldExpirationOptions` type, plus a key existence
+/// check (`NX`/`XX`), which redis-rs does not support.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct HashFieldExpirationOptions {
+    key_existence_check: Option<ExistenceCheck>,
     existence_check: Option<FieldExistenceCheck>,
     expiration: Option<SetExpiry>,
 }
 
 impl HashFieldExpirationOptions {
+    /// Set the key existence check: only set the fields if the hash key does
+    /// not exist (`NX`), or only if it already exists (`XX`).
+    ///
+    /// Since Valkey 9.1.0.
+    pub fn set_key_existence_check(mut self, key_existence_check: ExistenceCheck) -> Self {
+        self.key_existence_check = Some(key_existence_check);
+        self
+    }
+
     /// Set the field existence check (`FNX`/`FXX`).
     pub fn set_existence_check(mut self, field_existence_check: FieldExistenceCheck) -> Self {
         self.existence_check = Some(field_existence_check);
@@ -139,6 +150,9 @@ impl HashFieldExpirationOptions {
 
 impl ToValkeyArgs for HashFieldExpirationOptions {
     fn write_valkey_args<W: ?Sized + ValkeyWrite>(&self, out: &mut W) {
+        if let Some(ref key_existence_check) = self.key_existence_check {
+            key_existence_check.write_valkey_args(out);
+        }
         if let Some(ref existence_check) = self.existence_check {
             existence_check.write_valkey_args(out);
         }
@@ -852,6 +866,19 @@ mod tests {
         assert_args(
             HashFieldExpirationOptions::default().set_existence_check(FieldExistenceCheck::FXX),
             &["FXX"],
+        );
+        assert_args(
+            HashFieldExpirationOptions::default().set_key_existence_check(ExistenceCheck::NX),
+            &["NX"],
+        );
+        // Builder call order does not affect the argument order (NX/XX before
+        // FNX/FXX before the expiry).
+        assert_args(
+            HashFieldExpirationOptions::default()
+                .set_expiration(SetExpiry::KEEPTTL)
+                .set_existence_check(FieldExistenceCheck::FNX)
+                .set_key_existence_check(ExistenceCheck::XX),
+            &["XX", "FNX", "KEEPTTL"],
         );
     }
 
