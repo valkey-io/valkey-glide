@@ -700,6 +700,23 @@ impl std::ops::Deref for Client {
     }
 }
 
+/// Counts a request timeout in `glide.timeout_errors`, if telemetry is initialized.
+fn record_timeout_error() {
+    if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
+        log_error(
+            "OpenTelemetry:timeout_error",
+            format!("Failed to record timeout error: {e}"),
+        );
+    }
+}
+
+/// Counts `result` in `glide.timeout_errors` if it failed by timing out.
+fn record_if_timed_out<T>(result: &RedisResult<T>) {
+    if matches!(result, Err(e) if e.is_timeout()) {
+        record_timeout_error();
+    }
+}
+
 async fn run_with_timeout<T>(
     timeout: Option<Duration>,
     future: impl futures::Future<Output = RedisResult<T>> + Send,
@@ -708,13 +725,7 @@ async fn run_with_timeout<T>(
         Some(duration) => match tokio::time::timeout(duration, future).await {
             Ok(result) => result,
             Err(_) => {
-                // Record timeout error metric if telemetry is initialized
-                if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
-                    log_error(
-                        "OpenTelemetry:timeout_error",
-                        format!("Failed to record timeout error: {e}"),
-                    );
-                }
+                record_timeout_error();
                 Err(io::Error::from(io::ErrorKind::TimedOut).into())
             }
         },
@@ -1648,6 +1659,9 @@ impl Client {
                             let elapsed = cmd_start.elapsed();
                             self.latency_tracker.record(elapsed);
                         }
+                        // The connection's response timeout runs alongside the watchdog with the same
+                        // duration, and can fire first: count the timeout whichever timer noticed it.
+                        record_if_timed_out(&result);
                         result
                     }
                     recv_result = timeout_rx => {
@@ -1655,7 +1669,9 @@ impl Client {
                             Err(_) => {
                                 // Watchdog thread died — fall through to let the
                                 // command complete via Tokio's timer as fallback.
-                                execute.await
+                                let result = execute.await;
+                                record_if_timed_out(&result);
+                                result
                             }
                             Ok(()) => {
                                 // Build diagnostic event on the consumer side (rare timeout path)
@@ -1722,12 +1738,7 @@ impl Client {
                                     2,
                                     event.to_string()
                                 );
-                                if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
-                                    log_error(
-                                        "OpenTelemetry:timeout_error",
-                                        format!("Failed to record timeout error: {e}"),
-                                    );
-                                }
+                                record_timeout_error();
                                 Err(io::Error::from(io::ErrorKind::TimedOut).into())
                             }
                         }
@@ -1888,8 +1899,12 @@ impl Client {
                 match tokio::time::timeout(duration, connection.send_packed_command(&cmd_to_send))
                     .await
                 {
-                    Ok(result) => result?,
+                    Ok(result) => {
+                        record_if_timed_out(&result);
+                        result?
+                    }
                     Err(_) => {
+                        record_timeout_error();
                         return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
                     }
                 }
