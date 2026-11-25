@@ -2,8 +2,8 @@
 # Lifecycle for the rdma-pair CloudFormation stack.
 #   plan    build a change set and print what it would do (nothing is created
 #           except the change set; a new stack sits in REVIEW_IN_PROGRESS)
-#   apply   execute the change set, building one first if `plan` was not run,
-#           then stream stack events until the stack settles
+#   apply   execute an available change set when called without overrides;
+#           otherwise build a fresh plan, then stream events until it settles
 #   status  stack state plus instance states
 #   stop    stop both instances (volumes are kept and still billed)
 #   start   start both instances
@@ -109,7 +109,16 @@ complete_params() {
   local type=$1 kv; shift
   for kv in "$@"; do echo "$kv"; done
   if [ "$type" = UPDATE ]; then
-    for kv in Owner VpcId SubnetId InstanceProfileArn; do has_param "$kv" "$@" || echo "$kv=@previous"; done
+    # Read keys, not values (which may be masked by NoEcho). This preserves
+    # all existing parameters without duplicating the external template schema.
+    # New template parameters can use defaults or explicit overrides on UPDATE.
+    local keys
+    keys=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+      --query 'Stacks[0].Parameters[].ParameterKey' --output text) || return 1
+    while IFS= read -r kv; do
+      [ -n "$kv" ] && [ "$kv" != None ] || continue
+      has_param "$kv" "$@" || echo "$kv=@previous"
+    done <<<"${keys//$'\t'/$'\n'}"
     return 0
   fi
   has_param Owner "$@" || echo "Owner=$RDMA_OWNER"
@@ -207,15 +216,20 @@ capacity_failure() {
   [ "$n" -gt 0 ]
 }
 
+# UNAVAILABLE (a change set that failed to build) must not match AVAILABLE.
+change_set_available() {
+  aws cloudformation describe-change-set --stack-name "$STACK" --change-set-name "$CHANGE_SET" \
+    --query ExecutionStatus --output text 2>/dev/null | grep -qx AVAILABLE
+}
+
 # One plan-and-execute attempt; returns stream_events' status and sets
 # attempt_since to the attempt's start. A failed plan exits the script.
 # Every command here is checked explicitly: the caller tests this function's
 # status, and bash ignores `set -e` inside anything run as a condition.
 apply_once() {
-  # Executing a change set consumes it, so a fresh one is needed for every
-  # apply. UNAVAILABLE (a change set that failed to build) must not match.
-  if ! aws cloudformation describe-change-set --stack-name "$STACK" --change-set-name "$CHANGE_SET" \
-       --query ExecutionStatus --output text 2>/dev/null | grep -qx AVAILABLE; then
+  # Explicit overrides (including the subnet on capacity retries) always
+  # rebuild the plan. With no overrides, execute an available plan unchanged.
+  if [ "$#" -gt 0 ] || ! change_set_available; then
     plan "$@" || exit 1
   fi
   attempt_since=$(date -u +%Y-%m-%dT%H:%M:%S)
@@ -230,13 +244,17 @@ case "${1:-}" in
     ;;
   apply)
     shift
-    # On a new stack with RDMA_SUBNETS set and no SubnetId on the command
-    # line, each listed subnet is tried in turn, moving on only when the
+    # When building a fresh plan for a new stack with RDMA_SUBNETS set and
+    # no SubnetId on the command line, try each listed subnet only when the
     # CREATE failed for capacity in that zone. An existing stack keeps its
     # subnet and is never deleted on failure; any other failure stops with the
     # stack kept.
     subnets=("")
-    if ! has_param SubnetId "$@" && stack_is_new && [ -n "$(subnet_list)" ]; then
+    if [ "$#" -eq 0 ] && change_set_available; then
+      # Do not turn environment-derived subnets into implicit overrides of
+      # an already reviewed plan, including a new REVIEW_IN_PROGRESS stack.
+      :
+    elif ! has_param SubnetId "$@" && stack_is_new && [ -n "$(subnet_list)" ]; then
       subnets=()
       while IFS= read -r s; do subnets+=("$s"); done < <(subnet_list)
     fi
