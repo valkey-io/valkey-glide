@@ -26,7 +26,7 @@ napi = { version = "3.5", default-features = false, features = ["napi8"] }
 napi-derive = "3.5"
 num-bigint = { version = "0.4", optional = true }
 num-traits = "0.2"
-parking_lot = "0.12"
+parking_lot = "0.13"
 protobuf = { version = "3", features = ["bytes", "with-bytes"] } # Direct dep required: parse_from_bytes is called directly in the napi layer for MonitorClient
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "sync"] }
 tokio-util = { version = "0.7", features = ["rt"] }
