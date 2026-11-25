@@ -22,6 +22,7 @@ class ValkeyCluster:
         load_module: Optional[List[str]] = None,
         addresses: Optional[List[List[str]]] = None,
         tls_auth_clients: bool = False,
+        unix_socket: bool = False,
     ) -> None:
         if addresses:
             self.init_from_existing_cluster(addresses)
@@ -35,6 +36,8 @@ class ValkeyCluster:
                 args_list.append("--cluster-mode")
             if tls_auth_clients:
                 args_list.append("--tls-auth-clients")
+            if unix_socket:
+                args_list.append("--unix-socket")
             if load_module:
                 if len(load_module) == 0:
                     raise ValueError(
@@ -75,6 +78,15 @@ class ValkeyCluster:
                     host, port = addr.split(":")
                     nodes_list.append(NodeAddress(host, int(port)))
                 self.nodes_addr = nodes_list
+            if "UNIX_SOCKETS" in line:
+                self.unix_socket_paths = line.split("UNIX_SOCKETS=")[1].split(",")
+                # The nodes don't listen on their printed ports. Keeping those ports instead of
+                # the 6379 default makes a test that drops the path fail rather than reach a
+                # local server.
+                self.nodes_addr = [
+                    NodeAddress(addr.host, addr.port, unix_socket_path=path)
+                    for addr, path in zip(self.nodes_addr, self.unix_socket_paths)
+                ]
 
     def init_from_existing_cluster(self, addresses: List[List[str]]):
         self.cluster_folder = ""

@@ -790,7 +790,13 @@ class TestOpenTelemetryGlide:
         # Connection-level attributes
         assert {"db.system.name": "redis"} in evalsha_attrs
         assert "server.address" in attr_keys
-        assert "server.port" in attr_keys
+        if request.config.getoption("--unix-socket"):
+            # The core reports the socket path as the address, and a socket has no port.
+            socket_path = pytest.standalone_cluster.nodes_addr[0].unix_socket_path  # type: ignore[attr-defined]
+            assert {"server.address": socket_path} in evalsha_attrs
+            assert "server.port" not in attr_keys
+        else:
+            assert "server.port" in attr_keys
         assert "db.namespace" in attr_keys
 
         await client.close()
