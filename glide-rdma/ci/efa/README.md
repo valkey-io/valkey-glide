@@ -4,6 +4,8 @@ GitHub starts and monitors the `GlideRdmaEfa` CodeBuild project through the
 `AWS_ACTIONS` environment using `AWS_RDMA_ROLE_ARN`. CodeBuild runs
 `bin/orchestrate.py`; the ARM client builds both Python clients at
 `CODEBUILD_RESOLVED_SOURCE_VERSION` and runs the RDMA transfer tests.
+GitHub reports the build status and log link; unsuccessful builds also include
+phase errors and a bounded CloudWatch log excerpt when log access is available.
 
 - `.github/buildspec/rdma-efa.yml` documents the CodeBuild runtime and inputs.
 - `bin/rdma-pair.sh` manages the host stack using `RDMA_TEMPLATE_URL` and

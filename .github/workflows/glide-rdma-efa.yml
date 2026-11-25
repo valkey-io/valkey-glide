@@ -66,11 +66,94 @@ jobs:
                   echo "::error::Monitoring timed out. CodeBuild owns teardown; inspect $CODEBUILD_BUILD_ID."
                   exit 1
 
-            - name: Link build logs
+            - name: Report build result
               if: always() && env.CODEBUILD_BUILD_ID != ''
+              # Diagnostics must not replace the monitoring step's result.
+              continue-on-error: true
+              timeout-minutes: 2
               run: |
-                  LOG_URL=$(aws codebuild batch-get-builds --ids "$CODEBUILD_BUILD_ID" \
-                    --query 'builds[0].logs.deepLink' --output text)
-                  if [ "$LOG_URL" != None ] && [ -n "$LOG_URL" ]; then
-                    echo "[CodeBuild logs]($LOG_URL)" >> "$GITHUB_STEP_SUMMARY"
-                  fi
+                  python3 - <<'PYTHON'
+                  import html
+                  import json
+                  import os
+                  import subprocess
+                  import uuid
+                  from urllib.parse import urlparse
+
+                  summary = os.environ["GITHUB_STEP_SUMMARY"]
+                  build_id = os.environ["CODEBUILD_BUILD_ID"]
+
+                  def append(text):
+                      with open(summary, "a") as output:
+                          output.write(text + "\n")
+
+                  def report(label, text):
+                      # Treat remote output as data, including workflow commands and HTML.
+                      print(f"{label}:\n{text}", flush=True)
+                      append(f"<p>{html.escape(label)}</p><pre>{html.escape(text)}</pre>")
+
+                  def aws(*args):
+                      result = subprocess.run(
+                          ["aws", *args, "--output", "json", "--no-cli-pager",
+                           "--cli-connect-timeout", "10", "--cli-read-timeout", "30"],
+                          env=dict(os.environ, AWS_MAX_ATTEMPTS="1"),
+                          capture_output=True, text=True, timeout=45, check=False,
+                      )
+                      if result.returncode:
+                          raise RuntimeError((result.stderr or result.stdout)[-2000:])
+                      return json.loads(result.stdout)
+
+                  def main():
+                      report("CodeBuild", build_id)
+                      try:
+                          response = aws("codebuild", "batch-get-builds", "--ids", build_id)
+                          builds = response.get("builds", [])
+                          if not builds:
+                              raise RuntimeError("Build metadata was not returned.")
+                          build = builds[0]
+                      except (RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
+                          report("Build diagnostics unavailable", str(error))
+                          return
+
+                      status = build.get("buildStatus", "UNKNOWN")
+                      report("Build status", status)
+                      logs = build.get("logs") or {}
+                      url = logs.get("deepLink", "")
+                      if urlparse(url).scheme == "https":
+                          append(f'<p><a href="{html.escape(url, quote=True)}">CodeBuild logs</a></p>')
+                      if status == "SUCCEEDED":
+                          return
+
+                      phases = []
+                      for phase in build.get("phases", []):
+                          if phase.get("phaseStatus") in ("FAILED", "FAULT", "STOPPED", "TIMED_OUT"):
+                              phases.append(f"{phase.get('phaseType')}: {phase['phaseStatus']}")
+                              for context in phase.get("contexts", []):
+                                  phases.append(f"{context.get('statusCode', '')}: {context.get('message', '')}")
+                      report("Phase errors", "\n".join(phases)[-8000:] or "No phase error details returned.")
+                      if not logs.get("groupName") or not logs.get("streamName"):
+                          report("Log excerpt unavailable", "CodeBuild has not provided a CloudWatch log stream.")
+                          return
+                      try:
+                          page = aws("logs", "get-log-events", "--log-group-name", logs["groupName"],
+                                     "--log-stream-name", logs["streamName"], "--limit", "200",
+                                     "--no-start-from-head", "--no-paginate")
+                          tail = "\n".join(event["message"] for event in page.get("events", []))
+                      except (RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
+                          report("Log excerpt unavailable", str(error))
+                          return
+                      if not tail:
+                          report("Log excerpt unavailable", "CloudWatch returned no events; logs may not have arrived yet.")
+                          return
+                      # One page only; cap characters too because events can be large.
+                      print("CloudWatch excerpt (last 32,000 characters of up to 200 events):\n" + tail[-32000:], flush=True)
+                      append("<p>CloudWatch excerpt (last 8,000 characters of up to 200 events; "
+                             "longer excerpt in the job log):</p><pre>" + html.escape(tail[-8000:]) + "</pre>")
+
+                  token = uuid.uuid4().hex
+                  print(f"::stop-commands::{token}", flush=True)
+                  try:
+                      main()
+                  finally:
+                      print(f"::{token}::", flush=True)
+                  PYTHON

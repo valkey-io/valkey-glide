@@ -104,18 +104,113 @@ class WorkflowTests(unittest.TestCase):
                 result = self.run_step("Wait for CodeBuild", [response])
                 self.assertNotEqual(result.returncode, 0)
 
-    def test_logs_link_is_written_to_summary(self):
-        result = self.run_step("Link build logs", [(0, "https://example.invalid/logs")])
+    def report_build(self, build, log_response=None):
+        responses = [(0, json.dumps({"builds": [build]}))]
+        if log_response is not None:
+            responses.append(log_response)
+        result = self.run_step("Report build result", responses)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(
-            "[CodeBuild logs](https://example.invalid/logs)",
-            (self.root / "summary").read_text(),
-        )
+        return result, (self.root / "summary").read_text()
 
-    def test_missing_logs_do_not_make_broken_link(self):
-        result = self.run_step("Link build logs", [(0, "None")])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertFalse((self.root / "summary").exists())
+    def failed_build(self):
+        return {
+            "buildStatus": "FAILED",
+            "logs": {
+                "deepLink": "https://example.invalid/logs",
+                "groupName": "/aws/codebuild/GlideRdmaEfa",
+                "streamName": "build-stream",
+            },
+            "phases": [
+                {
+                    "phaseType": "BUILD",
+                    "phaseStatus": "FAILED",
+                    "contexts": [
+                        {
+                            "statusCode": "COMMAND_EXECUTION_ERROR",
+                            "message": "orchestrator exited 1",
+                        }
+                    ],
+                }
+            ],
+        }
+
+    def test_success_links_logs_without_fetching_them(self):
+        build = self.failed_build()
+        build["buildStatus"] = "SUCCEEDED"
+        _, summary = self.report_build(build)
+        self.assertIn('href="https://example.invalid/logs"', summary)
+        self.assertIn("SUCCEEDED", summary)
+        self.assertEqual(len((self.root / "calls").read_text().splitlines()), 1)
+
+    def test_failed_build_reports_phase_and_log_excerpt(self):
+        result, summary = self.report_build(
+            self.failed_build(),
+            (0, json.dumps({"events": [{"message": "test failed"}]})),
+        )
+        for text in (
+            "GlideRdmaEfa:test",
+            "FAILED",
+            "BUILD",
+            "orchestrator exited 1",
+            "test failed",
+        ):
+            self.assertIn(text, summary)
+        self.assertIn("test failed", result.stdout)
+        calls = [
+            json.loads(line) for line in (self.root / "calls").read_text().splitlines()
+        ]
+        args = calls[1]
+        self.assertEqual(args[:2], ["logs", "get-log-events"])
+        self.assertEqual(args[args.index("--limit") + 1], "200")
+        self.assertIn("--no-paginate", args)
+        self.assertIn("--no-start-from-head", args)
+        self.assertEqual(args[args.index("--log-stream-name") + 1], "build-stream")
+        self.assertTrue(STEPS["Report build result"]["continue-on-error"])
+        self.assertIn("always()", STEPS["Report build result"]["if"])
+
+    def test_missing_stream_reports_reason_without_fetching_logs(self):
+        _, summary = self.report_build({"buildStatus": "FAILED"})
+        self.assertIn("has not provided", summary)
+        self.assertNotIn("href=", summary)
+        self.assertEqual(len((self.root / "calls").read_text().splitlines()), 1)
+
+    def test_log_access_failure_preserves_build_diagnostics(self):
+        _, summary = self.report_build(
+            self.failed_build(), (254, "AccessDeniedException")
+        )
+        self.assertIn("AccessDeniedException", summary)
+        self.assertIn("orchestrator exited 1", summary)
+        self.assertIn("FAILED", summary)
+
+    def test_empty_log_page_is_explicit(self):
+        _, summary = self.report_build(self.failed_build(), (0, '{"events": []}'))
+        self.assertIn("logs may not have arrived yet", summary)
+
+    def test_metadata_errors_do_not_fail_reporting(self):
+        for response in (
+            (254, "AccessDenied"),
+            (0, '{"builds": []}'),
+            (0, "invalid json"),
+        ):
+            with self.subTest(response=response):
+                result = self.run_step("Report build result", [response])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Build diagnostics unavailable", result.stdout)
+
+    def test_excerpt_is_bounded_and_remote_output_is_not_interpreted(self):
+        message = (
+            "omitted-prefix" + "x" * 40000 + "\n::error::remote\n<script>bad</script>"
+        )
+        result, summary = self.report_build(
+            self.failed_build(), (0, json.dumps({"events": [{"message": message}]}))
+        )
+        self.assertNotIn("omitted-prefix", result.stdout)
+        self.assertLess(len(result.stdout), 34000)
+        self.assertLess(len(summary), 10000)
+        self.assertNotIn("<script>", summary)
+        self.assertIn("&lt;script&gt;", summary)
+        token = result.stdout.splitlines()[0].removeprefix("::stop-commands::")
+        self.assertEqual(result.stdout.splitlines()[-1], f"::{token}::")
 
 
 if __name__ == "__main__":
