@@ -472,8 +472,7 @@ fn resp_value_to_java<'local>(
     }
 }
 
-/// Converts an error held in place of a reply into a Java `RequestException`, using the
-/// message the same error carries when it fails the whole call.
+/// Converts an in-slot error into a Java `RequestException`.
 fn request_exception_to_java<'local>(
     env: &mut JNIEnv<'local>,
     error: redis::RedisError,

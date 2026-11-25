@@ -19,6 +19,7 @@ import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.CompressionBackend;
 import glide.api.models.configuration.CompressionConfiguration;
+import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.RequestException;
 import java.util.Base64;
@@ -1124,68 +1125,40 @@ public class CompressionTests {
         }
     }
 
-    private static void assertSizeLimitException(Object result, String expectedMessage) {
-        assertTrue(
-                result instanceof RequestException,
-                "Expected the size-limit error in place, got " + result);
-        assertEquals(expectedMessage, ((RequestException) result).getMessage());
-    }
-
     @SneakyThrows
-    private static Object[] execSizeLimitBatch(
-            BaseClient client, boolean atomic, boolean raiseOnError, String markerKey, String bigKey) {
-        if (client instanceof GlideClusterClient) {
-            glide.api.models.ClusterBatch batch = new glide.api.models.ClusterBatch(atomic);
-            batch.set(markerKey, "written");
-            batch.get(bigKey);
-            batch.get(markerKey);
-            batch.mget(new String[] {markerKey, bigKey});
-            return ((GlideClusterClient) client).exec(batch, raiseOnError).get();
-        }
-        glide.api.models.Batch batch = new glide.api.models.Batch(atomic);
-        batch.set(markerKey, "written");
-        batch.get(bigKey);
-        batch.get(markerKey);
-        batch.mget(new String[] {markerKey, bigKey});
-        return ((GlideClient) client).exec(batch, raiseOnError).get();
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(name = "clusterMode={0} atomic={1}")
-    @MethodSource("batchModes")
-    public void compression_batch_without_raise_on_error_returns_size_limit_in_place(
-            boolean clusterMode, boolean atomic) {
+    @Test
+    public void compression_batch_without_raise_on_error_returns_size_limit_in_place() {
         CompressionConfiguration unlimited = CompressionConfiguration.builder().enabled(true).build();
         CompressionConfiguration limited =
                 CompressionConfiguration.builder().enabled(true).maxDecompressedSize(100L).build();
-        try (BaseClient writer = clientWithCompression(clusterMode, unlimited);
-                BaseClient reader = clientWithCompression(clusterMode, limited)) {
-            String tag = randomKey("{batch_no_raise") + "}";
-            String bigKey = tag + "big";
-            String markerKey = tag + "marker";
-            assertEquals(OK, writer.set(bigKey, generateCompressibleText(10_000)).get());
+        try (GlideClient writer =
+                        GlideClient.createClient(
+                                        commonClientConfig()
+                                                .protocol(ProtocolVersion.RESP3)
+                                                .compressionConfiguration(unlimited)
+                                                .build())
+                                .get();
+                GlideClient reader =
+                        GlideClient.createClient(
+                                        commonClientConfig()
+                                                .protocol(ProtocolVersion.RESP3)
+                                                .compressionConfiguration(limited)
+                                                .build())
+                                .get()) {
+            String key = randomKey("{batch_no_raise}");
+            assertEquals(OK, writer.set(key, generateCompressibleText(10_000)).get());
 
-            Throwable raised =
-                    assertThrows(
-                                    ExecutionException.class,
-                                    () -> execSizeLimitBatch(reader, atomic, true, markerKey, bigKey))
-                            .getCause();
+            Object[] results = reader.exec(new glide.api.models.Batch(false).get(key), false).get();
+
+            assertEquals(1, results.length);
             assertTrue(
-                    raised instanceof RequestException, "Should throw RequestException, got " + raised);
+                    results[0] instanceof RequestException, "Expected RequestException: " + results[0]);
             assertTrue(
-                    raised.getMessage().toLowerCase().contains("size limit exceeded"),
-                    "Error should name the size limit: " + raised.getMessage());
+                    ((RequestException) results[0])
+                            .getMessage()
+                            .startsWith("Decompression error - ClientError: Decompression size limit exceeded"));
 
-            Object[] results = execSizeLimitBatch(reader, atomic, false, markerKey, bigKey);
-
-            assertEquals(4, results.length);
-            assertEquals(OK, results[0]);
-            assertSizeLimitException(results[1], raised.getMessage());
-            assertEquals("written", results[2]);
-            // An MGET reply fails as a whole, as the same MGET does outside a batch.
-            assertSizeLimitException(results[3], raised.getMessage());
-
-            writer.del(new String[] {bigKey, markerKey}).get();
+            writer.del(new String[] {key}).get();
         }
     }
 

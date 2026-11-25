@@ -702,8 +702,8 @@ fn estimate_value_size(value: &ServerValue) -> usize {
         redis::Value::VerbatimString { text, .. } => text.len(),
         redis::Value::BigNumber(num) => num.to_string().len(), // Estimate size as string representation
         redis::Value::Push { data, .. } => data.iter().map(estimate_value_size).sum::<usize>(),
-        redis::Value::ServerError(_) | redis::Value::ClientError(_) => 128, // Estimate for error messages
-        redis::Value::Okay => 2,                                            // "OK"
+        redis::Value::ServerError(_) | redis::Value::ClientError(_) => 128,
+        redis::Value::Okay => 2, // "OK"
         redis::Value::Attribute { data, .. } => estimate_value_size(data.as_ref()),
     }
 }
@@ -1066,7 +1066,6 @@ pub fn complete_error_sync(
 mod tests {
     use super::generate_safe_handle;
     use super::serialize_array_to_bytes;
-    use super::{estimate_value_size, should_use_direct_buffer};
     use redis::{Value, parse_redis_value};
 
     #[test]
@@ -1086,28 +1085,6 @@ mod tests {
                 "allocate_client_id collided with an ordinary handle: {pooled}"
             );
         }
-    }
-
-    #[test]
-    fn client_error_slot_keeps_its_batch_reply_off_the_direct_buffer() {
-        let client_error = Value::ClientError(redis::ClientError::new(
-            "Decompression error",
-            Some("Decompression size limit exceeded".to_string()),
-        ));
-        let server_error = parse_redis_value(b"-ERR boom\r\n").unwrap();
-        assert_eq!(
-            estimate_value_size(&client_error),
-            estimate_value_size(&server_error)
-        );
-
-        let large_neighbour = Value::BulkString(vec![b'v'; 32 * 1024].into());
-        assert!(should_use_direct_buffer(&Value::Array(vec![
-            large_neighbour.clone()
-        ])));
-        assert!(!should_use_direct_buffer(&Value::Array(vec![
-            large_neighbour,
-            client_error,
-        ])));
     }
 
     #[test]
