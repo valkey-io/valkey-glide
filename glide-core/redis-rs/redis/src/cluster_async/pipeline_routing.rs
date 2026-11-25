@@ -205,6 +205,10 @@ where
 
     if let Some(route) = route {
         // If we have a route, we will use it to route the commands to the given route, instead of finding the route for each command
+        debug_assert!(
+            !pipeline.has_command_routes(),
+            "a pipeline with per-command routes can't also have a pipeline-level route"
+        );
 
         let (addr, conn) = ClusterConnInner::get_connection(route, core, None)
             .await
@@ -219,9 +223,14 @@ where
         }
     } else {
         for (index, cmd) in pipeline.cmd_iter().enumerate() {
-            match RoutingInfo::for_routable(cmd.as_ref())
-                .unwrap_or(SingleNode(SingleNodeRoutingInfo::Random))
-            {
+            // A command added with its own route goes there; any other command goes where its
+            // keys or default routing send it
+            let routing = match pipeline.command_route(index) {
+                Some(route) => SingleNode(route.clone()),
+                None => RoutingInfo::for_routable(cmd.as_ref())
+                    .unwrap_or(SingleNode(SingleNodeRoutingInfo::Random)),
+            };
+            match routing {
                 SingleNode(route) => {
                     handle_pipeline_single_node_routing(
                         &mut pipelines_per_node,

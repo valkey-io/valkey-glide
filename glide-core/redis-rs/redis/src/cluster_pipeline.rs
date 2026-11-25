@@ -149,4 +149,10 @@ pub fn cluster_pipe() -> ClusterPipeline {
     ClusterPipeline::new()
 }
 
+impl ClusterPipeline {
+    /// `ClusterPipeline` has no per-command routes; called by `clear`.
+    #[inline]
+    fn clear_command_routes(&mut self) {}
+}
+
 implement_pipeline_commands!(ClusterPipeline);

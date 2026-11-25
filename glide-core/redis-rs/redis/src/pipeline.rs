@@ -15,6 +15,11 @@ pub struct Pipeline {
     commands: Vec<Arc<Cmd>>,
     transaction_mode: bool,
     ignored_commands: HashSet<usize>,
+    /// Per-command routes, keyed by command index. Only commands added with
+    /// [`Pipeline::add_command_with_route`] have an entry, so a pipeline without
+    /// routed commands stores nothing.
+    #[cfg(feature = "cluster")]
+    command_routes: std::collections::HashMap<usize, crate::cluster_routing::SingleNodeRoutingInfo>,
     /// The OpenTelemtry span command, to measure the lifetime of the pipeline.
     otel_command_span: Option<GlideSpan>,
 }
@@ -53,8 +58,47 @@ impl Pipeline {
             commands: Vec::with_capacity(capacity),
             transaction_mode: false,
             ignored_commands: HashSet::new(),
+            #[cfg(feature = "cluster")]
+            command_routes: std::collections::HashMap::new(),
             otel_command_span: None,
         }
+    }
+
+    /// Adds a command that is sent to the node `route` selects, instead of the node its
+    /// keys or default routing would select. Used for non-atomic cluster pipelines; a
+    /// cluster pipeline that also has a pipeline-level route, or an atomic one, is rejected
+    /// before it is sent.
+    #[cfg(feature = "cluster")]
+    pub fn add_command_with_route(
+        &mut self,
+        cmd: Cmd,
+        route: crate::cluster_routing::SingleNodeRoutingInfo,
+    ) -> &mut Self {
+        self.command_routes.insert(self.commands.len(), route);
+        self.add_command(cmd)
+    }
+
+    /// The route given to the command at `index` with [`Pipeline::add_command_with_route`],
+    /// if any.
+    #[cfg(feature = "cluster")]
+    pub fn command_route(
+        &self,
+        index: usize,
+    ) -> Option<&crate::cluster_routing::SingleNodeRoutingInfo> {
+        self.command_routes.get(&index)
+    }
+
+    /// Whether any command in the pipeline has its own route.
+    #[cfg(feature = "cluster")]
+    pub fn has_command_routes(&self) -> bool {
+        !self.command_routes.is_empty()
+    }
+
+    /// Drops the per-command routes; called by `clear`.
+    #[inline]
+    fn clear_command_routes(&mut self) {
+        #[cfg(feature = "cluster")]
+        self.command_routes.clear();
     }
 
     /// Set the pipeline span
@@ -374,6 +418,7 @@ macro_rules! implement_pipeline_commands {
             pub fn clear(&mut self) {
                 self.commands.clear();
                 self.ignored_commands.clear();
+                self.clear_command_routes();
             }
 
             #[inline]
@@ -440,5 +485,54 @@ impl PipelineRetryStrategy {
             retry_server_error,
             retry_connection_error,
         }
+    }
+}
+
+#[cfg(all(test, feature = "cluster"))]
+mod command_route_tests {
+    use super::*;
+    use crate::cluster_routing::{Route, SingleNodeRoutingInfo, SlotAddr};
+
+    fn route(slot: u16) -> SingleNodeRoutingInfo {
+        SingleNodeRoutingInfo::SpecificNode(Route::new(slot, SlotAddr::Master))
+    }
+
+    #[test]
+    fn routes_are_kept_by_command_index() {
+        let mut pipeline = Pipeline::new();
+        pipeline
+            .add_command(cmd("PING"))
+            .add_command_with_route(cmd("CLUSTER").arg("MYID").clone(), route(1))
+            .add_command(cmd("PING"))
+            .add_command_with_route(cmd("CLUSTER").arg("MYID").clone(), route(2));
+
+        assert!(pipeline.has_command_routes());
+        assert_eq!(pipeline.command_route(0), None);
+        assert_eq!(pipeline.command_route(1), Some(&route(1)));
+        assert_eq!(pipeline.command_route(2), None);
+        assert_eq!(pipeline.command_route(3), Some(&route(2)));
+        assert_eq!(pipeline.len(), 4);
+    }
+
+    #[test]
+    fn pipeline_without_routed_commands_has_no_routes() {
+        let mut pipeline = Pipeline::new();
+        pipeline.cmd("PING").cmd("PING");
+        assert!(!pipeline.has_command_routes());
+        assert_eq!(pipeline.command_route(0), None);
+    }
+
+    #[test]
+    fn clone_keeps_routes_and_clear_drops_them() {
+        let mut pipeline = Pipeline::new();
+        pipeline.add_command_with_route(cmd("PING"), route(7));
+
+        let cloned = pipeline.clone();
+        assert_eq!(cloned.command_route(0), Some(&route(7)));
+
+        pipeline.clear();
+        assert!(!pipeline.has_command_routes());
+        pipeline.add_command(cmd("PING"));
+        assert_eq!(pipeline.command_route(0), None);
     }
 }
