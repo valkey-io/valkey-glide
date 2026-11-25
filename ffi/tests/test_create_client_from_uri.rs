@@ -156,6 +156,8 @@ fn test_create_client_from_uri_simple() {
             ptr::null(), // No extra options
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -192,6 +194,8 @@ fn test_create_client_from_uri_redis_scheme_compat() {
             ptr::null(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -226,6 +230,8 @@ fn test_create_client_from_uri_with_refresh_topology_from_initial_nodes() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -260,6 +266,8 @@ fn test_create_client_from_uri_with_read_only() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -295,6 +303,8 @@ fn test_create_client_from_uri_with_password() {
             ptr::null(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -326,6 +336,8 @@ fn test_create_client_from_uri_with_username_and_password() {
             ptr::null(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -354,6 +366,8 @@ fn test_create_client_from_uri_with_database() {
             ptr::null(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -395,6 +409,8 @@ fn test_create_client_from_uri_with_json_options() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -429,6 +445,8 @@ fn test_create_client_from_uri_with_protocol() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -463,6 +481,8 @@ fn test_create_client_from_uri_with_read_from() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -507,6 +527,8 @@ fn test_create_client_from_uri_with_retry_strategy() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -551,6 +573,8 @@ fn test_create_client_from_uri_with_multiple_options() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -582,6 +606,8 @@ fn test_create_client_from_uri_invalid_uri() {
             ptr::null(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -615,6 +641,8 @@ fn test_create_client_from_uri_invalid_json() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -648,6 +676,8 @@ fn test_create_client_from_uri_unknown_json_keys() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -685,6 +715,8 @@ fn test_create_client_from_uri_invalid_protocol() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -718,6 +750,8 @@ fn test_create_client_from_uri_invalid_read_from() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -750,6 +784,8 @@ fn test_create_client_from_uri_invalid_database_id() {
             ptr::null(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -785,6 +821,8 @@ fn test_create_client_from_uri_wrong_type_in_json() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -823,6 +861,8 @@ fn test_create_client_from_uri_valid_formats(#[case] uri_format: &str) {
             ptr::null(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -859,6 +899,8 @@ fn test_create_client_from_uri_all_read_from_values(#[case] read_from: &str) {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -906,6 +948,8 @@ fn test_create_client_from_uri_with_compression_config() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -949,6 +993,8 @@ fn test_create_client_from_uri_with_periodic_checks_manual() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -993,6 +1039,8 @@ fn test_create_client_from_uri_with_periodic_checks_disabled() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1040,6 +1088,8 @@ fn test_create_client_from_uri_with_iam_credentials() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1070,6 +1120,8 @@ fn test_create_client_from_uri_with_username_only() {
             ptr::null(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1113,6 +1165,8 @@ fn test_create_client_from_uri_with_pubsub_subscriptions() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1158,6 +1212,8 @@ fn test_create_client_from_uri_invalid_compression_backend() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1200,6 +1256,8 @@ fn test_create_client_from_uri_invalid_service_type() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1243,6 +1301,8 @@ fn test_create_client_from_uri_with_client_side_cache_all_fields() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1288,6 +1348,8 @@ fn test_create_client_from_uri_with_client_side_cache_required_fields_only() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1334,6 +1396,8 @@ fn test_create_client_from_uri_with_client_side_cache_lfu_policy() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1380,6 +1444,8 @@ fn test_create_client_from_uri_invalid_eviction_policy() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1422,6 +1488,8 @@ fn test_create_client_from_uri_client_side_cache_missing_max_cache_kb() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1464,6 +1532,8 @@ fn test_create_client_from_uri_client_side_cache_missing_entry_ttl_ms() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1507,6 +1577,8 @@ fn test_create_client_from_uri_client_side_cache_invalid_max_cache_kb_type() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1542,6 +1614,8 @@ fn test_create_client_from_uri_client_side_cache_not_an_object() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1587,6 +1661,8 @@ fn test_create_client_from_uri_client_side_cache_case_insensitive_eviction_polic
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1624,6 +1700,8 @@ fn test_create_client_from_uri_client_side_cache_rejects_cache_id() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1659,6 +1737,8 @@ fn test_create_client_from_uri_client_side_cache_zero_max_cache_kb() {
             options.as_ptr(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
     assert!(!response.is_null());
@@ -1703,6 +1783,8 @@ fn test_create_client_from_uri_with_reserved_char_password_authenticates() {
             ptr::null(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1753,6 +1835,8 @@ fn test_create_client_from_uri_unix_socket_authenticates(#[case] scheme: &str) {
             ptr::null(),
             client_type,
             null_pubsub_callback(),
+            0,
+            None,
         )
     };
 
@@ -1775,8 +1859,9 @@ fn test_create_client_from_uri_unix_socket_authenticates(#[case] scheme: &str) {
     }
 }
 
-// Tests for `create_client_from_uri_with_credential_provider`. Core creates the IAM token
-// manager, which calls the provider, before it connects, so none of these needs a server.
+// Tests for the `client_id` and `credential_provider` arguments of `create_client_from_uri`. Core
+// creates the IAM token manager, which calls the provider, before it connects, so none of these
+// needs a server.
 
 const IAM_OPTIONS: &str = r#"{"iam_credentials": {"cluster_name": "my-cluster", "region": "us-east-1", "service_type": "ELASTICACHE"}}"#;
 const IAM_LAZY_OPTIONS: &str = r#"{"lazy_connect": true, "iam_credentials": {"cluster_name": "my-cluster", "region": "us-east-1", "service_type": "ELASTICACHE"}}"#;
@@ -1878,8 +1963,8 @@ fn iam_tls_uri() -> CString {
     .unwrap()
 }
 
-/// Calls `create_client_from_uri_with_credential_provider` and returns the error message and
-/// type, or `None` after closing the client if creation succeeded.
+/// Calls `create_client_from_uri` and returns the error message and type, or `None` after closing
+/// the client if creation succeeded.
 fn create_with_provider(
     uri: &CString,
     options: Option<&str>,
@@ -1892,7 +1977,7 @@ fn create_with_provider(
         .map_or(ptr::null(), |options| options.as_ptr());
     let client_type = ClientType::SyncClient;
     unsafe {
-        let response = create_client_from_uri_with_credential_provider(
+        let response = create_client_from_uri(
             uri.as_ptr(),
             options_ptr,
             &client_type,
@@ -1970,25 +2055,8 @@ fn uri_credential_provider_requires_iam() {
 #[case::invalid_json("valkeys://iam-user@127.0.0.1:6379", Some("{not json"))]
 fn uri_credential_provider_preserves_uri_errors(#[case] uri: &str, #[case] options: Option<&str>) {
     let uri = CString::new(uri).unwrap();
-    let c_options = options.map(|options| CString::new(options).unwrap());
-    let client_type = ClientType::SyncClient;
-    let expected = unsafe {
-        let response = create_client_from_uri(
-            uri.as_ptr(),
-            c_options
-                .as_ref()
-                .map_or(ptr::null(), |options| options.as_ptr()),
-            &client_type,
-            null_pubsub_callback(),
-        );
-        assert!((*response).conn_ptr.is_null());
-        let expected = (
-            parse_error_msg((*response).connection_error_message),
-            (*response).connection_error_type,
-        );
-        free_connection_response(response as *mut ConnectionResponse);
-        expected
-    };
+    let expected = create_with_provider(&uri, options, 0, None)
+        .expect("an invalid URI or option must fail client creation");
 
     let actual = create_with_provider(&uri, options, 0x8D8D, Some(uri_errors_provider))
         .expect("an invalid URI or option must fail client creation");

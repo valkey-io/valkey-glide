@@ -163,14 +163,6 @@ const ConnectionResponse* create_client(
     uintptr_t client_id
 );
 
-/* A compatible redeclaration proves existing four-argument URI callers still compile. */
-const ConnectionResponse* create_client_from_uri(
-    const char* uri_str,
-    const char* extra_options_json,
-    const ClientType* client_type,
-    PubSubCallback pubsub_callback
-);
-
 static unsigned pubsub_calls = 0;
 static void pubsub(
     uintptr_t client_ptr,
@@ -273,15 +265,11 @@ int main(void) {{
 
     const char *uri = "valkey://127.0.0.1:1";
     const char *lazy = "{{\"lazy_connect\": true}}";
-    if (!expect_client(create_client_from_uri(uri, lazy, &client_type, pubsub))) {{
+    if (!expect_client(create_client_from_uri(uri, lazy, &client_type, pubsub, 0x45678, NULL))) {{
         return 20;
     }}
-    if (!expect_client(create_client_from_uri_with_credential_provider(
-            uri, lazy, &client_type, pubsub, 0x45678, NULL))) {{
-        return 21;
-    }}
 
-    const ConnectionResponse *uri_failed = create_client_from_uri_with_credential_provider(
+    const ConnectionResponse *uri_failed = create_client_from_uri(
         uri, NULL, &client_type, NULL, 0x56789, provider);
     if (uri_failed == NULL || uri_failed->conn_ptr != NULL
             || uri_failed->connection_error_message == NULL) {{

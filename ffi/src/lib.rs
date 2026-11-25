@@ -961,9 +961,8 @@ type NonNullCredentialProviderCallback = unsafe extern "C-unwind" fn(
 ) -> u8;
 
 /// Nullable custom AWS credential-provider callback accepted by
-/// [`create_client_with_credential_provider`] and
-/// [`create_client_from_uri_with_credential_provider`]. Pass `None`/`NULL` to use the default AWS
-/// credential chain.
+/// [`create_client_with_credential_provider`] and [`create_client_from_uri`]. Pass `None`/`NULL`
+/// to use the default AWS credential chain.
 ///
 /// The Rust core invokes the callback whenever it needs fresh credentials to generate an IAM
 /// token, possibly many times while the client is active. All string outputs must be UTF-8. The
@@ -3467,9 +3466,6 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 /// The URI parsing and configuration building happens in Rust, making it easier to add new connection
 /// options without changing FFI signatures across all language bindings.
 ///
-/// This entrypoint never installs a custom credential provider; use
-/// [`create_client_from_uri_with_credential_provider`] to supply one.
-///
 /// # Parameters
 ///
 /// * `uri_str`: A null-terminated C string containing the connection URI.
@@ -3513,6 +3509,13 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///
 /// * `pubsub_callback`: Optional callback function for pub/sub messages (0 for none).
 ///
+/// * `client_id`: Passed to `credential_provider`. Allocate it with [`glide_allocate_client_id`];
+///   pass 0 when there is no provider.
+///
+/// * `credential_provider`: Optional custom AWS credential provider. Pass `NULL` to use the default
+///   AWS credential chain. A non-null provider requires `iam_credentials` in `extra_options_json`
+///   and must satisfy the [`CredentialProviderCallback`] contract.
+///
 /// # Returns
 ///
 /// A pointer to a `ConnectionResponse`. The caller must call [`free_connection_response`] when done.
@@ -3521,11 +3524,11 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///
 /// ```c
 /// // Simple URI
-/// create_client_from_uri("valkey://localhost:6379", NULL, &client_type, 0);
+/// create_client_from_uri("valkey://localhost:6379", NULL, &client_type, 0, 0, NULL);
 ///
 /// // URI with basic options
 /// const char* basic_opts = "{\"request_timeout\": 5000, \"client_name\": \"myapp\"}";
-/// create_client_from_uri("valkey://localhost:6379", basic_opts, &client_type, 0);
+/// create_client_from_uri("valkey://localhost:6379", basic_opts, &client_type, 0, 0, NULL);
 ///
 /// // URI with advanced options
 /// const char* advanced_opts = "{"
@@ -3539,7 +3542,7 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///     "},"
 ///     "\"client_az\": \"us-west-2a\""
 /// "}";
-/// create_client_from_uri("valkey://localhost:6379", advanced_opts, &client_type, 0);
+/// create_client_from_uri("valkey://localhost:6379", advanced_opts, &client_type, 0, 0, NULL);
 ///
 /// // TLS with custom CA certificates
 /// const char* tls_opts = "{"
@@ -3547,7 +3550,7 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///     "\"client_cert\": \"-----BEGIN CERTIFICATE-----\\n...\","
 ///     "\"client_key\": \"-----BEGIN PRIVATE KEY-----\\n...\""
 /// "}";
-/// create_client_from_uri("valkeys://secure.example.com:6380", tls_opts, &client_type, 0);
+/// create_client_from_uri("valkeys://secure.example.com:6380", tls_opts, &client_type, 0, 0, NULL);
 ///
 /// // Compression and periodic checks
 /// const char* compression_opts = "{"
@@ -3561,7 +3564,7 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///         "\"manual_interval\": {\"duration_in_sec\": 30}"
 ///     "}"
 /// "}";
-/// create_client_from_uri("valkey://localhost:6379", compression_opts, &client_type, 0);
+/// create_client_from_uri("valkey://localhost:6379", compression_opts, &client_type, 0, 0, NULL);
 ///
 /// // AWS IAM authentication
 /// const char* iam_opts = "{"
@@ -3572,7 +3575,7 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///         "\"refresh_interval_seconds\": 900"
 ///     "}"
 /// "}";
-/// create_client_from_uri("valkey://my-cluster.aws.com:6379", iam_opts, &client_type, 0);
+/// create_client_from_uri("valkey://my-cluster.aws.com:6379", iam_opts, &client_type, 0, 0, NULL);
 ///
 /// // Pre-subscribe to pub/sub channels
 /// const char* pubsub_opts = "{"
@@ -3582,7 +3585,7 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///         "\"2\": [\"shard-channel\"]"      // Sharded
 ///     "}"
 /// "}";
-/// create_client_from_uri("valkey://localhost:6379", pubsub_opts, &client_type, 0);
+/// create_client_from_uri("valkey://localhost:6379", pubsub_opts, &client_type, 0, 0, NULL);
 ///
 /// // Client-side caching
 /// const char* cache_opts = "{"
@@ -3593,7 +3596,7 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///         "\"enable_metrics\": true"
 ///     "}"
 /// "}";
-/// create_client_from_uri("valkey://localhost:6379", cache_opts, &client_type, 0);
+/// create_client_from_uri("valkey://localhost:6379", cache_opts, &client_type, 0, 0, NULL);
 /// ```
 ///
 /// # Safety
@@ -3602,65 +3605,9 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 /// * If `extra_options_json` is non-null, it must be a valid null-terminated C string containing valid JSON.
 /// * `client_type` must be a valid pointer to a `ClientType`.
 /// * If `pubsub_callback` is non-zero, it must be a valid function pointer that lives while the client is open/active.
+/// * If `credential_provider` is non-null, the [`CredentialProviderCallback`] safety contract applies.
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn create_client_from_uri(
-    uri_str: *const c_char,
-    extra_options_json: *const c_char,
-    client_type: *const ClientType,
-    pubsub_callback: PubSubCallback,
-) -> *const ConnectionResponse {
-    unsafe {
-        create_client_from_uri_response(
-            uri_str,
-            extra_options_json,
-            client_type,
-            pubsub_callback,
-            0,
-            None,
-        )
-    }
-}
-
-/// Creates a new client from a URI string and optional JSON configuration, with an optional
-/// custom IAM credential provider.
-///
-/// # Parameters
-///
-/// * First four parameters: As for [`create_client_from_uri`].
-/// * `client_id`: Passed to `credential_provider`. Allocate it with [`glide_allocate_client_id`].
-/// * `credential_provider`: Optional custom AWS credential provider. Pass `NULL` to use the default
-///   AWS credential chain. A non-null provider requires `iam_credentials` in `extra_options_json`
-///   and must satisfy the [`CredentialProviderCallback`] contract.
-///
-/// # Returns
-///
-/// A pointer to a `ConnectionResponse`. The caller must call [`free_connection_response`] when done.
-///
-/// # Safety
-///
-/// The [`create_client_from_uri`] and [`CredentialProviderCallback`] safety contracts apply.
-#[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn create_client_from_uri_with_credential_provider(
-    uri_str: *const c_char,
-    extra_options_json: *const c_char,
-    client_type: *const ClientType,
-    pubsub_callback: PubSubCallback,
-    client_id: usize,
-    credential_provider: CredentialProviderCallback,
-) -> *const ConnectionResponse {
-    unsafe {
-        create_client_from_uri_response(
-            uri_str,
-            extra_options_json,
-            client_type,
-            pubsub_callback,
-            client_id,
-            credential_provider,
-        )
-    }
-}
-
-unsafe fn create_client_from_uri_response(
     uri_str: *const c_char,
     extra_options_json: *const c_char,
     client_type: *const ClientType,
@@ -3924,7 +3871,7 @@ mod tests_pipe_client_id {
         let options = CString::new(r#"{"lazy_connect": true}"#).unwrap();
         let client_type = async_client();
         let response = unsafe {
-            create_client_from_uri_with_credential_provider(
+            create_client_from_uri(
                 uri.as_ptr(),
                 options.as_ptr(),
                 &client_type,

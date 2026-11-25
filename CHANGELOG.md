@@ -7,7 +7,6 @@
 * Node: valkey-search 1.3 stable surface ([#7378](https://github.com/valkey-io/valkey-glide/pull/7378))
 * Rust: Add `HGETDEL` and `DELIFEQ` commands ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145), [#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Python: Add CPython 3.15 wheels for the async and sync clients ([#7321](https://github.com/valkey-io/valkey-glide/issues/7321))
-* FFI: Add `create_client_from_uri_with_credential_provider` so URI-based bindings can supply a custom IAM credential provider ([#7847](https://github.com/valkey-io/valkey-glide/pull/7847))
 * Core, Python: Add support for Valkey 9.2 commands:
   * `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
 * Core: use atomics for telemetry instead of shared lock ([#7497](https://github.com/valkey-io/valkey-glide/pull/7497))
@@ -37,6 +36,7 @@
 
 ### Breaking Changes
 
+* FFI: `create_client_from_uri` takes `client_id` and `credential_provider` arguments, so URI-based bindings can supply a custom IAM credential provider ([#7847](https://github.com/valkey-io/valkey-glide/pull/7847))
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 * Python, Go: a whitespace-only client AZ is now rejected for AZ-affinity read strategies, like an empty one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))
