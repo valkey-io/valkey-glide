@@ -3009,7 +3009,7 @@ mod tests_block_on_worker {
         let in_task = dispatch.clone();
         let error = block_on_worker(&runtime(), Some(&dispatch), async move {
             in_task.run(|| {
-                create_client_internal(&[], ClientType::SyncClient, None, None, None, 0)
+                create_client_internal(&[], ClientType::SyncClient, None, None, None, 0, 0)
                     .err()
                     .map(|error| error.message)
             })
@@ -3028,7 +3028,7 @@ mod tests_block_on_worker {
         address.port = 1;
         request.addresses.push(address);
         let bytes = request.write_to_bytes().unwrap();
-        create_client_internal(&bytes, ClientType::SyncClient, None, None, None, 0)
+        create_client_internal(&bytes, ClientType::SyncClient, None, None, None, 0, 0)
             .unwrap_or_else(|error| panic!("{}", error.message))
             .cast()
     }
@@ -3509,8 +3509,8 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///
 /// * `pubsub_callback`: Optional callback function for pub/sub messages (0 for none).
 ///
-/// * `client_id`: Passed to `credential_provider`. Allocate it with [`glide_allocate_client_id`];
-///   pass 0 when there is no provider.
+/// * `client_id`: Passed to `credential_provider`. Allocate it with [`glide_allocate_client_id`]
+///   (cast to `usize`); pass 0 when there is no provider.
 ///
 /// * `credential_provider`: Optional custom AWS credential provider. Pass `NULL` to use the default
 ///   AWS credential chain. A non-null provider requires `iam_credentials` in `extra_options_json`
