@@ -78,15 +78,13 @@ impl std::fmt::Display for SizeLimitExceeded {
 
 impl std::error::Error for SizeLimitExceeded {}
 
-impl From<SizeLimitExceeded> for redis::ClientError {
-    fn from(limit: SizeLimitExceeded) -> Self {
-        redis::ClientError::new("Decompression error", Some(limit.to_string()))
-    }
-}
-
 impl From<SizeLimitExceeded> for redis::RedisError {
     fn from(limit: SizeLimitExceeded) -> Self {
-        redis::ClientError::from(limit).into()
+        redis::RedisError::from((
+            redis::ErrorKind::IoError,
+            "Decompression error",
+            limit.to_string(),
+        ))
     }
 }
 

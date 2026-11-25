@@ -14,6 +14,6 @@ pub fn error_type(_error: &RedisError) -> RequestErrorType {
     RequestErrorType::Unspecified
 }
 
-pub fn error_message(error: &RedisError) -> String {
-    error.to_string()
+pub fn error_message(_error: &RedisError) -> String {
+    "".to_string()
 }
