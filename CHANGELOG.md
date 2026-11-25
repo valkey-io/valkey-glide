@@ -42,7 +42,6 @@
 
 ### Breaking Changes
 
-* Core/FFI, Go, Java, Python: pool acquire returns a per-borrow lease id; `glide_pool_get_client_ptr` is replaced by `glide_pool_lease_client` and `glide_pool_release_client_ref` ([#7863](https://github.com/valkey-io/valkey-glide/pull/7863))
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 * Python, Go: a whitespace-only client AZ is now rejected for AZ-affinity read strategies, like an empty one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))

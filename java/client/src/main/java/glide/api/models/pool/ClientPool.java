@@ -275,9 +275,11 @@ public class ClientPool implements AutoCloseable {
                             return GlideClient.fromPoolHandle(
                                     clientId, maxInflight, requestTimeoutMs, credentials, connectionRequestBytes);
                         });
-        // close() may have swept borrows before this one was published.
+        // close() may have swept borrows before this one was published, and may
+        // clear it before the remove below, so detach either way (idempotent).
         if (state.get() != RUNNING) {
-            if (borrows.remove(leaseId, client)) client.detachFromPool();
+            borrows.remove(leaseId, client);
+            client.detachFromPool();
             throw new ClosingException("Pool is closed");
         }
         return client;
