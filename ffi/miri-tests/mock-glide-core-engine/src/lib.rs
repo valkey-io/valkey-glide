@@ -88,6 +88,14 @@ impl Pipeline {
         self
     }
 
+    pub fn add_command_with_route(
+        &mut self,
+        _cmd: Cmd,
+        _route: cluster_routing::SingleNodeRoutingInfo,
+    ) -> &mut Self {
+        self
+    }
+
     pub fn set_pipeline_span(&mut self, _span: Option<GlideSpan>) {}
 
     pub fn span(&self) -> Option<GlideSpan> {

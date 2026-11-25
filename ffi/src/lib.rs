@@ -6694,6 +6694,11 @@ pub struct CmdInfo {
     pub args: *const *const u8,
     pub arg_count: usize,
     pub args_len: *const usize,
+    /// Optional route for this command alone; `null` for none. Only a non-atomic batch on a
+    /// cluster client honours it, and only a single-node route: a multi-node route fails the
+    /// batch, and so does a per-command route in an atomic batch or next to a batch-level route.
+    /// Borrowed: it must stay valid until [`batch`] returns.
+    pub route_info: *const RouteInfo,
 }
 
 #[repr(C)]
@@ -6985,6 +6990,8 @@ pub(crate) unsafe fn create_cmd(
 ///   They must be able to be safely casted to a valid to a slice of the corresponding type via [`from_raw_parts`]. See the safety documentation of [`from_raw_parts`].
 /// * Every pointer stored in `cmds` must not be `null` and must point to a valid [`CmdInfo`] structure.
 /// * All data in referred [`CmdInfo`] structure(s) should be valid. See the safety documentation of [`create_cmd`].
+/// * `route_info` in each [`CmdInfo`] could be `null`, but if it is not `null`, it must be a valid pointer to a
+///   [`RouteInfo`] struct. See the safety documentation of [`create_route`].
 pub(crate) unsafe fn create_pipeline(
     ptr: *const BatchInfo,
     compression_manager: Option<&std::sync::Arc<glide_core::compression::CompressionManager>>,
@@ -6993,9 +7000,19 @@ pub(crate) unsafe fn create_pipeline(
     let cmd_pointers = unsafe { from_raw_parts(info.cmds, info.cmd_count) };
     let mut pipeline = Pipeline::with_capacity(info.cmd_count);
     for (i, cmd_ptr) in cmd_pointers.iter().enumerate() {
-        match unsafe { create_cmd(*cmd_ptr, compression_manager) } {
-            Ok(cmd) => pipeline.add_command(cmd),
+        let cmd = match unsafe { create_cmd(*cmd_ptr, compression_manager) } {
+            Ok(cmd) => cmd,
             Err(err) => return Err(format!("Coudln't create {i:?}'th command: {err:?}")),
+        };
+        let route_info = unsafe { (**cmd_ptr).route_info };
+        match unsafe { create_route(route_info, Some(&cmd)) } {
+            None => pipeline.add_command(cmd),
+            Some(RoutingInfo::SingleNode(route)) => pipeline.add_command_with_route(cmd, route),
+            Some(RoutingInfo::MultiNode(_)) => {
+                return Err(format!(
+                    "Couldn't create {i:?}'th command: per-command routes support only single-node routes"
+                ));
+            }
         };
     }
     if info.is_atomic {
@@ -7003,6 +7020,118 @@ pub(crate) unsafe fn create_pipeline(
     }
 
     Ok(pipeline)
+}
+
+#[cfg(all(test, not(miri)))]
+mod tests_create_pipeline_routes {
+    use super::*;
+    use redis::cluster_routing::{Route, SlotAddr};
+
+    /// Builds a `CLUSTER MYID` command with `route` and converts a one-command batch.
+    fn pipeline_with_route(route: Option<&RouteInfo>, is_atomic: bool) -> Result<Pipeline, String> {
+        let args: [&[u8]; 2] = [b"CLUSTER", b"MYID"];
+        let arg_ptrs: Vec<*const u8> = args.iter().map(|a| a.as_ptr()).collect();
+        let arg_lens: Vec<usize> = args.iter().map(|a| a.len()).collect();
+        let cmd = CmdInfo {
+            request_type: RequestType::CustomCommand,
+            args: arg_ptrs.as_ptr(),
+            arg_count: args.len(),
+            args_len: arg_lens.as_ptr(),
+            route_info: route.map_or(std::ptr::null(), |r| r as *const RouteInfo),
+        };
+        let cmds = [&cmd as *const CmdInfo];
+        let batch = BatchInfo {
+            cmd_count: cmds.len(),
+            cmds: cmds.as_ptr(),
+            is_atomic,
+        };
+        unsafe { create_pipeline(&batch, None) }
+    }
+
+    fn route_info(route_type: RouteType) -> RouteInfo {
+        RouteInfo {
+            route_type,
+            slot_id: 0,
+            slot_key: std::ptr::null(),
+            slot_type: SlotType::Primary,
+            hostname: std::ptr::null(),
+            port: 0,
+        }
+    }
+
+    #[test]
+    fn null_route_adds_an_unrouted_command() {
+        let pipeline = pipeline_with_route(None, false).expect("pipeline");
+        assert!(!pipeline.has_command_routes());
+    }
+
+    #[test]
+    fn slot_key_route_is_kept_for_its_command() {
+        let key = CString::new("a").unwrap();
+        let route = RouteInfo {
+            slot_key: key.as_ptr(),
+            ..route_info(RouteType::SlotKey)
+        };
+        let pipeline = pipeline_with_route(Some(&route), false).expect("pipeline");
+        assert_eq!(
+            pipeline.command_route(0),
+            Some(&SingleNodeRoutingInfo::SpecificNode(Route::new(
+                redis::cluster_topology::get_slot(b"a"),
+                SlotAddr::Master
+            )))
+        );
+    }
+
+    #[test]
+    fn slot_id_random_and_address_routes_are_kept() {
+        let route = RouteInfo {
+            slot_id: 42,
+            slot_type: SlotType::Replica,
+            ..route_info(RouteType::SlotId)
+        };
+        let pipeline = pipeline_with_route(Some(&route), false).expect("pipeline");
+        assert_eq!(
+            pipeline.command_route(0),
+            Some(&SingleNodeRoutingInfo::SpecificNode(Route::new(
+                42,
+                SlotAddr::ReplicaRequired
+            )))
+        );
+
+        let pipeline =
+            pipeline_with_route(Some(&route_info(RouteType::Random)), false).expect("pipeline");
+        assert_eq!(
+            pipeline.command_route(0),
+            Some(&SingleNodeRoutingInfo::Random)
+        );
+
+        let host = CString::new("localhost").unwrap();
+        let route = RouteInfo {
+            hostname: host.as_ptr(),
+            port: 6379,
+            ..route_info(RouteType::ByAddress)
+        };
+        let pipeline = pipeline_with_route(Some(&route), false).expect("pipeline");
+        assert_eq!(
+            pipeline.command_route(0),
+            Some(&SingleNodeRoutingInfo::ByAddress {
+                host: "localhost".to_string(),
+                port: 6379
+            })
+        );
+    }
+
+    #[test]
+    fn multi_node_routes_are_rejected() {
+        for route_type in [RouteType::AllNodes, RouteType::AllPrimaries] {
+            let err = pipeline_with_route(Some(&route_info(route_type)), false)
+                .expect_err("multi-node per-command route");
+            assert!(
+                err.contains("per-command routes support only single-node routes"),
+                "{err}"
+            );
+        }
+    }
 }
 
 /// Convert [`BatchOptionsInfo`] to a tuple of corresponding values.
