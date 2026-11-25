@@ -583,6 +583,7 @@ class TestGlideClients:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.requires_tcp
     async def test_connection_timeout_on_unavailable_host(
         self,
         request,
@@ -732,6 +733,7 @@ class TestGlideClients:
         await anyio.sleep(1)
         await assert_connected(glide_client)
 
+    @pytest.mark.requires_tcp
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("ip_address", [IP_ADDRESS_V4, IP_ADDRESS_V6])
     async def test_connect_with_ip_address_succeeds(
@@ -13404,6 +13406,7 @@ class TestScripts:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.requires_tcp
     async def test_failover(self, glide_client: GlideClient):
         # Spin up a dedicated standalone with 1 replica so the failover
         # doesn't destabilize the shared test server.

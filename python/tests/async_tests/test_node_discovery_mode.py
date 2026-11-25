@@ -42,7 +42,7 @@ class TestStatic:
 
         client = await GlideClient.create(
             GlideClientConfiguration(
-                addresses=[NodeAddress(addr.host, addr.port)],
+                addresses=[addr],
                 use_tls=tls,
                 protocol=protocol,
                 request_timeout=2000,
@@ -71,7 +71,7 @@ class TestStatic:
 
         client = await GlideClient.create(
             GlideClientConfiguration(
-                addresses=[NodeAddress(addr.host, addr.port)],
+                addresses=[addr],
                 use_tls=tls,
                 protocol=protocol,
                 request_timeout=2000,
@@ -85,6 +85,7 @@ class TestStatic:
             await client.delete([key])
             await client.close()
 
+    @pytest.mark.requires_tcp
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_read_only_rejects_discover_replicas(
@@ -101,7 +102,7 @@ class TestStatic:
         with pytest.raises((ClosingError, Exception)) as exc_info:
             await GlideClient.create(
                 GlideClientConfiguration(
-                    addresses=[NodeAddress(addr.host, addr.port)],
+                    addresses=[addr],
                     use_tls=tls,
                     protocol=protocol,
                     request_timeout=2000,
@@ -117,6 +118,7 @@ class TestStatic:
 
 
 @pytest.mark.anyio
+@pytest.mark.requires_tcp
 class TestDiscoverAll:
     """Tests for DISCOVER_ALL mode using a dedicated cluster with 1 primary + 3 replicas."""
 
