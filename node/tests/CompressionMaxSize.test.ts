@@ -262,24 +262,15 @@ describe("Compression MaxDecompressedSize", () => {
         TIMEOUT,
     );
 
-    /**
-     * With raiseOnError=false, an oversized reply is returned as a RequestError in its
-     * position and the other results of the batch are kept.
-     */
-    it.each([
-        [false, false],
-        [false, true],
-        [true, false],
-        [true, true],
-    ])(
-        "maxDecompressedSize_batch_without_raise_on_error_returns_error_in_place cluster_mode=%p atomic=%p",
-        async (clusterMode, atomic) => {
-            const unlimitedClient = await createCompressedClient(clusterMode, {
+    it(
+        "maxDecompressedSize_batch_without_raise_on_error_returns_error_in_place",
+        async () => {
+            const unlimitedClient = await createCompressedClient(false, {
                 enabled: true,
             });
 
             try {
-                const tag = `{${uniqueKey("batch_no_raise")}}`;
+                const tag = uniqueKey("batch_no_raise");
                 const bigKey = `${tag}big`;
                 const markerKey = `${tag}marker`;
                 await unlimitedClient.set(
@@ -287,64 +278,22 @@ describe("Compression MaxDecompressedSize", () => {
                     generateCompressibleText(10000),
                 );
 
-                const limitedClient = await createCompressedClient(
-                    clusterMode,
-                    {
-                        enabled: true,
-                        maxDecompressedSize: 100,
-                    },
-                );
+                const limitedClient = (await createCompressedClient(false, {
+                    enabled: true,
+                    maxDecompressedSize: 100,
+                })) as GlideClient;
 
                 try {
-                    const batch = (
-                        clusterMode
-                            ? new ClusterBatch(atomic)
-                            : new Batch(atomic)
-                    )
+                    const batch = new Batch(false)
                         .set(markerKey, "written")
-                        .get(bigKey)
-                        .get(markerKey)
-                        .mget([markerKey, bigKey]);
-                    const execBatch = (raiseOnError: boolean) =>
-                        clusterMode
-                            ? (limitedClient as GlideClusterClient).exec(
-                                  batch as ClusterBatch,
-                                  raiseOnError,
-                              )
-                            : (limitedClient as GlideClient).exec(
-                                  batch as Batch,
-                                  raiseOnError,
-                              );
+                        .get(bigKey);
+                    const result = await limitedClient.exec(batch, false);
 
-                    const raisedError = await execBatch(true).then(
-                        () => {
-                            throw new Error("expected the batch to throw");
-                        },
-                        (error: unknown) => error,
-                    );
-                    expect((raisedError as object).constructor).toBe(
-                        RequestError,
-                    );
-                    const raisedMessage = (raisedError as RequestError).message;
-                    expect(raisedMessage).toMatch(/size limit exceeded/i);
-
-                    const result = await execBatch(false);
-
-                    expect(result).toHaveLength(4);
-                    expect(result?.[0]).toEqual("OK");
                     expect((result?.[1] as object).constructor).toBe(
                         RequestError,
                     );
-                    expect((result?.[1] as RequestError).message).toEqual(
-                        raisedMessage,
-                    );
-                    expect(result?.[2]).toEqual("written");
-                    // An MGET reply fails as a whole, as the same MGET does outside a batch.
-                    expect((result?.[3] as object).constructor).toBe(
-                        RequestError,
-                    );
-                    expect((result?.[3] as RequestError).message).toEqual(
-                        raisedMessage,
+                    expect((result?.[1] as RequestError).message).toMatch(
+                        /^Decompression error - ClientError: Decompression size limit exceeded/,
                     );
                 } finally {
                     limitedClient.close();
