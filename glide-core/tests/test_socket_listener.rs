@@ -49,6 +49,7 @@ mod socket_listener {
         ClosingError = 3,
     }
 
+    #[derive(Clone, Copy)]
     enum RedisType {
         Cluster,
         Standalone,
@@ -1672,9 +1673,9 @@ mod socket_listener {
         #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
         #[values(false, true)] is_atomic: bool,
     ) {
-        let mut socket = setup_compression_socket(use_cluster, false);
         let keys = SizeLimitKeys::new();
-        write_size_limit_keys(&mut socket, &keys);
+        write_size_limit_keys(&mut setup_compression_socket(use_cluster, true), &keys);
+        let mut socket = setup_compression_socket(use_cluster, false);
         let commands = vec![
             command(RequestType::Get, &[keys.oversized.as_bytes()]),
             command(
@@ -1685,15 +1686,28 @@ mod socket_listener {
 
         let values = batch_values(send_batch(&mut socket, 2, commands, is_atomic, false));
 
-        assert_eq!(
-            values,
-            vec![
-                Value::BulkString(oversized_value().into()),
-                Value::Array(vec![
-                    Value::BulkString(fitting_value().into()),
-                    Value::BulkString(oversized_value().into()),
-                ]),
-            ]
+        let [oversized, Value::Array(members)] = values.as_slice() else {
+            panic!("expected a GET reply and an MGET array, got {values:?}");
+        };
+        let [fits, oversized_member] = members.as_slice() else {
+            panic!("expected two MGET members, got {members:?}");
+        };
+        assert_stored_compressed(oversized, &oversized_value());
+        assert_stored_compressed(fits, &fitting_value());
+        assert_stored_compressed(oversized_member, &oversized_value());
+    }
+
+    /// The reply is the compressed bytes as stored: neither decompressed nor a size-limit error.
+    #[track_caller]
+    fn assert_stored_compressed(value: &Value, original: &[u8]) {
+        let Value::BulkString(stored) = value else {
+            panic!("expected the stored bytes, got {value:?}");
+        };
+        let backend_id = compression::CompressionBackendType::Zstd.backend_id();
+        assert!(
+            stored.starts_with(&compression::create_header(backend_id)),
+            "{value:?}"
         );
+        assert_ne!(&stored[..], original);
     }
 }

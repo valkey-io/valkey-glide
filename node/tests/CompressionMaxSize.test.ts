@@ -322,7 +322,9 @@ describe("Compression MaxDecompressedSize", () => {
                         },
                         (error: unknown) => error,
                     );
-                    expect(raisedError).toBeInstanceOf(RequestError);
+                    expect((raisedError as object).constructor).toBe(
+                        RequestError,
+                    );
                     const raisedMessage = (raisedError as RequestError).message;
                     expect(raisedMessage).toMatch(/size limit exceeded/i);
 
@@ -330,13 +332,17 @@ describe("Compression MaxDecompressedSize", () => {
 
                     expect(result).toHaveLength(4);
                     expect(result?.[0]).toEqual("OK");
-                    expect(result?.[1]).toBeInstanceOf(RequestError);
+                    expect((result?.[1] as object).constructor).toBe(
+                        RequestError,
+                    );
                     expect((result?.[1] as RequestError).message).toEqual(
                         raisedMessage,
                     );
                     expect(result?.[2]).toEqual("written");
                     // An MGET reply fails as a whole, as the same MGET does outside a batch.
-                    expect(result?.[3]).toBeInstanceOf(RequestError);
+                    expect((result?.[3] as object).constructor).toBe(
+                        RequestError,
+                    );
                     expect((result?.[3] as RequestError).message).toEqual(
                         raisedMessage,
                     );

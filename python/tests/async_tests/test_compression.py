@@ -126,6 +126,7 @@ async def raised_size_limit_message(
     """Returns the message of the error the size-limit batch raises with raise_on_error=True."""
     with pytest.raises(RequestError, match="size limit exceeded") as raised:
         await exec_size_limit_batch(client, is_atomic, big_key, marker_key, True)
+    assert type(raised.value) is RequestError
     return str(raised.value)
 
 
@@ -1944,12 +1945,12 @@ class TestCompressionMaxDecompressedSize:
                 assert results is not None
                 assert len(results) == 4
                 assert results[0] == OK
-                assert isinstance(results[1], RequestError)
+                assert type(results[1]) is RequestError
                 assert "size limit exceeded" in str(results[1])
                 assert str(results[1]) == raised_message
                 assert results[2] == b"written"
                 # An MGET reply fails as a whole, as the same MGET does outside a batch.
-                assert isinstance(results[3], RequestError)
+                assert type(results[3]) is RequestError
                 assert str(results[3]) == raised_message
             finally:
                 await limited_client.close()
