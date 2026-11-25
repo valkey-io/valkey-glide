@@ -32,6 +32,17 @@ pub trait PubSubSynchronizer: Send + Sync {
         address: String,
     );
 
+    /// Whether `channel` is already recorded as current on `address`. Lets the push
+    /// path skip `add_current_subscriptions` (and its write lock) for every message.
+    fn is_current_subscription(
+        &self,
+        _subscription_type: PubSubSubscriptionKind,
+        _channel: &[u8],
+        _address: &str,
+    ) -> bool {
+        false
+    }
+
     /// Remove channels from current (actual) subscriptions
     fn remove_current_subscriptions(
         &self,
