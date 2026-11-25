@@ -876,6 +876,7 @@ impl RoutingInfo {
         let cmd = &r.command()?[..];
 
         if cmd.eq_ignore_ascii_case(b"FT.CURSOR") || cmd.eq_ignore_ascii_case(b"FT.HYBRID") {
+            // FT.CURSOR: index name is arg 2 (arg 1 is READ/DEL), so FirstKey would hash the subcommand
             return r
                 .arg_idx(if cmd.eq_ignore_ascii_case(b"FT.CURSOR") {
                     2
