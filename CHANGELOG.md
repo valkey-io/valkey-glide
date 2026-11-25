@@ -10,7 +10,7 @@
 * Core, Python: Add support for Valkey 9.2 commands:
   * `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
 * Core: use atomics for telemetry instead of shared lock ([#7497](https://github.com/valkey-io/valkey-glide/pull/7497))
-* Core/FFI: a command in a non-atomic cluster batch can have its own single-node route, through `Pipeline::add_command_with_route` in the core and `CmdInfo.route_info` in the FFI ([#7697](https://github.com/valkey-io/valkey-glide/issues/7697))
+* Core, FFI: a command in a non-atomic cluster batch can have its own single-node route, through `Pipeline::add_command_with_route` in the core and `CmdInfo.route_info` in the FFI ([#7697](https://github.com/valkey-io/valkey-glide/issues/7697))
 
 ### Fixes
 
@@ -40,7 +40,7 @@
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 * Python, Go: a whitespace-only client AZ is now rejected for AZ-affinity read strategies, like an empty one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))
-* FFI: `CmdInfo` gains a `route_info` field (null for no route), so a binding that builds `CmdInfo` must add it ([#7697](https://github.com/valkey-io/valkey-glide/issues/7697))
+* FFI: `CmdInfo` gains a trailing `route_info` pointer (null for no route), so it grows from 32 to 40 bytes on 64-bit targets. A binding that builds `CmdInfo` must add the field and set it to null when it doesn't route the command: with the old layout the core reads past the end of each `CmdInfo`, and an uninitialised `route_info` (for example from an unzeroed allocation) is dereferenced as a route ([#7697](https://github.com/valkey-io/valkey-glide/issues/7697))
 
 ## 2.6
 

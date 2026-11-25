@@ -2370,18 +2370,11 @@ impl Client {
                     && self.is_pool_managed.load(Ordering::Acquire)
                     && Self::is_watch(cmd)
                 {
-                    // A WATCH with its own route goes to that route's node
-                    let command_routing = pipeline
-                        .command_route(index)
-                        .cloned()
-                        .map(RoutingInfo::SingleNode);
-                    let routing = command_routing.as_ref().or(routing.as_ref());
-                    let maybe_replica = matches!(
-                        routing,
-                        Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
-                    ) || Self::classify_watch(cmd, routing)
-                        == WatchTarget::MaybeReplica;
-                    if maybe_replica {
+                    if Self::batch_watch_maybe_replica(
+                        cmd,
+                        pipeline.command_route(index),
+                        routing.as_ref(),
+                    ) {
                         self.unresettable.store(true, Ordering::Release);
                     } else {
                         self.watch_routes
@@ -4033,6 +4026,22 @@ impl Client {
     }
 
     /// Where a WATCH will land, from the routing the cluster client would use for it.
+    /// Whether a WATCH in a non-atomic batch may reach a replica. A WATCH with its own
+    /// route goes to that route's node; otherwise the batch-level route applies. Unlike a
+    /// single command, a `Random` route is not narrowed to a primary.
+    fn batch_watch_maybe_replica(
+        cmd: &Cmd,
+        command_route: Option<&SingleNodeRoutingInfo>,
+        routing: Option<&RoutingInfo>,
+    ) -> bool {
+        let command_routing = command_route.cloned().map(RoutingInfo::SingleNode);
+        let watch_routing = command_routing.as_ref().or(routing);
+        matches!(
+            watch_routing,
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
+        ) || Self::classify_watch(cmd, watch_routing) == WatchTarget::MaybeReplica
+    }
+
     fn classify_watch(cmd: &Cmd, routing: Option<&RoutingInfo>) -> WatchTarget {
         use redis::cluster_routing::SlotAddr;
         let routes = match routing.cloned().or_else(|| RoutingInfo::for_routable(cmd)) {
@@ -5917,6 +5926,46 @@ mod tests {
 
     /// Repeated WATCHes on a slot keep one entry; a slot seen under a new owner, or
     /// an unknown target, falls back to every primary.
+    /// A WATCH's own route in a batch decides its target over the batch-level route (#7697).
+    #[test]
+    fn batch_watch_uses_the_command_route() {
+        use redis::cluster_routing::{Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr};
+        let watch = redis::cmd("WATCH").arg("k").clone();
+        let random = SingleNodeRoutingInfo::Random;
+        let by_address = SingleNodeRoutingInfo::ByAddress {
+            host: "127.0.0.1".to_string(),
+            port: 6379,
+        };
+        let primary = SingleNodeRoutingInfo::SpecificNode(Route::new(1, SlotAddr::Master));
+        let batch_random = RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random);
+
+        // No routes: the WATCH's key decides, and a key goes to its primary
+        assert!(!Client::batch_watch_maybe_replica(&watch, None, None));
+        // A Random or ByAddress command route may reach a replica
+        assert!(Client::batch_watch_maybe_replica(
+            &watch,
+            Some(&random),
+            None
+        ));
+        assert!(Client::batch_watch_maybe_replica(
+            &watch,
+            Some(&by_address),
+            None
+        ));
+        // A primary slot route is a primary, even when the batch-level route is Random
+        assert!(!Client::batch_watch_maybe_replica(
+            &watch,
+            Some(&primary),
+            Some(&batch_random)
+        ));
+        // Without a command route, the batch-level route applies
+        assert!(Client::batch_watch_maybe_replica(
+            &watch,
+            None,
+            Some(&batch_random)
+        ));
+    }
+
     #[test]
     fn watched_primaries_keeps_one_entry_per_slot() {
         use super::WatchedPrimaries;

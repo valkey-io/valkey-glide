@@ -65,9 +65,10 @@ impl Pipeline {
     }
 
     /// Adds a command that is sent to the node `route` selects, instead of the node its
-    /// keys or default routing would select. Used for non-atomic cluster pipelines; a
-    /// cluster pipeline that also has a pipeline-level route, or an atomic one, is rejected
-    /// before it is sent.
+    /// keys or default routing would select. Only a non-atomic pipeline on a cluster
+    /// connection uses the route, and only when the pipeline has no pipeline-level route,
+    /// which takes precedence. glide-core's `Client` rejects an atomic pipeline with routed
+    /// commands, and one that also has a pipeline-level route.
     #[cfg(feature = "cluster")]
     pub fn add_command_with_route(
         &mut self,

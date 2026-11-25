@@ -3224,6 +3224,9 @@ pub(crate) mod shared_client_tests {
             pipeline.add_command_with_route(myid.clone(), route_a);
             pipeline.add_command(cmd("GET").arg(&key).clone());
             pipeline.add_command_with_route(myid.clone(), by_address);
+            // A fan-out command and a randomly routed one next to the routed commands
+            pipeline.add_command(cmd("DBSIZE"));
+            pipeline.add_command_with_route(myid.clone(), SingleNodeRoutingInfo::Random);
 
             let result = client
                 .send_pipeline(
@@ -3236,17 +3239,81 @@ pub(crate) mod shared_client_tests {
                 .await
                 .expect("pipeline with per-command routes");
 
+            let Value::Array(values) = result else {
+                panic!("Pipeline result: {result:?}");
+            };
             assert_eq!(
-                result,
-                Value::Array(vec![
+                values[..5],
+                [
                     id_b,
                     Value::Okay,
                     id_a.clone(),
                     Value::BulkString(b"value".to_vec().into()),
                     id_a,
+                ],
+                "Pipeline result: {values:?}"
+            );
+            assert!(
+                matches!(values[5], Value::Int(n) if n >= 1),
+                "DBSIZE: {:?}",
+                values[5]
+            );
+            assert!(
+                matches!(values[6], Value::BulkString(_)),
+                "Random-routed CLUSTER MYID: {:?}",
+                values[6]
+            );
+            assert_eq!(values.len(), 7);
+        });
+    }
+
+    /// A standalone client ignores per-command routes in a non-atomic batch, as it ignores a
+    /// batch-level route, and rejects them in an atomic batch (#7697).
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_per_command_routes_standalone(#[values(false)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let client = &mut test_basics.client;
+
+            let mut pipeline = Pipeline::new();
+            pipeline.add_command_with_route(cmd("PING"), route_to_key(b"a"));
+            pipeline.add_command(cmd("PING"));
+
+            let result = client
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    true,
+                    Some(PIPELINE_TEST_TIMEOUT_MS),
+                    per_command_route_retry_strategy(),
+                )
+                .await
+                .expect("standalone pipeline with a per-command route");
+            assert_eq!(
+                result,
+                Value::Array(vec![
+                    Value::SimpleString("PONG".to_string()),
+                    Value::SimpleString("PONG".to_string()),
                 ]),
                 "Pipeline result: {result:?}"
             );
+
+            let mut atomic = pipeline.clone();
+            atomic.atomic();
+            let err = client
+                .send_transaction(&atomic, None, Some(PIPELINE_TEST_TIMEOUT_MS), true)
+                .await
+                .expect_err("atomic standalone batch with a per-command route");
+            assert_eq!(err.kind(), redis::ErrorKind::ClientError);
         });
     }
 

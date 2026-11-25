@@ -204,11 +204,8 @@ where
     let mut response_policies = HashMap::new();
 
     if let Some(route) = route {
-        // If we have a route, we will use it to route the commands to the given route, instead of finding the route for each command
-        debug_assert!(
-            !pipeline.has_command_routes(),
-            "a pipeline with per-command routes can't also have a pipeline-level route"
-        );
+        // If we have a route, we will use it to route the commands to the given route, instead of finding the route for each command.
+        // It takes precedence over per-command routes; glide-core's `Client` rejects a pipeline with both.
 
         let (addr, conn) = ClusterConnInner::get_connection(route, core, None)
             .await

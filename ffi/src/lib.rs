@@ -6694,10 +6694,15 @@ pub struct CmdInfo {
     pub args: *const *const u8,
     pub arg_count: usize,
     pub args_len: *const usize,
-    /// Optional route for this command alone; `null` for none. Only a non-atomic batch on a
-    /// cluster client honours it, and only a single-node route: a multi-node route fails the
-    /// batch, and so does a per-command route in an atomic batch or next to a batch-level route.
-    /// Borrowed: it must stay valid until [`batch`] returns.
+    /// Optional route for this command alone; `null` for none. Borrowed: it must stay valid until
+    /// [`batch`] returns.
+    ///
+    /// * A non-atomic batch on a cluster client sends the command to the route's node. A
+    ///   `Random` route may reuse a node another command in the batch already goes to.
+    /// * A non-atomic batch on a standalone client ignores it, as it ignores a batch-level route.
+    /// * The batch fails if the route is multi-node, if the batch is atomic, if the batch also has
+    ///   a batch-level route, or if the route's `slot_key` or `hostname` is not valid UTF-8 (use a
+    ///   `SlotId` route for a binary key).
     pub route_info: *const RouteInfo,
 }
 
@@ -6981,6 +6986,29 @@ pub(crate) unsafe fn create_cmd(
     Ok(cmd)
 }
 
+/// Checks that the string a per-command route uses is valid UTF-8, so [`create_route`], which
+/// unwraps the conversion, can't panic across the FFI boundary.
+///
+/// # Safety
+/// * `route_ptr` could be `null`, but if it is not `null`, it must be a valid pointer to a
+///   [`RouteInfo`] struct whose `slot_key` (for a `SlotKey` route) or `hostname` (for a
+///   `ByAddress` route) is `null` or a valid C string.
+unsafe fn check_route_strings(route_ptr: *const RouteInfo) -> Result<(), String> {
+    if route_ptr.is_null() {
+        return Ok(());
+    }
+    let route = unsafe { *route_ptr };
+    let (ptr, field) = match route.route_type {
+        RouteType::SlotKey => (route.slot_key, "slot_key"),
+        RouteType::ByAddress => (route.hostname, "hostname"),
+        _ => return Ok(()),
+    };
+    if !ptr.is_null() && unsafe { CStr::from_ptr(ptr) }.to_str().is_err() {
+        return Err(format!("the route's {field} is not valid UTF-8"));
+    }
+    Ok(())
+}
+
 /// Convert [`BatchInfo`] to a [`Pipeline`].
 ///
 /// # Safety
@@ -7005,12 +7033,16 @@ pub(crate) unsafe fn create_pipeline(
             Err(err) => return Err(format!("Coudln't create {i:?}'th command: {err:?}")),
         };
         let route_info = unsafe { (**cmd_ptr).route_info };
-        match unsafe { create_route(route_info, Some(&cmd)) } {
+        if let Err(err) = unsafe { check_route_strings(route_info) } {
+            return Err(format!("Invalid route for the {i:?}'th command: {err}"));
+        }
+        // No command: it only serves a multi-node route's response policy, and those are rejected
+        match unsafe { create_route(route_info, None) } {
             None => pipeline.add_command(cmd),
             Some(RoutingInfo::SingleNode(route)) => pipeline.add_command_with_route(cmd, route),
             Some(RoutingInfo::MultiNode(_)) => {
                 return Err(format!(
-                    "Couldn't create {i:?}'th command: per-command routes support only single-node routes"
+                    "Invalid route for the {i:?}'th command: per-command routes must be single-node routes"
                 ));
             }
         };
@@ -7028,7 +7060,7 @@ mod tests_create_pipeline_routes {
     use redis::cluster_routing::{Route, SlotAddr};
 
     /// Builds a `CLUSTER MYID` command with `route` and converts a one-command batch.
-    fn pipeline_with_route(route: Option<&RouteInfo>, is_atomic: bool) -> Result<Pipeline, String> {
+    fn pipeline_with_route(route: Option<&RouteInfo>) -> Result<Pipeline, String> {
         let args: [&[u8]; 2] = [b"CLUSTER", b"MYID"];
         let arg_ptrs: Vec<*const u8> = args.iter().map(|a| a.as_ptr()).collect();
         let arg_lens: Vec<usize> = args.iter().map(|a| a.len()).collect();
@@ -7043,7 +7075,7 @@ mod tests_create_pipeline_routes {
         let batch = BatchInfo {
             cmd_count: cmds.len(),
             cmds: cmds.as_ptr(),
-            is_atomic,
+            is_atomic: false,
         };
         unsafe { create_pipeline(&batch, None) }
     }
@@ -7061,7 +7093,7 @@ mod tests_create_pipeline_routes {
 
     #[test]
     fn null_route_adds_an_unrouted_command() {
-        let pipeline = pipeline_with_route(None, false).expect("pipeline");
+        let pipeline = pipeline_with_route(None).expect("pipeline");
         assert!(!pipeline.has_command_routes());
     }
 
@@ -7072,7 +7104,7 @@ mod tests_create_pipeline_routes {
             slot_key: key.as_ptr(),
             ..route_info(RouteType::SlotKey)
         };
-        let pipeline = pipeline_with_route(Some(&route), false).expect("pipeline");
+        let pipeline = pipeline_with_route(Some(&route)).expect("pipeline");
         assert_eq!(
             pipeline.command_route(0),
             Some(&SingleNodeRoutingInfo::SpecificNode(Route::new(
@@ -7089,7 +7121,7 @@ mod tests_create_pipeline_routes {
             slot_type: SlotType::Replica,
             ..route_info(RouteType::SlotId)
         };
-        let pipeline = pipeline_with_route(Some(&route), false).expect("pipeline");
+        let pipeline = pipeline_with_route(Some(&route)).expect("pipeline");
         assert_eq!(
             pipeline.command_route(0),
             Some(&SingleNodeRoutingInfo::SpecificNode(Route::new(
@@ -7098,8 +7130,7 @@ mod tests_create_pipeline_routes {
             )))
         );
 
-        let pipeline =
-            pipeline_with_route(Some(&route_info(RouteType::Random)), false).expect("pipeline");
+        let pipeline = pipeline_with_route(Some(&route_info(RouteType::Random))).expect("pipeline");
         assert_eq!(
             pipeline.command_route(0),
             Some(&SingleNodeRoutingInfo::Random)
@@ -7111,7 +7142,7 @@ mod tests_create_pipeline_routes {
             port: 6379,
             ..route_info(RouteType::ByAddress)
         };
-        let pipeline = pipeline_with_route(Some(&route), false).expect("pipeline");
+        let pipeline = pipeline_with_route(Some(&route)).expect("pipeline");
         assert_eq!(
             pipeline.command_route(0),
             Some(&SingleNodeRoutingInfo::ByAddress {
@@ -7122,12 +7153,31 @@ mod tests_create_pipeline_routes {
     }
 
     #[test]
+    fn non_utf8_route_strings_are_rejected_without_panicking() {
+        let bad = CString::new(vec![0xff, 0xfe]).unwrap();
+        for route in [
+            RouteInfo {
+                slot_key: bad.as_ptr(),
+                ..route_info(RouteType::SlotKey)
+            },
+            RouteInfo {
+                hostname: bad.as_ptr(),
+                port: 6379,
+                ..route_info(RouteType::ByAddress)
+            },
+        ] {
+            let err = pipeline_with_route(Some(&route)).expect_err("non-UTF-8 route string");
+            assert!(err.contains("is not valid UTF-8"), "{err}");
+        }
+    }
+
+    #[test]
     fn multi_node_routes_are_rejected() {
         for route_type in [RouteType::AllNodes, RouteType::AllPrimaries] {
-            let err = pipeline_with_route(Some(&route_info(route_type)), false)
+            let err = pipeline_with_route(Some(&route_info(route_type)))
                 .expect_err("multi-node per-command route");
             assert!(
-                err.contains("per-command routes support only single-node routes"),
+                err.contains("per-command routes must be single-node routes"),
                 "{err}"
             );
         }
