@@ -358,7 +358,7 @@ impl ClientPool {
     /// The caller is responsible for:
     /// 1. Calling `client.reset_connection_state(configured_db)` on the entry
     /// 2. Calling `return_to_idle(entry)` to put it back in the idle pool
-    ///    Or on failure, calling `discard_client(client_id)` to remove it for good.
+    ///    Or on failure, calling `discard_entry(entry)` to remove it for good.
     pub fn take_for_release(&mut self, client_id: u64) -> Option<PooledClient> {
         self.remove_in_use(client_id)
     }

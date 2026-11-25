@@ -599,34 +599,22 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
     };
 
     let mut pool = pool_arc.lock();
-    // A client whose release is mid-reset is in neither idle, in_use nor
-    // discarded_ids, so the id loop below cannot reach its scopes; the adapter
-    // map, whose entries record the owning pool, can.
-    let owned: Vec<usize> = get_pool_adapter_map()
+    // The adapter map records each client's owning pool, so it reaches every
+    // client of this pool: idle, borrowed, discarded but not yet drained, and
+    // one whose release is mid-reset (in none of the pool's collections).
+    let owned: Vec<(usize, u64)> = get_pool_adapter_map()
         .iter()
         .filter(|e| e.value().0 == pool_id)
-        .map(|e| *e.key())
+        .map(|e| (*e.key(), e.value().1))
         .collect();
-    for adapter_ptr in owned {
-        glide_core::scope::unregister_client(adapter_ptr as u64);
-    }
-    // Clean up POOL_CLIENTS entries for all clients owned by this pool
-    // (includes discarded clients that the abandon monitor removed from in_use)
-    let discarded = pool.drain_discarded_ids();
-    let client_ids: Vec<u64> = pool
-        .idle
-        .iter()
-        .map(|e| e.client_id)
-        .chain(pool.in_use.keys().copied())
-        .chain(discarded)
-        .collect();
+    pool.drain_discarded_ids();
     let mut adapters = Vec::new();
-    for cid in client_ids {
+    for (adapter_ptr, cid) in owned {
         glide_core::pool::unregister_blocking_flag(cid);
-        if let Some((_, entry)) = get_pool_clients().remove(&cid) {
-            get_pool_adapter_map().remove(&entry.adapter_ptr);
-            glide_core::scope::unregister_client(entry.adapter_ptr as u64);
-            adapters.push(entry.adapter_ptr);
+        get_pool_adapter_map().remove(&adapter_ptr);
+        glide_core::scope::unregister_client(adapter_ptr as u64);
+        if get_pool_clients().remove(&cid).is_some() {
+            adapters.push(adapter_ptr);
         }
     }
     ClientPool::destroy(pool);
@@ -1644,6 +1632,10 @@ mod pool_destroy_tests {
         assert!(
             scope::get_parent_client(adapter_ptr as u64).is_none(),
             "the scope parent of a client mid-release survived destroy"
+        );
+        assert!(
+            get_pool_clients().get(&client_id).is_none(),
+            "destroy kept the adapter of a client mid-release"
         );
         drop(blackhole);
     }

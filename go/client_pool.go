@@ -87,10 +87,7 @@ type PooledClient struct {
 // Safe to call multiple times (idempotent). After Close, commands on this
 // PooledClient, or on its embedded Client, fail with a ClosingError.
 func (pc *PooledClient) Close() {
-	pc.closeOnce.Do(func() {
-		pc.detach()
-		pc.pool.release(pc.leaseID)
-	})
+	pc.closeOnce.Do(func() { pc.pool.Release(pc.leaseID) })
 }
 
 // detach makes later commands fail as on a closed client, fails the ones in
@@ -266,28 +263,20 @@ func (p *ClientPool) AcquireWithTimeout(ctx context.Context, timeout time.Durati
 // Release returns a borrow to the pool by its lease id. Releasing a borrow
 // that has already ended does nothing.
 func (p *ClientPool) Release(leaseID int64) {
-	p.mu.Lock()
-	pooled := p.pooledCache[leaseID]
-	p.mu.Unlock()
-	if pooled != nil {
-		pooled.Close()
-		return
-	}
-	p.release(leaseID)
-}
-
-// release ends the lease under p.mu, which GetClient also holds, so GetClient
-// never wraps a lease that ends before the wrapper is cached.
-func (p *ClientPool) release(leaseID int64) {
+	// Under p.mu, which GetClient also holds: a borrow's wrapper is either
+	// cached and detached here, or never created for the ended lease.
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	delete(p.pooledCache, leaseID)
+	if pooled := p.pooledCache[leaseID]; pooled != nil {
+		delete(p.pooledCache, leaseID)
+		pooled.detach()
+	}
 	C.glide_pool_release(C.uint64_t(p.poolID), C.uint64_t(leaseID))
 }
 
 // GetClient returns the PooledClient of a current borrow, by its lease id.
-// Repeated calls for one borrow return the same wrapper; a borrow that has
-// ended returns a ClosingError.
+// Repeated calls for one borrow return the same wrapper. A released borrow
+// returns a ClosingError; a borrow the pool reclaimed fails on its next command.
 //
 // The pooled client uses synchronous command dispatch (not async callbacks).
 func (p *ClientPool) GetClient(leaseID int64) (*PooledClient, error) {

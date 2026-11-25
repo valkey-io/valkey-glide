@@ -214,7 +214,7 @@ class TestClientPool:
             pool.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])
-    def test_reclaimed_client_raises_closing_error(self, cluster_mode):
+    def test_abandon_reclaim_fences_the_borrower(self, cluster_mode):
         """A reclaimed borrow's client fails, also after the pool frees the
         connection's adapter (once a use-after-free)."""
         config = _get_pool_client_config(cluster_mode)

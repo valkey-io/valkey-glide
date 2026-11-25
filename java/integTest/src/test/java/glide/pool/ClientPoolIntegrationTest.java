@@ -1221,6 +1221,14 @@ public class ClientPoolIntegrationTest {
     }
 
     @Test
+    public void testDetachFromPoolIgnoresDirectClients() throws Exception {
+        try (GlideClient direct = (GlideClient) createOrdinaryClient(false)) {
+            direct.detachFromPool();
+            assertEquals("PONG", direct.ping().get(5, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
     public void testStaleReleaseLeavesTheNextBorrowAlone() throws Exception {
         try (ClientPool pool = ClientPool.create(singleClientPoolConfig())) {
             waitForPoolReady(pool, 1);

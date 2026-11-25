@@ -19,7 +19,7 @@
 * Python: avoid deprecation warning on legacy module introspection ([#7452](https://github.com/valkey-io/valkey-glide/pull/7452))
 * Core: keep timeout watchdog pending counts isolated from retired workers and losing singleton initialization candidates ([#7762](https://github.com/valkey-io/valkey-glide/pull/7762))
 * Core: prevent missed refresh completion notifications ([#7766](https://github.com/valkey-io/valkey-glide/pull/7766))
-* Core, Go, Java, Node, Python: A pooled-client handle works only for its own borrow. After release or abandon reclaim it fails with `ClosingError`, a second release no longer frees a later borrow, and a reclaimed connection closes. Java: a cancelled `acquire()` no longer leaks a slot ([#7545](https://github.com/valkey-io/valkey-glide/issues/7545))
+* Core, Go, Java, Node, Python: bind pooled-client handles to their borrow ([#7863](https://github.com/valkey-io/valkey-glide/pull/7863))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
 * Core, Python, Go: trim the client availability zone and reject a whitespace-only one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))
 * Core: release connections when a reconnecting client closes ([#7492](https://github.com/valkey-io/valkey-glide/pull/7492))
@@ -42,6 +42,7 @@
 
 ### Breaking Changes
 
+* Core/FFI, Go, Java, Python: pool acquire returns a per-borrow lease id; `glide_pool_get_client_ptr` is replaced by `glide_pool_lease_client` and `glide_pool_release_client_ref` ([#7863](https://github.com/valkey-io/valkey-glide/pull/7863))
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 * Python, Go: a whitespace-only client AZ is now rejected for AZ-affinity read strategies, like an empty one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))

@@ -216,10 +216,16 @@ public class ConnectionManager {
         }
     }
 
-    /** Stop using a pooled handle without closing it; see {@link #closeConnectionSync()}. */
-    public void detachFromPool() {
+    /**
+     * Stop using a pooled handle without closing it; see {@link #closeConnectionSync()}.
+     *
+     * @return {@code false}, and does nothing, for a client not borrowed from a pool
+     */
+    public boolean detachFromPool() {
+        if (!poolBorrowed) return false;
         isClosed = true;
         nativeClientHandle = 0;
+        return true;
     }
 
     /** Get the native client handle for use by CommandManager. */

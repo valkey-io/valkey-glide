@@ -970,9 +970,7 @@ impl Client {
                 client.update_connection_database(database_id).await?;
                 Ok(())
             }
-            ClientWrapper::Lazy(_) => {
-                unreachable!("Lazy client should have been initialized")
-            }
+            ClientWrapper::Lazy(_) => self.lazy_after_discard(),
         }
     }
 
@@ -1023,9 +1021,7 @@ impl Client {
                 client.update_connection_client_name(client_name).await?;
                 Ok(())
             }
-            ClientWrapper::Lazy(_) => {
-                unreachable!("Lazy client should have been initialized")
-            }
+            ClientWrapper::Lazy(_) => self.lazy_after_discard(),
         }
     }
 
@@ -1087,9 +1083,7 @@ impl Client {
             ClientWrapper::Cluster { client, .. } => {
                 client.update_connection_username(username).await?;
             }
-            ClientWrapper::Lazy(_) => {
-                unreachable!("Lazy client should have been initialized")
-            }
+            ClientWrapper::Lazy(_) => self.lazy_after_discard()?,
         }
         Ok(())
     }
@@ -1104,9 +1098,7 @@ impl Client {
             ClientWrapper::Cluster { client, .. } => {
                 client.update_connection_password(password).await?;
             }
-            ClientWrapper::Lazy(_) => {
-                unreachable!("Lazy client should have been initialized")
-            }
+            ClientWrapper::Lazy(_) => self.lazy_after_discard()?,
         }
         Ok(())
     }
@@ -1247,9 +1239,7 @@ impl Client {
                 client.update_connection_protocol(protocol).await?;
                 Ok(())
             }
-            ClientWrapper::Lazy(_) => {
-                unreachable!("Lazy client should have been initialized")
-            }
+            ClientWrapper::Lazy(_) => self.lazy_after_discard(),
         }
     }
 
@@ -1338,6 +1328,8 @@ impl Client {
         config.lazy_connect = false;
 
         let mut guard = self.internal_client.write().await;
+        // A discard while the config was copied leaves the placeholder here.
+        self.reject_if_pool_discarded()?;
         let iam_manager_ref = self.iam_token_manager.as_ref();
         if let ClientWrapper::Lazy(_) = &*guard {
             // Create the appropriate client based on configuration
@@ -1398,6 +1390,7 @@ impl Client {
 
         // Re-acquire for the return
         let guard = self.internal_client.read().await;
+        self.reject_if_pool_discarded()?;
         Ok(guard.clone()) // ✅ Return clone of the now-initialized wrapper
     }
 
@@ -4016,7 +4009,24 @@ impl Client {
             runtime.spawn(async move {
                 *internal_client.write().await = closed();
             });
+        } else {
+            // Outside a runtime (e.g. a binding thread destroying the pool);
+            // the lock is held only briefly by a send cloning the wrapper.
+            std::thread::spawn(move || {
+                futures::executor::block_on(async {
+                    *internal_client.write().await = closed();
+                });
+            });
         }
+    }
+
+    /// A `Lazy` wrapper seen after a command ran: the pool discarded the client
+    /// mid-command, and its connection is never reused, so skip the bookkeeping.
+    fn lazy_after_discard(&self) -> RedisResult<()> {
+        if self.pool_discarded.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        unreachable!("Lazy client should have been initialized")
     }
 
     fn reject_if_pool_discarded(&self) -> RedisResult<()> {
@@ -4567,6 +4577,22 @@ mod tests {
     use std::time::Duration;
 
     use redis::Cmd;
+
+    /// A command's reply can land after the pool discarded its client and
+    /// swapped in the placeholder; its bookkeeping must not panic.
+    #[test]
+    fn bookkeeping_after_discard_does_not_panic() {
+        let client = super::create_test_glide_client();
+        client.mark_pool_discarded();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            client.update_stored_database_id(3).await.unwrap();
+            client
+                .update_stored_client_name(Some("n".into()))
+                .await
+                .unwrap();
+        });
+    }
 
     use crate::client::types::{
         ConnectionRequest, ConnectionRetryStrategy, NodeAddress, OTelMetadata, ReadFrom, TlsMode,

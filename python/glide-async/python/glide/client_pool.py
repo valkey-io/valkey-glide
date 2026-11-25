@@ -141,9 +141,9 @@ class AsyncClientPool:
         self._pool_config = pool_config or PoolConfig()
         self._closed = False
         self._client_cache: dict = {}
-        # Request ids per pooled connection, shared by its borrows so a late
-        # reply to a released borrow never matches a later borrow's request.
-        self._callback_ids: dict = {}
+        # Request ids shared by every borrow, so a late reply to a released
+        # borrow never matches a later borrow's request on the same connection.
+        self._callback_ids = itertools.count(1)
         self._cache_lock = threading.Lock()
         self._is_cluster = isinstance(client_config, GlideClusterClientConfiguration)
 
@@ -312,9 +312,7 @@ class AsyncClientPool:
             client._pubsub_futures = []
             client._pubsub_lock = threading.Lock()
             client._pubsub_callback_ref = None
-            client._callback_id_gen = self._callback_ids.setdefault(
-                connection_id, itertools.count(1)
-            )
+            client._callback_id_gen = self._callback_ids
             client._lock = threading.Lock()
             client._core_client = self._ffi.cast("void*", adapter_ptr)
             client._conn_req_bytes = self._conn_req_bytes
@@ -369,7 +367,6 @@ class AsyncClientPool:
                 for client in self._client_cache.values():
                     _detach(client)
                 self._client_cache.clear()
-                self._callback_ids.clear()
             self._lib.glide_pool_destroy(self._pool_id)
 
     async def aclose(self):

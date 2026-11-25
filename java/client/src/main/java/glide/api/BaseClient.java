@@ -698,8 +698,7 @@ public abstract class BaseClient
      * fails later calls as a closed client does, while the pool lends its connection on.
      */
     public void detachFromPool() {
-        commandManager.detachFromPool();
-        connectionManager.detachFromPool();
+        if (connectionManager.detachFromPool()) commandManager.detachFromPool();
     }
 
     /** Check if the client is connected and ready for commands. */

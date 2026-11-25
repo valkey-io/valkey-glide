@@ -36,7 +36,7 @@ from glide_shared.exceptions import ClosingError
 
 from tests.utils.utils import check_if_server_version_lt
 from tests.utils.utils import get_standalone_address as _get_standalone_address
-from tests.utils.utils import require_cluster_addresses
+from tests.utils.utils import require_cluster_addresses, wait_for
 
 pytestmark = pytest.mark.asyncio
 
@@ -527,22 +527,23 @@ class TestAsyncClientPool:
             client = pool._get_or_create_client(lease)
             connection = await client.custom_command(["CLIENT", "ID"])
 
-            deadline = asyncio.get_event_loop().time() + 5
-            while pool.total_count > 0 and asyncio.get_event_loop().time() < deadline:
-                await asyncio.sleep(0.1)
-            assert pool.total_count == 0, "the abandon monitor reclaimed the borrow"
+            async def _reclaimed():
+                return pool.total_count == 0
 
+            await wait_for(
+                _reclaimed, "the abandon monitor never reclaimed the borrow", 5
+            )
             with pytest.raises(ClosingError):
                 await client.ping()
-            listed = await observer.custom_command(
-                ["CLIENT", "LIST", "ID", str(connection)]
-            )
-            while listed and asyncio.get_event_loop().time() < deadline:
-                await asyncio.sleep(0.1)
-                listed = await observer.custom_command(
+
+            async def _connection_closed():
+                return not await observer.custom_command(
                     ["CLIENT", "LIST", "ID", str(connection)]
                 )
-            assert not listed, f"the reclaimed connection is still open: {listed!r}"
+
+            await wait_for(
+                _connection_closed, "the reclaimed connection is still open", 5
+            )
             pool.release(lease)
         finally:
             await observer.close()

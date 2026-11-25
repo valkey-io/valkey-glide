@@ -184,22 +184,22 @@ public class ClientPool implements AutoCloseable {
                                     throw new RuntimeException(new ClosingException("Pool is closed"));
                                 }
 
-                                long clientId = GlidePoolResolver.glidePoolTryAcquire(poolId);
-                                if (clientId >= 0) {
+                                long leaseId = GlidePoolResolver.glidePoolTryAcquire(poolId);
+                                if (leaseId >= 0) {
                                     // test_on_borrow: PING to verify connection health
                                     if (config.isTestOnBorrow()) {
                                         try {
-                                            GlideClient client = getClient(clientId);
+                                            GlideClient client = getClient(leaseId);
                                             client.ping().get(2, java.util.concurrent.TimeUnit.SECONDS);
                                         } catch (Exception e) {
                                             // Dead connection — release and retry
-                                            release(clientId);
+                                            release(leaseId);
                                             continue;
                                         }
                                     }
-                                    return new PooledGlideClient(getClient(clientId), ClientPool.this, clientId);
+                                    return new PooledGlideClient(getClient(leaseId), ClientPool.this, leaseId);
                                 }
-                                if (clientId == -2) throw new RuntimeException("Pool was destroyed");
+                                if (leaseId == -2) throw new RuntimeException("Pool was destroyed");
 
                                 long remainingMs = (deadlineNanos - System.nanoTime()) / 1_000_000;
                                 long sleepMs = Math.min(backoffMs, Math.max(remainingMs, 0));
@@ -231,12 +231,12 @@ public class ClientPool implements AutoCloseable {
     /**
      * Get the GlideClient of a current borrow, by the lease id from {@link
      * PooledGlideClient#getClientId()}. Each borrow has its own client, which fails with {@link
-     * ClosingException} once the borrow is released.
+     * ClosingException} once the borrow is released or the pool reclaims it.
      *
      * <p><b>Important:</b> Do NOT call {@code close()} on the returned client. The pool manages the
      * client's lifecycle. Call {@link #release(long)} instead to return the client to the pool.
      *
-     * @throws ClosingException if the borrow has ended
+     * @throws ClosingException if the borrow was released or the pool is closed
      */
     public GlideClient getClient(long leaseId) {
         GlideClient borrowed = borrows.get(leaseId);
@@ -264,16 +264,23 @@ public class ClientPool implements AutoCloseable {
         ServerCredentials credentials = config.getClientConfig().getCredentials();
         // Keyed on the lease, so this and release() run one at a time per borrow: the lookup
         // either sees the lease current and the release detaches the client, or sees it ended.
-        return borrows.computeIfAbsent(
-                leaseId,
-                id -> {
-                    long clientId = GlidePoolResolver.glidePoolLeaseClient(poolId, id);
-                    if (clientId < 0) {
-                        throw new ClosingException("Pooled client was returned to the pool");
-                    }
-                    return GlideClient.fromPoolHandle(
-                            clientId, maxInflight, requestTimeoutMs, credentials, connectionRequestBytes);
-                });
+        GlideClient client =
+                borrows.computeIfAbsent(
+                        leaseId,
+                        id -> {
+                            long clientId = GlidePoolResolver.glidePoolLeaseClient(poolId, id);
+                            if (clientId < 0) {
+                                throw new ClosingException("Pooled client was returned to the pool");
+                            }
+                            return GlideClient.fromPoolHandle(
+                                    clientId, maxInflight, requestTimeoutMs, credentials, connectionRequestBytes);
+                        });
+        // close() may have swept borrows before this one was published.
+        if (state.get() != RUNNING) {
+            if (borrows.remove(leaseId, client)) client.detachFromPool();
+            throw new ClosingException("Pool is closed");
+        }
+        return client;
     }
 
     /**
