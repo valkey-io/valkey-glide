@@ -14,7 +14,7 @@
 #                       e.g. "--emulate-release 1.3.0". Empty by default. Use the bare
 #                       config name (emulate-release), not search.emulate-release.
 #   SCRATCH_DIR         Directory for the generated .conf files (default
-#                       .module-ci-local-scratch next to the repository root). On macOS,
+#                       .module-ci-local-scratch in the repository root). On macOS,
 #                       keep it under $HOME so Docker Desktop can bind-mount it.
 #
 # Output: exports MODULES_STANDALONE_ENDPOINT and MODULES_CLUSTER_ENDPOINTS to GITHUB_ENV
