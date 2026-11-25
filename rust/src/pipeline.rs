@@ -142,126 +142,12 @@ pub(crate) async fn dispatch_pipeline(
             .await
     };
 
-    pipeline_reply_to_value(reply)
-}
-
-/// Converts a batch reply from glide-core, keeping each command's error in its own slot.
-fn pipeline_reply_to_value(reply: redis::RedisResult<redis::Value>) -> ValkeyResult<ValkeyValue> {
     ValkeyValue::from_redis(reply.map_err(GlideError::from_redis_error)?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::value::{FromValkeyValue, ValkeyClientError};
-    use glide_core::compression::zstd_backend::ZstdBackend;
-    use glide_core::compression::{
-        CompressionBackendType, CompressionConfig, CompressionManager, decompress_batch_response,
-    };
-    use redis::Value;
-
-    const OVERSIZED_LENGTH: usize = 200;
-
-    fn size_limited_manager() -> CompressionManager {
-        let config = CompressionConfig::new(CompressionBackendType::Zstd)
-            .with_min_compression_size(64)
-            .with_max_decompressed_size(Some(100));
-        CompressionManager::new(Box::new(ZstdBackend::new()), config).unwrap()
-    }
-
-    fn compressed(manager: &CompressionManager, length: usize) -> Value {
-        let original = vec![b'A'; length];
-        Value::BulkString(manager.compress_value(&original).into_owned().into())
-    }
-
-    fn wrong_type_reply() -> Value {
-        redis::parse_redis_value(b"-WRONGTYPE Operation against a key\r\n").unwrap()
-    }
-
-    /// A batch of SET, an oversized GET, an MGET with one oversized member, a plain GET,
-    /// and a failed INCR, as glide-core receives it from the server.
-    fn batch_with_oversized_replies(manager: &CompressionManager) -> Value {
-        Value::Array(vec![
-            Value::Okay,
-            compressed(manager, OVERSIZED_LENGTH),
-            Value::Array(vec![
-                compressed(manager, 80),
-                compressed(manager, OVERSIZED_LENGTH),
-            ]),
-            Value::BulkString("plain".into()),
-            wrong_type_reply(),
-        ])
-    }
-
-    fn pipeline_reply(raise_on_error: bool) -> ValkeyResult<ValkeyValue> {
-        let manager = size_limited_manager();
-        let reply = decompress_batch_response(
-            batch_with_oversized_replies(&manager),
-            &manager,
-            raise_on_error,
-        )
-        .map_err(redis::RedisError::from);
-        pipeline_reply_to_value(reply)
-    }
-
-    #[track_caller]
-    fn assert_size_limit_error(error: &ValkeyClientError) {
-        assert_eq!(error.description(), "Decompression error");
-        let detail = error.details().expect("the size-limit detail");
-        assert!(
-            detail.starts_with("Decompression size limit exceeded"),
-            "{detail}"
-        );
-        assert!(detail.contains("maxDecompressedSize"), "{detail}");
-    }
-
-    #[test]
-    fn oversized_replies_without_raise_on_error_are_client_errors_in_their_slots() {
-        let ValkeyValue::Array(slots) = pipeline_reply(false).unwrap() else {
-            panic!("expected one slot per command");
-        };
-        assert_eq!(slots.len(), 5);
-        assert_eq!(slots[0], ValkeyValue::Okay);
-        for oversized in [&slots[1], &slots[2]] {
-            let ValkeyValue::ClientError(error) = oversized else {
-                panic!("expected a client error in place, got {oversized:?}");
-            };
-            assert_size_limit_error(error);
-        }
-        assert_eq!(slots[3], ValkeyValue::BulkString("plain".into()));
-        let ValkeyValue::ServerError(server_error) = &slots[4] else {
-            panic!("expected the server error in place, got {:?}", slots[4]);
-        };
-        assert_eq!(server_error.err_code(), "WRONGTYPE");
-    }
-
-    #[test]
-    fn oversized_reply_slot_decodes_to_a_request_error() {
-        let ValkeyValue::Array(mut slots) = pipeline_reply(false).unwrap() else {
-            panic!("expected one slot per command");
-        };
-        let error = String::from_owned_valkey_value(slots.swap_remove(1)).unwrap_err();
-        assert!(matches!(error, GlideError::Request(_)), "{error:?}");
-        assert!(error.message().contains("maxDecompressedSize"), "{error}");
-    }
-
-    #[test]
-    fn oversized_reply_with_raise_on_error_fails_with_the_same_client_error() {
-        let ValkeyValue::Array(slots) = pipeline_reply(false).unwrap() else {
-            panic!("expected one slot per command");
-        };
-        let ValkeyValue::ClientError(in_place) = &slots[1] else {
-            panic!("expected a client error in place, got {:?}", slots[1]);
-        };
-
-        let error = pipeline_reply(true).unwrap_err();
-        assert!(matches!(error, GlideError::Request(_)), "{error:?}");
-        assert!(error.message().contains(in_place.description()), "{error}");
-        assert!(
-            error.message().contains(in_place.details().unwrap()),
-            "{error}"
-        );
-    }
 
     #[test]
     fn get_packed_pipeline_matches_redis() {

@@ -36,8 +36,8 @@
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 * Python, Go: a whitespace-only client AZ is now rejected for AZ-affinity read strategies, like an empty one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))
-* Core, Go, Java, Node, Python, Rust: a reply over `maxDecompressedSize` is a client error, not a server reply. Its message starts with `Decompression error - ClientError:` instead of `Decompression error - IoError:`. The error type is unchanged ([#7601](https://github.com/valkey-io/valkey-glide/issues/7601))
-* Core, Rust: `redis::Value` and `ValkeyValue` gain a `ClientError` variant, which breaks exhaustive `match`es ([#7601](https://github.com/valkey-io/valkey-glide/issues/7601))
+* Core, Go, Java, Node, Python: a reply over `maxDecompressedSize` in a batch slot is a client error, not a server reply. Its message starts with `Decompression error - ClientError:` instead of `Decompression error - IoError:`. The error type is unchanged ([#7601](https://github.com/valkey-io/valkey-glide/issues/7601))
+* Core: `redis::Value` gains a `ClientError` variant, which breaks exhaustive `match`es ([#7601](https://github.com/valkey-io/valkey-glide/issues/7601))
 
 ## 2.6
 
