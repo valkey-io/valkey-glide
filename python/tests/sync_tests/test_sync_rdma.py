@@ -40,7 +40,7 @@ from glide_shared.exceptions import (
 )
 from glide_sync import GlideClient, RdmaRegion, RdmaWindow
 from glide_sync import glide_client as glide_client_module
-from glide_sync.glide_client import _RETAINED_RDMA_MEMORY
+from glide_sync.glide_client import _RETAINED_RDMA_MEMORY, _CudaMemory
 
 # Taken before the `gpu_contexts` fixture replaces it, for the tests of it.
 _REAL_GPU_CONTEXT = glide_client_module._gpu_context
@@ -1349,11 +1349,13 @@ def test_a_gpu_region_has_no_host_view():
     [
         pytest.param({"address": 0x7F00_0000_1000}, id="moved"),
         pytest.param({"shape": (4, 128)}, id="resized"),
+        pytest.param({"strides": (4, 16)}, id="relaid"),
+        pytest.param({"device": (2, 1)}, id="other-gpu"),
     ],
 )
 def test_gpu_memory_whose_range_changed_is_refused_before_the_ffi(change):
-    # A tensor can move or change size after registration, which the fabric
-    # cannot see: it would keep transferring the range it registered.
+    # A tensor can move, change size or change layout after registration, which
+    # the fabric cannot see: it would keep transferring the range it registered.
     client = _offline_client()
     client._core_client = object()
     memory = _FakeCudaArray()
@@ -1361,7 +1363,7 @@ def test_gpu_memory_whose_range_changed_is_refused_before_the_ffi(change):
     registered = dict(vars(memory))
 
     vars(memory).update(change)
-    with pytest.raises(RdmaError, match="has moved or been resized"):
+    with pytest.raises(RdmaError, match="has moved, been resized, or changed layout"):
         client.rdma_get(b"key", region.window(0, 8))
     assert client._lib.sets == [], "refused before the FFI"
     assert region.closed is False
@@ -1379,7 +1381,8 @@ def test_gpu_memory_still_held_is_refused_for_a_new_region():
     raw = _FakeRegion()
     hold = {"released": False}
     client._lib.holds[id(raw)] = hold
-    RdmaRegion(client, memory, raw, (memory.address, memory.address + 4096)).close()
+    cuda_memory = _CudaMemory(memory.address, memory.address + 4096, 0)
+    RdmaRegion(client, memory, raw, cuda_memory).close()
     try:
         with pytest.raises(RdmaError, match="could still write into it"):
             client.register_rdma_region(_FakeCudaArray(address=memory.address + 8))

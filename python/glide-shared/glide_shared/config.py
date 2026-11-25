@@ -416,10 +416,11 @@ class RdmaConfiguration:
             than one card. If not set, the first domain the provider returns is
             used.
         device_memory (bool): Open the fabric so it can also register GPU
-            memory, such as a CUDA ``torch.Tensor``. Needs a provider offering
-            it, as ``RdmaProvider.EfaDirect()`` does on a GPU host whose
-            libfabric was built with CUDA; creating the client fails otherwise.
-            Defaults to False.
+            memory, such as a CUDA ``torch.Tensor``. This applies to whichever
+            provider the fabric opens, and that provider must offer GPU memory
+            on this host: efa-direct does on a GPU host whose libfabric was
+            built with CUDA, and tcp does where libfabric finds a GPU runtime.
+            Creating the client fails otherwise. Defaults to False.
 
     Example::
 
