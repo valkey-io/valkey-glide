@@ -2229,6 +2229,13 @@ impl Client {
         raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            // An atomic batch runs on one node, so its commands can't have their own routes
+            if pipeline.has_command_routes() {
+                return Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "per-command routes are not supported in atomic batches",
+                )));
+            }
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             // Before the tracking below, so a rejected batch leaves no state.
             for cmd in pipeline.cmd_iter() {
@@ -2333,6 +2340,14 @@ impl Client {
         pipeline_retry_strategy: PipelineRetryStrategy,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            // A batch-level route sends every command to one node, which per-command routes
+            // would contradict
+            if routing.is_some() && pipeline.has_command_routes() {
+                return Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "a batch can't have both a batch-level route and per-command routes",
+                )));
+            }
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             // Before the tracking below, so a rejected batch leaves no state.
             for cmd in pipeline.cmd_iter() {
@@ -2345,7 +2360,7 @@ impl Client {
             // earlier (as a command or in a batch) and not yet closed must queue this
             // batch, so it also pins this batch to the primary.
             let multi_open = self.multi_active.load(Ordering::Acquire);
-            for cmd in pipeline.cmd_iter() {
+            for (index, cmd) in pipeline.cmd_iter().enumerate() {
                 self.track_transaction_state(cmd);
                 self.track_unresettable(cmd);
                 // A batch may split across nodes, so its WATCH target is unknown,
@@ -2355,10 +2370,16 @@ impl Client {
                     && self.is_pool_managed.load(Ordering::Acquire)
                     && Self::is_watch(cmd)
                 {
+                    // A WATCH with its own route goes to that route's node
+                    let command_routing = pipeline
+                        .command_route(index)
+                        .cloned()
+                        .map(RoutingInfo::SingleNode);
+                    let routing = command_routing.as_ref().or(routing.as_ref());
                     let maybe_replica = matches!(
                         routing,
                         Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
-                    ) || Self::classify_watch(cmd, routing.as_ref())
+                    ) || Self::classify_watch(cmd, routing)
                         == WatchTarget::MaybeReplica;
                     if maybe_replica {
                         self.unresettable.store(true, Ordering::Release);

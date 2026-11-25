@@ -3147,6 +3147,163 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    fn route_to_key(key: &[u8]) -> SingleNodeRoutingInfo {
+        SingleNodeRoutingInfo::SpecificNode(Route::new(get_slot(key), SlotAddr::Master))
+    }
+
+    fn per_command_route_retry_strategy() -> PipelineRetryStrategy {
+        PipelineRetryStrategy {
+            retry_server_error: false,
+            retry_connection_error: false,
+        }
+    }
+
+    /// A non-atomic cluster batch sends a command added with its own route to that route's
+    /// node, and every other command where its keys send it, replying in order (#7697).
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_per_command_routes(#[values(true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let client = &mut test_basics.client;
+
+            // "a" (slot 15495) and "b" (slot 3300) are on different primaries in the
+            // three-shard test cluster
+            let route_a = route_to_key(b"a");
+            let route_b = route_to_key(b"b");
+            let mut myid = cmd("CLUSTER");
+            myid.arg("MYID");
+            let id_a = client
+                .send_command(
+                    &mut myid.clone(),
+                    Some(RoutingInfo::SingleNode(route_a.clone())),
+                )
+                .await
+                .expect("CLUSTER MYID to a's node");
+            let id_b = client
+                .send_command(
+                    &mut myid.clone(),
+                    Some(RoutingInfo::SingleNode(route_b.clone())),
+                )
+                .await
+                .expect("CLUSTER MYID to b's node");
+            assert_ne!(id_a, id_b, "a and b should be on different primaries");
+
+            // The address of a's node, for a ByAddress route
+            let mut nodes = cmd("CLUSTER");
+            nodes.arg("NODES");
+            let nodes = client
+                .send_command(&mut nodes, Some(RoutingInfo::SingleNode(route_a.clone())))
+                .await
+                .expect("CLUSTER NODES");
+            let nodes = String::from_redis_value(&nodes).expect("CLUSTER NODES text");
+            let address = nodes
+                .lines()
+                .find(|line| line.contains("myself"))
+                .and_then(|line| line.split(' ').nth(1))
+                .and_then(|address| address.split('@').next())
+                .expect("address of a's node");
+            let (host, port) = address.rsplit_once(':').expect("host:port");
+            let by_address = SingleNodeRoutingInfo::ByAddress {
+                host: host.to_string(),
+                port: port.parse().expect("port"),
+            };
+
+            let key = generate_random_string(10);
+            let mut pipeline = Pipeline::new();
+            pipeline.add_command_with_route(myid.clone(), route_b);
+            pipeline.add_command(cmd("SET").arg(&key).arg("value").clone());
+            pipeline.add_command_with_route(myid.clone(), route_a);
+            pipeline.add_command(cmd("GET").arg(&key).clone());
+            pipeline.add_command_with_route(myid.clone(), by_address);
+
+            let result = client
+                .send_pipeline(
+                    &pipeline,
+                    None,
+                    true,
+                    Some(PIPELINE_TEST_TIMEOUT_MS),
+                    per_command_route_retry_strategy(),
+                )
+                .await
+                .expect("pipeline with per-command routes");
+
+            assert_eq!(
+                result,
+                Value::Array(vec![
+                    id_b,
+                    Value::Okay,
+                    id_a.clone(),
+                    Value::BulkString(b"value".to_vec().into()),
+                    id_a,
+                ]),
+                "Pipeline result: {result:?}"
+            );
+        });
+    }
+
+    /// Per-command routes are rejected in an atomic batch and next to a batch-level route
+    /// (#7697).
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_pipeline_per_command_route_errors(#[values(true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let client = &mut test_basics.client;
+
+            let mut myid = cmd("CLUSTER");
+            myid.arg("MYID");
+            let mut pipeline = Pipeline::new();
+            pipeline.add_command_with_route(myid, route_to_key(b"a"));
+
+            let mut atomic = pipeline.clone();
+            atomic.atomic();
+            let err = client
+                .send_transaction(&atomic, None, Some(PIPELINE_TEST_TIMEOUT_MS), true)
+                .await
+                .expect_err("atomic batch with a per-command route");
+            assert_eq!(err.kind(), redis::ErrorKind::ClientError);
+            assert!(
+                err.to_string()
+                    .contains("per-command routes are not supported in atomic batches"),
+                "{err}"
+            );
+
+            let err = client
+                .send_pipeline(
+                    &pipeline,
+                    Some(RoutingInfo::SingleNode(route_to_key(b"b"))),
+                    true,
+                    Some(PIPELINE_TEST_TIMEOUT_MS),
+                    per_command_route_retry_strategy(),
+                )
+                .await
+                .expect_err("batch-level route with a per-command route");
+            assert_eq!(err.kind(), redis::ErrorKind::ClientError);
+            assert!(
+                err.to_string()
+                    .contains("a batch can't have both a batch-level route and per-command routes"),
+                "{err}"
+            );
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
