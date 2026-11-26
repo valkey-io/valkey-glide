@@ -53,6 +53,12 @@ pub struct Cmd {
     span: Option<GlideSpan>,
     //  A flag indicating whether this is a fenced command  (will have PING appended to ensure ordering)
     is_fenced: bool,
+    /// Whether `ASKING` is packed before the command, in the same write. The node honours
+    /// `ASKING` only for the next command it reads from the connection, so on a shared
+    /// connection it must not be a request of its own. Only `MultiplexedConnection` reads
+    /// (and discards) the extra reply; set it only for commands sent there, never in a
+    /// pipeline.
+    asking: bool,
     /// Whether this is a blocking command (e.g. XREAD BLOCK, BLPOP). When true,
     /// the response-wait warning in the multiplexed connection is suppressed for
     /// waits that are within the blocking window, because long waits are expected
@@ -86,6 +92,7 @@ impl Clone for Cmd {
             no_response: self.no_response,
             span: self.span.clone(),
             is_fenced: self.is_fenced,
+            asking: self.asking,
             is_blocking: self.is_blocking,
             response_timeout: self.response_timeout,
             #[cfg(feature = "cluster-async")]
@@ -99,6 +106,9 @@ impl Clone for Cmd {
 
 /// The PING command used to fence other commands for ordering guarantees
 const FENCE_COMMAND: &[u8] = b"*1\r\n$4\r\nPING\r\n";
+
+/// The `ASKING` command packed before a command that has the `asking` flag.
+const ASKING_COMMAND: &[u8] = b"*1\r\n$6\r\nASKING\r\n";
 
 /// Represents a redis iterator.
 pub struct Iter<'a, T: FromRedisValue> {
@@ -285,6 +295,11 @@ where
 pub(crate) fn cmd_len(cmd: &impl Borrow<Cmd>) -> usize {
     let cmd_ref: &Cmd = cmd.borrow();
     args_len(cmd_ref.args_iter(), cmd_ref.cursor.unwrap_or(0))
+        + if cmd_ref.asking {
+            ASKING_COMMAND.len()
+        } else {
+            0
+        }
 }
 
 /// Returns the key type if the command is a cacheable full-key-retrieval command.
@@ -534,6 +549,7 @@ impl Cmd {
             no_response: false,
             span: None,
             is_fenced: false,
+            asking: false,
             is_blocking: false,
             response_timeout: None,
             #[cfg(feature = "cluster-async")]
@@ -552,6 +568,7 @@ impl Cmd {
             no_response: false,
             span: None,
             is_fenced: false,
+            asking: false,
             is_blocking: false,
             response_timeout: None,
             #[cfg(feature = "cluster-async")]
@@ -672,6 +689,10 @@ impl Cmd {
     pub(crate) fn write_packed_segments(&self, out: &mut SegmentedBytes, scratch: &mut Vec<u8>) {
         let mut int_buf = ::itoa::Buffer::new();
 
+        if self.asking {
+            scratch.extend_from_slice(ASKING_COMMAND);
+        }
+
         // Reserve for everything that lands in scratch: all inline payloads
         // (self.data) plus per-arg framing. Without this, large inline args
         // pay repeated Vec-growth reallocs (the contiguous packer reserves
@@ -731,6 +752,9 @@ impl Cmd {
     }
 
     pub(crate) fn write_packed_command(&self, cmd: &mut Vec<u8>) {
+        if self.asking {
+            cmd.extend_from_slice(ASKING_COMMAND);
+        }
         write_command_to_vec(
             cmd,
             self.args_iter(),
@@ -740,6 +764,9 @@ impl Cmd {
     }
 
     pub(crate) fn write_packed_command_preallocated(&self, cmd: &mut Vec<u8>) {
+        if self.asking {
+            cmd.extend_from_slice(ASKING_COMMAND);
+        }
         write_command(
             cmd,
             self.args_iter(),
@@ -949,6 +976,22 @@ impl Cmd {
     #[inline]
     pub fn is_fenced(&self) -> bool {
         self.is_fenced
+    }
+
+    /// Pack `ASKING` before this command, in the same write. The reply to `ASKING` comes
+    /// first, and `MultiplexedConnection` discards it; see the `asking` field.
+    #[cfg(feature = "aio")]
+    #[inline]
+    pub(crate) fn set_asking(&mut self, asking: bool) -> &mut Cmd {
+        self.asking = asking;
+        self
+    }
+
+    /// Whether `ASKING` is packed before this command.
+    #[cfg(feature = "aio")]
+    #[inline]
+    pub(crate) fn is_asking(&self) -> bool {
+        self.asking
     }
 
     /// Mark this command as blocking (e.g. XREAD BLOCK, BLPOP). Blocking
@@ -1252,6 +1295,63 @@ mod tests {
                     pl.get_packed_pipeline_segments().to_contiguous(),
                     pl.get_packed_pipeline(),
                     "segmented pipeline packing must be byte-identical (transaction={transaction})"
+                );
+            }
+        }
+
+        /// A command with the `asking` flag packs `ASKING` first, then the command, then the
+        /// fence's `PING` when fenced, in every packing.
+        #[cfg(feature = "aio")]
+        #[test]
+        fn asking_command_packs_asking_first() {
+            let payload = bytes::Bytes::from(vec![b'v'; SHARED_ARG_INLINE_MAX + 1]);
+            for fenced in [false, true] {
+                for shared in [false, true] {
+                    let mut plain = crate::cmd("SET");
+                    plain.arg("k");
+                    if shared {
+                        plain.arg_shared(payload.clone());
+                    } else {
+                        plain.arg("v");
+                    }
+                    plain.set_fenced(fenced);
+                    let mut asking = plain.clone();
+                    asking.set_asking(true);
+
+                    let mut expected = b"*1\r\n$6\r\nASKING\r\n".to_vec();
+                    expected.extend(plain.get_packed_command());
+                    assert_eq!(asking.get_packed_command(), expected);
+                    assert_eq!(asking.get_packed_segments().to_contiguous(), expected);
+                    let mut preallocated = Vec::new();
+                    asking.write_packed_command_preallocated(&mut preallocated);
+                    assert_eq!(preallocated, expected);
+                    assert!(expected.starts_with(b"*1\r\n$6\r\nASKING\r\n*3\r\n$3\r\nSET\r\n"));
+                    assert_eq!(expected.ends_with(b"*1\r\n$4\r\nPING\r\n"), fenced);
+                    assert_eq!(
+                        cmd_len(&asking),
+                        cmd_len(&plain) + b"*1\r\n$6\r\nASKING\r\n".len()
+                    );
+                }
+            }
+        }
+
+        /// `ASKING` goes first, before `MULTI` in atomic mode, in both packings.
+        #[cfg(feature = "cluster-async")]
+        #[test]
+        fn pipeline_with_asking_packs_asking_first() {
+            for transaction in [false, true] {
+                let mut pl = crate::pipe();
+                if transaction {
+                    pl.atomic();
+                }
+                pl.cmd("GET").arg("k");
+                let asking = pl.with_asking();
+                let mut expected = crate::cmd("ASKING").get_packed_command();
+                expected.extend(pl.get_packed_pipeline());
+                assert_eq!(asking.get_packed_pipeline(), expected);
+                assert_eq!(
+                    asking.get_packed_pipeline_segments().to_contiguous(),
+                    expected
                 );
             }
         }

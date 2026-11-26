@@ -43,7 +43,12 @@ mod test_monitor {
                 port: *port,
                 unix_socket_path: None,
             },
-            _ => panic!("Expected TCP address"),
+            redis::ConnectionAddr::Unix(path) => NodeAddress {
+                host: String::new(),
+                port: 0,
+                unix_socket_path: Some(path.clone()),
+            },
+            _ => panic!("Expected a TCP or Unix socket address"),
         }
     }
 

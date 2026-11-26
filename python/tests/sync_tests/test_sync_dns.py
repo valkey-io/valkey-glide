@@ -41,6 +41,7 @@ def create_client_with_hostname(cluster_mode: bool, use_tls: bool, hostname: str
     not os.getenv("VALKEY_GLIDE_DNS_TESTS_ENABLED"),
     reason="DNS tests disabled. Set VALKEY_GLIDE_DNS_TESTS_ENABLED to enable.",
 )
+@pytest.mark.requires_tcp
 @pytest.mark.parametrize("cluster_mode", [True, False])
 class TestSyncDns:
     """Sync DNS resolution tests."""
