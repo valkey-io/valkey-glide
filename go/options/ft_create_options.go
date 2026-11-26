@@ -57,8 +57,6 @@ func (f *baseField) baseArgs(ft fieldType) []string {
 	return args
 }
 
-// sortableUnfArgs appends SORTABLE and, immediately after it, UNF -- the only position
-// valkey-search recognises UNF in. Returns an error if Unf is set without Sortable.
 func sortableUnfArgs(args []string, sortable bool, unf bool) ([]string, error) {
 	if unf && !sortable {
 		return nil, errors.New("unf requires Sortable to be set")

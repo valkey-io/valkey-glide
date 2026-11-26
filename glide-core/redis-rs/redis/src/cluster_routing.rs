@@ -16,7 +16,9 @@ use std::sync::{RwLock, RwLockWriteGuard};
 #[derive(Clone)]
 pub(crate) enum Redirect {
     Moved(String),
-    /// (addr, should_exec_asking) - if `should_exec_asking` is true,  the `ASKING` command would be executed as part of `get_connection`.
+    /// (addr, should_exec_asking) - if `should_exec_asking` is true, the request is preceded by `ASKING`.
+    /// The sync client sends it first. The async client writes it in the same write as the command,
+    /// or as a request of its own (see `cluster_async::Connect::sends_asking_with_command`).
     Ask(String, bool),
 }
 
@@ -117,6 +119,16 @@ pub enum MultipleNodeRoutingInfo {
     /// The `MultiSlotArgPattern` specifies the pattern of the command’s arguments, indicating how they are organized
     /// (e.g., only keys, key-value pairs, etc).
     MultiSlot((Vec<(Route, Vec<usize>)>, MultiSlotArgPattern)),
+}
+
+impl MultipleNodeRoutingInfo {
+    /// Whether [`crate::Cmd::set_allow_partial_results`] applies to a command
+    /// sent to these nodes with `response_policy`: all nodes or all primaries,
+    /// with the `Special` response policy or none.
+    pub fn allows_partial_results(&self, response_policy: Option<ResponsePolicy>) -> bool {
+        matches!(self, Self::AllNodes | Self::AllMasters)
+            && matches!(response_policy, None | Some(ResponsePolicy::Special))
+    }
 }
 
 /// Takes a routable and an iterator of indices, which is assued to be created from`MultipleNodeRoutingInfo::MultiSlot`,
@@ -1733,6 +1745,14 @@ mod tests_routing {
             }
             other => panic!("expected a single specific node, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn allows_partial_results_only_with_a_per_node_response_policy() {
+        use MultipleNodeRoutingInfo::{AllMasters, AllNodes};
+        assert!(AllMasters.allows_partial_results(Some(ResponsePolicy::Special)));
+        assert!(AllNodes.allows_partial_results(None));
+        assert!(!AllNodes.allows_partial_results(Some(ResponsePolicy::AllSucceeded)));
     }
 
     #[test]

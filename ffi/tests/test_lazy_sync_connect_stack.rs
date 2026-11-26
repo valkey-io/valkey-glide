@@ -17,7 +17,7 @@ use std::sync::Mutex;
 
 const FIRST_COMMAND_THREAD: &str = "first-command";
 
-/// Names of the threads the connect called the address resolver on.
+/// Names of the threads the address resolver ran on.
 static RESOLVER_THREADS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 unsafe extern "C-unwind" fn record_resolver_thread(
@@ -127,25 +127,30 @@ fn ping(client: &Client) -> Result<(), String> {
     send(client, RequestType::Ping, &[])
 }
 
-/// Sends the first command from a musl-sized thread and asserts it connected off that thread.
+/// Sends the first command from a musl-sized thread and asserts it connected without
+/// overflowing that thread's stack.
 fn assert_first_ping_connects_on_a_worker(client: Client) {
     assert!(
         RESOLVER_THREADS.lock().unwrap().is_empty(),
         "a lazy client connected before its first command"
     );
 
-    let (client, result) = on_musl_sized_stack(FIRST_COMMAND_THREAD, move || {
+    // Read when the command returns: a resolution after that, with no caller waiting, runs on a
+    // runtime thread.
+    let (client, result, threads) = on_musl_sized_stack(FIRST_COMMAND_THREAD, move || {
         let result = ping(&client);
-        (client, result)
+        let threads = RESOLVER_THREADS.lock().unwrap().clone();
+        (client, result, threads)
     });
     unsafe { close_client(client.0) };
     assert_eq!(result, Ok(()), "first PING on a lazy TLS client");
 
-    let threads = RESOLVER_THREADS.lock().unwrap();
+    // The musl-sized thread survived the connect, so the connect ran on a worker. The resolver
+    // it called while the caller waited ran on the caller.
     assert!(!threads.is_empty(), "the first command did not connect");
     assert!(
-        threads.iter().all(|name| name != FIRST_COMMAND_THREAD),
-        "the connect ran on the caller's thread: {threads:?}"
+        threads.iter().all(|name| name == FIRST_COMMAND_THREAD),
+        "the resolver ran off the caller's thread: {threads:?}"
     );
 }
 

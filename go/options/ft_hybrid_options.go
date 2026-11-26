@@ -30,8 +30,6 @@ type FtHybridVsimFilter struct {
 	BatchSize *int
 }
 
-// toArgs returns the arguments for the VSIM FILTER clause: the server's counted form when
-// Policy or BatchSize is set, or the uncounted extension form otherwise.
 func (f *FtHybridVsimFilter) toArgs() ([]string, error) {
 	if f.BatchSize != nil && f.Policy != constants.HybridFilterPolicyBatches {
 		return nil, errors.New("BatchSize requires Policy=HybridFilterPolicyBatches")
@@ -44,7 +42,6 @@ func (f *FtHybridVsimFilter) toArgs() ([]string, error) {
 		subArgs = append(subArgs, "BATCH_SIZE", strconv.Itoa(*f.BatchSize))
 	}
 	if len(subArgs) == 0 {
-		// Uncounted extension: a bare expression, no POLICY/BATCH_SIZE possible in this form.
 		return []string{"FILTER", f.Expression}, nil
 	}
 	tokenCount := 1 + len(subArgs)
@@ -381,8 +378,6 @@ type FtHybridOptions struct {
 	Dialect *int
 }
 
-// mergeParams merges Params with an internally generated VSIM PARAMS entry, returning an error
-// if the generated name collides with a caller-supplied one.
 func (o *FtHybridOptions) mergeParams(generatedVsimParamName, generatedVsimParamValue string) ([]FtAggregateParam, error) {
 	merged := make([]FtAggregateParam, 0, len(o.Params)+1)
 	merged = append(merged, o.Params...)
@@ -411,8 +406,6 @@ func (o *FtHybridOptions) ToArgs(generatedVsimParamName, generatedVsimParamValue
 	}
 	args := []string{}
 	if o.LocalOnly {
-		// Must come before PARAMS -- see the docstring above. ToArgs always emits it this early
-		// regardless of field-set order, so this restriction is handled transparently.
 		args = append(args, "LOCALONLY")
 	}
 	if o.LoadAll {
@@ -434,9 +427,6 @@ func (o *FtHybridOptions) ToArgs(generatedVsimParamName, generatedVsimParamValue
 		}
 	}
 	if o.Clauses != nil {
-		// Must come after PARAMS -- a leading FILTER clause emitted right after the VSIM arm
-		// would otherwise be claimed by the server's VSIM parser as a VSIM pre-filter instead.
-		// See the docstring above.
 		for _, clause := range o.Clauses {
 			args = append(args, clause.ftAggregateClauseArgs()...)
 		}
