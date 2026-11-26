@@ -234,25 +234,24 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolDestr
     };
     let handle_table = get_handle_table();
     let mut pool = pool_arc.lock();
-    // Clean up JNI handle table entries for all pooled clients
-    // (includes clients core has discarded)
-    let discarded = pool.drain_discarded_ids();
-    for entry in pool.idle.iter() {
-        handle_table.remove(&entry.client_id);
-        glide_core::scope::unregister_client(entry.client_id);
-        get_pool_client_map().remove(&entry.client_id);
-        glide_core::pool::unregister_blocking_flag(entry.client_id);
-    }
-    for &client_id in pool.in_use.keys() {
-        handle_table.remove(&client_id);
-        glide_core::scope::unregister_client(client_id);
-        get_pool_client_map().remove(&client_id);
-        glide_core::pool::unregister_blocking_flag(client_id);
-    }
-    for cid in discarded {
+    // Every client of this pool: idle, borrowed, discarded, and any ever-borrowed
+    // client whose release is mid-reset (in no pool collection, but still in
+    // pool_client_map, which keeps an entry until discard or destroy).
+    let mut client_ids: std::collections::HashSet<u64> =
+        pool.drain_discarded_ids().into_iter().collect();
+    client_ids.extend(pool.idle.iter().map(|e| e.client_id));
+    client_ids.extend(pool.in_use.keys().copied());
+    client_ids.extend(
+        get_pool_client_map()
+            .iter()
+            .filter(|e| *e.value() == pool_id as u64)
+            .map(|e| *e.key()),
+    );
+    for cid in client_ids {
         handle_table.remove(&cid);
         glide_core::scope::unregister_client(cid);
         get_pool_client_map().remove(&cid);
+        glide_core::pool::unregister_blocking_flag(cid);
     }
     ClientPool::destroy(pool);
     0

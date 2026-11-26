@@ -1221,6 +1221,21 @@ public class ClientPoolIntegrationTest {
     }
 
     @Test
+    public void testCloseRemovesTheHandleOfAClientStillResetting() throws Exception {
+        ClientPool pool = ClientPool.create(singleClientPoolConfig());
+        waitForPoolReady(pool, 1);
+        glide.api.models.pool.PooledGlideClient client = pool.acquire().get(10, TimeUnit.SECONDS);
+        long connection = pooledClientId(pool, client);
+        // Dirty, so the release's reset needs a round trip that close() can land inside.
+        client.unwrap().customCommand(new String[] {"SELECT", "1"}).get(5, TimeUnit.SECONDS);
+        client.close();
+        pool.close();
+        assertFalse(
+                GlideNativeBridge.isConnected(connection),
+                "pool close left the native handle of a client whose release was resetting");
+    }
+
+    @Test
     public void testDetachFromPoolIgnoresDirectClients() throws Exception {
         try (GlideClient direct = (GlideClient) createOrdinaryClient(false)) {
             direct.detachFromPool();
