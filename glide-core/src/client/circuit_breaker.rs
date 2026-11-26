@@ -500,11 +500,15 @@ mod tests {
         assert!(cb.is_healthy());
 
         // Probe fails
+        let probe_failed_at = Instant::now();
         cb.on_result(true, Some("IoError"), 0);
 
         assert_eq!(cb.state(), CircuitState::Open);
         // Read the flag directly: is_healthy() would reach HalfOpen again if 100 ms passed.
         assert!(!cb.healthy.load(Ordering::Acquire));
+        // Reopening restarts the open timeout.
+        let opened_at = cb.state.read().unwrap().opened_at;
+        assert!(opened_at.is_some_and(|t| t >= probe_failed_at));
     }
 
     #[test]
