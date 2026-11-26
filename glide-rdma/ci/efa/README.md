@@ -6,6 +6,11 @@ GitHub starts and monitors the `GlideRdmaEfa` CodeBuild project through the
 `CODEBUILD_RESOLVED_SOURCE_VERSION` and runs the RDMA transfer tests.
 GitHub reports the build status and log link; unsuccessful builds also include
 phase errors and a bounded CloudWatch log excerpt when log access is available.
+GitHub serializes dispatches across branches without cancelling the active run;
+only the latest pending run is retained. Before cancelling active GitHub monitoring,
+cancel any pending runs first: otherwise a pending run can immediately dispatch
+another build when the slot is released, while the original CodeBuild build continues.
+Wait for that build to finish before dispatching again.
 
 - `.github/buildspec/rdma-efa.yml` documents the CodeBuild runtime and inputs.
 - `bin/rdma-pair.sh` manages the host stack using `RDMA_TEMPLATE_URL` and

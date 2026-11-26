@@ -18,6 +18,11 @@ jobs:
         name: EFA hardware test via CodeBuild
         runs-on: ubuntu-24.04
         environment: AWS_ACTIONS
+        # All branches share one CodeBuild project. Wait here rather than use
+        # its short build queue, and let the active run finish teardown.
+        concurrency:
+            group: glide-rdma-efa-codebuild
+            cancel-in-progress: false
         permissions:
             id-token: write
             contents: read
