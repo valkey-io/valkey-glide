@@ -1643,32 +1643,6 @@ def helper6(
     key27,
     args,
 ):
-    if not check_version_lt(version, "8.0.0"):
-        keyslot = keyslot or key26
-        transaction.hset(f"{{{keyslot}}}: 1", {"name": "Alice", "age": "30"})
-        args.append(2)
-        transaction.hset(f"{{{keyslot}}}: 2", {"name": "Bob", "age": "25"})
-        args.append(2)
-        transaction.lpush(key26, ["2", "1"])
-        args.append(2)
-        transaction.sort(
-            key26,
-            by_pattern=f"{{{keyslot}}}: *->age",
-            get_patterns=[f"{{{keyslot}}}: *->name"],
-            order=OrderBy.ASC,
-            alpha=True,
-        )
-        args.append([b"Bob", b"Alice"])
-        transaction.sort_store(
-            key26,
-            key27,
-            by_pattern=f"{{{keyslot}}}: *->age",
-            get_patterns=[f"{{{keyslot}}}: *->name"],
-            order=OrderBy.ASC,
-            alpha=True,
-        )
-        args.append(2)
-
     transaction.sadd(key7, ["one"])
     args.append(1)
     transaction.srandmember(key7)
@@ -1703,9 +1677,6 @@ def helper6(
         args.append(OK)
         transaction.flushdb(FlushMode.SYNC)
         args.append(OK)
-
-    min_version = "6.2.0"
-    if not check_version_lt(version, min_version):
         transaction.set(key22, "value")
         args.append(OK)
         transaction.getex(key22)
@@ -1735,6 +1706,32 @@ def helper6(
         transaction.lcs_idx(key23, key24, with_match_len=True)
         args.append({b"matches": [[[4, 7], [5, 8], 4], [[1, 3], [0, 2], 3]], b"len": 7})
 
+    if not check_version_lt(version, "8.0.0"):
+        keyslot = keyslot or key26
+        transaction.hset(f"{{{keyslot}}}: 1", {"name": "Alice", "age": "30"})
+        args.append(2)
+        transaction.hset(f"{{{keyslot}}}: 2", {"name": "Bob", "age": "25"})
+        args.append(2)
+        transaction.lpush(key26, ["2", "1"])
+        args.append(2)
+        transaction.sort(
+            key26,
+            by_pattern=f"{{{keyslot}}}: *->age",
+            get_patterns=[f"{{{keyslot}}}: *->name"],
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append([b"Bob", b"Alice"])
+        transaction.sort_store(
+            key26,
+            key27,
+            by_pattern=f"{{{keyslot}}}: *->age",
+            get_patterns=[f"{{{keyslot}}}: *->name"],
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append(2)
+
     transaction.pubsub_channels(pattern="*")
     args.append([])
     transaction.pubsub_numpat()
@@ -1744,20 +1741,6 @@ def helper6(
 
 
 def helper5(transaction, version, key11, key12, key17, key18, key20, args):
-    if not check_version_lt(version, "7.0.0"):
-        transaction.set(key20, "foobar")
-        args.append(OK)
-        transaction.bitcount(key20, OffsetOptions(5, 30, BitmapIndexType.BIT))
-        args.append(17)
-        transaction.bitpos(key20, 1, OffsetOptions(44, 50, BitmapIndexType.BIT))
-        args.append(46)
-
-    if not check_version_lt(version, "8.0.0"):
-        transaction.set(key20, "foobar")
-        args.append(OK)
-        transaction.bitcount(key20, OffsetOptions(0))
-        args.append(26)
-
     transaction.geoadd(
         key12,
         {
@@ -1894,14 +1877,6 @@ def helper5(transaction, version, key11, key12, key17, key18, key20, args):
         alpha=True,
     )
     args.append([b"2", b"3", b"4", b"a"])
-    if not check_version_lt(version, "7.0.0"):
-        transaction.sort_ro(
-            key17,
-            limit=Limit(1, 4),
-            order=OrderBy.ASC,
-            alpha=True,
-        )
-        args.append([b"2", b"3", b"4", b"a"])
     transaction.sort_store(
         key17,
         key18,
@@ -1910,6 +1885,28 @@ def helper5(transaction, version, key11, key12, key17, key18, key20, args):
         alpha=True,
     )
     args.append(4)
+
+    if not check_version_lt(version, "7.0.0"):
+        transaction.sort_ro(
+            key17,
+            limit=Limit(1, 4),
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append([b"2", b"3", b"4", b"a"])
+
+        transaction.set(key20, "foobar")
+        args.append(OK)
+        transaction.bitcount(key20, OffsetOptions(5, 30, BitmapIndexType.BIT))
+        args.append(17)
+        transaction.bitpos(key20, 1, OffsetOptions(44, 50, BitmapIndexType.BIT))
+        args.append(46)
+
+    if not check_version_lt(version, "8.0.0"):
+        transaction.set(key20, "foobar")
+        args.append(OK)
+        transaction.bitcount(key20, OffsetOptions(0))
+        args.append(26)
 
 
 def helper4(transaction, version, key8, key10, key13, key14, key15, key19, key20, args):
@@ -2135,9 +2132,6 @@ def helper3(
     args.append(1)
     transaction.sismember(key7, "bar")
     args.append(True)
-    if not check_version_lt(version, "9.2.0"):
-        transaction.sismember_if_exists(key7, "bar")
-        args.append(1)
     transaction.spop(key7)
     args.append(b"bar")
     transaction.sadd(key7, ["foo", "bar"])
@@ -2154,6 +2148,9 @@ def helper3(
         transaction.sintercard([key7, key7])
         args.append(2)
         transaction.sintercard([key7, key7], 1)
+        args.append(1)
+    if not check_version_lt(version, "9.2.0"):
+        transaction.sismember_if_exists(key7, "bar")
         args.append(1)
     transaction.sdiff([key7, key7])
     args.append(set())
@@ -2290,15 +2287,16 @@ def helper1(
     args.append(False)
     transaction.ttl(key)
     args.append(-1)
+
+    if not check_version_lt(version, "6.2.0"):
+        transaction.copy(key, key2, replace=True)
+        args.append(True)
+
     if not check_version_lt(version, "7.0.0"):
         transaction.expiretime(key)
         args.append(-1)
         transaction.pexpiretime(key)
         args.append(-1)
-
-    if not check_version_lt(version, "6.2.0"):
-        transaction.copy(key, key2, replace=True)
-        args.append(True)
 
     transaction.rename(key, key2)
     args.append(OK)

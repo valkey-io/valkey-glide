@@ -325,19 +325,16 @@ class BaseBatch:
 
         Args:
             key (TEncodable): The key to delete.
-            value (TEncodable): The comparison value. The key is only deleted if its current value
-                matches `value` exactly.
+            value (TEncodable): The value to compare against the key.
 
         Commands response:
-            bool: True if `key` was deleted.
-
-            False if `key` did not exist or its value did not match `value`.
+            bool: True if `key` was deleted, False otherwise.
         """
         return self.append_command(RequestType.DelIfEq, [key, value])
 
     def delex(self: TBatch, key: TEncodable, condition: ValueComparison) -> TBatch:
         """
-        Deletes `key` if its value meets `condition`.
+        Deletes `key` if its value meets the given condition.
 
         Since: Valkey 9.2.0.
 
@@ -345,13 +342,10 @@ class BaseBatch:
 
         Args:
             key (TEncodable): The key to delete.
-            condition (ValueComparison): The comparison condition. The key is only deleted if its
-                current value meets `condition`.
+            condition (ValueComparison): The condition for deleting the key.
 
         Commands response:
-            bool: True if `key` was deleted.
-
-            False if `key` did not exist or `condition` was not met.
+            bool: True if `key` was deleted, False otherwise.
         """
         return self.append_command(RequestType.DelEx, [key, *condition._to_args()])
 
