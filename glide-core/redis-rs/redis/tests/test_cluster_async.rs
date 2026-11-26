@@ -5708,13 +5708,20 @@ mod cluster_async {
         partial: bool,
         handler: impl Fn(&[u8], u16) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
     ) -> RedisResult<Value> {
-        info_to_nodes(name, MultipleNodeRoutingInfo::AllMasters, partial, handler)
+        info_to_nodes(
+            name,
+            MultipleNodeRoutingInfo::AllMasters,
+            partial,
+            None,
+            handler,
+        )
     }
 
     fn info_to_nodes(
         name: &'static str,
         routing: MultipleNodeRoutingInfo,
         partial: bool,
+        fan_out_deadline: Option<std::time::Instant>,
         handler: impl Fn(&[u8], u16) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
     ) -> RedisResult<Value> {
         let mut info = cmd("INFO");
@@ -5729,7 +5736,11 @@ mod cluster_async {
             name,
             handler,
         );
-        runtime.block_on(connection.route_command(&info, per_node_route(routing)))
+        runtime.block_on(connection.route_command_with_fan_out_deadline(
+            Arc::new(info),
+            per_node_route(routing),
+            fan_out_deadline,
+        ))
     }
 
     // `routing` with the `Special` response policy, which keeps one entry per node.
@@ -5809,6 +5820,33 @@ mod cluster_async {
 
     #[test]
     #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_stop_at_the_fan_out_deadline() {
+        let name = "test_async_cluster_partial_results_stop_at_the_fan_out_deadline";
+        // The deadline has passed before any node can answer.
+        let value = info_to_nodes(
+            name,
+            MultipleNodeRoutingInfo::AllMasters,
+            true,
+            Some(std::time::Instant::now()),
+            move |received_cmd, port| {
+                respond_startup_with_replica_using_config(name, received_cmd, None)?;
+                Err(Ok(info_reply(port)))
+            },
+        )
+        .unwrap();
+
+        let pairs = sorted_map(value);
+        assert_eq!(pairs.len(), 2, "{pairs:?}");
+        for (address, entry) in pairs {
+            let Value::ServerError(err) = entry else {
+                panic!("expected a timeout for {address}, got {entry:?}");
+            };
+            assert_eq!(err.err_code(), redis::TIMEOUT_ERROR_CODE, "{address}");
+        }
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_without_partial_results_fails_on_node_timeout() {
         let name = "test_async_cluster_without_partial_results_fails_on_node_timeout";
         let err = info_with_one_timed_out_primary(name, false).unwrap_err();
@@ -5850,6 +5888,7 @@ mod cluster_async {
             name,
             MultipleNodeRoutingInfo::AllNodes,
             true,
+            None,
             move |received_cmd, port| {
                 respond_startup_with_replica_using_config(name, received_cmd, None)?;
                 Err(Ok(info_reply(port)))
