@@ -3762,17 +3762,20 @@ mod cluster_async {
 
     /// Runs one `cluster_scan` against a mock cluster whose SCAN finds no connection
     /// `failures` times. With `move_slots`, each failure also moves every slot to the other
-    /// node, so each refresh sends the scan somewhere new. The retry backoff outlasts the
-    /// deadline, so this fails if the scan backs off on a connection error. Returns the
-    /// result and the number of SCANs.
+    /// node, so each refresh sends the scan somewhere new. With `epoch_reread_fails`, the
+    /// node's epoch can't be read on the first retry. The retry backoff outlasts the deadline,
+    /// so this fails if the scan backs off on a connection error. Returns the result and the
+    /// number of SCANs.
     fn scan_with_failing_scans(
         name: &'static str,
         retries: u32,
         failures: usize,
         move_slots: bool,
+        epoch_reread_fails: bool,
     ) -> (RedisResult<(redis::ScanStateRC, Vec<Value>)>, usize) {
         let scans = Arc::new(atomic::AtomicUsize::new(0));
         let handler_scans = scans.clone();
+        let epoch_reads = atomic::AtomicUsize::new(0);
         let MockEnv {
             runtime,
             async_connection: mut connection,
@@ -3792,6 +3795,9 @@ mod cluster_async {
                     return Err(Ok(Value::SimpleString("OK".into())));
                 }
                 if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"INFO") {
+                    if epoch_reread_fails && epoch_reads.fetch_add(1, Ordering::SeqCst) == 1 {
+                        return Err(parse_redis_value(b"-ERR not now\r\n"));
+                    }
                     return Err(Ok(Value::BulkString(
                         b"cluster_my_epoch:1\r\n".to_vec().into(),
                     )));
@@ -3848,6 +3854,7 @@ mod cluster_async {
             1,
             1,
             false,
+            false,
         );
         result.unwrap();
     }
@@ -3859,6 +3866,7 @@ mod cluster_async {
             "test_async_cluster_scan_fails_once_the_retry_budget_is_spent",
             1,
             usize::MAX,
+            false,
             false,
         );
         assert_eq!(
@@ -3876,8 +3884,27 @@ mod cluster_async {
             0,
             1,
             true,
+            false,
         );
         result.unwrap();
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_scan_retry_keeps_the_epoch_it_cannot_reread() {
+        // Losing the epoch makes the scan treat the node as changed and scan it again.
+        let (result, scans) = scan_with_failing_scans(
+            "test_async_cluster_scan_retry_keeps_the_epoch_it_cannot_reread",
+            1,
+            1,
+            false,
+            true,
+        );
+        assert!(
+            result.unwrap().0.is_finished(),
+            "the node was scanned twice"
+        );
+        assert_eq!(scans, 2);
     }
 
     #[test]

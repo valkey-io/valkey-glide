@@ -753,7 +753,17 @@ where
         cluster_scan_args.allow_non_covered_slots,
     ) {
         Ok(NextNodeResult::Address(new_address)) => {
-            let new_epoch = core.address_epoch(&new_address).await.unwrap_or(0);
+            // A node that just failed often can't report its epoch yet. Keep the one already
+            // read, so the node isn't scanned twice for an epoch change that didn't happen.
+            let known_epoch = if new_address == scan_state.address_in_scan {
+                scan_state.address_epoch
+            } else {
+                0
+            };
+            let new_epoch = core
+                .address_epoch(&new_address)
+                .await
+                .unwrap_or(known_epoch);
             Ok(Some(ScanState::new(
                 0,
                 scanned_slots_map,
