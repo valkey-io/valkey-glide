@@ -4,6 +4,7 @@
 
 ### Features
 
+* Core: per-node partial results in the redis-rs cluster fan-out ([#7819](https://github.com/valkey-io/valkey-glide/pull/7819))
 * Node: valkey-search 1.3 stable surface ([#7378](https://github.com/valkey-io/valkey-glide/pull/7378))
 * Java: Add valkey-search 1.3 support, including scoring, cursors, and `FT.HYBRID` ([#7379](https://github.com/valkey-io/valkey-glide/pull/7379))
 * Rust: Add `HGETDEL` and `DELIFEQ` commands ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145), [#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
