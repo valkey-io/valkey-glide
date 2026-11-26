@@ -200,9 +200,6 @@ func (o *FtSearchOptions) ToArgs() ([]string, error) {
 		args = append(args, "LIMIT", strconv.Itoa(o.Limit.Offset), strconv.Itoa(o.Limit.Count))
 	}
 	if o.Count {
-		// COUNT is not a real FT.SEARCH keyword -- valkey-search's parser rejects a bare COUNT
-		// token outright. The count-only form the server actually recognises is LIMIT 0 0; the
-		// guard at the top of this method already confirmed Limit is unset.
 		args = append(args, "LIMIT", "0", "0")
 	}
 	if o.WithScores {
