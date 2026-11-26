@@ -9716,13 +9716,15 @@ mod cluster_async {
     }
 
     /// An ASK reply to a fast-path attempt is followed by the event loop: the retry goes to the
-    /// ASK target, preceded by ASKING, from the event loop task.
+    /// ASK target, with ASKING packed before it in the same write, from the event loop task.
     #[test]
     #[serial_test::parallel(otel)]
     fn test_async_cluster_fast_path_ask_error_is_retried_by_event_loop_with_asking() {
         let name = "fast_path_ask_retry";
-        // (port, command, sending task) for each ASKING and GET the nodes received.
+        // (port, command, sending task) for each ASKING and GET the nodes received, and the
+        // GETs that came in the same write as an ASKING.
         let received: Recorded<Vec<(u16, &'static str, SenderTask)>> = Default::default();
+        let asked_gets: Recorded<Vec<u16>> = Default::default();
 
         let MockEnv {
             runtime,
@@ -9734,8 +9736,12 @@ mod cluster_async {
             name,
             {
                 let received = received.clone();
+                let asked_gets = asked_gets.clone();
                 move |cmd: &[u8], port| {
                     respond_startup(name, cmd)?;
+                    if contains_slice(cmd, b"GET") && asked_in_same_write() {
+                        asked_gets.lock().unwrap().push(port);
+                    }
                     let command = if contains_slice(cmd, b"ASKING") {
                         "ASKING"
                     } else if contains_slice(cmd, b"GET") {
@@ -9778,6 +9784,11 @@ mod cluster_async {
             summary,
             vec![(6379, "GET"), (6380, "ASKING"), (6380, "GET")],
             "the ASK retry must send ASKING to the target before the command"
+        );
+        assert_eq!(
+            *asked_gets.lock().unwrap(),
+            vec![6380],
+            "the ASK retry must pack ASKING in the same write as the command"
         );
         assert_eq!(
             received[0].2,
