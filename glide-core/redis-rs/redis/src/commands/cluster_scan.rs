@@ -44,6 +44,7 @@ use crate::aio::ConnectionLike;
 use crate::cluster_async::{ClusterConnInner, Connect, InnerCore, RefreshPolicy};
 use crate::cluster_routing::SlotAddr;
 use crate::cluster_topology::SLOT_SIZE;
+use crate::types::RetryMethod;
 use crate::{cmd, from_redis_value, ErrorKind, RedisError, RedisResult, Value};
 use std::sync::Arc;
 use strum_macros::{Display, EnumString};
@@ -803,13 +804,15 @@ where
             return Ok(((0, Vec::new()), ScanState::create_finished_state()));
         };
         // Following a topology change is free; retrying the same node again counts
-        // against the client's retries, with the usual backoff.
+        // against the client's retries, and backs off only where the request path does.
         if !topology_changed && next.address_in_scan == new_scan_state.address_in_scan {
             if retry >= retry_params.number_of_retries {
                 return Err(err);
             }
             retry += 1;
-            tokio::time::sleep(retry_params.wait_time_for_retry(retry)).await;
+            if err.retry_method() == RetryMethod::WaitAndRetry {
+                tokio::time::sleep(retry_params.wait_time_for_retry(retry)).await;
+            }
         }
         new_scan_state = next;
     }

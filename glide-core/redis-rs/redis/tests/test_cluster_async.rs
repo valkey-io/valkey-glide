@@ -3762,8 +3762,9 @@ mod cluster_async {
 
     /// Runs one `cluster_scan` against a mock cluster whose SCAN finds no connection
     /// `failures` times. With `move_slots`, each failure also moves every slot to the other
-    /// node, so each refresh sends the scan somewhere new. Returns the result and the
-    /// number of SCANs.
+    /// node, so each refresh sends the scan somewhere new. The retry backoff outlasts the
+    /// deadline, so this fails if the scan backs off on a connection error. Returns the
+    /// result and the number of SCANs.
     fn scan_with_failing_scans(
         name: &'static str,
         retries: u32,
@@ -3780,8 +3781,8 @@ mod cluster_async {
         } = MockEnv::with_client_builder(
             ClusterClient::builder(vec![&*format!("redis://{name}")])
                 .retries(retries)
-                .min_retry_wait(0)
-                .max_retry_wait(1),
+                .min_retry_wait(60_000)
+                .max_retry_wait(60_001),
             name,
             move |cmd: &[u8], _port| {
                 if contains_slice(cmd, b"PING")
