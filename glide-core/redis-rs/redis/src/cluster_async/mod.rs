@@ -369,8 +369,10 @@ where
 
     /// Same as [`Self::route_command`], and a partial-results fan-out (see
     /// [`Cmd::set_allow_partial_results`]) stops waiting at `fan_out_deadline`:
-    /// nodes that have not answered by then are reported as timed out. Takes the
-    /// command as an `Arc`, so a caller that already holds one does not clone it.
+    /// nodes that have not answered by then are reported as timed out, and with
+    /// `None` it waits for every node. Takes the command as an `Arc`, so a caller
+    /// that already holds one does not clone it; that shared command's watchdog
+    /// fields then record its phase and retries.
     pub async fn route_command_with_fan_out_deadline(
         &mut self,
         cmd: Arc<Cmd>,
