@@ -1455,6 +1455,7 @@ impl Client {
         mut self_clone: Client,
         cmd: Arc<Cmd>,
         routing: Option<RoutingInfo>,
+        fan_out_deadline: Option<Instant>,
         client: ClientWrapper,
         compression_manager: Option<Arc<CompressionManager>>,
     ) -> RedisResult<Value> {
@@ -1483,7 +1484,18 @@ impl Client {
                         .or_else(|| RoutingInfo::for_routable(cmd.as_ref()))
                         .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
                 };
-                client.route_command(&cmd, final_routing).await
+                match fan_out_deadline {
+                    None => client.route_command(&cmd, final_routing).await,
+                    deadline => {
+                        client
+                            .route_command_with_fan_out_deadline(
+                                cmd.clone(),
+                                final_routing,
+                                deadline,
+                            )
+                            .await
+                    }
+                }
             }
             ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
         }?;
@@ -1699,11 +1711,11 @@ impl Client {
                 // and the partial-results deadline
                 let cmd_start = Instant::now();
 
-                let mut owned_cmd = owned_cmd;
                 let mut watchdog_duration = duration;
+                let mut fan_out_deadline = None;
                 if partial_results {
                     let margin = partial_results_margin(duration);
-                    owned_cmd.set_fan_out_deadline(Some(cmd_start + duration - margin));
+                    fan_out_deadline = Some(cmd_start + duration - margin);
                     watchdog_duration += margin;
                 }
                 // Wrap Cmd in Arc so the timeout arm can still read watchdog fields after execute takes ownership
@@ -1721,6 +1733,7 @@ impl Client {
                     self_clone,
                     owned_cmd.clone(),
                     routing,
+                    fan_out_deadline,
                     client,
                     compression_manager,
                 );
@@ -1825,6 +1838,7 @@ impl Client {
                     self_clone,
                     owned_cmd,
                     routing,
+                    None,
                     client,
                     compression_manager,
                 );
