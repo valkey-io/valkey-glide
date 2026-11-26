@@ -40,7 +40,7 @@
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 * Python, Go: a whitespace-only client AZ is now rejected for AZ-affinity read strategies, like an empty one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))
-* FFI: `CmdInfo` gains a trailing `route_info` pointer (null for no route), so it grows from 32 to 40 bytes on 64-bit targets. A binding that builds `CmdInfo` must add the field and set it to null when it doesn't route the command: with the old layout the core reads past the end of each `CmdInfo`, and an uninitialised `route_info` (for example from an unzeroed allocation) is dereferenced as a route ([#7697](https://github.com/valkey-io/valkey-glide/issues/7697))
+* FFI: `CmdInfo` gains a trailing `route_info` pointer; bindings that build `CmdInfo` must add it and set it to null for an unrouted command ([#7697](https://github.com/valkey-io/valkey-glide/issues/7697))
 
 ## 2.6
 

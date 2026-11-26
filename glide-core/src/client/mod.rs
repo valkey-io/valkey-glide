@@ -4025,7 +4025,6 @@ impl Client {
             .is_some_and(|name| name.eq_ignore_ascii_case(b"WATCH"))
     }
 
-    /// Where a WATCH will land, from the routing the cluster client would use for it.
     /// Whether a WATCH in a non-atomic batch may reach a replica. A WATCH with its own
     /// route goes to that route's node; otherwise the batch-level route applies. Unlike a
     /// single command, a `Random` route is not narrowed to a primary.
@@ -4042,6 +4041,7 @@ impl Client {
         ) || Self::classify_watch(cmd, watch_routing) == WatchTarget::MaybeReplica
     }
 
+    /// Where a WATCH will land, from the routing the cluster client would use for it.
     fn classify_watch(cmd: &Cmd, routing: Option<&RoutingInfo>) -> WatchTarget {
         use redis::cluster_routing::SlotAddr;
         let routes = match routing.cloned().or_else(|| RoutingInfo::for_routable(cmd)) {
@@ -5924,8 +5924,6 @@ mod tests {
         }
     }
 
-    /// Repeated WATCHes on a slot keep one entry; a slot seen under a new owner, or
-    /// an unknown target, falls back to every primary.
     /// A WATCH's own route in a batch decides its target over the batch-level route (#7697).
     #[test]
     fn batch_watch_uses_the_command_route() {
@@ -5966,6 +5964,8 @@ mod tests {
         ));
     }
 
+    /// Repeated WATCHes on a slot keep one entry; a slot seen under a new owner, or
+    /// an unknown target, falls back to every primary.
     #[test]
     fn watched_primaries_keeps_one_entry_per_slot() {
         use super::WatchedPrimaries;
