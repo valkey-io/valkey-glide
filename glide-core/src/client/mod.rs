@@ -853,6 +853,15 @@ fn partial_results_margin(request_timeout: Duration) -> Duration {
         .min(Duration::from_millis(100))
 }
 
+/// Whether the circuit breaker counts `error` as the client failing to reach
+/// the server. Timeouts count separately, when the breaker counts them.
+fn counts_as_connection_failure(error: &RedisError) -> bool {
+    matches!(
+        error.kind(),
+        ErrorKind::IoError | ErrorKind::FatalSendError | ErrorKind::FatalReceiveError
+    ) || error.is_connection_dropped()
+}
+
 /// Returns whether any node in a partial result timed out and, when no node
 /// answered, the error the circuit breaker counts instead of the plain call's:
 /// the first connection error, else a timeout. Error replies are not counted,
@@ -866,26 +875,18 @@ fn partial_results_failure(entries: &[(Value, Value)]) -> (bool, Option<RedisErr
             answered = true;
             continue;
         };
-        // A client-side error keeps its kind's name as the code. A server reply
-        // with one of these codes would also count; no server sends one.
-        let kind = match error.err_code() {
-            redis::TIMEOUT_ERROR_CODE => {
-                timed_out = true;
-                continue;
-            }
-            "IoError" => ErrorKind::IoError,
-            "FatalSendError" => ErrorKind::FatalSendError,
-            "FatalReceiveError" => ErrorKind::FatalReceiveError,
-            _ => continue,
-        };
-        connection_error.get_or_insert(kind);
+        let error = RedisError::from(error.clone());
+        if error.is_timeout() {
+            timed_out = true;
+        } else if counts_as_connection_failure(&error) {
+            connection_error.get_or_insert(error);
+        }
     }
     let failure = if answered {
         None
-    } else if let Some(kind) = connection_error {
-        Some((kind, "No node answered").into())
     } else {
-        timed_out.then(|| io::Error::from(io::ErrorKind::TimedOut).into())
+        connection_error
+            .or_else(|| timed_out.then(|| io::Error::from(io::ErrorKind::TimedOut).into()))
     };
     (timed_out, failure)
 }
@@ -1856,12 +1857,7 @@ impl Client {
                     let counts = if e.is_timeout() {
                         cb.counts_timeouts()
                     } else {
-                        matches!(
-                            e.kind(),
-                            ErrorKind::IoError
-                                | ErrorKind::FatalSendError
-                                | ErrorKind::FatalReceiveError
-                        ) || e.is_connection_dropped()
+                        counts_as_connection_failure(e)
                     };
                     if counts {
                         let kind_str = if e.is_timeout() {
@@ -5433,7 +5429,11 @@ mod tests {
                 },
             ))
         };
-        let failed = |error: redis::RedisError| node(redis::Value::ServerError(error.into()));
+        let failed = |error| {
+            node(redis::Value::ServerError(
+                redis::ServerError::from_error_keeping_kind(error),
+            ))
+        };
         let denied = || node(redis::parse_redis_value(b"-NOPERM no permissions\r\n").unwrap());
 
         // Every node timed out: a timeout for the metric and for the breaker.
