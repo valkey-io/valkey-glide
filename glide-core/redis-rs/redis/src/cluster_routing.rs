@@ -16,7 +16,9 @@ use std::sync::{RwLock, RwLockWriteGuard};
 #[derive(Clone)]
 pub(crate) enum Redirect {
     Moved(String),
-    /// (addr, should_exec_asking) - if `should_exec_asking` is true,  the `ASKING` command would be executed as part of `get_connection`.
+    /// (addr, should_exec_asking) - if `should_exec_asking` is true, the request is preceded by `ASKING`.
+    /// The sync client sends it first. The async client writes it in the same write as the command,
+    /// or as a request of its own (see `cluster_async::Connect::sends_asking_with_command`).
     Ask(String, bool),
 }
 

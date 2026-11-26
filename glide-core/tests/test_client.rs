@@ -377,6 +377,38 @@ pub(crate) mod shared_client_tests {
     // TODO #7698: Add a test that a password updated during a reconnect is used by the next
     // reconnect attempt, for standalone and cluster.
     #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_update_connection_password_timeout_is_a_timeout_error() {
+        block_on_all(async {
+            // Accepts connections but never answers, so the lazy connect inside the
+            // password update outlasts the request timeout.
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = listener.local_addr().unwrap().port();
+            tokio::spawn(async move {
+                let mut held = Vec::new();
+                while let Ok((stream, _)) = listener.accept().await {
+                    held.push(stream);
+                }
+            });
+            let connection_request = create_connection_request(
+                &[redis::ConnectionAddr::Tcp("127.0.0.1".to_string(), port)],
+                &TestConfiguration {
+                    lazy_connect: true,
+                    request_timeout: Some(300),
+                    ..Default::default()
+                },
+            );
+            let mut client = Client::new(connection_request.into(), None).await.unwrap();
+
+            let err = client
+                .update_connection_password(Some("password".to_string()), false)
+                .await
+                .expect_err("the password update should time out");
+            assert!(err.is_timeout(), "expected a timeout error, got: {err}");
+        });
+    }
+
+    #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_authenticate_with_password(#[values(false, true)] use_cluster: bool) {
@@ -5174,16 +5206,13 @@ pub(crate) mod shared_client_tests {
     ) {
         use ::protobuf::MessageField;
         use glide_core::connection_request as protobuf;
+        use protobuf::AuthenticationInfo as ProtoAuthInfo;
         use protobuf::ConnectionRequest as ProtoConnectionRequest;
         use protobuf::TlsMode;
-        use protobuf::{AuthenticationInfo as ProtoAuthInfo, NodeAddress};
 
-        let server = RedisServer::new(ServerType::Tcp { tls: false });
+        let server = RedisServer::new(standalone_server_type(false));
         let addr = server.get_client_addr();
-        let (host, port) = match &addr {
-            redis::ConnectionAddr::Tcp(host, port) => (host.clone(), *port),
-            other => panic!("Expected a plain TCP test server address, got: {other:?}"),
-        };
+        let node_address = get_address_info(&addr);
 
         let admin_client = redis::Client::open(redis::ConnectionInfo {
             addr,
@@ -5200,11 +5229,7 @@ pub(crate) mod shared_client_tests {
         set_requirepass(&mut admin_conn, password).await;
 
         let mut proto_request = ProtoConnectionRequest::new();
-        proto_request.addresses.push(NodeAddress {
-            host: host.into(),
-            port: port.into(),
-            ..Default::default()
-        });
+        proto_request.addresses.push(node_address);
         proto_request.tls_mode = TlsMode::NoTls.into();
         let mut auth_info = ProtoAuthInfo::new();
         auth_info.password = password.into();

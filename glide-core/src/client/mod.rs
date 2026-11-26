@@ -853,39 +853,46 @@ fn partial_results_margin(request_timeout: Duration) -> Duration {
         .min(Duration::from_millis(100))
 }
 
+/// Whether the circuit breaker counts `error` as the client failing to reach
+/// the server. Timeouts count separately, when the breaker counts them.
+fn counts_as_connection_failure(error: &RedisError) -> bool {
+    matches!(
+        error.kind(),
+        ErrorKind::IoError | ErrorKind::FatalSendError | ErrorKind::FatalReceiveError
+    ) || error.is_connection_dropped()
+}
+
 /// Returns whether any node in a partial result timed out and, when no node
-/// answered, the error the circuit breaker counts instead of the plain call's:
-/// the first connection error, else a timeout. Error replies are not counted,
-/// as for a plain call.
+/// answered, the error the circuit breaker counts instead of the plain call's.
+/// The plain call fails with the first node error to arrive, and a timeout
+/// arrives last, so the first connection error counts, else a timeout if no
+/// other node failed. Error replies are not counted, as for a plain call. A
+/// node with no connection, which the plain call leaves out, changes nothing.
 fn partial_results_failure(entries: &[(Value, Value)]) -> (bool, Option<RedisError>) {
     let mut answered = false;
     let mut timed_out = false;
+    let mut failed = false;
     let mut connection_error = None;
     for (_, value) in entries {
         let Value::ServerError(error) = value else {
             answered = true;
             continue;
         };
-        // A client-side error keeps its kind's name as the code. A server reply
-        // with one of these codes would also count; no server sends one.
-        let kind = match error.err_code() {
-            redis::TIMEOUT_ERROR_CODE => {
-                timed_out = true;
-                continue;
-            }
-            "IoError" => ErrorKind::IoError,
-            "FatalSendError" => ErrorKind::FatalSendError,
-            "FatalReceiveError" => ErrorKind::FatalReceiveError,
-            _ => continue,
-        };
-        connection_error.get_or_insert(kind);
+        let error = RedisError::from(error.clone());
+        if error.is_timeout() {
+            timed_out = true;
+        } else if counts_as_connection_failure(&error) {
+            connection_error.get_or_insert(error);
+        } else if error.kind() != ErrorKind::ConnectionNotFoundForRoute {
+            failed = true;
+        }
     }
     let failure = if answered {
         None
-    } else if let Some(kind) = connection_error {
-        Some((kind, "No node answered").into())
     } else {
-        timed_out.then(|| io::Error::from(io::ErrorKind::TimedOut).into())
+        connection_error.or_else(|| {
+            (timed_out && !failed).then(|| io::Error::from(io::ErrorKind::TimedOut).into())
+        })
     };
     (timed_out, failure)
 }
@@ -1448,6 +1455,7 @@ impl Client {
         mut self_clone: Client,
         cmd: Arc<Cmd>,
         routing: Option<RoutingInfo>,
+        fan_out_deadline: Option<Instant>,
         client: ClientWrapper,
         compression_manager: Option<Arc<CompressionManager>>,
     ) -> RedisResult<Value> {
@@ -1476,7 +1484,18 @@ impl Client {
                         .or_else(|| RoutingInfo::for_routable(cmd.as_ref()))
                         .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
                 };
-                client.route_command(&cmd, final_routing).await
+                match fan_out_deadline {
+                    None => client.route_command(&cmd, final_routing).await,
+                    deadline => {
+                        client
+                            .route_command_with_fan_out_deadline(
+                                cmd.clone(),
+                                final_routing,
+                                deadline,
+                            )
+                            .await
+                    }
+                }
             }
             ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
         }?;
@@ -1692,11 +1711,11 @@ impl Client {
                 // and the partial-results deadline
                 let cmd_start = Instant::now();
 
-                let mut owned_cmd = owned_cmd;
                 let mut watchdog_duration = duration;
+                let mut fan_out_deadline = None;
                 if partial_results {
                     let margin = partial_results_margin(duration);
-                    owned_cmd.set_fan_out_deadline(Some(cmd_start + duration - margin));
+                    fan_out_deadline = Some(cmd_start + duration - margin);
                     watchdog_duration += margin;
                 }
                 // Wrap Cmd in Arc so the timeout arm can still read watchdog fields after execute takes ownership
@@ -1714,6 +1733,7 @@ impl Client {
                     self_clone,
                     owned_cmd.clone(),
                     routing,
+                    fan_out_deadline,
                     client,
                     compression_manager,
                 );
@@ -1818,6 +1838,7 @@ impl Client {
                     self_clone,
                     owned_cmd,
                     routing,
+                    None,
                     client,
                     compression_manager,
                 );
@@ -1831,9 +1852,14 @@ impl Client {
         // goes to the circuit breaker as the error the plain call would return.
         let partial_failure = if partial_results && let Ok(Value::Map(entries)) = &result {
             let (timed_out, failure) = partial_results_failure(entries);
-            // As `track_blocking_failure` does for the plain call's timeout: the
-            // node may still hold the blocking command, so the borrow can't be reset.
-            if timed_out && is_blocking_cmd {
+            // As `track_blocking_failure` does for the plain call: the node may
+            // still hold the blocking command, so the borrow can't be reset.
+            if is_blocking_cmd
+                && entries.iter().any(|(_, value)| {
+                    matches!(value, Value::ServerError(error)
+                        if crate::scope::is_poisoning_error(&error.clone().into()))
+                })
+            {
                 self.unresettable.store(true, Ordering::Release);
             }
             if timed_out && let Err(e) = GlideOpenTelemetry::record_timeout_error() {
@@ -1856,12 +1882,7 @@ impl Client {
                     let counts = if e.is_timeout() {
                         cb.counts_timeouts()
                     } else {
-                        matches!(
-                            e.kind(),
-                            ErrorKind::IoError
-                                | ErrorKind::FatalSendError
-                                | ErrorKind::FatalReceiveError
-                        ) || e.is_connection_dropped()
+                        counts_as_connection_failure(e)
                     };
                     if counts {
                         let kind_str = if e.is_timeout() {
@@ -2221,28 +2242,31 @@ impl Client {
         let scan_state_cursor_clone = scan_state_cursor.clone();
         let cluster_scan_args_clone = cluster_scan_args.clone(); // Assuming ClusterScanArgs is Clone
 
-        // Check and initialize if lazy *inside* the async block
         self.reconcile_iam_before_dispatch().await?;
         let client = self.get_or_initialize_client().await?;
 
-        match client {
-            ClientWrapper::Standalone(_) => {
-                unreachable!("Cluster scan is not supported in standalone mode")
+        // The SCANs have no response timeout and try_scan retries without limit, so
+        // this is the only bound on the call.
+        run_with_timeout(Some(self.request_timeout), async move {
+            match client {
+                ClientWrapper::Standalone(_) => {
+                    unreachable!("Cluster scan is not supported in standalone mode")
+                }
+                ClientWrapper::Cluster { mut client, .. } => {
+                    let (cursor, keys) = client
+                        .cluster_scan(scan_state_cursor_clone, cluster_scan_args_clone)
+                        .await?;
+                    let cluster_cursor_id = if cursor.is_finished() {
+                        Value::BulkString(FINISHED_SCAN_CURSOR.into())
+                    } else {
+                        Value::BulkString(insert_cluster_scan_cursor(cursor).into())
+                    };
+                    Ok(Value::Array(vec![cluster_cursor_id, Value::Array(keys)]))
+                }
+                ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
             }
-            ClientWrapper::Cluster { mut client, .. } => {
-                let (cursor, keys) = client
-                    .cluster_scan(scan_state_cursor_clone, cluster_scan_args_clone) // Use clones
-                    .await?;
-                let cluster_cursor_id = if cursor.is_finished() {
-                    Value::BulkString(FINISHED_SCAN_CURSOR.into()) // Use constant
-                } else {
-                    Value::BulkString(insert_cluster_scan_cursor(cursor).into())
-                };
-                Ok(Value::Array(vec![cluster_cursor_id, Value::Array(keys)]))
-            }
-            // Lazy case is now handled by the initial check
-            ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
-        }
+        })
+        .await
     }
 
     fn get_transaction_values(
@@ -2671,10 +2695,11 @@ impl Client {
                     result
                 }
             }
-            Err(_elapsed) => Err(RedisError::from((
-                ErrorKind::IoError,
+            Err(_elapsed) => Err(io::Error::new(
+                io::ErrorKind::TimedOut,
                 "Password update operation timed out, please check the connection",
-            ))),
+            )
+            .into()),
         }
     }
 
@@ -5421,20 +5446,33 @@ mod tests {
         assert_eq!(partial_results_margin(Duration::ZERO), Duration::ZERO);
     }
 
+    /// A node's entry in a partial result.
+    fn node_entry(value: redis::Value) -> (redis::Value, redis::Value) {
+        (redis::Value::BulkString(b"a:1".to_vec().into()), value)
+    }
+
+    /// A node's entry for `error`, held as partial results hold it.
+    fn failed_entry(error: redis::RedisError) -> (redis::Value, redis::Value) {
+        node_entry(redis::Value::ServerError(
+            redis::ServerError::from_error_keeping_kind(error),
+        ))
+    }
+
+    fn timeout_entry() -> (redis::Value, redis::Value) {
+        failed_entry(std::io::Error::from(std::io::ErrorKind::TimedOut).into())
+    }
+
+    /// A node's entry for the error reply `wire`.
+    fn reply_entry(wire: &[u8]) -> (redis::Value, redis::Value) {
+        node_entry(redis::parse_redis_value(wire).unwrap())
+    }
+
     #[test]
     fn test_partial_results_failure_stands_for_the_plain_error_when_no_node_answered() {
-        let node = |value| (redis::Value::BulkString(b"a:1".to_vec().into()), value);
-        let reply = || node(redis::Value::BulkString(b"# Server".to_vec().into()));
-        let timeout = || {
-            node(redis::Value::ServerError(
-                redis::ServerError::ExtensionError {
-                    code: redis::TIMEOUT_ERROR_CODE.into(),
-                    detail: Some("timed out".into()),
-                },
-            ))
-        };
-        let failed = |error: redis::RedisError| node(redis::Value::ServerError(error.into()));
-        let denied = || node(redis::parse_redis_value(b"-NOPERM no permissions\r\n").unwrap());
+        let reply = || node_entry(redis::Value::BulkString(b"# Server".to_vec().into()));
+        let timeout = timeout_entry;
+        let failed = failed_entry;
+        let denied = || reply_entry(b"-NOPERM no permissions\r\n");
 
         // Every node timed out: a timeout for the metric and for the breaker.
         let (timed_out, failure) = partial_results_failure(&[timeout(), timeout()]);
@@ -5457,6 +5495,34 @@ mod tests {
         // Error replies do not count, as for the plain call.
         let (timed_out, failure) = partial_results_failure(&[denied(), denied()]);
         assert!(!timed_out);
+        assert!(failure.is_none());
+    }
+
+    #[test]
+    fn test_partial_results_failure_counts_a_timeout_only_when_no_other_node_failed() {
+        // The plain call fails first with the error reply, which is not counted.
+        let denied = reply_entry(b"-NOPERM no permissions\r\n");
+        let (timed_out, failure) = partial_results_failure(&[denied, timeout_entry()]);
+        assert!(timed_out);
+        assert!(failure.is_none());
+
+        // The plain call leaves out a node with no connection and times out.
+        let unconnected = failed_entry(
+            (
+                redis::ErrorKind::ConnectionNotFoundForRoute,
+                "Connection not found",
+            )
+                .into(),
+        );
+        let (_, failure) = partial_results_failure(&[unconnected, timeout_entry()]);
+        assert!(failure.unwrap().is_timeout());
+    }
+
+    #[test]
+    fn test_partial_results_failure_does_not_count_a_reply_coded_like_a_connection_error() {
+        // A script can reply with any error code.
+        let forged = || reply_entry(b"-IoError not really\r\n");
+        let (_, failure) = partial_results_failure(&[forged(), forged()]);
         assert!(failure.is_none());
     }
 

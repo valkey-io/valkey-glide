@@ -983,13 +983,18 @@ mod cluster_client_tests {
         .await
     }
 
-    /// Pauses every client of the node at `address` for 3 s and returns its route.
-    async fn pause_node(pauser: &mut Client, address: &str) -> RoutingInfo {
+    /// The route to the node at `address`.
+    fn node_route(address: &str) -> RoutingInfo {
         let (host, port) = address.rsplit_once(':').unwrap();
-        let route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+        RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
             host: host.to_string(),
             port: port.parse().unwrap(),
-        });
+        })
+    }
+
+    /// Pauses every client of the node at `address` for 3 s and returns its route.
+    async fn pause_node(pauser: &mut Client, address: &str) -> RoutingInfo {
+        let route = node_route(address);
         let mut pause = redis::cmd("CLIENT");
         pause.arg("PAUSE").arg(3000).arg("ALL");
         pauser
@@ -1211,6 +1216,231 @@ mod cluster_client_tests {
             assert!(client.reset_connection_state(0).await.is_err());
 
             wait_for_pauses_to_end(&mut pauser, &[route]).await;
+        });
+    }
+
+    #[rstest]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_partial_results_blocking_command_connection_error_makes_the_borrow_unresettable() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: false,
+                ..Default::default()
+            })
+            .await;
+            let mut killer = second_client(test_basics.cluster.as_ref()).await;
+            let client = &mut test_basics.client;
+            let all_primaries = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, None));
+            let healthy = client
+                .send_command(&mut redis::cmd("PING"), Some(all_primaries.clone()))
+                .await
+                .unwrap();
+            let victim = node_entries(healthy).into_keys().next().unwrap();
+            let victim_route = node_route(&victim);
+
+            // WAIT blocks for 1 s, since no primary has that many replicas.
+            let mut wait = redis::cmd("WAIT");
+            wait.arg(100).arg(1000).set_allow_partial_results(true);
+            // Close the victim's connection while it holds the WAIT.
+            let kill_waiting_connection = async {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                loop {
+                    let mut list = redis::cmd("CLIENT");
+                    list.arg("LIST").arg("TYPE").arg("normal");
+                    let clients: String = redis::from_owned_redis_value(
+                        killer
+                            .send_command(&mut list, Some(victim_route.clone()))
+                            .await
+                            .unwrap(),
+                    )
+                    .unwrap();
+                    if let Some(id) = clients
+                        .lines()
+                        .find(|line| line.contains("cmd=wait"))
+                        .and_then(|line| line.split(' ').find_map(|f| f.strip_prefix("id=")))
+                    {
+                        let mut kill = redis::cmd("CLIENT");
+                        kill.arg("KILL").arg("ID").arg(id);
+                        killer
+                            .send_command(&mut kill, Some(victim_route.clone()))
+                            .await
+                            .unwrap();
+                        return;
+                    }
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "the WAIT never reached {victim}"
+                    );
+                }
+            };
+            let (result, ()) = tokio::join!(
+                client.send_command(&mut wait, Some(all_primaries)),
+                kill_waiting_connection
+            );
+            let entries = node_entries(result.unwrap());
+            assert!(
+                matches!(&entries[&victim], Value::ServerError(_))
+                    && !is_client_timeout(&entries[&victim]),
+                "{entries:?}"
+            );
+            assert!(client.reset_connection_state(0).await.is_err());
+        });
+    }
+
+    /// Without a bound, the scan never settles and rstest kills the test at its own limit.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_scan_is_bounded_by_request_timeout() {
+        const REQUEST_TIMEOUT_MS: u32 = 500;
+
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                request_timeout: Some(REQUEST_TIMEOUT_MS),
+                shared_server: false,
+                ..Default::default()
+            })
+            .await;
+
+            block_all_primaries(&mut test_basics.client).await;
+
+            let cursor = redis::ScanStateRC::new();
+            let args = redis::ClusterScanArgs::builder().build();
+
+            let started = std::time::Instant::now();
+            let result = test_basics.client.cluster_scan(&cursor, args).await;
+            let elapsed = started.elapsed();
+
+            let err = result.expect_err("cluster_scan should fail while every primary is blocked");
+            assert!(err.is_timeout(), "expected a timeout error, got: {err}");
+            assert!(
+                elapsed < Duration::from_millis(REQUEST_TIMEOUT_MS as u64) * 4,
+                "cluster_scan took {elapsed:?}, which is not bounded by the \
+                 {REQUEST_TIMEOUT_MS}ms request timeout",
+            );
+        });
+    }
+
+    /// Returns once the script has timed out, so every primary is running it. The
+    /// script keeps running until a `SCRIPT KILL` arrives on another connection.
+    async fn block_all_primaries(client: &mut Client) {
+        let mut cmd = redis::cmd("EVAL");
+        cmd.arg("while (true) do redis.call('ping') end").arg("0");
+        let err = client
+            .send_command(
+                &mut cmd,
+                Some(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllMasters,
+                    None,
+                ))),
+            )
+            .await
+            .expect_err("the script never returns");
+        assert!(
+            err.is_timeout(),
+            "expected the script to time out, got: {err}"
+        );
+    }
+
+    async fn scan_page(
+        client: &mut Client,
+        cursor: &redis::ScanStateRC,
+        keys: &mut std::collections::HashSet<String>,
+    ) -> redis::RedisResult<Option<redis::ScanStateRC>> {
+        let args = redis::ClusterScanArgs::builder().with_count(10).build();
+        let Value::Array(reply) = client.cluster_scan(cursor, args).await? else {
+            panic!("cluster_scan reply is not an array");
+        };
+        let [Value::BulkString(id), Value::Array(page)] = reply.as_slice() else {
+            panic!("unexpected cluster_scan reply: {reply:?}");
+        };
+        for key in page {
+            let Value::BulkString(key) = key else {
+                panic!("unexpected key: {key:?}");
+            };
+            keys.insert(String::from_utf8(key.to_vec()).unwrap());
+        }
+        let id = String::from_utf8(id.to_vec()).unwrap();
+        if id == glide_core::client::FINISHED_SCAN_CURSOR {
+            return Ok(None);
+        }
+        glide_core::cluster_scan_container::get_cluster_scan_cursor(id).map(Some)
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_scan_resumes_from_cursor_after_timeout() {
+        const REQUEST_TIMEOUT_MS: u32 = 500;
+        const KEY_COUNT: usize = 1000;
+
+        block_on_all(async move {
+            let config = TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                request_timeout: Some(REQUEST_TIMEOUT_MS),
+                shared_server: false,
+                ..Default::default()
+            };
+            let test_basics = setup_test_basics_internal(config.clone()).await;
+            let mut client = test_basics.client;
+            // Connect before blocking: a busy server completes no handshake, and it answers
+            // `SCRIPT KILL` only after `busy-reply-threshold` (5 s), hence the 10 s timeout.
+            let addresses = test_basics.cluster.as_ref().unwrap().get_server_addresses();
+            let kill_config = TestConfiguration {
+                request_timeout: Some(10_000),
+                ..config
+            };
+            let mut kill_client = Client::new(
+                create_connection_request(&addresses, &kill_config).into(),
+                None,
+            )
+            .await
+            .unwrap();
+
+            let seeded: std::collections::HashSet<String> =
+                (0..KEY_COUNT).map(|i| format!("key:{i}")).collect();
+            for key in &seeded {
+                client
+                    .send_command(redis::cmd("SET").arg(key).arg("v"), None)
+                    .await
+                    .unwrap();
+            }
+
+            let mut seen = std::collections::HashSet::new();
+            let first = redis::ScanStateRC::new();
+            let cursor = scan_page(&mut client, &first, &mut seen)
+                .await
+                .unwrap()
+                .expect("scan finished after one page");
+
+            block_all_primaries(&mut client).await;
+            let err = scan_page(&mut client, &cursor, &mut seen)
+                .await
+                .expect_err("cluster_scan should fail while every primary is blocked");
+            assert!(err.is_timeout(), "expected a timeout error, got: {err}");
+
+            kill_client
+                .send_command(
+                    &mut redis::cmd("SCRIPT").arg("KILL").clone(),
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllMasters,
+                        None,
+                    ))),
+                )
+                .await
+                .unwrap();
+
+            let mut next = Some(cursor);
+            while let Some(cursor) = next {
+                next = scan_page(&mut client, &cursor, &mut seen).await.unwrap();
+            }
+            let missing: Vec<_> = seeded.difference(&seen).collect();
+            assert!(
+                missing.is_empty(),
+                "keys lost across the timeout: {missing:?}"
+            );
         });
     }
 

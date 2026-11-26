@@ -1141,7 +1141,7 @@ def sync_pubsub_test_clients(
             )
 
         # Pool the publishing client — it only calls publish(), no state to reset.
-        pub_key = (_get_worker_id(), cluster_mode, "pubsub_publisher")
+        pub_key = (_get_worker_id(), cluster_mode, "pubsub_publisher", timeout)
         with _sync_client_pool_lock:
             publishing_client = _sync_client_pool.get(pub_key)
 
