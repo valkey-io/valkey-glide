@@ -4210,6 +4210,44 @@ mod tests_create_client_from_uri_internal {
             );
         }
     }
+
+    /// Parses `client_side_cache` JSON into the cache configuration of the connection request.
+    fn parse_client_side_cache(cache_json: &str) -> connection_request::ClientSideCache {
+        let options = format!(r#"{{"protocol": "RESP3", "client_side_cache": {cache_json}}}"#);
+        let request = parse_uri_with_options("redis://127.0.0.1:6379", &options)
+            .expect("the cache options are valid");
+        request
+            .client_side_cache
+            .into_option()
+            .expect("the request carries a cache configuration")
+    }
+
+    /// The JSON `tracking_prefix` reaches the connection request as its UTF-8 bytes, unchanged.
+    #[test]
+    fn client_side_cache_tracking_prefix_reaches_the_request_unchanged() {
+        for prefix in ["user:", "u", "caf\u{e9}:\u{1f600}:"] {
+            let cache = parse_client_side_cache(&format!(
+                r#"{{"max_cache_kb": 1024, "entry_ttl_ms": 0, "server_assisted": true, "tracking_prefix": {}}}"#,
+                serde_json::to_string(prefix).unwrap()
+            ));
+            assert!(cache.server_assisted, "prefix {prefix:?}");
+            assert_eq!(
+                cache.tracking_prefix.as_deref(),
+                Some(prefix.as_bytes()),
+                "prefix {prefix:?}"
+            );
+        }
+    }
+
+    /// Without a JSON `tracking_prefix` the connection request carries no prefix.
+    #[test]
+    fn client_side_cache_without_tracking_prefix_leaves_it_unset() {
+        let cache = parse_client_side_cache(
+            r#"{"max_cache_kb": 1024, "entry_ttl_ms": 0, "server_assisted": true}"#,
+        );
+        assert!(cache.server_assisted);
+        assert_eq!(cache.tracking_prefix, None);
+    }
 }
 
 fn is_known_connection_options_json_key(key: &str) -> bool {
