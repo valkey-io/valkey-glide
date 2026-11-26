@@ -70,8 +70,6 @@ pub struct Cmd {
     response_timeout: Option<std::time::Duration>,
     /// See [`Cmd::set_allow_partial_results`].
     allow_partial_results: bool,
-    /// See [`Cmd::set_fan_out_deadline`].
-    fan_out_deadline: Option<std::time::Instant>,
     /// Inflight slot tracker. When set, the slot is released when the last
     /// clone of this Cmd (or its Arc) is dropped. Used to decouple user-facing
     /// timeout from internal pipeline cleanup.
@@ -100,7 +98,6 @@ impl Clone for Cmd {
             is_blocking: self.is_blocking,
             response_timeout: self.response_timeout,
             allow_partial_results: self.allow_partial_results,
-            fan_out_deadline: self.fan_out_deadline,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: self.inflight_tracker.clone(),
             // Reset watchdog fields — each clone is a fresh command attempt
@@ -559,7 +556,6 @@ impl Cmd {
             is_blocking: false,
             response_timeout: None,
             allow_partial_results: false,
-            fan_out_deadline: None,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: None,
             watchdog_phase: AtomicU8::new(PHASE_QUEUED),
@@ -580,7 +576,6 @@ impl Cmd {
             is_blocking: false,
             response_timeout: None,
             allow_partial_results: false,
-            fan_out_deadline: None,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: None,
             watchdog_phase: AtomicU8::new(PHASE_QUEUED),
@@ -1049,19 +1044,6 @@ impl Cmd {
         self.allow_partial_results
     }
 
-    /// Set the time at which a partial-results fan-out stops waiting. Nodes
-    /// that have not answered by then are reported as timed out.
-    #[inline]
-    pub fn set_fan_out_deadline(&mut self, deadline: Option<std::time::Instant>) {
-        self.fan_out_deadline = deadline;
-    }
-
-    /// Get the partial-results fan-out deadline, if set.
-    #[inline]
-    pub fn fan_out_deadline(&self) -> Option<std::time::Instant> {
-        self.fan_out_deadline
-    }
-
     /// Attach an inflight slot tracker. The slot is released when the last
     /// clone of this Cmd (or its `Arc<Cmd>`) is dropped.
     #[cfg(feature = "cluster-async")]
@@ -1221,14 +1203,18 @@ mod tests {
     fn test_allow_partial_results_defaults_and_clone() {
         let mut cmd = Cmd::new();
         assert!(!cmd.allow_partial_results());
-        assert_eq!(cmd.fan_out_deadline(), None);
 
-        let deadline = std::time::Instant::now();
         cmd.set_allow_partial_results(true);
-        cmd.set_fan_out_deadline(Some(deadline));
-        let cloned = cmd.clone();
-        assert!(cloned.allow_partial_results());
-        assert_eq!(cloned.fan_out_deadline(), Some(deadline));
+        assert!(cmd.clone().allow_partial_results());
+    }
+
+    #[test]
+    #[cfg(all(feature = "cluster-async", target_pointer_width = "64"))]
+    fn test_cmd_stays_within_104_bytes() {
+        // Every command is cloned into an `Arc`. Past 104 bytes that allocation moves to
+        // a larger size class, and 64-task SET/GET throughput drops by about 5%.
+        let size = std::mem::size_of::<Cmd>();
+        assert!(size <= 104, "Cmd is {size} bytes");
     }
 
     #[test]

@@ -363,13 +363,28 @@ where
         cmd: &Cmd,
         routing: cluster_routing::RoutingInfo,
     ) -> RedisResult<Value> {
+        self.route_command_with_fan_out_deadline(Arc::new(cmd.clone()), routing, None)
+            .await
+    }
+
+    /// Same as [`Self::route_command`], and a partial-results fan-out (see
+    /// [`Cmd::set_allow_partial_results`]) stops waiting at `fan_out_deadline`:
+    /// nodes that have not answered by then are reported as timed out. Takes the
+    /// command as an `Arc`, so a caller that already holds one does not clone it.
+    pub async fn route_command_with_fan_out_deadline(
+        &mut self,
+        cmd: Arc<Cmd>,
+        routing: cluster_routing::RoutingInfo,
+        fan_out_deadline: Option<std::time::Instant>,
+    ) -> RedisResult<Value> {
         log_trace_lazy!("cluster", "route_command");
         let (sender, receiver) = oneshot::channel();
         self.sender
             .send(Message {
                 cmd: CmdArg::Cmd {
-                    cmd: Arc::new(cmd.clone()),
+                    cmd,
                     routing: routing.into(),
+                    fan_out_deadline,
                 },
                 sender,
             })
@@ -954,6 +969,8 @@ enum CmdArg<C> {
     Cmd {
         cmd: Arc<Cmd>,
         routing: InternalRoutingInfo<C>,
+        /// See [`ClusterConnection::route_command_with_fan_out_deadline`].
+        fan_out_deadline: Option<std::time::Instant>,
     },
     Pipeline {
         pipeline: Arc<crate::Pipeline>,
@@ -3382,6 +3399,7 @@ where
         routing: &'a MultipleNodeRoutingInfo,
         core: Core<C>,
         response_policy: Option<ResponsePolicy>,
+        fan_out_deadline: Option<std::time::Instant>,
     ) -> OperationResult {
         log_trace_lazy!("cluster", "execute_on_multiple_nodes");
 
@@ -3415,6 +3433,7 @@ where
                                             conn,
                                         }
                                         .into(),
+                                        fan_out_deadline: None,
                                     },
                                 },
                             }),
@@ -3517,7 +3536,7 @@ where
         }
 
         let result = if partial_results {
-            let collected = Self::collect_partial_results(receivers, cmd.fan_out_deadline()).await;
+            let collected = Self::collect_partial_results(receivers, fan_out_deadline).await;
             if matches!(collected, Ok((_, true))) {
                 // The node may have failed over, so ask for a throttled slot
                 // refresh in the background. The command is not retried.
@@ -3546,6 +3565,7 @@ where
     pub(crate) async fn try_cmd_request(
         cmd: Arc<Cmd>,
         routing: InternalRoutingInfo<C>,
+        fan_out_deadline: Option<std::time::Instant>,
         core: Core<C>,
     ) -> OperationResult {
         let routing = match routing {
@@ -3555,6 +3575,7 @@ where
                     &multi_node_routing,
                     core,
                     response_policy,
+                    fan_out_deadline,
                 )
                 .await;
             }
@@ -3622,7 +3643,11 @@ where
 
     async fn try_request(info: RequestInfo<C>, core: Core<C>) -> OperationResult {
         match info.cmd {
-            CmdArg::Cmd { cmd, routing } => Self::try_cmd_request(cmd, routing, core).await,
+            CmdArg::Cmd {
+                cmd,
+                routing,
+                fan_out_deadline,
+            } => Self::try_cmd_request(cmd, routing, fan_out_deadline, core).await,
             CmdArg::Pipeline {
                 pipeline,
                 offset,
