@@ -2117,14 +2117,36 @@ pub(crate) mod test_cache {
         };
     }
 
-    /// Unwraps the error of a client creation attempt (`Client` has no `Debug` impl).
-    fn expect_creation_error(
+    /// Cluster mode of a connection request built by hand, so that the `use_cluster` case
+    /// creates a cluster client and not a standalone client pointed at a cluster node.
+    fn cluster_mode(use_cluster: bool) -> ClusterMode {
+        if use_cluster {
+            ClusterMode::Enabled
+        } else {
+            ClusterMode::Disabled
+        }
+    }
+
+    /// Unwraps the error of a client creation attempt that validation must reject
+    /// (`Client` has no `Debug` impl).
+    ///
+    /// The error has to be `ConnectionError::Configuration`: `Client::new` returns that
+    /// variant only for a request it rejects before opening a connection. The same cache
+    /// checks run again while the connection is set up, with the same message but as a
+    /// connection failure, so the message alone does not tell the two apart.
+    fn expect_configuration_error(
         result: Result<glide_core::client::Client, glide_core::client::ConnectionError>,
         context: &str,
     ) -> glide_core::client::ConnectionError {
         match result {
             Ok(_) => panic!("client creation unexpectedly succeeded: {context}"),
-            Err(err) => err,
+            Err(err) => {
+                assert!(
+                    err.is_configuration(),
+                    "expected a configuration error ({context}), got: {err:?}"
+                );
+                err
+            }
         }
     }
 
@@ -2726,7 +2748,8 @@ pub(crate) mod test_cache {
         });
     }
 
-    /// Configuration errors are reported at client creation, before any connection is opened.
+    /// An invalid prefix configuration is rejected by `Client::new` as a configuration error,
+    /// before any connection is opened.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -2746,6 +2769,7 @@ pub(crate) mod test_cache {
             // Prefix without server-assisted tracking.
             let configuration = TestConfiguration {
                 shared_server: true,
+                cluster_mode: cluster_mode(use_cluster),
                 protocol: ProtocolVersion::RESP3,
                 client_side_cache: Some(ClientSideCache {
                     cache_id: "prefix_without_server_assisted".to_string().into(),
@@ -2757,7 +2781,7 @@ pub(crate) mod test_cache {
                 ..Default::default()
             };
             let request = create_connection_request(std::slice::from_ref(&addr), &configuration);
-            let err = expect_creation_error(
+            let err = expect_configuration_error(
                 glide_core::client::Client::new(request.into(), None).await,
                 "a prefix requires server_assisted",
             );
@@ -2767,6 +2791,7 @@ pub(crate) mod test_cache {
             // Empty prefix.
             let configuration = TestConfiguration {
                 shared_server: true,
+                cluster_mode: cluster_mode(use_cluster),
                 protocol: ProtocolVersion::RESP3,
                 client_side_cache: Some(ClientSideCache {
                     cache_id: "empty_prefix".to_string().into(),
@@ -2778,7 +2803,7 @@ pub(crate) mod test_cache {
                 ..Default::default()
             };
             let request = create_connection_request(std::slice::from_ref(&addr), &configuration);
-            let err = expect_creation_error(
+            let err = expect_configuration_error(
                 glide_core::client::Client::new(request.into(), None).await,
                 "an empty prefix is rejected",
             );
@@ -2954,12 +2979,13 @@ pub(crate) mod test_cache {
             // Same id, different prefix: rejected before connecting.
             let configuration = TestConfiguration {
                 shared_server: true,
+                cluster_mode: cluster_mode(use_cluster),
                 protocol: ProtocolVersion::RESP3,
                 client_side_cache: Some(prefixed_cache_config(&cache_id, b"yyy:", true)),
                 ..Default::default()
             };
             let request = create_connection_request(std::slice::from_ref(&addr), &configuration);
-            let err = expect_creation_error(
+            let err = expect_configuration_error(
                 glide_core::client::Client::new(request.into(), None).await,
                 "a different prefix cannot attach to the same cache id",
             );
@@ -2969,6 +2995,7 @@ pub(crate) mod test_cache {
             // Same id, same prefix: shares the cache.
             let configuration = TestConfiguration {
                 shared_server: true,
+                cluster_mode: cluster_mode(use_cluster),
                 protocol: ProtocolVersion::RESP3,
                 client_side_cache: Some(prefixed_cache_config(&cache_id, b"xxx:", true)),
                 ..Default::default()
