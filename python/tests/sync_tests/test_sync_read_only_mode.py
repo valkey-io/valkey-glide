@@ -181,6 +181,7 @@ class TestSyncReadOnlyMode:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.requires_tcp
     def test_sync_read_only_connects_to_primary_and_replica_separately(
         self,
         request,

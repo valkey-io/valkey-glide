@@ -65,7 +65,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     pin::Pin,
     sync::{
-        atomic::{self, AtomicIsize, AtomicUsize, Ordering},
+        atomic::{self, AtomicBool, AtomicIsize, AtomicUsize, Ordering},
         Arc,
     },
     task::{self, Poll},
@@ -619,7 +619,7 @@ impl<C> InnerCore<C>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    fn get_cluster_param<T, F>(&self, f: F) -> T
+    pub(crate) fn get_cluster_param<T, F>(&self, f: F) -> T
     where
         F: FnOnce(&ClusterParams) -> T,
         T: Clone,
@@ -752,17 +752,6 @@ where
             .slot_map
             .get_slots_of_node(node_address)
     }
-
-    /// Get connection for address
-    pub(crate) async fn connection_for_address(
-        &self,
-        address: &str,
-    ) -> Option<ConnectionFuture<C>> {
-        self.conn_lock
-            .read()
-            .connection_for_address(address)
-            .map(|(_, conn)| conn)
-    }
 }
 
 pub(crate) struct ClusterConnInner<C> {
@@ -887,6 +876,23 @@ pub(crate) enum InternalSingleNodeRouting<C> {
         redirect: Redirect,
         previous_routing: Box<InternalSingleNodeRouting<C>>,
     },
+}
+
+impl<C> InternalSingleNodeRouting<C> {
+    /// Whether a request on this route must be sent right after `ASKING`.
+    ///
+    /// The node honours `ASKING` only for the next command it reads from the connection,
+    /// and other requests share the connection, so the caller packs `ASKING` and the
+    /// request in one write. [`ClusterConnInner::get_connection`] does not send it.
+    pub(crate) fn requires_asking(&self) -> bool {
+        matches!(
+            self,
+            InternalSingleNodeRouting::Redirect {
+                redirect: Redirect::Ask(_, true),
+                ..
+            }
+        )
+    }
 }
 
 impl<C> From<SingleNodeRoutingInfo> for InternalSingleNodeRouting<C> {
@@ -1789,6 +1795,18 @@ fn fail_queued_senders<C>(
         failed += 1;
     }
     failed
+}
+
+/// Clears `SlotRefreshState::in_progress` on drop, so a refresh future cancelled
+/// mid-flight (e.g. by a `cluster_scan` timeout) cannot block all later refreshes.
+struct SlotRefreshInProgressGuard<'a> {
+    in_progress: &'a AtomicBool,
+}
+
+impl Drop for SlotRefreshInProgressGuard<'_> {
+    fn drop(&mut self) {
+        self.in_progress.store(false, Ordering::Relaxed);
+    }
 }
 
 impl<C> ClusterConnInner<C>
@@ -2844,6 +2862,7 @@ where
             log_warn_lazy!("topology_refresh", "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)");
             return Ok(());
         }
+        let _in_progress_guard = SlotRefreshInProgressGuard { in_progress };
         let acquire_elapsed = acquire_start.elapsed();
         if acquire_elapsed > Duration::from_millis(100) {
             log_warn_lazy!(
@@ -2910,7 +2929,6 @@ where
             })
             .await;
         }
-        in_progress.store(false, Ordering::Relaxed);
         res
     }
 
@@ -3415,9 +3433,15 @@ where
         };
         log_trace_lazy!("cluster", "route request to single node");
 
+        let asking = routing.requires_asking();
+        let asking_in_same_write = asking && C::sends_asking_with_command();
         let (address, mut conn) = Self::get_connection(routing, core, Some(cmd.clone()))
             .await
             .map_err(|err| (OperationTarget::NotFound, err))?;
+        if asking && !asking_in_same_write {
+            // A connection that has not opted in gets `ASKING` as a request of its own.
+            let _ = conn.req_packed_command(&crate::cmd::cmd("ASKING")).await;
+        }
         if let Some(span) = cmd.span() {
             set_routed_node_on_span(&span, &address);
         }
@@ -3426,8 +3450,18 @@ where
         cmd.watchdog_phase
             .store(crate::cmd::PHASE_SENT, std::sync::atomic::Ordering::Release);
 
-        conn.req_packed_command(&cmd)
-            .await
+        let result = if asking_in_same_write {
+            // Pack `ASKING` before the command, in the same write: a separate `ASKING` can be
+            // consumed by another request on this shared connection, and the node then
+            // answers the command with MOVED back to the slot's owner. The copy keeps the
+            // command's timeout, blocking and fencing flags.
+            let mut asking_cmd = Cmd::clone(&cmd);
+            asking_cmd.set_asking(true);
+            conn.req_packed_command(&asking_cmd).await
+        } else {
+            conn.req_packed_command(&cmd).await
+        };
+        result
             .map(Response::Single)
             .map_err(|err| (address.into(), err))
     }
@@ -3468,16 +3502,34 @@ where
                 pipeline_retry_strategy,
             } => {
                 if pipeline.is_atomic() || sub_pipeline {
-                    Self::try_pipeline_request(
-                        pipeline,
-                        offset,
-                        count,
-                        Self::get_connection(
-                            route.unwrap_or(InternalSingleNodeRouting::Random),
-                            core,
-                            None,
-                        ),
-                    )
+                    let asking = route
+                        .as_ref()
+                        .is_some_and(InternalSingleNodeRouting::requires_asking);
+                    // Only an atomic pipeline gets `ASKING` in the same write (before `MULTI`), as
+                    // single commands do; the connection discards its reply, so `offset` stays
+                    // as it is. In a non-atomic sub-pipeline it would cover only the first
+                    // command, so that keeps the standalone `ASKING`.
+                    let asking_in_same_write =
+                        asking && pipeline.is_atomic() && C::sends_asking_with_command();
+                    let pipeline = if asking_in_same_write {
+                        Arc::new(pipeline.with_asking())
+                    } else {
+                        pipeline
+                    };
+                    let connection = Self::get_connection(
+                        route.unwrap_or(InternalSingleNodeRouting::Random),
+                        core,
+                        None,
+                    );
+                    Self::try_pipeline_request(pipeline, offset, count, async move {
+                        let (address, mut conn) = connection.await?;
+                        if asking && !asking_in_same_write {
+                            // A connection that has not opted in gets `ASKING` as a request
+                            // of its own.
+                            let _ = conn.req_packed_command(&crate::cmd::cmd("ASKING")).await;
+                        }
+                        Ok((address, conn))
+                    })
                     .await
                 } else {
                     // The pipeline is not atomic and not already splitted, we need to split it into sub-pipelines and send them separately.
@@ -3500,9 +3552,9 @@ where
                     Ok((scan_state_ref, values)) => {
                         Ok(Response::ClusterScanResult(scan_state_ref, values))
                     }
-                    // TODO: After routing issues with sending to random node on not-key based commands are resolved,
-                    // this error should be handled in the same way as other errors and not fan-out.
-                    Err(err) => Err((OperationTarget::FanOut, err)),
+                    // `try_scan` already retried with the client's `retries`, so don't retry
+                    // again here.
+                    Err(err) => Err((OperationTarget::FatalError, err)),
                 }
             }
             CmdArg::OperationRequest(operation_request) => match operation_request {
@@ -3677,13 +3729,11 @@ where
         final_responses
     }
 
-    async fn get_connection(
+    pub(crate) async fn get_connection(
         routing: InternalSingleNodeRouting<C>,
         core: Core<C>,
         cmd: Option<Arc<Cmd>>,
     ) -> RedisResult<(String, C)> {
-        let mut asking = false;
-
         let conn_check = match routing {
             InternalSingleNodeRouting::Redirect {
                 redirect: Redirect::Moved(moved_addr),
@@ -3697,18 +3747,16 @@ where
                     ConnectionCheck::Found,
                 ),
             InternalSingleNodeRouting::Redirect {
-                redirect: Redirect::Ask(ask_addr, should_exec_asking),
+                redirect: Redirect::Ask(ask_addr, _),
                 ..
-            } => {
-                asking = should_exec_asking;
-                core.conn_lock
-                    .read()
-                    .connection_for_address(ask_addr.as_str())
-                    .map_or(
-                        ConnectionCheck::OnlyAddress(ask_addr),
-                        ConnectionCheck::Found,
-                    )
-            }
+            } => core
+                .conn_lock
+                .read()
+                .connection_for_address(ask_addr.as_str())
+                .map_or(
+                    ConnectionCheck::OnlyAddress(ask_addr),
+                    ConnectionCheck::Found,
+                ),
             InternalSingleNodeRouting::SpecificNode(route) => {
                 // Step 1: Attempt to get the connection directly using the route.
                 let conn_check = {
@@ -3828,7 +3876,7 @@ where
             }
         };
 
-        let (address, mut conn) = match conn_check {
+        let (address, conn) = match conn_check {
             ConnectionCheck::Found((address, connection)) => (address, connection.await),
             ConnectionCheck::OnlyAddress(address) => {
                 log_warn_rate_limited!("moved_error", 10, format!(
@@ -3909,9 +3957,6 @@ where
             }
         };
 
-        if asking {
-            let _ = conn.req_packed_command(&crate::cmd::cmd("ASKING")).await;
-        }
         Ok((address, conn))
     }
 
@@ -5091,9 +5136,35 @@ pub trait Connect: Sized {
     ) -> RedisFuture<'a, (Self, Option<IpAddr>)>
     where
         T: IntoConnectionInfo + Send + 'a;
+
+    /// Whether the client may hand this connection a command that is to be sent after
+    /// `ASKING` as one command, with `ASKING` packed in front of it in the same write.
+    ///
+    /// The node honours `ASKING` only for the next command it reads from the connection, so
+    /// on a connection that other requests share, `ASKING` and the command must not be
+    /// separate requests. A connection that returns `true` must write the command's packed
+    /// bytes as they are (they start with `ASKING`) and discard the first reply, returning
+    /// the command's own reply; [`MultiplexedConnection`] does both, and a wrapper that
+    /// passes the command to it unchanged may return `true` as well. The default, `false`,
+    /// keeps sending `ASKING` as a request of its own before the command.
+    ///
+    /// The contract is the same for atomic pipelines retried after ASK: the client sends
+    /// `Pipeline::with_asking` (`ASKING` before `MULTI`, in the same write) with the same
+    /// `offset` and `count` as without `ASKING`. The connection must write the pipeline's
+    /// packed bytes as they are and discard the first reply (`ASKING`'s, also when it is an
+    /// error) before it aggregates the pipeline's replies, as
+    /// [`MultiplexedConnection::send_packed_commands`] does. Otherwise an `ASKING` error
+    /// would be reported as the pipeline's, although the transaction may have run.
+    fn sends_asking_with_command() -> bool {
+        false
+    }
 }
 
 impl Connect for MultiplexedConnection {
+    fn sends_asking_with_command() -> bool {
+        true
+    }
+
     fn connect<'a, T>(
         info: T,
         response_timeout: Duration,
@@ -6077,7 +6148,7 @@ pub(super) mod refresh_task_resolution_tests {
     }
 
     #[derive(Clone, Debug)]
-    pub(super) struct RecordingConnection {
+    pub(crate) struct RecordingConnection {
         port: u16,
     }
 
@@ -6311,7 +6382,7 @@ pub(super) mod refresh_task_resolution_tests {
         )
     }
 
-    pub(super) fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
+    pub(crate) fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
         core_with_resolver(Arc::new(NonIdempotentResolver))
     }
 
@@ -6903,7 +6974,7 @@ pub(super) mod refresh_task_resolution_tests {
     }
 
     /// Inserts an in-progress refresh task for `address` and returns its identity.
-    fn insert_in_progress_refresh(
+    pub(crate) fn insert_in_progress_refresh(
         core: &Arc<InnerCore<RecordingConnection>>,
         address: &str,
         may_keep_existing_conn: bool,
@@ -6972,7 +7043,11 @@ pub(super) mod refresh_task_resolution_tests {
 
     /// Completes an in-progress refresh: installs the connection, then drops the task state,
     /// which wakes the waiters.
-    fn complete_refresh(core: &Arc<InnerCore<RecordingConnection>>, address: &str, port: u16) {
+    pub(crate) fn complete_refresh(
+        core: &Arc<InnerCore<RecordingConnection>>,
+        address: &str,
+        port: u16,
+    ) {
         core.conn_lock
             .read()
             .replace_or_add_connection_for_address(address, recording_node(port));

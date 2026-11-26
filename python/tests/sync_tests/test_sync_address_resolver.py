@@ -5,13 +5,16 @@ Tests for sync client address resolver functionality.
 Ports the Java address resolver tests from ConnectionTests.java.
 """
 
-from typing import Tuple, Union
+import os
+import threading
+from typing import List, Tuple, Union
 
 import pytest
 from glide_shared.config import (
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     NodeAddress,
+    PeriodicChecksStatus,
 )
 from glide_shared.constants import OK
 from glide_sync import GlideClient as SyncGlideClient
@@ -20,6 +23,7 @@ from glide_sync import GlideClusterClient as SyncGlideClusterClient
 TSyncGlideClient = Union[SyncGlideClient, SyncGlideClusterClient]
 
 
+@pytest.mark.requires_tcp
 @pytest.mark.parametrize("cluster_mode", [True, False])
 class TestSyncAddressResolver:
     """Sync address resolver tests."""
@@ -161,5 +165,64 @@ class TestSyncAddressResolver:
             assert client.ping() == b"PONG"
             assert client.set("resolver_test_key", "resolver_test_value") == OK
             assert client.get("resolver_test_key") == b"resolver_test_value"
+        finally:
+            client.close()
+
+    def test_address_resolver_runs_on_the_calling_thread_in_a_forked_child(
+        self, cluster_mode: bool
+    ):
+        """
+        After a fork, the child re-creates the client, which resolves its addresses again.
+        Those resolutions run in the child, on the thread that uses the client.
+        """
+        if cluster_mode:
+            cluster = pytest.valkey_cluster  # type: ignore[attr-defined]
+        else:
+            cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        actual = cluster.nodes_addr[0]
+        fake_host, fake_port = "fork-child-resolver.invalid", 9999
+        calls: List[Tuple[int, int]] = []
+
+        def resolver(host: str, port: int) -> Tuple[str, int]:
+            calls.append((os.getpid(), threading.get_ident()))
+            if host == fake_host and port == fake_port:
+                return (actual.host, actual.port)
+            return (host, port)
+
+        client: TSyncGlideClient
+        if cluster_mode:
+            # No periodic check, so no resolution runs in the background.
+            client = SyncGlideClusterClient.create(
+                GlideClusterClientConfiguration(
+                    addresses=[NodeAddress(fake_host, fake_port)],
+                    address_resolver=resolver,
+                    periodic_checks=PeriodicChecksStatus.DISABLED,
+                )
+            )
+        else:
+            client = SyncGlideClient.create(
+                GlideClientConfiguration(
+                    addresses=[NodeAddress(fake_host, fake_port)],
+                    address_resolver=resolver,
+                )
+            )
+
+        try:
+            pid = os.fork()
+            if pid == 0:
+                ok = False
+                try:
+                    in_child = [ident for pid_, ident in calls if pid_ == os.getpid()]
+                    ok = (
+                        client.set("fork_resolver_key", "child") == OK
+                        and client.get("fork_resolver_key") == b"child"
+                        and len(in_child) > 0
+                        and all(ident == threading.get_ident() for ident in in_child)
+                    )
+                finally:
+                    os._exit(0 if ok else 1)
+            _, status = os.waitpid(pid, 0)
+            assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0, status
+            assert client.get("fork_resolver_key") == b"child"
         finally:
             client.close()
