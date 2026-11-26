@@ -192,6 +192,8 @@ EXCLUDED_TESTS_FILENAMES = {
         "test_async_scope_backends.py",
         "test_async_pool_backends.py",
         "test_pipe_reader.py",
+        # Async-only: the loop-stall regression measures asyncio loop gaps (#7773)
+        "test_create_does_not_block_loop.py",
     ],
     "sync_only": [
         "test_sync_rdma.py",
