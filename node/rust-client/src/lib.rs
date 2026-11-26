@@ -8,6 +8,7 @@ use glide_core::compression::process_command_args_for_compression;
 use glide_core::connection_request;
 use glide_core::errors::{error_message, error_type};
 use glide_core::otel_db_semantics::{set_db_attributes, set_db_batch_attributes};
+use glide_core::worker_pool::socket_listener_pool_size;
 use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
     GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
@@ -267,7 +268,11 @@ fn acquire_worker_pool() -> LocalPoolHandle {
     let mut state = get_worker_pool_state().lock();
     state.client_count += 1;
     if state.pool.is_none() {
-        let num_workers = num_cpus::get();
+        // The shared sizing (glide-core::worker_pool) caps the default at 8: on many-core
+        // hosts the raw CPU count costs file descriptors proportional to it before any
+        // connection exists, and this build aborts (`panic = "abort"`) if a worker cannot
+        // be created.
+        let num_workers = socket_listener_pool_size();
         state.pool = Some(LocalPoolHandle::new(num_workers));
     }
     state.pool.as_ref().unwrap().clone()
@@ -527,6 +532,7 @@ fn process_command_for_compression(
         "BITPOS" => RequestType::BitPos,
         "DECR" => RequestType::Decr,
         "DECRBY" => RequestType::DecrBy,
+        // TODO #7238: Add DELEX so that it is rejected when compression is enabled.
         "DELIFEQ" => RequestType::DelIfEq,
         "GETBIT" => RequestType::GetBit,
         "GETRANGE" => RequestType::GetRange,

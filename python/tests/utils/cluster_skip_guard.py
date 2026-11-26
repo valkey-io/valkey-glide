@@ -14,7 +14,9 @@ def reset_unexpected_cluster_skips() -> None:
 
 
 def cluster_was_expected(config) -> bool:
-    """True unless this run is standalone-endpoints only."""
+    """True unless this run uses only standalone endpoints or a Unix socket."""
+    if config.getoption("--unix-socket"):
+        return False
     cluster = config.getoption("--cluster-endpoints")
     standalone = config.getoption("--standalone-endpoints")
     return bool(cluster) or not standalone

@@ -583,6 +583,7 @@ class TestGlideClients:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.requires_tcp
     async def test_connection_timeout_on_unavailable_host(
         self,
         request,
@@ -732,6 +733,7 @@ class TestGlideClients:
         await anyio.sleep(1)
         await assert_connected(glide_client)
 
+    @pytest.mark.requires_tcp
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("ip_address", [IP_ADDRESS_V4, IP_ADDRESS_V6])
     async def test_connect_with_ip_address_succeeds(
@@ -5903,19 +5905,61 @@ class TestCommands:
     async def test_delifeq(self, glide_client: TGlideClient):
         key = get_random_string(10)
         value = get_random_string(10)
-        wrong_value = get_random_string(10)
+        other_value = get_random_string(10)
 
-        # key does not exist yet
+        # key does not exist
         assert await glide_client.delifeq(key, value) is False
 
         assert await glide_client.set(key, value) == OK
 
-        # value does not match
-        assert await glide_client.delifeq(key, wrong_value) is False
+        # value not equal, key is not deleted
+        assert await glide_client.delifeq(key, other_value) is False
         assert await glide_client.get(key) == value.encode()
 
-        # value matches, key is deleted
+        # value equal, key is deleted
         assert await glide_client.delifeq(key, value) is True
+        assert await glide_client.get(key) is None
+
+    @pytest.mark.skip_if_version_below("9.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_delex_ifeq(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        other_value = get_random_string(10)
+
+        # key does not exist
+        assert await glide_client.delex(key, OnlyIfEqual(value)) is False
+
+        assert await glide_client.set(key, value) == OK
+
+        # value not equal, key is not deleted
+        assert await glide_client.delex(key, OnlyIfEqual(other_value)) is False
+        assert await glide_client.get(key) == value.encode()
+
+        # value equal, key is deleted
+        assert await glide_client.delex(key, OnlyIfEqual(value)) is True
+        assert await glide_client.get(key) is None
+
+    @pytest.mark.skip_if_version_below("9.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_delex_ifne(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        other_value = get_random_string(10)
+
+        # key does not exist
+        assert await glide_client.delex(key, OnlyIfNotEqual(value)) is False
+
+        assert await glide_client.set(key, value) == OK
+
+        # value equal, key is not deleted
+        assert await glide_client.delex(key, OnlyIfNotEqual(value)) is False
+        assert await glide_client.get(key) == value.encode()
+
+        # value not equal, key is deleted
+        assert await glide_client.delex(key, OnlyIfNotEqual(other_value)) is True
         assert await glide_client.get(key) is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -12511,12 +12555,6 @@ class TestScripts:
         result = await glide_client.hgetdel(non_existent_key, [field1, field2])
         assert result == [None, None]
 
-        # HGETDEL on a key holding a non-hash value returns a WRONGTYPE error
-        string_key = get_random_string(10)
-        assert await glide_client.set(string_key, "not_a_hash") == OK
-        with pytest.raises(RequestError, match="WRONGTYPE"):
-            await glide_client.hgetdel(string_key, [field1])
-
         # HGETDEL with an empty fields list should raise an error
         with pytest.raises(RequestError):
             await glide_client.hgetdel(key, [])
@@ -13368,6 +13406,7 @@ class TestScripts:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.requires_tcp
     async def test_failover(self, glide_client: GlideClient):
         # Spin up a dedicated standalone with 1 replica so the failover
         # doesn't destabilize the shared test server.

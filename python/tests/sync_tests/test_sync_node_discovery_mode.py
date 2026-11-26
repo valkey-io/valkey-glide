@@ -40,7 +40,7 @@ class TestSyncStatic:
 
         client = GlideClient.create(
             GlideClientConfiguration(
-                addresses=[NodeAddress(addr.host, addr.port)],
+                addresses=[addr],
                 use_tls=tls,
                 protocol=protocol,
                 request_timeout=2000,
@@ -68,7 +68,7 @@ class TestSyncStatic:
 
         client = GlideClient.create(
             GlideClientConfiguration(
-                addresses=[NodeAddress(addr.host, addr.port)],
+                addresses=[addr],
                 use_tls=tls,
                 protocol=protocol,
                 request_timeout=2000,
@@ -82,6 +82,7 @@ class TestSyncStatic:
             client.delete([key])
             client.close()
 
+    @pytest.mark.requires_tcp
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_read_only_rejects_discover_replicas(
@@ -97,7 +98,7 @@ class TestSyncStatic:
         with pytest.raises((ClosingError, Exception)) as exc_info:
             GlideClient.create(
                 GlideClientConfiguration(
-                    addresses=[NodeAddress(addr.host, addr.port)],
+                    addresses=[addr],
                     use_tls=tls,
                     protocol=protocol,
                     request_timeout=2000,
@@ -112,6 +113,7 @@ class TestSyncStatic:
         )
 
 
+@pytest.mark.requires_tcp
 class TestSyncDiscoverAll:
     """Tests for DISCOVER_ALL mode (sync version)."""
 

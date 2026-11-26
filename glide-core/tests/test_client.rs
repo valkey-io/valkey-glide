@@ -1730,6 +1730,72 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    /// A scope on a read-only standalone client, its parent's error for a `SET`
+    /// of `key`, and a normal client on the same server.
+    async fn read_only_scope(key: &str) -> (ScopeHandle, redis::RedisError, TestBasics) {
+        let config = TestConfiguration {
+            shared_server: true,
+            ..Default::default()
+        };
+        let checker = setup_test_basics(false, config.clone()).await;
+        let bytes = scope_request_bytes(&checker.server, &config);
+        let mut request = create_connection_request(&[get_shared_server_address(false)], &config);
+        request.read_only = Some(true);
+        let mut parent = Client::new(request.into(), None).await.unwrap();
+        let parent_err = parent
+            .send_command(cmd("SET").arg(key).arg("v"), None)
+            .await
+            .expect_err("a read-only client rejects SET");
+        (
+            ScopeHandle::setup(parent, bytes, 0).await,
+            parent_err,
+            checker,
+        )
+    }
+
+    /// A scope of a read-only standalone client rejects a write with its parent's
+    /// error and sends nothing.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_scope_rejects_write() {
+        block_on_all(async move {
+            let key = generate_random_string(10);
+            let (scope, parent_err, mut checker) = read_only_scope(&key).await;
+            let err = scope
+                .send("set", &mut [key.clone().into_bytes(), b"v".to_vec()])
+                .await
+                .expect_err("a read-only scope rejects SET");
+            assert_eq!(err.kind(), redis::ErrorKind::ReadOnly, "got: {err}");
+            assert_eq!(err.to_string(), parent_err.to_string());
+            assert_eq!(
+                checker
+                    .client
+                    .send_command(cmd("EXISTS").arg(&key), None)
+                    .await,
+                Ok(Value::Int(0)),
+                "the rejected scope write must not reach the server"
+            );
+            scope.release();
+        });
+    }
+
+    /// A scope of a read-only standalone client still runs reads.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_scope_runs_read() {
+        block_on_all(async move {
+            let key = generate_random_string(10);
+            let (scope, _, _checker) = read_only_scope(&key).await;
+            assert_eq!(
+                scope.send("GET", &mut [key.into_bytes()]).await,
+                Ok(Value::Nil)
+            );
+            scope.release();
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -2864,7 +2930,7 @@ pub(crate) mod shared_client_tests {
                     };
 
                     assert!(
-                        result.iter().all(|r| matches!(r, Value::ServerError(e) if e.err_code().contains("BrokenPipe"))
+                        result.iter().all(|r| matches!(r, Value::ServerError(e) if e.err_code() == "FatalReceiveError")
                             ),
                         "Not all responses are ServerError: {result:?}"
                     );
@@ -5108,16 +5174,13 @@ pub(crate) mod shared_client_tests {
     ) {
         use ::protobuf::MessageField;
         use glide_core::connection_request as protobuf;
+        use protobuf::AuthenticationInfo as ProtoAuthInfo;
         use protobuf::ConnectionRequest as ProtoConnectionRequest;
         use protobuf::TlsMode;
-        use protobuf::{AuthenticationInfo as ProtoAuthInfo, NodeAddress};
 
-        let server = RedisServer::new(ServerType::Tcp { tls: false });
+        let server = RedisServer::new(standalone_server_type(false));
         let addr = server.get_client_addr();
-        let (host, port) = match &addr {
-            redis::ConnectionAddr::Tcp(host, port) => (host.clone(), *port),
-            other => panic!("Expected a plain TCP test server address, got: {other:?}"),
-        };
+        let node_address = get_address_info(&addr);
 
         let admin_client = redis::Client::open(redis::ConnectionInfo {
             addr,
@@ -5134,11 +5197,7 @@ pub(crate) mod shared_client_tests {
         set_requirepass(&mut admin_conn, password).await;
 
         let mut proto_request = ProtoConnectionRequest::new();
-        proto_request.addresses.push(NodeAddress {
-            host: host.into(),
-            port: port.into(),
-            ..Default::default()
-        });
+        proto_request.addresses.push(node_address);
         proto_request.tls_mode = TlsMode::NoTls.into();
         let mut auth_info = ProtoAuthInfo::new();
         auth_info.password = password.into();

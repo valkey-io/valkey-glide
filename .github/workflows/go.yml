@@ -10,21 +10,27 @@ on:
             - release-*
             - v*
         paths:
-            - glide-core/src/**
-            - glide-core/redis-rs/redis/src/**
-            - glide-core/Cargo.toml
-            - glide-core/build.rs
-            - glide-core/redis-rs/redis/Cargo.toml
+            - glide-core/**
             - glide-logger/**
             - glide-telemetry/**
+            - glide-rdma/**
             - ffi/src/**
             - ffi/Cargo.toml
             - ffi/Cargo.lock
             - ffi/cbindgen.toml
+            - ffi/clippy.toml
+            - ffi/tests/**
+            - ffi/.cargo/config.toml
+            - .cargo/config.toml
+            - deny.toml
             - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
             - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-zig/action.yml
+            - .github/actions/setup-dns-tests/**
             - .github/actions/test-benchmark/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
@@ -34,21 +40,27 @@ on:
             - "!**/THIRD_PARTY_LICENSES*"
     pull_request:
         paths:
-            - glide-core/src/**
-            - glide-core/redis-rs/redis/src/**
-            - glide-core/Cargo.toml
-            - glide-core/build.rs
-            - glide-core/redis-rs/redis/Cargo.toml
+            - glide-core/**
             - glide-logger/**
             - glide-telemetry/**
+            - glide-rdma/**
             - ffi/src/**
             - ffi/Cargo.toml
             - ffi/Cargo.lock
             - ffi/cbindgen.toml
+            - ffi/clippy.toml
+            - ffi/tests/**
+            - ffi/.cargo/config.toml
+            - .cargo/config.toml
+            - deny.toml
             - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
             - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-zig/action.yml
+            - .github/actions/setup-dns-tests/**
             - .github/actions/test-benchmark/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
@@ -216,8 +228,7 @@ jobs:
               # that actually implements them. Older engines remain covered by the
               # version-gated integration tests.
               working-directory: go
-              # TODO #7312: Bump to 9.2.0 once released
-              if: ${{ matrix.engine.type == 'valkey' && matrix.engine.version == '9.2.0-rc1' && !inputs.rc-version }}
+              if: ${{ matrix.engine.type == 'valkey' && matrix.engine.version == '9.2' && !inputs.rc-version }}
               run: |
                   make -k example-test
 

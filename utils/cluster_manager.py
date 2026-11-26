@@ -473,6 +473,28 @@ def create_cluster_folder(path: str, prefix: str) -> str:
     return cluster_folder
 
 
+def unix_socket_path(cluster_folder: str, port: int) -> str:
+    # Socket paths are limited to 104-108 bytes and CI cluster folders are deep, so use /tmp.
+    # The folder's random suffix and the port keep the path unique.
+    cluster_id = os.path.basename(os.path.abspath(cluster_folder))[-6:]
+    return f"/tmp/glide-{cluster_id}-{port}.sock"
+
+
+def node_unix_socket(cluster_folder: str, port: int) -> Optional[str]:
+    """The Unix socket a node was started with, recorded in its folder so `stop` can find it."""
+    record = Path(cluster_folder, str(port), "unix_socket")
+    return record.read_text().strip() if record.exists() else None
+
+
+def cli_target_args(server: Server, cluster_folder: str) -> List[str]:
+    # Use the socket whenever the node has one: it doesn't listen on its port, and another
+    # server may have taken that port.
+    socket_path = node_unix_socket(cluster_folder, server.port)
+    if socket_path:
+        return ["-s", socket_path]
+    return ["-h", server.host, "-p", str(server.port)]
+
+
 def build_loadmodule_args(module_path: str) -> List[str]:
     """Build the ``--loadmodule`` argv for one ``--load-module`` entry.
 
@@ -512,6 +534,7 @@ def start_server(
     cluster_mode: bool,
     load_module: Optional[List[str]] = None,
     cluster_node_timeout: Optional[int] = None,
+    unix_socket: bool = False,
 ) -> Tuple[Server, str]:
     port = port if port else next_free_port(cluster_mode=cluster_mode)
     logging.debug(f"Creating server {host}:{port}")
@@ -541,7 +564,7 @@ def start_server(
     cmd_args = [
         get_server_command(),
         f"{'--tls-port' if tls else '--port'}",
-        str(port),
+        str(0 if unix_socket else port),
         "--cluster-enabled",
         f"{'yes' if cluster_mode else 'no'}",
         "--dir",
@@ -589,6 +612,10 @@ def start_server(
             )
         for module_path in load_module:
             cmd_args.extend(["--loadmodule", *build_loadmodule_args(module_path)])
+    if unix_socket:
+        socket_path = unix_socket_path(cluster_folder, port)
+        Path(node_folder, "unix_socket").write_text(socket_path)
+        cmd_args.extend(["--unixsocket", socket_path, "--unixsocketperm", "700"])
     cmd_args += tls_args
     p = subprocess.Popen(
         cmd_args,
@@ -628,6 +655,7 @@ def create_servers(
     tls_ca_cert_file: Optional[str] = None,
     tls_auth_clients: bool = False,
     cluster_node_timeout: Optional[int] = None,
+    unix_socket: bool = False,
 ) -> List[Server]:
     tic = time.perf_counter()
     logging.debug("## Creating servers")
@@ -683,6 +711,7 @@ def create_servers(
                 cluster_mode,
                 load_module,
                 cluster_node_timeout,
+                unix_socket,
             )
         )
     # Check all servers
@@ -704,7 +733,7 @@ def create_servers(
                         pass
                 else:
                     logging.warning(
-                        f"Server {server} never logged its pid; it may still be running after {node_folder} is removed"
+                        f"Server {server} never logged its pid; keeping {node_folder} for cleanup"
                     )
                 failure = "it never reported Ready"
             else:
@@ -716,7 +745,11 @@ def create_servers(
             # A failure a new port cannot fix (a bad --load-module path, a config
             # the engine rejects) would otherwise be replaced forever, with the
             # log that explains it deleted on every round.
-            if ports is not None or replacements_left == 0:
+            if (
+                ports is not None
+                or replacements_left == 0
+                or (verdict is NodeCheck.NO_VERDICT and server.process_id() <= 0)
+            ):
                 if verdict is NodeCheck.PORT_TAKEN:
                     # The port belongs to another server now, and the failure
                     # cleanup sends SHUTDOWN to every port it finds a node folder for.
@@ -728,6 +761,9 @@ def create_servers(
                     f"Couldn't start server on {server.host}:{server.port}, {failure}{detail}"
                 )
             replacements_left -= 1
+            socket_path = node_unix_socket(cluster_folder, server.port)
+            if socket_path:
+                Path(socket_path).unlink(missing_ok=True)
             remove_folder(node_folder)
             servers_to_check.add(
                 start_server(
@@ -739,6 +775,7 @@ def create_servers(
                     cluster_mode,
                     load_module,
                     cluster_node_timeout,
+                    unix_socket,
                 )
             )
             continue
@@ -980,10 +1017,7 @@ def wait_for_server(
         p = subprocess.Popen(
             [
                 get_cli_command(),
-                "-h",
-                server.host,
-                "-p",
-                str(server.port),
+                *cli_target_args(server, cluster_folder),
                 *get_cli_option_args(cluster_folder, use_tls, None, tls_cert_file, tls_key_file, tls_ca_cert_file),
                 "PING",
             ],
@@ -1076,7 +1110,8 @@ def check_node_startup(
             if any(error_msg in server_log for error_msg in address_in_use_errors):
                 logging.debug(f"Address is already bind for server {server}")
                 return NodeCheck.PORT_TAKEN
-            elif "Ready" in server_log:
+            # Redis 6.2 and 7.0 with only a Unix socket log "ready to accept connections at <path>".
+            elif "Ready" in server_log or "ready to accept connections" in server_log:
                 logging.debug(f"Address is free for server {server}!")
                 return NodeCheck.READY
             else:
@@ -1110,21 +1145,23 @@ def stop_server(server: Server, cluster_folder: str, use_tls: bool, auth: str):
     logging.debug(f"Stopping server {server}")
     try:
         ping = subprocess.run(
-            [get_cli_command(), "-h", server.host, "-p", str(server.port),
+            [get_cli_command(), *cli_target_args(server, cluster_folder),
              *get_cli_option_args(cluster_folder, use_tls, auth), "PING"],
             capture_output=True, text=True, timeout=2,
         )
         if ping.returncode != 0:
+            # A socket node is down only if its socket is gone or refuses connections. On any
+            # other failure it may still run, and the kept socket is the only way to reach it.
+            down_errors = ("Connection refused", "No such file or directory")
+            if node_unix_socket(cluster_folder, server.port) and not any(e in ping.stderr for e in down_errors):
+                raise Exception(f"Could not tell if {server} is down: {ping.stderr.strip()}")
             logging.info(f"Server {server} is already down, skipping shutdown")
             return
     except subprocess.TimeoutExpired:
         logging.debug(f"Ping to {server} timed out, attempting shutdown anyway")
     cmd_args = [
         get_cli_command(),
-        "-h",
-        server.host,
-        "-p",
-        str(server.port),
+        *cli_target_args(server, cluster_folder),
         *get_cli_option_args(cluster_folder, use_tls, auth),
         "shutdown",
         "nosave",
@@ -1179,10 +1216,7 @@ def wait_for_server_shutdown(
         p = subprocess.Popen(
             [
                 get_cli_command(),
-                "-h",
-                server.host,
-                "-p",
-                str(server.port),
+                *cli_target_args(server, cluster_folder),
                 *get_cli_option_args(cluster_folder, use_tls, auth),
                 "PING",
             ],
@@ -1275,17 +1309,28 @@ def stop_cluster(
     init_logger(logfile)
     logging.debug(f"## Stopping cluster in path {cluster_folder}")
     all_stopped = True
+    preserve_socket_record = False
     for it in os.scandir(cluster_folder):
         if it.is_dir() and it.name.isdigit():
             port = it.name
+            socket_path = node_unix_socket(cluster_folder, int(port))
             try:
                 stop_server(Server(host, int(port)), cluster_folder, use_tls, auth)
             except Exception:
+                # The socket is the only way to reach a socket node that is still running.
                 all_stopped = False
+                preserve_socket_record |= socket_path is not None
+                continue
+            # The server removes its socket on shutdown, but not when it was killed.
+            if socket_path:
+                try:
+                    Path(socket_path).unlink(missing_ok=True)
+                except OSError as e:
+                    logging.debug(f"Could not remove the Unix socket for port {port}: {e}")
     if all_stopped:
         logging.debug("All hosts were stopped gracefully")
 
-    if not keep_folder:
+    if not keep_folder and not preserve_socket_record:
         remove_folder(cluster_folder)
 
 
@@ -1594,6 +1639,15 @@ def main():
     )
 
     parser_start.add_argument(
+        "--unix-socket",
+        action="store_true",
+        help="Standalone only, with --replica-count 0 and without --tls or --remote. The server starts with "
+        "--port 0 and listens only on a Unix domain socket at /tmp/glide-<id>-<port>.sock. "
+        "CLUSTER_NODES contains a host and port identifier; UNIX_SOCKETS lists the socket paths.",
+        required=False,
+    )
+
+    parser_start.add_argument(
         "--remote",
         type=str,
         default=None,
@@ -1736,6 +1790,8 @@ def main():
     logging.info(f"## Executing cluster_manager.py with the following args:\n  {args}")
 
     if args.action == "start":
+        if args.unix_socket and (args.tls or args.cluster_mode or args.remote or args.replica_count):
+            parser.error("--unix-socket is not supported with --tls, --cluster-mode, --remote or replicas")
         if getattr(args, "remote", None):
             # Build the equivalent local command to run on the remote EC2
             remote_ip = args.remote_ip
@@ -1822,6 +1878,7 @@ def main():
                 getattr(args, 'tls_ca_cert_file', None),
                 getattr(args, 'tls_auth_clients', False),
                 args.cluster_node_timeout,
+                args.unix_socket,
             )
             if args.cluster_mode:
                 # Create a cluster
@@ -1862,6 +1919,9 @@ def main():
         )
         print(f"CLUSTER_FOLDER={cluster_folder}")
         print(f"CLUSTER_NODES={servers_str}")
+        if args.unix_socket:
+            sockets = (node_unix_socket(cluster_folder, server.port) for server in servers)
+            print(f"UNIX_SOCKETS={','.join(sockets)}")
 
     elif args.action == "stop":
         if getattr(args, "remote", None):

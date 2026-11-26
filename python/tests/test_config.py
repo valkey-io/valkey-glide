@@ -393,6 +393,25 @@ def test_convert_config_with_azaffinity_all_nodes_to_protobuf():
     assert request.client_az == az
 
 
+@pytest.mark.parametrize(
+    "read_from",
+    [
+        ReadFrom.AZ_AFFINITY,
+        ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY,
+        ReadFrom.AZ_AFFINITY_ALL_NODES,
+    ],
+)
+def test_whitespace_only_client_az_is_rejected_like_empty(read_from):
+    def error_for(client_az):
+        with pytest.raises(ValueError) as error:
+            BaseClientConfiguration(
+                [NodeAddress("127.0.0.1")], read_from=read_from, client_az=client_az
+            )
+        return str(error.value)
+
+    assert error_for(" \t\n ") == error_for("")
+
+
 def test_connection_timeout_in_protobuf_request():
     connection_timeout = 5000  # in milliseconds
     config = GlideClientConfiguration(

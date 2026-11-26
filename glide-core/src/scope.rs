@@ -249,6 +249,17 @@ pub async fn execute_scope_command(
         }
     };
 
+    // Build redis command
+    let mut cmd = Cmd::new();
+    cmd.arg(cmd_name.as_bytes());
+    for arg in args {
+        cmd.arg(arg.as_slice());
+    }
+    // Before any state tracking, so a rejected command leaves the scope untouched.
+    if let Some(c) = client {
+        c.reject_write_in_read_only(&cmd)?;
+    }
+
     let mut conn = entry.lock().await;
 
     // State tracking (for conditional cleanup on release)
@@ -302,13 +313,6 @@ pub async fn execute_scope_command(
                 }
             }
         }
-    }
-
-    // Build redis command
-    let mut cmd = Cmd::new();
-    cmd.arg(cmd_name.as_bytes());
-    for arg in args {
-        cmd.arg(arg.as_slice());
     }
 
     // Presume a blocking command's connection unsafe until we know the outcome;
@@ -1928,8 +1932,8 @@ pub fn scope_parent_id(scope_id: u64) -> Option<u64> {
 /// Global client registry: client_id → Client.
 /// Language bindings register their Client instances here so that
 /// scope execution can access timeout, decompression, and IAM features.
-static CLIENT_REGISTRY: std::sync::OnceLock<dashmap::DashMap<u64, Client>> =
-    std::sync::OnceLock::new();
+static CLIENT_REGISTRY: crate::fork_slot::ForkSlot<dashmap::DashMap<u64, Client>> =
+    crate::fork_slot::ForkSlot::new();
 
 pub fn get_client_registry() -> &'static dashmap::DashMap<u64, Client> {
     CLIENT_REGISTRY.get_or_init(dashmap::DashMap::new)

@@ -10,7 +10,7 @@ When a maintainer picks up your PR for review, they evaluate it against several 
 |------|---------------|
 | **Code quality** | Readability, structure, naming conventions, and adherence to the project's coding style |
 | **Test coverage** | New or changed functionality has corresponding tests that pass |
-| **Contribution guidelines** | DCO signoff is present, conventional commit format is used, PR template is filled out |
+| **Contribution guidelines** | DCO signoff is present, conventional commit format is used for commits and the PR title, PR template is filled out |
 | **CI status** | All automated checks (build, lint, tests) are passing |
 
 Maintainers may request changes, ask clarifying questions, or suggest alternative approaches. This is a normal part of the process — it's collaborative, not adversarial.

@@ -182,6 +182,10 @@ class BaseBatch:
         """
         Set the value of a key with the given options.
 
+        Since:
+            - Valkey 8.1.0 with `OnlyIfEqual`
+            - Valkey 9.2.0 with `OnlyIfNotEqual`
+
         See [valkey.io](https://valkey.io/commands/set/) for details.
 
         Args:
@@ -330,6 +334,26 @@ class BaseBatch:
             False if `key` did not exist or its value did not match `value`.
         """
         return self.append_command(RequestType.DelIfEq, [key, value])
+
+    def delex(self: TBatch, key: TEncodable, condition: ValueComparison) -> TBatch:
+        """
+        Deletes `key` if its value meets `condition`.
+
+        Since: Valkey 9.2.0.
+
+        See [valkey.io](https://valkey.io/commands/delex) for more details.
+
+        Args:
+            key (TEncodable): The key to delete.
+            condition (ValueComparison): The comparison condition. The key is only deleted if its
+                current value meets `condition`.
+
+        Commands response:
+            bool: True if `key` was deleted.
+
+            False if `key` did not exist or `condition` was not met.
+        """
+        return self.append_command(RequestType.DelEx, [key, *condition._to_args()])
 
     def info(
         self: TBatch,
@@ -5837,7 +5861,13 @@ class Batch(BaseBatch):
     See [Valkey Transactions (Atomic Batches)](https://valkey.io/topics/transactions/) and [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/topics/pipelining/) for details.
 
     Note for Standalone Mode (Cluster Mode Disabled):
-        Standalone Batches are executed on the primary node.
+        Atomic batches, batches sent while a raw `MULTI` is open, and non-atomic batches containing
+        a command that writes, changes connection or server state, uses a cursor, or is sent to every
+        node when run on its own (e.g. `SELECT`, `CLIENT SETNAME`, `CONFIG SET`, `SLOWLOG GET`,
+        `SCAN`) run on the primary node. `HTTL`, `HPTTL`, `HEXPIRETIME` and `HPEXPIRETIME` also
+        keep a batch on the primary. Other non-atomic batches, including ones with read-only admin
+        commands such as `CONFIG GET` or `INFO`, follow the client's `ReadFrom` setting, so with a
+        replica setting they may observe replication lag.
 
     Examples:
         ### Atomic Batch - Transaction:

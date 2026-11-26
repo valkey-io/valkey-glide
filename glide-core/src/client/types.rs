@@ -328,6 +328,34 @@ pub enum ReadFrom {
     AZAffinityAllNodes(String),
 }
 
+impl ReadFrom {
+    /// Trims surrounding whitespace from the client availability zone, which must match a
+    /// node's `availability-zone` exactly. A zone that is empty after trimming counts as
+    /// missing: this logs a warning and falls back to `ReadFrom::PreferReplica`. Idempotent,
+    /// so every entry point can apply it.
+    pub(crate) fn with_trimmed_client_az(self) -> Self {
+        let (client_az, with_az): (String, fn(String) -> Self) = match self {
+            ReadFrom::AZAffinity(az) => (az, ReadFrom::AZAffinity),
+            ReadFrom::AZAffinityReplicasAndPrimary(az) => {
+                (az, ReadFrom::AZAffinityReplicasAndPrimary)
+            }
+            ReadFrom::AZAffinityAllNodes(az) => (az, ReadFrom::AZAffinityAllNodes),
+            other => return other,
+        };
+        let trimmed = client_az.trim();
+        if trimmed.is_empty() {
+            log_warn(
+                "types",
+                format!(
+                    "Failed to convert availability zone string: {client_az:?}. Falling back to `ReadFrom::PreferReplica`"
+                ),
+            );
+            return ReadFrom::PreferReplica;
+        }
+        with_az(trimmed.to_owned())
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]
 #[repr(C)]
 pub enum TlsMode {
@@ -339,16 +367,17 @@ pub enum TlsMode {
 
 #[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]
 /// Controls how the client discovers node roles and topology in standalone mode.
+#[repr(u32)]
 pub enum NodeDiscoveryMode {
     /// Default: verify node roles via INFO REPLICATION, use only provided addresses.
     #[default]
-    Standard,
+    Standard = 0,
     /// Skip role detection entirely. Trust provided addresses as-is; first address is primary.
     /// Suitable for proxies (e.g., Envoy) or known-static topologies.
     /// Note: Do not set `client_name` when using this mode with a proxy.
-    Static,
+    Static = 1,
     /// Discover full topology (primary + all replicas) from any starting node.
-    DiscoverAll,
+    DiscoverAll = 2,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -415,6 +444,11 @@ fn convert_rdma(config: Option<&protobuf::RdmaConfig>) -> RdmaSetting {
         Some(interface) => fabric.with_interface(interface.to_string()),
         None => fabric,
     };
+    let fabric = if config.device_memory == Some(true) {
+        fabric.with_device_memory()
+    } else {
+        fabric
+    };
     RdmaSetting::Configured(fabric)
 }
 
@@ -426,48 +460,13 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             protobuf::ReadFrom::PreferReplica => ReadFrom::PreferReplica,
             protobuf::ReadFrom::LowestLatency => todo!(),
             protobuf::ReadFrom::AllNodes => ReadFrom::AllNodes,
-            protobuf::ReadFrom::AZAffinity => {
-                if let Some(client_az) = chars_to_string_option(&value.client_az) {
-                    ReadFrom::AZAffinity(client_az)
-                } else {
-                    log_warn(
-                        "types",
-                        format!(
-                            "Failed to convert availability zone string: '{:?}'. Falling back to `ReadFrom::PreferReplica`",
-                            value.client_az
-                        ),
-                    );
-                    ReadFrom::PreferReplica
-                }
-            }
+            protobuf::ReadFrom::AZAffinity => ReadFrom::AZAffinity(value.client_az.to_string()),
             protobuf::ReadFrom::AZAffinityReplicasAndPrimary => {
-                if let Some(client_az) = chars_to_string_option(&value.client_az) {
-                    ReadFrom::AZAffinityReplicasAndPrimary(client_az)
-                } else {
-                    log_warn(
-                        "types",
-                        format!(
-                            "Failed to convert availability zone string: '{:?}'. Falling back to `ReadFrom::PreferReplica`",
-                            value.client_az
-                        ),
-                    );
-                    ReadFrom::PreferReplica
-                }
-            },
+                ReadFrom::AZAffinityReplicasAndPrimary(value.client_az.to_string())
+            }
             protobuf::ReadFrom::AZAffinityAllNodes => {
-                if let Some(client_az) = chars_to_string_option(&value.client_az) {
-                    ReadFrom::AZAffinityAllNodes(client_az)
-                } else {
-                    log_warn(
-                        "types",
-                        format!(
-                            "Failed to convert availability zone string: '{:?}'. Falling back to `ReadFrom::PreferReplica`",
-                            value.client_az
-                        ),
-                    );
-                    ReadFrom::PreferReplica
-                }
-            },
+                ReadFrom::AZAffinityAllNodes(value.client_az.to_string())
+            }
         });
 
         let client_name = chars_to_string_option(&value.client_name);
@@ -854,6 +853,30 @@ mod tests {
             let cache = request.client_side_cache.expect("cache config");
             assert_eq!(cache.tracking_prefix.as_deref(), Some(&b""[..]));
             assert!(cache.validate().is_err());
+        }
+
+        #[cfg(feature = "rdma")]
+        #[test]
+        fn device_memory_reaches_the_fabric_config_only_when_asked_for() {
+            use crate::rdma::RdmaSetting;
+            let request_with = |device_memory: Option<bool>| {
+                let mut rdma = protobuf::RdmaConfig::new();
+                rdma.set_efa_direct(protobuf::EfaDirectProvider::new());
+                rdma.device_memory = device_memory;
+                let mut proto_request = protobuf::ConnectionRequest::new();
+                proto_request.rdma_config = ::protobuf::MessageField::some(rdma);
+                ConnectionRequest::from(proto_request).rdma
+            };
+            for (asked, expected) in [(None, false), (Some(false), false), (Some(true), true)] {
+                let RdmaSetting::Configured(config) = request_with(asked) else {
+                    panic!("an efa-direct configuration is usable");
+                };
+                assert_eq!(
+                    config.device_memory(),
+                    expected,
+                    "device_memory = {asked:?}"
+                );
+            }
         }
 
         #[test]

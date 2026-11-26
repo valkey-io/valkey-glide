@@ -34,10 +34,11 @@
 
 use crate::client::AuthGeneration;
 use crate::client::Client as GlideClient;
+use crate::fork_slot::ForkSlot;
 use dashmap::DashMap;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock, PoisonError};
+use std::sync::{Arc, PoisonError};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::Notify;
@@ -546,11 +547,11 @@ pub async fn release_client_async(pool_arc: Arc<PoolMutex>, client_id: u64) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Global pool registry: pool_id → Pool instance.
-static POOL_REGISTRY: OnceLock<DashMap<u64, Arc<PoolMutex>>> = OnceLock::new();
+static POOL_REGISTRY: ForkSlot<DashMap<u64, Arc<PoolMutex>>> = ForkSlot::new();
 static NEXT_POOL_ID: AtomicU64 = AtomicU64::new(1);
 /// Abandon monitor task handles, keyed by pool_id. Stored outside the pool
 /// mutex to allow abort on destroy without locking.
-static MONITOR_HANDLES: OnceLock<DashMap<u64, tokio::task::JoinHandle<()>>> = OnceLock::new();
+static MONITOR_HANDLES: ForkSlot<DashMap<u64, tokio::task::JoinHandle<()>>> = ForkSlot::new();
 
 fn get_monitor_handles() -> &'static DashMap<u64, tokio::task::JoinHandle<()>> {
     MONITOR_HANDLES.get_or_init(DashMap::new)
@@ -570,7 +571,7 @@ fn get_monitor_handles() -> &'static DashMap<u64, tokio::task::JoinHandle<()>> {
 /// caller holds a given pooled client at a time via `try_acquire`/
 /// `release_client_async`, so in practice the counter is ≤ 1 for pool clients.
 /// The `AtomicU32` is future-proof and handles direct-client concurrent usage.
-static BLOCKING_FLAG_REGISTRY: OnceLock<DashMap<u64, Arc<AtomicU32>>> = OnceLock::new();
+static BLOCKING_FLAG_REGISTRY: ForkSlot<DashMap<u64, Arc<AtomicU32>>> = ForkSlot::new();
 
 fn get_blocking_flag_registry() -> &'static DashMap<u64, Arc<AtomicU32>> {
     BLOCKING_FLAG_REGISTRY.get_or_init(DashMap::new)
@@ -608,7 +609,7 @@ pub fn get_blocking_flag(client_id: u64) -> Option<Arc<AtomicU32>> {
 // only has the client_id readily available.
 // ─────────────────────────────────────────────────────────────────────────────
 
-static CLIENT_TO_POOL: OnceLock<DashMap<u64, u64>> = OnceLock::new();
+static CLIENT_TO_POOL: ForkSlot<DashMap<u64, u64>> = ForkSlot::new();
 
 fn get_client_to_pool() -> &'static DashMap<u64, u64> {
     CLIENT_TO_POOL.get_or_init(DashMap::new)
@@ -1808,10 +1809,10 @@ pub fn allocate_scope_id() -> u64 {
 }
 
 /// Global scope registry: scope_id → ScopeEntry (for command dispatch).
-static SCOPE_REGISTRY: OnceLock<DashMap<u64, ScopeEntry>> = OnceLock::new();
+static SCOPE_REGISTRY: ForkSlot<DashMap<u64, ScopeEntry>> = ForkSlot::new();
 
 /// Per-client scope pools: client_id → ScopePool.
-static CLIENT_SCOPE_POOLS: OnceLock<DashMap<u64, ScopePoolHandle>> = OnceLock::new();
+static CLIENT_SCOPE_POOLS: ForkSlot<DashMap<u64, ScopePoolHandle>> = ForkSlot::new();
 
 pub fn get_scope_registry() -> &'static DashMap<u64, ScopeEntry> {
     SCOPE_REGISTRY.get_or_init(DashMap::new)
@@ -2238,7 +2239,7 @@ mod client_pool_marking_tests {
 }
 
 #[cfg(test)]
-mod scope_pool_tests {
+pub(crate) mod scope_pool_tests {
     use super::{
         Arc, AtomicU32, DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig,
         ScopeReservation, ScopeTarget, saturating_dec,
@@ -2306,13 +2307,13 @@ mod scope_pool_tests {
     }
 
     /// A real Valkey server child process bound to an ephemeral port, killed on drop.
-    struct TestServer {
+    pub(crate) struct TestServer {
         child: Child,
-        port: u16,
+        pub(crate) port: u16,
     }
 
     impl TestServer {
-        fn start() -> Self {
+        pub(crate) fn start() -> Self {
             let port = get_available_port();
             // Use `redis-server` to match the integration harness
             // (tests/utilities/mod.rs): it's present on every CI engine version,
@@ -2434,7 +2435,7 @@ mod scope_pool_tests {
         }
     }
 
-    async fn wait_for_server_ready(port: u16) {
+    pub(crate) async fn wait_for_server_ready(port: u16) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
             if let Ok(client) = redis::Client::open(format!("redis://127.0.0.1:{port}")) {
@@ -3713,11 +3714,11 @@ mod scope_pool_tests {
     }
 
     /// `reset_connection_state` must restore the configured db when a SELECT may
-    /// have landed untracked — not only when `current_database` shows drift. An
-    /// earlier batch SELECT that the server applied, followed by a rejected one,
-    /// leaves the connection on the new db while `current_database` still reads the
-    /// configured value; the `db_maybe_dirty` flag is what makes release fail safe
-    /// here. A-B: without the flag (drift-only check) this leaks the wrong db.
+    /// have landed untracked — not only when `current_database` shows drift. With
+    /// `raise_on_error=true`, a batch SELECT that the server applied, followed by a
+    /// rejected one, fails the batch and leaves the connection on the new db while
+    /// `current_database` still reads the configured value; the `db_maybe_dirty`
+    /// flag is what makes release fail safe here. A-B: without the flag (drift-only check) this leaks the wrong db.
     #[tokio::test]
     async fn release_restores_db_when_current_database_underreports() {
         use redis::FromRedisValue as _;
@@ -3736,13 +3737,13 @@ mod scope_pool_tests {
                 .expect("client connects to the test server")
         };
 
-        // SELECT 3 applies; SELECT 99 is rejected. `last_select_db` sees only the
-        // last (99 → ServerError → not recorded), so current_database stays 0 while
-        // the connection is really on db 3.
+        // SELECT 3 applies; SELECT 99 is rejected, so with raise_on_error the batch
+        // fails and no change is recorded: current_database stays 0 while the
+        // connection is really on db 3.
         let mut pipe = redis::pipe();
         pipe.cmd("SELECT").arg(3).cmd("SELECT").arg(99);
         let _ = client
-            .send_pipeline(&pipe, None, false, None, Default::default())
+            .send_pipeline(&pipe, None, true, None, Default::default())
             .await;
         assert_eq!(
             client.current_database(),
@@ -4358,11 +4359,11 @@ mod scope_pool_tests {
         }
     }
 
-    /// Read-only mode rejects DISCARD/UNWATCH locally, but a pipeline still reaches
-    /// the server, so a raw MULTI or WATCH there stays open; release must discard
-    /// the client. A-B: re-idled with the transaction or watch open.
+    /// Read-only mode rejects a pipeline holding MULTI or WATCH before it reaches the
+    /// server, so release must re-idle the client. A-B: discarded when the rejected
+    /// batch was still tracked as sent.
     #[tokio::test]
-    async fn release_discards_a_read_only_client_left_in_multi() {
+    async fn release_reuses_a_read_only_client_after_a_rejected_multi_pipeline() {
         for command in ["MULTI", "WATCH"] {
             let server = TestServer::start();
             wait_for_server_ready(server.port).await;
@@ -4387,12 +4388,12 @@ mod scope_pool_tests {
                     redis::PipelineRetryStrategy::default(),
                 )
                 .await
-                .expect("reaches the server through a pipeline");
+                .expect_err("read-only mode rejects the batch");
 
             super::release_client_async(pool_arc.clone(), client_id).await;
             let mut pool = pool_arc.lock();
-            assert_eq!(pool.idle_count(), 0, "{command}: must not be re-idled");
-            assert_eq!(pool.drain_discarded_ids(), vec![client_id], "{command}");
+            assert_eq!(pool.idle_count(), 1, "{command}: must be re-idled");
+            assert!(pool.drain_discarded_ids().is_empty(), "{command}");
         }
     }
 
@@ -5393,5 +5394,58 @@ mod client_pool_tests {
             assert!(get_blocking_flag(client_id).is_none());
         });
         drop(blackhole);
+    }
+}
+
+/// A forked child inherits the registries as the parent left them. A shard
+/// lock held by one of the parent's other threads at fork time is never
+/// released in the child, so the child must start with fresh registries.
+#[cfg(all(test, unix))]
+mod fork_tests {
+    use super::*;
+    use crate::fork_slot::assert_in_forked_child;
+    use serial_test::serial;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    fn test_pool() -> ClientPool {
+        ClientPool::new(PoolConfig {
+            max_size: 2,
+            min_idle: 0,
+            idle_timeout: Duration::from_secs(300),
+            request_timeout: Duration::from_secs(5),
+            test_on_borrow: false,
+            connection_request: vec![],
+            is_async: false,
+            configured_database_id: 0,
+            abandon_timeout: Duration::ZERO,
+        })
+        .unwrap()
+    }
+
+    /// Hold the registry shard the next pool id lands in, across the fork.
+    fn hold_next_pool_shard() -> (mpsc::Sender<()>, std::thread::JoinHandle<()>) {
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let (held_tx, held_rx) = mpsc::channel::<()>();
+        let next_id = NEXT_POOL_ID.load(Ordering::Relaxed);
+        let holder = std::thread::spawn(move || {
+            let _shard = get_pool_registry().entry(next_id);
+            held_tx.send(()).unwrap();
+            let _ = release_rx.recv();
+        });
+        held_rx.recv().unwrap();
+        (release_tx, holder)
+    }
+
+    #[test]
+    #[serial]
+    fn child_registers_a_pool_while_the_parent_holds_a_registry_lock() {
+        let (release, holder) = hold_next_pool_shard();
+        assert_in_forked_child(|| {
+            let id = register_pool(test_pool());
+            get_pool(id).is_some()
+        });
+        release.send(()).unwrap();
+        holder.join().unwrap();
     }
 }
