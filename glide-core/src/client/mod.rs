@@ -1300,8 +1300,9 @@ impl Client {
     }
 
     async fn get_or_initialize_client(&self) -> RedisResult<ClientWrapper> {
-        // Every path to the connection comes here, so a discarded client's
-        // non-send calls (scripts, scans, AUTH) fail as its sends do.
+        // Checked here as well as in the send paths, so a discarded client's
+        // non-send calls (scripts, scans, AUTH) fail too. Scopes use their own
+        // connection and check the parent in `scope.rs`.
         self.reject_if_pool_discarded()?;
         {
             let guard = self.internal_client.read().await;
@@ -4010,8 +4011,9 @@ impl Client {
                 *internal_client.write().await = closed();
             });
         } else {
-            // Outside a runtime (e.g. a binding thread destroying the pool);
-            // the lock is held only briefly by a send cloning the wrapper.
+            // Outside a runtime (e.g. a binding thread destroying the pool while
+            // holding its lock): wait for the wrapper lock on another thread so
+            // disposal never blocks the caller.
             std::thread::spawn(move || {
                 futures::executor::block_on(async {
                     *internal_client.write().await = closed();
@@ -4029,7 +4031,7 @@ impl Client {
         unreachable!("Lazy client should have been initialized")
     }
 
-    fn reject_if_pool_discarded(&self) -> RedisResult<()> {
+    pub(crate) fn reject_if_pool_discarded(&self) -> RedisResult<()> {
         if self.pool_discarded.load(Ordering::Acquire) {
             return Err(RedisError::from((
                 ErrorKind::ClientClosed,

@@ -238,6 +238,9 @@ pub async fn execute_scope_command(
     client: Option<&Client>,
 ) -> RedisResult<Value> {
     crate::rdma::refuse_direct(cmd_name.as_bytes())?;
+    if let Some(parent) = client {
+        parent.reject_if_pool_discarded()?;
+    }
     let registry = get_scope_registry();
     let entry = match registry.get(&scope_id) {
         Some(e) => e.connection.clone(),
@@ -401,6 +404,9 @@ pub async fn send_scope_command(
     args: &mut [Vec<u8>],
     client: &Client,
 ) -> RedisResult<Value> {
+    // A scope must not outlive its parent's borrow once the pool discards it.
+    client.reject_if_pool_discarded()?;
+
     // 1. Circuit breaker check
     if !client.is_circuit_breaker_healthy() {
         return Err(RedisError::from((
@@ -1591,7 +1597,10 @@ fn classify_acquire(
     // stale or unmapped slot never matches (or creates) a connection to the
     // wrong node. Unresolved never means "use the seed"; whether it means
     // "retry" depends on the cause (see `ScopeTargetUnresolved`).
-    let client = get_parent_client(pool.parent_client_id);
+    // A parent the pool discarded is as gone as an unregistered one; its
+    // registration lingers only until the binding drains the discard.
+    let client = get_parent_client(pool.parent_client_id)
+        .filter(|parent| parent.reject_if_pool_discarded().is_ok());
     let mut logs = Vec::new();
     let target = match try_resolve_scope_target(client.as_ref(), connection_slot) {
         Ok(target) => {
@@ -2879,6 +2888,43 @@ mod tests {
         assert!(
             elapsed < Duration::from_secs(2),
             "woke {elapsed:?} after start; the release was at 150 ms"
+        );
+    }
+
+    /// Once the pool discards a borrowed parent, its scopes are fenced like its
+    /// own commands, even while its registration lingers until the binding
+    /// drains the discard: no new scope, and no command on an existing one.
+    #[tokio::test]
+    async fn discarded_parent_cannot_acquire_or_use_a_scope() {
+        let client_id = 67_950_101_u64;
+        let (pool, held, request_bytes, endpoint) = held_single_slot_pool(client_id).await;
+        let parent = get_parent_client(client_id).expect("parent registered");
+        parent.mark_pool_discarded();
+
+        let sent = super::send_scope_command(held, "PING", &mut [], &parent).await;
+        assert!(pool.lock().release(held, crate::pool::get_scope_registry()));
+        let acquired = super::acquire_scope(
+            client_id,
+            request_bytes,
+            &tokio::runtime::Handle::current(),
+            None,
+            Duration::from_millis(500),
+        )
+        .await;
+        unregister_client(client_id);
+        get_client_scope_pools().remove(&client_id);
+        stop_endpoint(endpoint);
+
+        assert_eq!(
+            sent.expect_err("a scope of a discarded parent must not send")
+                .kind(),
+            redis::ErrorKind::ClientClosed
+        );
+        assert_eq!(
+            acquired,
+            Err(super::ScopeAcquireError::Terminal(
+                ScopeFailCause::ParentUnregistered
+            ))
         );
     }
 
