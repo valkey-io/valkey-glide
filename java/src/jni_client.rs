@@ -128,20 +128,32 @@ fn take_timed_out_callback(callback_id: jlong) -> bool {
     registry.remove(&callback_id).is_some()
 }
 
+/// Resolve the shared runtime's worker count from `GLIDE_TOKIO_WORKER_THREADS`.
+/// An unparsable or absent value falls back to the default; `0` is raised to `1`
+/// because tokio's multi-thread builder fails on `worker_threads(0)`, and inside
+/// `RUNTIME.get_or_init` the closure's panic propagates to the caller and leaves
+/// the cell uninitialized (`OnceLock` is never poisoned), so every later call
+/// retries the build and fails again — in release builds, where `panic = "abort"`,
+/// the process aborts outright. An explicit value is honored. Mirrors the FFI
+/// parser's semantics (`ffi/src/lib.rs`, same env var).
+fn resolve_worker_threads(env_value: Option<&str>) -> usize {
+    env_value
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(DEFAULT_RUNTIME_WORKER_THREADS)
+        .max(1)
+}
+
 /// Initialize or return the shared Tokio runtime.
 pub(crate) fn get_runtime() -> &'static Runtime {
     RUNTIME.get_or_init(|| {
-        let worker_threads = if let Ok(threads_str) = std::env::var("GLIDE_TOKIO_WORKER_THREADS") {
-            threads_str
-                .parse::<usize>()
-                .unwrap_or(DEFAULT_RUNTIME_WORKER_THREADS)
-        } else {
-            DEFAULT_RUNTIME_WORKER_THREADS
-        };
+        let worker_threads =
+            resolve_worker_threads(std::env::var("GLIDE_TOKIO_WORKER_THREADS").ok().as_deref());
 
         tokio::runtime::Builder::new_multi_thread()
             .worker_threads(worker_threads)
-            .max_blocking_threads(worker_threads * 2)
+            // saturating_mul: a huge explicit value must not overflow the
+            // blocking-pool bound (panic in debug, absurd value in release).
+            .max_blocking_threads(worker_threads.saturating_mul(2))
             .enable_all()
             .thread_name("glide-worker")
             .thread_stack_size(2 * 1024 * 1024)
@@ -1065,8 +1077,31 @@ pub fn complete_error_sync(
 #[cfg(test)]
 mod tests {
     use super::generate_safe_handle;
+    use super::resolve_worker_threads;
     use super::serialize_array_to_bytes;
     use redis::{Value, parse_redis_value};
+
+    #[test]
+    fn worker_threads_env_parsing_never_yields_zero_or_overflows() {
+        // Absent / unparsable fall back to the default.
+        let default = super::DEFAULT_RUNTIME_WORKER_THREADS;
+        assert_eq!(resolve_worker_threads(None), default);
+        assert_eq!(resolve_worker_threads(Some("")), default);
+        assert_eq!(resolve_worker_threads(Some("many")), default);
+        assert_eq!(resolve_worker_threads(Some("-1")), default);
+        // 0 is raised to 1: tokio fails the build on worker_threads(0), and
+        // inside RUNTIME.get_or_init the panic propagates and leaves the
+        // OnceLock uninitialized (never poisoned), so every later call
+        // retries and fails again — aborting the process in release builds
+        // (`panic = "abort"`).
+        assert_eq!(resolve_worker_threads(Some("0")), 1);
+        // An explicit value is honored.
+        assert_eq!(resolve_worker_threads(Some("4")), 4);
+        // The blocking-pool multiply cannot overflow for any parsed value.
+        let max = resolve_worker_threads(Some(&usize::MAX.to_string()));
+        assert_eq!(max, usize::MAX);
+        assert_eq!(max.saturating_mul(2), usize::MAX);
+    }
 
     #[test]
     fn ordinary_handles_and_pooled_ids_never_collide() {
