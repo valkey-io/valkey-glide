@@ -68,6 +68,8 @@ pub struct Cmd {
     /// response_timeout for this specific command. Used to propagate the
     /// caller's request_timeout into the multiplexed connection layer.
     response_timeout: Option<std::time::Duration>,
+    /// See [`Cmd::set_allow_partial_results`].
+    allow_partial_results: bool,
     /// Inflight slot tracker. When set, the slot is released when the last
     /// clone of this Cmd (or its Arc) is dropped. Used to decouple user-facing
     /// timeout from internal pipeline cleanup.
@@ -95,6 +97,7 @@ impl Clone for Cmd {
             asking: self.asking,
             is_blocking: self.is_blocking,
             response_timeout: self.response_timeout,
+            allow_partial_results: self.allow_partial_results,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: self.inflight_tracker.clone(),
             // Reset watchdog fields — each clone is a fresh command attempt
@@ -552,6 +555,7 @@ impl Cmd {
             asking: false,
             is_blocking: false,
             response_timeout: None,
+            allow_partial_results: false,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: None,
             watchdog_phase: AtomicU8::new(PHASE_QUEUED),
@@ -571,6 +575,7 @@ impl Cmd {
             asking: false,
             is_blocking: false,
             response_timeout: None,
+            allow_partial_results: false,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: None,
             watchdog_phase: AtomicU8::new(PHASE_QUEUED),
@@ -1022,6 +1027,23 @@ impl Cmd {
         self.response_timeout
     }
 
+    /// Return one entry per target node instead of failing on the first node
+    /// error. Applies only to commands sent to all nodes or all primaries whose
+    /// reply is a map keyed by node address (`ResponsePolicy::Special` or no
+    /// policy), such as `INFO`. Failed nodes hold a `Value::ServerError`.
+    #[inline]
+    pub fn set_allow_partial_results(&mut self, allow: bool) -> &mut Cmd {
+        self.allow_partial_results = allow;
+        self
+    }
+
+    /// Check whether this command returns partial results. See
+    /// [`Cmd::set_allow_partial_results`].
+    #[inline]
+    pub fn allow_partial_results(&self) -> bool {
+        self.allow_partial_results
+    }
+
     /// Attach an inflight slot tracker. The slot is released when the last
     /// clone of this Cmd (or its `Arc<Cmd>`) is dropped.
     #[cfg(feature = "cluster-async")]
@@ -1175,6 +1197,24 @@ mod tests {
 
         cmd.set_is_blocking(false);
         assert!(!cmd.is_blocking());
+    }
+
+    #[test]
+    fn test_allow_partial_results_defaults_and_clone() {
+        let mut cmd = Cmd::new();
+        assert!(!cmd.allow_partial_results());
+
+        cmd.set_allow_partial_results(true);
+        assert!(cmd.clone().allow_partial_results());
+    }
+
+    #[test]
+    #[cfg(all(feature = "cluster-async", target_pointer_width = "64"))]
+    fn test_cmd_stays_within_104_bytes() {
+        // Every command is cloned into an `Arc`. Past 104 bytes that allocation moves to
+        // a larger size class, and 64-task SET/GET throughput drops by about 5%.
+        let size = std::mem::size_of::<Cmd>();
+        assert!(size <= 104, "Cmd is {size} bytes");
     }
 
     #[test]
