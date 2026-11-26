@@ -6,6 +6,7 @@
 
 * Rust: Add `HGETDEL` and `DELIFEQ` commands ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145), [#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Python: Add CPython 3.15 wheels for the async and sync clients ([#7321](https://github.com/valkey-io/valkey-glide/issues/7321))
+* Python: The sync client can register CUDA device memory, such as a CUDA `torch.Tensor` or CuPy array, for RDMA when `RdmaConfiguration.device_memory` is set ([#7812](https://github.com/valkey-io/valkey-glide/pull/7812))
 * Core, Python: Add support for Valkey 9.2 commands:
   * `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
 
