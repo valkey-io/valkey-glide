@@ -7,6 +7,7 @@
 * Core: opt-in per-node results for multi-node commands ([#7751](https://github.com/valkey-io/valkey-glide/pull/7751))
 * Core: per-node partial results in the redis-rs cluster fan-out ([#7819](https://github.com/valkey-io/valkey-glide/pull/7819))
 * Node: valkey-search 1.3 stable surface ([#7378](https://github.com/valkey-io/valkey-glide/pull/7378))
+* Java: Add valkey-search 1.3 support, including scoring, cursors, and `FT.HYBRID` ([#7379](https://github.com/valkey-io/valkey-glide/pull/7379))
 * Rust: Add `HGETDEL` and `DELIFEQ` commands ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145), [#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Python: Add CPython 3.15 wheels for the async and sync clients ([#7321](https://github.com/valkey-io/valkey-glide/issues/7321))
 * Core, Python: Add support for Valkey 9.2 commands:
@@ -15,7 +16,9 @@
 
 ### Fixes
 
+* Core, Rust: reject an OpenTelemetry config with no exporter ([#7718](https://github.com/valkey-io/valkey-glide/pull/7718))
 * Core, Java: bound cluster_scan by the client's request timeout and retries ([#6892](https://github.com/valkey-io/valkey-glide/pull/6892))
+* Python: avoid deprecation warning on legacy module introspection ([#7452](https://github.com/valkey-io/valkey-glide/pull/7452))
 * Core: keep timeout watchdog pending counts isolated from retired workers and losing singleton initialization candidates ([#7762](https://github.com/valkey-io/valkey-glide/pull/7762))
 * Core: prevent missed refresh completion notifications ([#7766](https://github.com/valkey-io/valkey-glide/pull/7766))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
