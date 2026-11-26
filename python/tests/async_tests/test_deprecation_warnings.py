@@ -106,27 +106,19 @@ class TestDeprecationWarnings:
         """Test that inspecting sys.modules (e.g. inspect.stack, inspect.getmodule) does not warn (#7443)."""
         import inspect
         import warnings
-        import glide
 
         # Introspection should never emit DeprecationWarning
         with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "error",
-                category=DeprecationWarning,
-                message=r"Importing from 'glide\.",
-            )
+            _error_on_glide_deprecation()
             # Standard inspect stack/module inspection queries dunder attributes like __file__, __spec__
             inspect.stack()
-            for module_name in glide._legacy_modules:
-                if module_name in sys.modules:
-                    mod = sys.modules[module_name]
-                    if hasattr(mod, "_warned"):
-                        assert mod._warned is False
-                        assert not hasattr(mod, "__file__")
-                        assert hasattr(mod, "__name__")
-                        assert hasattr(mod, "__all__")
-                        assert mod.__all__ is not None
-                        assert mod._warned is False
+            for mod in legacy_proxies:
+                assert mod._warned is False
+                assert not hasattr(mod, "__file__")
+                assert hasattr(mod, "__name__")
+                assert hasattr(mod, "__all__")
+                assert mod.__all__ is not None
+                assert mod._warned is False
 
     def test_probing_a_missing_name_does_not_warn(self, legacy_proxies):
         """Tools probe modules for names they may not have (IPython checks `_repr_html_`).
@@ -143,25 +135,19 @@ class TestDeprecationWarnings:
 
     def test_missing_name_error_names_the_legacy_module(self, legacy_proxies):
         """A missing name raises AttributeError naming the legacy module the user used,
-        not glide, without warning or using up the one-shot warning. Checked on a plain
-        proxy and on a package proxy, which goes through the submodule fallback. The error
-        keeps name/obj, which Python uses for its "Did you mean" hint."""
-        import warnings
-
+        not glide. Checked on a plain proxy and on a package proxy, which goes through the
+        submodule fallback. The error keeps name/obj, which Python uses for its "Did you
+        mean" hint. (Not warning is covered by test_probing_a_missing_name_does_not_warn.)
+        """
         for module_name in ("glide.exceptions", "glide.async_commands.server_modules"):
             mod = sys.modules[module_name]
-            with warnings.catch_warnings():
-                _error_on_glide_deprecation()
-                with pytest.raises(
-                    AttributeError,
-                    match=rf"module '{re.escape(module_name)}' has no attribute 'Nope'",
-                ):
-                    mod.Nope
-            assert mod._warned is False, module_name
-            try:
+            with pytest.raises(
+                AttributeError,
+                match=rf"module '{re.escape(module_name)}' has no attribute 'Nope'",
+            ) as excinfo:
                 mod.Nope
-            except AttributeError as err:
-                assert err.name == "Nope" and err.obj is sys.modules["glide"]
+            assert excinfo.value.name == "Nope"
+            assert excinfo.value.obj is sys.modules["glide"]
 
     def test_nested_legacy_import_warns(self, legacy_proxies):
         """Importing a legacy submodule through a proxied legacy package warns at import
