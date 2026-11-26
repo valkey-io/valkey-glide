@@ -889,6 +889,23 @@ pub(crate) enum InternalSingleNodeRouting<C> {
     },
 }
 
+impl<C> InternalSingleNodeRouting<C> {
+    /// Whether a request on this route must be sent right after `ASKING`.
+    ///
+    /// The node honours `ASKING` only for the next command it reads from the connection,
+    /// and other requests share the connection, so the caller packs `ASKING` and the
+    /// request in one write. [`ClusterConnInner::get_connection`] does not send it.
+    pub(crate) fn requires_asking(&self) -> bool {
+        matches!(
+            self,
+            InternalSingleNodeRouting::Redirect {
+                redirect: Redirect::Ask(_, true),
+                ..
+            }
+        )
+    }
+}
+
 impl<C> From<SingleNodeRoutingInfo> for InternalSingleNodeRouting<C> {
     fn from(value: SingleNodeRoutingInfo) -> Self {
         match value {
@@ -3415,9 +3432,15 @@ where
         };
         log_trace_lazy!("cluster", "route request to single node");
 
+        let asking = routing.requires_asking();
+        let asking_in_same_write = asking && C::sends_asking_with_command();
         let (address, mut conn) = Self::get_connection(routing, core, Some(cmd.clone()))
             .await
             .map_err(|err| (OperationTarget::NotFound, err))?;
+        if asking && !asking_in_same_write {
+            // A connection that has not opted in gets `ASKING` as a request of its own.
+            let _ = conn.req_packed_command(&crate::cmd::cmd("ASKING")).await;
+        }
         if let Some(span) = cmd.span() {
             set_routed_node_on_span(&span, &address);
         }
@@ -3426,8 +3449,18 @@ where
         cmd.watchdog_phase
             .store(crate::cmd::PHASE_SENT, std::sync::atomic::Ordering::Release);
 
-        conn.req_packed_command(&cmd)
-            .await
+        let result = if asking_in_same_write {
+            // Pack `ASKING` before the command, in the same write: a separate `ASKING` can be
+            // consumed by another request on this shared connection, and the node then
+            // answers the command with MOVED back to the slot's owner. The copy keeps the
+            // command's timeout, blocking and fencing flags.
+            let mut asking_cmd = Cmd::clone(&cmd);
+            asking_cmd.set_asking(true);
+            conn.req_packed_command(&asking_cmd).await
+        } else {
+            conn.req_packed_command(&cmd).await
+        };
+        result
             .map(Response::Single)
             .map_err(|err| (address.into(), err))
     }
@@ -3468,16 +3501,34 @@ where
                 pipeline_retry_strategy,
             } => {
                 if pipeline.is_atomic() || sub_pipeline {
-                    Self::try_pipeline_request(
-                        pipeline,
-                        offset,
-                        count,
-                        Self::get_connection(
-                            route.unwrap_or(InternalSingleNodeRouting::Random),
-                            core,
-                            None,
-                        ),
-                    )
+                    let asking = route
+                        .as_ref()
+                        .is_some_and(InternalSingleNodeRouting::requires_asking);
+                    // Only an atomic pipeline gets `ASKING` in the same write (before `MULTI`), as
+                    // single commands do; the connection discards its reply, so `offset` stays
+                    // as it is. In a non-atomic sub-pipeline it would cover only the first
+                    // command, so that keeps the standalone `ASKING`.
+                    let asking_in_same_write =
+                        asking && pipeline.is_atomic() && C::sends_asking_with_command();
+                    let pipeline = if asking_in_same_write {
+                        Arc::new(pipeline.with_asking())
+                    } else {
+                        pipeline
+                    };
+                    let connection = Self::get_connection(
+                        route.unwrap_or(InternalSingleNodeRouting::Random),
+                        core,
+                        None,
+                    );
+                    Self::try_pipeline_request(pipeline, offset, count, async move {
+                        let (address, mut conn) = connection.await?;
+                        if asking && !asking_in_same_write {
+                            // A connection that has not opted in gets `ASKING` as a request
+                            // of its own.
+                            let _ = conn.req_packed_command(&crate::cmd::cmd("ASKING")).await;
+                        }
+                        Ok((address, conn))
+                    })
                     .await
                 } else {
                     // The pipeline is not atomic and not already splitted, we need to split it into sub-pipelines and send them separately.
@@ -3682,8 +3733,6 @@ where
         core: Core<C>,
         cmd: Option<Arc<Cmd>>,
     ) -> RedisResult<(String, C)> {
-        let mut asking = false;
-
         let conn_check = match routing {
             InternalSingleNodeRouting::Redirect {
                 redirect: Redirect::Moved(moved_addr),
@@ -3697,18 +3746,16 @@ where
                     ConnectionCheck::Found,
                 ),
             InternalSingleNodeRouting::Redirect {
-                redirect: Redirect::Ask(ask_addr, should_exec_asking),
+                redirect: Redirect::Ask(ask_addr, _),
                 ..
-            } => {
-                asking = should_exec_asking;
-                core.conn_lock
-                    .read()
-                    .connection_for_address(ask_addr.as_str())
-                    .map_or(
-                        ConnectionCheck::OnlyAddress(ask_addr),
-                        ConnectionCheck::Found,
-                    )
-            }
+            } => core
+                .conn_lock
+                .read()
+                .connection_for_address(ask_addr.as_str())
+                .map_or(
+                    ConnectionCheck::OnlyAddress(ask_addr),
+                    ConnectionCheck::Found,
+                ),
             InternalSingleNodeRouting::SpecificNode(route) => {
                 // Step 1: Attempt to get the connection directly using the route.
                 let conn_check = {
@@ -3828,7 +3875,7 @@ where
             }
         };
 
-        let (address, mut conn) = match conn_check {
+        let (address, conn) = match conn_check {
             ConnectionCheck::Found((address, connection)) => (address, connection.await),
             ConnectionCheck::OnlyAddress(address) => {
                 log_warn_rate_limited!("moved_error", 10, format!(
@@ -3909,9 +3956,6 @@ where
             }
         };
 
-        if asking {
-            let _ = conn.req_packed_command(&crate::cmd::cmd("ASKING")).await;
-        }
         Ok((address, conn))
     }
 
@@ -5091,9 +5135,35 @@ pub trait Connect: Sized {
     ) -> RedisFuture<'a, (Self, Option<IpAddr>)>
     where
         T: IntoConnectionInfo + Send + 'a;
+
+    /// Whether the client may hand this connection a command that is to be sent after
+    /// `ASKING` as one command, with `ASKING` packed in front of it in the same write.
+    ///
+    /// The node honours `ASKING` only for the next command it reads from the connection, so
+    /// on a connection that other requests share, `ASKING` and the command must not be
+    /// separate requests. A connection that returns `true` must write the command's packed
+    /// bytes as they are (they start with `ASKING`) and discard the first reply, returning
+    /// the command's own reply; [`MultiplexedConnection`] does both, and a wrapper that
+    /// passes the command to it unchanged may return `true` as well. The default, `false`,
+    /// keeps sending `ASKING` as a request of its own before the command.
+    ///
+    /// The contract is the same for atomic pipelines retried after ASK: the client sends
+    /// `Pipeline::with_asking` (`ASKING` before `MULTI`, in the same write) with the same
+    /// `offset` and `count` as without `ASKING`. The connection must write the pipeline's
+    /// packed bytes as they are and discard the first reply (`ASKING`'s, also when it is an
+    /// error) before it aggregates the pipeline's replies, as
+    /// [`MultiplexedConnection::send_packed_commands`] does. Otherwise an `ASKING` error
+    /// would be reported as the pipeline's, although the transaction may have run.
+    fn sends_asking_with_command() -> bool {
+        false
+    }
 }
 
 impl Connect for MultiplexedConnection {
+    fn sends_asking_with_command() -> bool {
+        true
+    }
+
     fn connect<'a, T>(
         info: T,
         response_timeout: Duration,
