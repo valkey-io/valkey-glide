@@ -33,6 +33,7 @@
 * Core: reject writes in read-only standalone pipelines, transactions and scopes ([#7761](https://github.com/valkey-io/valkey-glide/pull/7761))
 * Core: Cap the socket listener worker pool at 8 by default (override with `GLIDE_SOCKET_LISTENER_WORKERS`) and report pool-creation failures through the init callback ([#7586](https://github.com/valkey-io/valkey-glide/issues/7586))
 * Core/Node: Apply the same worker-pool cap to the Node client's pool ([#7586](https://github.com/valkey-io/valkey-glide/issues/7586))
+* Core: stop the reconnect loop of a connection whose last owner dropped it, so a failed or cancelled client creation no longer leaves an orphaned connect task redialling forever ([#7809](https://github.com/valkey-io/valkey-glide/issues/7809))
 
 ### Breaking Changes
 
