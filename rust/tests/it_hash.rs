@@ -4,6 +4,7 @@
 mod common;
 
 use glide::AsyncTypedCommands;
+use glide::ExistenceCheck;
 use glide::ExpireOption;
 use glide::Expiry;
 use glide::FieldExistenceCheck;
@@ -534,4 +535,60 @@ matrix_test!(hset_ex, c, {
     assert_eq!(v.as_deref(), Some("v8"));
     let ttl: Vec<IntegerReplyOrNoOp> = c.httl(&k, "f").await.unwrap();
     assert_eq!(ttl, vec![IntegerReplyOrNoOp::ExistsButNotRelevant]);
+});
+
+// HSETEX key existence check (NX/XX, Valkey 9.1+).
+matrix_test!(hset_ex_key_existence_check, c, {
+    skip_if_version_below!(c, 9, 1, 0);
+
+    let nx = HashFieldExpirationOptions::default().set_key_existence_check(ExistenceCheck::NX);
+    let xx = HashFieldExpirationOptions::default().set_key_existence_check(ExistenceCheck::XX);
+    let k = common::key("h_setex_key");
+
+    // HSETEX with XX on a missing key: nothing is set, the key is not created.
+    let res: bool = c.hset_ex(&k, &xx, &[("f", "v1")]).await.unwrap();
+    assert!(!res);
+    let exists: bool = c.exists(&k).await.unwrap();
+    assert!(!exists);
+
+    // HSETEX with NX and EX on a missing key.
+    let res: bool = c
+        .hset_ex(&k, &nx.set_expiration(SetExpiry::EX(100)), &[("f", "v1")])
+        .await
+        .unwrap();
+    assert!(res);
+    let v: Option<String> = c.hget(&k, "f").await.unwrap();
+    assert_eq!(v.as_deref(), Some("v1"));
+    let ttl: Vec<IntegerReplyOrNoOp> = c.httl(&k, "f").await.unwrap();
+    assert!(matches!(ttl[0], IntegerReplyOrNoOp::IntegerReply(1..=100)));
+
+    // HSETEX with NX on an existing key: nothing is set.
+    let res: bool = c
+        .hset_ex(&k, &nx, &[("f", "v2"), ("g", "gv")])
+        .await
+        .unwrap();
+    assert!(!res);
+    let v: Option<String> = c.hget(&k, "f").await.unwrap();
+    assert_eq!(v.as_deref(), Some("v1"));
+    let g: Option<String> = c.hget(&k, "g").await.unwrap();
+    assert_eq!(g, None);
+
+    // HSETEX with XX on an existing key.
+    let res: bool = c.hset_ex(&k, &xx, &[("f", "v3")]).await.unwrap();
+    assert!(res);
+    let v: Option<String> = c.hget(&k, "f").await.unwrap();
+    assert_eq!(v.as_deref(), Some("v3"));
+
+    // HSETEX with XX and FNX: the key exists, but so does the field.
+    let res: bool = c
+        .hset_ex(
+            &k,
+            &xx.set_existence_check(FieldExistenceCheck::FNX),
+            &[("f", "v4")],
+        )
+        .await
+        .unwrap();
+    assert!(!res);
+    let v: Option<String> = c.hget(&k, "f").await.unwrap();
+    assert_eq!(v.as_deref(), Some("v3"));
 });
