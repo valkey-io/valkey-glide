@@ -30,7 +30,6 @@
 * Core/FFI: run a lazy sync client's first connect on the runtime worker ([#7671](https://github.com/valkey-io/valkey-glide/pull/7671))
 * Core/FFI: run address resolver callbacks on the blocked caller thread ([#7818](https://github.com/valkey-io/valkey-glide/pull/7818))
 * Core/FFI, Python: pools and scopes work in forked children, and Python raises `ClosingError` for an inherited pool or async scope ([#7630](https://github.com/valkey-io/valkey-glide/issues/7630))
-* Go: strip LLVM bitcode from the prebuilt `libglide_ffi.a` so Go 1.26.11+ / 1.27.4+ no longer reject it with `disallowed LTO section` ([#7739](https://github.com/valkey-io/valkey-glide/pull/7739))
 * Go: link CoreFoundation on macOS arm64 so programs that do not import `crypto/x509` link with Go 1.27 ([#7784](https://github.com/valkey-io/valkey-glide/issues/7784))
 * Python: `AsyncClientPool` borrowing and async `IsolatedScope` commands work under trio ([#7513](https://github.com/valkey-io/valkey-glide/issues/7513), [#7651](https://github.com/valkey-io/valkey-glide/issues/7651))
 * Rust: `telemetry::init` rejects a configuration with no exporter ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
@@ -47,6 +46,13 @@
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 * Python, Go: a whitespace-only client AZ is now rejected for AZ-affinity read strategies, like an empty one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))
+
+## 2.6.1
+
+### Fixes
+
+* Go: strip LLVM bitcode from the prebuilt `libglide_ffi.a` so Go 1.26.11+ / 1.27.4+ no longer reject it with `disallowed LTO section` ([#7739](https://github.com/valkey-io/valkey-glide/pull/7739), [#7755](https://github.com/valkey-io/valkey-glide/pull/7755))
+* Rust: Remove `chrono` dependency for [RUSTSEC-2026-0543](https://rustsec.org/advisories/RUSTSEC-2026-0543) ([#7750](https://github.com/valkey-io/valkey-glide/pull/7750)).
 
 ## 2.6
 
@@ -69,7 +75,6 @@
 
 ### Fixes
 
-* Rust: Remove `chrono` dependency for [RUSTSEC-2026-0543](https://rustsec.org/advisories/RUSTSEC-2026-0543) ([#7750](https://github.com/valkey-io/valkey-glide/pull/7750)).
 * Java: Jedis compatibility `JedisPool` (4.x and 5.x) now restores its configured database before lending a connection, so a borrower no longer inherits a previous borrower's `select` ([#7604](https://github.com/valkey-io/valkey-glide/issues/7604))
 * Java: Publish the classifier-less `valkey-glide-jedis-compat-shared` JAR. The `valkey-glide-jedis-compatibility` and `valkey-glide-jedis-4-compatibility` POMs depend on it, and since 2.6.0-rc1 Maven failed to resolve them with `Could not find artifact io.valkey:valkey-glide-jedis-compat-shared` ([#7603](https://github.com/valkey-io/valkey-glide/issues/7603))
 * Node: Populate actual `lib-ver` instead of `unknown` in `CLIENT INFO` responses ([#7616](https://github.com/valkey-io/valkey-glide/pull/7616))
