@@ -863,12 +863,15 @@ fn counts_as_connection_failure(error: &RedisError) -> bool {
 }
 
 /// Returns whether any node in a partial result timed out and, when no node
-/// answered, the error the circuit breaker counts instead of the plain call's:
-/// the first connection error, else a timeout. Error replies are not counted,
-/// as for a plain call.
+/// answered, the error the circuit breaker counts instead of the plain call's.
+/// The plain call fails with the first node error to arrive, and a timeout
+/// arrives last, so the first connection error counts, else a timeout if no
+/// other node failed. Error replies are not counted, as for a plain call. A
+/// node with no connection, which the plain call leaves out, changes nothing.
 fn partial_results_failure(entries: &[(Value, Value)]) -> (bool, Option<RedisError>) {
     let mut answered = false;
     let mut timed_out = false;
+    let mut failed = false;
     let mut connection_error = None;
     for (_, value) in entries {
         let Value::ServerError(error) = value else {
@@ -880,13 +883,16 @@ fn partial_results_failure(entries: &[(Value, Value)]) -> (bool, Option<RedisErr
             timed_out = true;
         } else if counts_as_connection_failure(&error) {
             connection_error.get_or_insert(error);
+        } else if error.kind() != ErrorKind::ConnectionNotFoundForRoute {
+            failed = true;
         }
     }
     let failure = if answered {
         None
     } else {
-        connection_error
-            .or_else(|| timed_out.then(|| io::Error::from(io::ErrorKind::TimedOut).into()))
+        connection_error.or_else(|| {
+            (timed_out && !failed).then(|| io::Error::from(io::ErrorKind::TimedOut).into())
+        })
     };
     (timed_out, failure)
 }
@@ -5417,24 +5423,33 @@ mod tests {
         assert_eq!(partial_results_margin(Duration::ZERO), Duration::ZERO);
     }
 
+    /// A node's entry in a partial result.
+    fn node_entry(value: redis::Value) -> (redis::Value, redis::Value) {
+        (redis::Value::BulkString(b"a:1".to_vec().into()), value)
+    }
+
+    /// A node's entry for `error`, held as partial results hold it.
+    fn failed_entry(error: redis::RedisError) -> (redis::Value, redis::Value) {
+        node_entry(redis::Value::ServerError(
+            redis::ServerError::from_error_keeping_kind(error),
+        ))
+    }
+
+    fn timeout_entry() -> (redis::Value, redis::Value) {
+        failed_entry(std::io::Error::from(std::io::ErrorKind::TimedOut).into())
+    }
+
+    /// A node's entry for the error reply `wire`.
+    fn reply_entry(wire: &[u8]) -> (redis::Value, redis::Value) {
+        node_entry(redis::parse_redis_value(wire).unwrap())
+    }
+
     #[test]
     fn test_partial_results_failure_stands_for_the_plain_error_when_no_node_answered() {
-        let node = |value| (redis::Value::BulkString(b"a:1".to_vec().into()), value);
-        let reply = || node(redis::Value::BulkString(b"# Server".to_vec().into()));
-        let timeout = || {
-            node(redis::Value::ServerError(
-                redis::ServerError::ExtensionError {
-                    code: redis::TIMEOUT_ERROR_CODE.into(),
-                    detail: Some("timed out".into()),
-                },
-            ))
-        };
-        let failed = |error| {
-            node(redis::Value::ServerError(
-                redis::ServerError::from_error_keeping_kind(error),
-            ))
-        };
-        let denied = || node(redis::parse_redis_value(b"-NOPERM no permissions\r\n").unwrap());
+        let reply = || node_entry(redis::Value::BulkString(b"# Server".to_vec().into()));
+        let timeout = timeout_entry;
+        let failed = failed_entry;
+        let denied = || reply_entry(b"-NOPERM no permissions\r\n");
 
         // Every node timed out: a timeout for the metric and for the breaker.
         let (timed_out, failure) = partial_results_failure(&[timeout(), timeout()]);
@@ -5457,6 +5472,34 @@ mod tests {
         // Error replies do not count, as for the plain call.
         let (timed_out, failure) = partial_results_failure(&[denied(), denied()]);
         assert!(!timed_out);
+        assert!(failure.is_none());
+    }
+
+    #[test]
+    fn test_partial_results_failure_counts_a_timeout_only_when_no_other_node_failed() {
+        // The plain call fails first with the error reply, which is not counted.
+        let denied = reply_entry(b"-NOPERM no permissions\r\n");
+        let (timed_out, failure) = partial_results_failure(&[denied, timeout_entry()]);
+        assert!(timed_out);
+        assert!(failure.is_none());
+
+        // The plain call leaves out a node with no connection and times out.
+        let unconnected = failed_entry(
+            (
+                redis::ErrorKind::ConnectionNotFoundForRoute,
+                "Connection not found",
+            )
+                .into(),
+        );
+        let (_, failure) = partial_results_failure(&[unconnected, timeout_entry()]);
+        assert!(failure.unwrap().is_timeout());
+    }
+
+    #[test]
+    fn test_partial_results_failure_does_not_count_a_reply_coded_like_a_connection_error() {
+        // A script can reply with any error code.
+        let forged = || reply_entry(b"-IoError not really\r\n");
+        let (_, failure) = partial_results_failure(&[forged(), forged()]);
         assert!(failure.is_none());
     }
 
