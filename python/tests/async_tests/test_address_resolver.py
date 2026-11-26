@@ -20,6 +20,7 @@ TGlideClient = Union[GlideClient, GlideClusterClient]
 
 
 @pytest.mark.anyio
+@pytest.mark.requires_tcp
 @pytest.mark.parametrize("cluster_mode", [True, False])
 class TestAddressResolver:
     """Async address resolver tests."""
