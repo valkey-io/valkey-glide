@@ -41,7 +41,9 @@
 //! - Invalid routing scenarios
 
 use crate::aio::ConnectionLike;
-use crate::cluster_async::{ClusterConnInner, Connect, InnerCore, RefreshPolicy};
+use crate::cluster_async::{
+    ClusterConnInner, Connect, InnerCore, InternalSingleNodeRouting, RefreshPolicy,
+};
 use crate::cluster_routing::SlotAddr;
 use crate::cluster_topology::SLOT_SIZE;
 use crate::types::RetryMethod;
@@ -692,30 +694,26 @@ async fn send_scan<C>(
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    if let Some(conn_future) = core
-        .connection_for_address(&scan_state.address_in_scan)
-        .await
-    {
-        let mut conn = conn_future.await;
-        let mut scan_command = cmd("SCAN");
-        scan_command.arg(scan_state.cursor);
-        if let Some(match_pattern) = cluster_scan_args.match_pattern.as_ref() {
-            scan_command.arg("MATCH").arg(match_pattern);
-        }
-        if let Some(count) = cluster_scan_args.count {
-            scan_command.arg("COUNT").arg(count);
-        }
-        if let Some(object_type) = &cluster_scan_args.object_type {
-            scan_command.arg("TYPE").arg(object_type.to_string());
-        }
-        conn.req_packed_command(&scan_command).await
-    } else {
-        Err(RedisError::from((
-            ErrorKind::ConnectionNotFoundForRoute,
-            "Cluster scan failed. No connection available for address: ",
-            format!("{}", scan_state.address_in_scan),
-        )))
+    // Look the connection up as the request path does, so a SCAN sent while the node
+    // is being reconnected waits for the reconnect instead of failing.
+    let (_, mut conn) = ClusterConnInner::get_connection(
+        InternalSingleNodeRouting::ByAddress(scan_state.address_in_scan.to_string()),
+        core,
+        None,
+    )
+    .await?;
+    let mut scan_command = cmd("SCAN");
+    scan_command.arg(scan_state.cursor);
+    if let Some(match_pattern) = cluster_scan_args.match_pattern.as_ref() {
+        scan_command.arg("MATCH").arg(match_pattern);
     }
+    if let Some(count) = cluster_scan_args.count {
+        scan_command.arg("COUNT").arg(count);
+    }
+    if let Some(object_type) = &cluster_scan_args.object_type {
+        scan_command.arg("TYPE").arg(object_type.to_string());
+    }
+    conn.req_packed_command(&scan_command).await
 }
 
 /// Checks if the error is retryable during scanning.
@@ -872,6 +870,34 @@ mod tests {
         mark_slot_as_scanned(&mut scanned_slots_map, 5);
 
         assert_eq!(scanned_slots_map[0], 1 << 5);
+    }
+
+    #[tokio::test]
+    async fn send_scan_waits_for_its_node_to_reconnect() {
+        use crate::cluster_async::refresh_task_resolution_tests::{
+            complete_refresh, core_with_non_idempotent_resolver, insert_in_progress_refresh,
+        };
+        use futures::FutureExt;
+
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381";
+        insert_in_progress_refresh(&core, address, false);
+        let state = ScanState::new(
+            0,
+            [0; BITS_ARRAY_SIZE as usize],
+            Arc::new(address.to_owned()),
+            0,
+            ScanStateStage::InProgress,
+        );
+        let args = ClusterScanArgs::default();
+        let mut scan = Box::pin(send_scan(&state, &args, core.clone()));
+        assert!(
+            (&mut scan).now_or_never().is_none(),
+            "SCAN should wait for the reconnect instead of failing"
+        );
+
+        complete_refresh(&core, address, 6381);
+        scan.await.expect("SCAN sent once the node reconnected");
     }
 
     #[tokio::test]

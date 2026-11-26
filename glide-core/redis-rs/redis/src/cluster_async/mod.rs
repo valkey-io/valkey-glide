@@ -752,17 +752,6 @@ where
             .slot_map
             .get_slots_of_node(node_address)
     }
-
-    /// Get connection for address
-    pub(crate) async fn connection_for_address(
-        &self,
-        address: &str,
-    ) -> Option<ConnectionFuture<C>> {
-        self.conn_lock
-            .read()
-            .connection_for_address(address)
-            .map(|(_, conn)| conn)
-    }
 }
 
 pub(crate) struct ClusterConnInner<C> {
@@ -3689,7 +3678,7 @@ where
         final_responses
     }
 
-    async fn get_connection(
+    pub(crate) async fn get_connection(
         routing: InternalSingleNodeRouting<C>,
         core: Core<C>,
         cmd: Option<Arc<Cmd>>,
@@ -6089,7 +6078,7 @@ pub(super) mod refresh_task_resolution_tests {
     }
 
     #[derive(Clone, Debug)]
-    pub(super) struct RecordingConnection {
+    pub(crate) struct RecordingConnection {
         port: u16,
     }
 
@@ -6323,7 +6312,7 @@ pub(super) mod refresh_task_resolution_tests {
         )
     }
 
-    pub(super) fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
+    pub(crate) fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
         core_with_resolver(Arc::new(NonIdempotentResolver))
     }
 
@@ -6915,7 +6904,7 @@ pub(super) mod refresh_task_resolution_tests {
     }
 
     /// Inserts an in-progress refresh task for `address` and returns its identity.
-    fn insert_in_progress_refresh(
+    pub(crate) fn insert_in_progress_refresh(
         core: &Arc<InnerCore<RecordingConnection>>,
         address: &str,
         may_keep_existing_conn: bool,
@@ -6984,7 +6973,11 @@ pub(super) mod refresh_task_resolution_tests {
 
     /// Completes an in-progress refresh: installs the connection, then drops the task state,
     /// which wakes the waiters.
-    fn complete_refresh(core: &Arc<InnerCore<RecordingConnection>>, address: &str, port: u16) {
+    pub(crate) fn complete_refresh(
+        core: &Arc<InnerCore<RecordingConnection>>,
+        address: &str,
+        port: u16,
+    ) {
         core.conn_lock
             .read()
             .replace_or_add_connection_for_address(address, recording_node(port));
