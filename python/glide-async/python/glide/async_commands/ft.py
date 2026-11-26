@@ -156,18 +156,13 @@ async def search(
     Args:
         client (TGlideClient): The client to execute the command.
         index_name (TEncodable): The index name to search into.
-        query (TEncodable): The text query to search. A text/tag predicate can carry a trailing ``=>{$weight:
-            <value>}`` attribute to scale its contribution to the relevance score, e.g. ``@title:hello=>{$weight:
-            2.0}`` (valkey-search 1.3.0, ``src/commands/filter_parser.cc`` -- confirmed empirically: this attaches
-            to a predicate, not to a vector ``[KNN ...]`` clause, which uses ``=>[`` rather than ``=>{`` and
-            therefore cannot carry this block). A KNN clause's own prefiltering strategy is instead controlled by
-            ``HYBRID_POLICY BATCHES`` / ``ADHOC_BF`` as a parameter inside the ``[KNN k @field $vec ...]`` bracket
-            itself (``src/query/search.cc``) -- confirmed this requires the overall query to be genuinely hybrid
-            (a real predicate combined with the KNN clause, or ``INKEYS``; a bare ``*=>[KNN ...]`` is rejected with
-            "hybrid query attributes were sent for a non-hybrid query"), so it is not usable on every KNN query the
-            way this docstring originally assumed. GLIDE passes the whole query string through verbatim either
-            way; neither mechanism requires client-side support, the same way ``$yield_distance_as`` on
-            ``VECTOR_RANGE`` already works.
+        query (TEncodable): The text query to search. A text/tag predicate can carry a trailing
+            ``=>{$weight: <value>}`` attribute to scale its contribution to the relevance score, for
+            example ``@title:hello=>{$weight: 2.0}`` (valkey-search 1.3.0). A KNN clause's prefiltering
+            strategy is set by ``HYBRID_POLICY BATCHES`` or ``ADHOC_BF`` inside the
+            ``[KNN k @field $vec ...]`` bracket. It requires a hybrid query (a real predicate combined
+            with the KNN clause, or ``INKEYS``); a bare ``*=>[KNN ...]`` is rejected. GLIDE passes the
+            query string through verbatim, so neither mechanism needs client-side support.
         options (Optional[FtSearchOptions]): The search options.
 
     Returns:
@@ -225,10 +220,9 @@ async def aliasadd(
     Adds an alias for an index. The new alias name can be used anywhere that an index name is required.
 
     Note:
-        Not supported by valkey-search <= 1.3.0-rc1 -- confirmed live, the server rejects FT.ALIASADD
-        outright with "unknown command" (waiting on https://github.com/valkey-io/valkey-search/pull/1184).
-        This function remains part of the public API for parity with RediSearch clients, but any call
-        currently raises a `RequestError`.
+        Not supported by valkey-search 1.3.0-rc1 and earlier. The server replies "unknown command"
+        (tracked upstream in https://github.com/valkey-io/valkey-search/pull/1184). This function is
+        kept in the public API for parity with RediSearch clients, but any call raises a `RequestError`.
 
     Args:
         client (TGlideClient): The client to execute the command.
@@ -252,10 +246,9 @@ async def aliasdel(client: TGlideClient, alias: TEncodable) -> TOK:
     Deletes an existing alias for an index.
 
     Note:
-        Not supported by valkey-search <= 1.3.0-rc1 -- confirmed live, the server rejects FT.ALIASDEL
-        outright with "unknown command" (waiting on https://github.com/valkey-io/valkey-search/pull/1184).
-        This function remains part of the public API for parity with RediSearch clients, but any call
-        currently raises a `RequestError`.
+        Not supported by valkey-search 1.3.0-rc1 and earlier. The server replies "unknown command"
+        (tracked upstream in https://github.com/valkey-io/valkey-search/pull/1184). This function is
+        kept in the public API for parity with RediSearch clients, but any call raises a `RequestError`.
 
     Args:
         client (TGlideClient): The client to execute the command.
@@ -280,10 +273,9 @@ async def aliasupdate(
     Updates an existing alias to point to a different physical index. This command only affects future references to the alias.
 
     Note:
-        Not supported by valkey-search <= 1.3.0-rc1 -- confirmed live, the server rejects FT.ALIASUPDATE
-        outright with "unknown command" (waiting on https://github.com/valkey-io/valkey-search/pull/1184).
-        This function remains part of the public API for parity with RediSearch clients, but any call
-        currently raises a `RequestError`.
+        Not supported by valkey-search 1.3.0-rc1 and earlier. The server replies "unknown command"
+        (tracked upstream in https://github.com/valkey-io/valkey-search/pull/1184). This function is
+        kept in the public API for parity with RediSearch clients, but any call raises a `RequestError`.
 
     Args:
         client (TGlideClient): The client to execute the command.
@@ -323,11 +315,9 @@ async def info(
         FtInfoResponse: Nested maps with info about the index. See example for more details.
 
     Note:
-        `index_definition`'s `score_field` key (reporting `FtCreateOptions(score_field=...)`, see
-        ``ft_create_options.py``) requires `search.emulate-release` >= 1.3.0 to appear at all
-        (``ft_info_score_field`` compatibility flag) -- below that level the pair is omitted entirely,
-        even if the index was created with `score_field` set. See upstream COMPATIBILITY.md's
-        "Sunsetting of Incompatible Behavior" section.
+        `index_definition`'s `score_field` key (reporting `FtCreateOptions(score_field=...)`) requires
+        `search.emulate-release` 1.3.0 or later to appear at all. Below that level the pair is omitted,
+        even if the index was created with `score_field` set.
 
     Examples:
         An index with name 'myIndex', 1 text field and 1 vector field is already created for gettting the output of this
@@ -411,10 +401,9 @@ async def explain(
     Parse a query and return information about how that query was parsed.
 
     Note:
-        Not supported by valkey-search <= 1.3.0-rc1 -- confirmed live, the server rejects FT.EXPLAIN
-        outright with "unknown command" (the command is not registered at all). This function remains
-        part of the public API for parity with RediSearch clients, but any call currently raises a
-        `RequestError`.
+        Not supported by valkey-search 1.3.0-rc1 and earlier. The server replies "unknown command"
+        because the command is not registered. This function is kept in the public API for parity with
+        RediSearch clients, but any call raises a `RequestError`.
 
     Args:
         client (TGlideClient): The client to execute the command.
@@ -440,10 +429,9 @@ async def explaincli(
     Same as the FT.EXPLAIN command except that the results are displayed in a different format. More useful with cli.
 
     Note:
-        Not supported by valkey-search <= 1.3.0-rc1 -- confirmed live, the server rejects FT.EXPLAINCLI
-        outright with "unknown command" (the command is not registered at all). This function remains
-        part of the public API for parity with RediSearch clients, but any call currently raises a
-        `RequestError`.
+        Not supported by valkey-search 1.3.0-rc1 and earlier. The server replies "unknown command"
+        because the command is not registered. This function is kept in the public API for parity with
+        RediSearch clients, but any call raises a `RequestError`.
 
     Args:
         client (TGlideClient): The client to execute the command.
@@ -554,8 +542,7 @@ async def cursor_read(
         Always reads from the PRIMARY of the index's slot, regardless of the client's
         ``ReadFrom`` configuration -- see the cursor-affinity note on `aggregate`/`hybrid`. A
         cursor opened by FT.HYBRID is read the same way as one opened by FT.AGGREGATE; the server
-        does not distinguish which command created it (confirmed live and in
-        ``src/commands/ft_cursor.cc``).
+        does not distinguish which command created it.
 
     Examples:
         >>> from glide import ft
@@ -620,10 +607,9 @@ async def profile(
     Runs a search or aggregation query and collects performance profiling information.
 
     Note:
-        Not supported by valkey-search <= 1.3.0-rc1 -- confirmed live, the server rejects FT.PROFILE
-        outright with "unknown command" (the command is not registered at all). This
-        function remains part of the public API for parity with RediSearch clients, but any call
-        currently raises a `RequestError`.
+        Not supported by valkey-search 1.3.0-rc1 and earlier. The server replies "unknown command"
+        because the command is not registered. This function is kept in the public API for parity with
+        RediSearch clients, but any call raises a `RequestError`.
 
     Args:
         client (TGlideClient): The client to execute the command.
@@ -678,10 +664,9 @@ async def aliaslist(client: TGlideClient) -> Mapping[TEncodable, TEncodable]:
     List the index aliases.
 
     Note:
-        Not supported by valkey-search <= 1.3.0-rc1 -- confirmed live, the server rejects FT._ALIASLIST
-        outright with "unknown command" (waiting on https://github.com/valkey-io/valkey-search/pull/1184).
-        This function remains part of the public API for parity with RediSearch clients, but any call
-        currently raises a `RequestError`.
+        Not supported by valkey-search 1.3.0-rc1 and earlier. The server replies "unknown command"
+        (tracked upstream in https://github.com/valkey-io/valkey-search/pull/1184). This function is
+        kept in the public API for parity with RediSearch clients, but any call raises a `RequestError`.
 
     Args:
         client (TGlideClient): The client to execute the command.
@@ -728,14 +713,11 @@ async def hybrid(
             to fetch the next page (``0`` once exhausted).
 
     Note:
-        A paged (``with_cursor``) FT.HYBRID query, and every subsequent FT.CURSOR READ/DEL against
-        the cursor it opens, always reads from the PRIMARY of the index's slot, regardless of the
-        client's ``ReadFrom`` configuration. This is because a cursor is a
-        per-process, node-local resource on the server that opened it -- it is not shared or
-        forwarded between nodes, so a read that lands on a different node (a replica a
-        ``PREFER_REPLICA``/AZ-affinity client would otherwise have used) fails with "Cursor not
-        found". A failover of the primary that was holding an open cursor loses that cursor, the
-        same as any other cursor-discarding event on that node.
+        A paged (``with_cursor``) FT.HYBRID query, and every later FT.CURSOR READ/DEL against the
+        cursor it opens, always goes to the PRIMARY of the index's slot, regardless of the client's
+        ``ReadFrom`` configuration. A cursor is a node-local resource that is not forwarded between
+        nodes, so a read sent to a replica fails with "Cursor not found". A failover of the primary
+        that held the cursor loses it.
 
     Examples:
         For the following example to work, an index named "idx" must already exist, with a TEXT
