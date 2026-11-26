@@ -23,6 +23,13 @@ class TestCheckNodeStartup:
         log.write_text("* Ready to accept connections tcp\n")
         assert check_node_startup(SERVER, str(log), timeout=1) is NodeCheck.READY
 
+    def test_redis_6_2_socket_only_node_reports_ready(self, tmp_path):
+        log = tmp_path / "server.log"
+        log.write_text(
+            "* The server is now ready to accept connections at /tmp/glide.sock\n"
+        )
+        assert check_node_startup(SERVER, str(log), timeout=1) is NodeCheck.READY
+
     def test_bind_error_reports_port_taken(self, tmp_path):
         log = tmp_path / "server.log"
         log.write_text(

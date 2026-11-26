@@ -254,6 +254,13 @@ mod with_rdma {
     }
 
     impl Connect for GlideConnection {
+        // Commands and pipelines, `ASKING` ones included, go unchanged to
+        // `MultiplexedConnection::send_packed_command` / `send_packed_commands`, which discard
+        // the `ASKING` reply.
+        fn sends_asking_with_command() -> bool {
+            true
+        }
+
         fn connect<'a, T>(
             info: T,
             response_timeout: Duration,

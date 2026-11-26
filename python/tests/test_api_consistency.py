@@ -143,6 +143,9 @@ EXCLUDED_TESTS = {
         # Only the sync client registers an os.register_at_fork hook.
         "test_sync_fork_after_failed_create_does_not_reconnect",
         "spy",
+        # Only the sync client re-creates itself in a forked child; async fork
+        # behaviour is covered by test_fork_safety.py.
+        "test_address_resolver_runs_on_the_calling_thread_in_a_forked_child",
         # Sync clients rebuild their native client in a forked child; async clients refuse
         "test_scope_on_inherited_client_in_child",
         # RDMA is sync-only, and async clients refuse it at creation
