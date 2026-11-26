@@ -22,6 +22,7 @@
 * Core, Java: bound cluster_scan by the client's request timeout and retries ([#6892](https://github.com/valkey-io/valkey-glide/pull/6892))
 * Python: avoid deprecation warning on legacy module introspection ([#7452](https://github.com/valkey-io/valkey-glide/pull/7452))
 * Node: validate cursor in GlideClusterClient.scan ([#7610](https://github.com/valkey-io/valkey-glide/pull/7610))
+* Core: restore constant-time command argument lookup to prevent quadratic routing latency for large multi-key commands ([#7780](https://github.com/valkey-io/valkey-glide/issues/7780))
 * Core: keep timeout watchdog pending counts isolated from retired workers and losing singleton initialization candidates ([#7762](https://github.com/valkey-io/valkey-glide/pull/7762))
 * Core: prevent missed refresh completion notifications ([#7766](https://github.com/valkey-io/valkey-glide/pull/7766))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))

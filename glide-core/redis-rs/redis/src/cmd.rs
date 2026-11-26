@@ -29,8 +29,8 @@ pub enum Arg<D> {
 /// buffer (send-side zero-copy).
 #[derive(Clone)]
 enum StoredArg {
-    /// End offset of an inline argument in `Cmd::data`.
-    Inline(usize),
+    /// Start and end offsets of an inline argument in `Cmd::data`.
+    Inline { start: usize, end: usize },
     /// Refcounted shared payload stored out-of-line.
     Shared(bytes::Bytes),
     /// A cursor placeholder created from `cursor_arg()`.
@@ -497,15 +497,23 @@ impl RedisWrite for Cmd {
                     arg,
                 )));
         } else {
+            let start = self.data.len();
             self.data.extend_from_slice(arg);
-            self.args.push(StoredArg::Inline(self.data.len()));
+            self.args.push(StoredArg::Inline {
+                start,
+                end: self.data.len(),
+            });
         }
     }
 
     fn write_arg_fmt(&mut self, arg: impl fmt::Display) {
         use std::io::Write;
+        let start = self.data.len();
         write!(self.data, "{arg}").unwrap();
-        self.args.push(StoredArg::Inline(self.data.len()));
+        self.args.push(StoredArg::Inline {
+            start,
+            end: self.data.len(),
+        });
     }
 }
 
@@ -716,12 +724,10 @@ impl Cmd {
         scratch.extend_from_slice(int_buf.format(self.args.len()).as_bytes());
         scratch.extend_from_slice(b"\r\n");
 
-        let mut prev = 0;
         for arg in &self.args {
             match arg {
-                StoredArg::Inline(i) => {
-                    let payload = &self.data[prev..*i];
-                    prev = *i;
+                StoredArg::Inline { start, end } => {
+                    let payload = &self.data[*start..*end];
                     scratch.push(b'$');
                     scratch.extend_from_slice(int_buf.format(payload.len()).as_bytes());
                     scratch.extend_from_slice(b"\r\n");
@@ -925,13 +931,8 @@ impl Cmd {
 
     /// Iterate over the command arguments as byte slices (framing excluded).
     pub fn args_iter(&self) -> impl Clone + ExactSizeIterator<Item = Arg<&[u8]>> {
-        let mut prev = 0;
         self.args.iter().map(move |arg| match arg {
-            StoredArg::Inline(i) => {
-                let arg = Arg::Simple(&self.data[prev..*i]);
-                prev = *i;
-                arg
-            }
+            StoredArg::Inline { start, end } => Arg::Simple(&self.data[*start..*end]),
             StoredArg::Shared(bytes) => Arg::Simple(&bytes[..]),
             StoredArg::Cursor => Arg::Cursor,
         })
@@ -944,9 +945,10 @@ impl Cmd {
         // string (`b""`) is a present argument and must be distinguished from
         // a missing one, so cluster routing of a `Cmd` matches routing of its
         // packed RESP form (see `Routable for Value`).
-        match self.args_iter().nth(idx)? {
-            Arg::Simple(s) => Some(s),
-            Arg::Cursor => None,
+        match self.args.get(idx)? {
+            StoredArg::Inline { start, end } => Some(&self.data[*start..*end]),
+            StoredArg::Shared(bytes) => Some(&bytes[..]),
+            StoredArg::Cursor => None,
         }
     }
 
@@ -1157,6 +1159,16 @@ mod tests {
         e.arg("GET").arg(b"");
         assert_eq!(e.arg_idx(1), Some(&b""[..]));
         assert_eq!(e.arg_idx(2), None);
+
+        // Verify random-access indexing without sequential dependency
+        let mut multi = Cmd::new();
+        multi.arg("MSET").arg("k1").arg("v1").arg("k2").arg("v2");
+        assert_eq!(multi.arg_idx(3), Some(&b"k2"[..]));
+        assert_eq!(multi.arg_idx(1), Some(&b"k1"[..]));
+        assert_eq!(multi.arg_idx(4), Some(&b"v2"[..]));
+        assert_eq!(multi.arg_idx(0), Some(&b"MSET"[..]));
+        assert_eq!(multi.arg_idx(2), Some(&b"v1"[..]));
+        assert_eq!(multi.arg_idx(5), None);
     }
 
     #[test]

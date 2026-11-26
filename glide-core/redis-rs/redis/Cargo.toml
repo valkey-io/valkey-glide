@@ -190,6 +190,11 @@ harness = false
 required-features = ["cluster"]
 
 [[bench]]
+name = "bench_cluster_routing"
+harness = false
+required-features = ["cluster"]
+
+[[bench]]
 name = "bench_cluster_async"
 harness = false
 required-features = ["cluster-async", "tokio-comp"]
