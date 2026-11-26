@@ -11,11 +11,6 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
-// Unit tests for the wave-2 reply-shape parsing in parseFtSearchResponse/
-// parseCursorWrappedAggregateResponse. These exercise glide-core's already-reshaped reply
-// shapes directly (constructed here as the Go generic any/map/slice values CustomCommand would
-// hand back) -- they do not re-split or re-derive anything from a raw/un-reshaped reply.
-
 func TestParseFtSearchResponse_WithScoresOnly(t *testing.T) {
 	reply := []any{
 		int64(2),
@@ -40,7 +35,6 @@ func TestParseFtSearchResponse_WithScoresOnly(t *testing.T) {
 }
 
 func TestParseFtSearchResponse_WithScoresAndNoContent(t *testing.T) {
-	// WITHSCORES + NOCONTENT: pairs of (key, score), no field arrays.
 	reply := []any{
 		int64(2),
 		map[string]any{
@@ -59,7 +53,6 @@ func TestParseFtSearchResponse_WithScoresAndNoContent(t *testing.T) {
 }
 
 func TestParseFtSearchResponse_WithScoresAndWithSortKeysCombinedShape(t *testing.T) {
-	// [score, sortKey, fieldMap] triple when both flags are set and content is present.
 	reply := []any{
 		int64(1),
 		map[string]any{
@@ -79,10 +72,6 @@ func TestParseFtSearchResponse_WithScoresAndWithSortKeysCombinedShape(t *testing
 }
 
 func TestParseFtSearchResponse_WithScoresAndWithSortKeysNoContentDropsSortKey(t *testing.T) {
-	// Confirmed live (ported from Python's test_ft_search_with_scores_and_withsortkeys_combined_
-	// shape docstring and glide-core's value_conversion.rs): the server drops the sort key
-	// entirely in this specific combination, reverting to the plain WITHSCORES-only [score,
-	// fieldMap] shape -- not [score, nil, fieldMap].
 	reply := []any{
 		int64(1),
 		map[string]any{
