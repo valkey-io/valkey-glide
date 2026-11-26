@@ -18,6 +18,7 @@ Wait for that build to finish before dispatching again.
   `RDMA_INSTANCE_PROFILE_ARN`; it creates the stack without IAM capabilities.
 - `bin/run-on.sh` sends the `host/` steps to the pair over SSM.
 - `tests/` exercises orchestration and GitHub dispatch without AWS access.
+  `.github/workflows/efa-orchestration.yml` runs these checks for tooling changes.
 
 CodeBuild owns teardown. `KEEP_HOSTS=true` retains hosts only on failure.
 Cancelling GitHub monitoring leaves CodeBuild running. A hard CodeBuild stop can
@@ -26,5 +27,5 @@ skip teardown and leave the stack behind.
 Run local tests with PyYAML installed:
 
 ```bash
-python3 -m unittest discover -s glide-rdma/ci/efa/tests -v
+python3 -m unittest discover -s .github/efa/tests -v
 ```

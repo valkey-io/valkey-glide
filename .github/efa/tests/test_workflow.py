@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml  # type: ignore[import-untyped,import-not-found]
 
-REPO = Path(__file__).resolve().parents[4]
+REPO = Path(__file__).resolve().parents[3]
 WORKFLOW = yaml.safe_load((REPO / ".github/workflows/glide-rdma-efa.yml").read_text())
 STEPS = {step["name"]: step for step in WORKFLOW["jobs"]["test-efa"]["steps"]}
 

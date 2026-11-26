@@ -16,4 +16,4 @@ version: 0.2
 phases:
     build:
         commands:
-            - python3 glide-rdma/ci/efa/bin/orchestrate.py
+            - python3 .github/efa/bin/orchestrate.py

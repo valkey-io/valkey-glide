@@ -1,0 +1,42 @@
+name: EFA orchestration CI
+
+permissions:
+    contents: read
+
+on:
+    push:
+        branches:
+            - main
+            - release-*
+            - v*
+        paths:
+            - .github/efa/**
+            - .github/buildspec/rdma-efa.yml
+            - .github/workflows/glide-rdma-efa.yml
+            - .github/workflows/efa-orchestration.yml
+    pull_request:
+        paths:
+            - .github/efa/**
+            - .github/buildspec/rdma-efa.yml
+            - .github/workflows/glide-rdma-efa.yml
+            - .github/workflows/efa-orchestration.yml
+    workflow_dispatch:
+
+concurrency:
+    group: efa-orchestration-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    efa-orchestration:
+        name: EFA orchestration unit tests (no AWS)
+        runs-on: ubuntu-24.04
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+            - name: Test orchestration and dispatch failure paths
+              run: |
+                  python3 -m venv /tmp/efa-tests
+                  /tmp/efa-tests/bin/pip install PyYAML==6.0.3
+                  /tmp/efa-tests/bin/python -m unittest discover -s .github/efa/tests -v
