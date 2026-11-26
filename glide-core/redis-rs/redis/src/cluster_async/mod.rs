@@ -65,7 +65,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     pin::Pin,
     sync::{
-        atomic::{self, AtomicIsize, AtomicUsize, Ordering},
+        atomic::{self, AtomicBool, AtomicIsize, AtomicUsize, Ordering},
         Arc,
     },
     task::{self, Poll},
@@ -619,7 +619,7 @@ impl<C> InnerCore<C>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    fn get_cluster_param<T, F>(&self, f: F) -> T
+    pub(crate) fn get_cluster_param<T, F>(&self, f: F) -> T
     where
         F: FnOnce(&ClusterParams) -> T,
         T: Clone,
@@ -751,17 +751,6 @@ where
             .read()
             .slot_map
             .get_slots_of_node(node_address)
-    }
-
-    /// Get connection for address
-    pub(crate) async fn connection_for_address(
-        &self,
-        address: &str,
-    ) -> Option<ConnectionFuture<C>> {
-        self.conn_lock
-            .read()
-            .connection_for_address(address)
-            .map(|(_, conn)| conn)
     }
 }
 
@@ -1806,6 +1795,18 @@ fn fail_queued_senders<C>(
         failed += 1;
     }
     failed
+}
+
+/// Clears `SlotRefreshState::in_progress` on drop, so a refresh future cancelled
+/// mid-flight (e.g. by a `cluster_scan` timeout) cannot block all later refreshes.
+struct SlotRefreshInProgressGuard<'a> {
+    in_progress: &'a AtomicBool,
+}
+
+impl Drop for SlotRefreshInProgressGuard<'_> {
+    fn drop(&mut self) {
+        self.in_progress.store(false, Ordering::Relaxed);
+    }
 }
 
 impl<C> ClusterConnInner<C>
@@ -2861,6 +2862,7 @@ where
             log_warn_lazy!("topology_refresh", "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)");
             return Ok(());
         }
+        let _in_progress_guard = SlotRefreshInProgressGuard { in_progress };
         let acquire_elapsed = acquire_start.elapsed();
         if acquire_elapsed > Duration::from_millis(100) {
             log_warn_lazy!(
@@ -2927,7 +2929,6 @@ where
             })
             .await;
         }
-        in_progress.store(false, Ordering::Relaxed);
         res
     }
 
@@ -3551,9 +3552,9 @@ where
                     Ok((scan_state_ref, values)) => {
                         Ok(Response::ClusterScanResult(scan_state_ref, values))
                     }
-                    // TODO: After routing issues with sending to random node on not-key based commands are resolved,
-                    // this error should be handled in the same way as other errors and not fan-out.
-                    Err(err) => Err((OperationTarget::FanOut, err)),
+                    // `try_scan` already retried with the client's `retries`, so don't retry
+                    // again here.
+                    Err(err) => Err((OperationTarget::FatalError, err)),
                 }
             }
             CmdArg::OperationRequest(operation_request) => match operation_request {
@@ -3728,7 +3729,7 @@ where
         final_responses
     }
 
-    async fn get_connection(
+    pub(crate) async fn get_connection(
         routing: InternalSingleNodeRouting<C>,
         core: Core<C>,
         cmd: Option<Arc<Cmd>>,
@@ -6147,7 +6148,7 @@ pub(super) mod refresh_task_resolution_tests {
     }
 
     #[derive(Clone, Debug)]
-    pub(super) struct RecordingConnection {
+    pub(crate) struct RecordingConnection {
         port: u16,
     }
 
@@ -6381,7 +6382,7 @@ pub(super) mod refresh_task_resolution_tests {
         )
     }
 
-    pub(super) fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
+    pub(crate) fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
         core_with_resolver(Arc::new(NonIdempotentResolver))
     }
 
@@ -6973,7 +6974,7 @@ pub(super) mod refresh_task_resolution_tests {
     }
 
     /// Inserts an in-progress refresh task for `address` and returns its identity.
-    fn insert_in_progress_refresh(
+    pub(crate) fn insert_in_progress_refresh(
         core: &Arc<InnerCore<RecordingConnection>>,
         address: &str,
         may_keep_existing_conn: bool,
@@ -7042,7 +7043,11 @@ pub(super) mod refresh_task_resolution_tests {
 
     /// Completes an in-progress refresh: installs the connection, then drops the task state,
     /// which wakes the waiters.
-    fn complete_refresh(core: &Arc<InnerCore<RecordingConnection>>, address: &str, port: u16) {
+    pub(crate) fn complete_refresh(
+        core: &Arc<InnerCore<RecordingConnection>>,
+        address: &str,
+        port: u16,
+    ) {
         core.conn_lock
             .read()
             .replace_or_add_connection_for_address(address, recording_node(port));

@@ -3664,6 +3664,251 @@ mod cluster_async {
 
     #[test]
     #[serial_test::parallel(otel)]
+    fn test_async_cluster_scan_timeout_does_not_block_later_slot_refreshes() {
+        // A cluster_scan that times out can cancel the slot refresh it triggered. If the
+        // refresh kept its in-progress flag, every later refresh would silently skip.
+        let name = "test_async_cluster_scan_timeout_does_not_block_later_slot_refreshes";
+        let initial = vec![MockSlotRange {
+            primary_port: 6379,
+            replica_ports: vec![],
+            slot_range: (0..16383),
+        }];
+        let updated = vec![
+            MockSlotRange {
+                primary_port: 6379,
+                replica_ports: vec![],
+                slot_range: (0..8000),
+            },
+            MockSlotRange {
+                primary_port: 6380,
+                replica_ports: vec![],
+                slot_range: (8001..16383),
+            },
+        ];
+        // 0: startup. 1: SCAN fails, the topology differs, and the refresh fails and backs
+        // off until it is cancelled. 2: the first SCAN fails again, and the refresh succeeds.
+        let phase = Arc::new(atomic::AtomicUsize::new(0));
+        let calls = Arc::new(atomic::AtomicUsize::new(0));
+        let (handler_phase, handler_calls) = (phase.clone(), calls.clone());
+
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]),
+            name,
+            move |cmd: &[u8], _port| {
+                if contains_slice(cmd, b"PING")
+                    || contains_slice(cmd, b"SETNAME")
+                    || contains_slice(cmd, b"READONLY")
+                {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"INFO") {
+                    return Err(Ok(Value::BulkString(
+                        b"cluster_my_epoch:1\r\n".to_vec().into(),
+                    )));
+                }
+                let phase = handler_phase.load(Ordering::SeqCst);
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    return match phase {
+                        0 => Err(Ok(create_topology_from_config(name, initial.clone()))),
+                        1 if handler_calls.fetch_add(1, Ordering::SeqCst) > 0 => {
+                            Err(parse_redis_value(b"-ERR refresh unavailable\r\n"))
+                        }
+                        _ => Err(Ok(create_topology_from_config(name, updated.clone()))),
+                    };
+                }
+                if contains_slice(cmd, b"SCAN") {
+                    if phase == 1 || handler_calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                        return Err(parse_redis_value(b"-CLUSTERDOWN not serving\r\n"));
+                    }
+                    return Err(Ok(Value::Array(vec![
+                        Value::BulkString(b"0".to_vec().into()),
+                        Value::Array(vec![]),
+                    ])));
+                }
+                panic!("unexpected command: {}", String::from_utf8_lossy(cmd));
+            },
+        );
+
+        phase.store(1, Ordering::SeqCst);
+        let timed_out = runtime.block_on(async {
+            tokio::time::timeout(
+                Duration::from_millis(100),
+                connection
+                    .cluster_scan(redis::ScanStateRC::new(), redis::ClusterScanArgs::default()),
+            )
+            .await
+        });
+        assert!(timed_out.is_err(), "the scan should still be refreshing");
+
+        calls.store(0, Ordering::SeqCst);
+        phase.store(2, Ordering::SeqCst);
+        runtime
+            .block_on(
+                connection
+                    .cluster_scan(redis::ScanStateRC::new(), redis::ClusterScanArgs::default()),
+            )
+            .unwrap();
+        assert_eq!(
+            connection.address_for_slot(10000),
+            Some(format!("{name}:6380")),
+            "the refresh after the cancelled one did not run"
+        );
+    }
+
+    /// Runs one `cluster_scan` against a mock cluster whose SCAN finds no connection
+    /// `failures` times. With `move_slots`, each failure also moves every slot to the other
+    /// node, so each refresh sends the scan somewhere new. With `epoch_reread_fails`, the
+    /// node's epoch can't be read on the first retry. The retry backoff outlasts the deadline,
+    /// so this fails if the scan backs off on a connection error. Returns the result and the
+    /// number of SCANs.
+    fn scan_with_failing_scans(
+        name: &'static str,
+        retries: u32,
+        failures: usize,
+        move_slots: bool,
+        epoch_reread_fails: bool,
+    ) -> (RedisResult<(redis::ScanStateRC, Vec<Value>)>, usize) {
+        let scans = Arc::new(atomic::AtomicUsize::new(0));
+        let handler_scans = scans.clone();
+        let epoch_reads = atomic::AtomicUsize::new(0);
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .retries(retries)
+                .min_retry_wait(60_000)
+                .max_retry_wait(60_001),
+            name,
+            move |cmd: &[u8], _port| {
+                if contains_slice(cmd, b"PING")
+                    || contains_slice(cmd, b"SETNAME")
+                    || contains_slice(cmd, b"READONLY")
+                {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"INFO") {
+                    if epoch_reread_fails && epoch_reads.fetch_add(1, Ordering::SeqCst) == 1 {
+                        return Err(parse_redis_value(b"-ERR not now\r\n"));
+                    }
+                    return Err(Ok(Value::BulkString(
+                        b"cluster_my_epoch:1\r\n".to_vec().into(),
+                    )));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    let moves = if move_slots {
+                        handler_scans.load(Ordering::SeqCst).min(failures)
+                    } else {
+                        0
+                    };
+                    return Err(Ok(create_topology_from_config(
+                        name,
+                        vec![MockSlotRange {
+                            primary_port: 6379 + (moves % 2) as u16,
+                            replica_ports: vec![],
+                            slot_range: (0..16383),
+                        }],
+                    )));
+                }
+                if contains_slice(cmd, b"SCAN") {
+                    if handler_scans.fetch_add(1, Ordering::SeqCst) < failures {
+                        return Err(Err((
+                            ErrorKind::ConnectionNotFoundForRoute,
+                            "no connection",
+                        )
+                            .into()));
+                    }
+                    return Err(Ok(Value::Array(vec![
+                        Value::BulkString(b"0".to_vec().into()),
+                        Value::Array(vec![]),
+                    ])));
+                }
+                panic!("unexpected command: {}", String::from_utf8_lossy(cmd));
+            },
+        );
+        let result = runtime
+            .block_on(async {
+                tokio::time::timeout(
+                    Duration::from_secs(10),
+                    connection
+                        .cluster_scan(redis::ScanStateRC::new(), redis::ClusterScanArgs::default()),
+                )
+                .await
+            })
+            .expect("cluster_scan did not return");
+        (result, scans.load(Ordering::SeqCst))
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_scan_retries_within_the_retry_budget() {
+        let (result, _) = scan_with_failing_scans(
+            "test_async_cluster_scan_retries_within_the_retry_budget",
+            1,
+            1,
+            false,
+            false,
+        );
+        result.unwrap();
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_scan_fails_once_the_retry_budget_is_spent() {
+        let (result, scans) = scan_with_failing_scans(
+            "test_async_cluster_scan_fails_once_the_retry_budget_is_spent",
+            1,
+            usize::MAX,
+            false,
+            false,
+        );
+        assert_eq!(
+            result.unwrap_err().kind(),
+            ErrorKind::ConnectionNotFoundForRoute
+        );
+        assert_eq!(scans, 2);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_scan_follows_a_topology_change_without_using_a_retry() {
+        let (result, _) = scan_with_failing_scans(
+            "test_async_cluster_scan_follows_a_topology_change_without_using_a_retry",
+            0,
+            1,
+            true,
+            false,
+        );
+        result.unwrap();
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_scan_retry_keeps_the_epoch_it_cannot_reread() {
+        // Losing the epoch makes the scan treat the node as changed and scan it again.
+        let (result, scans) = scan_with_failing_scans(
+            "test_async_cluster_scan_retry_keeps_the_epoch_it_cannot_reread",
+            1,
+            1,
+            false,
+            true,
+        );
+        assert!(
+            result.unwrap().0.is_finished(),
+            "the node was scanned twice"
+        );
+        assert_eq!(scans, 2);
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_update_slots_based_on_moved_error_indicates_slot_migration() {
         // This test simulates the scenario where the client receives a MOVED error indicating that a key is now
         // stored on the primary node of another shard.
