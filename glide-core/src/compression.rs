@@ -1146,6 +1146,10 @@ fn decompress_batch_reply_or_error(
                 "DecompressionError".to_string(),
                 Some(limit.to_string()),
             );
+            // `Value` has no client-origin error variant, so keep this local failure in the
+            // command's result slot as a `ServerError`. Converting it back to `RedisError` makes
+            // `is_server_reply()` return true, but this path only passes its message to bindings;
+            // no caller uses that classification for the in-place error. See #7883.
             Ok(redis::Value::ServerError(error.into()))
         }
         result => result,
