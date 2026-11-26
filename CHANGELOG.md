@@ -9,8 +9,7 @@
 * Java: Add valkey-search 1.3 support, including scoring, cursors, and `FT.HYBRID` ([#7379](https://github.com/valkey-io/valkey-glide/pull/7379))
 * Rust: Add `HGETDEL` and `DELIFEQ` commands ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145), [#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Python: Add CPython 3.15 wheels for the async and sync clients ([#7321](https://github.com/valkey-io/valkey-glide/issues/7321))
-* Core, Python: Add support for Valkey 9.2 commands:
-  * `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
+* All: Add support for `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
 * Core: use atomics for telemetry instead of shared lock ([#7497](https://github.com/valkey-io/valkey-glide/pull/7497))
 
 ### Fixes

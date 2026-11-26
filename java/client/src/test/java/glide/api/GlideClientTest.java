@@ -28,6 +28,7 @@ import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
 import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.DelEx;
 import static command_request.CommandRequestOuterClass.RequestType.DelIfEq;
 import static command_request.CommandRequestOuterClass.RequestType.Dump;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
@@ -315,6 +316,7 @@ import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.ConditionalChange;
+import glide.api.models.commands.DelexOptions;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
@@ -11416,7 +11418,91 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
-    public void delifeq() {
+    public void delex_ifeq_returns_success() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
+        when(commandManager.<Boolean>submitNewCommand(
+                        eq(DelEx), eq(new GlideString[] {gs(key), gs("IFEQ"), gs(value)}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.delex(key, DelexOptions.onlyIfEqualTo(value));
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(true, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void delex_ifeq_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString value = gs("testValue");
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
+        when(commandManager.<Boolean>submitNewCommand(
+                        eq(DelEx), eq(new GlideString[] {key, gs("IFEQ"), value}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.delex(key, DelexOptions.onlyIfEqualTo(value));
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(true, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void delex_ifne_returns_success() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
+        when(commandManager.<Boolean>submitNewCommand(
+                        eq(DelEx), eq(new GlideString[] {gs(key), gs("IFNE"), gs(value)}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.delex(key, DelexOptions.onlyIfNotEqualTo(value));
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(true, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void delex_ifne_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString value = gs("testValue");
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
+        when(commandManager.<Boolean>submitNewCommand(
+                        eq(DelEx), eq(new GlideString[] {key, gs("IFNE"), value}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.delex(key, DelexOptions.onlyIfNotEqualTo(value));
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(true, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void delifeq_returns_success() {
         // setup
         String key = "testKey";
         String value = "testValue";
@@ -11424,6 +11510,27 @@ public class GlideClientTest {
         testResponse.complete(true);
         when(commandManager.<Boolean>submitNewCommand(
                         eq(DelIfEq), eq(new String[] {key, value}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.delifeq(key, value);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(true, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void delifeq_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString value = gs("testValue");
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
+        when(commandManager.<Boolean>submitNewCommand(
+                        eq(DelIfEq), eq(new GlideString[] {key, value}), any()))
                 .thenReturn(testResponse);
 
         // exercise
