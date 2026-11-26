@@ -317,7 +317,7 @@ mod tests {
         assert_eq!(received_sum, expected_sum);
     }
 
-    /// Records `add_current_subscriptions` calls; reports "ch-known" as already current.
+    /// Records `add_current_subscriptions` calls; reports Exact "ch-known" as already current.
     #[derive(Default)]
     struct RecordingSync {
         added: std::sync::Mutex<Vec<(PubSubSubscriptionKind, Vec<u8>)>>,
@@ -343,11 +343,13 @@ mod tests {
         }
         fn is_current_subscription(
             &self,
-            _: PubSubSubscriptionKind,
+            kind: PubSubSubscriptionKind,
             channel: &[u8],
             address: &str,
         ) -> bool {
-            channel == b"ch-known" && address == "node-a:6379"
+            kind == PubSubSubscriptionKind::Exact
+                && channel == b"ch-known"
+                && address == "node-a:6379"
         }
         fn remove_current_subscriptions(
             &self,
@@ -397,6 +399,8 @@ mod tests {
         assert_eq!(
             *added,
             vec![
+                // Same bytes, but current only as Exact, so the SMessage still records
+                (PubSubSubscriptionKind::Sharded, b"ch-known".to_vec()),
                 (PubSubSubscriptionKind::Exact, b"ch-new".to_vec()),
                 (PubSubSubscriptionKind::Exact, b"ch-known".to_vec()),
             ]

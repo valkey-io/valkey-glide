@@ -22,6 +22,7 @@
 * Python: register the sync client's fork hook only after it connects ([#7660](https://github.com/valkey-io/valkey-glide/pull/7660))
 * Core: flush server-assisted cache when its connection closes ([#7493](https://github.com/valkey-io/valkey-glide/pull/7493))
 * Core: deliver reconnect errors to cluster callers instead of dropping them ([#7737](https://github.com/valkey-io/valkey-glide/pull/7737))
+* Core: make pub/sub subscribe cost independent of channels held ([#7872](https://github.com/valkey-io/valkey-glide/pull/7872))
 * Core/FFI: run a lazy sync client's first connect on the runtime worker ([#7671](https://github.com/valkey-io/valkey-glide/pull/7671))
 * Core/FFI: run address resolver callbacks on the blocked caller thread ([#7818](https://github.com/valkey-io/valkey-glide/pull/7818))
 * Core/FFI, Python: pools and scopes work in forked children, and Python raises `ClosingError` for an inherited pool or async scope ([#7630](https://github.com/valkey-io/valkey-glide/issues/7630))

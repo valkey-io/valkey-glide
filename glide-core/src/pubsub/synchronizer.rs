@@ -39,6 +39,8 @@ struct SyncDiff {
     to_unsubscribe_by_address: HashMap<String, PubSubSubscriptionInfo>,
 }
 
+type HeldIndex = HashMap<PubSubSubscriptionKind, HashMap<PubSubChannelOrPattern, Vec<String>>>;
+
 /// Desired and current subscriptions. `held` and `out_of_sync` are derived from
 /// `desired` and `by_address` on every change, so reconciliation and sync checks cost
 /// O(changed channels), not O(all channels). One lock covers all four so they can't drift.
@@ -49,8 +51,9 @@ struct SubscriptionState {
     desired: PubSubSubscriptionInfo,
     /// What we're actually subscribed to, tracked by address for topology handling
     by_address: HashMap<String, PubSubSubscriptionInfo>,
-    /// Number of addresses holding each channel, per kind
-    held: HashMap<PubSubSubscriptionKind, HashMap<PubSubChannelOrPattern, usize>>,
+    /// Addresses holding each channel, per kind (sorted), so unsubscribes and
+    /// confirmations touch only those addresses
+    held: HeldIndex,
     /// Channels that are desired but not held, or held but not desired. No empty sets.
     out_of_sync: PubSubSubscriptionInfo,
 }
@@ -150,15 +153,27 @@ impl SubscriptionState {
             }
         };
         if added {
-            let counts = self.held.entry(kind).or_default();
-            match counts.get_mut(channel) {
-                Some(count) => *count += 1,
+            let holders = self.held.entry(kind).or_default();
+            match holders.get_mut(channel) {
+                Some(addrs) => {
+                    if let Err(pos) = addrs.binary_search_by(|a| a.as_str().cmp(address)) {
+                        addrs.insert(pos, address.to_string());
+                    }
+                }
                 None => {
-                    counts.insert(channel.to_vec(), 1);
+                    holders.insert(channel.to_vec(), vec![address.to_string()]);
                 }
             }
             self.refresh(kind, channel);
         }
+    }
+
+    /// Addresses currently holding `channel`.
+    fn holders(&self, kind: PubSubSubscriptionKind, channel: &[u8]) -> &[String] {
+        self.held
+            .get(&kind)
+            .and_then(|h| h.get(channel))
+            .map_or(&[], Vec::as_slice)
     }
 
     fn remove_current(&mut self, address: &str, kind: PubSubSubscriptionKind, channel: &[u8]) {
@@ -173,7 +188,7 @@ impl SubscriptionState {
             self.by_address.remove(address);
         }
         if removed {
-            self.release_held(kind, channel);
+            self.release_held(address, kind, channel);
         }
     }
 
@@ -182,20 +197,20 @@ impl SubscriptionState {
         let subs = self.by_address.remove(address)?;
         for (kind, channels) in &subs {
             for channel in channels {
-                self.release_held(*kind, channel);
+                self.release_held(address, *kind, channel);
             }
         }
         Some(subs)
     }
 
-    fn release_held(&mut self, kind: PubSubSubscriptionKind, channel: &[u8]) {
-        if let Some(counts) = self.held.get_mut(&kind)
-            && let Some(count) = counts.get_mut(channel)
+    fn release_held(&mut self, address: &str, kind: PubSubSubscriptionKind, channel: &[u8]) {
+        if let Some(holders) = self.held.get_mut(&kind)
+            && let Some(addrs) = holders.get_mut(channel)
         {
-            *count -= 1;
-            if *count == 0 {
-                counts.remove(channel);
-                if counts.is_empty() {
+            addrs.retain(|a| a != address);
+            if addrs.is_empty() {
+                holders.remove(channel);
+                if holders.is_empty() {
                     self.held.remove(&kind);
                 }
             }
@@ -248,15 +263,13 @@ impl SubscriptionState {
                         .insert(channel.clone());
                     continue;
                 }
-                for (addr, subs) in &self.by_address {
-                    if subs.get(kind).is_some_and(|set| set.contains(channel)) {
-                        to_unsubscribe_by_address
-                            .entry(addr.clone())
-                            .or_default()
-                            .entry(*kind)
-                            .or_default()
-                            .insert(channel.clone());
-                    }
+                for addr in self.holders(*kind, channel) {
+                    to_unsubscribe_by_address
+                        .entry(addr.clone())
+                        .or_default()
+                        .entry(*kind)
+                        .or_default()
+                        .insert(channel.clone());
                 }
             }
         }
@@ -296,19 +309,21 @@ impl SubscriptionState {
     }
 
     /// Full O(all channels) recomputation of `held` from `by_address`.
-    fn full_held(&self) -> HashMap<PubSubSubscriptionKind, HashMap<PubSubChannelOrPattern, usize>> {
-        let mut held: HashMap<PubSubSubscriptionKind, HashMap<PubSubChannelOrPattern, usize>> =
-            HashMap::new();
-        for subs in self.by_address.values() {
+    fn full_held(&self) -> HeldIndex {
+        let mut held = HeldIndex::new();
+        for (addr, subs) in &self.by_address {
             for (kind, channels) in subs {
                 for channel in channels {
-                    *held
-                        .entry(*kind)
+                    held.entry(*kind)
                         .or_default()
                         .entry(channel.clone())
-                        .or_insert(0) += 1;
+                        .or_default()
+                        .push(addr.clone());
                 }
             }
+        }
+        for addrs in held.values_mut().flat_map(|h| h.values_mut()) {
+            addrs.sort();
         }
         held
     }
@@ -465,28 +480,29 @@ impl GlidePubSubSynchronizer {
         let interval = self.reconciliation_interval;
 
         let handle = tokio::spawn(async move {
-            let mut last_full = Instant::now();
+            let mut last_full = tokio::time::Instant::now();
             loop {
                 let Some(sync) = sync_weak.upgrade() else {
                     break;
                 };
+                // Sleep to a fixed deadline, not a fresh interval: under steady churn,
+                // notifications always win the select and would keep pushing repair out.
+                let deadline = last_full + interval;
                 tokio::select! {
                     _ = sync.reconciliation_notify.notified() => {},
-                    _ = tokio::time::sleep(interval) => {},
+                    _ = tokio::time::sleep_until(deadline) => {},
                 }
 
-                // Time the full pass from the last one, not from the sleep: under steady
-                // churn, notifications always win the select and the sleep never completes.
-                let full = last_full.elapsed() >= interval;
-                if full {
-                    last_full = Instant::now();
-                }
-
+                let full = tokio::time::Instant::now() >= deadline;
                 if let Err(e) = sync.reconcile(full).await {
                     log_error(
                         "pubsub_synchronizer",
                         format!("Reconciliation failed: {:?}", e),
                     );
+                }
+                // Measured after the pass, so a slow pass can't trigger back-to-back repairs
+                if full {
+                    last_full = tokio::time::Instant::now();
                 }
 
                 sync.check_and_record_sync_state();
@@ -915,15 +931,7 @@ impl PubSubSynchronizer for GlidePubSubSynchronizer {
             // For regular subscriptions (Exact/Pattern), remove from ALL addresses.
             // These are not slot-bound, and the server's unsubscribe is authoritative.
             for channel in &channels {
-                let holders: Vec<String> = state
-                    .by_address
-                    .iter()
-                    .filter(|(_, subs)| {
-                        subs.get(&subscription_type)
-                            .is_some_and(|set| set.contains(channel))
-                    })
-                    .map(|(addr, _)| addr.clone())
-                    .collect();
+                let holders = state.holders(subscription_type, channel).to_vec();
                 for addr in holders {
                     state.remove_current(&addr, subscription_type, channel);
                 }
@@ -1271,6 +1279,22 @@ mod tests {
                 }
             }
         }
+        // Every address holding an unwanted channel gets an unsubscribe for it
+        for (addr, subs) in &state.by_address {
+            for (kind, channels) in subs {
+                for channel in channels {
+                    if state.kinds.contains(kind) && !state.is_desired(*kind, channel) {
+                        assert!(
+                            diff.to_unsubscribe_by_address
+                                .get(addr)
+                                .and_then(|s| s.get(kind))
+                                .is_some_and(|s| s.contains(channel)),
+                            "missing unsubscribe at step {step}"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     #[test]
@@ -1439,7 +1463,7 @@ mod tests {
 
         let state = sync.state.read().unwrap();
         assert!(!state.is_held(Exact, &ch(1)));
-        assert_eq!(state.held[&Sharded][&ch(1)], 1);
+        assert_eq!(state.holders(Sharded, &ch(1)), [ADDRS[1].to_string()]);
         assert!(state.by_address[ADDRS[1]][&Sharded].contains(&ch(1)));
         assert_eq!(state.held, state.full_held());
         assert_eq!(state.out_of_sync, state.full_out_of_sync());
@@ -1479,6 +1503,29 @@ mod tests {
         assert!(
             repaired(),
             "no full repair within 5 s of continuous notifications"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_notification_does_not_postpone_full_repair() {
+        let interval = Duration::from_secs(3);
+        let sync = GlidePubSubSynchronizer::new(None, true, Some(interval), Duration::from_secs(1));
+        sync.add_desired_subscriptions(HashSet::from([ch(1)]), Exact);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        sync.state.write().unwrap().out_of_sync.clear();
+
+        // One notification just before the deadline runs an incremental pass
+        tokio::time::sleep(Duration::from_millis(2800)).await;
+        sync.trigger_reconciliation();
+        tokio::time::sleep(Duration::from_millis(400)).await;
+
+        let state = sync.state.read().unwrap();
+        assert!(
+            state
+                .out_of_sync
+                .get(&Exact)
+                .is_some_and(|s| s.contains(&ch(1))),
+            "full repair should still run at the original deadline"
         );
     }
 
