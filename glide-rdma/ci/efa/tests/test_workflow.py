@@ -142,7 +142,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("SUCCEEDED", summary)
         self.assertEqual(len((self.root / "calls").read_text().splitlines()), 1)
 
-    ACCOUNT = "123456789012"
+    EXAMPLE_AWS_ID = "123456789012"
     PRIVATE_IP = "172.31.0.10"
     TEST_FAILURE_LOG = (
         "== client (i-0123456789abcdef0): 31-client-rdma-tests.sh",
@@ -159,7 +159,7 @@ class WorkflowTests(unittest.TestCase):
     )
     PROVISIONING_FAILURE_LOG = (
         (
-            f"17:02:06  ClientInstance   CREATE_FAILED   Value (arn:aws:iam::{ACCOUNT}:"
+            f"17:02:06  ClientInstance   CREATE_FAILED   Value (arn:aws:iam::{EXAMPLE_AWS_ID}:"
             "instance-profile/missing) for parameter iamInstanceProfile.arn is invalid."
         ),
         "stack: CREATE_FAILED",
@@ -172,7 +172,11 @@ class WorkflowTests(unittest.TestCase):
 
     def assert_no_identifiers(self, *texts):
         for text in texts:
-            for identifier in (self.ACCOUNT, self.PRIVATE_IP, "i-0123456789abcdef0"):
+            for identifier in (
+                self.EXAMPLE_AWS_ID,
+                self.PRIVATE_IP,
+                "i-0123456789abcdef0",
+            ):
                 self.assertNotIn(identifier, text)
 
     def test_failed_test_step_reports_step_and_counts_only(self):
@@ -266,7 +270,7 @@ class WorkflowTests(unittest.TestCase):
     def test_unexpected_phase_fields_are_not_printed(self):
         build = self.failed_build()
         build["phases"][0]["contexts"][0]["statusCode"] = (
-            f"arn:aws:iam::{self.ACCOUNT}:x"
+            f"arn:aws:iam::{self.EXAMPLE_AWS_ID}:x"
         )
         result, summary = self.report_build(build, self.log_page([]))
         self.assertIn("BUILD FAILED ?", summary)
@@ -299,7 +303,7 @@ class WorkflowTests(unittest.TestCase):
     def test_log_access_failure_reports_only_the_error_code(self):
         denied = (
             "An error occurred (AccessDeniedException) when calling the GetLogEvents"
-            f" operation: User: arn:aws:sts::{self.ACCOUNT}:assumed-role/r/s is not"
+            f" operation: User: arn:aws:sts::{self.EXAMPLE_AWS_ID}:assumed-role/r/s is not"
             " authorized to perform: logs:GetLogEvents"
         )
         result, summary = self.report_build(self.failed_build(), (254, denied))
