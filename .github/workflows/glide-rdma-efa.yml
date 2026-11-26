@@ -81,6 +81,7 @@ jobs:
                   import html
                   import json
                   import os
+                  import re
                   import subprocess
                   import uuid
                   from urllib.parse import urlparse
@@ -105,8 +106,54 @@ jobs:
                           capture_output=True, text=True, timeout=45, check=False,
                       )
                       if result.returncode:
-                          raise RuntimeError((result.stderr or result.stdout)[-2000:])
+                          code = re.search(r"An error occurred \((\w+)\)", result.stderr or result.stdout)
+                          raise RuntimeError(code[1] if code else f"aws exited {result.returncode}")
                       return json.loads(result.stdout)
+
+                  def failure_reason(error):
+                      if isinstance(error, subprocess.TimeoutExpired):
+                          return "timed out"
+                      if isinstance(error, ValueError):
+                          return "unreadable response"
+                      return str(error)
+
+                  # This log is public, and the build log carries account and network
+                  # identifiers, so only lines with a fixed, identifier-free shape are
+                  # printed from it.
+                  STEP_ARG = re.compile(r"bin/(?:rdma-pair|run-on)\.sh|apply|down|server|client"
+                                        r"|host/\d{2}-[a-z0-9-]+\.sh|GLIDE_SOURCE=[0-9a-f]{40}")
+                  # Python 3.15 dropped the quotes around the list in CalledProcessError.
+                  FAILED_COMMAND = re.compile(
+                      r"EFA build failed: Command '?\[(.*)\]'? (returned non-zero exit status \d+\."
+                      r"|died with <Signals\.SIG[A-Z0-9]+: \d+>\.|timed out after [\d.]+ seconds)")
+                  FIXED_FAILURE = re.compile(r"EFA build failed: (EFA orchestration exceeded its 65 minute work budget"
+                                             r"|Received signal \d+)")
+                  TEST_COUNTS = re.compile(r"=+ ((?:\d+ (?:passed|failed|skipped|deselected|xfailed|xpassed|errors?"
+                                           r"|warnings?)(?:, )?)+) in [\d.]+s(?: \(\d+:\d\d:\d\d\))? =+")
+                  CODEBUILD_ENUM = re.compile(r"[A-Z_]+")
+
+                  def failed_step(lines):
+                      for line in reversed(lines):
+                          fixed = FIXED_FAILURE.fullmatch(line)
+                          if fixed:
+                              return fixed[1]
+                          match = FAILED_COMMAND.fullmatch(line)
+                          if match:
+                              args = re.findall(r"'([^']*)'", match[1])
+                              # Rebuilding the list rejects an argument that hides a quote
+                              # or comma, which the per-argument allowlist cannot see.
+                              if (", ".join(f"'{arg}'" for arg in args) == match[1]
+                                      and all(STEP_ARG.fullmatch(arg) for arg in args)):
+                                  return " ".join(args) + " " + match[2].rstrip(".")
+                              return None
+                      return None
+
+                  def test_counts(lines):
+                      for line in reversed(lines):
+                          match = TEST_COUNTS.fullmatch(line)
+                          if match:
+                              return match[1]
+                      return None
 
                   def main():
                       report("CodeBuild", build_id)
@@ -117,7 +164,7 @@ jobs:
                               raise RuntimeError("Build metadata was not returned.")
                           build = builds[0]
                       except (RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
-                          report("Build diagnostics unavailable", str(error))
+                          report("Build diagnostics unavailable", failure_reason(error))
                           return
 
                       status = build.get("buildStatus", "UNKNOWN")
@@ -132,28 +179,29 @@ jobs:
                       phases = []
                       for phase in build.get("phases", []):
                           if phase.get("phaseStatus") in ("FAILED", "FAULT", "STOPPED", "TIMED_OUT"):
-                              phases.append(f"{phase.get('phaseType')}: {phase['phaseStatus']}")
-                              for context in phase.get("contexts", []):
-                                  phases.append(f"{context.get('statusCode', '')}: {context.get('message', '')}")
-                      report("Phase errors", "\n".join(phases)[-8000:] or "No phase error details returned.")
+                              # Context messages can name the account's resources; the status code cannot.
+                              codes = sorted({c.get("statusCode", "") for c in phase.get("contexts", [])} - {""})
+                              fields = [str(phase.get("phaseType", "")), phase["phaseStatus"], *codes]
+                              phases.append(" ".join(f if CODEBUILD_ENUM.fullmatch(f) else "?" for f in fields))
+                      report("Phase errors", "\n".join(phases) or "No phase error details returned.")
                       if not logs.get("groupName") or not logs.get("streamName"):
-                          report("Log excerpt unavailable", "CodeBuild has not provided a CloudWatch log stream.")
+                          report("Log summary unavailable", "CodeBuild has not provided a CloudWatch log stream.")
                           return
                       try:
                           page = aws("logs", "get-log-events", "--log-group-name", logs["groupName"],
                                      "--log-stream-name", logs["streamName"], "--limit", "200",
                                      "--no-start-from-head", "--no-paginate")
-                          tail = "\n".join(event["message"] for event in page.get("events", []))
+                          lines = [line.strip() for event in page.get("events", [])
+                                   for line in str(event.get("message", "")).splitlines()]
                       except (RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
-                          report("Log excerpt unavailable", str(error))
+                          report("Log summary unavailable", failure_reason(error))
                           return
-                      if not tail:
-                          report("Log excerpt unavailable", "CloudWatch returned no events; logs may not have arrived yet.")
+                      if not lines:
+                          report("Log summary unavailable", "CloudWatch returned no events; logs may not have arrived yet.")
                           return
-                      # One page only; cap characters too because events can be large.
-                      print("CloudWatch excerpt (last 32,000 characters of up to 200 events):\n" + tail[-32000:], flush=True)
-                      append("<p>CloudWatch excerpt (last 8,000 characters of up to 200 events; "
-                             "longer excerpt in the job log):</p><pre>" + html.escape(tail[-8000:]) + "</pre>")
+                      report("Failed step", failed_step(lines) or "No recognized failure line in the last 200 log events.")
+                      report("Test results", test_counts(lines) or "No pytest summary in the last 200 log events.")
+                      report("Full log", "Maintainers can read the CodeBuild log; ask on the PR.")
 
                   token = uuid.uuid4().hex
                   print(f"::stop-commands::{token}", flush=True)

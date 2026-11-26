@@ -142,20 +142,142 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("SUCCEEDED", summary)
         self.assertEqual(len((self.root / "calls").read_text().splitlines()), 1)
 
-    def test_failed_build_reports_phase_and_log_excerpt(self):
+    ACCOUNT = "123456789012"
+    PRIVATE_IP = "172.31.0.10"
+    TEST_FAILURE_LOG = (
+        "== client (i-0123456789abcdef0): 31-client-rdma-tests.sh",
+        f"FAILED tests/sync_tests/test_sync_rdma.py::test_x - ClosingError: {PRIVATE_IP}:7380",
+        "================= 1 failed, 7 passed, 95 deselected in 6.02s =================",
+        "== Failed",
+        "[rdma-ci-test] bin/rdma-pair.sh down",
+        "18:24:59  ServerInstance   DELETE_IN_PROGRESS",
+        "stack: NONE",
+        (
+            "EFA build failed: Command '['bin/run-on.sh', 'client',"
+            " 'host/31-client-rdma-tests.sh']' returned non-zero exit status 1."
+        ),
+    )
+    PROVISIONING_FAILURE_LOG = (
+        (
+            f"17:02:06  ClientInstance   CREATE_FAILED   Value (arn:aws:iam::{ACCOUNT}:"
+            "instance-profile/missing) for parameter iamInstanceProfile.arn is invalid."
+        ),
+        "stack: CREATE_FAILED",
+        "EFA build failed: Command '['bin/rdma-pair.sh', 'apply']' returned non-zero exit status 1.",
+    )
+
+    def log_page(self, lines):
+        # CloudWatch events may each hold several lines.
+        return (0, json.dumps({"events": [{"message": "\n\t".join(lines)}]}))
+
+    def assert_no_identifiers(self, *texts):
+        for text in texts:
+            for identifier in (self.ACCOUNT, self.PRIVATE_IP, "i-0123456789abcdef0"):
+                self.assertNotIn(identifier, text)
+
+    def test_failed_test_step_reports_step_and_counts_only(self):
         result, summary = self.report_build(
-            self.failed_build(),
-            (0, json.dumps({"events": [{"message": "test failed"}]})),
+            self.failed_build(), self.log_page(self.TEST_FAILURE_LOG)
         )
         for text in (
             "GlideRdmaEfa:test",
-            "FAILED",
-            "BUILD",
-            "orchestrator exited 1",
-            "test failed",
+            "BUILD FAILED COMMAND_EXECUTION_ERROR",
+            "bin/run-on.sh client host/31-client-rdma-tests.sh returned non-zero exit status 1",
+            "1 failed, 7 passed, 95 deselected",
         ):
             self.assertIn(text, summary)
-        self.assertIn("test failed", result.stdout)
+            self.assertIn(text, result.stdout)
+        self.assertNotIn("orchestrator exited 1", summary + result.stdout)
+        self.assertNotIn("DELETE_IN_PROGRESS", summary + result.stdout)
+        self.assert_no_identifiers(summary, result.stdout)
+
+    def test_failed_provisioning_reports_step_without_the_reason(self):
+        result, summary = self.report_build(
+            self.failed_build(), self.log_page(self.PROVISIONING_FAILURE_LOG)
+        )
+        self.assertIn("bin/rdma-pair.sh apply", summary)
+        self.assertIn("No pytest summary", summary)
+        self.assertNotIn("CREATE_FAILED", summary + result.stdout)
+        self.assert_no_identifiers(summary, result.stdout)
+
+    def test_failed_command_with_unexpected_arguments_is_not_printed(self):
+        line = (
+            "EFA build failed: Command '['bin/run-on.sh', 'client', 'host/31-x.sh',"
+            f" 'SERVER_IP={self.PRIVATE_IP}']' returned non-zero exit status 1."
+        )
+        result, summary = self.report_build(self.failed_build(), self.log_page([line]))
+        self.assertIn("No recognized failure line", summary)
+        self.assert_no_identifiers(summary, result.stdout)
+
+    def test_near_miss_step_arguments_are_rejected(self):
+        for args in (
+            "'bin/run-on.sh.evil', 'client'",
+            "'bin/run-on.sh', 'client', 'host/31-x.sh', 'GLIDE_SOURCE=abc'",
+            "'bin/run-on.sh', 'client, i-0123456789abcdef0'",
+        ):
+            with self.subTest(args=args):
+                line = f"EFA build failed: Command '[{args}]' returned non-zero exit status 1."
+                result, summary = self.report_build(
+                    self.failed_build(), self.log_page([line])
+                )
+                self.assertIn("No recognized failure line", summary)
+                self.assertNotIn("bin/run-on.sh", summary + result.stdout)
+
+    def test_timeout_signal_and_fixed_failures_name_the_step(self):
+        step = "['bin/run-on.sh', 'server', 'host/20-server-build.sh']"
+        for line, expected in (
+            (
+                f"EFA build failed: Command '{step}' timed out after 3599.5 seconds",
+                "bin/run-on.sh server host/20-server-build.sh timed out after 3599.5 seconds",
+            ),
+            (
+                f"EFA build failed: Command '{step}' died with <Signals.SIGKILL: 9>.",
+                "bin/run-on.sh server host/20-server-build.sh died with <Signals.SIGKILL: 9>",
+            ),
+            (
+                f"EFA build failed: Command {step} returned non-zero exit status 2.",
+                "bin/run-on.sh server host/20-server-build.sh returned non-zero exit status 2",
+            ),
+            (
+                "EFA build failed: EFA orchestration exceeded its 65 minute work budget",
+                "EFA orchestration exceeded its 65 minute work budget",
+            ),
+            ("EFA build failed: Received signal 15", "Received signal 15"),
+        ):
+            with self.subTest(line=line):
+                result, _ = self.report_build(
+                    self.failed_build(), self.log_page([line])
+                )
+                self.assertIn(expected, result.stdout)
+
+    def test_test_counts_require_the_exact_summary_line(self):
+        for line in (
+            f"{self.PRIVATE_IP} ======= 1 failed, 7 passed in 6.02s =======",
+            "======= 1 failed, 7 passed in 6.02s ======= i-0123456789abcdef0",
+            f"======= 1 failed, 7 passed, {self.PRIVATE_IP} in 6.02s =======",
+        ):
+            with self.subTest(line=line):
+                result, summary = self.report_build(
+                    self.failed_build(), self.log_page([line])
+                )
+                self.assertIn("No pytest summary", summary)
+                self.assert_no_identifiers(summary, result.stdout)
+
+    def test_unexpected_phase_fields_are_not_printed(self):
+        build = self.failed_build()
+        build["phases"][0]["contexts"][0]["statusCode"] = (
+            f"arn:aws:iam::{self.ACCOUNT}:x"
+        )
+        result, summary = self.report_build(build, self.log_page([]))
+        self.assertIn("BUILD FAILED ?", summary)
+        self.assert_no_identifiers(summary, result.stdout)
+
+    def test_bad_json_reports_a_fixed_reason(self):
+        result = self.run_step("Report build result", [(0, "invalid json")])
+        self.assertIn("unreadable response", result.stdout)
+
+    def test_log_request_arguments(self):
+        self.report_build(self.failed_build(), self.log_page(self.TEST_FAILURE_LOG))
         calls = [
             json.loads(line) for line in (self.root / "calls").read_text().splitlines()
         ]
@@ -174,13 +296,16 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn("href=", summary)
         self.assertEqual(len((self.root / "calls").read_text().splitlines()), 1)
 
-    def test_log_access_failure_preserves_build_diagnostics(self):
-        _, summary = self.report_build(
-            self.failed_build(), (254, "AccessDeniedException")
+    def test_log_access_failure_reports_only_the_error_code(self):
+        denied = (
+            "An error occurred (AccessDeniedException) when calling the GetLogEvents"
+            f" operation: User: arn:aws:sts::{self.ACCOUNT}:assumed-role/r/s is not"
+            " authorized to perform: logs:GetLogEvents"
         )
+        result, summary = self.report_build(self.failed_build(), (254, denied))
         self.assertIn("AccessDeniedException", summary)
-        self.assertIn("orchestrator exited 1", summary)
-        self.assertIn("FAILED", summary)
+        self.assertIn("BUILD FAILED COMMAND_EXECUTION_ERROR", summary)
+        self.assert_no_identifiers(summary, result.stdout)
 
     def test_empty_log_page_is_explicit(self):
         _, summary = self.report_build(self.failed_build(), (0, '{"events": []}'))
@@ -197,18 +322,15 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("Build diagnostics unavailable", result.stdout)
 
-    def test_excerpt_is_bounded_and_remote_output_is_not_interpreted(self):
-        message = (
-            "omitted-prefix" + "x" * 40000 + "\n::error::remote\n<script>bad</script>"
-        )
+    def test_unrecognized_log_lines_are_never_printed(self):
+        message = "x" * 40000 + "\n::error::remote\n<script>bad</script>"
         result, summary = self.report_build(
             self.failed_build(), (0, json.dumps({"events": [{"message": message}]}))
         )
-        self.assertNotIn("omitted-prefix", result.stdout)
-        self.assertLess(len(result.stdout), 34000)
-        self.assertLess(len(summary), 10000)
-        self.assertNotIn("<script>", summary)
-        self.assertIn("&lt;script&gt;", summary)
+        self.assertLess(len(result.stdout), 2000)
+        self.assertLess(len(summary), 2000)
+        for text in ("xxxx", "::error::remote", "script"):
+            self.assertNotIn(text, summary + result.stdout)
         token = result.stdout.splitlines()[0].removeprefix("::stop-commands::")
         self.assertEqual(result.stdout.splitlines()[-1], f"::{token}::")
 
