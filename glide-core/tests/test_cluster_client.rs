@@ -983,13 +983,18 @@ mod cluster_client_tests {
         .await
     }
 
-    /// Pauses every client of the node at `address` for 3 s and returns its route.
-    async fn pause_node(pauser: &mut Client, address: &str) -> RoutingInfo {
+    /// The route to the node at `address`.
+    fn node_route(address: &str) -> RoutingInfo {
         let (host, port) = address.rsplit_once(':').unwrap();
-        let route = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+        RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
             host: host.to_string(),
             port: port.parse().unwrap(),
-        });
+        })
+    }
+
+    /// Pauses every client of the node at `address` for 3 s and returns its route.
+    async fn pause_node(pauser: &mut Client, address: &str) -> RoutingInfo {
+        let route = node_route(address);
         let mut pause = redis::cmd("CLIENT");
         pause.arg("PAUSE").arg(3000).arg("ALL");
         pauser
@@ -1211,6 +1216,75 @@ mod cluster_client_tests {
             assert!(client.reset_connection_state(0).await.is_err());
 
             wait_for_pauses_to_end(&mut pauser, &[route]).await;
+        });
+    }
+
+    #[rstest]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+    fn test_partial_results_blocking_command_connection_error_makes_the_borrow_unresettable() {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: false,
+                ..Default::default()
+            })
+            .await;
+            let mut killer = second_client(test_basics.cluster.as_ref()).await;
+            let client = &mut test_basics.client;
+            let all_primaries = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, None));
+            let healthy = client
+                .send_command(&mut redis::cmd("PING"), Some(all_primaries.clone()))
+                .await
+                .unwrap();
+            let victim = node_entries(healthy).into_keys().next().unwrap();
+            let victim_route = node_route(&victim);
+
+            // WAIT blocks for 1 s, since no primary has that many replicas.
+            let mut wait = redis::cmd("WAIT");
+            wait.arg(100).arg(1000).set_allow_partial_results(true);
+            // Close the victim's connection while it holds the WAIT.
+            let kill_waiting_connection = async {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                loop {
+                    let mut list = redis::cmd("CLIENT");
+                    list.arg("LIST").arg("TYPE").arg("normal");
+                    let clients: String = redis::from_owned_redis_value(
+                        killer
+                            .send_command(&mut list, Some(victim_route.clone()))
+                            .await
+                            .unwrap(),
+                    )
+                    .unwrap();
+                    if let Some(id) = clients
+                        .lines()
+                        .find(|line| line.contains("cmd=wait"))
+                        .and_then(|line| line.split(' ').find_map(|f| f.strip_prefix("id=")))
+                    {
+                        let mut kill = redis::cmd("CLIENT");
+                        kill.arg("KILL").arg("ID").arg(id);
+                        killer
+                            .send_command(&mut kill, Some(victim_route.clone()))
+                            .await
+                            .unwrap();
+                        return;
+                    }
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "the WAIT never reached {victim}"
+                    );
+                }
+            };
+            let (result, ()) = tokio::join!(
+                client.send_command(&mut wait, Some(all_primaries)),
+                kill_waiting_connection
+            );
+            let entries = node_entries(result.unwrap());
+            assert!(
+                matches!(&entries[&victim], Value::ServerError(_))
+                    && !is_client_timeout(&entries[&victim]),
+                "{entries:?}"
+            );
+            assert!(client.reset_connection_state(0).await.is_err());
         });
     }
 

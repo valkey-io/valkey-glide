@@ -1838,9 +1838,14 @@ impl Client {
         // goes to the circuit breaker as the error the plain call would return.
         let partial_failure = if partial_results && let Ok(Value::Map(entries)) = &result {
             let (timed_out, failure) = partial_results_failure(entries);
-            // As `track_blocking_failure` does for the plain call's timeout: the
-            // node may still hold the blocking command, so the borrow can't be reset.
-            if timed_out && is_blocking_cmd {
+            // As `track_blocking_failure` does for the plain call: the node may
+            // still hold the blocking command, so the borrow can't be reset.
+            if is_blocking_cmd
+                && entries.iter().any(|(_, value)| {
+                    matches!(value, Value::ServerError(error)
+                        if crate::scope::is_poisoning_error(&error.clone().into()))
+                })
+            {
                 self.unresettable.store(true, Ordering::Release);
             }
             if timed_out && let Err(e) = GlideOpenTelemetry::record_timeout_error() {
