@@ -1022,9 +1022,12 @@ mod test_cluster_scan_async {
                 // The old connection keeps retrying these addresses, so the cluster must come back on them.
                 let ports = cluster.cluster.reserve_ports_for_restart();
                 drop(cluster);
-                let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = connection
-                    .cluster_scan(scan_state_rc.clone(), ClusterScanArgs::default())
-                    .await;
+                let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = tokio::time::timeout(
+                    Duration::from_secs(10),
+                    connection.cluster_scan(scan_state_rc.clone(), ClusterScanArgs::default()),
+                )
+                .await
+                .expect("cluster_scan did not return after the cluster went down");
                 assert!(scan_response.is_err());
                 cluster = TestClusterContext::restart_on_ports(
                     ports,
@@ -1189,11 +1192,30 @@ mod test_cluster_scan_async {
         let args = ClusterScanArgs::builder()
             .allow_non_covered_slots(true)
             .build();
+        // A page can still go to the killed node. With `retries(0)` it fails when the scan's
+        // topology check also queries the killed node, so retry it with the same cursor.
+        let mut failed_pages = 0;
         loop {
-            let (next_cursor, scan_keys): (ScanStateRC, Vec<Value>) = connection
-                .cluster_scan(scan_state_rc, args.clone())
+            let (next_cursor, scan_keys): (ScanStateRC, Vec<Value>) = match connection
+                .cluster_scan(scan_state_rc.clone(), args.clone())
                 .await
-                .unwrap();
+            {
+                Ok(page) => page,
+                Err(err)
+                    if failed_pages < 10
+                        && matches!(
+                            err.kind(),
+                            redis::ErrorKind::IoError
+                                | redis::ErrorKind::FatalSendError
+                                | redis::ErrorKind::ConnectionNotFoundForRoute
+                                | redis::ErrorKind::AllConnectionsUnavailable
+                        ) =>
+                {
+                    failed_pages += 1;
+                    continue;
+                }
+                Err(err) => panic!("cluster_scan failed: {err}"),
+            };
             scan_state_rc = next_cursor;
             let mut scan_keys = scan_keys
                 .into_iter()

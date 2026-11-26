@@ -38,7 +38,7 @@ integer-encoding = { version = "4", optional = true }
 libc = "0.2.186"
 lz4 = { version = "1.28" }
 nanoid = "0.4"
-num_cpus = { version = "^1", optional = true }
+num_cpus = { version = "^1" }
 once_cell = "1"
 protobuf = { version = "3", features = ["bytes", "with-bytes"], optional = true }
 rand = { version = "0.8" }
@@ -72,7 +72,6 @@ socket-layer = [
     "proto",
     "directories",
     "integer-encoding",
-    "num_cpus",
     "tokio-util",
 ]
 standalone_heartbeat = []

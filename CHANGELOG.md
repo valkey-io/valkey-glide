@@ -14,6 +14,7 @@
 
 ### Fixes
 
+* Core, Java: bound cluster_scan by the client's request timeout and retries ([#6892](https://github.com/valkey-io/valkey-glide/pull/6892))
 * Core: keep timeout watchdog pending counts isolated from retired workers and losing singleton initialization candidates ([#7762](https://github.com/valkey-io/valkey-glide/pull/7762))
 * Core: prevent missed refresh completion notifications ([#7766](https://github.com/valkey-io/valkey-glide/pull/7766))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
@@ -24,6 +25,7 @@
 * Core: flush server-assisted cache when its connection closes ([#7493](https://github.com/valkey-io/valkey-glide/pull/7493))
 * Core: deliver reconnect errors to cluster callers instead of dropping them ([#7737](https://github.com/valkey-io/valkey-glide/pull/7737))
 * Core/FFI: run a lazy sync client's first connect on the runtime worker ([#7671](https://github.com/valkey-io/valkey-glide/pull/7671))
+* Core/FFI: run address resolver callbacks on the blocked caller thread ([#7818](https://github.com/valkey-io/valkey-glide/pull/7818))
 * Core/FFI, Python: pools and scopes work in forked children, and Python raises `ClosingError` for an inherited pool or async scope ([#7630](https://github.com/valkey-io/valkey-glide/issues/7630))
 * Go: strip LLVM bitcode from the prebuilt `libglide_ffi.a` so Go 1.26.11+ / 1.27.4+ no longer reject it with `disallowed LTO section` ([#7739](https://github.com/valkey-io/valkey-glide/pull/7739))
 * Go: link CoreFoundation on macOS arm64 so programs that do not import `crypto/x509` link with Go 1.27 ([#7784](https://github.com/valkey-io/valkey-glide/issues/7784))
@@ -31,6 +33,9 @@
 * Rust: `telemetry::init` rejects a configuration with no exporter ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Rust: `telemetry::init` runs the HTTP and gRPC exporters on GLIDE's runtime ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core: reject writes in read-only standalone pipelines, transactions and scopes ([#7761](https://github.com/valkey-io/valkey-glide/pull/7761))
+* Core: Cap the socket listener worker pool at 8 by default (override with `GLIDE_SOCKET_LISTENER_WORKERS`) and report pool-creation failures through the init callback ([#7586](https://github.com/valkey-io/valkey-glide/issues/7586))
+* Core/Node: Apply the same worker-pool cap to the Node client's pool ([#7586](https://github.com/valkey-io/valkey-glide/issues/7586))
+* Core: send ASKING in the same write as the redirected command ([#7778](https://github.com/valkey-io/valkey-glide/pull/7778))
 
 ### Breaking Changes
 

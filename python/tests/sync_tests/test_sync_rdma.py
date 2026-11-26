@@ -1388,7 +1388,8 @@ def test_a_kept_registration_error_is_collected_safely(
         setup=(
             "from glide_shared.config import GlideClientConfiguration, NodeAddress; "
             "client = GlideClient.create(GlideClientConfiguration("
-            f"addresses=[NodeAddress({address.host!r}, {address.port})]))"
+            f"addresses=[NodeAddress({address.host!r}, {address.port}, "
+            f"unix_socket_path={address.unix_socket_path!r})]))"
         ),
     )
 
@@ -1487,6 +1488,7 @@ class _DroppingProxy:
         self._listener.close()
 
 
+@pytest.mark.requires_tcp
 @pytest.mark.parametrize("cluster_mode", [False])
 @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
 def test_a_transfer_whose_connection_is_lost_closes_its_region(
