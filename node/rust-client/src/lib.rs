@@ -2753,6 +2753,7 @@ fn resp_value_to_js<'a>(val: Value, js_env: &'a Env, string_decoder: bool) -> Re
             let error = error.into();
             let name = match error_type(&error) {
                 RequestErrorType::Timeout => "TimeoutError",
+                RequestErrorType::Disconnect => "ConnectionError",
                 _ => "RequestError",
             };
             let err = Error::new(Status::Ok, error_message(&error));

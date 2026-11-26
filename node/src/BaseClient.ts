@@ -1567,6 +1567,8 @@ export function restoreErrorPrototype(value: unknown): void {
 
     if (error.name === "TimeoutError") {
         Object.setPrototypeOf(error, TimeoutError.prototype);
+    } else if (error.name === "ConnectionError") {
+        Object.setPrototypeOf(error, ConnectionError.prototype);
     } else if (error.name === "RequestError") {
         Object.setPrototypeOf(error, RequestError.prototype);
     }

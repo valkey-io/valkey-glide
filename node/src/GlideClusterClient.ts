@@ -22,6 +22,7 @@ import {
     restoreErrorPrototype,
 } from "./BaseClient";
 import {
+    ConnectionError, // eslint-disable-line @typescript-eslint/no-unused-vars
     RequestError,
     TimeoutError, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "./Errors";
@@ -128,7 +129,8 @@ export interface PartialResultsOption {
      * When `true`, a command sent to several nodes resolves with an entry for every target node,
      * holding that node's reply or the error for that node. A node that has not answered by
      * `requestTimeout` minus a margin of a tenth of it, kept between 2 ms and 100 ms (a quarter of
-     * it under 8 ms), gets a {@link TimeoutError}; other failures get a {@link RequestError}. The
+     * it under 8 ms), gets a {@link TimeoutError}. A node the client lost or has no connection to
+     * gets a {@link ConnectionError}, and other failures get a {@link RequestError}. The
      * promise does not reject because some or all of the target nodes failed; it still rejects
      * when no node can be reached at all, and it rejects with a {@link TimeoutError} if it has not
      * settled by `requestTimeout` plus the same margin.
@@ -1144,7 +1146,8 @@ export class GlideClusterClient extends BaseClient {
      *     `allowPartialResults`.
      * @returns A string when the command goes to a single node. Otherwise a dictionary from each
      *     node address to its reply, or to its error: a {@link TimeoutError} if the node did not
-     *     answer in time, or a {@link RequestError} for any other failure.
+     *     answer in time, a {@link ConnectionError} if the client lost or has no connection to it,
+     *     or a {@link RequestError} for any other failure.
      */
     public async info(
         options: { sections?: InfoOptions[] } & RouteOption & {

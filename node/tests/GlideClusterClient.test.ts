@@ -21,6 +21,7 @@ import {
     ClosingError,
     ClusterBatch,
     ConfigurationError,
+    ConnectionError,
     Decoder,
     FlushMode,
     FunctionListResponse,
@@ -614,6 +615,71 @@ describe("GlideClusterClient", () => {
                 }
             } finally {
                 denied?.close();
+                await client.customCommand(["ACL", "DELUSER", username], {
+                    route: "allNodes",
+                });
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "info with allowPartialResults returns a ConnectionError for a primary it cannot reach",
+        async () => {
+            const protocol = ProtocolVersion.RESP3;
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const username = `partial-${getRandomKey()}`;
+            const password = "password";
+            await client.customCommand(
+                [
+                    "ACL",
+                    "SETUSER",
+                    username,
+                    "on",
+                    `>${password}`,
+                    "~*",
+                    "&*",
+                    "+@all",
+                ],
+                { route: "allNodes" },
+            );
+            let cutOff: GlideClusterClient | undefined;
+
+            try {
+                cutOff = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                        { credentials: { username, password } },
+                    ),
+                );
+                const primaries = Object.keys(await cutOff.info()).sort();
+                const [host, port] = primaries[0].split(":");
+                const route = {
+                    type: "routeByAddress" as const,
+                    host,
+                    port: Number(port),
+                };
+
+                // Drop the client's connection to one primary and keep it
+                // from reconnecting.
+                await client.customCommand(
+                    ["ACL", "SETUSER", username, "off"],
+                    { route },
+                );
+                await client.customCommand(
+                    ["CLIENT", "KILL", "USER", username],
+                    { route },
+                );
+
+                const replies = (await cutOff.info({
+                    allowPartialResults: true,
+                })) as Record<string, string | RequestError>;
+                expect(replies[primaries[0]]).toBeInstanceOf(ConnectionError);
+            } finally {
+                cutOff?.close();
                 await client.customCommand(["ACL", "DELUSER", username], {
                     route: "allNodes",
                 });
