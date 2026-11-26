@@ -240,13 +240,13 @@ pub type FunctionFlushOptions = FlushAllOptions;
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ValueComparison {
-    /// Met if the key exists and its value equals the given value (`IFEQ`).
+    /// Compare for equality with the given value (`IFEQ`).
     ///
     /// Since Valkey 8.1.0 for `SET`.
     /// Since Valkey 9.2.0 for `DELEX`.
     IFEQ(Vec<u8>),
 
-    /// Met if the key does not exist or its value does not equal the given value (`IFNE`).
+    /// Compare for inequality with the given value (`IFNE`).
     ///
     /// Since Valkey 9.2.0.
     IFNE(Vec<u8>),
