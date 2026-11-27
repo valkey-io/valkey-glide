@@ -21,6 +21,7 @@ on:
 
             # GitHub workflows
             - .github/workflows/glide-core-engine.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-engine/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
@@ -42,6 +43,7 @@ on:
 
             # GitHub workflows
             - .github/workflows/glide-core-engine.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-engine/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
