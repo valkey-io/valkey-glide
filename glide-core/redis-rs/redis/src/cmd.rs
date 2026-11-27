@@ -1172,6 +1172,28 @@ mod tests {
     }
 
     #[test]
+    fn test_cmd_arg_idx_is_constant_time() {
+        let mut cmd = Cmd::new();
+        for i in 0..50_000 {
+            cmd.arg(i);
+        }
+
+        // Time lookup only. Repeated scans from the first argument make this
+        // quadratic; direct indexing has ample headroom under this limit.
+        let start = std::time::Instant::now();
+        for i in 0..50_000 {
+            assert!(std::hint::black_box(&cmd)
+                .arg_idx(std::hint::black_box(i))
+                .is_some());
+        }
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < Duration::from_millis(250),
+            "50,000 indexed argument lookups took {elapsed:?}; expected under 250 ms"
+        );
+    }
+
+    #[test]
     fn test_response_timeout_defaults_to_none() {
         let cmd = Cmd::new();
         assert_eq!(cmd.response_timeout(), None);
