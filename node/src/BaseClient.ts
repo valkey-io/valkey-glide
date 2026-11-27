@@ -1557,6 +1557,26 @@ type WritePromiseOptions =
     BaseOptions | (BaseOptions & (ClusterBatchOptions | BatchOptions));
 
 /**
+ * @internal
+ * Errors inside a reply come from the native layer as plain `Error` objects
+ * whose `name` is the GLIDE error class. Gives such an error that class's
+ * prototype, so `instanceof` checks work. Other values are left as they are.
+ */
+export function restoreErrorPrototype(value: unknown): void {
+    // Compare by name: the native `Error` can come from another realm (e.g. jest's VM).
+    const error = value as Error | undefined;
+    if (error?.constructor?.name !== "Error") return;
+
+    if (error.name === "TimeoutError") {
+        Object.setPrototypeOf(error, TimeoutError.prototype);
+    } else if (error.name === "ConnectionError") {
+        Object.setPrototypeOf(error, ConnectionError.prototype);
+    } else if (error.name === "RequestError") {
+        Object.setPrototypeOf(error, RequestError.prototype);
+    }
+}
+
+/**
  * Base client interface for GLIDE
  */
 export class BaseClient {
@@ -1892,6 +1912,7 @@ export class BaseClient {
      * @param options - Optional settings for the write operation, including route, batch options and decoder.
      * @param isAtomic - Indicates whether the operation should be executed atomically (AKA as a Transaction, in the case of a batch). Defaults to `false`.
      * @param raiseOnError - Determines whether to raise an error if any of the commands fails, in the case of a Batch and not a single command. Defaults to `false`.
+     * @param allowPartialResults - Whether a single command sent to several nodes returns each node's reply or error instead of failing on the first node error. Defaults to `false`.
      * @returns A promise that resolves with the result of the command(s) or rejects with an error.
      */
     protected createWritePromise<T>(
@@ -1901,30 +1922,21 @@ export class BaseClient {
         isAtomic = false,
 
         raiseOnError = false,
+
+        allowPartialResults = false,
     ): Promise<T> {
         this.ensureClientIsUsable();
 
         if (!Array.isArray(command)) {
-            return this.sendCommand<T>(command, options);
+            return this.sendCommand<T>(command, options, allowPartialResults);
         }
 
         // Batch commands
         return this.sendBatch<T>(command, options, isAtomic, raiseOnError).then(
             (result: T) => {
                 // Patch error prototypes in batch results.
-                // The Rust NAPI layer returns errors as plain JS Error objects with
-                // name="RequestError". We need to re-class them as RequestError instances
-                // so that `instanceof RequestError` checks work correctly.
                 if (Array.isArray(result)) {
-                    for (const item of result) {
-                        if (
-                            item?.constructor?.name === "Error" &&
-                            /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-                            (item as any).name === "RequestError"
-                        ) {
-                            Object.setPrototypeOf(item, RequestError.prototype);
-                        }
-                    }
+                    result.forEach(restoreErrorPrototype);
                 }
 
                 return result;
@@ -2063,6 +2075,7 @@ export class BaseClient {
     private sendCommand<T>(
         command: command_request.Command,
         options: WritePromiseOptions = {},
+        allowPartialResults = false,
     ): Promise<T> {
         let routeBytes: Uint8Array | undefined;
 
@@ -2129,6 +2142,7 @@ export class BaseClient {
                 argsPointerLow,
                 spanPtr,
                 routeBytes,
+                allowPartialResults,
             );
 
             if (command.argsVecPointer) {

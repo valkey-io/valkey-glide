@@ -21,6 +21,7 @@ import {
     ClosingError,
     ClusterBatch,
     ConfigurationError,
+    ConnectionError,
     Decoder,
     FlushMode,
     FunctionListResponse,
@@ -41,6 +42,7 @@ import {
     Script,
     SlotKeyTypes,
     SortOrder,
+    TimeoutError,
     convertGlideRecordToRecord,
     convertRecordToGlideRecord,
 } from "../build-ts";
@@ -71,6 +73,7 @@ import {
     PRIMARY_SLOT_ROUTE_OPTION,
     triggerLatencySpike,
     validateBatchResponse,
+    waitFor,
     waitForNotBusy,
     socketDrainDelay,
 } from "./TestUtilities";
@@ -146,6 +149,9 @@ describe("GlideClusterClient", () => {
     afterAll(async () => {
         client?.close();
         azClient?.close();
+        // A test that replaces `client` leaves the pooled clients open otherwise.
+        pooledClient?.close();
+        pooledAzClient?.close();
 
         if (testsFailed === 0) {
             if (cluster) await cluster.close();
@@ -474,6 +480,253 @@ describe("GlideClusterClient", () => {
             });
             expect(result).toEqual(expect.stringContaining("# Server"));
             expect(result).toEqual(expect.not.stringContaining("# Errorstats"));
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `info with allowPartialResults keeps replies when a primary is slow_%p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 1000,
+                }),
+            );
+            const primaries = Object.keys(await client.info()).sort();
+            const [host, port] = primaries[0].split(":");
+            const route = {
+                type: "routeByAddress" as const,
+                host,
+                port: Number(port),
+            };
+
+            // A second client pauses the primary, so the pause is not queued
+            // behind the client under test.
+            const pauser = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            try {
+                // Long enough for both calls below to see the node as slow.
+                await pauser.customCommand(["CLIENT", "PAUSE", "4500", "ALL"], {
+                    route,
+                });
+
+                // Without the option, one slow primary fails the whole call.
+                await expect(client.info()).rejects.toThrow(TimeoutError);
+
+                const result = await client.info({
+                    allowPartialResults: true,
+                });
+                expect(typeof result).toEqual("object");
+                const replies = result as Record<string, string | RequestError>;
+                expect(Object.keys(replies).sort()).toEqual(primaries);
+
+                for (const address of primaries.slice(1)) {
+                    expect(replies[address]).toEqual(
+                        expect.stringContaining("# Server"),
+                    );
+                }
+
+                expect(replies[primaries[0]]).toBeInstanceOf(TimeoutError);
+            } finally {
+                try {
+                    // CLIENT UNPAUSE would wait for the pause too; wait for it to end.
+                    await waitFor(async () => {
+                        try {
+                            await pauser.ping({ route });
+                            return true;
+                        } catch {
+                            return false;
+                        }
+                    }, "paused primary did not recover");
+                } finally {
+                    pauser.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `info with allowPartialResults keeps the error reply of a denied primary_%p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const username = `partial-${getRandomKey()}`;
+            const password = "password";
+            await client.customCommand(
+                [
+                    "ACL",
+                    "SETUSER",
+                    username,
+                    "on",
+                    `>${password}`,
+                    "~*",
+                    "&*",
+                    "+@all",
+                ],
+                { route: "allNodes" },
+            );
+            let denied: GlideClusterClient | undefined;
+
+            try {
+                denied = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                        { credentials: { username, password } },
+                    ),
+                );
+                const primaries = Object.keys(await denied.info()).sort();
+                const [host, port] = primaries[0].split(":");
+                await client.customCommand(
+                    ["ACL", "SETUSER", username, "-info"],
+                    {
+                        route: {
+                            type: "routeByAddress",
+                            host,
+                            port: Number(port),
+                        },
+                    },
+                );
+
+                // Without the option, the denied primary fails the whole call.
+                const plain = await denied
+                    .info()
+                    .catch((error: unknown) => error);
+                expect(plain).toBeInstanceOf(RequestError);
+
+                const replies = (await denied.info({
+                    allowPartialResults: true,
+                })) as Record<string, string | RequestError>;
+                expect(Object.keys(replies).sort()).toEqual(primaries);
+                expect(replies[primaries[0]]).toBeInstanceOf(RequestError);
+                expect(replies[primaries[0]]).not.toBeInstanceOf(TimeoutError);
+                expect((replies[primaries[0]] as RequestError).message).toEqual(
+                    (plain as RequestError).message,
+                );
+
+                for (const address of primaries.slice(1)) {
+                    expect(replies[address]).toEqual(
+                        expect.stringContaining("# Server"),
+                    );
+                }
+            } finally {
+                denied?.close();
+                await client.customCommand(["ACL", "DELUSER", username], {
+                    route: "allNodes",
+                });
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "info with allowPartialResults returns a ConnectionError for a primary it cannot reach",
+        async () => {
+            const protocol = ProtocolVersion.RESP3;
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const username = `partial-${getRandomKey()}`;
+            const password = "password";
+            await client.customCommand(
+                [
+                    "ACL",
+                    "SETUSER",
+                    username,
+                    "on",
+                    `>${password}`,
+                    "~*",
+                    "&*",
+                    "+@all",
+                ],
+                { route: "allNodes" },
+            );
+            let cutOff: GlideClusterClient | undefined;
+
+            try {
+                cutOff = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                        { credentials: { username, password } },
+                    ),
+                );
+                const primaries = Object.keys(await cutOff.info()).sort();
+                const [host, port] = primaries[0].split(":");
+                const route = {
+                    type: "routeByAddress" as const,
+                    host,
+                    port: Number(port),
+                };
+
+                // Drop the client's connection to one primary and keep it
+                // from reconnecting.
+                await client.customCommand(
+                    ["ACL", "SETUSER", username, "off"],
+                    { route },
+                );
+                await client.customCommand(
+                    ["CLIENT", "KILL", "USER", username],
+                    { route },
+                );
+
+                const replies = (await cutOff.info({
+                    allowPartialResults: true,
+                })) as Record<string, string | RequestError>;
+                expect(replies[primaries[0]]).toBeInstanceOf(ConnectionError);
+            } finally {
+                cutOff?.close();
+                await client.customCommand(["ACL", "DELUSER", username], {
+                    route: "allNodes",
+                });
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "info with a non-boolean allowPartialResults resolves",
+        async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const primaries = Object.keys(await client.info()).sort();
+
+            // Plain JavaScript can pass any value here.
+            const replies = await client.info({
+                allowPartialResults: 1 as unknown as boolean,
+            });
+            expect(Object.keys(replies).sort()).toEqual(primaries);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "allowPartialResults has no effect outside info",
+        async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            // A variable passes the type check, and plain JavaScript has none.
+            const options = {
+                route: "allPrimaries" as const,
+                allowPartialResults: true,
+            };
+
+            // ECHO without its argument fails on every primary.
+            await expect(
+                client.customCommand(["ECHO"], options),
+            ).rejects.toThrow(RequestError);
         },
         TIMEOUT,
     );

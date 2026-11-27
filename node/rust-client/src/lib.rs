@@ -6,7 +6,7 @@ use glide_core::client::{MonitorClient, MonitorLine, MonitorLineCallback, NodeAd
 use glide_core::cluster_scan_container::get_cluster_scan_cursor;
 use glide_core::compression::process_command_args_for_compression;
 use glide_core::connection_request;
-use glide_core::errors::{error_message, error_type};
+use glide_core::errors::{RequestErrorType, error_message, error_type};
 use glide_core::otel_db_semantics::{set_db_attributes, set_db_batch_attributes};
 use glide_core::worker_pool::socket_listener_pool_size;
 use glide_core::{
@@ -1727,12 +1727,15 @@ impl GlideClientHandle {
     /// * `args_pointer_low` - Low 32 bits of the args `Vec<Bytes>` pointer
     /// * `span_ptr` - Optional OpenTelemetry span pointer
     /// * `route_bytes` - Optional routing information for cluster mode
+    /// * `allow_partial_results` - Return each node's reply or error for a
+    ///   multi-node command instead of failing on the first error
     ///
     /// # Returns
     /// * `true` if the command was successfully queued
     /// * `false` if the inflight request limit was exceeded
     #[napi]
     #[inline]
+    #[allow(clippy::too_many_arguments)]
     pub fn send_command(
         &self,
         callback_idx: u32,
@@ -1741,6 +1744,7 @@ impl GlideClientHandle {
         args_pointer_low: u32,
         span_ptr: Option<BigInt>,
         route_bytes: Option<Uint8Array>,
+        allow_partial_results: Option<bool>,
     ) -> Result<bool> {
         // Reconstruct the args pointer from high/low bits (simple bit ops, no allocation)
         // IMPORTANT: Reclaim the pointer BEFORE the inflight check to avoid leaking
@@ -1804,6 +1808,7 @@ impl GlideClientHandle {
         }
 
         cmd.set_span(command_span);
+        cmd.set_allow_partial_results(allow_partial_results.unwrap_or(false));
 
         // Parse routing information if provided
         let routing = match route_bytes {
@@ -2746,10 +2751,15 @@ fn resp_value_to_js<'a>(val: Value, js_env: &'a Env, string_decoder: bool) -> Re
             obj.into_unknown(js_env)
         }
         Value::ServerError(error) => {
-            let err_msg = error_message(&error.into());
-            let err = Error::new(Status::Ok, err_msg);
+            let error = error.into();
+            let name = match error_type(&error) {
+                RequestErrorType::Timeout => "TimeoutError",
+                RequestErrorType::Disconnect => "ConnectionError",
+                _ => "RequestError",
+            };
+            let err = Error::new(Status::Ok, error_message(&error));
             let mut js_error = js_env.create_error(err)?;
-            js_error.set_named_property("name", "RequestError")?;
+            js_error.set_named_property("name", name)?;
             js_error.into_unknown(js_env)
         }
     }

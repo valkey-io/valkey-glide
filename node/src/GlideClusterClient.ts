@@ -19,8 +19,13 @@ import {
     PubSubMsg,
     convertGlideRecordToRecord,
     isGlideRecord,
+    restoreErrorPrototype,
 } from "./BaseClient";
-import { RequestError } from "./Errors";
+import {
+    ConnectionError, // eslint-disable-line @typescript-eslint/no-unused-vars
+    RequestError,
+    TimeoutError, // eslint-disable-line @typescript-eslint/no-unused-vars
+} from "./Errors";
 import { ClusterBatch } from "./Batch";
 import {
     ClientPauseMode,
@@ -114,6 +119,26 @@ export interface RouteOption {
      * The client will route the command to the nodes defined by `route`.
      */
     route?: Routes;
+}
+
+/**
+ * An optional argument for cluster commands that are sent to several nodes.
+ */
+export interface PartialResultsOption {
+    /**
+     * When `true`, a command sent to several nodes resolves with an entry for every target node,
+     * holding that node's reply or the error for that node. A node that has not answered by
+     * `requestTimeout` minus a margin of a tenth of it, kept between 2 ms and 100 ms (a quarter of
+     * it under 8 ms), gets a {@link TimeoutError}. A node the client lost or has no connection to
+     * gets a {@link ConnectionError}, and other failures get a {@link RequestError}. The
+     * promise does not reject because some or all of the target nodes failed; it still rejects
+     * when no node can be reached at all, and it rejects with a {@link TimeoutError} if it has not
+     * settled by `requestTimeout` plus the same margin.
+     *
+     * Has no effect on a command routed to a single node. Defaults to `false`, which rejects with
+     * the first node error.
+     */
+    allowPartialResults?: boolean;
 }
 
 /**
@@ -1138,9 +1163,11 @@ export class GlideClusterClient extends BaseClient {
      * - (Optional) `sections`: a list of {@link InfoOptions} values specifying which sections of information to retrieve.
      *     When no parameter is provided, {@link InfoOptions.Default|Default} is assumed.
      * - (Optional) `route`: see {@link RouteOption}.
+     * - (Optional) `allowPartialResults`: see {@link PartialResultsOption}.
      * @returns A string containing the information for the sections requested.
      *     When specifying a route other than a single node,
      *     it returns a dictionary where each address is the key and its corresponding node response is the value.
+     *     With `allowPartialResults: true`, a node that failed has its error as the value.
      *
      * @example
      * ```typescript
@@ -1148,14 +1175,69 @@ export class GlideClusterClient extends BaseClient {
      * const result = await client.info(new Section[] { Section.STATS });
      * console.log(someClusterParsingFunction(result, "total_net_input_bytes")); // Output: 1
      * ```
+     *
+     * @example
+     * ```typescript
+     * // Keep the replies of the healthy primaries when one of them times out
+     * const result = await client.info({ allowPartialResults: true });
+     * for (const [address, reply] of Object.entries(result)) {
+     *     if (reply instanceof TimeoutError) console.log(`${address} timed out`);
+     * }
+     * ```
      */
     public async info(
+        options?: { sections?: InfoOptions[] } & RouteOption & {
+                allowPartialResults?: never;
+            },
+    ): Promise<ClusterResponse<string>>;
+    /**
+     * Gets information and statistics about the server, keeping the replies of the nodes that
+     * answered when other nodes fail. See {@link PartialResultsOption} and the overload without
+     * `allowPartialResults`.
+     *
+     * @param options - The options of the overload without `allowPartialResults`, plus
+     *     `allowPartialResults`.
+     * @returns A string when the command goes to a single node. Otherwise a dictionary from each
+     *     node address to its reply, or to its error: a {@link TimeoutError} if the node did not
+     *     answer in time, a {@link ConnectionError} if the client lost or has no connection to it,
+     *     or a {@link RequestError} for any other failure.
+     */
+    public async info(
+        options?: { sections?: InfoOptions[] } & RouteOption &
+            PartialResultsOption,
+    ): Promise<string | Record<string, string | RequestError>>;
+    // TypeScript reads `Parameters<>` and `ReturnType<>` from the last overload,
+    // so this one keeps them at the type of the call without `allowPartialResults`.
+    public async info(
         options?: { sections?: InfoOptions[] } & RouteOption,
-    ): Promise<ClusterResponse<string>> {
+    ): Promise<ClusterResponse<string>>;
+    public async info(
+        options?: { sections?: InfoOptions[] } & RouteOption &
+            PartialResultsOption,
+    ): Promise<string | Record<string, string | RequestError>> {
+        // A non-boolean from plain JS would throw in NAPI and leak the
+        // callback slot and the args vector.
+        const allowPartialResults = !!options?.allowPartialResults;
+
         return this.createWritePromise<ClusterGlideRecord<string>>(
             createInfo(options?.sections),
             { decoder: Decoder.String, ...options },
-        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
+            false,
+            false,
+            allowPartialResults,
+        ).then((res) => {
+            const result = convertClusterGlideRecord(
+                res,
+                false,
+                options?.route,
+            );
+
+            if (allowPartialResults && typeof result === "object") {
+                Object.values(result).forEach(restoreErrorPrototype);
+            }
+
+            return result;
+        });
     }
 
     /**
