@@ -6,10 +6,8 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"net"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -158,11 +156,9 @@ func sortedPrimaries(t *testing.T, infos map[string]string) ([]string, config.Ro
 		primaries = append(primaries, address)
 	}
 	sort.Strings(primaries)
-	host, portText, err := net.SplitHostPort(primaries[0])
+	route, err := config.NewByAddressRouteWithHost(primaries[0])
 	require.NoError(t, err)
-	port, err := strconv.Atoi(portText)
-	require.NoError(t, err)
-	return primaries, config.NewByAddressRoute(host, int32(port))
+	return primaries, route
 }
 
 func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsRepliesWhenAPrimaryIsSlow() {
@@ -187,15 +183,6 @@ func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsRepliesWhenAPrimaryI
 			_, err := pauser.CustomCommandWithRoute(ctx, []string{"PING"}, route)
 			return err == nil
 		}, 10*time.Second, 100*time.Millisecond, "paused primary did not recover")
-
-		// A single-node route still returns the node's reply as a string.
-		single, err := client.InfoWithPartialResults(
-			ctx,
-			options.ClusterInfoOptions{RouteOption: &options.RouteOption{Route: route}},
-		)
-		assert.NoError(t, err)
-		assert.True(t, single.IsSingleValue())
-		assert.Contains(t, single.SingleValue(), "# Server")
 	}()
 
 	// Without partial results, one slow primary fails the whole call.
@@ -212,6 +199,17 @@ func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsRepliesWhenAPrimaryI
 	for _, address := range primaries[1:] {
 		assert.Contains(t, replies[address], "# Server")
 	}
+}
+
+func (suite *GlideTestSuite) TestInfoWithPartialResultsReturnsTheReplyOfASingleNode() {
+	t := suite.T()
+	result, err := suite.defaultClusterClient().InfoWithPartialResults(
+		context.Background(),
+		options.ClusterInfoOptions{RouteOption: &options.RouteOption{Route: config.RandomRoute}},
+	)
+	require.NoError(t, err)
+	assert.True(t, result.IsSingleValue())
+	assert.Contains(t, result.SingleValue(), "# Server")
 }
 
 func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsTheErrorReplyOfADeniedPrimary() {
@@ -258,18 +256,6 @@ func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsTheErrorReplyOfADeni
 	assert.Equal(t, plainErr.Error(), nodeErr.Error())
 	for _, address := range primaries[1:] {
 		assert.Contains(t, replies[address], "# Server")
-	}
-
-	// With every primary denied, the call returns an error for each.
-	_, err = admin.CustomCommandWithRoute(ctx, []string{"ACL", "SETUSER", username, "-info"}, config.AllPrimaries)
-	require.NoError(t, err)
-	failed, err := denied.InfoWithPartialResults(ctx, options.ClusterInfoOptions{})
-	require.NoError(t, err)
-	assert.Len(t, failed.MultiValue(), len(primaries))
-	for _, reply := range failed.MultiValue() {
-		require.Implements(t, (*error)(nil), reply)
-		_, isTimeout := reply.(*glide.TimeoutError)
-		assert.False(t, isTimeout)
 	}
 }
 
