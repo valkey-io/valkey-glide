@@ -172,11 +172,16 @@ class ReleaseWorktreeChecksTests(unittest.TestCase):
                 )
         for client in ("glide-sync", "glide-async"):
             (self.repo / "python" / client / ".gitignore").symlink_to("../.gitignore")
-        self.write("pypy3.11-v7.3.19-macos_arm64.tar.bz2")
-        self.write("pypy3.11-v7.3.19-macos_x86_64.tar.bz2")
         self.validate("pypi-binary")
         self.write("python/glide-shared/glide_shared/protobuf/unexpected.py")
         self.validate("pypi-binary", expected=1)
+
+    def test_python_binary_interpreter_download_fails(self):
+        self.write("pypy3.11-v7.3.19-macos_arm64.tar.bz2")
+        self.assertIn(
+            "pypy3.11-v7.3.19-macos_arm64.tar.bz2",
+            self.validate("pypi-binary", expected=1),
+        )
 
     def test_npm_assembly_outputs_pass(self):
         self.write("node/npm/glide/package.json")
