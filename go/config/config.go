@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
@@ -625,6 +626,7 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 		request.NodeDiscoveryMode = protobuf.NodeDiscoveryMode(config.nodeDiscoveryMode)
 	}
 
+	// TODO #7683: Confirm glide-core's error for Pub/Sub with RESP2 surfaces as a configuration error.
 	if config.subscriptionConfig != nil {
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
 	}
@@ -724,9 +726,10 @@ func (config *ClientConfiguration) WithClientName(clientName string) *ClientConf
 	return config
 }
 
-// WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
+// WithClientAZ sets the client's Availability Zone (AZ) to be used for the client. Surrounding whitespace is
+// trimmed, so a whitespace-only AZ counts as unset.
 func (config *ClientConfiguration) WithClientAZ(clientAZ string) *ClientConfiguration {
-	config.clientAZ = clientAZ
+	config.clientAZ = strings.TrimSpace(clientAZ)
 	return config
 }
 
@@ -905,6 +908,7 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 		}
 		request.ConnectionTimeout = connectionTimeout
 	}
+	// TODO #7683: Confirm glide-core's error for Pub/Sub with RESP2 surfaces as a configuration error.
 	if config.subscriptionConfig != nil {
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
 	}
@@ -1021,9 +1025,10 @@ func (config *ClusterClientConfiguration) WithClientName(clientName string) *Clu
 	return config
 }
 
-// WithClientAZ sets the client's Availability Zone (AZ) to be used for the client.
+// WithClientAZ sets the client's Availability Zone (AZ) to be used for the client. Surrounding whitespace is
+// trimmed, so a whitespace-only AZ counts as unset.
 func (config *ClusterClientConfiguration) WithClientAZ(clientAZ string) *ClusterClientConfiguration {
-	config.clientAZ = clientAZ
+	config.clientAZ = strings.TrimSpace(clientAZ)
 	return config
 }
 
@@ -1231,6 +1236,9 @@ type TlsConfiguration struct {
 	//
 	// The certificate data should be in PEM format as a byte array.
 	RootCertificates []byte
+
+	// TODO #7707: Document that RootCertificates or IAM authentication with UseInsecureTLS
+	// is rejected.
 
 	// UseInsecureTLS bypasses TLS certificate verification when set to true.
 	//

@@ -188,7 +188,6 @@ type LoadField struct {
 	Alias string
 }
 
-// toArgs returns the arguments for this LOAD clause entry.
 func (f *LoadField) toArgs() []string {
 	if f.Alias == "" {
 		return []string{f.FieldIdentifier}
@@ -196,12 +195,6 @@ func (f *LoadField) toArgs() []string {
 	return []string{f.FieldIdentifier, "AS", f.Alias}
 }
 
-// loadFieldsToArgs serializes a LOAD clause's field list for FT.AGGREGATE and FT.HYBRID
-// (shared, since the two commands' LOAD clause grammar is byte-identical). plainFields is
-// emitted first (in order), followed by typedFields (also in order); the count is a token
-// budget, not an entry count -- each LoadField with an Alias contributes 3 tokens (field, AS,
-// alias) rather than 1, matching the parser's own accounting. Returns nil if both lists are
-// empty.
 func loadFieldsToArgs(plainFields []string, typedFields []LoadField) []string {
 	if len(plainFields) == 0 && len(typedFields) == 0 {
 		return nil

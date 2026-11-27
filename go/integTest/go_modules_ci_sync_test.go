@@ -12,13 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestGoModulesCiSync single-sources utils/run-modules-ci-locally.sh's test invocation against
-// .github/workflows/go-modules.yml's "Build and run modules tests" step, so the two cannot
-// silently drift apart (the Go equivalent of Python's test_ci_workflow_sync.py, Node's
-// ServerModulesCiSync.test.ts, and Java's JavaModulesCiSyncTest.java). This test does not run
-// either script -- it just asserts that both sides invoke a module-test command with the same
-// two endpoint flags, so a future edit to one side that isn't mirrored on the other fails here
-// instead of only showing up as a discrepancy in a future review.
 func TestGoModulesCiSync(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	require.NoError(t, err)
@@ -32,10 +25,6 @@ func TestGoModulesCiSync(t *testing.T) {
 	workflowText := string(workflowBytes)
 	runnerText := string(runnerBytes)
 
-	// The runner script is shared across languages via a `case "$MODULES_TEST_LANG" in ... esac`
-	// block, and the python) arm's flag text happens to look like the go) arm's. Extract just the
-	// go) arm so a regression confined to that arm (while the python arm's matching text stays
-	// intact) is actually caught here, instead of only asserting against the whole file.
 	goArmPattern := regexp.MustCompile(`(?s)\n\s*go\)\n(.*?\n\s*);;`)
 	goArmMatch := goArmPattern.FindStringSubmatch(runnerText)
 	require.NotEmpty(
@@ -45,16 +34,6 @@ func TestGoModulesCiSync(t *testing.T) {
 	)
 	goArmText := goArmMatch[1]
 
-	// CI invokes `make modules-test standalone-endpoints=... cluster-endpoints=...`, which runs
-	// `go test ./integTest/... -testify.m TestModule` (Makefile's modules-test target) with the
-	// same two endpoint flags (spelled --standalone-endpoints/--cluster-endpoints at that layer).
-	// The local runner bypasses the Makefile's HTML-report pipe (a flaky third-party module
-	// fetch) and additionally passes `-run TestGlideTestSuite`, which CI's invocation does not --
-	// this scopes the package to the one top-level function that hosts every TestModule* method,
-	// so other top-level Test* functions in the package (which need their own non-Docker server
-	// bring-up this script doesn't do) don't run and fail with an unrelated connection error.
-	// This test checks the two flags both sides share, not the full invocation string, since the
-	// `-run` addition is a deliberate local-only difference rather than a drift to catch.
 	for _, flag := range []string{"standalone-endpoints", "cluster-endpoints"} {
 		assert.Contains(
 			t, workflowText, flag,

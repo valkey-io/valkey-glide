@@ -1578,6 +1578,10 @@ class ClusterCommands(CoreCommands):
         returning all keys the database has from when the scan started until the scan ends.
         The same key can be returned in multiple scan iterations.
 
+        Each iteration is bounded by the client's request timeout. After a timeout, retry with the
+        same cursor to resume. If an iteration keeps timing out, use a smaller `count` or a longer
+        request timeout.
+
         See [valkey.io](https://valkey.io/commands/scan/) for more details.
 
         Args:

@@ -34,10 +34,11 @@
 
 use crate::client::AuthGeneration;
 use crate::client::Client as GlideClient;
+use crate::fork_slot::ForkSlot;
 use dashmap::DashMap;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock, PoisonError};
+use std::sync::{Arc, PoisonError};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::Notify;
@@ -501,19 +502,36 @@ pub async fn release_client_async(pool_arc: Arc<PoolMutex>, client_id: u64) {
         client_id: guard_client_id,
     };
 
-    // Undo the borrow's state (see `reset_connection_state`); failure discards.
-    let reset_result = tokio::time::timeout(
-        timeout_duration,
-        entry.client.reset_connection_state(configured_db),
-    )
-    .await;
+    // A blocking command still in flight (the caller gave up waiting) holds the
+    // node's connection, so the next borrower's commands there would queue behind
+    // it; nothing a reset sends can cancel it. Like the scope pool's
+    // `blocking_in_flight`, discard instead of resetting.
+    let reset_result = if entry.is_blocking.load(Ordering::Acquire) > 0 {
+        Ok(Err(redis::RedisError::from((
+            redis::ErrorKind::ClientError,
+            "Pooled client released with a blocking command in flight",
+        ))))
+    } else {
+        // Undo the borrow's state (see `reset_connection_state`); failure discards.
+        tokio::time::timeout(
+            timeout_duration,
+            entry.client.reset_connection_state(configured_db),
+        )
+        .await
+    };
 
-    if !matches!(reset_result, Ok(Ok(_))) {
-        glide_logger::log_warn_rate_limited!(
+    match &reset_result {
+        Ok(Ok(_)) => {}
+        Ok(Err(e)) => glide_logger::log_warn_rate_limited!(
             "pool",
             10,
-            "Client reset failed on release — discarding connection"
-        );
+            format!("Client reset failed on release — discarding connection: {e}")
+        ),
+        Err(_) => glide_logger::log_warn_rate_limited!(
+            "pool",
+            10,
+            "Client reset timed out on release — discarding connection"
+        ),
     }
 
     let mut pool = pool_arc.lock();
@@ -529,11 +547,11 @@ pub async fn release_client_async(pool_arc: Arc<PoolMutex>, client_id: u64) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Global pool registry: pool_id → Pool instance.
-static POOL_REGISTRY: OnceLock<DashMap<u64, Arc<PoolMutex>>> = OnceLock::new();
+static POOL_REGISTRY: ForkSlot<DashMap<u64, Arc<PoolMutex>>> = ForkSlot::new();
 static NEXT_POOL_ID: AtomicU64 = AtomicU64::new(1);
 /// Abandon monitor task handles, keyed by pool_id. Stored outside the pool
 /// mutex to allow abort on destroy without locking.
-static MONITOR_HANDLES: OnceLock<DashMap<u64, tokio::task::JoinHandle<()>>> = OnceLock::new();
+static MONITOR_HANDLES: ForkSlot<DashMap<u64, tokio::task::JoinHandle<()>>> = ForkSlot::new();
 
 fn get_monitor_handles() -> &'static DashMap<u64, tokio::task::JoinHandle<()>> {
     MONITOR_HANDLES.get_or_init(DashMap::new)
@@ -553,7 +571,7 @@ fn get_monitor_handles() -> &'static DashMap<u64, tokio::task::JoinHandle<()>> {
 /// caller holds a given pooled client at a time via `try_acquire`/
 /// `release_client_async`, so in practice the counter is ≤ 1 for pool clients.
 /// The `AtomicU32` is future-proof and handles direct-client concurrent usage.
-static BLOCKING_FLAG_REGISTRY: OnceLock<DashMap<u64, Arc<AtomicU32>>> = OnceLock::new();
+static BLOCKING_FLAG_REGISTRY: ForkSlot<DashMap<u64, Arc<AtomicU32>>> = ForkSlot::new();
 
 fn get_blocking_flag_registry() -> &'static DashMap<u64, Arc<AtomicU32>> {
     BLOCKING_FLAG_REGISTRY.get_or_init(DashMap::new)
@@ -591,7 +609,7 @@ pub fn get_blocking_flag(client_id: u64) -> Option<Arc<AtomicU32>> {
 // only has the client_id readily available.
 // ─────────────────────────────────────────────────────────────────────────────
 
-static CLIENT_TO_POOL: OnceLock<DashMap<u64, u64>> = OnceLock::new();
+static CLIENT_TO_POOL: ForkSlot<DashMap<u64, u64>> = ForkSlot::new();
 
 fn get_client_to_pool() -> &'static DashMap<u64, u64> {
     CLIENT_TO_POOL.get_or_init(DashMap::new)
@@ -1791,10 +1809,10 @@ pub fn allocate_scope_id() -> u64 {
 }
 
 /// Global scope registry: scope_id → ScopeEntry (for command dispatch).
-static SCOPE_REGISTRY: OnceLock<DashMap<u64, ScopeEntry>> = OnceLock::new();
+static SCOPE_REGISTRY: ForkSlot<DashMap<u64, ScopeEntry>> = ForkSlot::new();
 
 /// Per-client scope pools: client_id → ScopePool.
-static CLIENT_SCOPE_POOLS: OnceLock<DashMap<u64, ScopePoolHandle>> = OnceLock::new();
+static CLIENT_SCOPE_POOLS: ForkSlot<DashMap<u64, ScopePoolHandle>> = ForkSlot::new();
 
 pub fn get_scope_registry() -> &'static DashMap<u64, ScopeEntry> {
     SCOPE_REGISTRY.get_or_init(DashMap::new)
@@ -2049,16 +2067,18 @@ mod client_pool_marking_tests {
         .expect("valid pool config")
     }
 
-    /// A DISCARD failure other than "DISCARD without MULTI" must fail the reset, MULTI
-    /// open or not. A lazy client to a dead port makes DISCARD fail to connect.
+    /// After the borrow sent MULTI, a DISCARD failure other than "DISCARD without
+    /// MULTI" must fail the reset; a clean borrow sends nothing and succeeds. A lazy
+    /// client to a dead port makes DISCARD fail to connect.
     #[tokio::test]
     async fn reset_fails_when_discard_fails() {
-        for multi_open in [false, true] {
+        for multi_sent in [false, true] {
             let mut client = lazy_client().await;
-            client.set_multi_active_for_test(multi_open);
-            assert!(
+            client.set_multi_sent_for_test(multi_sent);
+            assert_eq!(
                 client.reset_connection_state(0).await.is_err(),
-                "multi_open={multi_open}: a DISCARD failure must propagate so the connection is not reused"
+                multi_sent,
+                "multi_sent={multi_sent}: only a sent DISCARD can fail the reset"
             );
         }
     }
@@ -2219,7 +2239,7 @@ mod client_pool_marking_tests {
 }
 
 #[cfg(test)]
-mod scope_pool_tests {
+pub(crate) mod scope_pool_tests {
     use super::{
         Arc, AtomicU32, DashMap, Ordering, ScopeAcquire, ScopeEntry, ScopePool, ScopePoolConfig,
         ScopeReservation, ScopeTarget, saturating_dec,
@@ -2287,13 +2307,13 @@ mod scope_pool_tests {
     }
 
     /// A real Valkey server child process bound to an ephemeral port, killed on drop.
-    struct TestServer {
+    pub(crate) struct TestServer {
         child: Child,
-        port: u16,
+        pub(crate) port: u16,
     }
 
     impl TestServer {
-        fn start() -> Self {
+        pub(crate) fn start() -> Self {
             let port = get_available_port();
             // Use `redis-server` to match the integration harness
             // (tests/utilities/mod.rs): it's present on every CI engine version,
@@ -2415,7 +2435,7 @@ mod scope_pool_tests {
         }
     }
 
-    async fn wait_for_server_ready(port: u16) {
+    pub(crate) async fn wait_for_server_ready(port: u16) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
             if let Ok(client) = redis::Client::open(format!("redis://127.0.0.1:{port}")) {
@@ -3694,11 +3714,11 @@ mod scope_pool_tests {
     }
 
     /// `reset_connection_state` must restore the configured db when a SELECT may
-    /// have landed untracked — not only when `current_database` shows drift. An
-    /// earlier batch SELECT that the server applied, followed by a rejected one,
-    /// leaves the connection on the new db while `current_database` still reads the
-    /// configured value; the `db_maybe_dirty` flag is what makes release fail safe
-    /// here. A-B: without the flag (drift-only check) this leaks the wrong db.
+    /// have landed untracked — not only when `current_database` shows drift. With
+    /// `raise_on_error=true`, a batch SELECT that the server applied, followed by a
+    /// rejected one, fails the batch and leaves the connection on the new db while
+    /// `current_database` still reads the configured value; the `db_maybe_dirty`
+    /// flag is what makes release fail safe here. A-B: without the flag (drift-only check) this leaks the wrong db.
     #[tokio::test]
     async fn release_restores_db_when_current_database_underreports() {
         use redis::FromRedisValue as _;
@@ -3717,13 +3737,13 @@ mod scope_pool_tests {
                 .expect("client connects to the test server")
         };
 
-        // SELECT 3 applies; SELECT 99 is rejected. `last_select_db` sees only the
-        // last (99 → ServerError → not recorded), so current_database stays 0 while
-        // the connection is really on db 3.
+        // SELECT 3 applies; SELECT 99 is rejected, so with raise_on_error the batch
+        // fails and no change is recorded: current_database stays 0 while the
+        // connection is really on db 3.
         let mut pipe = redis::pipe();
         pipe.cmd("SELECT").arg(3).cmd("SELECT").arg(99);
         let _ = client
-            .send_pipeline(&pipe, None, false, None, Default::default())
+            .send_pipeline(&pipe, None, true, None, Default::default())
             .await;
         assert_eq!(
             client.current_database(),
@@ -3784,26 +3804,63 @@ mod scope_pool_tests {
         // The tracker believes a MULTI is open, but the connection has none, so the
         // server's DISCARD replies "DISCARD without MULTI" — the expected, ignorable
         // error. Reset must still succeed (connection is clean, reusable).
-        client.set_multi_active_for_test(true);
+        client.set_multi_sent_for_test(true);
         client
             .reset_connection_state(0)
             .await
             .expect("a DISCARD-without-MULTI reply must be ignored, not propagated");
     }
 
+    /// A max-size-1 async pool holding `client` as its one borrowed connection.
+    fn pool_with_borrowed(client: &crate::client::Client) -> (Arc<super::PoolMutex>, u64) {
+        let pool_arc = Arc::new(super::PoolMutex::new(
+            super::ClientPool::new(super::PoolConfig {
+                max_size: 1,
+                min_idle: 0,
+                idle_timeout: std::time::Duration::from_secs(60),
+                request_timeout: std::time::Duration::from_secs(1),
+                test_on_borrow: false,
+                connection_request: Vec::new(),
+                is_async: true,
+                configured_database_id: 0,
+                abandon_timeout: std::time::Duration::from_secs(300),
+            })
+            .expect("valid pool config"),
+        ));
+        let client_id = {
+            let mut pool = pool_arc.lock();
+            let id = pool.add_client(client.clone());
+            assert_eq!(pool.try_acquire(), id as i64);
+            id
+        };
+        (pool_arc, client_id)
+    }
+
+    fn request_for(ports: &[u16]) -> crate::client::ConnectionRequest {
+        let mut request = crate::client::ConnectionRequest::default();
+        for &port in ports {
+            request.addresses.push(crate::client::NodeAddress {
+                host: "127.0.0.1".into(),
+                port,
+                unix_socket_path: None,
+            });
+        }
+        request
+    }
+
     /// Release must discard a connection the borrow left unusable and still reuse a
-    /// clean one. `CLIENT REPLY OFF|SKIP` times out the reset; a RESP3 `SUBSCRIBE`
-    /// answers it normally, so only `subscribe_sent` catches it. The read-only cases
-    /// pin that read-only mode, which rejects DISCARD locally, still reuses a clean
-    /// connection. A-B: the dirty ones were re-idled when DISCARD errors counted
-    /// only with a MULTI open.
+    /// clean one; the dirty commands are flagged at dispatch (`unresettable`). The
+    /// read-only cases pin that read-only mode, which rejects DISCARD locally, still
+    /// reuses a clean connection.
     #[tokio::test]
     async fn release_discards_a_connection_left_unusable() {
-        let cases: [(bool, &[&str], bool); 6] = [
+        let cases: [(bool, &[&str], bool); 8] = [
             (false, &["PING"], true),
             (false, &["CLIENT", "REPLY", "SKIP"], false),
             (false, &["CLIENT", "REPLY", "OFF"], false),
             (false, &["SUBSCRIBE", "release-discard-test"], false),
+            (false, &["MONITOR"], false),
+            (false, &["RESET"], false),
             (true, &["PING"], true),
             (true, &["CLIENT", "REPLY", "OFF"], false),
         ];
@@ -3811,38 +3868,12 @@ mod scope_pool_tests {
             let server = TestServer::start();
             wait_for_server_ready(server.port).await;
 
-            let mut client = {
-                let mut request = crate::client::ConnectionRequest::default();
-                request.addresses.push(crate::client::NodeAddress {
-                    host: "127.0.0.1".into(),
-                    port: server.port,
-                    unix_socket_path: None,
-                });
-                request.read_only = read_only;
-                crate::client::Client::new(request, None)
-                    .await
-                    .expect("client connects to the test server")
-            };
-            let pool_arc = Arc::new(super::PoolMutex::new(
-                super::ClientPool::new(super::PoolConfig {
-                    max_size: 1,
-                    min_idle: 0,
-                    idle_timeout: std::time::Duration::from_secs(60),
-                    request_timeout: std::time::Duration::from_secs(1),
-                    test_on_borrow: false,
-                    connection_request: Vec::new(),
-                    is_async: true,
-                    configured_database_id: 0,
-                    abandon_timeout: std::time::Duration::from_secs(300),
-                })
-                .expect("valid pool config"),
-            ));
-            let client_id = {
-                let mut pool = pool_arc.lock();
-                let id = pool.add_client(client.clone());
-                assert_eq!(pool.try_acquire(), id as i64);
-                id
-            };
+            let mut request = request_for(&[server.port]);
+            request.read_only = read_only;
+            let mut client = crate::client::Client::new(request, None)
+                .await
+                .expect("client connects to the test server");
+            let (pool_arc, client_id) = pool_with_borrowed(&client);
 
             let mut cmd = redis::cmd(command[0]);
             for arg in &command[1..] {
@@ -3861,9 +3892,8 @@ mod scope_pool_tests {
         }
     }
 
-    /// With replicas, a read-routed `CLIENT REPLY OFF` lands on a replica, but
-    /// standalone DISCARD reaches only the primary; release must still discard it.
-    /// A-B: re-idled when standalone skipped the all-nodes SELECT without db drift.
+    /// With replicas and read routing, a `CLIENT REPLY OFF` must still discard the
+    /// client wherever it landed. A-B: re-idled before the reset caught replicas.
     #[tokio::test]
     async fn release_discards_a_replica_left_unusable() {
         let primary = TestServer::start();
@@ -3877,41 +3907,13 @@ mod scope_pool_tests {
             (true, &["PING"][..], true),
             (true, &["CLIENT", "REPLY", "OFF"][..], false),
         ] {
-            let mut client = {
-                let mut request = crate::client::ConnectionRequest::default();
-                for port in [primary.port, replica.port] {
-                    request.addresses.push(crate::client::NodeAddress {
-                        host: "127.0.0.1".into(),
-                        port,
-                        unix_socket_path: None,
-                    });
-                }
-                request.read_from = Some(crate::client::ReadFrom::PreferReplica);
-                request.read_only = read_only;
-                crate::client::Client::new(request, None)
-                    .await
-                    .expect("client connects to primary and replica")
-            };
-            let pool_arc = Arc::new(super::PoolMutex::new(
-                super::ClientPool::new(super::PoolConfig {
-                    max_size: 1,
-                    min_idle: 0,
-                    idle_timeout: std::time::Duration::from_secs(60),
-                    request_timeout: std::time::Duration::from_secs(1),
-                    test_on_borrow: false,
-                    connection_request: Vec::new(),
-                    is_async: true,
-                    configured_database_id: 0,
-                    abandon_timeout: std::time::Duration::from_secs(300),
-                })
-                .expect("valid pool config"),
-            ));
-            let client_id = {
-                let mut pool = pool_arc.lock();
-                let id = pool.add_client(client.clone());
-                assert_eq!(pool.try_acquire(), id as i64);
-                id
-            };
+            let mut request = request_for(&[primary.port, replica.port]);
+            request.read_from = Some(crate::client::ReadFrom::PreferReplica);
+            request.read_only = read_only;
+            let mut client = crate::client::Client::new(request, None)
+                .await
+                .expect("client connects to primary and replica");
+            let (pool_arc, client_id) = pool_with_borrowed(&client);
 
             let mut cmd = redis::cmd(command[0]);
             for arg in &command[1..] {
@@ -3927,6 +3929,471 @@ mod scope_pool_tests {
                 "read_only={read_only} {command:?}: reused={reused} expected"
             );
             let _ = pool.drain_discarded_ids();
+        }
+    }
+
+    /// A replica going down must not make a clean borrow's release discard a client
+    /// that still serves commands. A-B: discarded when release probed every node
+    /// with SELECT.
+    #[tokio::test]
+    async fn release_reuses_a_client_while_a_replica_is_down() {
+        let primary = TestServer::start();
+        let replica = TestServer::start_replica_of(primary.port);
+        wait_for_server_ready(primary.port).await;
+        wait_for_server_ready(replica.port).await;
+
+        let mut request = request_for(&[primary.port, replica.port]);
+        request.read_from = Some(crate::client::ReadFrom::PreferReplica);
+        let mut client = crate::client::Client::new(request, None)
+            .await
+            .expect("client connects to primary and replica");
+        let (pool_arc, client_id) = pool_with_borrowed(&client);
+
+        drop(replica);
+        client
+            .send_command(redis::cmd("SET").arg("k").arg("v"), None)
+            .await
+            .expect("the primary still serves writes");
+
+        super::release_client_async(pool_arc.clone(), client_id).await;
+        let mut pool = pool_arc.lock();
+        assert_eq!(pool.idle_count(), 1, "a usable client must be re-idled");
+        assert!(pool.drain_discarded_ids().is_empty());
+    }
+
+    /// Creates ACL user `name` with `rules` and returns a request that logs in as it.
+    async fn acl_user_request(
+        port: u16,
+        name: &str,
+        rules: &[&str],
+    ) -> crate::client::ConnectionRequest {
+        let mut admin = crate::client::Client::new(request_for(&[port]), None)
+            .await
+            .expect("admin client connects");
+        let mut setuser = redis::cmd("ACL");
+        setuser.arg("SETUSER").arg(name).arg("on").arg("nopass");
+        for rule in rules {
+            setuser.arg(*rule);
+        }
+        admin
+            .send_command(&mut setuser, None)
+            .await
+            .expect("create ACL user");
+
+        let mut request = request_for(&[port]);
+        request.authentication_info = Some(crate::client::AuthenticationInfo {
+            username: Some(name.into()),
+            password: Some("unused".into()),
+            ..Default::default()
+        });
+        // Pin the precondition on a throwaway client (`ACL DRYRUN` needs 7.0+).
+        let mut probe = crate::client::Client::new(request.clone(), None)
+            .await
+            .expect("probe client connects as the restricted user");
+        let denied = probe.send_command(&mut redis::cmd("DISCARD"), None).await;
+        assert_eq!(
+            denied.map_err(|e| e.kind()),
+            Err(redis::ErrorKind::PermissionDenied),
+            "{name} must be denied DISCARD"
+        );
+        request
+    }
+
+    /// A clean borrow by an ACL user without `@transaction` must be reused: release
+    /// sends no DISCARD for it to be denied. A-B: discarded when release always sent
+    /// DISCARD and failed on its `NOPERM`.
+    #[tokio::test]
+    async fn release_reuses_a_client_without_transaction_permission() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+        let request = acl_user_request(server.port, "notx", &["+@all", "-@transaction"]).await;
+        let mut client = crate::client::Client::new(request, None)
+            .await
+            .expect("client connects as the restricted user");
+        let (pool_arc, client_id) = pool_with_borrowed(&client);
+        client
+            .send_command(&mut redis::cmd("PING"), None)
+            .await
+            .expect("PING as the restricted user");
+
+        super::release_client_async(pool_arc.clone(), client_id).await;
+        let mut pool = pool_arc.lock();
+        assert_eq!(pool.idle_count(), 1, "a clean borrow must be re-idled");
+        assert!(pool.drain_discarded_ids().is_empty());
+    }
+
+    /// A user who may MULTI but not DISCARD leaves the transaction open when their
+    /// own DISCARD is denied; release must discard the client. A-B: re-idled with
+    /// MULTI open when a denied release DISCARD counted as benign.
+    #[tokio::test]
+    async fn release_discards_a_client_whose_discard_was_denied() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+        let request = acl_user_request(server.port, "nodisc", &["+@all", "-discard"]).await;
+        let mut client = crate::client::Client::new(request, None)
+            .await
+            .expect("client connects as the restricted user");
+        let (pool_arc, client_id) = pool_with_borrowed(&client);
+        client
+            .send_command(&mut redis::cmd("MULTI"), None)
+            .await
+            .expect("MULTI is allowed");
+        let denied = client.send_command(&mut redis::cmd("DISCARD"), None).await;
+        assert_eq!(
+            denied.map_err(|e| e.kind()),
+            Err(redis::ErrorKind::PermissionDenied)
+        );
+
+        super::release_client_async(pool_arc.clone(), client_id).await;
+        let mut pool = pool_arc.lock();
+        assert_eq!(pool.idle_count(), 0, "an open MULTI must not be re-idled");
+        assert_eq!(pool.drain_discarded_ids(), vec![client_id]);
+    }
+
+    /// A WATCH without MULTI must not leak to the next borrower, whose EXEC would
+    /// abort on a key it never watched. A-B: leaked when release sent only DISCARD,
+    /// which doesn't unwatch without an open MULTI.
+    #[tokio::test]
+    async fn release_unwatches_a_watch_without_multi() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+        let mut client = crate::client::Client::new(request_for(&[server.port]), None)
+            .await
+            .expect("client connects");
+        let mut other = crate::client::Client::new(request_for(&[server.port]), None)
+            .await
+            .expect("second client connects");
+        let (pool_arc, client_id) = pool_with_borrowed(&client);
+        client
+            .send_command(redis::cmd("WATCH").arg("watched"), None)
+            .await
+            .expect("WATCH");
+
+        super::release_client_async(pool_arc.clone(), client_id).await;
+        assert_eq!(pool_arc.lock().idle_count(), 1, "WATCH alone is resettable");
+
+        other
+            .send_command(redis::cmd("SET").arg("watched").arg("changed"), None)
+            .await
+            .expect("touch the watched key from another connection");
+        client
+            .send_command(&mut redis::cmd("MULTI"), None)
+            .await
+            .expect("MULTI");
+        client
+            .send_command(redis::cmd("SET").arg("unrelated").arg("v"), None)
+            .await
+            .expect("queue SET");
+        let exec = client
+            .send_command(&mut redis::cmd("EXEC"), None)
+            .await
+            .expect("EXEC");
+        assert_ne!(
+            exec,
+            redis::Value::Nil,
+            "the next borrower's EXEC must not abort"
+        );
+    }
+
+    /// A client released with its circuit breaker open must be reused with the
+    /// breaker still open, so it keeps protecting callers, whether the borrow was
+    /// clean or sent MULTI or WATCH (the reset's DISCARD/UNWATCH skip the breaker).
+    /// A-B: discarded when release always sent DISCARD (clean) or when the breaker
+    /// refused the reset command (MULTI, WATCH).
+    #[tokio::test]
+    async fn release_keeps_a_client_whose_breaker_is_open() {
+        for sent in [None, Some("MULTI"), Some("WATCH")] {
+            let server = TestServer::start();
+            wait_for_server_ready(server.port).await;
+            let mut request = request_for(&[server.port]);
+            request.client_circuit_breaker = Some(crate::client::ClientCircuitBreakerConfig {
+                window_size_ms: 60_000,
+                failure_rate_threshold: 0.5,
+                min_errors: 1,
+                open_timeout_ms: 60_000,
+                count_timeouts: true,
+                consecutive_successes: 1,
+            });
+            let mut client = crate::client::Client::new(request, None)
+                .await
+                .expect("client connects");
+            let (pool_arc, client_id) = pool_with_borrowed(&client);
+            if let Some(command) = sent {
+                let mut cmd = redis::cmd(command);
+                if command == "WATCH" {
+                    cmd.arg("watched");
+                }
+                client.send_command(&mut cmd, None).await.expect(command);
+            }
+            client.trip_circuit_breaker_for_test();
+
+            super::release_client_async(pool_arc.clone(), client_id).await;
+            let mut pool = pool_arc.lock();
+            assert_eq!(pool.idle_count(), 1, "{sent:?}");
+            assert!(pool.drain_discarded_ids().is_empty(), "{sent:?}");
+            assert!(
+                !client.is_circuit_breaker_healthy(),
+                "{sent:?}: the re-idled client must keep its open breaker"
+            );
+        }
+    }
+
+    /// A blocking command still in flight when the client is released (the caller
+    /// gave up waiting) holds the connection, so release must discard the client
+    /// even though the borrow sent nothing else to reset. A-B: re-idled with the
+    /// BLPOP still blocking it.
+    #[tokio::test]
+    async fn release_discards_a_client_with_a_blocking_command_in_flight() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+        let client = crate::client::Client::new(request_for(&[server.port]), None)
+            .await
+            .expect("client connects");
+        let (pool_arc, client_id) = pool_with_borrowed(&client);
+
+        // What a binding does around a blocking dispatch.
+        let flag = super::get_blocking_flag(client_id).expect("pooled client has a flag");
+        flag.fetch_add(1, std::sync::atomic::Ordering::Release);
+        let mut blocked = client.clone();
+        let blpop = tokio::spawn(async move {
+            let _ = blocked
+                .send_command(redis::cmd("BLPOP").arg("empty").arg(0), None)
+                .await;
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        super::release_client_async(pool_arc.clone(), client_id).await;
+        {
+            let mut pool = pool_arc.lock();
+            assert_eq!(
+                pool.idle_count(),
+                0,
+                "a blocked client must not be re-idled"
+            );
+            assert_eq!(pool.drain_discarded_ids(), vec![client_id]);
+        }
+        blpop.abort();
+    }
+
+    /// A blocking command that the client timed out on (the server was paused) may
+    /// leave its waiter armed, so release must discard the client even though the
+    /// binding's blocking counter already dropped to zero. One that the server
+    /// answered (nil on its own timeout) leaves nothing behind. Covers a single
+    /// command, a pipeline and a transaction. A-B: each re-idled after the
+    /// client-side timeout when its call site didn't flag it.
+    #[tokio::test]
+    async fn release_discards_a_client_whose_blocking_command_timed_out() {
+        for sent in ["command", "pipeline", "transaction"] {
+            let server = TestServer::start();
+            wait_for_server_ready(server.port).await;
+            let mut client = crate::client::Client::new(request_for(&[server.port]), None)
+                .await
+                .expect("client connects");
+            let mut other = crate::client::Client::new(request_for(&[server.port]), None)
+                .await
+                .expect("second client connects");
+            let (pool_arc, client_id) = pool_with_borrowed(&client);
+            let mut blpop = redis::cmd("BLPOP");
+            blpop.arg("empty").arg(0.1);
+            let mut batch = redis::pipe();
+            batch.add_command(blpop.clone());
+            if sent == "transaction" {
+                batch.atomic();
+            }
+            let send = |client: &mut crate::client::Client| {
+                let (blpop, batch) = (blpop.clone(), batch.clone());
+                let mut client = client.clone();
+                async move {
+                    match sent {
+                        "command" => client.send_command(&mut blpop.clone(), None).await,
+                        "pipeline" => {
+                            client
+                                .send_pipeline(
+                                    &batch,
+                                    None,
+                                    true,
+                                    Some(1_000),
+                                    redis::PipelineRetryStrategy::default(),
+                                )
+                                .await
+                        }
+                        _ => {
+                            client
+                                .send_transaction(&batch, None, Some(1_000), true)
+                                .await
+                        }
+                    }
+                }
+            };
+
+            send(&mut client)
+                .await
+                .unwrap_or_else(|e| panic!("{sent}: the server answers BLPOP's own timeout: {e}"));
+            assert!(
+                !client.borrow_is_dirty_for_test(),
+                "{sent}: a nil BLPOP is clean"
+            );
+
+            other
+                .send_command(redis::cmd("CLIENT").arg("PAUSE").arg(3_000), None)
+                .await
+                .expect("CLIENT PAUSE");
+            let err = send(&mut client)
+                .await
+                .expect_err("the paused server never answers in time");
+            assert!(err.is_timeout(), "{sent}: client-side timeout: {err}");
+
+            super::release_client_async(pool_arc.clone(), client_id).await;
+            let mut pool = pool_arc.lock();
+            assert_eq!(
+                pool.idle_count(),
+                0,
+                "{sent}: a timed-out blocker must not be re-idled"
+            );
+            assert_eq!(pool.drain_discarded_ids(), vec![client_id], "{sent}");
+        }
+    }
+
+    /// A MULTI or WATCH the open circuit breaker refused never reached the server, so
+    /// it must not mark the borrow dirty. A-B: marked dirty when tracking ran before
+    /// the breaker check.
+    #[tokio::test]
+    async fn breaker_refused_multi_and_watch_are_not_tracked() {
+        let server = TestServer::start();
+        wait_for_server_ready(server.port).await;
+        let mut request = request_for(&[server.port]);
+        request.client_circuit_breaker = Some(crate::client::ClientCircuitBreakerConfig {
+            window_size_ms: 60_000,
+            failure_rate_threshold: 0.5,
+            min_errors: 1,
+            open_timeout_ms: 60_000,
+            count_timeouts: true,
+            consecutive_successes: 1,
+        });
+        let mut client = crate::client::Client::new(request, None)
+            .await
+            .expect("client connects");
+        client.trip_circuit_breaker_for_test();
+
+        for (command, arg) in [("MULTI", None), ("WATCH", Some("watched"))] {
+            let mut cmd = redis::cmd(command);
+            if let Some(arg) = arg {
+                cmd.arg(arg);
+            }
+            assert!(
+                client.send_command(&mut cmd, None).await.is_err(),
+                "{command}: the open breaker must refuse it"
+            );
+        }
+        assert!(
+            !client.borrow_is_dirty_for_test(),
+            "a refused command must not mark the borrow dirty"
+        );
+    }
+
+    /// A command refused for want of an in-flight slot never reached the server, so
+    /// it must not mark the client unresettable and release must reuse it. A-B:
+    /// discarded when tracking ran before the in-flight reserve.
+    #[tokio::test]
+    async fn release_reuses_a_client_after_an_inflight_refused_command() {
+        for args in [&["MONITOR"][..], &["RESET"], &["CLIENT", "REPLY", "OFF"]] {
+            let server = TestServer::start();
+            wait_for_server_ready(server.port).await;
+            let mut client = crate::client::Client::new(request_for(&[server.port]), None)
+                .await
+                .expect("client connects");
+            let (pool_arc, client_id) = pool_with_borrowed(&client);
+
+            let held: Vec<_> = std::iter::from_fn(|| client.reserve_inflight_request()).collect();
+            let mut cmd = redis::cmd(args[0]);
+            for arg in &args[1..] {
+                cmd.arg(*arg);
+            }
+            let err = client
+                .send_command(&mut cmd, None)
+                .await
+                .expect_err("no in-flight slot");
+            assert!(
+                err.to_string().contains("maximum inflight"),
+                "{args:?}: refused by the limit: {err}"
+            );
+            drop(held);
+
+            super::release_client_async(pool_arc.clone(), client_id).await;
+            let mut pool = pool_arc.lock();
+            assert_eq!(pool.idle_count(), 1, "{args:?}");
+            assert!(pool.drain_discarded_ids().is_empty(), "{args:?}");
+        }
+    }
+
+    /// A MULTI or WATCH that read-only mode rejects locally never reached the server,
+    /// so release must still reuse the client. A-B: discarded when the rejected
+    /// command was tracked as sent.
+    #[tokio::test]
+    async fn release_reuses_a_read_only_client_after_a_rejected_multi() {
+        for command in ["MULTI", "WATCH"] {
+            let server = TestServer::start();
+            wait_for_server_ready(server.port).await;
+            let mut request = request_for(&[server.port]);
+            request.read_only = true;
+            let mut client = crate::client::Client::new(request, None)
+                .await
+                .expect("read-only client connects");
+            let (pool_arc, client_id) = pool_with_borrowed(&client);
+
+            let mut cmd = redis::cmd(command);
+            if command == "WATCH" {
+                cmd.arg("watched");
+            }
+            let rejected = client.send_command(&mut cmd, None).await;
+            assert_eq!(
+                rejected.map_err(|e| e.kind()),
+                Err(redis::ErrorKind::ReadOnly),
+                "{command}"
+            );
+
+            super::release_client_async(pool_arc.clone(), client_id).await;
+            let mut pool = pool_arc.lock();
+            assert_eq!(pool.idle_count(), 1, "{command}: must be re-idled");
+            assert!(pool.drain_discarded_ids().is_empty(), "{command}");
+        }
+    }
+
+    /// Read-only mode rejects a pipeline holding MULTI or WATCH before it reaches the
+    /// server, so release must re-idle the client. A-B: discarded when the rejected
+    /// batch was still tracked as sent.
+    #[tokio::test]
+    async fn release_reuses_a_read_only_client_after_a_rejected_multi_pipeline() {
+        for command in ["MULTI", "WATCH"] {
+            let server = TestServer::start();
+            wait_for_server_ready(server.port).await;
+            let mut request = request_for(&[server.port]);
+            request.read_only = true;
+            let mut client = crate::client::Client::new(request, None)
+                .await
+                .expect("read-only client connects");
+            let (pool_arc, client_id) = pool_with_borrowed(&client);
+
+            let mut pipe = redis::pipe();
+            pipe.cmd(command);
+            if command == "WATCH" {
+                pipe.arg("watched");
+            }
+            client
+                .send_pipeline(
+                    &pipe,
+                    None,
+                    false,
+                    None,
+                    redis::PipelineRetryStrategy::default(),
+                )
+                .await
+                .expect_err("read-only mode rejects the batch");
+
+            super::release_client_async(pool_arc.clone(), client_id).await;
+            let mut pool = pool_arc.lock();
+            assert_eq!(pool.idle_count(), 1, "{command}: must be re-idled");
+            assert!(pool.drain_discarded_ids().is_empty(), "{command}");
         }
     }
 
@@ -4833,7 +5300,7 @@ mod client_pool_tests {
             .unwrap();
 
         // Bind then drop: nothing listens on this port, so the lazy client's
-        // first command (the DISCARD/SELECT reset) fails with a connect error.
+        // first command (the reset's DISCARD) fails with a connect error.
         let dead_port = TcpListener::bind("127.0.0.1:0")
             .unwrap()
             .local_addr()
@@ -4845,6 +5312,8 @@ mod client_pool_tests {
                 ClientPool::new(test_pool_config(Duration::from_millis(500))).unwrap(),
             ));
             let client = lazy_client_to(dead_port).await;
+            // Dirty, so the reset sends DISCARD to the dead port.
+            client.set_multi_sent_for_test(true);
             let client_id = {
                 let mut pool = pool_arc.lock();
                 let id = pool.add_client(client);
@@ -4891,6 +5360,8 @@ mod client_pool_tests {
                 ClientPool::new(test_pool_config(Duration::from_secs(30))).unwrap(),
             ));
             let client = lazy_client_to(port).await;
+            // Dirty, so the reset sends DISCARD and waits on the silent listener.
+            client.set_multi_sent_for_test(true);
             let client_id = {
                 let mut pool = pool_arc.lock();
                 let id = pool.add_client(client);
@@ -4923,5 +5394,58 @@ mod client_pool_tests {
             assert!(get_blocking_flag(client_id).is_none());
         });
         drop(blackhole);
+    }
+}
+
+/// A forked child inherits the registries as the parent left them. A shard
+/// lock held by one of the parent's other threads at fork time is never
+/// released in the child, so the child must start with fresh registries.
+#[cfg(all(test, unix))]
+mod fork_tests {
+    use super::*;
+    use crate::fork_slot::assert_in_forked_child;
+    use serial_test::serial;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    fn test_pool() -> ClientPool {
+        ClientPool::new(PoolConfig {
+            max_size: 2,
+            min_idle: 0,
+            idle_timeout: Duration::from_secs(300),
+            request_timeout: Duration::from_secs(5),
+            test_on_borrow: false,
+            connection_request: vec![],
+            is_async: false,
+            configured_database_id: 0,
+            abandon_timeout: Duration::ZERO,
+        })
+        .unwrap()
+    }
+
+    /// Hold the registry shard the next pool id lands in, across the fork.
+    fn hold_next_pool_shard() -> (mpsc::Sender<()>, std::thread::JoinHandle<()>) {
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let (held_tx, held_rx) = mpsc::channel::<()>();
+        let next_id = NEXT_POOL_ID.load(Ordering::Relaxed);
+        let holder = std::thread::spawn(move || {
+            let _shard = get_pool_registry().entry(next_id);
+            held_tx.send(()).unwrap();
+            let _ = release_rx.recv();
+        });
+        held_rx.recv().unwrap();
+        (release_tx, holder)
+    }
+
+    #[test]
+    #[serial]
+    fn child_registers_a_pool_while_the_parent_holds_a_registry_lock() {
+        let (release, holder) = hold_next_pool_shard();
+        assert_in_forked_child(|| {
+            let id = register_pool(test_pool());
+            get_pool(id).is_some()
+        });
+        release.send(()).unwrap();
+        holder.join().unwrap();
     }
 }

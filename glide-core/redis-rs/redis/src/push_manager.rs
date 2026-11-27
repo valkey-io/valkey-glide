@@ -60,7 +60,7 @@ impl PushManager {
             }
 
             if let Some(sync) = &self.pubsub_synchronizer {
-                Self::handle_pubsub_push(sync, kind, data, self.address.clone());
+                Self::handle_pubsub_push(sync, kind, data, self.address.as_deref());
             }
         }
     }
@@ -69,7 +69,7 @@ impl PushManager {
         sync: &Arc<dyn PubSubSynchronizer>,
         kind: &PushKind,
         data: &[Value],
-        address: Option<String>,
+        address: Option<&str>,
     ) {
         // We need an address to track subscriptions properly
         let Some(address) = address else {
@@ -92,16 +92,26 @@ impl PushManager {
 
         // Extract channel/pattern from push data
         let channel_or_pattern = match data.first() {
-            Some(Value::BulkString(bytes)) => bytes.to_vec(),
+            Some(Value::BulkString(bytes)) => bytes,
             _ => return,
         };
 
-        let channels = HashSet::from([channel_or_pattern]);
+        let is_message = matches!(
+            kind,
+            PushKind::Message | PushKind::PMessage | PushKind::SMessage
+        );
+        if is_message
+            && sync.is_current_subscription(subscription_type, channel_or_pattern, address)
+        {
+            return;
+        }
+
+        let channels = HashSet::from([channel_or_pattern.to_vec()]);
 
         if is_subscribe {
-            sync.add_current_subscriptions(channels, subscription_type, address);
+            sync.add_current_subscriptions(channels, subscription_type, address.to_string());
         } else {
-            sync.remove_current_subscriptions(channels, subscription_type, address);
+            sync.remove_current_subscriptions(channels, subscription_type, address.to_string());
         }
     }
 
@@ -305,5 +315,114 @@ mod tests {
 
         assert_eq!(count1 + count2 + count3 + count4, 1000);
         assert_eq!(received_sum, expected_sum);
+    }
+
+    /// Records `add_current_subscriptions` calls; reports Exact "ch-known" and Pattern
+    /// "pat-known.*" as already current.
+    #[derive(Default)]
+    struct RecordingSync {
+        added: std::sync::Mutex<Vec<(PubSubSubscriptionKind, Vec<u8>)>>,
+    }
+
+    #[async_trait::async_trait]
+    impl PubSubSynchronizer for RecordingSync {
+        fn add_desired_subscriptions(&self, _: HashSet<Vec<u8>>, _: PubSubSubscriptionKind) {}
+        fn remove_desired_subscriptions(
+            &self,
+            _: Option<HashSet<Vec<u8>>>,
+            _: PubSubSubscriptionKind,
+        ) {
+        }
+        fn add_current_subscriptions(
+            &self,
+            channels: HashSet<Vec<u8>>,
+            kind: PubSubSubscriptionKind,
+            _: String,
+        ) {
+            let mut added = self.added.lock().unwrap();
+            added.extend(channels.into_iter().map(|c| (kind, c)));
+        }
+        fn is_current_subscription(
+            &self,
+            kind: PubSubSubscriptionKind,
+            channel: &[u8],
+            address: &str,
+        ) -> bool {
+            let known = match kind {
+                PubSubSubscriptionKind::Exact => b"ch-known".as_slice(),
+                PubSubSubscriptionKind::Pattern => b"pat-known.*".as_slice(),
+                PubSubSubscriptionKind::Sharded => return false,
+            };
+            channel == known && address == "node-a:6379"
+        }
+        fn remove_current_subscriptions(
+            &self,
+            _: HashSet<Vec<u8>>,
+            _: PubSubSubscriptionKind,
+            _: String,
+        ) {
+        }
+        fn get_subscription_state(
+            &self,
+        ) -> (
+            std::collections::HashMap<PubSubSubscriptionKind, HashSet<Vec<u8>>>,
+            std::collections::HashMap<PubSubSubscriptionKind, HashSet<Vec<u8>>>,
+        ) {
+            Default::default()
+        }
+        fn trigger_reconciliation(&self) {}
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+
+    #[test]
+    fn test_message_push_for_current_channel_skips_synchronizer() {
+        let sync = Arc::new(RecordingSync::default());
+        let push_manager = PushManager::new(
+            None,
+            Some(sync.clone() as Arc<dyn PubSubSynchronizer>),
+            Some("node-a:6379".to_owned()),
+        );
+        let push = |kind: PushKind, channel: &str| {
+            push_manager.try_send_raw(&Value::Push {
+                kind,
+                data: vec![
+                    Value::BulkString(channel.as_bytes().to_vec().into()),
+                    Value::BulkString(b"payload".to_vec().into()),
+                ],
+            });
+        };
+
+        // A PMessage push is [pattern, channel, payload]; the pattern is what's tracked
+        let pmessage = |pattern: &str| {
+            push_manager.try_send_raw(&Value::Push {
+                kind: PushKind::PMessage,
+                data: vec![
+                    Value::BulkString(pattern.as_bytes().to_vec().into()),
+                    Value::BulkString(b"pat-known.1".to_vec().into()),
+                    Value::BulkString(b"payload".to_vec().into()),
+                ],
+            });
+        };
+
+        push(PushKind::Message, "ch-known");
+        push(PushKind::SMessage, "ch-known");
+        pmessage("pat-known.*");
+        pmessage("pat-new.*");
+        push(PushKind::Message, "ch-new");
+        push(PushKind::Subscribe, "ch-known");
+
+        let added = sync.added.lock().unwrap();
+        assert_eq!(
+            *added,
+            vec![
+                // Same bytes, but current only as Exact, so the SMessage still records
+                (PubSubSubscriptionKind::Sharded, b"ch-known".to_vec()),
+                (PubSubSubscriptionKind::Pattern, b"pat-new.*".to_vec()),
+                (PubSubSubscriptionKind::Exact, b"ch-new".to_vec()),
+                (PubSubSubscriptionKind::Exact, b"ch-known".to_vec()),
+            ]
+        );
     }
 }

@@ -21,6 +21,7 @@ from tests.utils.utils import (
 
 
 @pytest.mark.anyio
+@pytest.mark.requires_tcp
 class TestTls:
     """
     Integration tests for TLS with custom root certificates.

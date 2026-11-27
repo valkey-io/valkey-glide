@@ -336,8 +336,9 @@ func (client *ClusterClient) InfoWithOptions(
 // Unlike [ClusterClient.InfoWithOptions], a node that fails does not fail the call: its entry holds the error for that
 // node instead of its reply. A node that has not answered by the request timeout minus a margin of a tenth of it, kept
 // between 2 ms and 100 ms (a quarter of it under 8 ms), gets a [TimeoutError], and the call itself fails with a
-// [TimeoutError] if it has not finished by the request timeout plus the same margin. The call still fails when no target
-// node can be reached.
+// [TimeoutError] if it has not finished by the request timeout plus the same margin. A node the client lost its
+// connection to or cannot connect to gets a [DisconnectError], the error a request gets when it loses its connection to
+// a node. The call still fails when no target node can be reached.
 //
 // See [valkey.io] for details.
 //
@@ -778,6 +779,11 @@ func (client *ClusterClient) clusterScan(
 // returning all keys the database has from when the scan started until the scan ends.
 // The same key can be returned in multiple scan iterations.
 //
+// Each iteration is bounded by the client's request timeout. If iterations keep timing out,
+// use [ClusterClient.ScanWithOptions] with a smaller count, or a longer request timeout.
+// Each call releases its cursor, so after an error, including a timeout, the scan must
+// start again from [models.NewClusterScanCursor].
+//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -818,6 +824,11 @@ func (client *ClusterClient) Scan(
 // Like the SCAN command, the method can be used to iterate over the keys in the database,
 // returning all keys the database has from when the scan started until the scan ends.
 // The same key can be returned in multiple scan iterations.
+//
+// Each iteration is bounded by the client's request timeout. If iterations keep timing out,
+// use a smaller count or a longer request timeout.
+// Each call releases its cursor, so after an error, including a timeout, the scan must
+// start again from [models.NewClusterScanCursor].
 //
 // See [valkey.io] for details.
 //

@@ -8,8 +8,11 @@ Parameterized over cluster_mode (True/False) to ensure both standalone and
 cluster deployments behave identically.
 """
 
+import os
+import signal
 import threading
 import time
+import traceback
 import uuid
 
 import pytest
@@ -24,6 +27,7 @@ from glide_shared.config import (
     ServerCredentials,
     ServiceType,
 )
+from glide_shared.exceptions import ClosingError
 from glide_shared.routes import AllNodes
 from glide_sync.client_pool import ClientPool, PoolConfig
 from glide_sync.glide_client import GlideClient, GlideClusterClient
@@ -566,6 +570,7 @@ class TestPoolRdmaRejection:
 class TestPoolErrorHandling:
     """Negative tests — pool creation surfaces connectivity errors."""
 
+    @pytest.mark.requires_tcp
     def test_pool_bad_address_create_fails(self, request):
         """Pool with unreachable address: create should raise immediately."""
         from glide_shared.config import GlideClientConfiguration, NodeAddress
@@ -576,3 +581,145 @@ class TestPoolErrorHandling:
         )
         with pytest.raises(Exception):
             ClientPool.create(config, PoolConfig(max_size=1, min_idle=1))
+
+
+# ─── Fork safety ──────────────────────────────────────────────────────────────
+
+
+def _run_in_forked_child(child, timeout_s: int = 30) -> None:
+    """Run `child` in a forked child and fail unless it returns normally.
+
+    The alarm turns a hang in the child into a failure.
+    """
+    pid = os.fork()
+    if pid == 0:
+        code = 1
+        try:
+            # Drop pytest-timeout's inherited handler: it can't run while the
+            # child is stuck in native code, so the alarm would not stop it.
+            signal.signal(signal.SIGALRM, signal.SIG_DFL)
+            signal.alarm(timeout_s)
+            child()
+            code = 0
+        except BaseException:
+            traceback.print_exc()
+        finally:
+            os._exit(code)
+    _, status = os.waitpid(pid, 0)
+    assert (
+        os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
+    ), f"forked child failed (wait status {status})"
+
+
+@pytest.mark.parametrize("cluster_mode", [True, False])
+class TestPoolFork:
+    def test_new_pool_in_child_after_parent_used_pool(self, cluster_mode):
+        config = _get_pool_client_config(cluster_mode)
+        pool_config = PoolConfig(max_size=2, min_idle=1)
+        pool = ClientPool.create(config, pool_config)
+        try:
+            with pool.borrow(timeout=5) as client:
+                client.get("fork-pool")
+
+            def child():
+                child_pool = ClientPool.create(config, pool_config)
+                try:
+                    for _ in range(5):
+                        with child_pool.borrow(timeout=5) as client:
+                            client.get("fork-pool")
+                finally:
+                    child_pool.close()
+
+            _run_in_forked_child(child)
+        finally:
+            pool.close()
+
+    def test_inherited_pool_raises_in_child(self, cluster_mode):
+        pool = ClientPool.create(
+            _get_pool_client_config(cluster_mode), PoolConfig(max_size=2, min_idle=1)
+        )
+        try:
+            with pool.borrow(timeout=5) as client:
+                client.get("fork-pool")
+
+            def child():
+                with pytest.raises(ClosingError, match="before fork"):
+                    pool.acquire(timeout=1)
+                with pytest.raises(ClosingError, match="before fork"):
+                    pool.release(1)
+
+            _run_in_forked_child(child)
+        finally:
+            pool.close()
+
+    def test_scope_in_child_after_parent_used_scope(self, cluster_mode):
+        config = _get_pool_client_config(cluster_mode)
+        client = (GlideClusterClient if cluster_mode else GlideClient).create(config)
+        try:
+            with client.scoped_connection(timeout=5, routing_key="fork-scope") as scope:
+                scope.get("fork-scope")
+
+            def child():
+                child_client = (
+                    GlideClusterClient if cluster_mode else GlideClient
+                ).create(config)
+                try:
+                    with child_client.scoped_connection(
+                        timeout=5, routing_key="fork-scope"
+                    ) as scope:
+                        scope.get("fork-scope")
+                finally:
+                    child_client.close()
+
+            _run_in_forked_child(child)
+        finally:
+            client.close()
+
+    def test_borrow_exit_in_child_does_not_mask_the_error(self, cluster_mode):
+        pool = ClientPool.create(
+            _get_pool_client_config(cluster_mode), PoolConfig(max_size=2, min_idle=1)
+        )
+        try:
+            borrow = pool.borrow(timeout=5)
+            borrow.__enter__()
+
+            def child():
+                suppressed = borrow.__exit__(ValueError, ValueError("user error"), None)
+                assert suppressed is False
+
+            _run_in_forked_child(child)
+            borrow.__exit__(None, None, None)
+        finally:
+            pool.close()
+
+    def test_scope_on_inherited_client_in_child(self, cluster_mode):
+        # Sync clients rebuild their native client in the child.
+        config = _get_pool_client_config(cluster_mode)
+        client = (GlideClusterClient if cluster_mode else GlideClient).create(config)
+        try:
+            with client.scoped_connection(timeout=5, routing_key="fork-scope") as scope:
+                scope.get("fork-scope")
+
+            def child():
+                with client.scoped_connection(
+                    timeout=5, routing_key="fork-scope"
+                ) as scope:
+                    scope.get("fork-scope")
+
+            _run_in_forked_child(child)
+        finally:
+            client.close()
+
+    def test_inherited_open_scope_fails_in_child(self, cluster_mode):
+        config = _get_pool_client_config(cluster_mode)
+        client = (GlideClusterClient if cluster_mode else GlideClient).create(config)
+        try:
+            with client.scoped_connection(timeout=5, routing_key="fork-scope") as scope:
+
+                def child():
+                    with pytest.raises(RuntimeError, match="invalid scope"):
+                        scope.get("fork-scope")
+
+                _run_in_forked_child(child, timeout_s=10)
+        finally:
+            client.close()

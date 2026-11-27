@@ -61,6 +61,7 @@ pub fn process_command_args_for_compression(
 pub fn decompress_batch_response(
     value: redis::Value,
     _compression_manager: &CompressionManager,
+    _raise_on_error: bool,
 ) -> Result<redis::Value, String> {
     Ok(value)
 }
@@ -92,6 +93,7 @@ impl From<SizeLimitExceeded> for redis::RedisError {
 pub fn try_decompress_batch_response(
     value: redis::Value,
     _manager: Option<&CompressionManager>,
+    _raise_on_error: bool,
 ) -> Result<redis::Value, SizeLimitExceeded> {
     Ok(value)
 }
