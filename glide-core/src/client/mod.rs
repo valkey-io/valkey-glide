@@ -1552,8 +1552,14 @@ impl Client {
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
-            // TODO #7666: Reject empty commands here, replacing the check in `get_redis_command`
-            // (`socket_listener.rs`).
+            // The server sends no reply to an empty command, which would shift every later
+            // reply on the connection to the wrong request.
+            if cmd.args_iter().next().is_none() {
+                return Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Received command without a command name or arguments",
+                )));
+            }
             // `BLOB.*` transfers lend a buffer, so only the rdma methods send them.
             crate::rdma::refuse_direct_command(cmd)?;
             // Refresh IAM auth before the command (see `reconcile_iam_before_dispatch`).
