@@ -255,10 +255,12 @@ pub trait CompressionBackend: Send + Sync + fmt::Debug {
     fn validate_compression_level(&self, level: Option<i32>) -> CompressionResult<()>;
 }
 
+/// A compression backend.
+#[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CompressionBackendType {
-    Zstd,
-    Lz4,
+    Zstd = 0,
+    Lz4 = 1,
 }
 
 impl CompressionBackendType {
@@ -1093,19 +1095,24 @@ pub fn decompress_mget_response(
 /// Decompress a batch (pipeline/transaction) response.
 ///
 /// This function processes the response from a batch operation and decompresses
-/// individual response values using magic header detection. It recursively handles
-/// nested arrays (like MGET responses within a batch).
+/// individual response values using magic header detection. Each element of the
+/// batch response is one command's reply; nested arrays within a reply (like an
+/// MGET response within a batch) are decompressed element by element.
 ///
 /// # Arguments
 /// * `response` - The batch response value (typically an array of responses)
 /// * `manager` - The compression manager to use for decompression
+/// * `raise_on_error` - If `false`, an oversized command reply becomes an in-place
+///   `Value::ServerError`; if `true`, the batch fails.
 ///
 /// # Returns
 /// * `Ok(Value)` - The processed response with decompressed values
-/// * `Err(SizeLimitExceeded)` - If decompressing an element would exceed the size limit
+/// * `Err(SizeLimitExceeded)` - If `raise_on_error` is `true` and decompressing an element
+///   would exceed the size limit, or if a non-array response would exceed it
 pub fn decompress_batch_response(
     response: redis::Value,
     manager: &CompressionManager,
+    raise_on_error: bool,
 ) -> Result<redis::Value, SizeLimitExceeded> {
     use redis::Value;
 
@@ -1113,21 +1120,59 @@ pub fn decompress_batch_response(
         return Ok(response);
     }
 
-    match response {
-        Value::Array(responses) => {
-            let mut processed_responses = Vec::with_capacity(responses.len());
-            for resp in responses {
-                // Recursively process nested arrays (e.g., MGET responses within a batch)
-                // We take ownership of resp to avoid cloning
-                let processed = match resp {
-                    Value::Array(_) => decompress_batch_response(resp, manager)?,
-                    other => decompress_single_value_response(other, manager)?,
-                };
-                processed_responses.push(processed);
-            }
-            Ok(Value::Array(processed_responses))
+    let Value::Array(replies) = response else {
+        // A non-array response has no per-command position to hold the error.
+        return decompress_single_value_response(response, manager);
+    };
+    let mut processed = Vec::with_capacity(replies.len());
+    for reply in replies {
+        processed.push(decompress_batch_reply_or_error(
+            reply,
+            manager,
+            raise_on_error,
+        )?);
+    }
+    Ok(Value::Array(processed))
+}
+
+fn decompress_batch_reply_or_error(
+    reply: redis::Value,
+    manager: &CompressionManager,
+    raise_on_error: bool,
+) -> Result<redis::Value, SizeLimitExceeded> {
+    match decompress_batch_reply(reply, manager) {
+        Err(limit) if !raise_on_error => {
+            let error = redis::make_extension_error(
+                "DecompressionError".to_string(),
+                Some(limit.to_string()),
+            );
+            // `Value` has no client-origin error variant, so keep this local failure in the
+            // command's result slot as a `ServerError`. Converting it back to `RedisError` makes
+            // `is_server_reply()` return true, but this path only passes its message to bindings;
+            // no caller uses that classification for the in-place error. See #7883.
+            Ok(redis::Value::ServerError(error.into()))
         }
-        // For non-array responses, try to decompress directly
+        result => result,
+    }
+}
+
+/// Decompresses one command's reply within a batch response, recursing into nested arrays.
+/// The reply fails as a whole if any of its elements would exceed the size limit, as the
+/// same command does outside a batch.
+fn decompress_batch_reply(
+    reply: redis::Value,
+    manager: &CompressionManager,
+) -> Result<redis::Value, SizeLimitExceeded> {
+    use redis::Value;
+
+    match reply {
+        Value::Array(values) => {
+            let mut processed = Vec::with_capacity(values.len());
+            for value in values {
+                processed.push(decompress_batch_reply(value, manager)?);
+            }
+            Ok(Value::Array(processed))
+        }
         other => decompress_single_value_response(other, manager),
     }
 }
@@ -1140,16 +1185,18 @@ pub fn decompress_batch_response(
 /// # Arguments
 /// * `value` - The batch response value to decompress
 /// * `manager` - Optional compression manager
+/// * `raise_on_error` - The batch's `raise_on_error` option; see `decompress_batch_response`
 ///
 /// # Returns
 /// * `Ok(Value)` - The decompressed value, or the original value if no manager
-/// * `Err(SizeLimitExceeded)` - If decompressing an element would exceed the size limit
+/// * `Err(SizeLimitExceeded)` - See `decompress_batch_response`
 pub fn try_decompress_batch_response(
     value: redis::Value,
     manager: Option<&CompressionManager>,
+    raise_on_error: bool,
 ) -> Result<redis::Value, SizeLimitExceeded> {
     match manager {
-        Some(mgr) => decompress_batch_response(value, mgr),
+        Some(mgr) => decompress_batch_response(value, mgr, raise_on_error),
         None => Ok(value),
     }
 }

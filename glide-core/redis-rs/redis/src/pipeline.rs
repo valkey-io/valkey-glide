@@ -17,6 +17,10 @@ pub struct Pipeline {
     ignored_commands: HashSet<usize>,
     /// The OpenTelemtry span command, to measure the lifetime of the pipeline.
     otel_command_span: Option<GlideSpan>,
+    /// Whether the packed pipeline starts with `ASKING`, before `MULTI` in atomic mode.
+    /// Its reply comes first; the connection discards it, so `offset` and `count` do not
+    /// count it.
+    asking: bool,
 }
 
 /// A pipeline allows you to send multiple commands in one go to the
@@ -54,6 +58,7 @@ impl Pipeline {
             transaction_mode: false,
             ignored_commands: HashSet::new(),
             otel_command_span: None,
+            asking: false,
         }
     }
 
@@ -94,12 +99,36 @@ impl Pipeline {
 
     /// Returns the encoded pipeline commands.
     pub fn get_packed_pipeline(&self) -> Vec<u8> {
-        encode_pipeline(&self.commands, self.transaction_mode)
+        let mut rv = vec![];
+        self.write_packed_pipeline(&mut rv);
+        rv
     }
 
-    #[cfg(feature = "aio")]
     pub(crate) fn write_packed_pipeline(&self, out: &mut Vec<u8>) {
+        if self.asking {
+            cmd("ASKING").write_packed_command(out);
+        }
         write_pipeline(out, &self.commands, self.transaction_mode)
+    }
+
+    /// Returns a copy of this pipeline that sends `ASKING` first, in the same write as the
+    /// commands (before `MULTI` in atomic mode), so that no other request on a shared
+    /// connection can come between them. The reply to `ASKING` comes first, and the
+    /// connection discards it (see `Pipeline::is_asking`), so callers read from the same
+    /// `offset` as without `ASKING`.
+    #[cfg(feature = "cluster-async")]
+    pub(crate) fn with_asking(&self) -> Pipeline {
+        let mut pipeline = self.clone();
+        pipeline.asking = true;
+        pipeline
+    }
+
+    /// Whether the packed pipeline starts with `ASKING`. A connection that writes it must
+    /// discard the first reply, `ASKING`'s, before it reads the pipeline's replies, also when
+    /// that reply is an error.
+    #[cfg(feature = "aio")]
+    pub(crate) fn is_asking(&self) -> bool {
+        self.asking
     }
 
     /// Returns the encoded pipeline as segments for vectored writes.
@@ -108,6 +137,9 @@ impl Pipeline {
     pub fn get_packed_pipeline_segments(&self) -> crate::cmd::SegmentedBytes {
         let mut out = crate::cmd::SegmentedBytes::default();
         let mut scratch = Vec::new();
+        if self.asking {
+            cmd("ASKING").write_packed_segments(&mut out, &mut scratch);
+        }
         if self.transaction_mode {
             cmd("MULTI").write_packed_segments(&mut out, &mut scratch);
             for command in &self.commands {

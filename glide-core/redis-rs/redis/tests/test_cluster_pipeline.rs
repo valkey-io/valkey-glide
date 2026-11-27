@@ -778,7 +778,7 @@ mod test_cluster_pipeline {
     /// This test is executed twice—once with `retry_connection_error = false` and once with `retry_connection_error = true`.
     ///
     /// **Execution flow:**
-    /// 1. Spawn `kill_conn_future` to sleep 500 ms then drop all connections on `connection`, simulating a `RecvError`.
+    /// 1. Spawn `kill_conn_future` to sleep 500 ms then drop all connections on `connection`.
     /// 2. Build and dispatch a Redis pipeline:
     ///    ```rust
     ///    pipeline.incr(&key, 1)
@@ -791,10 +791,10 @@ mod test_cluster_pipeline {
     ///
     /// - **Without retry** (`retry_connection_error = false`):
     ///   - The pipeline is **not** retried.
-    ///   - `INCR` and `BLPOP` both hit a connection error and return `ServerError(RecvError)`.
+    ///   - `INCR` and `BLPOP` both hit a connection error and return `ServerError(FatalReceiveError)`.
     ///   - `SET` on `key3` succeeds (`Value::Okay`) because it targets a different node and completes before the kill.
     ///   - **Expected:**  
-    ///     `[ServerError(RecvError), ServerError(RecvError), Value::Okay]`
+    ///     `[ServerError(FatalReceiveError), ServerError(FatalReceiveError), Value::Okay]`
     ///
     /// - **With retry** (`retry_connection_error = true`):
     ///   - After the connection drops, the entire pipeline is retried on a fresh connection.
@@ -874,7 +874,7 @@ mod test_cluster_pipeline {
                                 // As it is not blocked by the BLPOP, the connection will be killed after the SET command succeeded
                                 matches!(r, Value::Okay)
                             } else {
-                                matches!(r, Value::ServerError(ref err) if err.details().unwrap().contains("RecvError"))
+                                matches!(r, Value::ServerError(ref err) if err.err_code() == "FatalReceiveError")
                             }
                         }),
                         "Pipeline result did not match expected output.\n\

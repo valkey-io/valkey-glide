@@ -775,7 +775,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<GlideClusterClient> {
         return await super.createClientInternal(
             options,
-            (options?: GlideClusterClientConfiguration) =>
+            (options: GlideClusterClientConfiguration) =>
                 new GlideClusterClient(options),
         );
     }
@@ -825,8 +825,8 @@ export class GlideClusterClient extends BaseClient {
     } {
         return super.serializeConnectionRequest(
             options,
-            (opts?: BaseClientConfiguration) =>
-                new GlideClusterClient(opts as GlideClusterClientConfiguration),
+            (opts: GlideClusterClientConfiguration) =>
+                new GlideClusterClient(opts),
         );
     }
 
@@ -914,6 +914,10 @@ export class GlideClusterClient extends BaseClient {
      * The same key may be returned in multiple scan iterations.
      * The API does not accept `route` as it go through all slots in the cluster.
      *
+     * Each iteration is bounded by the client's `requestTimeout`. After a timeout, retry with the
+     * same cursor to resume. If an iteration keeps timing out, use a smaller `count` or a longer
+     * `requestTimeout`.
+     *
      * @see {@link https://valkey.io/commands/scan/ | valkey.io} for more details.
      *
      * @param cursor - The cursor object that wraps the scan state.
@@ -963,6 +967,19 @@ export class GlideClusterClient extends BaseClient {
         cursor: ClusterScanCursor,
         options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
+        if (typeof cursor?.getCursor !== "function") {
+            const cursorType =
+                cursor === null
+                    ? "null"
+                    : Array.isArray(cursor)
+                      ? "array"
+                      : typeof cursor;
+            throw new RequestError(
+                `Invalid cursor parameter: expected instance of ClusterScanCursor, received ${cursorType}. ` +
+                    `Use 'new ClusterScanCursor()' to start a cluster scan.`,
+            );
+        }
+
         return this.createClusterScanPromise(cursor, options);
     }
 

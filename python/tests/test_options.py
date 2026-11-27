@@ -24,9 +24,13 @@ from glide_shared.commands.server_modules.ft_options.ft_aggregate_options import
     FtAggregateSortBy,
     FtAggregateSortProperty,
     FtWithCursor,
+    LoadField,
 )
 from glide_shared.commands.server_modules.ft_options.ft_create_options import (
     FtCreateOptions,
+    NumericField,
+    TagField,
+    TextField,
 )
 from glide_shared.commands.server_modules.ft_options.ft_hybrid_options import (
     FtHybridCombine,
@@ -49,7 +53,6 @@ from glide_shared.commands.stream import (
 )
 from glide_shared.constants import TEncodable
 
-from tests.conftest import classify_inkeys_probe_error
 from tests.utils.ft_test_helpers import json_groupby_column
 from tests.utils.utils import is_single_response
 
@@ -225,9 +228,6 @@ class TestHSetExArgs:
 
 
 class TestFtAggregateReducerUnitTests:
-    """Unit tests for the valkey-search 1.3 FtAggregateReducer factory methods
-    (TOLIST, FIRST_VALUE, RANDOM_SAMPLE). These construct arguments only; no server
-    is required."""
 
     def test_to_list(self):
         reducer = FtAggregateReducer.to_list("@color")
@@ -310,16 +310,10 @@ class TestFtAggregateReducerUnitTests:
         ]
 
     def test_random_sample_zero_size(self):
-        # 0 is a valid (if degenerate) sample size; the client does not validate
-        # the bound client-side, so this must construct without error.
         reducer = FtAggregateReducer.random_sample("@score", 0)
         assert reducer.to_args() == ["REDUCE", "RANDOM_SAMPLE", "2", "@score", "0"]
 
     def test_name_empty_string_is_not_omitted(self):
-        # L-2: `if self.name:` would treat name="" the same as name=None and
-        # silently drop the AS clause. An explicit empty string is a caller
-        # choice (however unusual) and must still emit `AS ""`, distinct from
-        # not passing a name at all.
         reducer = FtAggregateReducer("COUNT", [], name="")
         assert reducer.to_args() == ["REDUCE", "COUNT", "0", "AS", ""]
 
@@ -329,7 +323,6 @@ class TestFtAggregateReducerUnitTests:
 
 
 class TestFtSearchOptionsInKeys:
-    """Unit tests for the valkey-search 1.3 INKEYS option on FtSearchOptions."""
 
     def test_in_keys_absent_by_default(self):
         assert "INKEYS" not in FtSearchOptions().to_args()
@@ -339,8 +332,6 @@ class TestFtSearchOptionsInKeys:
         assert args == ["INKEYS", "3", "key1", "key2", "key3"]
 
     def test_in_keys_empty_list(self):
-        # An explicit empty list is distinct from omitting in_keys: it still
-        # emits INKEYS 0, which the server treats as excluding every result.
         args = FtSearchOptions(in_keys=[]).to_args()
         assert args == ["INKEYS", "0"]
 
@@ -350,10 +341,6 @@ class TestFtSearchOptionsInKeys:
 
 
 class TestFtSearchOptionsScoring:
-    """Unit tests for WITHSCORES/SCORER on FtSearchOptions, and the
-    count=True fix (COUNT is not a real FT.SEARCH keyword --
-    confirmed live the server rejects it outright -- so it now maps to the
-    LIMIT 0 0 count-only form instead)."""
 
     def test_with_scores_absent_by_default(self):
         assert "WITHSCORES" not in FtSearchOptions().to_args()
@@ -371,12 +358,6 @@ class TestFtSearchOptionsScoring:
         assert args == ["WITHSCORES", "SCORER", "BM25STD"]
 
     def test_count_maps_to_limit_0_0_not_count_keyword(self):
-        # COUNT used to be emitted literally, but
-        # src/commands/ft_search_parser.cc has no COUNT keyword at all --
-        # confirmed live, the server rejects a bare COUNT token with
-        # "Unexpected argument `COUNT`". LIMIT 0 0 is the server's actual
-        # documented count-only form (confirmed live: returns just the
-        # total count, zero result rows).
         args = FtSearchOptions(count=True).to_args()
         assert "COUNT" not in args
         assert args == ["LIMIT", "0", "0"]
@@ -391,10 +372,6 @@ class TestFtSearchOptionsScoring:
 
 
 class TestFtAggregateOptionsScoring:
-    """Unit tests for ADDSCORES/SCORER on FtAggregateOptions. Both
-    exist on FT.AGGREGATE's parser table (src/commands/ft_aggregate_parser.cc
-    kAddScoresParam/kScorerParam) even though ft.aggregate.json's documented
-    argument spec omits them -- confirmed by reading the parser directly."""
 
     def test_add_scores_absent_by_default(self):
         assert "ADDSCORES" not in FtAggregateOptions().to_args()
@@ -415,10 +392,6 @@ class TestFtAggregateOptionsScoring:
 
 
 class TestFtAggregateOptionsWithCursor:
-    """Unit tests for the FT.AGGREGATE typed cursor API:
-    FtAggregateOptions(with_cursor=FtWithCursor(...)). The typed cursor
-    option itself (FtWithCursor) is tested directly in TestFtWithCursor;
-    these tests cover its placement in FtAggregateOptions.to_args()."""
 
     def test_with_cursor_absent_by_default(self):
         assert "WITHCURSOR" not in FtAggregateOptions().to_args()
@@ -450,8 +423,15 @@ class TestFtAggregateOptionsWithCursor:
         ]
 
 
+class TestLoadFieldArgs:
+    def test_without_alias_emits_field_identifier_only(self):
+        assert LoadField("price").to_args() == ["price"]
+
+    def test_with_alias_emits_as_clause(self):
+        assert LoadField("price", "cost").to_args() == ["price", "AS", "cost"]
+
+
 class TestFtHybridSearchArm:
-    """Unit tests for FtHybridSearchArm.to_args()."""
 
     def test_bare_query(self):
         assert FtHybridSearchArm("hello").to_args() == ["SEARCH", "hello"]
@@ -516,11 +496,6 @@ class TestStreamBytesLikeArgs:
 
 
 class TestFtHybridVsimArm:
-    """Unit tests for FtHybridVsimArm.to_args(), including the raw-bytes
-    vs. $param-reference vector handling (confirmed live: FT.HYBRID's
-    VSIM clause has no wire-level inline
-    vector literal at all -- a $-prefixed PARAMS reference is the only form
-    the server accepts, so raw bytes need a generated parameter name)."""
 
     def test_param_reference_vector_used_directly(self):
         args = FtHybridVsimArm("vec", "$myvec").to_args()
@@ -546,15 +521,6 @@ class TestFtHybridVsimArm:
         assert not FtHybridVsimArm("vec", "notaparam").is_param_reference()
 
     def test_is_param_reference_treats_bytes_as_always_raw_vector_data(self):
-        # affonsov review (#7335): a raw vector's packed binary
-        # representation is arbitrary and can legitimately start with the
-        # byte 0x24 ("$") by coincidence. bytes/bytearray must never be
-        # treated as a $name parameter reference regardless of its first
-        # byte -- only an actual str starting with "$" is a reference.
-        # struct.pack("2f", 1.0000042915344238, 1.0) is the smallest float32
-        # pair whose packed bytes start with 0x24 on a little-endian
-        # platform, a concrete example of a vector this bug would have
-        # misclassified.
         packed_vector_starting_with_dollar_byte = struct.pack(
             "2f", 1.0000042915344238, 1.0
         )
@@ -569,10 +535,6 @@ class TestFtHybridVsimArm:
     def test_to_args_requires_generated_param_name_for_raw_bytes_starting_with_dollar(
         self,
     ):
-        # Companion to the is_param_reference test above: to_args must
-        # still raise (not silently pass the raw bytes through) when a
-        # 0x24-leading raw vector reaches it without a generated param name,
-        # the same way it already does for any other raw-bytes vector.
         packed_vector_starting_with_dollar_byte = struct.pack(
             "2f", 1.0000042915344238, 1.0
         )
@@ -584,9 +546,6 @@ class TestFtHybridVsimArm:
         assert args == ["VSIM", "@vec", "$generated"]
 
     def test_knn_block_omitted_when_no_knn_sub_args_given(self):
-        # Confirmed live: omitting the whole KNN block defaults K to 10
-        # server-side (kDefaultKnnK) -- the same default RediSearch
-        # documents. k is Optional here to match that engine behaviour.
         args = FtHybridVsimArm("vec", "$q").to_args()
         assert "KNN" not in args
 
@@ -613,10 +572,6 @@ class TestFtHybridVsimArm:
         ]
 
     def test_ef_runtime_rejected_with_adhoc_filter_policy(self):
-        # affonsov review (#7335): the server rejects EF_RUNTIME outright
-        # when filter.policy=ADHOC ("EF_RUNTIME is irrelevant for POLICY
-        # ADHOC"); catch it client-side instead of a round trip, mirroring
-        # FtHybridVsimFilter's own batch_size-requires-BATCHES validation.
         with pytest.raises(ValueError):
             FtHybridVsimArm(
                 "vec",
@@ -628,8 +583,6 @@ class TestFtHybridVsimArm:
             )
 
     def test_ef_runtime_allowed_with_batches_filter_policy(self):
-        # Companion to the rejection test above: EF_RUNTIME is fine with
-        # any other policy, including BATCHES, or with no filter at all.
         args = FtHybridVsimArm(
             "vec",
             "$q",
@@ -677,8 +630,6 @@ class TestFtHybridVsimArm:
 
 
 class TestFtHybridVsimFilter:
-    """Unit tests for FtHybridVsimFilter.to_args(), covering the
-    uncounted extension form vs. the counted form POLICY/BATCH_SIZE force."""
 
     def test_bare_expression_uses_uncounted_extension_form(self):
         args = FtHybridVsimFilter("@title:hello").to_args()
@@ -712,9 +663,6 @@ class TestFtHybridVsimFilter:
 
 
 class TestFtHybridCombine:
-    """Unit tests for FtHybridCombine.RRF/.Linear/.Function to_args(),
-    including the defaulting and mutual-exclusivity rules confirmed live
-    against src/commands/ft_hybrid_parser.cc."""
 
     def test_rrf_bare(self):
         assert FtHybridCombine.RRF().to_args() == ["COMBINE", "RRF", "0"]
@@ -724,8 +672,6 @@ class TestFtHybridCombine:
         assert args == ["COMBINE", "RRF", "2", "CONSTANT", "60"]
 
     def test_rrf_negative_constant_rejected(self):
-        # Confirmed live: a negative constant places a pole at
-        # rank == -constant: the server rejects it.
         with pytest.raises(ValueError):
             FtHybridCombine.RRF(constant=-1)
 
@@ -742,9 +688,6 @@ class TestFtHybridCombine:
         ]
 
     def test_linear_bare_defaults_both_server_side(self):
-        # Confirmed live: writing neither alpha nor beta defaults both
-        # (0.3/0.7 server-side) -- the client sends nothing and lets the
-        # server apply its own default, rather than hardcoding it here.
         assert FtHybridCombine.Linear().to_args() == ["COMBINE", "LINEAR", "0"]
 
     def test_linear_with_both_weights(self):
@@ -760,8 +703,6 @@ class TestFtHybridCombine:
         ]
 
     def test_linear_one_weight_without_the_other_rejected(self):
-        # Confirmed live: the server rejects writing exactly one of
-        # ALPHA/BETA as more likely a typo than an intentional default.
         with pytest.raises(ValueError):
             FtHybridCombine.Linear(alpha=0.5)
         with pytest.raises(ValueError):
@@ -784,23 +725,7 @@ class TestFtHybridCombine:
         ]
 
 
-class TestFtWithCursor:
-    """Unit tests for FtWithCursor.to_args(). Shared verbatim between
-    FT.AGGREGATE and FT.HYBRID (confirmed in source: both commands forward
-    WITHCURSOR to the same aggregate-suffix parser)."""
-
-    def test_bare_withcursor(self):
-        assert FtWithCursor().to_args() == ["WITHCURSOR"]
-
-    def test_count_and_maxidle(self):
-        args = FtWithCursor(count=10, maxidle=5000).to_args()
-        assert args == ["WITHCURSOR", "COUNT", "10", "MAXIDLE", "5000"]
-
-
 class TestFtHybridOptions:
-    """Unit tests for FtHybridOptions.to_args(), including the
-    LOCALONLY-must-be-first ordering fix (confirmed live: writing it after
-    LOAD/PARAMS/any other clause is rejected outright, unlike DIALECT)."""
 
     def test_empty_options_emits_nothing(self):
         assert FtHybridOptions().to_args() == []
@@ -813,9 +738,6 @@ class TestFtHybridOptions:
         assert args == ["LOAD", "2", "title", "price"]
 
     def test_local_only_emitted_first_regardless_of_field_order(self):
-        # Confirmed live: LOCALONLY must be the very first token of the
-        # tail. to_args() always emits it first, so field-construction
-        # order in Python never matters.
         args = FtHybridOptions(
             local_only=True, load_fields=["title"], dialect=2
         ).to_args()
@@ -857,13 +779,6 @@ class TestFtHybridOptions:
         assert args == ["LIMIT", "0", "10"]
 
     def test_params_emitted_before_clauses(self):
-        # Regression test: with no combine/local_only/load_*/timeout, a
-        # leading clause used to land right after the VSIM arm's own
-        # tokens, where the server's VSIM parser claims a leading FILTER
-        # as its own pre-filter instead (confirmed live,
-        # ft_hybrid_parser.cc's vsim_scoped FILTER handling). PARAMS is
-        # always present for FT.HYBRID, so to_args() must always put it
-        # ahead of clauses regardless of field-construction order.
         from glide_shared.commands.server_modules.ft_options.ft_aggregate_options import (
             FtAggregateFilter,
         )
@@ -874,9 +789,6 @@ class TestFtHybridOptions:
         assert args == ["PARAMS", "2", "q", "value", "FILTER", "@price>0"]
 
     def test_local_only_params_and_clauses_order(self):
-        # Pins the full tail order end to end: LOCALONLY, then LOAD, then
-        # PARAMS, then clauses -- the three live-confirmed orderings this
-        # class's docstring documents, all in a single call.
         from glide_shared.commands.server_modules.ft_options.ft_aggregate_options import (
             FtAggregateLimit,
         )
@@ -903,32 +815,16 @@ class TestFtHybridOptions:
 
 
 class TestFtCreateOptionsScoreField:
-    """Unit tests for FtCreateOptions(score_field=)."""
 
     def test_score_field_absent_by_default(self):
         assert "SCORE_FIELD" not in FtCreateOptions().to_args()
 
     def test_score_field_emits_before_schema_position(self):
-        # SCORE_FIELD is a top-level FT.CREATE option (like FILTER/ON/
-        # PREFIX), not a field-definition keyword -- confirmed live,
-        # placing it after SCHEMA's field list makes the parser treat it
-        # as part of the preceding field definition instead. FtCreateOptions
-        # itself only emits the pre-SCHEMA option block; the caller is
-        # responsible for appending "SCHEMA" and the field list after it
-        # (same convention as `filter`), so this test only pins the token
-        # order within that block.
         args = FtCreateOptions(filter="@price>0", score_field="price").to_args()
         assert args == ["FILTER", "@price>0", "SCORE_FIELD", "price"]
 
 
 class TestFtCreateOptionsNoHighlight:
-    """Unit tests for Q9: FtCreateOptions(no_highlight=). NOHL is a genuine
-    no-op on valkey-search <= 1.3.0-rc1 -- confirmed live and in source
-    (src/commands/ft_create_parser.cc: "Highlighting is not supported, so
-    NOHL is accepted and the match result deliberately discarded"). Unlike
-    SORTABLE UNF (also a no-op but stored and reported by FT.INFO), NOHL
-    is not even stored -- confirmed live via FT.INFO showing no NOHL-
-    related field at all after FT.CREATE idx NOHL SCHEMA ...."""
 
     def test_no_highlight_absent_by_default(self):
         assert "NOHL" not in FtCreateOptions().to_args()
@@ -938,49 +834,38 @@ class TestFtCreateOptionsNoHighlight:
         assert args == ["NOHL"]
 
 
-class TestJsonGroupbyColumnCompatHelper:
-    """Unit tests for the compat-expectation helper (tests/utils/ft_test_helpers.py)."""
+class TestFtCreateFieldUnfRequiresSortable:
+    @pytest.mark.parametrize("field_class", [TextField, TagField, NumericField])
+    def test_unf_without_sortable_raises(self, field_class):
+        with pytest.raises(ValueError, match="unf requires sortable=True"):
+            field_class("field", unf=True)
 
-    def test_below_1_3_0_returns_path(self):
+
+class TestFtCreateOptionsFilter:
+    def test_empty_filter_raises(self):
+        with pytest.raises(ValueError, match="filter cannot be empty"):
+            FtCreateOptions(filter="").to_args()
+
+
+class TestJsonGroupbyColumnCompatHelper:
+    def test_json_groupby_column_before_alias_level_returns_json_path(self):
         assert json_groupby_column("$.c", "c", "1.0.0") == "$.c"
         assert json_groupby_column("$.c", "c", "1.2.1") == "$.c"
 
-    def test_at_or_above_1_3_0_returns_alias(self):
+    def test_json_groupby_column_from_alias_level_returns_alias(self):
         assert json_groupby_column("$.c", "c", "1.3.0") == "c"
         assert json_groupby_column("$.c", "c", "1.3.1") == "c"
         assert json_groupby_column("$.c", "c", "2.0.0") == "c"
 
-    def test_malformed_version_raises_value_error(self):
+    def test_json_groupby_column_rejects_non_version_string(self):
         with pytest.raises(ValueError):
             json_groupby_column("$.c", "c", "not-a-version")
-        with pytest.raises(ValueError):
-            json_groupby_column("$.c", "c", "1.3")
 
-    def test_rc_suffix_tolerated(self):
-        # A "-suffix" (e.g. "-rc1") is stripped before parsing the
-        # X.Y.Z part, rather than making the whole string unparseable.
-        assert json_groupby_column("$.c", "c", "1.3.0-rc1") == "c"
+    def test_json_groupby_column_release_candidate_below_release_returns_json_path(
+        self,
+    ):
+        assert json_groupby_column("$.c", "c", "1.3.0-rc1") == "$.c"
         assert json_groupby_column("$.c", "c", "1.2.1-rc1") == "$.c"
-
-
-class TestClassifyInkeysProbeError:
-    """Unit tests for the pure classification function the search
-    1.3 capability gate uses to decide skip-vs-run for 16 tests
-    (tests/conftest.py, extracted from _probe_search_1_3_capability)."""
-
-    def test_raw_server_text_classifies_as_pre_1_3(self):
-        assert classify_inkeys_probe_error("Unexpected argument `INKEYS`") is True
-
-    def test_glide_reformatted_text_classifies_as_pre_1_3(self):
-        # GLIDE's RequestError splits the server's error text on its first
-        # word as if it were an error code, reformatting "Unexpected
-        # argument `INKEYS`" into "Unexpected: argument `INKEYS`"
-        # (confirmed empirically against a built 1.2.1 module).
-        assert classify_inkeys_probe_error("Unexpected: argument `INKEYS`") is True
-
-    def test_unrelated_error_does_not_classify_as_pre_1_3(self):
-        assert classify_inkeys_probe_error("WRONGTYPE Operation against a key") is False
-        assert classify_inkeys_probe_error("OOM command not allowed") is False
 
 
 class TestZeroValuedArgsAreForwarded:

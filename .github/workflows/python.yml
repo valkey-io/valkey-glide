@@ -11,12 +11,21 @@ on:
             - v*
         paths:
             - python/**
-            - glide-core/src/**
-            - glide-core/redis-rs/redis/src/**/**
+            - glide-core/**
+            - ffi/**
+            - glide-logger/**
+            - glide-telemetry/**
+            - glide-rdma/**
             - utils/cluster_manager.py
+            - deny.toml
+            - .cargo/config.toml
             - .github/workflows/python.yml
             - .github/actions/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-zig/action.yml
+            - .github/actions/setup-dns-tests/**
             - .github/actions/test-benchmark/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
@@ -29,12 +38,21 @@ on:
     pull_request:
         paths:
             - python/**
-            - glide-core/src/**
-            - glide-core/redis-rs/redis/src/**
+            - glide-core/**
+            - ffi/**
+            - glide-logger/**
+            - glide-telemetry/**
+            - glide-rdma/**
             - utils/cluster_manager.py
+            - deny.toml
+            - .cargo/config.toml
             - .github/workflows/python.yml
             - .github/actions/build-python-wrapper/action.yml
             - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-rust/action.yml
+            - .github/actions/install-protoc/action.yml
+            - .github/actions/install-zig/action.yml
+            - .github/actions/setup-dns-tests/**
             - .github/actions/test-benchmark/action.yml
             - .github/actions/lint-rust/action.yml
             - .github/actions/install-engine/action.yml
@@ -281,6 +299,20 @@ jobs:
                           || { rc=$?; [ "$rc" -eq 5 ] && [ -n "$TEST_FILTER" ] && [ "$MAIN_RUN_EMPTY" != "true" ] || exit "$rc"; }
                   fi
 
+            - name: Test with pytest (Unix socket)
+              if: >-
+                  ${{
+                      !cancelled()
+                      && env.RUN_FULL_MATRIX == 'true'
+                      && matrix.host.OS == 'ubuntu'
+                      && matrix.python == env.BASE_PYTHON_VERSION
+                  }}
+              working-directory: ./python
+              run: |
+                  ulimit -n 65536 2>/dev/null || true
+                  python3 dev.py test --args -n 4 --dist loadgroup -m "not serial_only" --async-backend=asyncio --unix-socket --html=pytest_report_unix_socket.html --self-contained-html
+                  python3 dev.py test --args -m serial_only --async-backend=asyncio --unix-socket --html=pytest_report_unix_socket_serial.html --self-contained-html
+
             - uses: ./.github/actions/test-benchmark
               with:
                   language-flag: -python
@@ -298,6 +330,8 @@ jobs:
                   path: |
                       python/pytest_report.html
                       python/pytest_report_serial.html
+                      python/pytest_report_unix_socket.html
+                      python/pytest_report_unix_socket_serial.html
                       utils/clusters/**
                       benchmarks/results/**
 
@@ -374,6 +408,19 @@ jobs:
                   ulimit -n 65536 2>/dev/null || true
                   python3 dev.py test --args -k 'pubsub' tests/sync_tests --html=pytest_report.html --self-contained-html
 
+            - name: Test pubsub with pytest (Unix socket)
+              if: >-
+                  ${{
+                      !cancelled()
+                      && env.RUN_FULL_MATRIX == 'true'
+                      && matrix.host.OS == 'ubuntu'
+                      && matrix.python == env.BASE_PYTHON_VERSION
+                  }}
+              working-directory: ./python
+              run: |
+                  ulimit -n 65536 2>/dev/null || true
+                  python3 dev.py test --args -k 'pubsub' --async-backend=asyncio --unix-socket --html=pytest_report_unix_socket.html --self-contained-html
+
             - name: Detect mock pubsub changes
               id: pubsub_mock_changes
               uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -410,6 +457,7 @@ jobs:
                   name: pubsub-test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
                       python/pytest_report.html
+                      python/pytest_report_unix_socket.html
 
     lint:
         runs-on: ubuntu-24.04

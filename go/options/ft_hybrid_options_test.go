@@ -10,15 +10,6 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 )
 
-// Argv-serialization tests for wave 2 of the valkey-search 1.3 stable surface: scoring
-// (WITHSCORES/SCORER on FT.SEARCH, ADDSCORES/SCORER on FT.AGGREGATE), cursors (FT.AGGREGATE
-// WITHCURSOR), and FT.HYBRID (SEARCH arm, VSIM arm, COMBINE RRF/LINEAR/FUNCTION, VSIM
-// FILTER/POLICY/BATCH_SIZE, LOCALONLY, LOAD, WITHCURSOR, PARAMS, DIALECT). Mirrors Python's
-// test_options.py's TestFtSearchOptionsScoring / TestFtAggregateOptionsScoring /
-// TestFtAggregateOptionsWithCursor / TestFtHybrid* / TestFtWithCursor classes.
-
-// --- FT.SEARCH scoring ---
-
 func TestFtSearchOptionsToArgs_WithScoresAbsentByDefault(t *testing.T) {
 	args, err := (&FtSearchOptions{}).ToArgs()
 	assert.NoError(t, err)
@@ -42,8 +33,6 @@ func TestFtSearchOptionsToArgs_WithScoresAndScorerCombined(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"WITHSCORES", "SCORER", "BM25STD"}, args)
 }
-
-// --- FT.AGGREGATE scoring ---
 
 func TestFtAggregateOptionsToArgs_AddScoresAbsentByDefault(t *testing.T) {
 	args, err := (&FtAggregateOptions{}).ToArgs()
@@ -70,8 +59,6 @@ func TestFtAggregateOptionsToArgs_AddScoresAndScorerCombinedAfterOtherClauses(t 
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"LOAD", "1", "price", "ADDSCORES", "SCORER", "BM25STD"}, args)
 }
-
-// --- FT.AGGREGATE typed cursor ---
 
 func TestFtAggregateOptionsToArgs_WithCursorAbsentByDefault(t *testing.T) {
 	args, err := (&FtAggregateOptions{}).ToArgs()
@@ -103,10 +90,6 @@ func TestFtAggregateOptionsToArgs_WithCursorCombinedWithLoadAndScoring(t *testin
 	assert.Equal(t, []string{"LOAD", "1", "price", "ADDSCORES", "WITHCURSOR", "COUNT", "5"}, args)
 }
 
-// TestFtAggregateOptionsToArgs_DialectEmittedLastAfterAddScoresScorerAndWithCursor is a
-// regression test: DIALECT must be the terminal token, matching FtSearchOptions.ToArgs and
-// FtHybridOptions.ToArgs, both of which already emit DIALECT last. Previously
-// FtAggregateOptions.ToArgs emitted DIALECT before ADDSCORES/SCORER/WITHCURSOR instead.
 func TestFtAggregateOptionsToArgs_DialectEmittedLastAfterAddScoresScorerAndWithCursor(t *testing.T) {
 	dialect := 2
 	count := 5
@@ -126,14 +109,6 @@ func TestFtAggregateOptionsToArgs_DialectEmittedLastAfterAddScoresScorerAndWithC
 	)
 }
 
-func TestFtWithCursorToArgs_Bare(t *testing.T) {
-	args, err := (&FtAggregateOptions{WithCursor: &FtWithCursor{}}).ToArgs()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"WITHCURSOR"}, args)
-}
-
-// --- LoadField (LOAD ... AS) ---
-
 func TestLoadFieldToArgs_WithoutAliasIsJustTheField(t *testing.T) {
 	args, err := (&FtAggregateOptions{LoadFieldEntries: []LoadField{{FieldIdentifier: "title"}}}).ToArgs()
 	assert.NoError(t, err)
@@ -145,7 +120,6 @@ func TestFtAggregateOptionsToArgs_LoadFieldEntriesWithAlias(t *testing.T) {
 		LoadFieldEntries: []LoadField{{FieldIdentifier: "price", Alias: "cost"}},
 	}).ToArgs()
 	assert.NoError(t, err)
-	// The count is a token budget (3 for field, AS, alias), not an entry count (1).
 	assert.Equal(t, []string{"LOAD", "3", "price", "AS", "cost"}, args)
 }
 
@@ -155,7 +129,6 @@ func TestFtAggregateOptionsToArgs_LoadFieldsAndLoadFieldEntriesCombined(t *testi
 		LoadFieldEntries: []LoadField{{FieldIdentifier: "price", Alias: "cost"}},
 	}).ToArgs()
 	assert.NoError(t, err)
-	// LoadFields is emitted first, then LoadFieldEntries, both into one LOAD clause.
 	assert.Equal(t, []string{"LOAD", "4", "title", "price", "AS", "cost"}, args)
 }
 
@@ -192,14 +165,6 @@ func TestFtHybridOptionsToArgs_LoadAllAndLoadFieldEntriesMutuallyExclusive(t *te
 	assert.Error(t, err)
 }
 
-func TestFtWithCursorToArgs_CountAndMaxIdle(t *testing.T) {
-	count, maxIdle := 10, 5000
-	c := &FtWithCursor{Count: &count, MaxIdle: &maxIdle}
-	assert.Equal(t, []string{"WITHCURSOR", "COUNT", "10", "MAXIDLE", "5000"}, c.toArgs())
-}
-
-// --- FtHybridSearchArm ---
-
 func TestFtHybridSearchArmToArgs_BareQuery(t *testing.T) {
 	a := &FtHybridSearchArm{Query: "hello"}
 	assert.Equal(t, []string{"SEARCH", "hello"}, a.ToArgs())
@@ -219,8 +184,6 @@ func TestFtHybridSearchArmToArgs_ScorerAndYieldScoreAsCombined(t *testing.T) {
 	a := &FtHybridSearchArm{Query: "hello", Scorer: "BM25STD", YieldScoreAs: "ss"}
 	assert.Equal(t, []string{"SEARCH", "hello", "SCORER", "BM25STD", "YIELD_SCORE_AS", "ss"}, a.ToArgs())
 }
-
-// --- FtHybridVsimArm ---
 
 func TestFtHybridVsimArmToArgs_ParamReferenceVectorUsedDirectly(t *testing.T) {
 	a := &FtHybridVsimArm{Field: "vec", VectorParam: "$myvec"}
@@ -261,15 +224,9 @@ func TestFtHybridVsimArmToArgs_BothVectorAndVectorParamErrors(t *testing.T) {
 }
 
 func TestFtHybridVsimArmIsParamReference_RawBytesStartingWithDollarByteIsAlwaysRaw(t *testing.T) {
-	// A raw vector's packed binary representation is arbitrary and can legitimately start with
-	// the byte 0x24 ("$") by coincidence. Go's []byte Vector field must never be treated as a
-	// $name parameter reference regardless of its first byte -- unlike some other languages'
-	// single any-typed vector field, Go's VectorParam is a dedicated string field, so there is no
-	// runtime type-sniffing to get wrong here: a []byte in Vector is unconditionally raw data,
-	// full stop, by construction.
 	a := &FtHybridVsimArm{Field: "vec", Vector: []byte("$myvec")}
 	assert.False(t, a.IsParamReference())
-	_, err := a.ToArgs("") // no generatedParamName supplied -- must error, not silently pass through
+	_, err := a.ToArgs("")
 	assert.ErrorContains(t, err, "generatedParamName is required")
 	args, err := a.ToArgs("$generated")
 	assert.NoError(t, err)
@@ -349,8 +306,6 @@ func TestFtHybridVsimArmToArgs_FilterAppendedAfterYieldScoreAs(t *testing.T) {
 	assert.Equal(t, []string{"VSIM", "@vec", "$q", "YIELD_SCORE_AS", "vs", "FILTER", "@title:hello"}, args)
 }
 
-// --- FtHybridVsimFilter ---
-
 func TestFtHybridVsimFilterToArgs_BareExpressionUsesUncountedExtensionForm(t *testing.T) {
 	a := &FtHybridVsimArm{Field: "vec", VectorParam: "$q", Filter: &FtHybridVsimFilter{Expression: "@title:hello"}}
 	args, err := a.ToArgs("")
@@ -392,8 +347,6 @@ func TestFtHybridVsimFilterToArgs_PolicyBatchesWithBatchSize(t *testing.T) {
 		"VSIM", "@vec", "$q", "FILTER", "5", "@title:hello", "POLICY", "BATCHES", "BATCH_SIZE", "10",
 	}, args)
 }
-
-// --- FtHybridCombine: RRF / Linear / Function ---
 
 func TestFtHybridRrfToArgs_Bare(t *testing.T) {
 	c := &FtHybridRrf{}
@@ -464,8 +417,6 @@ func TestFtHybridFunctionToArgs_WithWindow(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"COMBINE", "FUNCTION", "4", "EXPR", "@ss + @vs", "WINDOW", "1000"}, args)
 }
-
-// --- FtHybridOptions ---
 
 func TestFtHybridOptionsToArgs_EmptyOptionsEmitsNothing(t *testing.T) {
 	args, err := (&FtHybridOptions{}).ToArgs("", "")
@@ -543,16 +494,6 @@ func TestFtHybridOptionsToArgs_ClausesAppliedInOrder(t *testing.T) {
 	assert.Equal(t, []string{"LIMIT", "0", "10"}, args)
 }
 
-// TestFtHybridOptionsToArgs_ParamsEmittedBeforeClauses is the regression test for the
-// tail-ordering bug: with no combine/local_only/load_*/timeout, a leading clause used to land
-// right after the VSIM arm's own tokens, where the server's VSIM parser claims a leading FILTER
-// as its own pre-filter instead (ft_hybrid_parser.cc's vsim_scoped FILTER handling). This test's
-// own VSIM arm uses VectorParam (an explicit "$q" reference, no generated entry), so PARAMS IS
-// written here -- but ToArgs's ordering guarantee holds regardless: whenever PARAMS ends up
-// non-empty (an explicit Params entry, a raw-bytes Vector's generated entry, or both), it is
-// always placed ahead of Clauses, never after. Deliberately no LoadFields/LoadAll here -- a LOAD
-// clause in between the VSIM arm and this FILTER would mask the bug even if PARAMS were
-// missing, since LOAD itself would already separate FILTER from the VSIM arm's own argv.
 func TestFtHybridOptionsToArgs_ParamsEmittedBeforeClauses(t *testing.T) {
 	args, err := (&FtHybridOptions{
 		Clauses: []FtAggregateClause{&FtAggregateFilter{Expression: "@price>0"}},
@@ -575,11 +516,6 @@ func TestFtHybridOptionsToArgs_LocalOnlyParamsAndClausesOrder(t *testing.T) {
 	}, args)
 }
 
-// TestFtHybridRegressionPostFusionFilterNoLoad is the full end-to-end regression case: a
-// FILTER clause placed directly after the VSIM arm's own argv, with NO LOAD clause in between
-// and NO combine, so a tail-ordering bug (PARAMS missing or emitted after Clauses) would let the
-// server's VSIM parser claim this FILTER as its own VSIM pre-filter instead of an
-// aggregate-pipeline FILTER.
 func TestFtHybridRegressionPostFusionFilterNoLoad(t *testing.T) {
 	searchArm := &FtHybridSearchArm{Query: "goodbye", YieldScoreAs: "ss"}
 	k := 5

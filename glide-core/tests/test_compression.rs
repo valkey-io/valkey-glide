@@ -883,6 +883,7 @@ mod compression_tests {
     fn test_compression_incompatibility_reason() {
         // Test string manipulation commands
         assert_compression_incompatible(RequestType::Append, &["key", "value"]);
+        assert_compression_incompatible(RequestType::DelEx, &["key", "IFEQ", "value"]);
         assert_compression_incompatible(RequestType::DelIfEq, &["key", "value"]);
         assert_compression_incompatible(RequestType::GetRange, &["key", "0", "-1"]);
         assert_compression_incompatible(RequestType::LCS, &["key", "key2"]);
@@ -943,6 +944,11 @@ mod compression_tests {
         // Test incompatible commands return errors
         assert_process_args_incompatible(RequestType::Append, &["key", "value"], Some(&manager));
         assert_process_args_incompatible(RequestType::BitCount, &["key"], Some(&manager));
+        assert_process_args_incompatible(
+            RequestType::DelEx,
+            &["key", "IFEQ", "value"],
+            Some(&manager),
+        );
         assert_process_args_incompatible(RequestType::Incr, &["key"], Some(&manager));
         assert_process_args_incompatible(
             RequestType::Set,
@@ -991,6 +997,7 @@ mod compression_tests {
         assert_eq!(RequestType::BitPos.command_name(), Some("BITPOS"));
         assert_eq!(RequestType::Decr.command_name(), Some("DECR"));
         assert_eq!(RequestType::DecrBy.command_name(), Some("DECRBY"));
+        assert_eq!(RequestType::DelEx.command_name(), Some("DELEX"));
         assert_eq!(RequestType::DelIfEq.command_name(), Some("DELIFEQ"));
         assert_eq!(RequestType::GetBit.command_name(), Some("GETBIT"));
         assert_eq!(RequestType::GetRange.command_name(), Some("GETRANGE"));
@@ -1037,6 +1044,7 @@ mod compression_tests {
 
         // Test incompatible commands - string manipulation
         assert_from_command_name("APPEND", RequestType::Append);
+        assert_from_command_name("DELEX", RequestType::DelEx);
         assert_from_command_name("DELIFEQ", RequestType::DelIfEq);
         assert_from_command_name("GETRANGE", RequestType::GetRange);
         assert_from_command_name("LCS", RequestType::LCS);
@@ -1061,10 +1069,9 @@ mod compression_tests {
         assert_from_command_name("SETBIT", RequestType::SetBit);
 
         // Test case insensitivity
-        assert_from_command_name("append", RequestType::Append);
-        assert_from_command_name("sEt", RequestType::Set);
-        assert_from_command_name("Set", RequestType::Set);
-        assert_from_command_name("set", RequestType::Set);
+        assert_from_command_name("set", RequestType::Set); // Lower case
+        assert_from_command_name("sEt", RequestType::Set); // Mixed case
+        assert_from_command_name("Set", RequestType::Set); // Capital case
 
         // Test unknown commands return None
         assert!(RequestType::from_command_name("").is_none());
@@ -1089,7 +1096,7 @@ mod compression_tests {
             Value::BulkString(b"value2".to_vec().into()),
             Value::Nil,
         ]);
-        let result = decompress_batch_response(array_response.clone(), &manager);
+        let result = decompress_batch_response(array_response.clone(), &manager, true);
         assert!(result.is_ok());
         let decompressed = result.unwrap();
         match decompressed {
@@ -1109,7 +1116,7 @@ mod compression_tests {
             Value::BulkString(compressed.clone().into()),
             Value::BulkString(b"uncompressed".to_vec().into()),
         ]);
-        let result = decompress_batch_response(array_with_compressed, &manager);
+        let result = decompress_batch_response(array_with_compressed, &manager, true);
         assert!(result.is_ok());
         let decompressed = result.unwrap();
         match decompressed {
@@ -1128,7 +1135,7 @@ mod compression_tests {
 
         // Test with non-array response (single value)
         let single_response = Value::BulkString(compressed.clone().into());
-        let result = decompress_batch_response(single_response, &manager);
+        let result = decompress_batch_response(single_response, &manager, true);
         assert!(result.is_ok());
         let decompressed = result.unwrap();
         assert_eq!(decompressed, Value::BulkString(test_data.to_vec().into()));
@@ -1147,7 +1154,7 @@ mod compression_tests {
         // With disabled manager, compressed data should NOT be decompressed
         let array_with_compressed =
             Value::Array(vec![Value::BulkString(compressed.clone().into())]);
-        let result = decompress_batch_response(array_with_compressed, &disabled_manager);
+        let result = decompress_batch_response(array_with_compressed, &disabled_manager, true);
         assert!(result.is_ok());
         let not_decompressed = result.unwrap();
         match not_decompressed {
@@ -1191,7 +1198,7 @@ mod compression_tests {
             ]),
         ]);
 
-        let result = decompress_batch_response(batch_response, &manager);
+        let result = decompress_batch_response(batch_response, &manager, true);
         assert!(result.is_ok());
         let decompressed = result.unwrap();
 
@@ -1230,7 +1237,7 @@ mod compression_tests {
             Value::BulkString(compressed1.clone().into()),
         ])])]);
 
-        let result = decompress_batch_response(deeply_nested, &manager);
+        let result = decompress_batch_response(deeply_nested, &manager, true);
         assert!(result.is_ok());
         let decompressed = result.unwrap();
 
@@ -1259,7 +1266,7 @@ mod compression_tests {
             Value::SimpleString("OK".to_string()), // Simple string
         ]);
 
-        let result = decompress_batch_response(mixed_response, &manager);
+        let result = decompress_batch_response(mixed_response, &manager, true);
         assert!(result.is_ok());
         let decompressed = result.unwrap();
 
@@ -1475,8 +1482,8 @@ mod compression_tests {
                 Value::BulkString(plain.clone().into()),
             ]),
         ]);
-        let result =
-            decompress_batch_response(batch, &manager).expect("batch reply should decompress");
+        let result = decompress_batch_response(batch, &manager, true)
+            .expect("batch reply should decompress");
         assert_eq!(
             result,
             Value::Array(vec![
@@ -1491,7 +1498,7 @@ mod compression_tests {
     }
 
     #[test]
-    fn batch_reply_propagates_size_limit_from_nested_element() {
+    fn batch_reply_propagates_size_limit_from_nested_element_when_raise_on_error() {
         let config = CompressionConfig::new(CompressionBackendType::Zstd)
             .with_min_compression_size(64)
             .with_max_decompressed_size(Some(50));
@@ -1509,9 +1516,188 @@ mod compression_tests {
             ]),
         ]);
         assert!(matches!(
-            decompress_batch_response(batch, &manager),
+            decompress_batch_response(batch, &manager, true),
             Err(SizeLimitExceeded { .. })
         ));
+    }
+
+    /// 100-byte decompression limit.
+    fn size_limited_manager() -> CompressionManager {
+        let config = CompressionConfig::new(CompressionBackendType::Zstd)
+            .with_min_compression_size(64)
+            .with_max_decompressed_size(Some(100));
+        CompressionManager::new(Box::new(ZstdBackend::new()), config).unwrap()
+    }
+
+    fn compressed(manager: &CompressionManager, original: &[u8]) -> Value {
+        let bytes = manager.compress_value(original).into_owned();
+        assert!(has_magic_header(&bytes));
+        Value::BulkString(bytes.into())
+    }
+
+    /// Asserts `value` is the in-place size-limit error, and that a binding converting it
+    /// (as it does every `Value::ServerError`) gets a plain request error naming the limit.
+    fn assert_size_limit_error_reply(value: &Value) {
+        let Value::ServerError(server_error) = value else {
+            panic!("expected the size-limit error in place, got {value:?}");
+        };
+        let error = redis::RedisError::from(server_error.clone());
+        let message = glide_core::errors::error_message(&error);
+        assert!(
+            message.starts_with("DecompressionError: Decompression size limit exceeded"),
+            "unexpected message: {message}"
+        );
+        assert!(message.contains("maxDecompressedSize"), "{message}");
+        assert_eq!(
+            glide_core::errors::error_type(&error),
+            glide_core::errors::RequestErrorType::Unspecified
+        );
+    }
+
+    #[test]
+    fn batch_reply_without_raise_on_error_replaces_only_the_oversized_reply() {
+        let manager = size_limited_manager();
+        let fits = "B".repeat(80).into_bytes();
+        // Mirrors [SET marker written, GET oversized, GET marker, GET fits].
+        let batch = Value::Array(vec![
+            Value::Okay,
+            compressed(&manager, &"A".repeat(200).into_bytes()),
+            Value::BulkString(b"written".to_vec().into()),
+            compressed(&manager, &fits),
+        ]);
+
+        let Value::Array(values) =
+            decompress_batch_response(batch, &manager, false).expect("batch should not fail")
+        else {
+            panic!("expected array");
+        };
+        assert_eq!(values.len(), 4);
+        assert_eq!(values[0], Value::Okay);
+        assert_size_limit_error_reply(&values[1]);
+        assert_eq!(values[2], Value::BulkString(b"written".to_vec().into()));
+        assert_eq!(values[3], Value::BulkString(fits.into()));
+    }
+
+    #[test]
+    fn batch_reply_with_raise_on_error_fails_when_a_flat_reply_is_oversized() {
+        let manager = size_limited_manager();
+        let batch = Value::Array(vec![
+            Value::Okay,
+            compressed(&manager, &"A".repeat(200).into_bytes()),
+            Value::BulkString(b"written".to_vec().into()),
+        ]);
+        let error = decompress_batch_response(batch, &manager, true)
+            .expect_err("raise_on_error should fail the whole batch");
+        assert_eq!(error.max_size, 100);
+        assert_eq!(error.decompressed_size, 200);
+    }
+
+    #[test]
+    fn batch_reply_without_raise_on_error_replaces_the_whole_nested_reply() {
+        let manager = size_limited_manager();
+        let fits = "B".repeat(80).into_bytes();
+        // An MGET (or any array reply) fails as a whole, as the same command does outside a
+        // batch; sibling commands keep their replies, including nested ones that fit.
+        let batch = Value::Array(vec![
+            Value::BulkString(b"small plain".to_vec().into()),
+            Value::Array(vec![
+                compressed(&manager, &fits),
+                Value::Nil,
+                compressed(&manager, &"A".repeat(200).into_bytes()),
+            ]),
+            Value::Array(vec![compressed(&manager, &fits), Value::Nil]),
+            Value::Array(vec![Value::Array(vec![compressed(
+                &manager,
+                &"A".repeat(300).into_bytes(),
+            )])]),
+        ]);
+
+        let Value::Array(values) =
+            decompress_batch_response(batch, &manager, false).expect("batch should not fail")
+        else {
+            panic!("expected array");
+        };
+        assert_eq!(values.len(), 4);
+        assert_eq!(values[0], Value::BulkString(b"small plain".to_vec().into()));
+        assert_size_limit_error_reply(&values[1]);
+        assert_eq!(
+            values[2],
+            Value::Array(vec![Value::BulkString(fits.into()), Value::Nil])
+        );
+        assert_size_limit_error_reply(&values[3]);
+    }
+
+    #[test]
+    fn batch_reply_without_raise_on_error_keeps_server_errors_and_replaces_each_oversized_reply() {
+        let manager = size_limited_manager();
+        let wrong_type = redis::parse_redis_value(
+            b"-WRONGTYPE Operation against a key holding the wrong kind of value\r\n",
+        )
+        .unwrap();
+        let batch = Value::Array(vec![
+            compressed(&manager, &"A".repeat(200).into_bytes()),
+            wrong_type.clone(),
+            compressed(&manager, &"C".repeat(500).into_bytes()),
+        ]);
+
+        let Value::Array(values) =
+            decompress_batch_response(batch, &manager, false).expect("batch should not fail")
+        else {
+            panic!("expected array");
+        };
+        assert_eq!(values.len(), 3);
+        assert_size_limit_error_reply(&values[0]);
+        assert_eq!(values[1], wrong_type);
+        assert_size_limit_error_reply(&values[2]);
+    }
+
+    #[test]
+    fn batch_reply_size_limit_handling_through_try_decompress() {
+        let manager = size_limited_manager();
+        let batch = || {
+            Value::Array(vec![
+                Value::Okay,
+                compressed(&manager, &"A".repeat(200).into_bytes()),
+            ])
+        };
+
+        let Value::Array(values) =
+            try_decompress_batch_response(batch(), Some(&manager), false).unwrap()
+        else {
+            panic!("expected array");
+        };
+        assert_eq!(values[0], Value::Okay);
+        assert_size_limit_error_reply(&values[1]);
+
+        assert!(matches!(
+            try_decompress_batch_response(batch(), Some(&manager), true),
+            Err(SizeLimitExceeded { .. })
+        ));
+
+        // No manager: the reply is returned untouched in both modes.
+        for raise_on_error in [false, true] {
+            assert_eq!(
+                try_decompress_batch_response(batch(), None, raise_on_error).unwrap(),
+                batch()
+            );
+        }
+    }
+
+    #[test]
+    fn non_array_batch_reply_reports_size_limit_regardless_of_raise_on_error() {
+        let manager = size_limited_manager();
+        for raise_on_error in [false, true] {
+            let reply = compressed(&manager, &"A".repeat(200).into_bytes());
+            assert!(matches!(
+                decompress_batch_response(reply, &manager, raise_on_error),
+                Err(SizeLimitExceeded { .. })
+            ));
+        }
+        // An aborted transaction (WATCH) replies Nil.
+        assert_eq!(
+            decompress_batch_response(Value::Nil, &manager, false).unwrap(),
+            Value::Nil
+        );
     }
 
     #[test]

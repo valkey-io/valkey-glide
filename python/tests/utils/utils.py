@@ -49,6 +49,8 @@ from glide_shared.commands.core_options import (
     FlushMode,
     InfoSection,
     InsertPosition,
+    OnlyIfEqual,
+    OnlyIfNotEqual,
 )
 from glide_shared.commands.memory import MemoryStats, MemoryStatsDb
 from glide_shared.commands.sorted_set import (
@@ -431,6 +433,14 @@ def sync_wait_for(
         _time.sleep(_WAIT_FOR_INTERVAL_SEC)
 
     raise TimeoutError(failure)
+
+
+def assert_unix_socket_client(client_info: object) -> str:
+    """Asserts that a CLIENT INFO reply flags the connection as a Unix socket (`U`)."""
+    text = client_info.decode() if isinstance(client_info, bytes) else str(client_info)
+    flags = next(field for field in text.split() if field.startswith("flags="))
+    assert "U" in flags[len("flags=") :], text
+    return text
 
 
 # While a script or function runs, the server does not read other clients'
@@ -1391,6 +1401,7 @@ def batch_test(
     key28 = generate_key(keyslot, batch.is_atomic)  # hash field expiration
     key29 = generate_key(keyslot, batch.is_atomic)  # hash
     key30 = generate_key(keyslot, batch.is_atomic)  # string
+    key31 = generate_key(keyslot, batch.is_atomic)  # string
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value_bytes = value.encode()
     value2 = get_random_string(5)
@@ -1541,6 +1552,9 @@ def batch_test(
     if not check_version_lt(version, "9.1.0"):
         helper_valkey_9_1(batch, key29, args)
 
+    if not check_version_lt(version, "9.2.0"):
+        helper_valkey_9_2(batch, key31, args)
+
     return args
 
 
@@ -1605,6 +1619,15 @@ def helper_valkey_9_1(transaction, key29, args):
     args.append(1)
 
 
+def helper_valkey_9_2(transaction, key31, args):
+    transaction.set(key31, "value")
+    args.append(OK)
+    transaction.delex(key31, OnlyIfEqual("other"))
+    args.append(False)
+    transaction.delex(key31, OnlyIfNotEqual("other"))
+    args.append(True)
+
+
 def helper6(
     transaction,
     keyslot,
@@ -1620,32 +1643,6 @@ def helper6(
     key27,
     args,
 ):
-    if not check_version_lt(version, "8.0.0"):
-        keyslot = keyslot or key26
-        transaction.hset(f"{{{keyslot}}}: 1", {"name": "Alice", "age": "30"})
-        args.append(2)
-        transaction.hset(f"{{{keyslot}}}: 2", {"name": "Bob", "age": "25"})
-        args.append(2)
-        transaction.lpush(key26, ["2", "1"])
-        args.append(2)
-        transaction.sort(
-            key26,
-            by_pattern=f"{{{keyslot}}}: *->age",
-            get_patterns=[f"{{{keyslot}}}: *->name"],
-            order=OrderBy.ASC,
-            alpha=True,
-        )
-        args.append([b"Bob", b"Alice"])
-        transaction.sort_store(
-            key26,
-            key27,
-            by_pattern=f"{{{keyslot}}}: *->age",
-            get_patterns=[f"{{{keyslot}}}: *->name"],
-            order=OrderBy.ASC,
-            alpha=True,
-        )
-        args.append(2)
-
     transaction.sadd(key7, ["one"])
     args.append(1)
     transaction.srandmember(key7)
@@ -1680,9 +1677,6 @@ def helper6(
         args.append(OK)
         transaction.flushdb(FlushMode.SYNC)
         args.append(OK)
-
-    min_version = "6.2.0"
-    if not check_version_lt(version, min_version):
         transaction.set(key22, "value")
         args.append(OK)
         transaction.getex(key22)
@@ -1712,6 +1706,32 @@ def helper6(
         transaction.lcs_idx(key23, key24, with_match_len=True)
         args.append({b"matches": [[[4, 7], [5, 8], 4], [[1, 3], [0, 2], 3]], b"len": 7})
 
+    if not check_version_lt(version, "8.0.0"):
+        keyslot = keyslot or key26
+        transaction.hset(f"{{{keyslot}}}: 1", {"name": "Alice", "age": "30"})
+        args.append(2)
+        transaction.hset(f"{{{keyslot}}}: 2", {"name": "Bob", "age": "25"})
+        args.append(2)
+        transaction.lpush(key26, ["2", "1"])
+        args.append(2)
+        transaction.sort(
+            key26,
+            by_pattern=f"{{{keyslot}}}: *->age",
+            get_patterns=[f"{{{keyslot}}}: *->name"],
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append([b"Bob", b"Alice"])
+        transaction.sort_store(
+            key26,
+            key27,
+            by_pattern=f"{{{keyslot}}}: *->age",
+            get_patterns=[f"{{{keyslot}}}: *->name"],
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append(2)
+
     transaction.pubsub_channels(pattern="*")
     args.append([])
     transaction.pubsub_numpat()
@@ -1721,20 +1741,6 @@ def helper6(
 
 
 def helper5(transaction, version, key11, key12, key17, key18, key20, args):
-    if not check_version_lt(version, "7.0.0"):
-        transaction.set(key20, "foobar")
-        args.append(OK)
-        transaction.bitcount(key20, OffsetOptions(5, 30, BitmapIndexType.BIT))
-        args.append(17)
-        transaction.bitpos(key20, 1, OffsetOptions(44, 50, BitmapIndexType.BIT))
-        args.append(46)
-
-    if not check_version_lt(version, "8.0.0"):
-        transaction.set(key20, "foobar")
-        args.append(OK)
-        transaction.bitcount(key20, OffsetOptions(0))
-        args.append(26)
-
     transaction.geoadd(
         key12,
         {
@@ -1871,14 +1877,6 @@ def helper5(transaction, version, key11, key12, key17, key18, key20, args):
         alpha=True,
     )
     args.append([b"2", b"3", b"4", b"a"])
-    if not check_version_lt(version, "7.0.0"):
-        transaction.sort_ro(
-            key17,
-            limit=Limit(1, 4),
-            order=OrderBy.ASC,
-            alpha=True,
-        )
-        args.append([b"2", b"3", b"4", b"a"])
     transaction.sort_store(
         key17,
         key18,
@@ -1887,6 +1885,28 @@ def helper5(transaction, version, key11, key12, key17, key18, key20, args):
         alpha=True,
     )
     args.append(4)
+
+    if not check_version_lt(version, "7.0.0"):
+        transaction.sort_ro(
+            key17,
+            limit=Limit(1, 4),
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append([b"2", b"3", b"4", b"a"])
+
+        transaction.set(key20, "foobar")
+        args.append(OK)
+        transaction.bitcount(key20, OffsetOptions(5, 30, BitmapIndexType.BIT))
+        args.append(17)
+        transaction.bitpos(key20, 1, OffsetOptions(44, 50, BitmapIndexType.BIT))
+        args.append(46)
+
+    if not check_version_lt(version, "8.0.0"):
+        transaction.set(key20, "foobar")
+        args.append(OK)
+        transaction.bitcount(key20, OffsetOptions(0))
+        args.append(26)
 
 
 def helper4(transaction, version, key8, key10, key13, key14, key15, key19, key20, args):
@@ -2112,9 +2132,6 @@ def helper3(
     args.append(1)
     transaction.sismember(key7, "bar")
     args.append(True)
-    if not check_version_lt(version, "9.2.0"):
-        transaction.sismember_if_exists(key7, "bar")
-        args.append(1)
     transaction.spop(key7)
     args.append(b"bar")
     transaction.sadd(key7, ["foo", "bar"])
@@ -2131,6 +2148,9 @@ def helper3(
         transaction.sintercard([key7, key7])
         args.append(2)
         transaction.sintercard([key7, key7], 1)
+        args.append(1)
+    if not check_version_lt(version, "9.2.0"):
+        transaction.sismember_if_exists(key7, "bar")
         args.append(1)
     transaction.sdiff([key7, key7])
     args.append(set())
@@ -2267,15 +2287,16 @@ def helper1(
     args.append(False)
     transaction.ttl(key)
     args.append(-1)
+
+    if not check_version_lt(version, "6.2.0"):
+        transaction.copy(key, key2, replace=True)
+        args.append(True)
+
     if not check_version_lt(version, "7.0.0"):
         transaction.expiretime(key)
         args.append(-1)
         transaction.pexpiretime(key)
         args.append(-1)
-
-    if not check_version_lt(version, "6.2.0"):
-        transaction.copy(key, key2, replace=True)
-        args.append(True)
 
     transaction.rename(key, key2)
     args.append(OK)
@@ -2567,7 +2588,7 @@ def get_standalone_address() -> NodeAddress:
     try:
         cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
         addr = cluster.nodes_addr[0]
-        return NodeAddress(addr.host, addr.port)
+        return NodeAddress(addr.host, addr.port, unix_socket_path=addr.unix_socket_path)
     except (AttributeError, IndexError):
         return NodeAddress("localhost", 6379)
 

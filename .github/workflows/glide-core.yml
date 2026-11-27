@@ -18,6 +18,7 @@ on:
             - glide-telemetry/**
             - glide-rdma/**
             - deny.toml
+            - .cargo/config.toml
 
             # GitHub workflows
             - .github/workflows/glide-core.yml
@@ -49,6 +50,7 @@ on:
             - glide-telemetry/**
             - glide-rdma/**
             - deny.toml
+            - .cargo/config.toml
 
             # GitHub workflows
             - .github/workflows/glide-core.yml
@@ -155,7 +157,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-matrices, approve-self-hosted]
         if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
-        timeout-minutes: 35
+        timeout-minutes: 60
         strategy:
             fail-fast: false
             matrix:
@@ -192,6 +194,13 @@ jobs:
 
             - name: Run glide-core tests
               working-directory: ./glide-core
+              run: cargo test --locked --features "proto,socket-layer,standalone_heartbeat"
+
+            - name: Run glide-core tests over a Unix socket
+              if: ${{ !cancelled() && (inputs.full-matrix == true || github.event_name == 'schedule') && matrix.host.OS == 'ubuntu' }}
+              working-directory: ./glide-core
+              env:
+                  GLIDE_TEST_UNIX_SOCKET: "1"
               run: cargo test --locked --features "proto,socket-layer,standalone_heartbeat"
 
             - name: Install libfabric

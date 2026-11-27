@@ -39,31 +39,21 @@ func execStandalone(client standaloneClient, ctx context.Context, args []string)
 	return client.CustomCommand(ctx, args)
 }
 
-func execCluster(client clusterClient, ctx context.Context, args []string) (any, error) {
-	result, err := client.CustomCommand(ctx, args)
+func unwrapClusterValue(result models.ClusterValue[any], err error) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if result.IsSingleValue() {
 		return result.SingleValue(), nil
 	}
 	return result.MultiValue(), nil
 }
 
-// execClusterPrimaryPinned routes args to the PRIMARY of indexName's slot, regardless of the
-// client's ReadFrom configuration. Used by FT.CURSOR READ/DEL and any WITHCURSOR-opening
-// FT.AGGREGATE/FT.HYBRID -- a cursor is a per-process, node-local resource on the server that
-// opened it, so a read that lands on a different node (a replica a PREFER_REPLICA/AZ-affinity
-// client would otherwise have used) fails with "Cursor not found".
+func execCluster(client clusterClient, ctx context.Context, args []string) (any, error) {
+	return unwrapClusterValue(client.CustomCommand(ctx, args))
+}
+
 func execClusterPrimaryPinned(client clusterClient, ctx context.Context, indexName string, args []string) (any, error) {
 	route := config.NewSlotKeyRoute(config.SlotTypePrimary, indexName)
-	result, err := client.CustomCommandWithRoute(ctx, args, route)
-	if err != nil {
-		return nil, err
-	}
-	if result.IsSingleValue() {
-		return result.SingleValue(), nil
-	}
-	return result.MultiValue(), nil
+	return unwrapClusterValue(client.CustomCommandWithRoute(ctx, args, route))
 }

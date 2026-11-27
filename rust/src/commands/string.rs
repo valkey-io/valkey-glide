@@ -51,6 +51,20 @@ pub trait StringCommands: CommandExecutor {
             .with_arg(with_match_len.then_some("WITHMATCHLEN"));
         self.execute_command(cmd, None).await
     }
+
+    /// Deletes `key` if its value equals `value` (`DELIFEQ`).
+    ///
+    /// Since Valkey 9.0.0.
+    ///
+    /// Returns `true` if `key` was deleted, `false` otherwise.
+    async fn del_if_eq<K: ToValkeyArgs + Send, V: ToValkeyArgs + Send>(
+        &self,
+        key: K,
+        value: V,
+    ) -> ValkeyResult<bool> {
+        let cmd = cmd("DELIFEQ").with_arg(key).with_arg(value);
+        bool::from_owned_valkey_value(self.execute_command(cmd, None).await?)
+    }
 }
 
 impl<T: CommandExecutor + ?Sized> StringCommands for T {}
