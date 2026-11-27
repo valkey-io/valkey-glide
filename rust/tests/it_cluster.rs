@@ -84,11 +84,6 @@ async fn cluster_info_with_partial_results_keeps_replies_when_a_primary_is_slow(
         host: host.to_string(),
         port: port.parse().unwrap(),
     };
-    let err = client
-        .info_with_partial_results(&[], Some(route.clone()))
-        .await
-        .unwrap_err();
-    assert!(matches!(err, GlideError::Request(_)), "{err:?}");
 
     pauser
         // Long enough for both calls below to see the node as slow.
@@ -129,6 +124,21 @@ async fn cluster_info_with_partial_results_keeps_replies_when_a_primary_is_slow(
         }
     }
     assert!(recovered, "paused primary did not recover");
+}
+
+#[tokio::test]
+async fn cluster_info_with_partial_results_rejects_a_single_node_route() {
+    let cluster = common::ClusterHarness::start().await;
+    let client = cluster.client().await;
+
+    let err = client
+        .info_with_partial_results(&[], Some(Route::RandomNode))
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(&err, GlideError::Request(message) if message.contains("needs a multi-node route")),
+        "{err:?}"
+    );
 }
 
 /// Admin client, a client logged in as the ACL user `partial`, the sorted
