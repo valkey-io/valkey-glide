@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX-Identifier: Apache-2.0
 """Exercise the actual GitHub shell steps against a fake AWS CLI (requires PyYAML)."""
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -14,6 +15,37 @@ import yaml  # type: ignore[import-untyped,import-not-found]
 REPO = Path(__file__).resolve().parents[3]
 WORKFLOW = yaml.safe_load((REPO / ".github/workflows/glide-rdma-efa.yml").read_text())
 STEPS = {step["name"]: step for step in WORKFLOW["jobs"]["test-efa"]["steps"]}
+
+ORCHESTRATE_SPEC = importlib.util.spec_from_file_location(
+    "orchestrate", Path(__file__).resolve().parents[1] / "bin/orchestrate.py"
+)
+assert ORCHESTRATE_SPEC is not None and ORCHESTRATE_SPEC.loader is not None
+orchestrate = importlib.util.module_from_spec(ORCHESTRATE_SPEC)
+ORCHESTRATE_SPEC.loader.exec_module(orchestrate)
+
+
+def provisioning_failure():
+    """The apply command orchestrate.py runs, and the line it prints when it fails."""
+    commands = []
+
+    def failing_apply(command, env, timeout):
+        commands.append(command)
+        if command[1] == "apply":
+            raise subprocess.CalledProcessError(1, command)
+
+    env = {
+        "CODEBUILD_RESOLVED_SOURCE_VERSION": "a" * 40,
+        "CODEBUILD_BUILD_ID": "GlideRdmaEfa:12345678-1234-1234-1234-123456789abc",
+        "RDMA_VPC_ID": "vpc-test",
+        "RDMA_SUBNETS": "subnet-a",
+        "RDMA_TEMPLATE_URL": "https://example.invalid/template.yaml",
+        "RDMA_INSTANCE_PROFILE_ARN": "arn:aws:iam::123456789012:instance-profile/x",
+    }
+    try:
+        orchestrate.orchestrate(env, failing_apply)
+    except subprocess.CalledProcessError as error:
+        return commands[0], f"EFA build failed: {error}"
+    raise AssertionError("orchestrate did not propagate the apply failure")
 
 
 class WorkflowTests(unittest.TestCase):
@@ -163,7 +195,7 @@ class WorkflowTests(unittest.TestCase):
             "instance-profile/missing) for parameter iamInstanceProfile.arn is invalid."
         ),
         "stack: CREATE_FAILED",
-        "EFA build failed: Command '['bin/rdma-pair.sh', 'apply', 'MaxHostLifetimeMinutes=120']' returned non-zero exit status 1.",
+        provisioning_failure()[1],
     )
 
     def log_page(self, lines):
@@ -199,7 +231,10 @@ class WorkflowTests(unittest.TestCase):
         result, summary = self.report_build(
             self.failed_build(), self.log_page(self.PROVISIONING_FAILURE_LOG)
         )
-        self.assertIn("bin/rdma-pair.sh apply MaxHostLifetimeMinutes=120", summary)
+        apply_command, _ = provisioning_failure()
+        self.assertIn(
+            " ".join(apply_command) + " returned non-zero exit status 1", summary
+        )
         self.assertIn("No pytest summary", summary)
         self.assertNotIn("CREATE_FAILED", summary + result.stdout)
         self.assert_no_identifiers(summary, result.stdout)
@@ -216,6 +251,8 @@ class WorkflowTests(unittest.TestCase):
     def test_near_miss_step_arguments_are_rejected(self):
         for args in (
             "'bin/rdma-pair.sh', 'apply', 'MaxHostLifetimeMinutes=120-secret'",
+            "'bin/rdma-pair.sh', 'apply', 'MaxHostLifetimeMinutes=12345'",
+            "'bin/rdma-pair.sh', 'apply', 'MaxHostLifetimeMinutes='",
             "'bin/run-on.sh.evil', 'client'",
             "'bin/run-on.sh', 'client', 'host/31-x.sh', 'GLIDE_SOURCE=abc'",
             "'bin/run-on.sh', 'client, i-0123456789abcdef0'",
