@@ -16,6 +16,7 @@
 
 ### Fixes
 
+* Core: mark HTTL, HPTTL, HEXPIRETIME, HPEXPIRETIME as readonly ([#7717](https://github.com/valkey-io/valkey-glide/pull/7717))
 * Core: handle groups named consumers in XINFO STREAM FULL ([#7781](https://github.com/valkey-io/valkey-glide/pull/7781))
 * Core: respect command option boundaries in reply conversion ([#7748](https://github.com/valkey-io/valkey-glide/pull/7748))
 * Core, Rust: reject an OpenTelemetry config with no exporter ([#7718](https://github.com/valkey-io/valkey-glide/pull/7718))
