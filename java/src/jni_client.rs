@@ -510,6 +510,20 @@ fn process_callback_job_with_env(
     }
 }
 
+/// Wraps `err` as a `ClientError`, so a connection error doesn't close the Java client.
+/// A timeout passes through unchanged, since rebuilding it would lose `is_timeout`.
+pub(crate) fn client_error_unless_timeout(err: ServerError, context: &'static str) -> ServerError {
+    if err.is_timeout() {
+        err
+    } else {
+        ServerError::from((
+            redis::ErrorKind::ClientError,
+            context,
+            glide_core::errors::error_text(&err),
+        ))
+    }
+}
+
 /// Enqueue callback job to dedicated workers.
 /// If the channel is dead (all workers terminated), sweeps all pending futures with error.
 pub fn complete_callback(
@@ -1064,9 +1078,24 @@ pub fn complete_error_sync(
 
 #[cfg(test)]
 mod tests {
-    use super::generate_safe_handle;
-    use super::serialize_array_to_bytes;
-    use redis::{Value, parse_redis_value};
+    use super::{client_error_unless_timeout, generate_safe_handle, serialize_array_to_bytes};
+    use glide_core::errors::{RequestErrorType, error_type};
+    use redis::{RedisError, Value, parse_redis_value};
+
+    #[test]
+    fn client_error_unless_timeout_passes_timeouts_through() {
+        let err: RedisError = std::io::Error::from(std::io::ErrorKind::TimedOut).into();
+        let bridged = client_error_unless_timeout(err, "ctx");
+        assert_eq!(error_type(&bridged), RequestErrorType::Timeout);
+    }
+
+    #[test]
+    fn client_error_unless_timeout_keeps_connection_errors_out_of_disconnect() {
+        let err: RedisError = std::io::Error::from(std::io::ErrorKind::ConnectionReset).into();
+        assert_eq!(error_type(&err), RequestErrorType::Disconnect);
+        let bridged = client_error_unless_timeout(err, "ctx");
+        assert_eq!(error_type(&bridged), RequestErrorType::Unspecified);
+    }
 
     #[test]
     fn ordinary_handles_and_pooled_ids_never_collide() {

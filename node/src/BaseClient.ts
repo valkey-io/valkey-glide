@@ -87,6 +87,7 @@ import {
     TimeUnit,
     TimeoutError,
     ValkeyError,
+    DelexOptions,
     ZAddOptions,
     ZScanOptions,
     convertFieldsAndValuesToHashDataType,
@@ -107,6 +108,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDelEx,
     createDelIfEq,
     createDump,
     createExists,
@@ -1401,6 +1403,8 @@ export interface AdvancedBaseClientConfiguration {
      * such as enabling an insecure mode that bypasses certificate validation.
      */
     tlsAdvancedConfiguration?: {
+        // TODO #7707: Document that root certificates or IAM authentication with `insecure`
+        // is rejected.
         /**
          * Whether to bypass TLS certificate verification.
          *
@@ -1570,7 +1574,7 @@ export class BaseClient {
     protected defaultDecoder = Decoder.String;
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
-    private config: BaseClientConfiguration | undefined;
+    private config: BaseClientConfiguration;
     private addressResolverKey: string | undefined;
     private credentialProviderKey: string | undefined;
     protected clientHandle: GlideClientHandle | null = null;
@@ -1582,6 +1586,7 @@ export class BaseClient {
         configuration: connection_request.IConnectionRequest,
     ) {
         if (options.pubsubSubscriptions) {
+            // TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
             if (options.protocol == ProtocolVersion.RESP2) {
                 throw new ConfigurationError(
                     "PubSub subscriptions require RESP3 protocol, but RESP2 was configured.",
@@ -1753,7 +1758,7 @@ export class BaseClient {
         }
 
         const [callback, context] = this.getPubsubCallbackAndContext(
-            this.config!,
+            this.config,
         );
 
         if (callback) {
@@ -1838,12 +1843,14 @@ export class BaseClient {
         this.dropOtelSpanForCallback(response.callbackIdx);
     };
 
-    protected constructor(options?: BaseClientConfiguration) {
+    protected constructor(
+        options: BaseClientConfiguration = { addresses: [] },
+    ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
 
         this.config = options;
-        this.defaultDecoder = options?.defaultDecoder ?? Decoder.String;
+        this.defaultDecoder = options.defaultDecoder ?? Decoder.String;
     }
 
     protected getCallbackIndex(): number {
@@ -2380,8 +2387,8 @@ export class BaseClient {
 
         // only throw error if BOTH config exists AND callback exists
         if (
-            this.isPubsubConfigured(this.config!) &&
-            this.getPubsubCallbackAndContext(this.config!)[0]
+            this.isPubsubConfigured(this.config) &&
+            this.getPubsubCallbackAndContext(this.config)[0]
         ) {
             throw new ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback.",
@@ -2403,8 +2410,8 @@ export class BaseClient {
 
         // only throw error if BOTH config exists AND callback exists
         if (
-            this.isPubsubConfigured(this.config!) &&
-            this.getPubsubCallbackAndContext(this.config!)[0]
+            this.isPubsubConfigured(this.config) &&
+            this.getPubsubCallbackAndContext(this.config)[0]
         ) {
             throw new ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback.",
@@ -9716,15 +9723,39 @@ export class BaseClient {
     }
 
     /**
+     * Deletes `key` if its value meets the given condition.
+     *
+     * @see {@link https://valkey.io/commands/delex/|valkey.io} for more details.
+     *
+     * @param key - The key to delete.
+     * @param options - The condition for deleting the key.
+     * @returns `true` if `key` was deleted, `false` otherwise.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key", "value");
+     * console.log(await client.delex("key", { condition: "onlyIfEqual", value: "other_value" })); // Output: false
+     * console.log(await client.delex("key", { condition: "onlyIfNotEqual", value: "value" })); // Output: false
+     * console.log(await client.delex("key", { condition: "onlyIfEqual", value: "value" })); // Output: true
+     * ```
+     *
+     * @since Valkey 9.2.0
+     */
+    public async delex(
+        key: GlideString,
+        options: DelexOptions,
+    ): Promise<boolean> {
+        return this.createWritePromise(createDelEx(key, options));
+    }
+
+    /**
      * Deletes `key` if its value equals `value`.
      *
      * @see {@link https://valkey.io/commands/delifeq/|valkey.io} for more details.
      *
      * @param key - The key to delete.
-     * @param value - The comparison value. The key is only deleted if its current value matches
-     *     exactly.
-     * @returns `true` if `key` was deleted, or `false` if `key` did not exist or its value did
-     *     not match `value`.
+     * @param value - The value to compare against the key.
+     * @returns `true` if `key` was deleted, `false` otherwise.
      *
      * @example
      * ```typescript
@@ -10484,7 +10515,7 @@ export class BaseClient {
      */
     public static serializeConnectionRequest(
         options: BaseClientConfiguration,
-        constructor: (options?: BaseClientConfiguration) => BaseClient,
+        constructor: (options: BaseClientConfiguration) => BaseClient,
     ): { bytes: Uint8Array; resolverKey: string | undefined } {
         const instance = constructor(options);
         const request = instance.createClientRequest(options);
@@ -10513,7 +10544,7 @@ export class BaseClient {
      */
     protected static async createClientInternal<TConnection extends BaseClient>(
         options: BaseClientConfiguration,
-        constructor: (options?: BaseClientConfiguration) => TConnection,
+        constructor: (options: BaseClientConfiguration) => TConnection,
     ): Promise<TConnection> {
         const overallStart = Date.now();
 
@@ -10561,7 +10592,7 @@ export class BaseClient {
         immediateAuth = false,
     ) {
         // If we’re on IAM, forbid password updates to avoid confusion.
-        const creds = this.config?.credentials;
+        const creds = this.config.credentials;
         const usingIam = !!creds && "iamConfig" in creds;
 
         if (usingIam) {
@@ -10580,11 +10611,10 @@ export class BaseClient {
             updateConnectionPassword,
         );
 
-        if (response === "OK" && !this.config?.credentials) {
+        if (response === "OK" && !this.config.credentials) {
             this.config = {
-                ...this.config!,
+                ...this.config,
                 credentials: {
-                    ...this.config!.credentials,
                     password: password ? password : "",
                 },
             };
@@ -10607,7 +10637,7 @@ export class BaseClient {
      */
     public async refreshIamToken(): Promise<GlideString> {
         if (
-            !this.config?.credentials ||
+            !this.config.credentials ||
             !("iamConfig" in this.config.credentials)
         ) {
             throw new ConfigurationError(

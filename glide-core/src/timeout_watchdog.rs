@@ -17,14 +17,51 @@ use tokio::sync::oneshot;
 
 // ─── Public Types ────────────────────────────────────────────────────────────
 
-/// Published pending count: updated by the watchdog thread once per loop iteration.
-/// Readers use relaxed load; only the watchdog thread writes (no contention).
-static PUBLISHED_PENDING: AtomicUsize = AtomicUsize::new(0);
+/// Instance-local snapshot capabilities. Only the worker owns the writer;
+/// handles may clone readers without gaining publication authority.
+mod pending_snapshot {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
 
-/// Returns the current number of pending (registered but not yet fired/cancelled)
-/// watchdog entries.
+    #[derive(Clone)]
+    pub(super) struct Reader(Arc<AtomicUsize>);
+
+    pub(super) struct Writer(Arc<AtomicUsize>);
+
+    pub(super) fn new() -> (Reader, Writer) {
+        let count = Arc::new(AtomicUsize::new(0));
+        (Reader(Arc::clone(&count)), Writer(count))
+    }
+
+    impl Reader {
+        pub(super) fn load(&self) -> usize {
+            self.0.load(Ordering::Relaxed)
+        }
+    }
+
+    impl Writer {
+        pub(super) fn publish(&mut self, count: usize) {
+            self.0.store(count, Ordering::Relaxed);
+        }
+    }
+}
+
+/// Returns the elected watchdog's latest pending-entry snapshot, or zero
+/// before initialization. Reading diagnostics does not start a worker.
 pub fn pending_count() -> usize {
-    PUBLISHED_PENDING.load(Ordering::Relaxed)
+    let slot = GLOBAL_SLOT.load(Ordering::Acquire);
+    if slot.is_null() {
+        return 0;
+    }
+    // Safety: published slots and elected watchdogs are never freed.
+    let watchdog = unsafe { &*slot }.load(Ordering::Acquire);
+    if watchdog.is_null() {
+        0
+    } else {
+        unsafe { &*watchdog }.pending.load()
+    }
 }
 
 /// Resolve a command name from raw bytes to a &'static str without allocation.
@@ -98,6 +135,7 @@ pub fn cmd_name_from_bytes(bytes: &[u8]) -> &'static str {
                 (b"BITOP", "BITOP"),
                 (b"BLPOP", "BLPOP"),
                 (b"BRPOP", "BRPOP"),
+                (b"DELEX", "DELEX"),
                 (b"FCALL", "FCALL"),
                 (b"GETEX", "GETEX"),
                 (b"HELLO", "HELLO"),
@@ -255,6 +293,8 @@ pub fn cmd_name_from_bytes(bytes: &[u8]) -> &'static str {
         9 => match_upper(
             bytes,
             &[
+                (b"FT.CURSOR", "FT.CURSOR"),
+                (b"FT.HYBRID", "FT.HYBRID"),
                 (b"GEOSEARCH", "GEOSEARCH"),
                 (b"HEXPIREAT", "HEXPIREAT"),
                 (b"PEXPIREAT", "PEXPIREAT"),
@@ -606,6 +646,7 @@ struct DeadlineEntry {
 #[derive(Clone)]
 pub struct TimeoutWatchdog {
     tx: mpsc::Sender<DeadlineEntry>,
+    pending: pending_snapshot::Reader,
 }
 
 /// Points to the slot that holds the global watchdog pointer. Read it
@@ -683,7 +724,6 @@ fn reinit_global() {
     if !slot.is_null() {
         unsafe { &*slot }.store(ptr::null_mut(), Ordering::Release);
     }
-    PUBLISHED_PENDING.store(0, Ordering::Relaxed);
 }
 
 /// Make sure forked children reinitialize the global watchdog.
@@ -732,7 +772,7 @@ impl TimeoutWatchdog {
     fn init_global() -> &'static Self {
         #[cfg(unix)]
         ensure_reinit_in_forked_child();
-        let ptr = Box::into_raw(Box::new(Self::start_global()));
+        let ptr = Box::into_raw(Box::new(Self::start()));
         match global_slot().compare_exchange(
             ptr::null_mut(),
             ptr,
@@ -751,25 +791,25 @@ impl TimeoutWatchdog {
         }
     }
 
-    /// Start the global watchdog instance (publishes pending count).
-    fn start_global() -> Self {
+    /// Construct matching registration and snapshot capabilities before spawning.
+    fn prepare() -> (
+        Self,
+        mpsc::Receiver<DeadlineEntry>,
+        pending_snapshot::Writer,
+    ) {
         let (tx, rx) = mpsc::channel();
-        std::thread::Builder::new()
-            .name("glide-timeout-watchdog".into())
-            .spawn(move || Self::run(rx, true))
-            .expect("Failed to spawn timeout watchdog thread");
-        Self { tx }
+        let (pending, writer) = pending_snapshot::new();
+        (Self { tx, pending }, rx, writer)
     }
 
-    /// Start a watchdog instance. Spawns a dedicated OS thread.
-    /// Does NOT publish to the global pending count (only the global instance does).
+    /// Start an independent watchdog with its own pending-entry snapshot.
     pub fn start() -> Self {
-        let (tx, rx) = mpsc::channel();
+        let (watchdog, rx, pending) = Self::prepare();
         std::thread::Builder::new()
             .name("glide-timeout-watchdog".into())
-            .spawn(move || Self::run(rx, false))
+            .spawn(move || Self::run(rx, pending))
             .expect("Failed to spawn timeout watchdog thread");
-        Self { tx }
+        watchdog
     }
 
     /// Register a timeout. Returns a `oneshot::Receiver<()>` that resolves
@@ -786,7 +826,7 @@ impl TimeoutWatchdog {
     }
 
     /// Watchdog thread main loop.
-    fn run(rx: mpsc::Receiver<DeadlineEntry>, publish_count: bool) {
+    fn run(rx: mpsc::Receiver<DeadlineEntry>, mut pending: pending_snapshot::Writer) {
         let mut deadlines: BTreeMap<Instant, Vec<DeadlineEntry>> = BTreeMap::new();
         let mut last_cleanup = Instant::now();
         let mut local_count: usize = 0;
@@ -841,10 +881,8 @@ impl TimeoutWatchdog {
                 }
             }
 
-            // Publish the local count once per iteration (no contention on write side)
-            if publish_count {
-                PUBLISHED_PENDING.store(local_count, Ordering::Relaxed);
-            }
+            // Only this worker can publish to this instance's snapshot.
+            pending.publish(local_count);
 
             // Wait for next event
             let wait_result = if let Some(next_deadline) = deadlines.keys().next() {
@@ -923,9 +961,8 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn pending_count_reflects_registered_entries() {
-        // Use the global watchdog since PUBLISHED_PENDING is a single global.
-        // #[serial] prevents concurrent tests from perturbing the global counter
-        // while we poll for our 2 registered entries.
+        // Exercise the public accessor. Serial tests may replace the global
+        // slot, but retired workers cannot overwrite this instance's snapshot.
         let watchdog = TimeoutWatchdog::global();
 
         // The watchdog publishes 0 as soon as these entries fire, so the deadline
@@ -974,6 +1011,86 @@ mod tests {
             result.is_ok(),
             "watchdog must still fire after mass cancellation"
         );
+    }
+
+    fn wait_for_pending(watchdog: &TimeoutWatchdog, expected: usize) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while watchdog.pending.load() != expected {
+            assert!(
+                Instant::now() < deadline,
+                "pending snapshot did not reach {expected}"
+            );
+            std::thread::yield_now();
+        }
+    }
+
+    fn wait_for_signal(mut signal: oneshot::Receiver<()>) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            match signal.try_recv() {
+                Ok(()) => return,
+                Err(oneshot::error::TryRecvError::Closed) => {
+                    panic!("worker dropped timeout signal")
+                }
+                Err(oneshot::error::TryRecvError::Empty) => {}
+            }
+            assert!(Instant::now() < deadline, "worker did not fire timeout");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    fn join_worker(worker: std::thread::JoinHandle<()>) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !worker.is_finished() {
+            assert!(
+                Instant::now() < deadline,
+                "worker did not exit after disconnect"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn retired_worker_cannot_overwrite_replacement_snapshot() {
+        let (retired, rx, writer) = TimeoutWatchdog::prepare();
+        let worker = std::thread::spawn(move || TimeoutWatchdog::run(rx, writer));
+        // Establish that the old worker is running before creating its replacement.
+        let first = retired.register(Duration::ZERO, Instant::now());
+        wait_for_signal(first);
+
+        let replacement = TimeoutWatchdog::start();
+        let mut first = replacement.register(Duration::from_secs(60), Instant::now());
+        let mut second = replacement.register(Duration::from_secs(60), Instant::now());
+        wait_for_pending(&replacement, 2);
+
+        // Force a publication by the retired worker AFTER the replacement's 2.
+        // Joining ensures its final zero publication has completed before asserting.
+        let wake = retired.register(Duration::ZERO, Instant::now());
+        wait_for_signal(wake);
+        drop(retired);
+        join_worker(worker);
+        assert_eq!(replacement.pending.load(), 2);
+        assert_eq!(first.try_recv(), Err(oneshot::error::TryRecvError::Empty));
+        assert_eq!(second.try_recv(), Err(oneshot::error::TryRecvError::Empty));
+    }
+
+    #[test]
+    fn losing_candidate_cannot_overwrite_elected_snapshot() {
+        let elected = TimeoutWatchdog::start();
+        let mut first = elected.register(Duration::from_secs(60), Instant::now());
+        let mut second = elected.register(Duration::from_secs(60), Instant::now());
+        wait_for_pending(&elected, 2);
+
+        // Model a candidate losing the CAS and being dropped before its spawned
+        // worker is first scheduled. The real worker loop publishes zero before
+        // observing Disconnected; that publication must belong only to the loser.
+        let (loser, rx, writer) = TimeoutWatchdog::prepare();
+        drop(loser);
+        join_worker(std::thread::spawn(move || TimeoutWatchdog::run(rx, writer)));
+        assert_eq!(elected.pending.load(), 2);
+        assert_eq!(first.try_recv(), Err(oneshot::error::TryRecvError::Empty));
+        assert_eq!(second.try_recv(), Err(oneshot::error::TryRecvError::Empty));
     }
 
     // ── Latency Tracker ──────────────────────────────────────────────────

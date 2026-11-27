@@ -1,14 +1,16 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import collections
+import ctypes
 import os
 import sys
 import threading
 import warnings
 import weakref
+from contextlib import contextmanager
 from dataclasses import dataclass
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Iterator, List, Optional, Tuple, Union
 
 if TYPE_CHECKING:
     from .isolated_scope import IsolatedScope
@@ -134,7 +136,8 @@ class RdmaReadReceipt:
     Attributes:
         bytes_written (int): Bytes the server moved into the window.
         checksum (Optional[int]): CRC-32c the server computed over those bytes.
-            The landed bytes have already been verified against it.
+            The landed bytes have already been verified against it, unless
+            they landed in GPU memory.
     """
 
     bytes_written: int
@@ -162,7 +165,7 @@ class RdmaWindow:
         staging what one will send.
 
         Raises:
-            RdmaError: If the region has been closed.
+            RdmaError: If the region has been closed, or is GPU memory.
         """
         return self.region.memoryview()[self.offset : self.offset + self.length]
 
@@ -173,6 +176,310 @@ def _memory_span(memory: Any) -> Tuple[int, int]:
     view = memoryview(memory)
     start = int(ffi.cast("uintptr_t", ffi.from_buffer(view)))
     return start, start + view.nbytes
+
+
+# DLPack device types, from `__dlpack_device__`: memory the CPU addresses, CUDA
+# memory, and CUDA managed memory.
+_DLPACK_HOST_DEVICES = (1, 3)  # kDLCPU, kDLCUDAHost
+_DLPACK_CUDA = 2
+_DLPACK_CUDA_MANAGED = 13
+
+
+@dataclass(frozen=True)
+class _CudaMemory:
+    """
+    Where CUDA device memory lies: the address range ``[start, end)`` and the
+    ordinal of the GPU it is on.
+    """
+
+    start: int
+    end: int
+    ordinal: int
+
+
+def _cuda_memory(memory: Any) -> Optional[_CudaMemory]:
+    """
+    Where `memory` lies if it is CUDA device memory, as ``__dlpack_device__``
+    reports it, or None if it is host memory.
+
+    The range comes from ``__cuda_array_interface__``, which PyTorch,
+    CuPy, Numba and JAX offer, or else from a ``torch.Tensor``'s own
+    ``data_ptr()``, since PyTorch raises for a dtype it has no typestr for
+    (the float8 types, and bfloat16 in older releases) and for a tensor that
+    requires grad.
+
+    Raises:
+        TypeError: If the memory is on a device other than the host or a CUDA
+            GPU, is managed memory, is read-only or not C-contiguous, has
+            strides that do not match its shape, is a tensor with its conjugate
+            or negative bit set, or offers no way to find its address.
+    """
+    dlpack_device = getattr(memory, "__dlpack_device__", None)
+    if dlpack_device is None:
+        return None
+    device = dlpack_device()
+    device_type = int(device[0])
+    if device_type in _DLPACK_HOST_DEVICES:
+        return None
+    if device_type == _DLPACK_CUDA_MANAGED:
+        raise TypeError(
+            "CUDA managed memory cannot be registered; allocate the memory on "
+            "the device instead"
+        )
+    if device_type != _DLPACK_CUDA:
+        raise TypeError(
+            f"memory on DLPack device type {device_type} cannot be registered; "
+            "only host memory and CUDA device memory can"
+        )
+
+    for bit in ("conj", "neg"):
+        # PyTorch applies these bits when it reads the storage; the fabric would
+        # move the stored values as they are.
+        is_set = getattr(memory, f"is_{bit}", None)
+        if callable(is_set) and is_set():
+            raise TypeError(
+                f"a tensor with its {bit} bit set cannot be registered; call "
+                f"resolve_{bit}() first"
+            )
+
+    try:
+        interface = memory.__cuda_array_interface__
+    except (AttributeError, KeyError, RuntimeError, TypeError):
+        # PyTorch raises KeyError for a dtype it has no typestr for, and
+        # RuntimeError for a tensor that requires grad, such as a parameter.
+        interface = None
+    if interface is not None:
+        start, end = _cuda_array_interface_span(interface)
+        return _CudaMemory(start, end, int(device[1]))
+
+    data_ptr = getattr(memory, "data_ptr", None)
+    if data_ptr is None:
+        raise TypeError(
+            "CUDA memory must offer __cuda_array_interface__, or data_ptr() as "
+            "a torch.Tensor does, to be registered"
+        )
+    if not memory.is_contiguous():
+        raise TypeError("memory must be C-contiguous")
+    start = int(data_ptr())
+    end = start + memory.numel() * memory.element_size()
+    return _CudaMemory(start, end, int(device[1]))
+
+
+def _cuda_array_interface_span(interface: dict) -> Tuple[int, int]:
+    """The address range ``[start, end)`` a ``__cuda_array_interface__`` describes."""
+    address, readonly = interface["data"]
+    if readonly:
+        raise TypeError("memory must be writable")
+    if interface.get("mask") is not None:
+        raise TypeError("memory with a mask cannot be registered")
+    shape = tuple(interface["shape"])
+    # The size is the typestr's last part, as in "<f4" or "<V2".
+    itemsize = int(interface["typestr"][2:])
+    length = itemsize
+    for extent in shape:
+        length *= extent
+    strides = interface.get("strides")
+    if strides is not None and len(strides) != len(shape):
+        raise TypeError(
+            f"__cuda_array_interface__ has {len(strides)} strides for "
+            f"{len(shape)} dimensions"
+        )
+    if strides is not None and length:
+        expected = itemsize
+        for extent, stride in reversed(list(zip(shape, strides))):
+            if extent != 1 and stride != expected:
+                raise TypeError("memory must be C-contiguous")
+            expected *= extent
+    return int(address), int(address) + length
+
+
+def _view_or_cuda_memory(memory: Any) -> Union[memoryview, _CudaMemory]:
+    """
+    A view of `memory` if it has the buffer protocol, or else its ``_cuda_memory``.
+
+    Memory with the buffer protocol is tried first, so host memory registers as
+    before and its ``__dlpack_device__`` is never called.
+
+    Raises:
+        TypeError: The buffer protocol's own error, for memory that is neither a
+            buffer nor CUDA device memory, or as ``_cuda_memory`` raises.
+    """
+    try:
+        return memoryview(memory)
+    except TypeError as error:
+        not_a_buffer = error
+    # Outside the `except`, so an error here is not chained to the one above.
+    cuda_memory = _cuda_memory(memory)
+    if cuda_memory is None:
+        raise not_a_buffer
+    return cuda_memory
+
+
+# The CUDA driver, loaded the first time GPU memory is registered. GLIDE calls it
+# only to check how GPU memory was allocated and to make its GPU's context current
+# around a registration.
+_CUDA_DRIVER: Optional[ctypes.CDLL] = None
+_CUDA_DRIVER_LOCK = threading.Lock()
+
+# From cuda.h.
+_CUDA_ERROR_INVALID_VALUE = 1
+_CU_POINTER_ATTRIBUTE_MEMORY_TYPE = 2
+_CU_POINTER_ATTRIBUTE_IS_MANAGED = 8
+_CU_MEMORYTYPE_DEVICE = 2
+
+
+def _cuda_driver() -> ctypes.CDLL:
+    """
+    The CUDA driver library, loaded and initialized once.
+
+    Raises:
+        RdmaError: If the driver does not load or initialize. A later call
+            tries again.
+    """
+    global _CUDA_DRIVER
+    with _CUDA_DRIVER_LOCK:
+        if _CUDA_DRIVER is None:
+            try:
+                driver = ctypes.CDLL("libcuda.so.1")
+            except OSError as error:
+                raise RdmaError(
+                    f"the CUDA driver libcuda.so.1 could not be loaded: {error}"
+                ) from error
+            driver.cuGetErrorName.argtypes = [
+                ctypes.c_int,
+                ctypes.POINTER(ctypes.c_char_p),
+            ]
+            driver.cuDeviceGet.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
+            driver.cuDevicePrimaryCtxRetain.argtypes = [
+                ctypes.POINTER(ctypes.c_void_p),
+                ctypes.c_int,
+            ]
+            driver.cuDevicePrimaryCtxRelease_v2.argtypes = [ctypes.c_int]
+            driver.cuCtxPushCurrent_v2.argtypes = [ctypes.c_void_p]
+            driver.cuCtxPopCurrent_v2.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+            driver.cuPointerGetAttribute.argtypes = [
+                ctypes.POINTER(ctypes.c_uint),
+                ctypes.c_int,
+                ctypes.c_uint64,
+            ]
+            _cuda_check(driver, driver.cuInit(0), "cuInit")
+            _CUDA_DRIVER = driver
+        return _CUDA_DRIVER
+
+
+def _cuda_check(driver: ctypes.CDLL, code: int, call: str) -> None:
+    """Raise an RdmaError naming the driver's error unless `code` is success."""
+    error = _cuda_error(driver, code, call)
+    if error is not None:
+        raise RdmaError(error)
+
+
+def _cuda_error(driver: ctypes.CDLL, code: int, call: str) -> Optional[str]:
+    """What failed, naming the driver's error, or None if `code` is success."""
+    if code == 0:
+        return None
+    name = ctypes.c_char_p()
+    if driver.cuGetErrorName(code, ctypes.byref(name)) == 0 and name.value:
+        reason = name.value.decode()
+    else:
+        reason = f"error {code}"
+    return f"{call} failed with {reason}"
+
+
+def _check_cuda_device_memory(address: int) -> None:
+    """
+    Refuse the memory at `address` unless CUDA allocated it as device memory.
+
+    ``__dlpack_device__`` names the device a tensor is on, not how its memory
+    was allocated: PyTorch reports managed memory from a custom allocator as
+    ordinary CUDA memory. So the driver is asked, as libfabric asks it.
+    Managed memory has no dmabuf to register, and a failed dmabuf registration
+    can stop libfabric using dmabuf for the rest of the process.
+
+    Raises:
+        TypeError: If the memory is CUDA managed memory, or not CUDA device
+            memory.
+        RdmaError: If the driver does not load or initialize, or cannot report
+            on the memory.
+    """
+    driver = _cuda_driver()
+
+    def _attribute(name: int, call: str) -> int:
+        value = ctypes.c_uint()
+        code = driver.cuPointerGetAttribute(ctypes.byref(value), name, address)
+        if code == _CUDA_ERROR_INVALID_VALUE:
+            raise TypeError("memory is not CUDA memory; CUDA does not know its address")
+        _cuda_check(driver, code, call)
+        return value.value
+
+    if _attribute(
+        _CU_POINTER_ATTRIBUTE_IS_MANAGED, "cuPointerGetAttribute(IS_MANAGED)"
+    ):
+        raise TypeError(
+            "CUDA managed memory cannot be registered; allocate the memory on "
+            "the device instead"
+        )
+    memory_type = _attribute(
+        _CU_POINTER_ATTRIBUTE_MEMORY_TYPE, "cuPointerGetAttribute(MEMORY_TYPE)"
+    )
+    if memory_type != _CU_MEMORYTYPE_DEVICE:
+        raise TypeError(
+            f"memory of CUDA memory type {memory_type} cannot be registered; "
+            "only CUDA device memory can"
+        )
+
+
+@contextmanager
+def _gpu_context(ordinal: int) -> Iterator[None]:
+    """
+    Make the primary context of GPU `ordinal` current on this thread, and put
+    back whatever was current before when the block ends.
+
+    libfabric looks GPU memory up through the CUDA driver on the registering
+    thread, and makes no context current itself. With no context current, a
+    registration over dmabuf fails, and with another GPU's context it fails on
+    libfabric 2.6.0.
+
+    Putting the previous context back is logged if it fails, not raised: by
+    then the registration may have succeeded, and raising would lose it.
+
+    Raises:
+        RdmaError: If the driver does not load or initialize, or making the
+            context current fails.
+    """
+    driver = _cuda_driver()
+    device = ctypes.c_int()
+    _cuda_check(
+        driver, driver.cuDeviceGet(ctypes.byref(device), ordinal), "cuDeviceGet"
+    )
+    context = ctypes.c_void_p()
+    _cuda_check(
+        driver,
+        driver.cuDevicePrimaryCtxRetain(ctypes.byref(context), device),
+        "cuDevicePrimaryCtxRetain",
+    )
+    try:
+        _cuda_check(driver, driver.cuCtxPushCurrent_v2(context), "cuCtxPushCurrent")
+        try:
+            yield
+        finally:
+            popped = ctypes.c_void_p()
+            error = _cuda_error(
+                driver,
+                driver.cuCtxPopCurrent_v2(ctypes.byref(popped)),
+                "cuCtxPopCurrent",
+            )
+            if error is not None:
+                Logger.log(
+                    Level.ERROR,
+                    "rdma",
+                    f"{error} after registering GPU memory; the thread's CUDA "
+                    "context may not be the one it had before",
+                )
+    finally:
+        # The allocation's own owner, such as PyTorch, holds the context too, so
+        # releasing this reference leaves it alive.
+        driver.cuDevicePrimaryCtxRelease_v2(device)
 
 
 class _RetainedRdmaMemory:
@@ -262,6 +569,12 @@ class _RetainedRdmaMemory:
 
 
 _RETAINED_RDMA_MEMORY = _RetainedRdmaMemory()
+
+_GPU_MEMORY_MOVED = (
+    "the GPU memory this region was registered over has moved, been resized, or "
+    "changed layout, for example through resize_(), set_() or transpose_(); close "
+    "the region and register the memory again"
+)
 
 
 def _free_rdma_region(lib, ffi, region, memory, view, span: Tuple[int, int]):
@@ -363,14 +676,26 @@ class RdmaRegion:
     :attr:`memory_released`.
     """
 
-    def __init__(self, client: "BaseClient", memory: Any, region):
+    def __init__(
+        self,
+        client: "BaseClient",
+        memory: Any,
+        region,
+        cuda_memory: Optional[_CudaMemory] = None,
+    ):
         # Both references keep the caller's allocation alive for as long as the
         # server may write to it: the object itself, and the cdata view CFFI
-        # made of it.
+        # made of it. GPU memory has no view, since the CPU cannot address it.
         self._memory = memory
-        self._view = client._ffi.from_buffer(memory)
+        self._cuda_memory = cuda_memory
+        self._on_gpu = cuda_memory is not None
+        self._view = None if self._on_gpu else client._ffi.from_buffer(memory)
         try:
-            self._span = _memory_span(memory)
+            self._span = (
+                (cuda_memory.start, cuda_memory.end)
+                if cuda_memory is not None
+                else _memory_span(memory)
+            )
             self._client = client
             self._region = region
             # The FFI registers exactly the bytes it is handed, so the region
@@ -417,7 +742,8 @@ class RdmaRegion:
             # however many references remain. `register_rdma_region` keeps its
             # own export if the fabric still holds the memory, so this one is
             # not needed for that.
-            client._ffi.release(self._view)
+            if self._view is not None:
+                client._ffi.release(self._view)
             raise
 
     @property
@@ -504,9 +830,15 @@ class RdmaRegion:
         A view of the registered memory as a span of bytes.
 
         Raises:
-            RdmaError: If the region has been closed.
+            RdmaError: If the region has been closed, or is GPU memory, which
+                the CPU cannot read; use the tensor or array itself.
         """
         self._require_open()
+        if self._on_gpu:
+            raise RdmaError(
+                "this RDMA region is GPU memory, which has no host view; read or "
+                "write it through the tensor or array it was registered from"
+            )
         return memoryview(self._memory).cast("B")
 
     def close(self) -> None:
@@ -571,6 +903,16 @@ class RdmaRegion:
                     "transfer may use a region at a time"
                 )
             region = self._require_open()
+            if self._on_gpu:
+                # Nothing stops a tensor from moving, changing size or changing
+                # layout, as `resize_`, `set_` or `transpose_` do, but the
+                # fabric still addresses the range it registered.
+                try:
+                    moved = _cuda_memory(self._memory) != self._cuda_memory
+                except TypeError as error:
+                    raise RdmaError(_GPU_MEMORY_MOVED) from error
+                if moved:
+                    raise RdmaError(_GPU_MEMORY_MOVED)
             self._busy = True
             return region
 
@@ -596,7 +938,12 @@ class RdmaRegion:
         self.close()
 
     def __repr__(self) -> str:
-        state = "closed" if self.closed else f"{self._capacity} bytes"
+        if self.closed:
+            state = "closed"
+        elif self._on_gpu:
+            state = f"{self._capacity} bytes of CUDA memory"
+        else:
+            state = f"{self._capacity} bytes"
         return f"RdmaRegion({state})"
 
 
@@ -646,10 +993,13 @@ class BaseClient(CoreCommands):
         self._config = config
         self._is_closed = False
 
+        self._create_core_client()
+
+        # Register the hook only after a successful connect. A failed create()
+        # never returns the client, so nothing can close it, and every later
+        # fork would retry the failed connect in the child.
         if hasattr(os, "register_at_fork"):
             os.register_at_fork(after_in_child=self._create_core_client)
-
-        self._create_core_client()
 
         return self
 
@@ -1716,9 +2066,49 @@ class BaseClient(CoreCommands):
         Register memory so the server can transfer into or out of it directly.
 
         The memory stays the caller's. Anything supporting the writable buffer
-        protocol works: a ``bytearray``, an ``mmap``, a NumPy array, a tensor's
-        backing store. It must not be resized or freed until the returned region
-        is closed.
+        protocol works: a ``bytearray``, an ``mmap``, a NumPy array such as a
+        CPU tensor's ``.numpy()``. It must not be resized or freed until the
+        returned region is closed.
+
+        GPU memory works too, on a client whose ``RdmaConfiguration`` sets
+        ``device_memory``: a CUDA ``torch.Tensor`` or CuPy array, or anything
+        whose ``__dlpack_device__`` names a CUDA device and that offers
+        ``__cuda_array_interface__``. The server then reads and writes the GPU
+        memory directly, with no copy through host memory. The region has no
+        :meth:`RdmaRegion.memoryview`, and since GLIDE cannot read the bytes:
+
+        - ``rdma_set`` takes ``RdmaSetChecksum.Skip()`` or
+          ``RdmaSetChecksum.Known(value)``, not ``Compute()``.
+        - ``rdma_get`` does not check the landed bytes against the server's
+          checksum, and hands it back in the receipt instead.
+        - Finish the GPU work that writes the memory before calling
+          ``rdma_set`` on it, for example with ``torch.cuda.synchronize()`` or
+          the stream's ``synchronize()``. No GPU work may touch a window while
+          a transfer of it runs.
+        - GPU work that reads a window must be submitted after ``rdma_get``
+          returns, since work already running can see stale data. If the
+          device's ``CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WRITES_ORDERING`` does
+          not cover that work, call ``cuFlushGPUDirectRDMAWrites`` first.
+
+        A tensor whose address range or layout changes after registration, as
+        it does through ``resize_()``, ``set_()`` or ``transpose_()``, is
+        refused at its next transfer.
+
+        A tensor that requires grad, such as a parameter, can be registered.
+        ``rdma_get`` writes its storage outside PyTorch, so autograd's version
+        counter does not change. Do not ``rdma_get`` into storage, or any alias
+        of it, that a pending backward pass saved: backward would silently use
+        the new values. ``torch.autograd.graph.increment_version()`` after the
+        transfer lets PyTorch detect such an overwrite, but does not make the
+        old graph valid. Sending with ``rdma_set``, or loading weights between
+        backward passes, is safe.
+
+        GLIDE makes the memory's GPU context current while it registers, so GPU
+        memory can be registered from any thread, including one that never used
+        CUDA. A tensor from PyTorch's expandable segments
+        (``PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True``) can span more
+        than one mapping. Registering one that does needs libfabric 2.7.0 or
+        later, and the dmabuf path libfabric takes by default.
 
         Register one large region and address windows of it per transfer rather
         than registering per operation.
@@ -1730,24 +2120,34 @@ class BaseClient(CoreCommands):
         only after a failed deregistration.
 
         Args:
-            memory (Any): A writable, C-contiguous buffer to register.
+            memory (Any): A writable, C-contiguous buffer to register, or a
+                C-contiguous CUDA tensor or array.
 
         Returns:
             RdmaRegion: The registered region. Close when done with it.
 
         Raises:
             RdmaError: If this build has no RDMA support, the client was not
-                configured for RDMA, the memory is still held from a closed
-                region, or the fabric refused the registration.
+                configured for RDMA, or was configured without
+                ``device_memory`` and given GPU memory, the memory is still held
+                from a closed region, the CUDA driver could not be loaded, report
+                how the GPU memory was allocated, or make its context current, or
+                the fabric refused the registration.
             ClosingError: If the client is closed.
-            TypeError: If the buffer is not writable and C-contiguous.
+            TypeError: If the buffer is not writable and C-contiguous, or has
+                strides that do not match its shape, or the memory is on a
+                device other than a CUDA GPU, or is CUDA managed memory or
+                otherwise not CUDA device memory, or is a tensor with its
+                conjugate or negative bit set.
 
         Example:
             >>> region = client.register_rdma_region(bytearray(1 << 20))
             >>> region.capacity
             1048576
         """
-        view = memoryview(memory)
+        view = _view_or_cuda_memory(memory)
+        if isinstance(view, _CudaMemory):
+            return self._register_rdma_device_region(memory, view)
         if view.readonly:
             raise TypeError("memory must be writable")
         if not view.c_contiguous:
@@ -1796,6 +2196,49 @@ class BaseClient(CoreCommands):
         finally:
             self._end_rdma_call()
 
+    def _register_rdma_device_region(
+        self, memory: Any, cuda_memory: _CudaMemory
+    ) -> RdmaRegion:
+        """:meth:`register_rdma_region` for GPU memory, as `_cuda_memory` found it."""
+        address = cuda_memory.start
+        length = cuda_memory.end - address
+        span = (address, cuda_memory.end)
+        if _RETAINED_RDMA_MEMORY.overlaps(span):
+            raise RdmaError(
+                "this memory belongs to a closed RDMA region whose last transfer "
+                "could still write into it; register different memory"
+            )
+
+        client_adapter_ptr = self._begin_rdma_call()
+        try:
+            with _gpu_context(cuda_memory.ordinal):
+                _check_cuda_device_memory(address)
+                registration = self._lib.register_rdma_cuda_region(
+                    client_adapter_ptr,
+                    self._ffi.cast("uint8_t*", address),
+                    length,
+                )
+            if registration == self._ffi.NULL:
+                raise RdmaError(
+                    "Internal error: received NULL from register_rdma_cuda_region"
+                )
+            try:
+                if registration.error_message != self._ffi.NULL:
+                    raise RdmaError(
+                        self._ffi.string(registration.error_message).decode(ENCODING)
+                    )
+                region = registration.region
+                try:
+                    return RdmaRegion(self, memory, region, cuda_memory)
+                except BaseException:
+                    # As for host memory: nothing else would free the region.
+                    _free_rdma_region(self._lib, self._ffi, region, memory, None, span)
+                    raise
+            finally:
+                self._lib.free_rdma_registration(registration)
+        finally:
+            self._end_rdma_call()
+
     def rdma_get(
         self,
         key: TEncodable,
@@ -1835,11 +2278,14 @@ class BaseClient(CoreCommands):
         Returns:
             Optional[RdmaReadReceipt]: What the server transferred, or None if the
             key does not exist. The landed bytes have already been verified
-            against the receipt's ``checksum``.
+            against the receipt's ``checksum``. GPU memory is not checked,
+            since GLIDE cannot read it; there the checksum is the server's, for
+            the caller to check.
 
         Raises:
             RdmaError: If the region is closed, in use by another transfer, or
-                belongs to another client; a ``MULTI`` is open on this client;
+                belongs to another client; its GPU memory has moved, been
+                resized, or changed layout; a ``MULTI`` is open on this client;
                 the value was larger than the window (the region stays usable);
                 the landed bytes did not match the checksum; or the server
                 refused the transfer or its handshake.
@@ -1887,6 +2333,8 @@ class BaseClient(CoreCommands):
             checksum: Whether the server checks the bytes it read against a
                 CRC-32c before storing them; see :class:`RdmaSetChecksum`.
                 Defaults to ``RdmaSetChecksum.Skip()``, which sends none.
+                ``Compute()`` is refused for GPU memory, which GLIDE cannot
+                read.
 
         Returns:
             None. The server acknowledges without reporting a length, having
@@ -1895,7 +2343,8 @@ class BaseClient(CoreCommands):
 
         Raises:
             RdmaError: If the region is closed, in use by another transfer, or
-                belongs to another client; a ``MULTI`` is open on this client;
+                belongs to another client; its GPU memory has moved, been
+                resized, or changed layout; a ``MULTI`` is open on this client;
                 or the server refused the write or its handshake, including when
                 the bytes it read do not match the checksum. A refused write
                 stores nothing and leaves the region usable. If the region
@@ -1936,8 +2385,8 @@ class BaseClient(CoreCommands):
 
         The same value the server computes, so a caller can verify what landed
         after a read, or compute one before sending to pass to ``rdma_set`` as
-        ``RdmaSetChecksum.Known``. ``rdma_get`` verifies every read against the
-        checksum the server sends with its reply.
+        ``RdmaSetChecksum.Known``. ``rdma_get`` verifies every read into host
+        memory against the checksum the server sends with its reply.
 
         Args:
             data (Any): Any bytes-like object.

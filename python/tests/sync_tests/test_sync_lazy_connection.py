@@ -69,6 +69,7 @@ def get_expected_new_connections(
 
 @pytest.fixture(scope="function")
 def dedicated_cluster(
+    request,
     cluster_mode: bool,
 ) -> Generator[ValkeyCluster, None, None]:
     """
@@ -91,6 +92,7 @@ def dedicated_cluster(
         cluster_mode=cluster_mode,
         shard_count=3 if cluster_mode else 1,
         replica_count=0,
+        unix_socket=request.config.getoption("--unix-socket") and not cluster_mode,
     )
 
     yield cluster
@@ -232,6 +234,7 @@ class TestSyncLazyConnection:
                 monitoring_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [False, True])
+    @pytest.mark.requires_tcp
     def test_sync_lazy_connection_with_non_existent_host(
         self,
         request: Any,

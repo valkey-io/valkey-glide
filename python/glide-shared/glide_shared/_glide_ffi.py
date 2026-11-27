@@ -471,6 +471,12 @@ class _GlideFFI:
                 size_t length
             );
 
+            RdmaRegistration* register_rdma_cuda_region(
+                const void* client_adapter_ptr,
+                uint8_t* memory,
+                size_t length
+            );
+
             RdmaResult* rdma_get(
                 const void* client_adapter_ptr,
                 const uint8_t* key,

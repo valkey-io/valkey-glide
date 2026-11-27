@@ -41,9 +41,12 @@
 //! - Invalid routing scenarios
 
 use crate::aio::ConnectionLike;
-use crate::cluster_async::{ClusterConnInner, Connect, InnerCore, RefreshPolicy};
+use crate::cluster_async::{
+    ClusterConnInner, Connect, InnerCore, InternalSingleNodeRouting, RefreshPolicy,
+};
 use crate::cluster_routing::SlotAddr;
 use crate::cluster_topology::SLOT_SIZE;
+use crate::types::RetryMethod;
 use crate::{cmd, from_redis_value, ErrorKind, RedisError, RedisResult, Value};
 use std::sync::Arc;
 use strum_macros::{Display, EnumString};
@@ -691,30 +694,26 @@ async fn send_scan<C>(
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    if let Some(conn_future) = core
-        .connection_for_address(&scan_state.address_in_scan)
-        .await
-    {
-        let mut conn = conn_future.await;
-        let mut scan_command = cmd("SCAN");
-        scan_command.arg(scan_state.cursor);
-        if let Some(match_pattern) = cluster_scan_args.match_pattern.as_ref() {
-            scan_command.arg("MATCH").arg(match_pattern);
-        }
-        if let Some(count) = cluster_scan_args.count {
-            scan_command.arg("COUNT").arg(count);
-        }
-        if let Some(object_type) = &cluster_scan_args.object_type {
-            scan_command.arg("TYPE").arg(object_type.to_string());
-        }
-        conn.req_packed_command(&scan_command).await
-    } else {
-        Err(RedisError::from((
-            ErrorKind::ConnectionNotFoundForRoute,
-            "Cluster scan failed. No connection available for address: ",
-            format!("{}", scan_state.address_in_scan),
-        )))
+    // Look the connection up as the request path does, so a SCAN sent while the node
+    // is being reconnected waits for the reconnect instead of failing.
+    let (_, mut conn) = ClusterConnInner::get_connection(
+        InternalSingleNodeRouting::ByAddress(scan_state.address_in_scan.to_string()),
+        core,
+        None,
+    )
+    .await?;
+    let mut scan_command = cmd("SCAN");
+    scan_command.arg(scan_state.cursor);
+    if let Some(match_pattern) = cluster_scan_args.match_pattern.as_ref() {
+        scan_command.arg("MATCH").arg(match_pattern);
     }
+    if let Some(count) = cluster_scan_args.count {
+        scan_command.arg("COUNT").arg(count);
+    }
+    if let Some(object_type) = &cluster_scan_args.object_type {
+        scan_command.arg("TYPE").arg(object_type.to_string());
+    }
+    conn.req_packed_command(&scan_command).await
 }
 
 /// Checks if the error is retryable during scanning.
@@ -754,7 +753,17 @@ where
         cluster_scan_args.allow_non_covered_slots,
     ) {
         Ok(NextNodeResult::Address(new_address)) => {
-            let new_epoch = core.address_epoch(&new_address).await.unwrap_or(0);
+            // A node that just failed often can't report its epoch yet. Keep the one already
+            // read, so the node isn't scanned twice for an epoch change that didn't happen.
+            let known_epoch = if new_address == scan_state.address_in_scan {
+                scan_state.address_epoch
+            } else {
+                0
+            };
+            let new_epoch = core
+                .address_epoch(&new_address)
+                .await
+                .unwrap_or(known_epoch);
             Ok(Some(ScanState::new(
                 0,
                 scanned_slots_map,
@@ -780,31 +789,40 @@ async fn try_scan<C>(
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
+    let retry_params = core.get_cluster_param(|params| params.retry_params.clone());
     let mut new_scan_state = scan_state.clone();
+    let mut retry = 0;
 
     loop {
-        match send_scan(&new_scan_state, cluster_scan_args, core.clone()).await {
+        let err = match send_scan(&new_scan_state, cluster_scan_args, core.clone()).await {
             Ok(scan_response) => {
                 let (new_cursor, new_keys) = from_redis_value::<(u64, Vec<Value>)>(&scan_response)?;
                 return Ok(((new_cursor, new_keys), new_scan_state));
             }
-            Err(err) if is_scanwise_retryable_error(&err) => {
-                ClusterConnInner::check_topology_and_refresh_if_diff(
-                    core.clone(),
-                    &RefreshPolicy::NotThrottable,
-                )
-                .await?;
-
-                if let Some(next_scan_state) =
-                    next_scan_state(&core, &new_scan_state, cluster_scan_args).await?
-                {
-                    new_scan_state = next_scan_state;
-                } else {
-                    return Ok(((0, Vec::new()), ScanState::create_finished_state()));
-                }
-            }
+            Err(err) if is_scanwise_retryable_error(&err) => err,
             Err(err) => return Err(err),
+        };
+        let topology_changed = ClusterConnInner::check_topology_and_refresh_if_diff(
+            core.clone(),
+            &RefreshPolicy::NotThrottable,
+        )
+        .await?;
+
+        let Some(next) = next_scan_state(&core, &new_scan_state, cluster_scan_args).await? else {
+            return Ok(((0, Vec::new()), ScanState::create_finished_state()));
+        };
+        // Following a topology change is free; retrying the same node again counts
+        // against the client's retries, and backs off only where the request path does.
+        if !topology_changed && next.address_in_scan == new_scan_state.address_in_scan {
+            if retry >= retry_params.number_of_retries {
+                return Err(err);
+            }
+            retry += 1;
+            if err.retry_method() == RetryMethod::WaitAndRetry {
+                tokio::time::sleep(retry_params.wait_time_for_retry(retry)).await;
+            }
         }
+        new_scan_state = next;
     }
 }
 
@@ -862,6 +880,34 @@ mod tests {
         mark_slot_as_scanned(&mut scanned_slots_map, 5);
 
         assert_eq!(scanned_slots_map[0], 1 << 5);
+    }
+
+    #[tokio::test]
+    async fn send_scan_waits_for_its_node_to_reconnect() {
+        use crate::cluster_async::refresh_task_resolution_tests::{
+            complete_refresh, core_with_non_idempotent_resolver, insert_in_progress_refresh,
+        };
+        use futures::FutureExt;
+
+        let core = core_with_non_idempotent_resolver();
+        let address = "resolved-node:6381";
+        insert_in_progress_refresh(&core, address, false);
+        let state = ScanState::new(
+            0,
+            [0; BITS_ARRAY_SIZE as usize],
+            Arc::new(address.to_owned()),
+            0,
+            ScanStateStage::InProgress,
+        );
+        let args = ClusterScanArgs::default();
+        let mut scan = Box::pin(send_scan(&state, &args, core.clone()));
+        assert!(
+            (&mut scan).now_or_never().is_none(),
+            "SCAN should wait for the reconnect instead of failing"
+        );
+
+        complete_refresh(&core, address, 6381);
+        scan.await.expect("SCAN sent once the node reconnected");
     }
 
     #[tokio::test]

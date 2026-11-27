@@ -184,6 +184,8 @@ matrix_test!(atomic_transaction_query_async, c, {
 
 // ---- error surface -----------------------------------------------------------
 
+// TODO #7666: Add a test that an empty `custom_command` returns an error and that later
+// replies are correct.
 matrix_test!(wrong_type_returns_request_error, c, {
     let k = common::key("cmd_err");
     c.set(&k, "text").await.unwrap();

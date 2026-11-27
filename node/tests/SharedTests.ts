@@ -2835,14 +2835,10 @@ export function runBaseTests(config: {
                     ]);
                     expect(result3).toEqual([null, null]);
 
-                    // Test HGETDEL on a key holding a non-hash value returns WRONGTYPE
-                    const stringKey = getRandomKey();
-                    expect(await client.set(stringKey, "not_a_hash")).toEqual(
-                        "OK",
+                    // HGETDEL with an empty fields list should raise an error
+                    await expect(client.hgetdel(key, [])).rejects.toThrow(
+                        RequestError,
                     );
-                    await expect(
-                        client.hgetdel(stringKey, [field1]),
-                    ).rejects.toThrow(RequestError);
                 },
                 protocol,
             );
@@ -2861,21 +2857,115 @@ export function runBaseTests(config: {
 
                     const key = getRandomKey();
                     const value = getRandomKey();
-                    const wrongValue = getRandomKey();
+                    const otherValue = getRandomKey();
 
-                    // Key does not exist yet
+                    // key does not exist
                     expect(await client.delifeq(key, value)).toEqual(false);
 
                     expect(await client.set(key, value)).toEqual("OK");
 
-                    // Value does not match - key remains
-                    expect(await client.delifeq(key, wrongValue)).toEqual(
+                    // value not equal, key is not deleted
+                    expect(await client.delifeq(key, otherValue)).toEqual(
                         false,
                     );
                     expect(await client.get(key)).toEqual(value);
 
-                    // Value matches - key is deleted
+                    // value equal, key is deleted
                     expect(await client.delifeq(key, value)).toEqual(true);
+                    expect(await client.get(key)).toEqual(null);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `delex ifeq_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.2.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const value = getRandomKey();
+                    const otherValue = getRandomKey();
+
+                    // key does not exist
+                    expect(
+                        await client.delex(key, {
+                            condition: "onlyIfEqual",
+                            value: value,
+                        }),
+                    ).toEqual(false);
+
+                    expect(await client.set(key, value)).toEqual("OK");
+
+                    // value not equal, key is not deleted
+                    expect(
+                        await client.delex(key, {
+                            condition: "onlyIfEqual",
+                            value: otherValue,
+                        }),
+                    ).toEqual(false);
+                    expect(await client.get(key)).toEqual(value);
+
+                    // value equal, key is deleted
+                    expect(
+                        await client.delex(key, {
+                            condition: "onlyIfEqual",
+                            value: value,
+                        }),
+                    ).toEqual(true);
+                    expect(await client.get(key)).toEqual(null);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `delex ifne_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.2.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const value = getRandomKey();
+                    const otherValue = getRandomKey();
+
+                    // key does not exist
+                    expect(
+                        await client.delex(key, {
+                            condition: "onlyIfNotEqual",
+                            value: value,
+                        }),
+                    ).toEqual(false);
+
+                    expect(await client.set(key, value)).toEqual("OK");
+
+                    // value equal, key is not deleted
+                    expect(
+                        await client.delex(key, {
+                            condition: "onlyIfNotEqual",
+                            value: value,
+                        }),
+                    ).toEqual(false);
+                    expect(await client.get(key)).toEqual(value);
+
+                    // value not equal, key is deleted
+                    expect(
+                        await client.delex(key, {
+                            condition: "onlyIfNotEqual",
+                            value: otherValue,
+                        }),
+                    ).toEqual(true);
                     expect(await client.get(key)).toEqual(null);
                 },
                 protocol,
@@ -5712,8 +5802,47 @@ export function runBaseTests(config: {
 
                 // Now it should throw a NOSCRIPT error
                 await expect(client.invokeScript(script2)).rejects.toThrowError(
-                    /NoScriptError/,
+                    /^NOSCRIPT /,
                 );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `NOSCRIPT error keeps the server's text_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const noScript =
+                    /^NOSCRIPT No matching script\.( Please use EVAL\.)?$/;
+                const evalSha = ["EVALSHA", "f".repeat(40), "0"];
+
+                await expect(client.customCommand(evalSha)).rejects.toThrow(
+                    noScript,
+                );
+
+                const isCluster = client instanceof GlideClusterClient;
+                const batch = isCluster
+                    ? new ClusterBatch(false)
+                    : new Batch(false);
+                batch.customCommand(evalSha);
+                const result = isCluster
+                    ? await (client as GlideClusterClient).exec(
+                          batch as ClusterBatch,
+                          false,
+                      )
+                    : await (client as GlideClient).exec(batch as Batch, false);
+                expect(result?.[0]).toBeInstanceOf(RequestError);
+                expect((result?.[0] as RequestError).message).toMatch(noScript);
+
+                await expect(
+                    isCluster
+                        ? (client as GlideClusterClient).exec(
+                              batch as ClusterBatch,
+                              true,
+                          )
+                        : (client as GlideClient).exec(batch as Batch, true),
+                ).rejects.toThrow(noScript);
             }, protocol);
         },
         config.timeout,
@@ -9938,14 +10067,14 @@ export function runBaseTests(config: {
         expect(await client.get(key)).toEqual(newValue);
 
         // fail command
-        const wrongValue = "wrong value";
-        const setResFailedWithAllOptions = await client.set(key, wrongValue, {
+        const otherValue = "other value";
+        const setResFailedWithAllOptions = await client.set(key, otherValue, {
             expiry: {
                 type: TimeUnit.UnixSeconds,
                 count: Math.floor(Date.now() / 1000) + 10,
             },
             conditionalSet: "onlyIfEqual",
-            comparisonValue: wrongValue,
+            comparisonValue: otherValue,
             returnOldValue: true,
         });
         // current value of key should be newValue
@@ -9964,14 +10093,14 @@ export function runBaseTests(config: {
         // * only apply SET if the current value does not equal the comparison value
         // * expires after 10 seconds
         // * returns the old value
-        const wrongValue = "wrong value";
+        const otherValue = "other value";
         const setResWithAllOptions = await client.set(key, newValue, {
             expiry: {
                 type: TimeUnit.UnixSeconds,
                 count: Math.floor(Date.now() / 1000) + 10,
             },
             conditionalSet: "onlyIfNotEqual",
-            comparisonValue: wrongValue,
+            comparisonValue: otherValue,
             returnOldValue: true,
         });
         // initialValue is returned as the old value
@@ -9980,7 +10109,7 @@ export function runBaseTests(config: {
         expect(await client.get(key)).toEqual(newValue);
 
         // fail command
-        const setResFailedWithAllOptions = await client.set(key, wrongValue, {
+        const setResFailedWithAllOptions = await client.set(key, otherValue, {
             expiry: {
                 type: TimeUnit.UnixSeconds,
                 count: Math.floor(Date.now() / 1000) + 10,
@@ -14164,6 +14293,8 @@ export function runBaseTests(config: {
         },
         config.timeout,
     );
+
+    // TODO #7654: Add a queue-time error case that expects ExecAbortError for atomic batches.
 
     it.each([
         [ProtocolVersion.RESP2, true],

@@ -71,6 +71,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     TimeUnit,
+    DelexOptions,
     ZAddOptions,
     ZScanOptions,
     convertFieldsAndValuesToHashDataType,
@@ -99,6 +100,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDelEx,
     createDelIfEq,
     createDump,
     createEcho,
@@ -4289,16 +4291,30 @@ export class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
+     * Deletes `key` if its value meets the given condition.
+     *
+     * @see {@link https://valkey.io/commands/delex/|valkey.io} for details.
+     *
+     * @param key - The key to delete.
+     * @param options - The condition for deleting the key.
+     *
+     * Command Response - `true` if `key` was deleted, `false` otherwise.
+     *
+     * @since Valkey 9.2.0
+     */
+    public delex(key: GlideString, options: DelexOptions): T {
+        return this.addAndReturn(createDelEx(key, options));
+    }
+
+    /**
      * Deletes `key` if its value equals `value`.
      *
      * @see {@link https://valkey.io/commands/delifeq/|valkey.io} for details.
      *
      * @param key - The key to delete.
-     * @param value - The comparison value. The key is only deleted if its current value matches
-     *     exactly.
+     * @param value - The value to compare against the key.
      *
-     * Command Response - `true` if `key` was deleted, or `false` if `key` did not exist or its
-     *     value did not match `value`.
+     * Command Response - `true` if `key` was deleted, `false` otherwise.
      *
      * @since Valkey 9.0.0
      */
@@ -4483,7 +4499,12 @@ export class BaseBatch<T extends BaseBatch<T>> {
  *
  * @see {@link https://valkey.io/docs/topics/transactions/ | Valkey Transactions (Atomic Batches)}
  * @see {@link https://valkey.io/topics/pipelining | Valkey Pipelines (Non-Atomic Batches)}
- * @remarks Standalone Batches are executed on the primary node.
+ * @remarks Standalone atomic batches, batches sent while a raw `MULTI` is open, and non-atomic batches containing a
+ * command that writes, changes connection or server state, uses a cursor, or is sent to every node when run on its own
+ * (e.g. `SELECT`, `CLIENT SETNAME`, `CONFIG SET`, `SLOWLOG GET`, `SCAN`) run on the primary node.
+ * `HTTL`, `HPTTL`, `HEXPIRETIME` and `HPEXPIRETIME` also keep a batch on the primary.
+ * Other non-atomic batches, including ones with read-only admin commands such as `CONFIG GET` or `INFO`,
+ * follow the client's {@link ReadFrom} setting, so with a replica setting they may observe replication lag.
  *
  * @example
  * ```typescript
