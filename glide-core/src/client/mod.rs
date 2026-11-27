@@ -4656,6 +4656,7 @@ mod tests {
         get_connection_info, get_timeout_from_cmd_arg, sanitized_request_string,
         validate_effective_lib_name, validate_effective_lib_ver, validate_unix_socket_addresses,
     };
+    use crate::errors::{RequestErrorType, error_type};
     use std::sync::{Arc, Weak};
 
     #[test]
@@ -5524,6 +5525,24 @@ mod tests {
         let forged = || reply_entry(b"-IoError not really\r\n");
         let (_, failure) = partial_results_failure(&[forged(), forged()]);
         assert!(failure.is_none());
+    }
+
+    #[test]
+    fn test_partial_results_node_lost_mid_reply_is_a_disconnect_like_the_plain_call() {
+        // What a node's connection raises when it closes partway through a reply.
+        let cut_short = || {
+            redis::RedisError::from((
+                redis::ErrorKind::ParseError,
+                "parse error",
+                "unexpected end of input".to_string(),
+            ))
+        };
+        let (_, redis::Value::ServerError(entry)) = failed_entry(cut_short()) else {
+            unreachable!("failed_entry holds a ServerError");
+        };
+        let plain = error_type(&cut_short());
+        assert_eq!(plain, RequestErrorType::Disconnect);
+        assert_eq!(error_type(&entry.into()), plain);
     }
 
     #[test]
