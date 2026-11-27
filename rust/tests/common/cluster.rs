@@ -248,6 +248,15 @@ impl ClusterHarness {
             .await
     }
 
+    /// Connect a client with the given configuration, retrying and warming up
+    /// the topology like [`client`](Self::client).
+    pub async fn client_with_config(
+        &self,
+        config: GlideClusterClientConfiguration,
+    ) -> GlideClusterClient {
+        self.connect(config).await
+    }
+
     /// A base client configuration.
     pub fn config(&self) -> GlideClusterClientConfiguration {
         GlideClusterClientConfiguration::with_address("127.0.0.1", self.seed_port())

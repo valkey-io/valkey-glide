@@ -3,7 +3,11 @@
 
 mod common;
 
-use glide::{AsyncTypedCommands, CustomCommand, FromValkeyValue, Route};
+use glide::{
+    AsyncTypedCommands, CustomCommand, FromValkeyValue, GlideClusterClient, GlideError, Route,
+    ServerCredentials,
+};
+use std::time::Duration;
 
 #[tokio::test]
 async fn cluster_set_get_routed_by_key() {
@@ -55,6 +59,147 @@ async fn cluster_info_reports_ok() {
         info.contains("cluster_state:ok"),
         "cluster never reported ok: {info}"
     );
+}
+
+/// The sorted primary addresses `client` reports, and a route to the first.
+async fn primaries_and_route(client: &GlideClusterClient) -> (Vec<String>, Route) {
+    let healthy = client.info_with_partial_results(&[], None).await.unwrap();
+    let mut primaries: Vec<String> = healthy.keys().cloned().collect();
+    primaries.sort();
+    let (host, port) = primaries[0].rsplit_once(':').unwrap();
+    let route = Route::ByAddress {
+        host: host.to_string(),
+        port: port.parse().unwrap(),
+    };
+    (primaries, route)
+}
+
+#[tokio::test]
+async fn cluster_info_with_partial_results_keeps_replies_when_a_primary_is_slow() {
+    let cluster = common::ClusterHarness::start().await;
+    let client = cluster
+        .client_with_config(cluster.config().request_timeout(Duration::from_millis(500)))
+        .await;
+    // A second client pauses the primary, so the pause is not queued behind the
+    // client under test.
+    let pauser = cluster.client().await;
+    let (primaries, route) = primaries_and_route(&client).await;
+    assert_eq!(primaries.len(), cluster.primary_ports.len());
+
+    pauser
+        // Long enough for the call below to see the node as slow.
+        .custom_command_with_route(&["CLIENT", "PAUSE", "3000", "ALL"], route)
+        .await
+        .unwrap();
+
+    let replies = client.info_with_partial_results(&[], None).await.unwrap();
+    let mut addresses: Vec<String> = replies.keys().cloned().collect();
+    addresses.sort();
+    assert_eq!(addresses, primaries);
+    assert!(
+        matches!(replies[&primaries[0]], Err(GlideError::Timeout(_))),
+        "{:?}",
+        replies[&primaries[0]]
+    );
+    for address in &primaries[1..] {
+        assert!(replies[address].as_ref().unwrap().contains("# Server"));
+    }
+}
+
+#[tokio::test]
+async fn cluster_info_with_partial_results_rejects_a_single_node_route() {
+    let cluster = common::ClusterHarness::start().await;
+    let client = cluster.client().await;
+
+    let err = client
+        .info_with_partial_results(&[], Some(Route::RandomNode))
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(&err, GlideError::Request(message) if message.contains("needs a multi-node route")),
+        "{err:?}"
+    );
+}
+
+/// Admin client, a client logged in as the ACL user `partial`, the sorted
+/// primary addresses, and a route to the first primary.
+async fn partial_user_client(
+    cluster: &common::ClusterHarness,
+) -> (GlideClusterClient, GlideClusterClient, Vec<String>, Route) {
+    let admin = cluster.client().await;
+    admin
+        .custom_command_with_route(
+            &[
+                "ACL",
+                "SETUSER",
+                "partial",
+                "on",
+                ">password",
+                "~*",
+                "&*",
+                "+@all",
+            ],
+            Route::AllNodes,
+        )
+        .await
+        .unwrap();
+    let credentials = ServerCredentials::username_password("partial", "password");
+    let client = cluster
+        .client_with_config(cluster.config().credentials(credentials))
+        .await;
+    let (primaries, route) = primaries_and_route(&client).await;
+    (admin, client, primaries, route)
+}
+
+#[tokio::test]
+async fn cluster_info_with_partial_results_keeps_the_error_reply_of_a_denied_primary() {
+    let cluster = common::ClusterHarness::start().await;
+    let (admin, denied, primaries, route) = partial_user_client(&cluster).await;
+    admin
+        .custom_command_with_route(&["ACL", "SETUSER", "partial", "-info"], route)
+        .await
+        .unwrap();
+
+    // Without partial results, the denied primary fails the whole call.
+    let plain = denied
+        .custom_command_with_route(&["INFO"], Route::AllPrimaries)
+        .await
+        .unwrap_err();
+
+    let replies = denied.info_with_partial_results(&[], None).await.unwrap();
+    let error = replies[&primaries[0]].as_ref().unwrap_err();
+    assert_eq!(error.to_string(), plain.to_string());
+    for address in &primaries[1..] {
+        assert!(replies[address].as_ref().unwrap().contains("# Server"));
+    }
+}
+
+#[tokio::test]
+async fn cluster_info_with_partial_results_returns_a_connection_error_for_a_lost_primary() {
+    // The harness stops the cluster on drop, which also removes the user when
+    // the test fails.
+    let cluster = common::ClusterHarness::start().await;
+    let (admin, cut_off, primaries, route) = partial_user_client(&cluster).await;
+
+    // Drop the client's connection to one primary and keep it from reconnecting.
+    admin
+        .custom_command_with_route(&["ACL", "SETUSER", "partial", "off"], route.clone())
+        .await
+        .unwrap();
+    admin
+        .custom_command_with_route(&["CLIENT", "KILL", "USER", "partial"], route)
+        .await
+        .unwrap();
+
+    let replies = cut_off.info_with_partial_results(&[], None).await.unwrap();
+    assert!(
+        matches!(replies[&primaries[0]], Err(GlideError::Connection(_))),
+        "{:?}",
+        replies[&primaries[0]]
+    );
+    for address in &primaries[1..] {
+        assert!(replies[address].as_ref().unwrap().contains("# Server"));
+    }
 }
 
 #[tokio::test]
