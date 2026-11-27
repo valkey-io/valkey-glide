@@ -28,6 +28,9 @@ outputs:
     version-matrix-output:
         description: "Version matrix"
         value: ${{ steps.create-lang-version-matrix.outputs.version-matrix }}
+    macos-exclude-output:
+        description: "Matrix `exclude` entries that cap macOS hosts to the always-run engines and language versions on scheduled runs"
+        value: ${{ steps.create-macos-exclude.outputs.macos-exclude }}
 
 runs:
     using: "composite"
@@ -121,6 +124,30 @@ runs:
                   echo 'Pick language versions listed in 'versions' - on cron (schedule) or if manually triggered job requires a full matrix'
                   jq -c "[.[] | select(.language == \"$LANGUAGE_NAME\") | .versions][0]" < .github/json_matrices/supported-languages-versions.json | awk '{ printf "version-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
               fi
+
+        - name: Create macOS exclude list
+          id: create-macos-exclude
+          shell: bash
+          env:
+              HOST_MATRIX: ${{ steps.load-host-matrix.outputs.host-matrix }}
+          run: |
+              set -o pipefail
+              # The self-hosted macOS pool cannot serve the full nightly matrix, so scheduled runs
+              # keep macOS to the always-run engines and language versions. Manual runs are not capped.
+              if [[ "$EVENT_NAME" == "schedule" ]]; then
+                  EXCLUDE=$(jq -nc --arg lang "$LANGUAGE_NAME" \
+                      --argjson hosts "$HOST_MATRIX" \
+                      --slurpfile engines .github/json_matrices/engine-matrix.json \
+                      --slurpfile langs .github/json_matrices/supported-languages-versions.json '
+                      (first($langs[0][] | select(.language == $lang)) // {versions: [], "always-run-versions": []}) as $l
+                      | [$hosts[] | select(.TARGET == "aarch64-apple-darwin")] as $macs
+                      | [$macs[] as $h | $engines[0][] | select(.run != "always") | {host: $h, engine: .}]
+                        + [$macs[] as $h | $l.versions[] | select(IN($l["always-run-versions"][]) | not) | {host: $h, ($lang): .}]
+                      ')
+              else
+                  EXCLUDE='[]'
+              fi
+              echo "macos-exclude=$EXCLUDE" | tee -a "$GITHUB_OUTPUT"
 
         - name: Validate no empty/incorrect matrices
           shell: bash

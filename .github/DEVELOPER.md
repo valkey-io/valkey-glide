@@ -16,7 +16,7 @@ Our CI/CD pipeline tests and builds our project across multiple languages, versi
 ### Test coverage
 
 There are two levels of testing: the basic one and full (_aka_ `full-matrix`).
-Basic amount of testing is executed on every open and merged PR. The full set of tests is executed by the scheduled job.
+Basic amount of testing is executed on every open and merged PR. The full set of tests is executed by the scheduled job (macOS hosts run only the always-run subset, see [Workflow Matrices](#workflow-matrices)).
 A developer can select the level when starting a job, either scheduled or client's pipeline.
 
 <img width="264" alt="Matrices" src="https://github.com/user-attachments/assets/72857f80-078c-4e11-bcc6-75beb0125a9d">
@@ -99,7 +99,7 @@ Defines the supported versions of languages:
 
 - Push to `main` by merging a PR or create a new pull request to run workflows automatically.
 - Use `workflow_dispatch` for manual triggers, accepting a boolean configuration parameter to run all configurations.
-- Scheduled runs are triggered daily to ensure regular testing of all configurations.
+- Scheduled runs are triggered daily to ensure regular testing of all configurations, except that the Java, Python, Node, and Go workflows run only the always-run subset on macOS hosts (see [Workflow Matrices](#workflow-matrices)).
 
 ### Mutual vs. Language-Specific Components
 
@@ -146,11 +146,15 @@ We use dynamic matrices for our CI/CD workflows, which are created using the `cr
     - Engine matrix: Defines the types and versions of the engine to test against, for example Valkey 7.2.5.
     - Host matrix: Defines the host platforms to run the tests on, for example Ubuntu on ARM64.
     - Language-version matrix: Defines the supported versions of languages, for example python 3.9.
+5. On scheduled runs, it also builds a list of matrix `exclude` entries that limit macOS hosts to the engines with `"run": "always"` and the language's `always-run-versions`.
+   The self-hosted macOS pool is too small for the full nightly matrix.
+   Other events get an empty list, so manual full-matrix runs still cover macOS fully.
 
 #### Outputs
 
 - `engine-matrix-output`: The generated engine matrix.
 - `host-matrix-output`: The generated host matrix.
-- `language-version-matrix-output`: The generated language version matrix.
+- `version-matrix-output`: The generated language version matrix.
+- `macos-exclude-output`: The macOS `exclude` entries, used as `strategy.matrix.exclude` by the Java, Python, Node, and Go test jobs.
 
 This dynamic matrix generation allows for flexible and efficient CI/CD workflows, adapting the test configurations based on the type of change and the specific language being tested.
