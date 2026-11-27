@@ -22,7 +22,9 @@ Wait for that build to finish before dispatching again.
 
 CodeBuild owns teardown. It explicitly requests a 120-minute host lifetime, including
 when `KEEP_HOSTS=true` retains hosts after failure. Retention does not restart that
-lifetime; inspect the hosts before it expires and delete the stack afterward.
+lifetime; inspect the hosts before it expires and delete the stack afterward. Each
+step's complete output stays on its host under `/var/log/rdma/`; SSM returns only the
+final 23,999 bytes.
 Cancelling GitHub monitoring leaves CodeBuild running. A hard CodeBuild stop can
 skip teardown and leave the stack behind.
 
