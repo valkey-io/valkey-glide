@@ -73,15 +73,9 @@ mod tests {
     }
 
     #[test]
-    fn pool_size_override_is_capped_at_max_socket_listener_workers() {
-        assert_eq!(
-            socket_listener_pool_size_from(Some("64"), 4),
-            MAX_SOCKET_LISTENER_WORKERS
-        );
-        assert_eq!(
-            socket_listener_pool_size_from(Some("65"), 4),
-            MAX_SOCKET_LISTENER_WORKERS
-        );
+    fn pool_size_override_is_capped_at_64() {
+        assert_eq!(socket_listener_pool_size_from(Some("64"), 4), 64);
+        assert_eq!(socket_listener_pool_size_from(Some("65"), 4), 64);
     }
 
     #[test]
