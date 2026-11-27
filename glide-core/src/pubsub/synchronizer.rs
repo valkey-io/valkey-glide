@@ -342,20 +342,28 @@ impl SubscriptionState {
                 }
             }
         }
-        let indexed: usize = self
-            .held
-            .values()
-            .flat_map(|h| h.values())
-            .map(Vec::len)
-            .sum();
+        // Empty entries never come from a rebuild, and they change `is_held`,
+        // unsubscribe-all waits and `is_synchronized`
+        let mut indexed = 0;
+        for holders in self.held.values() {
+            if holders.is_empty() {
+                return false;
+            }
+            for addrs in holders.values() {
+                if addrs.is_empty() {
+                    return false;
+                }
+                indexed += addrs.len();
+            }
+        }
         if indexed != memberships {
             return false;
         }
 
         if self
             .out_of_sync
-            .keys()
-            .any(|kind| !self.kinds.contains(kind))
+            .iter()
+            .any(|(kind, set)| set.is_empty() || !self.kinds.contains(kind))
         {
             return false;
         }
@@ -1467,6 +1475,23 @@ mod tests {
             .or_default()
             .insert(ch(9));
         assert!(!extra_mismatch.is_consistent());
+        // An empty holder list makes ch(1) look held, so it's also missing from out_of_sync
+        let mut empty_holders = clone_state(&state);
+        empty_holders
+            .held
+            .entry(Exact)
+            .or_default()
+            .insert(ch(1), vec![]);
+        empty_holders.out_of_sync.remove(&Exact);
+        assert!(!empty_holders.is_consistent());
+        let mut empty_kind = clone_state(&state);
+        empty_kind.held.insert(Sharded, HashMap::new());
+        assert!(!empty_kind.is_consistent());
+        let mut empty_mismatch_set = clone_state(&state);
+        empty_mismatch_set
+            .out_of_sync
+            .insert(Sharded, HashSet::new());
+        assert!(!empty_mismatch_set.is_consistent());
 
         state.out_of_sync.clear();
         state.held.clear();
