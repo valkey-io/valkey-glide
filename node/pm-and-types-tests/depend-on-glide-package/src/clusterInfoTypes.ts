@@ -11,6 +11,7 @@ import {
 export async function clusterInfoTypes(
     client: GlideClusterClient,
     allowPartialResults?: boolean,
+    maybeOptions?: RouteOption & PartialResultsOption,
 ) {
     const info = (...args: Parameters<GlideClusterClient["info"]>) =>
         client.info(...args);
@@ -30,5 +31,8 @@ export async function clusterInfoTypes(
     const options: RouteOption & PartialResultsOption = { allowPartialResults };
     // @ts-expect-error A node's error can be in the reply.
     const variable: ClusterResponse<string> = await client.info(options);
-    return [plain, plainReturn, partial, optional, untyped, variable];
+    // So does a parameter that may be undefined.
+    // @ts-expect-error A node's error can be in the reply.
+    const maybe: ClusterResponse<string> = await client.info(maybeOptions);
+    return [plain, plainReturn, partial, optional, untyped, variable, maybe];
 }

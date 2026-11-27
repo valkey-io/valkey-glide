@@ -1203,14 +1203,11 @@ export class GlideClusterClient extends BaseClient {
      *     or a {@link RequestError} for any other failure.
      */
     public async info(
-        options: { sections?: InfoOptions[] } & RouteOption &
+        options?: { sections?: InfoOptions[] } & RouteOption &
             PartialResultsOption,
     ): Promise<string | Record<string, string | RequestError>>;
-    /**
-     * Gets information and statistics about the server, like the first overload. TypeScript reads
-     * `Parameters<>` and `ReturnType<>` from this last overload, so they give the type of the call
-     * without `allowPartialResults`.
-     */
+    // TypeScript reads `Parameters<>` and `ReturnType<>` from the last overload,
+    // so this one keeps them at the type of the call without `allowPartialResults`.
     public async info(
         options?: { sections?: InfoOptions[] } & RouteOption,
     ): Promise<ClusterResponse<string>>;
