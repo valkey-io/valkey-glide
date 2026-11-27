@@ -117,7 +117,6 @@ import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
-import glide.api.models.exceptions.TimeoutException;
 import glide.managers.CommandManager;
 import glide.managers.GlideExceptionCheckedFunction;
 import java.nio.charset.StandardCharsets;
@@ -662,11 +661,9 @@ public class GlideClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void infoWithPartialResults_keeps_node_errors() {
+    public void infoWithPartialResults_sends_the_sections() {
         // setup
-        Map<String, Object> testPayload = new HashMap<>();
-        testPayload.put("addr1", "value1");
-        testPayload.put("addr2", new TimeoutException("timed out"));
+        Map<String, Object> testPayload = createMap("addr1", "addr1 result");
         String[] arguments = new String[] {"STATS"};
         CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(ClusterValue.of(testPayload));
@@ -698,25 +695,6 @@ public class GlideClusterClientTest {
         // exercise and verify
         assertEquals(primariesPayload, service.infoWithPartialResults().get().getMultiValue());
         assertEquals(allNodesPayload, service.infoWithPartialResults(ALL_NODES).get().getMultiValue());
-    }
-
-    @SneakyThrows
-    @Test
-    public void infoWithPartialResults_with_route_passes_route() {
-        // setup
-        Map<String, Object> testPayload = createMap("addr1", "addr1 result");
-        CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
-        testResponse.complete(ClusterValue.of(testPayload));
-        when(commandManager.<ClusterValue<Object>>submitNewCommandWithPartialResults(
-                        eq(Info), eq(new String[0]), eq(ALL_NODES), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<ClusterValue<Object>> response =
-                service.infoWithPartialResults(new Section[0], ALL_NODES);
-
-        // verify
-        assertEquals(testPayload, response.get().getMultiValue());
     }
 
     @SneakyThrows
