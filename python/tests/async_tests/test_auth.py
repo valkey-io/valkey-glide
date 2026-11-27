@@ -448,10 +448,12 @@ class TestAuthCommands:
                 NEW_PASSWORD, immediate_auth=False
             )
             assert result == OK
-            with pytest.raises(RequestError):
+            assert (
                 await test_client.update_connection_password(
                     NEW_PASSWORD, immediate_auth=True
                 )
+                == OK
+            )
         finally:
             try:
                 await test_client.close()
@@ -697,10 +699,12 @@ class TestAuthCommands:
         # ensure client disconnection
         await anyio.sleep(2)
 
-        with pytest.raises(RequestError):
+        assert (
             await acl_glide_client.update_connection_password(
                 NEW_PASSWORD, immediate_auth=True
             )
+            == OK
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

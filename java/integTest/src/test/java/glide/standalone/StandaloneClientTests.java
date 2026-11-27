@@ -395,12 +395,8 @@ public class StandaloneClientTests {
             // server connection)
             assertEquals(OK, testClient.updateConnectionPassword(newPwd, false).get());
 
-            // Check that the client is unable to perform operations that require server connection,
-            // as it is still trying to reconnect with the old password
-            ExecutionException timeoutException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> testClient.updateConnectionPassword(newPwd, true).get());
+            // Reconnect loop uses the updated password, so immediate auth succeeds
+            assertEquals(OK, testClient.updateConnectionPassword(newPwd, true).get());
 
         } finally {
             deleteAclUser(adminClient, username);
