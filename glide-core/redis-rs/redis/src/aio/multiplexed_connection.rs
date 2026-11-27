@@ -871,7 +871,7 @@ where
     // `send_packed_command` calls `send_recv` directly, to pass the command's `asking` flag.
     #[cfg(test)]
     async fn send_single(
-        &mut self,
+        &self,
         item: SinkItem,
         timeout: Duration,
         is_fenced: bool,
@@ -883,7 +883,7 @@ where
 
     #[allow(clippy::too_many_arguments)]
     async fn send_recv(
-        &mut self,
+        &self,
         input: SinkItem,
         // If `None`, this is a single request, not a pipeline of multiple requests.
         pipeline_response_count: Option<usize>,
@@ -1188,7 +1188,11 @@ impl MultiplexedConnection {
 
     /// Sends an already encoded (packed) command into the TCP socket and
     /// reads the single response from it.
-    pub async fn send_packed_command(&mut self, cmd: &Cmd) -> RedisResult<Value> {
+    ///
+    /// Takes `&self`: nothing here mutates the connection (the pipeline sender is
+    /// shared by every clone), so a caller can send through a shared
+    /// `Arc<MultiplexedConnection>` without cloning it.
+    pub async fn send_packed_command(&self, cmd: &Cmd) -> RedisResult<Value> {
         let cache = self.cache.clone();
 
         if let Some(cache) = &cache {
@@ -1240,7 +1244,7 @@ impl MultiplexedConnection {
         result
     }
 
-    async fn send_packed_command_inner(&mut self, cmd: &Cmd) -> RedisResult<Value> {
+    async fn send_packed_command_inner(&self, cmd: &Cmd) -> RedisResult<Value> {
         let timeout = cmd.response_timeout().unwrap_or(self.response_timeout);
         let result = self
             .pipeline
@@ -1694,10 +1698,7 @@ mod tests {
             .await
             .unwrap();
 
-        let request = tokio::spawn(async move {
-            let mut connection = connection;
-            connection.send_packed_command(&command).await
-        });
+        let request = tokio::spawn(async move { connection.send_packed_command(&command).await });
         command_rx.recv().await.expect("command must be sent");
 
         // Queue both frames before waking the driver. `poll_read` drains them in
@@ -1786,7 +1787,7 @@ mod tests {
             let (connection, mut command_rx, mut response_tx, driver) =
                 connection_over_response_sink(Duration::from_secs(5)).await;
 
-            let mut asked = connection.clone();
+            let asked = connection.clone();
             let first = tokio::spawn(async move {
                 asked
                     .send_packed_command(&asking_get("asked", fenced))
@@ -1796,7 +1797,7 @@ mod tests {
             assert_eq!(sent, asking_get("asked", fenced).get_packed_command());
             assert!(sent.starts_with(b"*1\r\n$6\r\nASKING\r\n*2\r\n$3\r\nGET\r\n"));
 
-            let mut plain = connection.clone();
+            let plain = connection.clone();
             let second = tokio::spawn(async move {
                 let mut command = crate::cmd("GET");
                 command.arg("plain");
@@ -1896,7 +1897,7 @@ mod tests {
                     "{case}"
                 );
 
-                let mut plain = connection.clone();
+                let plain = connection.clone();
                 let second = tokio::spawn(async move {
                     let mut command = crate::cmd("GET");
                     command.arg("plain");
@@ -1955,7 +1956,7 @@ mod tests {
         response_tx: &mut futures_mpsc::Sender<RedisResult<Value>>,
         case: &str,
     ) {
-        let mut next = connection.clone();
+        let next = connection.clone();
         let request = tokio::spawn(async move {
             let mut command = crate::cmd("GET");
             command.arg("next");
@@ -2121,7 +2122,7 @@ mod tests {
     /// connection's.
     #[tokio::test]
     async fn test_asking_blocking_command_keeps_its_response_timeout() {
-        let (mut connection, mut command_rx, _response_tx, driver) =
+        let (connection, mut command_rx, _response_tx, driver) =
             connection_over_response_sink(Duration::from_secs(60)).await;
         let mut command = crate::cmd("BLPOP");
         command.arg("list").arg(1).set_asking(true);
@@ -2356,7 +2357,6 @@ mod tests {
             .unwrap();
 
         let request = tokio::spawn(async move {
-            let mut connection = connection;
             let mut command = crate::cmd("GET");
             command.arg("key");
             connection.send_packed_command(&command).await
@@ -2522,12 +2522,12 @@ mod tests {
         };
 
         // Create pipeline but don't drive it, the channel will fill and send() will block
-        let (mut pipeline, driver) = Pipeline::new(stalling_sink, None, None);
+        let (pipeline, driver) = Pipeline::new(stalling_sink, None, None);
         std::mem::forget(driver);
 
         // Fill the 50-slot pipeline channel
         for _ in 0..50 {
-            let mut pipeline_clone = pipeline.clone();
+            let pipeline_clone = pipeline.clone();
             tokio::spawn(async move {
                 let _ = pipeline_clone
                     .send_single(
@@ -2674,7 +2674,7 @@ mod tests {
         let driver_handle = tokio::spawn(driver);
 
         // Send first command — this should go through fine
-        let mut pipeline1 = pipeline.clone();
+        let pipeline1 = pipeline.clone();
         let cmd1_handle = tokio::spawn(async move {
             pipeline1
                 .send_single(
@@ -2693,7 +2693,7 @@ mod tests {
         write_blocked.store(true, Ordering::SeqCst);
 
         // Send second command — this will block in poll_ready because write is blocked
-        let mut pipeline2 = pipeline.clone();
+        let pipeline2 = pipeline.clone();
         let cmd2_handle = tokio::spawn(async move {
             pipeline2
                 .send_single(
@@ -2772,12 +2772,12 @@ mod tests {
             inner_rx: resp_rx,
         };
 
-        let (mut pipeline, driver) = Pipeline::new_with_buffer_size(sink, None, None, 3);
+        let (pipeline, driver) = Pipeline::new_with_buffer_size(sink, None, None, 3);
         std::mem::forget(driver); // never drain, so the channel stays full
 
         // Fill the 3 buffer slots with sends that then park awaiting responses.
         for _ in 0..3 {
-            let mut pipeline_clone = pipeline.clone();
+            let pipeline_clone = pipeline.clone();
             tokio::spawn(async move {
                 let _ = pipeline_clone
                     .send_single(
@@ -2830,7 +2830,7 @@ mod tests {
 
         let mut handles = Vec::new();
         for _ in 0..200 {
-            let mut p = pipeline.clone();
+            let p = pipeline.clone();
             handles.push(tokio::spawn(async move {
                 p.send_single(
                     crate::cmd("PING").get_packed_command(),
@@ -2865,7 +2865,7 @@ mod tests {
 
         let mut handles = Vec::new();
         for _ in 0..200 {
-            let mut p = pipeline.clone();
+            let p = pipeline.clone();
             handles.push(tokio::spawn(async move {
                 p.send_single(
                     crate::cmd("PING").get_packed_command(),
@@ -2916,7 +2916,7 @@ mod tests {
         let timeout = Duration::from_millis(150);
         let mut handles = Vec::new();
         for _ in 0..300 {
-            let mut p = pipeline.clone();
+            let p = pipeline.clone();
             handles.push(tokio::spawn(async move {
                 p.send_single(
                     crate::cmd("PING").get_packed_command(),
@@ -2971,7 +2971,7 @@ mod tests {
         // producer's send must fail promptly with FatalSendError rather than spin
         // in the liveness loop waiting for capacity that will never free.
         let (sink, _server) = MockServerSink::new(Duration::ZERO, usize::MAX);
-        let (mut pipeline, driver) = Pipeline::new_with_buffer_size(sink, None, None, 50);
+        let (pipeline, driver) = Pipeline::new_with_buffer_size(sink, None, None, 50);
         drop(driver); // writer/receiver gone -> channel closed
 
         let start = std::time::Instant::now();
@@ -3022,7 +3022,6 @@ mod tests {
 
         // The caller gives up before the reply arrives, like a timed-out request.
         let request = tokio::spawn(async move {
-            let mut connection = connection;
             let mut command = crate::cmd("GET");
             command.arg("key");
             connection.send_packed_command(&command).await
@@ -3066,7 +3065,7 @@ mod tests {
         let start = std::time::Instant::now();
         let mut handles = Vec::with_capacity(total);
         for _ in 0..total {
-            let mut p = pipeline.clone();
+            let p = pipeline.clone();
             let packed = packed.clone();
             handles.push(tokio::spawn(async move {
                 p.send_single(packed, Duration::from_secs(60), false, false)
@@ -3252,7 +3251,7 @@ mod tests {
         // buffer_size (1) in the channel + 1 buffered by `Forward` = 2 absorbed.
         let mut fillers = Vec::new();
         for _ in 0..2 {
-            let mut f = pipeline.clone();
+            let f = pipeline.clone();
             fillers.push(tokio::spawn(async move {
                 f.send_single(
                     crate::cmd("PING").get_packed_command(),
@@ -3265,7 +3264,7 @@ mod tests {
             settle().await; // let the writer absorb this filler before the next
         }
 
-        let mut subject = pipeline.clone();
+        let subject = pipeline.clone();
         let subject_handle = tokio::spawn(async move {
             subject
                 .send_single(

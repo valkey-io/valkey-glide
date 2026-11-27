@@ -38,7 +38,11 @@ use std::time::{Duration, Instant};
 use tokio::runtime::{Builder, Handle};
 pub use types::*;
 
-use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, get_value_type};
+use self::value_conversion::{
+    convert_to_expected_type, expected_type_for_cmd, expected_type_for_cmd_name, get_value_type,
+};
+mod cmd_name;
+use self::cmd_name::{CmdName, name_bytes};
 mod dispatch_permit;
 use dispatch_permit::{Admission, DispatchPermit};
 #[cfg(feature = "rdma")]
@@ -809,12 +813,17 @@ fn get_timeout_from_cmd_arg(
 /// Also used by the pool abandon monitor to skip clients executing blocking commands.
 pub fn is_blocking_command(cmd: &Cmd) -> bool {
     let command = cmd.command().unwrap_or_default();
-    match command.as_slice() {
+    is_blocking_cmd_named(cmd, &command)
+}
+
+/// [`is_blocking_command`] with the uppercased command name (`Routable::command()`
+/// bytes) already computed, so the `send_command` path does not allocate it again.
+fn is_blocking_cmd_named(cmd: &Cmd, upper_name: &[u8]) -> bool {
+    match upper_name {
         b"XREAD" | b"XREADGROUP" => cmd.position(b"BLOCK").is_some(),
-        // `command()` already normalizes the name to uppercase, so pass it through
-        // to the shared name-based check (empty args slice — the only arg-dependent
-        // case, XREAD/XREADGROUP, is handled above via `cmd.position`).
-        name => is_blocking_command_name(name, &[]),
+        // The only arg-dependent case, XREAD/XREADGROUP, is handled above via
+        // `cmd.position`.
+        name => is_blocking_upper_name(name),
     }
 }
 
@@ -828,6 +837,18 @@ pub fn is_blocking_command(cmd: &Cmd) -> bool {
 pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
     let upper = name.to_ascii_uppercase();
     match upper.as_slice() {
+        // BLOCK is matched case-insensitively, mirroring `Cmd::position`.
+        b"XREAD" | b"XREADGROUP" => args.iter().any(|a| a.eq_ignore_ascii_case(b"BLOCK")),
+        name => is_blocking_upper_name(name),
+    }
+}
+
+/// The argument-independent blocking commands, by uppercased name. Shared by
+/// [`is_blocking_command`] and [`is_blocking_command_name`] so the two recognize
+/// the same set; XREAD/XREADGROUP (blocking only with `BLOCK`) are handled by the
+/// callers.
+fn is_blocking_upper_name(upper_name: &[u8]) -> bool {
+    match upper_name {
         b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" | b"BLMPOP"
         | b"BZMPOP" | b"WAIT" | b"WAITAOF" => true,
         // An RDMA transfer is treated as blocking so that nothing which gives up
@@ -836,8 +857,6 @@ pub fn is_blocking_command_name(name: &[u8], args: &[Vec<u8>]) -> bool {
         // A transfer cut short ends without the server's reply, which revokes its
         // region and loses the caller's buffer.
         b"BLOB.RDMA_GET" | b"BLOB.RDMA_SET" => true,
-        // BLOCK is matched case-insensitively, mirroring `Cmd::position`.
-        b"XREAD" | b"XREADGROUP" => args.iter().any(|a| a.eq_ignore_ascii_case(b"BLOCK")),
         _ => false,
     }
 }
@@ -897,9 +916,31 @@ fn partial_results_failure(entries: &[(Value, Value)]) -> (bool, Option<RedisErr
     (timed_out, failure)
 }
 
+/// Whether a command with this uppercased name (`Routable::command()` bytes) runs
+/// one of the connection-state post-hooks in `execute_command_owned`, which need a
+/// `Client` clone. Exactly the commands matched by `is_client_set_name_command`,
+/// `is_select_command`, `is_auth_command`, `is_hello_command` and
+/// `is_reset_command`.
+fn needs_post_hook(upper_name: &[u8]) -> bool {
+    matches!(
+        upper_name,
+        b"CLIENT SETNAME" | b"SELECT" | b"AUTH" | b"HELLO" | b"RESET"
+    )
+}
+
 fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Option<Duration>> {
     let command = cmd.command().unwrap_or_default();
-    let timeout = match command.as_slice() {
+    get_request_timeout_named(cmd, &command, default_timeout)
+}
+
+/// [`get_request_timeout`] with the uppercased command name (`Routable::command()`
+/// bytes) already computed, so the `send_command` path does not allocate it again.
+fn get_request_timeout_named(
+    cmd: &Cmd,
+    command: &[u8],
+    default_timeout: Duration,
+) -> RedisResult<Option<Duration>> {
+    let timeout = match command {
         b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" => {
             get_timeout_from_cmd_arg(cmd, cmd.args_iter().len() - 1, TimeUnit::Seconds)
         }
@@ -909,11 +950,7 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
             .map(|idx| get_timeout_from_cmd_arg(cmd, idx + 1, TimeUnit::Milliseconds))
             .unwrap_or(Ok(RequestTimeoutOption::ClientConfig)),
         b"WAIT" | b"WAITAOF" => {
-            let idx = if command.as_slice() == b"WAITAOF" {
-                3
-            } else {
-                2
-            };
+            let idx = if command == b"WAITAOF" { 3 } else { 2 };
             get_timeout_from_cmd_arg(cmd, idx, TimeUnit::Milliseconds)
         }
         // An RDMA transfer should not have a timeout, and neither does the
@@ -1449,18 +1486,30 @@ impl Client {
         Ok(guard.clone()) // ✅ Return clone of the now-initialized wrapper
     }
 
-    /// Internal command execution logic. Takes owned data so the returned future
-    /// is `Send + 'static`.
+    /// Internal command execution logic. Borrows the command for the request's
+    /// lifetime (no per-command `Cmd` clone or `Arc`, except the partial-results
+    /// copy in `fan_out`); the returned future is still `Send`.
+    ///
+    /// `self_clone` is needed only by the connection-state post-hooks (CLIENT
+    /// SETNAME, SELECT, AUTH, HELLO, RESET; see [`needs_post_hook`]); the caller
+    /// passes `None` for every other command, so they skip the `Client` clone.
+    /// `cmd_name` is `Routable::command()` of `cmd` (`None` iff `cmd` has no
+    /// arguments), computed once by the caller. `fan_out` is set only for a
+    /// partial-results fan-out: a shared copy of `cmd` for redis-rs, and the
+    /// fan-out deadline.
     async fn execute_command_owned(
-        mut self_clone: Client,
-        cmd: Arc<Cmd>,
+        self_clone: Option<Client>,
+        cmd: &Cmd,
+        cmd_name: Option<&[u8]>,
         routing: Option<RoutingInfo>,
-        fan_out_deadline: Option<Instant>,
+        fan_out: Option<(Arc<Cmd>, Instant)>,
         client: ClientWrapper,
         compression_manager: Option<Arc<CompressionManager>>,
     ) -> RedisResult<Value> {
         let raw_value = match client {
-            ClientWrapper::Standalone(mut client) => client.send_command(&cmd).await,
+            ClientWrapper::Standalone(mut client) => {
+                client.send_command_with_name(cmd, cmd_name).await
+            }
             ClientWrapper::Cluster { mut client, .. } => {
                 let final_routing = if let Some(RoutingInfo::SingleNode(
                     SingleNodeRoutingInfo::Random,
@@ -1481,17 +1530,17 @@ impl Client {
                     }
                 } else {
                     routing
-                        .or_else(|| RoutingInfo::for_routable(cmd.as_ref()))
+                        .or_else(|| RoutingInfo::for_routable(cmd))
                         .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
                 };
-                match fan_out_deadline {
-                    None => client.route_command(&cmd, final_routing).await,
-                    deadline => {
+                match fan_out {
+                    None => client.route_command(cmd, final_routing).await,
+                    Some((shared_cmd, deadline)) => {
                         client
                             .route_command_with_fan_out_deadline(
-                                cmd.clone(),
+                                shared_cmd,
                                 final_routing,
-                                deadline,
+                                Some(deadline),
                             )
                             .await
                     }
@@ -1503,7 +1552,7 @@ impl Client {
         // Post-process: decompress and convert to expected type.
         // Done after the mutable borrow on cmd is released.
         let processed_value = match &compression_manager {
-            Some(compression_manager) => match extract_request_type_from_cmd(&cmd) {
+            Some(compression_manager) => match extract_request_type_from_cmd(cmd) {
                 Some(request_type) => crate::compression::process_response_for_decompression(
                     raw_value,
                     request_type,
@@ -1514,7 +1563,7 @@ impl Client {
             None => raw_value,
         };
 
-        let expected_type = expected_type_for_cmd(&cmd);
+        let expected_type = cmd_name.and_then(|name| expected_type_for_cmd_name(cmd, name));
         let value = convert_to_expected_type(processed_value, expected_type)?;
 
         // A partial result is `Ok` even when nodes failed, where the plain call
@@ -1526,49 +1575,68 @@ impl Client {
             return Ok(value);
         }
 
-        if self_clone.is_client_set_name_command(&cmd) {
-            self_clone.handle_client_set_name_command(&cmd).await?;
-        }
-        if self_clone.is_select_command(&cmd) {
-            self_clone.handle_select_command(&cmd).await?;
-        }
-        if self_clone.is_auth_command(&cmd) {
-            self_clone.handle_auth_command(&cmd).await?;
-        }
-        if self_clone.is_hello_command(&cmd) {
-            self_clone.handle_hello_command(&cmd).await?;
-        }
-        if self_clone.is_reset_command(&cmd) {
-            self_clone.handle_reset_command().await?;
+        // Post-hooks: only the connection-state commands carry a `Client` clone
+        // (see `needs_post_hook`); the checks themselves are unchanged.
+        if let Some(mut self_clone) = self_clone {
+            if self_clone.is_client_set_name_command(cmd) {
+                self_clone.handle_client_set_name_command(cmd).await?;
+            }
+            if self_clone.is_select_command(cmd) {
+                self_clone.handle_select_command(cmd).await?;
+            }
+            if self_clone.is_auth_command(cmd) {
+                self_clone.handle_auth_command(cmd).await?;
+            }
+            if self_clone.is_hello_command(cmd) {
+                self_clone.handle_hello_command(cmd).await?;
+            }
+            if self_clone.is_reset_command(cmd) {
+                self_clone.handle_reset_command().await?;
+            }
         }
         Ok(value)
     }
 
     /// Gated dispatch entry: reconcile pool-borrowed IAM auth, then dispatch through
     /// `send_command_ungated`.
+    ///
+    /// Not boxed: every caller only `.await`s the returned future, so it is
+    /// awaited inline by its caller instead of costing one heap allocation per
+    /// command (made before the request's await and freed after it, usually on
+    /// another worker thread). A caller that needs a nameable type can box it.
+    // Not `async fn`: the explicit `+ Send` keeps the guarantee the boxed
+    // `RedisFuture` gave callers (FFI, Java, Node, Python, Rust) in the signature,
+    // so a non-`Send` change fails here rather than in a binding.
+    #[allow(clippy::manual_async_fn)]
     pub fn send_command<'a>(
         &'a mut self,
         cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
-    ) -> redis::RedisFuture<'a, Value> {
-        Box::pin(async move {
+    ) -> impl Future<Output = RedisResult<Value>> + Send + 'a {
+        async move {
             // TODO #7666: Reject empty commands here, replacing the check in `get_redis_command`
             // (`socket_listener.rs`).
             // `BLOB.*` transfers lend a buffer, so only the rdma methods send them.
             crate::rdma::refuse_direct_command(cmd)?;
             // Refresh IAM auth before the command (see `reconcile_iam_before_dispatch`).
             self.reconcile_iam_before_dispatch().await?;
-            self.send_command_ungated(cmd, routing).await
-        })
+            // The uppercased command name, computed once (on the stack) and reused
+            // by every name-based check below instead of one `Routable::command()`
+            // allocation per check.
+            let cmd_name = CmdName::of(cmd);
+            self.send_command_ungated(cmd, cmd_name, routing).await
+        }
     }
 
     /// Record what an admitted command may change on the connection, for the
     /// re-AUTH defer and the release reset.
-    fn track_command(&self, cmd: &Cmd, routing: Option<&RoutingInfo>) {
+    ///
+    /// `cmd_name` is the command's `Routable::command()` bytes.
+    fn track_command(&self, cmd: &Cmd, cmd_name: &[u8], routing: Option<&RoutingInfo>) {
         // Read-only standalone rejects MULTI/WATCH/EXEC/DISCARD locally, in
         // pipelines too, so they never reach the server.
         if self.is_cluster || !self.read_only {
-            self.track_transaction_state(cmd);
+            self.track_transaction_state(cmd_name);
         }
         // Only the pool reset reads the routes, so other clients don't collect them.
         if self.is_cluster && self.is_pool_managed.load(Ordering::Acquire) && Self::is_watch(cmd) {
@@ -1593,7 +1661,8 @@ impl Client {
         let permit = Admission::check_ignoring_breaker(self)
             .await?
             .reserve(self)?;
-        self.dispatch(permit, cmd, routing).await
+        let cmd_name = CmdName::of(cmd);
+        self.dispatch(permit, cmd, cmd_name, routing).await
     }
 
     /// Ungated dispatch: everything `send_command` does after the borrow gate. The
@@ -1601,9 +1670,12 @@ impl Client {
     /// structurally rather than via a re-entrancy flag. Kept private and off
     /// `RedisFuture`/`Box::pin` so it neither exports a gate-skipping entry point nor
     /// adds a second heap allocation on the hot path.
+    ///
+    /// `cmd_name` must be `CmdName::of(cmd)`.
     async fn send_command_ungated<'a>(
         &'a mut self,
         cmd: &'a mut Cmd,
+        cmd_name: Option<CmdName>,
         routing: Option<RoutingInfo>,
     ) -> RedisResult<Value> {
         // Track only once admitted: a command refused here never reached the
@@ -1612,19 +1684,27 @@ impl Client {
 
         // Answered locally, so it never takes an in-flight slot; an intercepted
         // SUBSCRIBE still subscribes, so track it here.
-        if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
-            self.track_command(cmd, routing.as_ref());
+        // `may_intercept_pubsub_command` is a synchronous pre-filter (default
+        // `true`); the production synchronizer answers it from the exact name list
+        // `intercept_pubsub_command` matches, so the boxed async call is skipped
+        // for every other command without changing which commands are intercepted.
+        if self
+            .pubsub_synchronizer
+            .may_intercept_pubsub_command(name_bytes(&cmd_name))
+            && let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await
+        {
+            self.track_command(cmd, name_bytes(&cmd_name), routing.as_ref());
             return result;
         }
 
         let permit = admission.reserve(self)?;
         // After the intercept, which answers GLIDE's own pubsub commands, and
         // before the tracking, so a rejected command leaves no state.
-        self.reject_write_in_read_only(cmd)?;
+        self.reject_write_in_read_only_named(name_bytes(&cmd_name))?;
         // The request-timeout lookup in `dispatch` refuses only blocking and WAIT
         // commands, none of which are tracked.
-        self.track_command(cmd, routing.as_ref());
-        self.dispatch(permit, cmd, routing).await
+        self.track_command(cmd, name_bytes(&cmd_name), routing.as_ref());
+        self.dispatch(permit, cmd, cmd_name, routing).await
     }
 
     /// Send `cmd` with the client and in-flight slot in `permit`.
@@ -1633,14 +1713,18 @@ impl Client {
     /// checked when `permit` was taken. The request-timeout lookup can still refuse
     /// the command, but never an RDMA transfer's. An error from here does not prove
     /// the command reached the server: the connection layer can fail before sending.
+    ///
+    /// `cmd_name` must be `CmdName::of(cmd)`.
     async fn dispatch<'a>(
         &'a mut self,
         permit: DispatchPermit,
         cmd: &'a mut Cmd,
+        cmd_name: Option<CmdName>,
         mut routing: Option<RoutingInfo>,
     ) -> RedisResult<Value> {
-        let (client, tracker) = permit.into_parts();
-        let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
+        let (client, slot) = permit.into_parts();
+        let name = name_bytes(&cmd_name);
+        let request_timeout = get_request_timeout_named(cmd, name, self.request_timeout)?;
 
         // Log at debug level when inflight usage crosses a 10% threshold.
         // Only one log per threshold crossing — zero noise when stable.
@@ -1662,7 +1746,31 @@ impl Client {
             }
         }
 
-        cmd.set_inflight_tracker(tracker);
+        // Standalone: the slot is owned by this future and released when it ends.
+        // Nothing in the standalone connection holds the `Cmd` past the reply (the
+        // multiplexer is sent packed bytes), so no shared guard is allocated; that
+        // `Arc` was one allocation per command, made here and freed after the
+        // await, usually on another worker thread. Cluster attaches the shared
+        // tracker to the `Cmd` as before, because there sub-command clones outlive
+        // this future in the cluster event loop.
+        // A permit whose slot was already moved onto `cmd` (`attach_slot_to`, the
+        // RDMA transfer path) arrives with `slot == None` and keeps it there.
+        let _standalone_slot = match slot {
+            Some(slot) if matches!(client, ClientWrapper::Standalone(_)) => {
+                // Drop any tracker a reused `Cmd` still carries from an earlier
+                // send (upstream replaced it on every send), so it holds no
+                // stale slot.
+                cmd.clear_inflight_tracker();
+                Some(slot)
+            }
+            Some(slot) => {
+                cmd.set_inflight_tracker(redis::cluster_async::InflightRequestTracker::from_slot(
+                    slot,
+                ));
+                None
+            }
+            None => None,
+        };
         cmd.set_response_timeout(request_timeout);
 
         // Clone compression_manager reference only if compression is enabled
@@ -1671,16 +1779,26 @@ impl Client {
         } else {
             None
         };
-        let self_clone = self.clone();
+        // Only the connection-state post-hooks need a `Client` clone (they update
+        // client-side state after the reply); every other command skips it.
+        let self_clone = needs_post_hook(name).then(|| self.clone());
 
         // Blocking commands have artificially long latencies; exclude from tracker.
-        let is_blocking_cmd = is_blocking_command(cmd);
-        // Propagate the blocking flag into the Cmd BEFORE cloning owned_cmd so
-        // the copy that actually travels to the multiplexed connection carries
-        // it, letting that connection suppress false-positive response-wait
-        // warnings (#6283).
+        let is_blocking_cmd = is_blocking_cmd_named(cmd, name);
+        // Propagate the blocking flag into the Cmd that travels to the multiplexed
+        // connection, letting that connection suppress false-positive
+        // response-wait warnings (#6283).
         cmd.set_is_blocking(is_blocking_cmd);
-        let owned_cmd = cmd.clone();
+        // No per-command `Cmd` clone (its `data` and `args` Vecs were two
+        // allocations, plus a tracker refcount bump): the request borrows the
+        // caller's `Cmd` for its whole lifetime (a partial-results fan-out makes
+        // one shared copy below). The clone used to reset the watchdog
+        // diagnostics fields; reset them here instead, so a reused `Cmd` starts
+        // each send as Queued with zero retries.
+        cmd.watchdog_phase
+            .store(redis::PHASE_QUEUED, Ordering::Release);
+        cmd.watchdog_retry_count.store(0, Ordering::Relaxed);
+        let owned_cmd: &Cmd = cmd;
 
         // Partial results apply only to a cluster fan-out that redis-rs collects
         // per node; every other request keeps its timeout and accounting as is.
@@ -1712,14 +1830,18 @@ impl Client {
                 let cmd_start = Instant::now();
 
                 let mut watchdog_duration = duration;
-                let mut fan_out_deadline = None;
+                let mut fan_out = None;
                 if partial_results {
                     let margin = partial_results_margin(duration);
-                    fan_out_deadline = Some(cmd_start + duration - margin);
+                    // redis-rs takes a fan-out's command as a shared `Arc`, whose
+                    // watchdog fields its per-node requests update.
+                    fan_out = Some((Arc::new(owned_cmd.clone()), cmd_start + duration - margin));
                     watchdog_duration += margin;
                 }
-                // Wrap Cmd in Arc so the timeout arm can still read watchdog fields after execute takes ownership
-                let owned_cmd = Arc::new(owned_cmd);
+                // The execute future borrows the command, so the timeout arm can
+                // still read its watchdog fields; no `Arc::new(Cmd)` per command. For
+                // a partial-results fan-out it reads the shared copy instead.
+                let diag_cmd: &Cmd = fan_out.as_ref().map_or(owned_cmd, |(shared, _)| &**shared);
 
                 let timeout_rx = crate::timeout_watchdog::TimeoutWatchdog::global()
                     .register(watchdog_duration, cmd_start);
@@ -1731,9 +1853,10 @@ impl Client {
                 let routing_for_diag = routing.clone();
                 let execute = Self::execute_command_owned(
                     self_clone,
-                    owned_cmd.clone(),
+                    owned_cmd,
+                    cmd_name.as_ref().map(CmdName::as_bytes),
                     routing,
-                    fan_out_deadline,
+                    fan_out.clone(),
                     client,
                     compression_manager,
                 );
@@ -1759,13 +1882,13 @@ impl Client {
                                 // Build diagnostic event on the consumer side (rare timeout path)
                                 let actual_elapsed = cmd_start.elapsed();
                                 let (phase, node, retry_count, command) = {
-                                    let p = owned_cmd.watchdog_phase.load(Ordering::Acquire);
+                                    let p = diag_cmd.watchdog_phase.load(Ordering::Acquire);
                                     let n: String = routing_for_diag
                                         .as_ref()
                                         .map(|r| format!("{:?}", r))
                                         .unwrap_or_else(|| "unknown".to_owned());
-                                    let r = owned_cmd.watchdog_retry_count.load(Ordering::Relaxed);
-                                    let c = owned_cmd.arg_idx(0)
+                                    let r = diag_cmd.watchdog_retry_count.load(Ordering::Relaxed);
+                                    let c = diag_cmd.arg_idx(0)
                                         .map(crate::timeout_watchdog::cmd_name_from_bytes)
                                         .unwrap_or("UNKNOWN");
                                     (
@@ -1833,10 +1956,10 @@ impl Client {
                 }
             }
             None => {
-                let owned_cmd = Arc::new(owned_cmd);
                 let execute = Self::execute_command_owned(
                     self_clone,
                     owned_cmd,
+                    cmd_name.as_ref().map(CmdName::as_bytes),
                     routing,
                     None,
                     client,
@@ -2123,6 +2246,16 @@ impl Client {
     pub(crate) fn reject_write_in_read_only(&self, cmd: &Cmd) -> RedisResult<()> {
         if self.shared.read_only && !self.shared.is_cluster {
             standalone_client::reject_write_command(&cmd.command().unwrap_or_default())?;
+        }
+        Ok(())
+    }
+
+    /// [`Self::reject_write_in_read_only`] with the command's `Routable::command()`
+    /// bytes already computed (`&[]` for a command with no arguments), so the
+    /// `send_command` path does not allocate the name again.
+    fn reject_write_in_read_only_named(&self, cmd_name: &[u8]) -> RedisResult<()> {
+        if self.shared.read_only && !self.shared.is_cluster {
+            standalone_client::reject_write_command(cmd_name)?;
         }
         Ok(())
     }
@@ -2470,7 +2603,7 @@ impl Client {
             // batch, so it also pins this batch to the primary.
             let multi_open = self.multi_active.load(Ordering::Acquire);
             for cmd in pipeline.cmd_iter() {
-                self.track_transaction_state(cmd);
+                self.track_transaction_state(name_bytes(&CmdName::of(cmd)));
                 self.track_unresettable(cmd);
                 // A batch may split across nodes, so its WATCH target is unknown,
                 // unless the batch routing may send it to a replica. Unlike a single
@@ -2601,9 +2734,14 @@ impl Client {
     /// Reserve an inflight slot, returning a tracker whose Drop releases it.
     /// Returns `None` if no slots available.
     pub fn reserve_inflight_request(&self) -> Option<redis::cluster_async::InflightRequestTracker> {
-        redis::cluster_async::InflightRequestTracker::try_new(
-            self.inflight_requests_allowed.clone(),
-        )
+        self.reserve_inflight_slot()
+            .map(redis::cluster_async::InflightRequestTracker::from_slot)
+    }
+
+    /// Reserve an inflight slot with a single owner (no shared guard allocation),
+    /// released when dropped. Returns `None` if no slots available.
+    fn reserve_inflight_slot(&self) -> Option<redis::cluster_async::InflightSlot> {
+        redis::cluster_async::InflightSlot::try_new(self.inflight_requests_allowed.clone())
     }
 
     /// The error for a command refused because every in-flight slot is taken.
@@ -2736,7 +2874,9 @@ impl Client {
         cmd.arg(pass);
         // Ungated: this AUTH is itself the pool-borrow reconcile's dispatch, so it
         // must not re-enter the borrow gate.
-        self.send_command_ungated(&mut cmd, Some(routing)).await
+        let cmd_name = CmdName::of(&cmd);
+        self.send_command_ungated(&mut cmd, cmd_name, Some(routing))
+            .await
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
@@ -4116,17 +4256,16 @@ impl Client {
     /// `multi_seen`/`watch_seen` for the release reset. `send_transaction` is not
     /// tracked: redis-rs adds its MULTI/EXEC bracket at pack time, outside
     /// `cmd_iter()`, so it always closes, and the server rejects a WATCH inside it.
-    fn track_transaction_state(&self, cmd: &Cmd) {
-        match cmd.command().as_deref() {
-            Some(b"MULTI") => {
+    /// `upper_name` is the command's `Routable::command()` bytes.
+    fn track_transaction_state(&self, upper_name: &[u8]) {
+        match upper_name {
+            b"MULTI" => {
                 self.multi_active.store(true, Ordering::Release);
                 self.multi_seen.store(true, Ordering::Release);
             }
-            Some(b"WATCH") => self.watch_seen.store(true, Ordering::Release),
+            b"WATCH" => self.watch_seen.store(true, Ordering::Release),
             // RESET also discards an open transaction.
-            Some(b"EXEC") | Some(b"DISCARD") | Some(b"RESET") => {
-                self.multi_active.store(false, Ordering::Release)
-            }
+            b"EXEC" | b"DISCARD" | b"RESET" => self.multi_active.store(false, Ordering::Release),
             _ => {}
         }
     }
@@ -4469,7 +4608,7 @@ impl GlideClientForTests for Client {
         cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value> {
-        self.send_command(cmd, routing)
+        Box::pin(Client::send_command(self, cmd, routing))
     }
 }
 
@@ -6032,26 +6171,129 @@ mod tests {
         );
     }
 
+    /// `needs_post_hook` decides whether `dispatch` clones the `Client` for the
+    /// connection-state post-hooks, so it must accept exactly the commands at least
+    /// one post-hook predicate matches; a command it misses would silently skip its
+    /// post-hook.
+    #[test]
+    fn needs_post_hook_matches_the_post_hook_predicates() {
+        // A runtime context, so the mock pubsub synchronizer (`mock-pubsub`) can
+        // spawn its cleanup when the client drops.
+        let rt = borrow_test_runtime();
+        let _rt_guard = rt.enter();
+        let client = create_test_client();
+        let commands = [
+            redis::cmd("CLIENT").arg("SETNAME").arg("n").clone(),
+            redis::cmd("client").arg("setname").arg("n").clone(),
+            redis::cmd("CLIENT").arg("GETNAME").clone(),
+            redis::cmd("CLIENT").arg("INFO").clone(),
+            redis::cmd("CLIENT").clone(),
+            redis::cmd("SELECT").arg("1").clone(),
+            redis::cmd("select").arg("1").clone(),
+            redis::cmd("AUTH").arg("pw").clone(),
+            redis::cmd("auth").arg("user").arg("pw").clone(),
+            redis::cmd("HELLO").arg("3").clone(),
+            redis::cmd("hello")
+                .arg("3")
+                .arg("AUTH")
+                .arg("u")
+                .arg("p")
+                .clone(),
+            redis::cmd("RESET").clone(),
+            redis::cmd("reset").clone(),
+            redis::cmd("GET").arg("k").clone(),
+            redis::cmd("SET").arg("k").arg("v").clone(),
+            redis::cmd("PING").clone(),
+            redis::cmd("SELECTX").clone(),
+            redis::Cmd::new(),
+        ];
+        for cmd in &commands {
+            let by_predicates = client.is_client_set_name_command(cmd)
+                || client.is_select_command(cmd)
+                || client.is_auth_command(cmd)
+                || client.is_hello_command(cmd)
+                || client.is_reset_command(cmd);
+            let name = super::CmdName::of(cmd);
+            assert_eq!(
+                super::needs_post_hook(super::name_bytes(&name)),
+                by_predicates,
+                "{cmd:?}"
+            );
+        }
+    }
+
+    /// The name-taking request-timeout and blocking checks `dispatch` uses must
+    /// agree with the `Cmd`-taking ones (which compute the name themselves).
+    #[test]
+    fn named_timeout_and_blocking_checks_match_the_cmd_ones() {
+        let default = Duration::from_millis(250);
+        let commands = [
+            redis::cmd("BLPOP").arg("k").arg("1").clone(),
+            redis::cmd("blpop").arg("k").arg("0").clone(),
+            redis::cmd("BLMPOP")
+                .arg("2")
+                .arg("1")
+                .arg("k")
+                .arg("LEFT")
+                .clone(),
+            redis::cmd("XREAD")
+                .arg("BLOCK")
+                .arg("100")
+                .arg("STREAMS")
+                .arg("s")
+                .arg("0")
+                .clone(),
+            redis::cmd("xread").arg("STREAMS").arg("s").arg("0").clone(),
+            redis::cmd("WAIT").arg("1").arg("10").clone(),
+            redis::cmd("WAITAOF").arg("1").arg("0").arg("10").clone(),
+            redis::cmd("BLOB.RDMA_GET").arg("k").clone(),
+            redis::cmd("GET").arg("k").clone(),
+            redis::Cmd::new(),
+        ];
+        for cmd in &commands {
+            let name = super::CmdName::of(cmd);
+            let name = super::name_bytes(&name);
+            assert_eq!(
+                super::is_blocking_cmd_named(cmd, name),
+                is_blocking_command(cmd),
+                "{cmd:?}"
+            );
+            assert_eq!(
+                super::get_request_timeout_named(cmd, name, default).map_err(|e| e.to_string()),
+                get_request_timeout(cmd, default).map_err(|e| e.to_string()),
+                "{cmd:?}"
+            );
+        }
+    }
+
     /// `track_transaction_state` must set `multi_active` on MULTI and clear it on
     /// EXEC/DISCARD — the state `prepare_for_borrow`'s defer keys on.
     #[test]
     fn track_transaction_state_tracks_multi_open_and_close() {
         use std::sync::atomic::Ordering;
         let client = create_test_client();
+        // As `track_command` and the pipeline loop call it: with the command's precomputed name.
+        let track = |cmd: redis::Cmd| {
+            client.track_transaction_state(super::name_bytes(&super::CmdName::of(&cmd)))
+        };
 
-        client.track_transaction_state(&redis::cmd("MULTI"));
+        track(redis::cmd("MULTI"));
         assert!(
             client.shared.multi_active.load(Ordering::Acquire),
             "MULTI must mark a transaction open"
         );
-        client.track_transaction_state(&redis::cmd("EXEC"));
+        track(redis::cmd("exec"));
         assert!(
             !client.shared.multi_active.load(Ordering::Acquire),
-            "EXEC must clear the open-transaction flag"
+            "EXEC (any case) must clear the open-transaction flag"
         );
 
-        client.track_transaction_state(&redis::cmd("MULTI"));
-        client.track_transaction_state(&redis::cmd("DISCARD"));
+        track(redis::cmd("multi"));
+        assert!(
+            client.shared.multi_active.load(Ordering::Acquire),
+            "MULTI (any case) must mark a transaction open"
+        );
+        track(redis::cmd("DISCARD"));
         assert!(
             !client.shared.multi_active.load(Ordering::Acquire),
             "DISCARD must clear the open-transaction flag"
@@ -6061,11 +6303,11 @@ mod tests {
             "EXEC/DISCARD must not clear multi_seen; only a successful reset does"
         );
         assert!(!client.shared.watch_seen.load(Ordering::Acquire));
-        client.track_transaction_state(&redis::cmd("WATCH"));
+        track(redis::cmd("WATCH"));
         assert!(client.shared.watch_seen.load(Ordering::Acquire));
 
-        client.track_transaction_state(&redis::cmd("MULTI"));
-        client.track_transaction_state(&redis::cmd("RESET"));
+        track(redis::cmd("MULTI"));
+        track(redis::cmd("RESET"));
         assert!(
             !client.shared.multi_active.load(Ordering::Acquire),
             "RESET discards the transaction, so it must clear the open-transaction flag"
@@ -7113,11 +7355,30 @@ mod tests {
     /// client to connect and send: `PING` gets `PONG`, `INFO` reports the master
     /// role, and anything else gets `OK`.
     async fn serve_as_a_primary(listener: tokio::net::TcpListener) {
+        serve_as_a_primary_holding(listener, None).await
+    }
+
+    /// Lets a test hold one command's reply: the server signals `received` when
+    /// a command named `name` arrives, then waits for `release` before replying.
+    struct HeldReply {
+        name: &'static [u8],
+        received: std::sync::Arc<tokio::sync::Notify>,
+        release: std::sync::Arc<tokio::sync::Notify>,
+    }
+
+    /// [`serve_as_a_primary`], except that the reply to `held`'s command waits
+    /// until the test releases it.
+    async fn serve_as_a_primary_holding(
+        listener: tokio::net::TcpListener,
+        held: Option<HeldReply>,
+    ) {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let held = held.map(std::sync::Arc::new);
         loop {
             let Ok((mut socket, _)) = listener.accept().await else {
                 return;
             };
+            let held = held.clone();
             tokio::spawn(async move {
                 let mut pending = Vec::new();
                 let mut chunk = [0u8; 4096];
@@ -7125,7 +7386,12 @@ mod tests {
                     pending.extend_from_slice(&chunk[..read]);
                     while let Some((name, used)) = first_command_name(&pending) {
                         pending.drain(..used);
-                        let reply: &[u8] = match name.to_ascii_uppercase().as_slice() {
+                        let upper = name.to_ascii_uppercase();
+                        if let Some(held) = held.as_ref().filter(|h| h.name == upper) {
+                            held.received.notify_one();
+                            held.release.notified().await;
+                        }
+                        let reply: &[u8] = match upper.as_slice() {
                             b"PING" => b"+PONG\r\n",
                             b"INFO" => b"$13\r\nrole:master\r\n\r\n",
                             _ => b"+OK\r\n",
@@ -7161,6 +7427,150 @@ mod tests {
             at = end + 2;
         }
         Some((name?, at))
+    }
+
+    /// A standalone command's in-flight slot is owned by the request future and
+    /// released when the send returns, even while the caller keeps its `Cmd`; and
+    /// a reused `Cmd` starts each send with reset watchdog diagnostics (the
+    /// per-command `Cmd` clone that used to reset them is gone).
+    #[tokio::test]
+    async fn standalone_send_releases_its_slot_and_resets_watchdog_fields() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(serve_as_a_primary(listener));
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port,
+                unix_socket_path: None,
+            }],
+            ..Default::default()
+        };
+        use std::sync::atomic::Ordering;
+        let mut client = Client::new(request, None).await.expect("connects");
+        let limit = client.available_inflight_count();
+
+        let mut cmd = redis::cmd("SET");
+        cmd.arg("key").arg("value");
+        // Leftovers from an earlier attempt must not leak into this send: a stale
+        // retry count, and a tracker holding another counter's slot.
+        cmd.watchdog_retry_count.store(7, Ordering::Relaxed);
+        let other = std::sync::Arc::new(std::sync::atomic::AtomicIsize::new(1));
+        cmd.set_inflight_tracker(
+            redis::cluster_async::InflightRequestTracker::try_new(other.clone()).unwrap(),
+        );
+        assert_eq!(other.load(Ordering::Relaxed), 0);
+        for _ in 0..3 {
+            let reply = client.send_command(&mut cmd, None).await;
+            assert_eq!(reply, Ok(redis::Value::Okay));
+            assert_eq!(
+                client.available_inflight_count(),
+                limit,
+                "the slot is released when the send returns, not when the Cmd drops"
+            );
+            assert_eq!(cmd.watchdog_retry_count.load(Ordering::Relaxed), 0);
+            assert_eq!(
+                other.load(Ordering::Relaxed),
+                1,
+                "a stale tracker on a reused Cmd is released by the standalone send"
+            );
+        }
+    }
+
+    /// The standalone request future holds its in-flight slot for as long as the
+    /// request is outstanding, not only up to the write: while the server holds
+    /// the reply one slot is taken, and it comes back once the reply arrives.
+    #[tokio::test]
+    async fn standalone_send_holds_its_slot_while_the_reply_is_outstanding() {
+        use std::sync::Arc;
+        use tokio::sync::Notify;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let received = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        tokio::spawn(serve_as_a_primary_holding(
+            listener,
+            Some(HeldReply {
+                name: b"SET",
+                received: received.clone(),
+                release: release.clone(),
+            }),
+        ));
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port,
+                unix_socket_path: None,
+            }],
+            // Far longer than the test holds the reply, so the request cannot
+            // time out and release its slot early.
+            request_timeout: Some(30_000),
+            ..Default::default()
+        };
+        let client = Client::new(request, None).await.expect("connects");
+        let limit = client.available_inflight_count();
+
+        let mut sender = client.clone();
+        let request = tokio::spawn(async move {
+            let mut cmd = redis::cmd("SET");
+            cmd.arg("key").arg("value");
+            sender.send_command(&mut cmd, None).await
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(10), received.notified())
+            .await
+            .expect("the server receives the SET");
+        assert_eq!(
+            client.available_inflight_count(),
+            limit - 1,
+            "the slot is held while the reply is outstanding"
+        );
+
+        release.notify_one();
+        let reply = tokio::time::timeout(std::time::Duration::from_secs(10), request)
+            .await
+            .expect("the reply arrives once released")
+            .expect("the request task does not panic");
+        assert_eq!(reply, Ok(redis::Value::Okay));
+        assert_eq!(
+            client.available_inflight_count(),
+            limit,
+            "the slot is released once the reply arrives"
+        );
+    }
+
+    /// A permit whose slot was moved onto the command (`attach_slot_to`, the RDMA
+    /// transfer path) keeps the slot held by the command after `dispatch`
+    /// returns, until the command is dropped, as before the slot moved into the
+    /// request future.
+    #[cfg(feature = "rdma")]
+    #[tokio::test]
+    async fn an_attached_slot_is_held_by_the_command_past_dispatch() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(serve_as_a_primary(listener));
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port,
+                unix_socket_path: None,
+            }],
+            ..Default::default()
+        };
+        let mut client = Client::new(request, None).await.expect("connects");
+        let limit = client.available_inflight_count();
+
+        let mut permit = super::DispatchPermit::take(&client)
+            .await
+            .expect("a slot is free");
+        let mut cmd = redis::cmd("SET");
+        cmd.arg("key").arg("value");
+        permit.attach_slot_to(&mut cmd);
+        let name = super::CmdName::of(&cmd);
+        let reply = client.dispatch(permit, &mut cmd, name, None).await;
+        assert_eq!(reply, Ok(redis::Value::Okay));
+        assert_eq!(client.available_inflight_count(), limit - 1);
+        drop(cmd);
+        assert_eq!(client.available_inflight_count(), limit);
     }
 
     /// A send that already holds its permit must not check the circuit breaker
@@ -7212,7 +7622,8 @@ mod tests {
 
         let mut sent = redis::cmd("SET");
         sent.arg("key").arg("value");
-        let reply = client.dispatch(permit, &mut sent, None).await;
+        let sent_name = super::CmdName::of(&sent);
+        let reply = client.dispatch(permit, &mut sent, sent_name, None).await;
         assert_eq!(reply, Ok(redis::Value::Okay));
     }
 
