@@ -169,7 +169,6 @@ impl NodeDiscoveryMode {
 
 /// A server address (host + port).
 ///
-// TODO #7645: Add a way to build a Unix socket address for standalone clients.
 /// Mirrors Python `NodeAddress`. Defaults to `localhost:6379`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeAddress {
@@ -200,7 +199,6 @@ impl NodeAddress {
         CoreNodeAddress {
             host: self.host.clone(),
             port: self.port,
-            // TODO #7645: Pass the Unix socket path, once `NodeAddress` can hold one.
             unix_socket_path: None,
         }
     }
@@ -540,9 +538,9 @@ pub(crate) fn split_connection_addr(
             };
             Ok((NodeAddress::new(host, port), tls))
         }
-        // TODO #7645: Accept Unix socket URLs for standalone clients; glide-core supports them.
+        // `GlideClientConfiguration::from_url` handles socket URLs before calling this.
         redis::ConnectionAddr::Unix(_) => Err(crate::error::GlideError::Configuration(
-            "unix-socket connections are not supported by glide-core".into(),
+            "Unix domain socket addresses are not supported in cluster mode".into(),
         )),
     }
 }
@@ -556,11 +554,14 @@ pub(crate) fn from_redis_protocol(p: redis::ProtocolVersion) -> ProtocolVersion 
 }
 
 /// Build [`ServerCredentials`] from URL-provided username/password (either may
-/// be absent; `redis://:pass@host` yields password-only credentials).
+/// be absent; `redis://:pass@host` yields password-only credentials). Empty
+/// values, such as a Unix socket URL's `?pass=`, count as absent.
 pub(crate) fn credentials_from_info(
     username: Option<String>,
     password: Option<String>,
 ) -> Option<ServerCredentials> {
+    let username = username.filter(|username| !username.is_empty());
+    let password = password.filter(|password| !password.is_empty());
     match (username, password) {
         (None, None) => None,
         (username, password) => Some(ServerCredentials {

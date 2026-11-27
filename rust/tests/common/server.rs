@@ -15,6 +15,8 @@ const START_TIMEOUT: Duration = Duration::from_secs(10);
 
 // Constants for parsing server logs.
 const LOG_READY: &str = "Ready to accept connections";
+// Redis 6.2 logs only this when it has no TCP listener (`--port 0`).
+const LOG_READY_UNIX: &str = "ready to accept connections at";
 const LOG_PORT_IN_USE: &str = "in use";
 
 /// Locate a usable `valkey-server`/`redis-server` binary. Set the
@@ -71,6 +73,14 @@ impl TestServer {
     /// Panics if it cannot be started.
     pub fn start_with_password(password: &str) -> TestServer {
         Self::start_with_args(&["--requirepass", password])
+    }
+
+    /// Start a standalone server that listens only on the Unix socket at `path`.
+    /// Panics if it cannot be started.
+    pub fn start_with_unix_socket(path: &str) -> TestServer {
+        let extra = ["--unixsocket", path, "--unixsocketperm", "700"];
+        // Port 0 disables TCP, so there is no free port to look for.
+        Self::try_start_on(&server_binary(), 0, &extra).expect("Unix socket path already in use")
     }
 
     /// Start a standalone server with extra CLI arguments.
@@ -146,7 +156,7 @@ impl TestServer {
             // so that an exited server's log is read in full.
             let exited = server.child.try_wait().ok().flatten();
             let log = std::fs::read_to_string(&server.log_path).unwrap_or_default();
-            if log.contains(LOG_READY) {
+            if log.contains(LOG_READY) || log.contains(LOG_READY_UNIX) {
                 return Some(server);
             }
             if let Some(status) = exited {

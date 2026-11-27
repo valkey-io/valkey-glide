@@ -8,6 +8,9 @@ use super::common::{
     split_connection_addr, to_redis_connection_info,
 };
 use glide_core::client::ConnectionRequest;
+use glide_core::client::NodeAddress as CoreNodeAddress;
+use std::borrow::Cow;
+use std::path::PathBuf;
 use std::time::Duration;
 
 /// Configuration for a **standalone** (non-cluster) GLIDE client.
@@ -16,6 +19,10 @@ use std::time::Duration;
 pub struct GlideClientConfiguration {
     /// Seed node addresses.
     pub addresses: Vec<NodeAddress>,
+    /// Absolute path of the server's Unix domain socket, to connect through it instead of TCP
+    /// (Unix platforms only). Set via [`Self::with_unix_socket`]; `addresses` must then be
+    /// empty. Not supported with TLS or `DiscoverAll`.
+    pub unix_socket_path: Option<PathBuf>,
     /// TLS mode.
     pub tls: TlsConfig,
     /// Optional credentials.
@@ -63,6 +70,7 @@ impl GlideClientConfiguration {
     pub fn new(addresses: Vec<NodeAddress>) -> Self {
         GlideClientConfiguration {
             addresses,
+            unix_socket_path: None,
             tls: TlsConfig::NoTls,
             credentials: None,
             read_from: ReadFrom::Primary,
@@ -82,6 +90,14 @@ impl GlideClientConfiguration {
         }
     }
 
+    /// Create a standalone configuration that connects through the server's Unix domain
+    /// socket at the absolute `path` (Unix platforms only).
+    pub fn with_unix_socket(path: impl Into<PathBuf>) -> Self {
+        let mut cfg = Self::new(Vec::new());
+        cfg.unix_socket_path = Some(path.into());
+        cfg
+    }
+
     /// Build a configuration from a connection URL.
     ///
     /// Supports Redis URLs:
@@ -96,14 +112,21 @@ impl GlideClientConfiguration {
     /// `rediss://` enables TLS with full verification;
     /// `rediss://…/#insecure` disables certificate verification.
     ///
-    /// Does not support Unix-socket URLs (`unix://` or `unix+redis://`).
-    /// Does not support Valkey URLs (`valkey://` or `valkeys://`).
+    /// `unix:///path/to/valkey.sock` (or `redis+unix://`) connects through a Unix domain socket;
+    /// pass `db`, `user`, `pass` and `resp3=true` as query parameters.
+    ///
+    /// Does not support Valkey URLs (`valkey://`, `valkeys://` or `valkey+unix://`).
     // TODO #7031: Accept `valkey://` and `valkeys://` schemes.
     pub fn from_url(url: impl AsRef<str>) -> crate::ValkeyResult<Self> {
+        let url = check_unix_socket_url(url.as_ref())?;
         let info = to_redis_connection_info(url)?;
-        let (address, tls) = split_connection_addr(info.addr)?;
-
-        let mut cfg = Self::new(vec![address]).tls(tls);
+        let mut cfg = match info.addr {
+            redis::ConnectionAddr::Unix(path) => Self::with_unix_socket(path),
+            addr => {
+                let (address, tls) = split_connection_addr(addr)?;
+                Self::new(vec![address]).tls(tls)
+            }
+        };
         cfg.database_id = info.redis.db;
         cfg.protocol = from_redis_protocol(info.redis.protocol);
         cfg.client_name = info.redis.client_name;
@@ -126,9 +149,61 @@ impl GlideClientConfiguration {
 
     pub(crate) fn to_request(&self) -> ConnectionRequest {
         let mut req = self.common_request();
+        // Kept next to `addresses`, so the core rejects a socket combined with TCP addresses.
+        req.addresses
+            .extend(self.unix_socket_path.iter().map(|path| CoreNodeAddress {
+                host: String::new(),
+                port: 0,
+                unix_socket_path: Some(path.clone()),
+            }));
         req.cluster_mode_enabled = false;
         req.database_id = self.database_id;
         req.node_discovery_mode = self.node_discovery_mode.to_core();
         req
+    }
+}
+
+/// redis-rs ignores a Unix socket URL's userinfo, a `localhost` host, the fragment and unknown
+/// query keys, so reject the forms it would silently misread. It also form-decodes the query,
+/// turning `+` into a space, so return the URL with `+` percent-encoded to keep it literal.
+fn check_unix_socket_url(url: &str) -> crate::ValkeyResult<Cow<'_, str>> {
+    let Some(mut parsed) = redis::parse_redis_url(url) else {
+        return Ok(Cow::Borrowed(url));
+    };
+    if !matches!(parsed.scheme(), "unix" | "redis+unix") {
+        return Ok(Cow::Borrowed(url));
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(crate::error::GlideError::Configuration(
+            "Unix socket URL must pass credentials as `user` and `pass` query parameters".into(),
+        ));
+    }
+    if parsed.host_str().is_some_and(|host| !host.is_empty()) {
+        return Err(crate::error::GlideError::Configuration(
+            "Unix socket URL must not contain a host".into(),
+        ));
+    }
+    if parsed.fragment().is_some() {
+        return Err(crate::error::GlideError::Configuration(
+            "Unix socket URL must not contain a fragment; encode `#` as `%23`".into(),
+        ));
+    }
+    // Errors never echo a key or value: a mistyped separator can put a password inside one.
+    if parsed
+        .query_pairs()
+        .any(|(key, _)| !matches!(key.as_ref(), "db" | "user" | "pass" | "resp3"))
+    {
+        return Err(crate::error::GlideError::Configuration(
+            "Unsupported query parameter in Unix socket URL; use `db`, `user`, `pass` or `resp3`"
+                .into(),
+        ));
+    }
+    match parsed.query().filter(|query| query.contains('+')) {
+        Some(query) => {
+            let query = query.replace('+', "%2B");
+            parsed.set_query(Some(&query));
+            Ok(Cow::Owned(parsed.into()))
+        }
+        None => Ok(Cow::Borrowed(url)),
     }
 }

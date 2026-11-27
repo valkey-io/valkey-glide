@@ -93,7 +93,7 @@ impl GlideClusterClientConfiguration {
     /// `rediss://` enables TLS with full verification;
     /// `rediss://…/#insecure` disables certificate verification.
     ///
-    /// Does not support Unix-socket URLs (`unix://` or `unix+redis://`).
+    /// Does not support Unix-socket URLs (`unix://` or `redis+unix://`).
     /// Does not support Valkey URLs (`valkey://` or `valkeys://`).
     // TODO #7031: Accept `valkey://` and `valkeys://` schemes.
     pub fn from_url(url: impl AsRef<str>) -> crate::ValkeyResult<Self> {
@@ -120,7 +120,7 @@ impl GlideClusterClientConfiguration {
     /// `rediss://` enables TLS with full verification;
     /// `rediss://…/#insecure` disables certificate verification.
     ///
-    /// Does not support Unix-socket URLs (`unix://` or `unix+redis://`).
+    /// Does not support Unix-socket URLs (`unix://` or `redis+unix://`).
     /// Does not support Valkey URLs (`valkey://` or `valkeys://`).
     // TODO #7031: Accept `valkey://` and `valkeys://` schemes.
     pub fn from_urls<S: AsRef<str>>(
