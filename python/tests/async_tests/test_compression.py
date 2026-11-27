@@ -97,6 +97,25 @@ async def exec_gets(
     )
 
 
+async def exec_size_limit_batch(
+    client: TGlideClient, is_atomic: bool, big_key: str, marker_key: str
+) -> Optional[List[Any]]:
+    """Runs SET marker, GET big, GET marker, MGET [marker, big] with raise_on_error=False."""
+    if isinstance(client, GlideClient):
+        batch = Batch(is_atomic=is_atomic)
+        batch.set(marker_key, "written").get(big_key).get(marker_key).mget(
+            [marker_key, big_key]
+        )
+        return await client.exec(batch, raise_on_error=False)
+    cluster_batch = ClusterBatch(is_atomic=is_atomic)
+    cluster_batch.set(marker_key, "written").get(big_key).get(marker_key).mget(
+        [marker_key, big_key]
+    )
+    return await cast(GlideClusterClient, client).exec(
+        cluster_batch, raise_on_error=False
+    )
+
+
 def generate_mixed_size_list(count: int, min_size: int, max_size: int) -> List[str]:
     """Generate list of strings with varying sizes."""
     return [
@@ -1532,18 +1551,18 @@ class TestCompressionIncompatibleCommands:
         param("bitpos", [1], 2, None, id="bitpos"),
         param("decr", [], 9, None, id="decr"),
         param("decrby", [5], 5, None, id="decrby"),
-        param("delex", [OnlyIfEqual("10")], True, "9.2.0", id="delex_ifeq"),
-        param("delifeq", ["10"], True, "9.0.0", id="delifeq"),
         param("getbit", [0], 0, None, id="getbit"),
         param("getrange", [0, 0], b"1", None, id="getrange"),
         param("incr", [], 11, None, id="incr"),
         param("incrby", [5], 15, None, id="incrby"),
         param("incrbyfloat", [0.5], 10.5, None, id="incrbyfloat"),
-        param("set", ["20", OnlyIfEqual("10")], OK, "8.1.0", id="set_ifeq"),
-        param("set", ["20", OnlyIfNotEqual("20")], OK, "9.2.0", id="set_ifne"),
         param("setbit", [0, 1], 0, None, id="setbit"),
         param("setrange", [1, "5"], 2, None, id="setrange"),
         param("strlen", [], 2, None, id="strlen"),
+        param("set", ["20", OnlyIfEqual("10")], OK, "8.1.0", id="set_ifeq"),
+        param("delifeq", ["10"], True, "9.0.0", id="delifeq"),
+        param("delex", [OnlyIfEqual("10")], True, "9.2.0", id="delex_ifeq"),
+        param("set", ["20", OnlyIfNotEqual("20")], OK, "9.2.0", id="set_ifne"),
     ]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -1858,6 +1877,66 @@ class TestCompressionMaxDecompressedSize:
                 await limited_client.close()
 
             await unlimited_client.delete([key])
+        finally:
+            await unlimited_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("is_atomic", [True, False])
+    async def test_max_decompressed_size_batch_without_raise_on_error_returns_error_in_place(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion, is_atomic: bool
+    ):
+        """With raise_on_error=False, an oversized reply is a RequestError in its
+        position and the other replies of the batch are kept."""
+        unlimited_client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            enable_compression=True,
+        )
+        try:
+            tag = f"{{batch_no_raise_{get_random_string(8)}}}"
+            big_key = f"{tag}big"
+            marker_key = f"{tag}marker"
+            await unlimited_client.set(big_key, generate_compressible_text(10000))
+
+            limited_config = create_client_config(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                enable_compression=False,
+            )
+            limited_config.compression = CompressionConfiguration(
+                enabled=True,
+                backend=CompressionBackend.ZSTD,
+                compression_level=3,
+                min_compression_size=64,
+                max_decompressed_size=100,
+            )
+            limited_client: GlideClient | GlideClusterClient
+            if cluster_mode:
+                limited_client = await GlideClusterClient.create(limited_config)
+            else:
+                limited_client = await GlideClient.create(limited_config)
+
+            try:
+                results = await exec_size_limit_batch(
+                    limited_client, is_atomic, big_key, marker_key
+                )
+
+                assert results is not None
+                assert len(results) == 4
+                assert results[0] == OK
+                assert isinstance(results[1], RequestError)
+                assert "size limit exceeded" in str(results[1])
+                assert results[2] == b"written"
+                # An MGET reply fails as a whole, as the same MGET does outside a batch.
+                assert isinstance(results[3], RequestError)
+                assert "size limit exceeded" in str(results[3])
+            finally:
+                await limited_client.close()
+
+            await unlimited_client.delete([big_key, marker_key])
         finally:
             await unlimited_client.close()
 

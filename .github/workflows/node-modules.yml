@@ -14,6 +14,8 @@ on:
             - glide-core/redis-rs/redis/src/**
             - node/src/server-modules/**
             - node/tests/ServerModules.test.ts
+            - node/tests/ServerModulesSearchQueryFeatures.test.ts
+            - node/tests/searchCapabilityHelpers.ts
             - .github/workflows/node-modules.yml
             - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
@@ -25,6 +27,8 @@ on:
             - glide-core/redis-rs/redis/src/**
             - node/src/server-modules/**
             - node/tests/ServerModules.test.ts
+            - node/tests/ServerModulesSearchQueryFeatures.test.ts
+            - node/tests/searchCapabilityHelpers.ts
             - .github/workflows/node-modules.yml
             - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml

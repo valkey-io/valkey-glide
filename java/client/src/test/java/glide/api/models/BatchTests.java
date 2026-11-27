@@ -27,6 +27,7 @@ import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
 import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.DelEx;
 import static command_request.CommandRequestOuterClass.RequestType.DelIfEq;
 import static command_request.CommandRequestOuterClass.RequestType.Dump;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
@@ -263,6 +264,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.ConditionalChange;
+import glide.api.models.commands.DelexOptions;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.ExpirySet;
 import glide.api.models.commands.FieldConditionalChange;
@@ -366,6 +368,12 @@ public class BatchTests {
 
         batch.delifeq("key", "value");
         results.add(Pair.of(DelIfEq, buildArgs("key", "value")));
+
+        batch.delex("key", DelexOptions.onlyIfEqualTo("value"));
+        results.add(Pair.of(DelEx, buildArgs("key", "IFEQ", "value")));
+
+        batch.delex("key", DelexOptions.onlyIfNotEqualTo("value"));
+        results.add(Pair.of(DelEx, buildArgs("key", "IFNE", "value")));
 
         batch.del(new String[] {"key1", "key2"});
         results.add(Pair.of(Del, buildArgs("key1", "key2")));

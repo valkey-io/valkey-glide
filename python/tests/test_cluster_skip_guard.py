@@ -5,6 +5,8 @@
 import os
 from pathlib import Path
 
+import pytest
+
 pytest_plugins = ["pytester"]
 
 _PYTHON_ROOT = Path(__file__).resolve().parent.parent
@@ -24,6 +26,7 @@ from cluster_skip_guard import (
 def pytest_addoption(parser):
     parser.addoption("--cluster-endpoints", default=None, action="store")
     parser.addoption("--standalone-endpoints", default=None, action="store")
+    parser.addoption("--unix-socket", default=False, action="store_true")
 
 
 def pytest_sessionstart(session):
@@ -73,11 +76,15 @@ def test_unexpected_cluster_skip_fails_session(pytester, monkeypatch):
     )
 
 
-def test_standalone_only_cluster_skip_is_accepted(pytester, monkeypatch):
+@pytest.mark.parametrize(
+    "option", ["--standalone-endpoints=127.0.0.1:1", "--unix-socket"]
+)
+def test_standalone_only_cluster_skip_is_accepted(pytester, monkeypatch, option):
     _prepare(pytester, monkeypatch)
     pytester.makepyfile(_REQUIRE_CLUSTER_ADDRESSES_TEST)
-    result = pytester.runpytest_subprocess("-q", "--standalone-endpoints=127.0.0.1:1")
+    result = pytester.runpytest_subprocess("-q", option)
     assert result.ret == 0
+    result.assert_outcomes(skipped=1)
     assert "although one was expected" not in result.stdout.str()
 
 

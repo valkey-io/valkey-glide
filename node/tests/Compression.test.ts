@@ -519,6 +519,16 @@ describe("Compression", () => {
 
     // --- Incompatible commands tests ---
 
+    const setIfEqual = { conditionalSet: "onlyIfEqual", comparisonValue: "10" };
+    const setIfNotEqual = {
+        conditionalSet: "onlyIfNotEqual",
+        comparisonValue: "20",
+    };
+    const delexIfEqual = {
+        condition: "onlyIfEqual",
+        value: "10",
+    };
+
     /** Commands that are incompatible with compression, with their arguments after the key. */
     const INCOMPATIBLE_COMMANDS: {
         id: string;
@@ -530,28 +540,15 @@ describe("Compression", () => {
         { id: "bitpos", method: "bitpos", args: [1] },
         { id: "decr", method: "decr", args: [] },
         { id: "decrby", method: "decrBy", args: [5] },
-        { id: "delifeq", method: "delifeq", args: ["value"] },
+        { id: "delex", method: "delex", args: [delexIfEqual] },
+        { id: "delifeq", method: "delifeq", args: ["10"] },
         { id: "getbit", method: "getbit", args: [0] },
         { id: "getrange", method: "getrange", args: [0, 0] },
         { id: "incr", method: "incr", args: [] },
         { id: "incrby", method: "incrBy", args: [5] },
         { id: "incrbyfloat", method: "incrByFloat", args: [0.5] },
-        {
-            id: "set_ifeq",
-            method: "set",
-            args: [
-                "20",
-                { conditionalSet: "onlyIfEqual", comparisonValue: "10" },
-            ],
-        },
-        {
-            id: "set_ifne",
-            method: "set",
-            args: [
-                "20",
-                { conditionalSet: "onlyIfNotEqual", comparisonValue: "20" },
-            ],
-        },
+        { id: "set_ifeq", method: "set", args: ["20", setIfEqual] },
+        { id: "set_ifne", method: "set", args: ["20", setIfNotEqual] },
         { id: "setbit", method: "setbit", args: [0, 1] },
         { id: "setrange", method: "setrange", args: [1, "5"] },
         { id: "strlen", method: "strlen", args: [] },
@@ -595,71 +592,99 @@ describe("Compression", () => {
             );
             const key = uniqueKey("no_compression_test");
 
-            // Set initial value
-            await client.set(key, "100");
-
-            // All these commands should work without compression
-            // INCR
-            expect(await client.incr(key)).toBe(101);
-
-            // INCRBY
-            expect(await client.incrBy(key, 10)).toBe(111);
-
-            // DECR
-            expect(await client.decr(key)).toBe(110);
-
-            // DECRBY
-            expect(await client.decrBy(key, 10)).toBe(100);
-
-            // STRLEN
-            await client.set(key, "hello");
-            expect(await client.strlen(key)).toBe(5);
+            // All these commands should work without compression.
+            // Each command runs against the key set to "10".
 
             // APPEND
-            expect(await client.append(key, " world")).toBe(11);
-
-            // GETRANGE
-            expect(await client.getrange(key, 0, 4)).toBe("hello");
-
-            // SETRANGE
-            expect(await client.setrange(key, 6, "WORLD")).toBe(11);
-
-            // DELIFEQ
-            if (!standaloneCluster.checkIfServerVersionLessThan("9.0.0")) {
-                await client.delifeq(key, "value");
-            }
-
-            // GETBIT
-            await client.set(key, "\x00");
-            expect(await client.getbit(key, 0)).toBe(0);
-
-            // SETBIT
-            expect(await client.setbit(key, 0, 1)).toBe(0);
+            await client.set(key, "10");
+            expect(await client.append(key, "0")).toBe(3);
 
             // BITCOUNT
-            expect(await client.bitcount(key)).toBeGreaterThanOrEqual(0);
+            await client.set(key, "10");
+            expect(await client.bitcount(key)).toBe(5);
 
-            // SET with IFEQ
+            // BITPOS
+            await client.set(key, "10");
+            expect(await client.bitpos(key, 1)).toBe(2);
+
+            // DECR
+            await client.set(key, "10");
+            expect(await client.decr(key)).toBe(9);
+
+            // DECRBY
+            await client.set(key, "10");
+            expect(await client.decrBy(key, 5)).toBe(5);
+
+            // GETBIT
+            await client.set(key, "10");
+            expect(await client.getbit(key, 0)).toBe(0);
+
+            // GETRANGE
+            await client.set(key, "10");
+            expect(await client.getrange(key, 0, 0)).toBe("1");
+
+            // INCR
+            await client.set(key, "10");
+            expect(await client.incr(key)).toBe(11);
+
+            // INCRBY
+            await client.set(key, "10");
+            expect(await client.incrBy(key, 5)).toBe(15);
+
+            // INCRBYFLOAT
+            await client.set(key, "10");
+            expect(await client.incrByFloat(key, 0.5)).toBe(10.5);
+
+            // SETBIT
+            await client.set(key, "10");
+            expect(await client.setbit(key, 0, 1)).toBe(0);
+
+            // SETRANGE
+            await client.set(key, "10");
+            expect(await client.setrange(key, 1, "5")).toBe(2);
+
+            // STRLEN
+            await client.set(key, "10");
+            expect(await client.strlen(key)).toBe(2);
+
             if (!standaloneCluster.checkIfServerVersionLessThan("8.1.0")) {
-                await client.set(key, "hello");
+                // SET with IFEQ
+                await client.set(key, "10");
                 expect(
-                    await client.set(key, "world", {
+                    await client.set(key, "20", {
                         conditionalSet: "onlyIfEqual",
-                        comparisonValue: "hello",
+                        comparisonValue: "10",
                     }),
                 ).toBe("OK");
             }
 
-            // SET with IFNE
+            if (!standaloneCluster.checkIfServerVersionLessThan("9.0.0")) {
+                // DELIFEQ
+                await client.set(key, "10");
+                expect(await client.delifeq(key, "10")).toBe(true);
+            }
+
             if (!standaloneCluster.checkIfServerVersionLessThan("9.2.0")) {
-                await client.set(key, "hello");
+                // DELEX
+                await client.set(key, "10");
                 expect(
-                    await client.set(key, "world", {
+                    await client.delex(key, {
+                        condition: "onlyIfEqual",
+                        value: "10",
+                    }),
+                ).toBe(true);
+
+                // SET with IFNE
+                await client.set(key, "10");
+                expect(
+                    await client.set(key, "20", {
                         conditionalSet: "onlyIfNotEqual",
-                        comparisonValue: "world",
+                        comparisonValue: "20",
                     }),
                 ).toBe("OK");
             }
+
+            await client.del([key]);
         },
         TIMEOUT,
     );

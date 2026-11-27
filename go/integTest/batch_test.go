@@ -552,16 +552,10 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	batch.Append(multiKey1, "3")
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(7), TestName: "Append(multiKey1, 3)"})
 
-	if compareServerVersions(serverVer, "9.0.0") >= 0 {
-		batch.DelIfEq(atomicKey1, "wrong-value")
-		testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "DelIfEq(atomicKey1, wrong-value)"})
-	}
-
 	batch.Set(multiKey2, "val")
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(multiKey2, val)"})
 
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "7.0.0" {
+	if compareServerVersions(serverVer, "7.0.0") >= 0 {
 		batch.LCS(multiKey1, multiKey2)
 		testData = append(testData, CommandTestData{ExpectedResponse: "va", TestName: "LCS(multiKey1, multiKey2)"})
 
@@ -582,8 +576,7 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 		)
 	}
 
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "8.1.0" {
+	if compareServerVersions(serverVer, "8.1.0") >= 0 {
 		atomicKey2 := atomicKeyPrefix + "4-" + uuid.NewString()
 
 		batch.SetWithOptions(atomicKey2, "value", *options.NewSetOptions().SetOnlyIfEquals("other"))
@@ -617,8 +610,23 @@ func CreateStringTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 		)
 	}
 
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "9.2.0" {
+	if compareServerVersions(serverVer, "9.0.0") >= 0 {
+		batch.DelIfEq(atomicKey1, "other-value")
+		testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "DelIfEq(atomicKey1, other-value)"})
+	}
+
+	if compareServerVersions(serverVer, "9.2.0") >= 0 {
+		delExKey := atomicKeyPrefix + "delex-" + uuid.NewString()
+		batch.Set(delExKey, "value")
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(delExKey, value)"})
+		batch.DelEx(delExKey, options.NewDelexOptionsOnlyIfEquals("other"))
+		testData = append(testData, CommandTestData{ExpectedResponse: false, TestName: "DelEx(delExKey, OnlyIfEquals(other))"})
+		batch.DelEx(delExKey, options.NewDelexOptionsOnlyIfNotEquals("other"))
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: true, TestName: "DelEx(delExKey, OnlyIfNotEquals(other))"},
+		)
+
 		atomicKey3 := atomicKeyPrefix + "5-" + uuid.NewString()
 
 		batch.SetWithOptions(atomicKey3, "value", *options.NewSetOptions().SetOnlyIfNotEquals("other"))
@@ -851,8 +859,7 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 	batch.PExpireAt(slotHashedKey1, time.Now())
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "PExpireAt(slotHashedKey1, 0)"})
 
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "7.0.0" {
+	if compareServerVersions(serverVer, "7.0.0") >= 0 {
 		batch.ExpireWithOptions(singleNodeKey1, 1*time.Second, constants.HasExistingExpiry)
 		testData = append(
 			testData,
@@ -890,6 +897,39 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 
 		batch.PExpireTime(slotHashedKey1)
 		testData = append(testData, CommandTestData{ExpectedResponse: int64(-1), TestName: "PExpireTime(slotHashedKey1)"})
+
+		sortKey := prefix + "sort-" + uuid.NewString()
+		batch.LPush(sortKey, []string{"3", "2", "1"})
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPush(sortKey, [3, 2, 1])"})
+		batch.SortReadOnly(sortKey)
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: []models.Result[string]{
+					models.CreateStringResult("1"),
+					models.CreateStringResult("2"),
+					models.CreateStringResult("3"),
+				},
+				TestName: "SortReadOnly(sortKey)",
+			},
+		)
+
+		batch.Del([]string{sortKey})
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del(sortKey)"})
+		batch.LPush(sortKey, []string{"c", "b", "a"})
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPush(sortKey, [c, b, a])"})
+		batch.SortReadOnlyWithOptions(sortKey, *options.NewSortOptions().SetIsAlpha(true))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: []models.Result[string]{
+					models.CreateStringResult("a"),
+					models.CreateStringResult("b"),
+					models.CreateStringResult("c"),
+				},
+				TestName: "SortReadOnlyWithOptions(sortKey, {Alpha: true})",
+			},
+		)
 	}
 
 	batch.TTL(slotHashedKey1)
@@ -1014,48 +1054,6 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 			TestName:         "SortStoreWithOptions(slotHashedKey1, sortDestKey, {Alpha: true})",
 		},
 	)
-
-	batch.Del([]string{slotHashedKey1})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del(slotHashedKey1)"})
-	batch.LPush(slotHashedKey1, []string{"3", "2", "1"})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPush(slotHashedKey1, [3, 2, 1])"})
-
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "7.0.0" {
-		batch.SortReadOnly(slotHashedKey1)
-		testData = append(
-			testData,
-			CommandTestData{
-				ExpectedResponse: []models.Result[string]{
-					models.CreateStringResult("1"),
-					models.CreateStringResult("2"),
-					models.CreateStringResult("3"),
-				},
-				TestName: "SortReadOnly(slotHashedKey1)",
-			},
-		)
-	}
-
-	batch.Del([]string{slotHashedKey1})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "Del(slotHashedKey1)"})
-	batch.LPush(slotHashedKey1, []string{"c", "b", "a"})
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(3), TestName: "LPush(slotHashedKey1, [c, b, a])"})
-
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "7.0.0" {
-		batch.SortReadOnlyWithOptions(slotHashedKey1, *options.NewSortOptions().SetIsAlpha(true))
-		testData = append(
-			testData,
-			CommandTestData{
-				ExpectedResponse: []models.Result[string]{
-					models.CreateStringResult("a"),
-					models.CreateStringResult("b"),
-					models.CreateStringResult("c"),
-				},
-				TestName: "SortReadOnlyWithOptions(slotHashedKey1, {Alpha: true})",
-			},
-		)
-	}
 
 	batch.Wait(0, 0)
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "Wait(0, 0)"})
@@ -1293,8 +1291,7 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 			TestName: "HScan(key, 0)",
 		},
 	)
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "8.0.0" {
+	if compareServerVersions(serverVer, "8.0.0") >= 0 {
 		batch.HScanWithOptions(key, "0", *options.NewHashScanOptions().SetNoValues(true))
 		testData = append(
 			testData,
@@ -1439,8 +1436,7 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 	}
 
 	// HGETDEL command and HSETEX key conditional change (NX/XX) (Valkey 9.1+)
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "9.1.0" {
+	if compareServerVersions(serverVer, "9.1.0") >= 0 {
 		// HGETDEL command
 		getdelKey := prefix + "getdel-" + uuid.NewString()
 		batch.HSet(getdelKey, map[string]string{"field1": "value1", "field2": "value2"})
@@ -1635,8 +1631,7 @@ func CreateListCommandsTest(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 		CommandTestData{ExpectedResponse: []string{"added", "initial"}, TestName: "LRange(lpushxKey, 0, -1) after LPushX"},
 	)
 
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "7.0.0" {
+	if compareServerVersions(serverVer, "7.0.0") >= 0 {
 		batch.LMPop([]string{key}, constants.Left)
 		testData = append(
 			testData,
@@ -1774,11 +1769,6 @@ func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 	batch.SIsMember(key, "member1")
 	testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "SIsMember(key, member1)"})
 
-	if serverVer >= "9.2.0" {
-		batch.SIsMemberIfExists(key, "member1")
-		testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SIsMemberIfExists(key, member1)"})
-	}
-
 	key2 := atomicKey + "key2-" + uuid.NewString()
 	batch.SAdd(key2, []string{"member1", "member3"})
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(2), TestName: "SAdd(key2, [member1, member3])"})
@@ -1817,8 +1807,7 @@ func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 		CommandTestData{ExpectedResponse: int64(1), TestName: "SInterStore(dest, [prefix + key, prefix + key2])"},
 	)
 
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "7.0.0" {
+	if compareServerVersions(serverVer, "7.0.0") >= 0 {
 		batch.SInterCard([]string{prefix + key, prefix + key2})
 		testData = append(
 			testData,
@@ -1830,6 +1819,11 @@ func CreateSetCommandsTests(batch *pipeline.ClusterBatch, isAtomic bool, serverV
 			testData,
 			CommandTestData{ExpectedResponse: int64(1), TestName: "SInterCardLimit([prefix + key, prefix + key2], 10)"},
 		)
+	}
+
+	if compareServerVersions(serverVer, "9.2.0") >= 0 {
+		batch.SIsMemberIfExists(key, "member1")
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "SIsMemberIfExists(key, member1)"})
 	}
 
 	batch.SRandMember(key)
@@ -1984,8 +1978,7 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		},
 	)
 
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "7.0.0" {
+	if compareServerVersions(serverVer, "7.0.0") >= 0 {
 		batch.ZAdd(key, map[string]float64{"member1": float64(1.0)})
 		testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZAdd(key, {member1:1.0})"})
 		batch.BZMPop([]string{key}, constants.MIN, 1)
@@ -2042,8 +2035,7 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		},
 	)
 
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "7.0.0" {
+	if compareServerVersions(serverVer, "7.0.0") >= 0 {
 		batch.ZAdd(key, membersScoreMap)
 		testData = append(
 			testData,
@@ -2103,32 +2095,8 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 	batch.ZRank(key, "member1")
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZRank(key, member1)"})
 
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "7.2.0" {
-		batch.ZRankWithScore(key, "member1")
-		testData = append(
-			testData,
-			CommandTestData{
-				ExpectedResponse: models.RankAndScore{Rank: 0, Score: 1.0},
-				TestName:         "ZRankWithScore(key, member1)",
-			},
-		)
-	}
-
 	batch.ZRevRank(key, "member1")
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZRevRank(key, member1)"})
-
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "7.2.0" {
-		batch.ZRevRankWithScore(key, "member1")
-		testData = append(
-			testData,
-			CommandTestData{
-				ExpectedResponse: models.RankAndScore{Rank: 0, Score: 1.0},
-				TestName:         "ZRevRankWithScore(key, member1)",
-			},
-		)
-	}
 
 	batch.ZScore(key, "member1")
 	testData = append(testData, CommandTestData{ExpectedResponse: float64(1.0), TestName: "ZScore(key, member1)"})
@@ -2304,8 +2272,7 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 		CommandTestData{ExpectedResponse: int64(2), TestName: "ZUnionStoreWithOptions(dest, keys, opts)"},
 	)
 
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "7.0.0" {
+	if compareServerVersions(serverVer, "7.0.0") >= 0 {
 		batch.ZInterCard([]string{prefix + key, prefix + key3})
 		testData = append(testData, CommandTestData{ExpectedResponse: int64(0), TestName: "ZInterCard(keys)"})
 
@@ -2319,6 +2286,26 @@ func CreateSortedSetTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer
 
 	batch.ZLexCount(key3, *options.NewRangeByLexQuery(options.NewLexBoundary("a", true), options.NewLexBoundary("c", true)))
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "ZLexCount(key3, [a, [c)"})
+
+	if compareServerVersions(serverVer, "7.2.0") >= 0 {
+		batch.ZRankWithScore(key, "member1")
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: models.RankAndScore{Rank: 0, Score: 1.0},
+				TestName:         "ZRankWithScore(key, member1)",
+			},
+		)
+
+		batch.ZRevRankWithScore(key, "member1")
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: models.RankAndScore{Rank: 0, Score: 1.0},
+				TestName:         "ZRevRankWithScore(key, member1)",
+			},
+		)
+	}
 
 	return BatchTestData{CommandTestData: testData, TestName: "Sorted Set commands"}
 }
@@ -2479,15 +2466,13 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	})
 
 	// XAUTOCLAIM commands
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "6.2.0" {
+	if compareServerVersions(serverVer, "6.2.0") >= 0 {
 		expectedXAutoClaimResponse := models.XAutoClaimResponse{
 			NextEntry:      "0-0",
 			ClaimedEntries: []models.StreamEntry{{ID: "0-3", Fields: []models.FieldValue{{Field: "field3", Value: "value3"}}}},
 		}
 
-		// TODO #5368: Compare versions semantically, not as strings.
-		if serverVer >= "7.0.0" {
+		if compareServerVersions(serverVer, "7.0.0") >= 0 {
 			expectedXAutoClaimResponse = models.XAutoClaimResponse{
 				NextEntry: "0-0",
 				ClaimedEntries: []models.StreamEntry{
@@ -2501,8 +2486,7 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 			NextEntry:      "0-0",
 			ClaimedEntries: []string{"0-3"},
 		}
-		// TODO #5368: Compare versions semantically, not as strings.
-		if serverVer >= "7.0.0" {
+		if compareServerVersions(serverVer, "7.0.0") >= 0 {
 			expectedXAutoClaimJustIdResponse = models.XAutoClaimJustIdResponse{
 				NextEntry:       "0-0",
 				ClaimedEntries:  []string{"0-3"},
@@ -2573,8 +2557,7 @@ func CreateStreamTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	}
 
 	// Add entry to streamKey2 and create group
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "7.0.0" {
+	if compareServerVersions(serverVer, "7.0.0") >= 0 {
 		xaddOpts6 := options.NewXAddOptions().SetId("1-0")
 		batch.XAddWithOptions(streamKey2, []models.FieldValue{{Field: "f0", Value: "v0"}}, *xaddOpts6)
 		testData = append(testData, CommandTestData{ExpectedResponse: "1-0", TestName: "XAdd(streamKey2, f0=v0, 1-0)"})
@@ -2663,8 +2646,7 @@ func CreateScriptTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer str
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ScriptFlush()"})
 	batch.ScriptFlushWithMode(options.SYNC)
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ScriptFlushWithMode()"})
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer >= "8.0.0" {
+	if compareServerVersions(serverVer, "8.0.0") >= 0 {
 		batch.ScriptShow("abc")
 		testData = append(
 			testData,
@@ -2685,8 +2667,7 @@ func CreateFunctionTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer s
 	// adding a dummy command to avoid "empty pipeline" error on server < 7.0
 	batch.Ping()
 	testData = append(testData, CommandTestData{ExpectedResponse: "PONG", TestName: "Ping()"})
-	// TODO #5368: Compare versions semantically, not as strings.
-	if serverVer < "7.0.0" {
+	if compareServerVersions(serverVer, "7.0.0") < 0 {
 		return BatchTestData{CommandTestData: testData, TestName: "Function commands"}
 	}
 

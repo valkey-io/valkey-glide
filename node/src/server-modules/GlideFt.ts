@@ -2,6 +2,8 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { randomUUID } from "crypto";
+
 import {
     convertGlideRecordToRecord,
     Decoder,
@@ -14,8 +16,13 @@ import {
     Field,
     FtAggregateOptions,
     FtCreateOptions,
+    FtHybridOptions,
+    FtHybridSearchArm,
+    FtHybridVsimArm,
     FtInfoOptions,
     FtSearchOptions,
+    FtWithCursor,
+    LoadField,
 } from "..";
 
 /** Response type of {@link GlideFt.info | ft.info} command. */
@@ -36,9 +43,31 @@ export type FtSearchReturnType = [
 ];
 
 /**
+ * Response type for the {@link GlideFt.search | ft.search} command when `withScores` is set.
+ * Each document's value is a `[score, fields]` pair, or a `[score, sortKey, fields]` triple when
+ * `withsortkeys` is also set. `score` is a string-encoded decimal. `sortKey` is `null` when the
+ * sort field is missing from the document. `fields` is empty when `nocontent` is set.
+ */
+export type FtSearchWithScoresReturnType = [
+    number,
+    GlideRecord<
+        | [GlideString, GlideRecord<GlideString>]
+        | [GlideString, GlideString | null, GlideRecord<GlideString>]
+    >,
+];
+
+/**
  * Response type for the {@link GlideFt.aggregate | ft.aggregate} command.
  */
 export type FtAggregateReturnType = GlideRecord<GlideReturnType>[];
+
+/**
+ * The reply shape of {@link GlideFt.cursorRead | FT.CURSOR READ}: a two-element
+ * `[rows, cursorId]` array, where `rows` is the same per-document array shape
+ * {@link GlideFt.aggregate}/{@link GlideFt.hybrid} return, and `cursorId` is `0` once the
+ * cursor is exhausted, or the id to pass to the next `cursorRead` call otherwise.
+ */
+export type FtCursorReturnType = [FtAggregateReturnType, number];
 
 /** Module for Vector Search commands. */
 export class GlideFt {
@@ -159,6 +188,26 @@ export class GlideFt {
             if (options.punctuation) {
                 args.push("PUNCTUATION", options.punctuation);
             }
+
+            if (options.filter !== undefined) {
+                if (
+                    options.filter === "" ||
+                    (Buffer.isBuffer(options.filter) &&
+                        options.filter.length === 0)
+                ) {
+                    throw new Error("filter cannot be empty.");
+                }
+
+                args.push("FILTER", options.filter);
+            }
+
+            if (options.scoreField !== undefined) {
+                args.push("SCORE_FIELD", options.scoreField);
+            }
+
+            if (options.noHighlight) {
+                args.push("NOHL");
+            }
         }
 
         args.push("SCHEMA");
@@ -190,6 +239,12 @@ export class GlideFt {
 
                     if (f.sortable) {
                         args.push("SORTABLE");
+
+                        if (f.unf) {
+                            args.push("UNF");
+                        }
+                    } else if (f.unf) {
+                        throw new Error("unf requires sortable to be set.");
                     }
 
                     break;
@@ -206,6 +261,12 @@ export class GlideFt {
 
                     if (f.sortable) {
                         args.push("SORTABLE");
+
+                        if (f.unf) {
+                            args.push("UNF");
+                        }
+                    } else if (f.unf) {
+                        throw new Error("unf requires sortable to be set.");
                     }
 
                     break;
@@ -214,6 +275,12 @@ export class GlideFt {
                 case "NUMERIC": {
                     if (f.sortable) {
                         args.push("SORTABLE");
+
+                        if (f.unf) {
+                            args.push("UNF");
+                        }
+                    } else if (f.unf) {
+                        throw new Error("unf requires sortable to be set.");
                     }
 
                     break;
@@ -419,8 +486,21 @@ export class GlideFt {
         client: GlideClient | GlideClusterClient,
         indexName: GlideString,
         query: GlideString,
+        options: DecoderOption &
+            FtAggregateOptions & { withCursor: FtWithCursor },
+    ): Promise<FtCursorReturnType>;
+    static async aggregate(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
         options?: DecoderOption & FtAggregateOptions,
-    ): Promise<FtAggregateReturnType> {
+    ): Promise<FtAggregateReturnType>;
+    static async aggregate(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: DecoderOption & FtAggregateOptions,
+    ): Promise<FtAggregateReturnType | FtCursorReturnType> {
         const args: GlideString[] = [
             "FT.AGGREGATE",
             indexName,
@@ -428,11 +508,217 @@ export class GlideFt {
             ..._addFtAggregateOptions(options),
         ];
 
+        return _handleCustomCommand(client, args, options) as Promise<
+            FtAggregateReturnType | FtCursorReturnType
+        >;
+    }
+
+    /**
+     * Reads the next page of results from a cursor opened by {@link GlideFt.aggregate | FT.AGGREGATE}
+     * (with `withCursor` set) or {@link GlideFt.hybrid | FT.HYBRID} (with `withCursor` set).
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name the cursor was opened against.
+     * @param cursorId - The cursor id, from the opening command's reply or a previous
+     *     `cursorRead` call. `0` means the cursor is already exhausted; calling this with `0`
+     *     is a caller error, not something this function special-cases.
+     * @param options - (Optional) `count`: overrides how many rows this page returns, instead of
+     *     the count the cursor was opened with. Plus {@link DecoderOption}.
+     * @returns A two-element array of `[rows, cursorId]`, where `rows` is the same per-document
+     *     array shape {@link GlideFt.aggregate}/{@link GlideFt.hybrid} return, and `cursorId` is
+     *     `0` once the cursor is exhausted, or the id to pass to the next `cursorRead` call
+     *     otherwise.
+     *
+     * Always reads from the PRIMARY of the index's slot, regardless of the client's `ReadFrom`
+     * configuration -- see the cursor-affinity note on {@link FtWithCursor}.
+     * A cursor opened by FT.HYBRID is read the same way as one opened by FT.AGGREGATE; the
+     * server does not distinguish which command created it.
+     *
+     * On a client created with `readOnly: true`, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats FT.CURSOR as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry
+     * for FT.CURSOR, so the client rejects the call before it reaches the server.
+     *
+     * @example
+     * ```typescript
+     * let [rows, cursorId] = await GlideFt.aggregate(client, "myIndex", "*",
+     *     { loadFields: ["__key"], withCursor: { count: 10 } });
+     * while (cursorId !== 0) {
+     *     [rows, cursorId] = await GlideFt.cursorRead(client, "myIndex", cursorId);
+     * }
+     * ```
+     */
+    static async cursorRead(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        cursorId: number,
+        options?: DecoderOption & { count?: number },
+    ): Promise<FtCursorReturnType> {
+        const args: GlideString[] = [
+            "FT.CURSOR",
+            "READ",
+            indexName,
+            cursorId.toString(),
+        ];
+
+        if (options?.count !== undefined) {
+            args.push("COUNT", options.count.toString());
+        }
+
         return _handleCustomCommand(
             client,
             args,
             options,
-        ) as Promise<FtAggregateReturnType>;
+        ) as Promise<FtCursorReturnType>;
+    }
+
+    /**
+     * Deletes an open cursor, discarding it before it would otherwise be exhausted or time out.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name the cursor was opened against.
+     * @param cursorId - The cursor id to delete.
+     * @returns `"OK"`
+     *
+     * Always reads from the PRIMARY of the index's slot, regardless of the client's `ReadFrom`
+     * configuration -- see the cursor-affinity note on {@link FtWithCursor}.
+     *
+     * On a client created with `readOnly: true`, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats FT.CURSOR as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry
+     * for FT.CURSOR, so the client rejects the call before it reaches the server.
+     *
+     * @example
+     * ```typescript
+     * const [rows, cursorId] = await GlideFt.aggregate(client, "myIndex", "*",
+     *     { loadFields: ["__key"], withCursor: { count: 1 } });
+     * await GlideFt.cursorDel(client, "myIndex", cursorId); // "OK"
+     * ```
+     */
+    static async cursorDel(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        cursorId: number,
+    ): Promise<"OK"> {
+        const args: GlideString[] = [
+            "FT.CURSOR",
+            "DEL",
+            indexName,
+            cursorId.toString(),
+        ];
+
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String,
+        }) as Promise<"OK">;
+    }
+
+    /**
+     * Combines a text/tag/numeric query (the SEARCH arm) with a vector similarity search (the
+     * VSIM arm) in a single query, fusing both arms' results into one ranked reply.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name to query.
+     * @param searchArm - The text/tag/numeric query arm. See {@link FtHybridSearchArm}.
+     * @param vsimArm - The vector similarity search arm. See {@link FtHybridVsimArm}.
+     * @param options - (Optional) Additional parameters for the command, covering COMBINE,
+     *     LOAD, FILTER/LIMIT/GROUPBY/SORTBY/APPLY clauses, WITHCURSOR, LOCALONLY, TIMEOUT,
+     *     PARAMS and DIALECT. See {@link FtHybridOptions} and {@link DecoderOption}.
+     * @returns An array containing a mapping of field name and associated value for each
+     *     matching document, after both arms' results have been fused and any clauses in
+     *     `options` applied. With no LOAD clause in `options` (the default), each mapping
+     *     contains just the document key and the fused score. When `options.withCursor` is set,
+     *     the reply shape instead matches FT.AGGREGATE's own WITHCURSOR shape: a two-element
+     *     array of `[rows, cursorId]`, where `rows` is this same response shape and `cursorId`
+     *     is passed to a subsequent {@link GlideFt.cursorRead} call to fetch the next page (`0`
+     *     once exhausted).
+     *
+     * A paged (`withCursor`) FT.HYBRID query, and every subsequent FT.CURSOR READ/DEL against
+     * the cursor it opens, always reads from the PRIMARY of the index's slot in cluster mode,
+     * regardless of the client's `ReadFrom` configuration. This is because a cursor is a
+     * per-process, node-local resource on the server that opened it -- it is not shared or
+     * forwarded between nodes, so a read that lands on a different node (a replica a
+     * `PREFER_REPLICA`/AZ-affinity client would otherwise have used) fails with "Cursor not
+     * found". A failover of the primary that was holding an open cursor loses that cursor, the
+     * same as any other cursor-discarding event on that node.
+     *
+     * On a client created with `readOnly: true`, this call fails client-side with "write
+     * commands are not allowed in read-only mode", even though the server treats FT.HYBRID as
+     * read-only and a replica can answer it. glide-core's read-only command list has no entry
+     * for FT.HYBRID, so the client rejects the call before it reaches the server.
+     *
+     * @example
+     * ```typescript
+     * // For the following example to work, an index named "idx" must already exist, with a
+     * // TEXT field "title" and a VECTOR field "vec".
+     * const result = await GlideFt.hybrid(
+     *     client,
+     *     "idx",
+     *     { query: "hello world" },
+     *     { field: "vec", vector: queryVectorBytes, k: 10 },
+     * );
+     * // Output: [{ key: "__key", value: "d1" }, { key: "__score", value: "0.014925" }], ...
+     *
+     * // With RRF fusion, a LOAD clause and WITHCURSOR paging:
+     * const result2 = await GlideFt.hybrid(
+     *     client,
+     *     "idx",
+     *     { query: "hello world", yieldScoreAs: "ss" },
+     *     { field: "vec", vector: queryVectorBytes, k: 10, yieldScoreAs: "vs" },
+     *     {
+     *         combine: { method: "RRF", constant: 60 },
+     *         loadFields: ["title"],
+     *         withCursor: { count: 10 },
+     *     },
+     * );
+     * ```
+     */
+    static async hybrid(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        searchArm: FtHybridSearchArm,
+        vsimArm: FtHybridVsimArm,
+        options: DecoderOption & FtHybridOptions & { withCursor: FtWithCursor },
+    ): Promise<FtCursorReturnType>;
+    static async hybrid(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        searchArm: FtHybridSearchArm,
+        vsimArm: FtHybridVsimArm,
+        options?: DecoderOption & FtHybridOptions,
+    ): Promise<FtAggregateReturnType>;
+    static async hybrid(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        searchArm: FtHybridSearchArm,
+        vsimArm: FtHybridVsimArm,
+        options?: DecoderOption & FtHybridOptions,
+    ): Promise<FtAggregateReturnType | FtCursorReturnType> {
+        const args: GlideString[] = ["FT.HYBRID", indexName];
+        args.push(..._addFtHybridSearchArm(searchArm));
+
+        let generatedVsimParam:
+            { name: GlideString; value: GlideString } | undefined;
+
+        if (_isVsimParamReference(vsimArm.vector)) {
+            args.push(..._addFtHybridVsimArm(vsimArm, vsimArm.vector));
+        } else {
+            const generatedName = `$${randomUUID().replace(/-/g, "")}`;
+            generatedVsimParam = {
+                name: generatedName.slice(1),
+                value: vsimArm.vector,
+            };
+            args.push(..._addFtHybridVsimArm(vsimArm, generatedName));
+        }
+
+        if (options?.combine) {
+            args.push(..._addFtHybridCombine(options.combine));
+        }
+
+        args.push(..._addFtHybridOptions(options, generatedVsimParam));
+
+        return _handleCustomCommand(client, args, options) as Promise<
+            FtAggregateReturnType | FtCursorReturnType
+        >;
     }
 
     /**
@@ -579,6 +865,24 @@ export class GlideFt {
     }
 
     /**
+     * Runs a search query with `withScores` set, so each matching document carries its relevance
+     * score. Other parameters are the same as {@link GlideFt.search | search}.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name to search into.
+     * @param query - The text query to search.
+     * @param options - `withScores: true`, plus any other {@link FtSearchOptions} and {@link DecoderOption}.
+     * @returns A two-element array, where the first element is the number of documents in the result set, and the
+     * second element maps each document key to a `[score, fields]` pair, or to a `[score, sortKey, fields]` triple
+     * when `withsortkeys` is also set. With `nocontent`, `fields` is empty.
+     */
+    static async search(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options: DecoderOption & FtSearchOptions & { withScores: true },
+    ): Promise<FtSearchWithScoresReturnType>;
+    /**
      * Uses the provided query expression to locate keys within an index. Once located, the count
      * and/or content of indexed fields within those keys can be returned.
      *
@@ -652,7 +956,13 @@ export class GlideFt {
         indexName: GlideString,
         query: GlideString,
         options?: FtSearchOptions & DecoderOption,
-    ): Promise<FtSearchReturnType> {
+    ): Promise<FtSearchReturnType>;
+    static async search(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: FtSearchOptions & DecoderOption,
+    ): Promise<FtSearchReturnType | FtSearchWithScoresReturnType> {
         const args: GlideString[] = [
             "FT.SEARCH",
             indexName,
@@ -661,7 +971,7 @@ export class GlideFt {
         ];
 
         return _handleCustomCommand(client, args, options) as Promise<
-            [number, GlideRecord<GlideRecord<GlideString>>]
+            FtSearchReturnType | FtSearchWithScoresReturnType
         >;
     }
 
@@ -881,6 +1191,208 @@ export class GlideFt {
     }
 }
 
+function _isVsimParamReference(vector: GlideString): boolean {
+    return typeof vector === "string" && vector.startsWith("$");
+}
+
+function _addFtHybridSearchArm(arm: FtHybridSearchArm): GlideString[] {
+    const args: GlideString[] = ["SEARCH", arm.query];
+    if (arm.scorer !== undefined) args.push("SCORER", arm.scorer);
+    if (arm.yieldScoreAs !== undefined)
+        args.push("YIELD_SCORE_AS", arm.yieldScoreAs);
+    return args;
+}
+
+function _addFtHybridVsimArm(
+    arm: FtHybridVsimArm,
+    paramRef: GlideString,
+): GlideString[] {
+    if (arm.efRuntime !== undefined && arm.filter?.policy === "ADHOC") {
+        throw new Error(
+            "efRuntime is not supported with filter.policy: 'ADHOC' " +
+                "(the server rejects this combination: " +
+                '"EF_RUNTIME is irrelevant for POLICY ADHOC").',
+        );
+    }
+
+    if (
+        arm.filter?.batchSize !== undefined &&
+        arm.filter?.policy !== "BATCHES"
+    ) {
+        throw new Error("batchSize requires filter.policy: 'BATCHES'.");
+    }
+
+    const fieldRef = Buffer.isBuffer(arm.field)
+        ? Buffer.concat([Buffer.from("@"), arm.field])
+        : `@${arm.field}`;
+
+    const args: GlideString[] = ["VSIM", fieldRef, paramRef];
+
+    if (
+        arm.k !== undefined ||
+        arm.efRuntime !== undefined ||
+        arm.shardKRatio !== undefined
+    ) {
+        const subArgs: GlideString[] = [];
+        if (arm.k !== undefined) subArgs.push("K", arm.k.toString());
+        if (arm.efRuntime !== undefined)
+            subArgs.push("EF_RUNTIME", arm.efRuntime.toString());
+        if (arm.shardKRatio !== undefined)
+            subArgs.push("SHARD_K_RATIO", arm.shardKRatio.toString());
+        args.push("KNN", subArgs.length.toString(), ...subArgs);
+    }
+
+    if (arm.yieldScoreAs !== undefined)
+        args.push("YIELD_SCORE_AS", arm.yieldScoreAs);
+
+    if (arm.filter !== undefined) {
+        const filter = arm.filter;
+        const subArgs: GlideString[] = [];
+        if (filter.policy !== undefined) subArgs.push("POLICY", filter.policy);
+        if (filter.batchSize !== undefined)
+            subArgs.push("BATCH_SIZE", filter.batchSize.toString());
+
+        if (subArgs.length === 0) {
+            args.push("FILTER", filter.expression);
+        } else {
+            const tokenCount = 1 + subArgs.length;
+            args.push(
+                "FILTER",
+                tokenCount.toString(),
+                filter.expression,
+                ...subArgs,
+            );
+        }
+    }
+
+    return args;
+}
+
+function _addFtHybridCombine(
+    combine: FtHybridOptions["combine"],
+): GlideString[] {
+    if (!combine) return [];
+
+    switch (combine.method) {
+        case "RRF": {
+            if (combine.constant !== undefined && combine.constant < 0) {
+                throw new Error("constant must not be negative.");
+            }
+
+            const subArgs: GlideString[] = [];
+            if (combine.constant !== undefined)
+                subArgs.push("CONSTANT", combine.constant.toString());
+            if (combine.window !== undefined)
+                subArgs.push("WINDOW", combine.window.toString());
+            if (combine.yieldScoreAs !== undefined)
+                subArgs.push("YIELD_SCORE_AS", combine.yieldScoreAs);
+            return ["COMBINE", "RRF", subArgs.length.toString(), ...subArgs];
+        }
+
+        case "LINEAR": {
+            if (
+                (combine.alpha === undefined) !==
+                (combine.beta === undefined)
+            ) {
+                throw new Error(
+                    "alpha and beta must both be set, or both left unset -- " +
+                        "the server rejects writing exactly one of them.",
+                );
+            }
+
+            const subArgs: GlideString[] = [];
+            if (combine.alpha !== undefined)
+                subArgs.push("ALPHA", combine.alpha.toString());
+            if (combine.beta !== undefined)
+                subArgs.push("BETA", combine.beta.toString());
+            if (combine.window !== undefined)
+                subArgs.push("WINDOW", combine.window.toString());
+            if (combine.yieldScoreAs !== undefined)
+                subArgs.push("YIELD_SCORE_AS", combine.yieldScoreAs);
+            return ["COMBINE", "LINEAR", subArgs.length.toString(), ...subArgs];
+        }
+
+        case "FUNCTION": {
+            const subArgs: GlideString[] = ["EXPR", combine.expr];
+            if (combine.window !== undefined)
+                subArgs.push("WINDOW", combine.window.toString());
+            if (combine.yieldScoreAs !== undefined)
+                subArgs.push("YIELD_SCORE_AS", combine.yieldScoreAs);
+            return [
+                "COMBINE",
+                "FUNCTION",
+                subArgs.length.toString(),
+                ...subArgs,
+            ];
+        }
+
+        default:
+            throw new Error("Unknown combine method in FtHybridOptions");
+    }
+}
+
+function _addFtHybridOptions(
+    options: FtHybridOptions | undefined,
+    generatedVsimParam?: { name: GlideString; value: GlideString },
+): GlideString[] {
+    const args: GlideString[] = [];
+
+    if (options?.localOnly) {
+        args.push("LOCALONLY");
+    }
+
+    if (options?.loadAll) {
+        args.push("LOAD", "*");
+    } else {
+        args.push(..._loadFieldsToArgs(options?.loadFields));
+    }
+
+    if (options?.timeout !== undefined) {
+        args.push("TIMEOUT", options.timeout.toString());
+    }
+
+    const paramEntries: { key: GlideString; value: GlideString }[] = (
+        options?.params ?? []
+    ).map((p) => ({ key: p.key, value: p.value }));
+
+    if (generatedVsimParam) {
+        const keyAsString = (k: GlideString) =>
+            Buffer.isBuffer(k) ? k.toString() : k;
+        const collision = paramEntries.some(
+            (p) => keyAsString(p.key) === generatedVsimParam!.name,
+        );
+
+        if (collision) {
+            throw new Error(
+                `Generated VSIM parameter name '${generatedVsimParam.name}' collides with ` +
+                    "an entry already present in params; rename the caller-supplied params entry.",
+            );
+        }
+
+        paramEntries.push({
+            key: generatedVsimParam.name,
+            value: generatedVsimParam.value,
+        });
+    }
+
+    if (paramEntries.length > 0) {
+        args.push(
+            "PARAMS",
+            (paramEntries.length * 2).toString(),
+            ...paramEntries.flatMap((p) => [p.key, p.value]),
+        );
+    }
+
+    args.push(..._addAggregateClauses(options?.clauses));
+    args.push(..._addWithCursor(options?.withCursor));
+
+    if (options?.dialect !== undefined) {
+        args.push("DIALECT", options.dialect.toString());
+    }
+
+    return args;
+}
+
 /**
  * @internal
  */
@@ -894,12 +1406,7 @@ function _addFtAggregateOptions(options?: FtAggregateOptions): GlideString[] {
     if (options.slop !== undefined) args.push("SLOP", options.slop.toString());
 
     if (options.loadAll) args.push("LOAD", "*");
-    else if (options.loadFields)
-        args.push(
-            "LOAD",
-            options.loadFields.length.toString(),
-            ...options.loadFields,
-        );
+    else args.push(..._loadFieldsToArgs(options.loadFields));
 
     if (options.timeout) args.push("TIMEOUT", options.timeout.toString());
 
@@ -911,65 +1418,110 @@ function _addFtAggregateOptions(options?: FtAggregateOptions): GlideString[] {
         );
     }
 
-    if (options.clauses) {
-        for (const clause of options.clauses) {
-            switch (clause.type) {
-                case "LIMIT":
-                    args.push(
-                        clause.type,
-                        clause.offset.toString(),
-                        clause.count.toString(),
-                    );
-                    break;
-                case "FILTER":
-                    args.push(clause.type, clause.expression);
-                    break;
-                case "GROUPBY":
-                    args.push(
-                        clause.type,
-                        clause.properties.length.toString(),
-                        ...clause.properties,
-                    );
+    args.push(..._addAggregateClauses(options.clauses));
 
-                    for (const reducer of clause.reducers) {
-                        args.push(
-                            "REDUCE",
-                            reducer.function,
-                            reducer.args.length.toString(),
-                            ...reducer.args,
-                        );
-                        if (reducer.name) args.push("AS", reducer.name);
-                    }
+    if (options.addScores) args.push("ADDSCORES");
+    if (options.scorer !== undefined) args.push("SCORER", options.scorer);
 
-                    break;
-                case "SORTBY":
-                    args.push(
-                        clause.type,
-                        (clause.properties.length * 2).toString(),
-                    );
-                    for (const property of clause.properties)
-                        args.push(property.property, property.order);
-                    if (clause.max) args.push("MAX", clause.max.toString());
-                    break;
-                case "APPLY":
-                    args.push(
-                        clause.type,
-                        clause.expression,
-                        "AS",
-                        clause.name,
-                    );
-                    break;
-                default:
-                    throw new Error(
-                        "Unknown clause type in FtAggregateOptions",
-                    );
-            }
-        }
-    }
+    args.push(..._addWithCursor(options.withCursor));
 
     if (options.dialect !== undefined)
         args.push("DIALECT", options.dialect.toString());
 
+    return args;
+}
+
+function _addAggregateClauses(
+    clauses: FtAggregateOptions["clauses"],
+): GlideString[] {
+    if (!clauses) return [];
+
+    const args: GlideString[] = [];
+
+    for (const clause of clauses) {
+        switch (clause.type) {
+            case "LIMIT":
+                args.push(
+                    clause.type,
+                    clause.offset.toString(),
+                    clause.count.toString(),
+                );
+                break;
+            case "FILTER":
+                args.push(clause.type, clause.expression);
+                break;
+            case "GROUPBY":
+                args.push(
+                    clause.type,
+                    clause.properties.length.toString(),
+                    ...clause.properties,
+                );
+
+                for (const reducer of clause.reducers) {
+                    args.push(
+                        "REDUCE",
+                        reducer.function,
+                        reducer.args.length.toString(),
+                        ...reducer.args,
+                    );
+                    if (reducer.name) args.push("AS", reducer.name);
+                }
+
+                break;
+            case "SORTBY":
+                args.push(
+                    clause.type,
+                    (clause.properties.length * 2).toString(),
+                );
+                for (const property of clause.properties)
+                    args.push(property.property, property.order);
+                if (clause.max) args.push("MAX", clause.max.toString());
+                break;
+            case "APPLY":
+                args.push(clause.type, clause.expression, "AS", clause.name);
+                break;
+            default:
+                throw new Error("Unknown clause type in FtAggregateOptions");
+        }
+    }
+
+    return args;
+}
+
+function _loadFieldsToArgs(
+    loadFields: (GlideString | LoadField)[] | undefined,
+): GlideString[] {
+    if (!loadFields || loadFields.length === 0) return [];
+
+    const loadFieldArgs: GlideString[] = [];
+
+    for (const entry of loadFields) {
+        if (
+            typeof entry === "object" &&
+            !Buffer.isBuffer(entry) &&
+            "fieldIdentifier" in entry
+        ) {
+            loadFieldArgs.push(entry.fieldIdentifier);
+
+            if (entry.alias !== undefined) {
+                loadFieldArgs.push("AS", entry.alias);
+            }
+        } else {
+            loadFieldArgs.push(entry as GlideString);
+        }
+    }
+
+    return ["LOAD", loadFieldArgs.length.toString(), ...loadFieldArgs];
+}
+
+function _addWithCursor(withCursor?: FtWithCursor): GlideString[] {
+    if (!withCursor) return [];
+
+    const args: GlideString[] = ["WITHCURSOR"];
+    if (withCursor.count !== undefined)
+        args.push("COUNT", withCursor.count.toString());
+    if (withCursor.maxidle !== undefined)
+        args.push("MAXIDLE", withCursor.maxidle.toString());
     return args;
 }
 
@@ -1017,6 +1569,14 @@ function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
     // SLOP
     if (options.slop !== undefined) {
         args.push("SLOP", options.slop.toString());
+    }
+
+    if (options.inKeys !== undefined) {
+        args.push(
+            "INKEYS",
+            options.inKeys.length.toString(),
+            ...options.inKeys,
+        );
     }
 
     // RETURN
@@ -1071,9 +1631,16 @@ function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
         );
     }
 
-    // COUNT
     if (options.count) {
-        args.push("COUNT");
+        args.push("LIMIT", "0", "0");
+    }
+
+    if (options.withScores) {
+        args.push("WITHSCORES");
+    }
+
+    if (options.scorer !== undefined) {
+        args.push("SCORER", options.scorer);
     }
 
     // DIALECT
