@@ -403,7 +403,12 @@ public class GlideCoreClient implements AutoCloseable {
         return future;
     }
 
-    /** Execute a single command asynchronously via JNI. */
+    /**
+     * Execute a single command asynchronously via JNI.
+     *
+     * @param allowPartialResults when true, a command sent to several nodes returns each node's reply
+     *     or error instead of failing on the first node error
+     */
     public CompletableFuture<Object> executeCommandAsync(
             int requestType,
             byte[][] args,
@@ -411,6 +416,7 @@ public class GlideCoreClient implements AutoCloseable {
             int routeType,
             String routeParam,
             boolean expectUtf8Response,
+            boolean allowPartialResults,
             long timeoutMs,
             long spanPtr) {
         try {
@@ -442,6 +448,7 @@ public class GlideCoreClient implements AutoCloseable {
                     routeType,
                     routeParam,
                     expectUtf8Response,
+                    allowPartialResults,
                     spanPtr);
 
             return future;

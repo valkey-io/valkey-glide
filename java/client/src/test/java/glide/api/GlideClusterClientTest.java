@@ -661,6 +661,44 @@ public class GlideClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void infoWithPartialResults_sends_the_sections() {
+        // setup
+        Map<String, Object> testPayload = createMap("addr1", "addr1 result");
+        String[] arguments = new String[] {"STATS"};
+        CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(ClusterValue.of(testPayload));
+        when(commandManager.<ClusterValue<Object>>submitNewCommandWithPartialResults(
+                        eq(Info), eq(arguments), eq(null), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Object>> response =
+                service.infoWithPartialResults(new Section[] {Section.STATS});
+
+        // verify
+        assertEquals(testPayload, response.get().getMultiValue());
+    }
+
+    @SneakyThrows
+    @Test
+    public void infoWithPartialResults_without_sections_sends_no_sections() {
+        // setup
+        Map<String, Object> primariesPayload = createMap("addr1", "addr1 result");
+        Map<String, Object> allNodesPayload = createMap("addr2", "addr2 result");
+        when(commandManager.<ClusterValue<Object>>submitNewCommandWithPartialResults(
+                        eq(Info), eq(new String[0]), eq(null), any()))
+                .thenReturn(CompletableFuture.completedFuture(ClusterValue.of(primariesPayload)));
+        when(commandManager.<ClusterValue<Object>>submitNewCommandWithPartialResults(
+                        eq(Info), eq(new String[0]), eq(ALL_NODES), any()))
+                .thenReturn(CompletableFuture.completedFuture(ClusterValue.of(allNodesPayload)));
+
+        // exercise and verify
+        assertEquals(primariesPayload, service.infoWithPartialResults().get().getMultiValue());
+        assertEquals(allNodesPayload, service.infoWithPartialResults(ALL_NODES).get().getMultiValue());
+    }
+
+    @SneakyThrows
+    @Test
     public void info_with_route_returns_string() {
         // setup
         Map<String, String> testClusterValue =

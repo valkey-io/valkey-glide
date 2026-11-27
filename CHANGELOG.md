@@ -5,6 +5,7 @@
 ### Features
 
 * Core: opt-in per-node results for multi-node commands ([#7751](https://github.com/valkey-io/valkey-glide/pull/7751))
+* Java: infoWithPartialResults for the cluster client ([#7754](https://github.com/valkey-io/valkey-glide/pull/7754))
 * Core: per-node partial results in the redis-rs cluster fan-out ([#7819](https://github.com/valkey-io/valkey-glide/pull/7819))
 * Node: valkey-search 1.3 stable surface ([#7378](https://github.com/valkey-io/valkey-glide/pull/7378))
 * Java: Add valkey-search 1.3 support, including scoring, cursors, and `FT.HYBRID` ([#7379](https://github.com/valkey-io/valkey-glide/pull/7379))

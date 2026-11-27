@@ -528,6 +528,39 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<ClusterValue<Object>> infoWithPartialResults() {
+        return infoWithPartialResults(new Section[0]);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object>> infoWithPartialResults(@NonNull Route route) {
+        return infoWithPartialResults(new Section[0], route);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object>> infoWithPartialResults(
+            @NonNull Section[] sections) {
+        return commandManager.submitNewCommandWithPartialResults(
+                Info,
+                Stream.of(sections).map(Enum::toString).toArray(String[]::new),
+                null,
+                response -> ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object>> infoWithPartialResults(
+            @NonNull Section[] sections, @NonNull Route route) {
+        return commandManager.submitNewCommandWithPartialResults(
+                Info,
+                Stream.of(sections).map(Enum::toString).toArray(String[]::new),
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
     public CompletableFuture<Long> clientId() {
         return commandManager.submitNewCommand(ClientId, EMPTY_STRING_ARRAY, this::handleLongResponse);
     }
