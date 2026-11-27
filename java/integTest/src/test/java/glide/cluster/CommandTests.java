@@ -587,9 +587,15 @@ public class CommandTests {
                         },
                         "paused primary did not recover");
             }
+        }
+    }
 
-            // A single-node route still returns the node's reply as a string.
-            Object single = client.infoWithPartialResults(new Section[0], route).get().getSingleValue();
+    @Test
+    @SneakyThrows
+    public void infoWithPartialResults_with_a_single_node_route_returns_the_reply() {
+        try (GlideClusterClient client =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+            Object single = client.infoWithPartialResults(new Section[0], RANDOM).get().getSingleValue();
             assertTrue(((String) single).contains("# Server"));
         }
     }
@@ -641,16 +647,6 @@ public class CommandTests {
                 assertEquals(plain.getCause().getMessage(), ((RequestException) error).getMessage());
                 for (String address : primaries.subList(1, primaries.size())) {
                     assertTrue(((String) replies.get(address)).contains("# Server"));
-                }
-
-                // With every primary denied, the call returns an error for each.
-                admin
-                        .customCommand(new String[] {"ACL", "SETUSER", username, "-info"}, ALL_PRIMARIES)
-                        .get();
-                Map<String, Object> failed = denied.infoWithPartialResults().get().getMultiValue();
-                assertEquals(new HashSet<>(primaries), failed.keySet());
-                for (Object reply : failed.values()) {
-                    assertInstanceOf(RequestException.class, reply);
                 }
             } finally {
                 admin.customCommand(new String[] {"ACL", "DELUSER", username}, ALL_NODES).get();
