@@ -158,7 +158,47 @@ pub(crate) mod shared_client_tests {
         });
     }
 
-    // TODO #7673: Add a test that a batch with a multi-node route returns an error.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_batch_with_multi_node_route_returns_error() {
+        // A batch with a multi-node route must fail with a client error instead of
+        // silently running on one node (valkey-io/valkey-glide#7673).
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                true,
+                TestConfiguration {
+                    use_tls: false,
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut pipe = redis::pipe();
+            pipe.cmd("CLUSTER").arg("MYID");
+            let err = test_basics
+                .client
+                .send_pipeline(
+                    &pipe,
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllNodes,
+                        None,
+                    ))),
+                    false,
+                    None,
+                    PipelineRetryStrategy::default(),
+                )
+                .await
+                .expect_err("a batch with a multi-node route must be rejected");
+            assert_eq!(err.kind(), redis::ErrorKind::ClientError);
+            assert!(
+                err.to_string().contains("single-node"),
+                "unexpected error: {err}"
+            );
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]

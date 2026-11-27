@@ -177,14 +177,13 @@ impl SyncGlideClusterClient {
     // TODO #7672: Return `ValkeyResult<Option<Vec<ValkeyValue>>>`
     // with `None` for a transaction aborted by `WATCH`.
     /// Execute a [`crate::pipeline::Pipeline`] with GLIDE execution options,
-    /// optionally routed (blocking). See
+    /// optionally routed to a single node (blocking). See
     /// [`crate::GlideClusterClient::exec`].
     pub fn exec(
         &self,
         pipeline: &crate::pipeline::Pipeline,
         raise_on_error: bool,
-        // TODO #7673: Accept only single-node routes.
-        route: Option<crate::Route>,
+        route: Option<crate::SingleNodeRoute>,
         options: &PipelineOptions,
     ) -> ValkeyResult<Vec<ValkeyValue>> {
         runtime().block_on(self.inner.exec(pipeline, raise_on_error, route, options))

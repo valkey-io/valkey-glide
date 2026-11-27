@@ -65,6 +65,7 @@ pub use write::ValkeyWrite;
 // Core types
 pub use error::GlideError;
 pub use routes::Route;
+pub use routes::SingleNodeRoute;
 pub use routes::SlotType;
 
 // Client
