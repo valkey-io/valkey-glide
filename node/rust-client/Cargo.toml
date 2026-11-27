@@ -41,7 +41,7 @@ napi-build = "2"
 
 
 [dev-dependencies]
-napi = { version = "=3.12.4", default-features = false, features = ["dyn-symbols", "napi8"] }
+napi = { version = "=3.16.2", default-features = false, features = ["dyn-symbols", "napi8"] }
 
 [profile.release]
 opt-level = 3         # Optimize for performance
