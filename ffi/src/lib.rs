@@ -5650,8 +5650,10 @@ pub unsafe extern "C-unwind" fn command(
 /// has not answered in time when it has not answered by the request timeout
 /// minus a margin of a tenth of it, kept between 2 ms and 100 ms (a quarter of
 /// it under 8 ms), and the call itself fails with a timeout if it has not
-/// finished by the request timeout plus the same margin. The call still fails
-/// when no target node can be reached. Other routes behave as with [`command`].
+/// finished by the request timeout plus the same margin. Node failures fail the
+/// call only when the client has no connection to any target node; otherwise
+/// every target node gets an entry, even when all of them fail. Other routes
+/// behave as with [`command`].
 ///
 /// # Safety
 ///

@@ -338,7 +338,8 @@ func (client *ClusterClient) InfoWithOptions(
 // between 2 ms and 100 ms (a quarter of it under 8 ms), gets a [TimeoutError], and the call itself fails with a
 // [TimeoutError] if it has not finished by the request timeout plus the same margin. A node the client lost its
 // connection to or cannot connect to gets a [DisconnectError], the error a request gets when it loses its connection to
-// a node. The call still fails when no target node can be reached.
+// a node. Node failures fail the call only when the client has no connection to any target node; otherwise every target
+// node gets an entry, even when all of them fail.
 //
 // See [valkey.io] for details.
 //
