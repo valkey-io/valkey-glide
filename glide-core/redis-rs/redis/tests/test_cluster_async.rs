@@ -8882,15 +8882,35 @@ mod cluster_async {
         let connection = cluster.async_connection(None).await;
 
         let request_count = 10_000;
+        // Route each SET by address to its slot's primary. A key-routed SET would take the
+        // caller-task fast path and never use the channel; a by-address one goes through the
+        // event loop, and the node is the one the key-routed SET would reach.
+        let routes: Vec<_> = (0..request_count)
+            .map(|i| {
+                let key = format!("key:{}", i);
+                let address = connection
+                    .address_for_slot(get_slot(key.as_bytes()))
+                    .expect("every slot has a primary");
+                let (host, port) = address.rsplit_once(':').expect("address is host:port");
+                let routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                    host: host.to_string(),
+                    port: port.parse().expect("port is a number"),
+                });
+                (key, routing)
+            })
+            .collect();
         let start = std::time::Instant::now();
 
         // Spawn many concurrent operations (SET) that go to pending_requests channel
-        let tasks: Vec<_> = (0..request_count)
-            .map(|i| {
+        let tasks: Vec<_> = routes
+            .into_iter()
+            .enumerate()
+            .map(|(i, (key, routing))| {
                 let mut connection = connection.clone();
                 tokio::spawn(async move {
-                    let key = format!("key:{}", i);
-                    let _: () = connection.set(&key, i).await?;
+                    connection
+                        .route_command(cmd("SET").arg(&key).arg(i), routing)
+                        .await?;
                     Ok::<_, RedisError>(())
                 })
             })
@@ -9552,6 +9572,913 @@ mod cluster_async {
         connections
     }
 
+    // Caller-task fast path (`ClusterConnection::route_command`). A mock connection runs its
+    // handler in the task that sends the command, so the tokio task id seen by the handler tells
+    // whether the caller's task sent it (fast path) or the cluster event loop did.
+
+    /// The task that sent a command to a mock connection (`tokio::task::try_id()`).
+    type SenderTask = Option<tokio::task::Id>;
+    /// Written by a mock handler, read by the test.
+    type Recorded<T> = Arc<std::sync::Mutex<T>>;
+
+    /// A ready single-node route is sent from the caller's task; other routes take the event loop.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fast_path_sends_ready_single_node_route_from_caller_task() {
+        let name = "fast_path_caller_task";
+        let senders: Recorded<HashMap<&'static str, SenderTask>> = Default::default();
+
+        let MockEnv {
+            runtime,
+            async_connection: connection,
+            handler: _handler,
+            ..
+        } = MockEnv::new(name, {
+            let senders = senders.clone();
+            move |cmd: &[u8], _| {
+                respond_startup(name, cmd)?;
+                let command = if contains_slice(cmd, b"GET") {
+                    "GET"
+                } else if contains_slice(cmd, b"ECHO") {
+                    "ECHO"
+                } else {
+                    return Err(Ok(Value::Nil));
+                };
+                senders
+                    .lock()
+                    .unwrap()
+                    .insert(command, tokio::task::try_id());
+                Err(Ok(Value::BulkString(b"123".to_vec().into())))
+            }
+        });
+
+        let (caller, get, echo) = runtime.block_on(async move {
+            tokio::spawn(async move {
+                let mut connection = connection;
+                // Key-routed: SpecificNode, and the node's connection is in the map.
+                let get = cmd("GET")
+                    .arg("test")
+                    .query_async::<_, Option<i32>>(&mut connection)
+                    .await;
+                // By address: not a fast-path route.
+                let echo = connection
+                    .route_command(
+                        cmd("ECHO").arg("test"),
+                        RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                            host: name.to_string(),
+                            port: 6379,
+                        }),
+                    )
+                    .await;
+                (tokio::task::id(), get, echo)
+            })
+            .await
+            .expect("caller task panicked")
+        });
+
+        assert_eq!(get, Ok(Some(123)));
+        assert_eq!(echo, Ok(Value::BulkString(b"123".to_vec().into())));
+        let senders = senders.lock().unwrap();
+        assert_eq!(
+            senders["GET"],
+            Some(caller),
+            "a ready single-node route must be sent from the caller's task"
+        );
+        assert!(
+            senders["ECHO"].is_some() && senders["ECHO"] != Some(caller),
+            "a by-address route must be sent by the event loop task, got {:?} (caller {caller:?})",
+            senders["ECHO"]
+        );
+    }
+
+    /// A MOVED reply to a fast-path attempt re-enters the event loop's retry machinery: the retry
+    /// follows the redirect, from the event loop task, and counts as the request's first retry.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fast_path_moved_error_is_retried_by_event_loop() {
+        let name = "fast_path_moved_retry";
+        let gets: Recorded<Vec<(u16, SenderTask)>> = Default::default();
+
+        let MockEnv {
+            runtime,
+            async_connection: connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(1),
+            name,
+            {
+                let gets = gets.clone();
+                move |cmd: &[u8], port| {
+                    respond_startup(name, cmd)?;
+                    if !contains_slice(cmd, b"GET") {
+                        return Err(Ok(Value::Nil));
+                    }
+                    gets.lock().unwrap().push((port, tokio::task::try_id()));
+                    match port {
+                        6379 => Err(parse_redis_value(
+                            format!("-MOVED {} {name}:6380\r\n", get_slot(b"test")).as_bytes(),
+                        )),
+                        _ => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
+                    }
+                }
+            },
+        );
+
+        let (caller, value) = runtime.block_on(async move {
+            tokio::spawn(async move {
+                let mut connection = connection;
+                let value = cmd("GET")
+                    .arg("test")
+                    .query_async::<_, Option<i32>>(&mut connection)
+                    .await;
+                (tokio::task::id(), value)
+            })
+            .await
+            .expect("caller task panicked")
+        });
+
+        // `retries(1)`: the redirected attempt is the one retry the request gets, so the
+        // fast-path attempt was counted as attempt 0, as an event-loop attempt would be.
+        assert_eq!(value, Ok(Some(123)));
+        let gets = gets.lock().unwrap();
+        assert_eq!(gets.len(), 2, "one fast-path attempt, one redirected retry");
+        assert_eq!(
+            gets[0],
+            (6379, Some(caller)),
+            "first attempt on the fast path"
+        );
+        assert_eq!(gets[1].0, 6380, "the retry follows the MOVED redirect");
+        assert!(
+            gets[1].1.is_some() && gets[1].1 != Some(caller),
+            "the retry must be sent by the event loop task"
+        );
+    }
+
+    /// An ASK reply to a fast-path attempt is followed by the event loop: the retry goes to the
+    /// ASK target, with ASKING packed before it in the same write, from the event loop task.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fast_path_ask_error_is_retried_by_event_loop_with_asking() {
+        let name = "fast_path_ask_retry";
+        // (port, command, sending task) for each ASKING and GET the nodes received, and the
+        // GETs that came in the same write as an ASKING.
+        let received: Recorded<Vec<(u16, &'static str, SenderTask)>> = Default::default();
+        let asked_gets: Recorded<Vec<u16>> = Default::default();
+
+        let MockEnv {
+            runtime,
+            async_connection: connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(1),
+            name,
+            {
+                let received = received.clone();
+                let asked_gets = asked_gets.clone();
+                move |cmd: &[u8], port| {
+                    respond_startup(name, cmd)?;
+                    if contains_slice(cmd, b"GET") && asked_in_same_write() {
+                        asked_gets.lock().unwrap().push(port);
+                    }
+                    let command = if contains_slice(cmd, b"ASKING") {
+                        "ASKING"
+                    } else if contains_slice(cmd, b"GET") {
+                        "GET"
+                    } else {
+                        return Err(Ok(Value::Nil));
+                    };
+                    received
+                        .lock()
+                        .unwrap()
+                        .push((port, command, tokio::task::try_id()));
+                    match (port, command) {
+                        (_, "ASKING") => Err(Ok(Value::Okay)),
+                        (6379, _) => Err(parse_redis_value(
+                            format!("-ASK {} {name}:6380\r\n", get_slot(b"test")).as_bytes(),
+                        )),
+                        _ => Err(Ok(Value::BulkString(b"123".to_vec().into()))),
+                    }
+                }
+            },
+        );
+
+        let (caller, value) = runtime.block_on(async move {
+            tokio::spawn(async move {
+                let mut connection = connection;
+                let value = cmd("GET")
+                    .arg("test")
+                    .query_async::<_, Option<i32>>(&mut connection)
+                    .await;
+                (tokio::task::id(), value)
+            })
+            .await
+            .expect("caller task panicked")
+        });
+
+        assert_eq!(value, Ok(Some(123)));
+        let received = received.lock().unwrap();
+        let summary: Vec<_> = received.iter().map(|(p, c, _)| (*p, *c)).collect();
+        assert_eq!(
+            summary,
+            vec![(6379, "GET"), (6380, "ASKING"), (6380, "GET")],
+            "the ASK retry must send ASKING to the target before the command"
+        );
+        assert_eq!(
+            *asked_gets.lock().unwrap(),
+            vec![6380],
+            "the ASK retry must pack ASKING in the same write as the command"
+        );
+        assert_eq!(
+            received[0].2,
+            Some(caller),
+            "first attempt on the fast path"
+        );
+        for (_, command, sender) in &received[1..] {
+            assert!(
+                sender.is_some() && *sender != Some(caller),
+                "{command} on the ASK target must be sent by the event loop task"
+            );
+        }
+    }
+
+    /// While the event loop is recovering (here: `RefreshingSlots`, held open by a blocked
+    /// CLUSTER SLOTS), a request whose route has a ready connection still goes to the event loop
+    /// and its recovery queue, and is sent only after recovery completes.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fast_path_stands_down_during_recovery() {
+        let name = "fast_path_recovery_fallback";
+        let moved_fired = Arc::new(AtomicBool::new(false));
+        let refresh_blocked = Arc::new(AtomicBool::new(false));
+        let release_refresh = Arc::new(AtomicBool::new(false));
+        // (refresh released when sent, sending task) for the request issued during recovery.
+        let during_recovery_send: Recorded<Option<(bool, SenderTask)>> = Default::default();
+        // The sending task of each request issued after recovery.
+        let after_recovery_senders: Recorded<Vec<SenderTask>> = Default::default();
+
+        let _handler = MockConnectionBehavior::register_new(name, {
+            let moved_fired = moved_fired.clone();
+            let refresh_blocked = refresh_blocked.clone();
+            let release_refresh = release_refresh.clone();
+            let during_recovery_send = during_recovery_send.clone();
+            let after_recovery_senders = after_recovery_senders.clone();
+            Arc::new(move |cmd: &[u8], _port| {
+                if contains_slice(cmd, b"PING")
+                    || contains_slice(cmd, b"SETNAME")
+                    || contains_slice(cmd, b"READONLY")
+                {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    if moved_fired.load(Ordering::SeqCst) {
+                        // Hold the slot refresh (and so the event loop's recovery) open until
+                        // the test releases it.
+                        refresh_blocked.store(true, Ordering::SeqCst);
+                        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+                        while !release_refresh.load(Ordering::SeqCst)
+                            && std::time::Instant::now() < deadline
+                        {
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                    }
+                    return Err(Ok(Value::Array(vec![Value::Array(vec![
+                        Value::Int(0),
+                        Value::Int(16383),
+                        Value::Array(vec![
+                            Value::BulkString(name.as_bytes().to_vec().into()),
+                            Value::Int(6379),
+                        ]),
+                    ])])));
+                }
+                if contains_slice(cmd, b"during_recovery") {
+                    *during_recovery_send.lock().unwrap() = Some((
+                        release_refresh.load(Ordering::SeqCst),
+                        tokio::task::try_id(),
+                    ));
+                    return Err(Ok(Value::BulkString(b"2".to_vec().into())));
+                }
+                if contains_slice(cmd, b"after_recovery") {
+                    after_recovery_senders
+                        .lock()
+                        .unwrap()
+                        .push(tokio::task::try_id());
+                }
+                if contains_slice(cmd, b"trigger") && !moved_fired.swap(true, Ordering::SeqCst) {
+                    // Non-circular MOVED: the event loop refreshes slots (RefreshingSlots).
+                    return Err(parse_redis_value(
+                        format!("-MOVED {} {name}:6380\r\n", get_slot(b"trigger")).as_bytes(),
+                    ));
+                }
+                Err(Ok(Value::BulkString(b"1".to_vec().into())))
+            })
+        });
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(4)
+            .enable_all()
+            .build()
+            .expect("failed to build runtime");
+        let client = ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .retries(5)
+            .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            .build()
+            .expect("failed to build ClusterClient");
+        let connection: ClusterConnection<MockConnection> = runtime
+            .block_on(client.get_async_generic_connection())
+            .expect("failed to get async connection");
+
+        let (trigger, caller, during_recovery) = runtime.block_on(async move {
+            let trigger = tokio::spawn({
+                let mut connection = connection.clone();
+                async move {
+                    cmd("GET")
+                        .arg("trigger")
+                        .query_async::<_, Option<i32>>(&mut connection)
+                        .await
+                }
+            });
+            let wait_for_refresh = async {
+                while !refresh_blocked.load(Ordering::SeqCst) {
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+            };
+            tokio::time::timeout(Duration::from_secs(5), wait_for_refresh)
+                .await
+                .expect("the MOVED reply should start a slot refresh");
+            // The refresh task is spawned just before the event loop enters `Recover`.
+            tokio::time::sleep(Duration::from_millis(50)).await;
+
+            let during_recovery = tokio::spawn({
+                let mut connection = connection.clone();
+                async move {
+                    let value = cmd("GET")
+                        .arg("during_recovery")
+                        .query_async::<_, Option<i32>>(&mut connection)
+                        .await;
+                    (tokio::task::id(), value)
+                }
+            });
+            // Give a (wrong) fast-path send time to happen while the refresh is still blocked.
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            release_refresh.store(true, Ordering::SeqCst);
+
+            let (caller, during_recovery) =
+                tokio::time::timeout(Duration::from_secs(10), during_recovery)
+                    .await
+                    .expect("request issued during recovery timed out")
+                    .expect("task panicked");
+            let trigger = tokio::time::timeout(Duration::from_secs(10), trigger)
+                .await
+                .expect("MOVED request timed out")
+                .expect("task panicked");
+
+            // After recovery the fast path opens again (a flag stuck in recovery would send
+            // every request through the event loop, and the tests above would still pass). The
+            // event loop clears it at the end of a poll, which can come just after the replies
+            // above, so allow a few attempts.
+            let mut fast_path_reopened = false;
+            for _ in 0..100 {
+                let (caller, value) = tokio::spawn({
+                    let mut connection = connection.clone();
+                    async move {
+                        let value = cmd("GET")
+                            .arg("after_recovery")
+                            .query_async::<_, Option<i32>>(&mut connection)
+                            .await;
+                        (tokio::task::id(), value)
+                    }
+                })
+                .await
+                .expect("task panicked");
+                assert_eq!(value, Ok(Some(1)));
+                if after_recovery_senders.lock().unwrap().last() == Some(&Some(caller)) {
+                    fast_path_reopened = true;
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            assert!(
+                fast_path_reopened,
+                "after recovery, a ready single-node route must take the fast path again"
+            );
+            (trigger, caller, during_recovery)
+        });
+
+        assert_eq!(trigger, Ok(Some(1)));
+        assert_eq!(during_recovery, Ok(Some(2)));
+        let (released, sender) = during_recovery_send
+            .lock()
+            .unwrap()
+            .expect("request issued during recovery was never sent");
+        assert!(
+            released,
+            "a request issued during recovery must not be sent before recovery completes"
+        );
+        assert!(
+            sender.is_some() && sender != Some(caller),
+            "a request issued during recovery must be sent by the event loop task"
+        );
+    }
+
+    /// A fast-path attempt sent before recovery began whose error arrives during recovery is
+    /// treated like an event-loop attempt in flight: retried after recovery. It is not a new
+    /// request, so the recovery queue must not buffer, cap or fail it (the queue cap here is 0,
+    /// which fails every new request arriving during recovery).
+    ///
+    /// The caller's task hands the error to the event loop, then sends a new request (`probe`)
+    /// through the same channel. The event loop takes messages in order, so when the probe is
+    /// failed as a new request arriving during recovery, the error has reached the event loop
+    /// during that recovery too. The refresh is released only then.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fast_path_error_during_recovery_is_retried_not_queued() {
+        let name = "fast_path_error_during_recovery";
+        let moved_fired = Arc::new(AtomicBool::new(false));
+        let refresh_blocked = Arc::new(AtomicBool::new(false));
+        let release_refresh = Arc::new(AtomicBool::new(false));
+        let in_flight_sent = Arc::new(AtomicBool::new(false));
+        let in_flight_attempts = Arc::new(atomic::AtomicUsize::new(0));
+        // The task that sent each attempt of the in-flight request.
+        let in_flight_senders: Recorded<Vec<SenderTask>> = Default::default();
+
+        let wait_for = |flag: &AtomicBool| {
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            while !flag.load(Ordering::SeqCst) && std::time::Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        };
+        let _handler = MockConnectionBehavior::register_new(name, {
+            let moved_fired = moved_fired.clone();
+            let refresh_blocked = refresh_blocked.clone();
+            let release_refresh = release_refresh.clone();
+            let in_flight_sent = in_flight_sent.clone();
+            let in_flight_attempts = in_flight_attempts.clone();
+            let in_flight_senders = in_flight_senders.clone();
+            Arc::new(move |cmd: &[u8], _port| {
+                if contains_slice(cmd, b"PING")
+                    || contains_slice(cmd, b"SETNAME")
+                    || contains_slice(cmd, b"READONLY")
+                {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    if moved_fired.load(Ordering::SeqCst) {
+                        refresh_blocked.store(true, Ordering::SeqCst);
+                        wait_for(&release_refresh);
+                    }
+                    return Err(Ok(Value::Array(vec![Value::Array(vec![
+                        Value::Int(0),
+                        Value::Int(16383),
+                        Value::Array(vec![
+                            Value::BulkString(name.as_bytes().to_vec().into()),
+                            Value::Int(6379),
+                        ]),
+                    ])])));
+                }
+                if contains_slice(cmd, b"in_flight") {
+                    in_flight_senders
+                        .lock()
+                        .unwrap()
+                        .push(tokio::task::try_id());
+                    if in_flight_attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                        // The fast-path attempt: on the wire before recovery, answered during it.
+                        in_flight_sent.store(true, Ordering::SeqCst);
+                        wait_for(&refresh_blocked);
+                        // Margin only: the event loop enters `Recover` in the poll that spawns the
+                        // refresh task, before it takes another message, so the order the probe
+                        // checks does not depend on this pause.
+                        std::thread::sleep(Duration::from_millis(50));
+                        return Err(parse_redis_value(b"-TRYAGAIN mock\r\n"));
+                    }
+                    return Err(Ok(Value::BulkString(b"2".to_vec().into())));
+                }
+                if contains_slice(cmd, b"trigger") && !moved_fired.swap(true, Ordering::SeqCst) {
+                    return Err(parse_redis_value(
+                        format!("-MOVED {} {name}:6380\r\n", get_slot(b"trigger")).as_bytes(),
+                    ));
+                }
+                Err(Ok(Value::BulkString(b"1".to_vec().into())))
+            })
+        });
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(4)
+            .enable_all()
+            .build()
+            .expect("failed to build runtime");
+        let client = ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .retries(5)
+            .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            .recovery_requests_queue_size(0)
+            .build()
+            .expect("failed to build ClusterClient");
+        let connection: ClusterConnection<MockConnection> = runtime
+            .block_on(client.get_async_generic_connection())
+            .expect("failed to get async connection");
+
+        let (caller, in_flight, trigger, probe) = runtime.block_on(async move {
+            let probe_failed: Recorded<Option<RedisResult<Value>>> = Default::default();
+            let in_flight = tokio::spawn({
+                let mut connection = connection.clone();
+                let mut probe_connection = connection.clone();
+                let probe_failed = probe_failed.clone();
+                async move {
+                    let mut get_cmd = cmd("GET");
+                    get_cmd.arg("in_flight");
+                    let mut get = Box::pin(get_cmd.query_async::<_, Option<i32>>(&mut connection));
+                    // This poll sends the fast-path attempt, waits in the node's handler until
+                    // the node replies during recovery, and hands the error to the event loop.
+                    let polled = futures::poll!(&mut get);
+                    assert!(polled.is_pending());
+                    // The request now waits for the event loop, which holds it until the refresh
+                    // ends: for the watchdog it is Queued again, as an event-loop request is.
+                    assert_eq!(
+                        get_cmd.watchdog_phase.load(Ordering::Acquire),
+                        redis::PHASE_QUEUED,
+                        "a fast-path request handed to the event loop must be marked Queued"
+                    );
+                    let probe = probe_connection
+                        .route_command(
+                            cmd("GET").arg("probe"),
+                            RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                                host: name.to_string(),
+                                port: 6379,
+                            }),
+                        )
+                        .await;
+                    *probe_failed.lock().unwrap() = Some(probe);
+                    (tokio::task::id(), get.await)
+                }
+            });
+            let wait_until = |flag: Arc<AtomicBool>, what: &'static str| async move {
+                tokio::time::timeout(Duration::from_secs(5), async {
+                    while !flag.load(Ordering::SeqCst) {
+                        tokio::time::sleep(Duration::from_millis(1)).await;
+                    }
+                })
+                .await
+                .expect(what);
+            };
+            wait_until(
+                in_flight_sent.clone(),
+                "the fast-path attempt should be sent",
+            )
+            .await;
+            let trigger = tokio::spawn({
+                let mut connection = connection.clone();
+                async move {
+                    cmd("GET")
+                        .arg("trigger")
+                        .query_async::<_, Option<i32>>(&mut connection)
+                        .await
+                }
+            });
+            wait_until(
+                refresh_blocked,
+                "the MOVED reply should start a slot refresh",
+            )
+            .await;
+            // Release the refresh once the probe, sent after the fast-path error, has been
+            // failed as a new request during recovery.
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while probe_failed.lock().unwrap().is_none() {
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+            })
+            .await
+            .expect("the probe should be answered during recovery");
+            let probe = probe_failed.lock().unwrap().take().unwrap();
+            release_refresh.store(true, Ordering::SeqCst);
+
+            let (caller, in_flight) = tokio::time::timeout(Duration::from_secs(10), in_flight)
+                .await
+                .expect("in-flight request timed out")
+                .expect("task panicked");
+            let trigger = tokio::time::timeout(Duration::from_secs(10), trigger)
+                .await
+                .expect("MOVED request timed out")
+                .expect("task panicked");
+            (caller, in_flight, trigger, probe)
+        });
+
+        let probe_error = probe.expect_err("setup: the probe must arrive during recovery");
+        assert!(
+            probe_error.to_string().contains("Connection in recovery"),
+            "setup: the probe must be failed by the recovery queue, got {probe_error}"
+        );
+        assert_eq!(
+            in_flight,
+            Ok(Some(2)),
+            "a fast-path error arriving during recovery must be retried, not failed by the \
+             recovery queue"
+        );
+        assert_eq!(in_flight_attempts.load(Ordering::SeqCst), 2);
+        let senders = in_flight_senders.lock().unwrap();
+        assert_eq!(
+            senders[0],
+            Some(caller),
+            "the first attempt must be sent on the fast path, from the caller's task"
+        );
+        assert!(
+            senders[1].is_some() && senders[1] != Some(caller),
+            "the retry must be sent by the event loop task"
+        );
+        assert_eq!(trigger, Ok(Some(1)));
+    }
+
+    /// More requests than tokio's cooperative budget (128 per task poll) are buffered during
+    /// recovery. All of them reach the node before any request issued while they are being
+    /// drained, and the fast path opens again once they are done.
+    ///
+    /// The mock connection, like a real one, sends a command when the request is first polled and
+    /// takes a unit of budget only to wait for the reply. Tokio defers the wake of a task that ran
+    /// out of budget, so `FuturesUnordered` does not count it as a yield and polls every drained
+    /// request once in the poll that drains them: all of them are sent before the event loop
+    /// returns and clears its recovery flag. The node issues the new requests from new tasks when
+    /// it has received 200 of the 300 drained ones, which is past the first 128, and holds the
+    /// event loop until each of them has been polled once on the other worker. A request that took
+    /// the fast path would reach the node in that poll, ahead of the drained requests not yet
+    /// sent; one that did not is then waiting for the event loop.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fast_path_drained_requests_are_sent_before_new_ones() {
+        const QUEUED: usize = 300;
+        const FRESH: usize = 50;
+        const FRESH_AFTER: usize = 200;
+        let name = "fast_path_drained_order";
+        let moved_fired = Arc::new(AtomicBool::new(false));
+        let refresh_blocked = Arc::new(AtomicBool::new(false));
+        let release_refresh = Arc::new(AtomicBool::new(false));
+        // The order in which the node received the buffered and the new requests.
+        let arrivals: Recorded<Vec<&'static str>> = Default::default();
+        // The task that sent each buffered request, and each attempt of the MOVED request (its
+        // retry is sent by the event loop).
+        let buffered_senders: Recorded<Vec<SenderTask>> = Default::default();
+        let trigger_senders: Recorded<Vec<SenderTask>> = Default::default();
+        // The task that sent each request issued after everything else finished.
+        let after_senders: Recorded<Vec<SenderTask>> = Default::default();
+        // Set once the connection exists; the node uses it to issue the new requests.
+        let fresh_connection: Arc<std::sync::OnceLock<ClusterConnection<MockConnection>>> =
+            Default::default();
+        type FreshRequest = tokio::task::JoinHandle<RedisResult<Option<i32>>>;
+        let fresh_requests: Recorded<Vec<FreshRequest>> = Default::default();
+        // New requests polled once, and whether all of them were while the event loop was held.
+        let fresh_polled = Arc::new(atomic::AtomicUsize::new(0));
+        let all_fresh_polled = Arc::new(AtomicBool::new(false));
+
+        let _handler = MockConnectionBehavior::register_new(name, {
+            let moved_fired = moved_fired.clone();
+            let refresh_blocked = refresh_blocked.clone();
+            let release_refresh = release_refresh.clone();
+            let arrivals = arrivals.clone();
+            let buffered_senders = buffered_senders.clone();
+            let trigger_senders = trigger_senders.clone();
+            let after_senders = after_senders.clone();
+            let fresh_connection = fresh_connection.clone();
+            let fresh_requests = fresh_requests.clone();
+            let fresh_polled = fresh_polled.clone();
+            let all_fresh_polled = all_fresh_polled.clone();
+            Arc::new(move |cmd: &[u8], _port| {
+                if contains_slice(cmd, b"PING")
+                    || contains_slice(cmd, b"SETNAME")
+                    || contains_slice(cmd, b"READONLY")
+                {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    if moved_fired.load(Ordering::SeqCst) {
+                        refresh_blocked.store(true, Ordering::SeqCst);
+                        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+                        while !release_refresh.load(Ordering::SeqCst)
+                            && std::time::Instant::now() < deadline
+                        {
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                    }
+                    return Err(Ok(Value::Array(vec![Value::Array(vec![
+                        Value::Int(0),
+                        Value::Int(16383),
+                        Value::Array(vec![
+                            Value::BulkString(name.as_bytes().to_vec().into()),
+                            Value::Int(6379),
+                        ]),
+                    ])])));
+                }
+                if contains_slice(cmd, b"buffered") {
+                    buffered_senders.lock().unwrap().push(tokio::task::try_id());
+                    let issue_fresh = {
+                        let mut arrivals = arrivals.lock().unwrap();
+                        arrivals.push("buffered");
+                        arrivals.len() == FRESH_AFTER
+                    };
+                    if issue_fresh {
+                        let connection = fresh_connection.get().expect("connection is set");
+                        let runtime = tokio::runtime::Handle::current();
+                        // Spawn from a thread outside the runtime, so that every new task is in
+                        // the shared queue: a task spawned on this worker could wait in its LIFO
+                        // slot, which other workers don't take from, until the handler returns.
+                        let spawned: Vec<FreshRequest> = std::thread::scope(|scope| {
+                            scope
+                                .spawn(|| {
+                                    (0..FRESH)
+                                        .map(|_| {
+                                            let mut connection = connection.clone();
+                                            let fresh_polled = fresh_polled.clone();
+                                            runtime.spawn(async move {
+                                                let mut get = redis::cmd("GET");
+                                                get.arg("fresh");
+                                                let mut get =
+                                                    Box::pin(get.query_async::<_, Option<i32>>(
+                                                        &mut connection,
+                                                    ));
+                                                let polled = futures::poll!(&mut get);
+                                                fresh_polled.fetch_add(1, Ordering::SeqCst);
+                                                match polled {
+                                                    std::task::Poll::Ready(value) => value,
+                                                    std::task::Poll::Pending => get.await,
+                                                }
+                                            })
+                                        })
+                                        .collect()
+                                })
+                                .join()
+                                .unwrap()
+                        });
+                        fresh_requests.lock().unwrap().extend(spawned);
+                        // Hold the event loop here (this handler runs on its task) until every
+                        // new request has been polled once on the other worker. If the fast path
+                        // were open, that poll would send it to the node now, ahead of the 100
+                        // drained requests not yet sent; with it closed, it waits for the event
+                        // loop.
+                        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+                        while fresh_polled.load(Ordering::SeqCst) < FRESH
+                            && std::time::Instant::now() < deadline
+                        {
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                        all_fresh_polled.store(
+                            fresh_polled.load(Ordering::SeqCst) == FRESH,
+                            Ordering::SeqCst,
+                        );
+                    }
+                } else if contains_slice(cmd, b"fresh") {
+                    arrivals.lock().unwrap().push("fresh");
+                } else if contains_slice(cmd, b"after") {
+                    after_senders.lock().unwrap().push(tokio::task::try_id());
+                } else if contains_slice(cmd, b"trigger") {
+                    trigger_senders.lock().unwrap().push(tokio::task::try_id());
+                    if moved_fired.swap(true, Ordering::SeqCst) {
+                        return Err(Ok(Value::BulkString(b"1".to_vec().into())));
+                    }
+                    return Err(parse_redis_value(
+                        format!("-MOVED {} {name}:6380\r\n", get_slot(b"trigger")).as_bytes(),
+                    ));
+                }
+                Err(Ok(Value::BulkString(b"1".to_vec().into())))
+            })
+        });
+
+        // Two workers: the blocked slot refresh holds one, the event loop and callers use the
+        // other.
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .expect("failed to build runtime");
+        let client = ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .retries(5)
+            .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            .build()
+            .expect("failed to build ClusterClient");
+        let connection: ClusterConnection<MockConnection> = runtime
+            .block_on(client.get_async_generic_connection())
+            .expect("failed to get async connection");
+        assert!(fresh_connection.set(connection.clone()).is_ok());
+
+        let get = |connection: &ClusterConnection<MockConnection>, key: &'static str| {
+            let mut connection = connection.clone();
+            async move {
+                cmd("GET")
+                    .arg(key)
+                    .query_async::<_, Option<i32>>(&mut connection)
+                    .await
+            }
+        };
+        let (trigger, buffered, fresh_results, caller_task_sent_after) =
+            runtime.block_on(async move {
+                let trigger = tokio::spawn(get(&connection, "trigger"));
+                tokio::time::timeout(Duration::from_secs(5), async {
+                    while !refresh_blocked.load(Ordering::SeqCst) {
+                        tokio::time::sleep(Duration::from_millis(1)).await;
+                    }
+                })
+                .await
+                .expect("the MOVED reply should start a slot refresh");
+                // The refresh task is spawned just before the event loop enters `Recover`.
+                tokio::time::sleep(Duration::from_millis(50)).await;
+
+                let buffered: Vec<_> = (0..QUEUED)
+                    .map(|_| tokio::spawn(get(&connection, "buffered")))
+                    .collect();
+                // Let every buffered request reach the event loop's recovery queue.
+                tokio::time::sleep(Duration::from_millis(200)).await;
+
+                release_refresh.store(true, Ordering::SeqCst);
+
+                let buffered = tokio::time::timeout(
+                    Duration::from_secs(10),
+                    futures::future::join_all(buffered),
+                )
+                .await
+                .expect("buffered requests timed out");
+                let fresh = std::mem::take(&mut *fresh_requests.lock().unwrap());
+                let fresh_results =
+                    tokio::time::timeout(Duration::from_secs(10), futures::future::join_all(fresh))
+                        .await
+                        .expect("new requests timed out");
+                let trigger = tokio::time::timeout(Duration::from_secs(10), trigger)
+                    .await
+                    .expect("MOVED request timed out")
+                    .expect("task panicked");
+
+                // The fast path must open again. The event loop clears its recovery flag at the
+                // end of a poll, which can come just after the callers above got their replies,
+                // so allow a few attempts.
+                let mut caller_task_sent_after = false;
+                for _ in 0..100 {
+                    let (caller, value) = tokio::spawn({
+                        let after = get(&connection, "after");
+                        async move { (tokio::task::id(), after.await) }
+                    })
+                    .await
+                    .expect("task panicked");
+                    assert_eq!(value, Ok(Some(1)));
+                    if after_senders.lock().unwrap().last() == Some(&Some(caller)) {
+                        caller_task_sent_after = true;
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+                (trigger, buffered, fresh_results, caller_task_sent_after)
+            });
+
+        assert!(
+            all_fresh_polled.load(Ordering::SeqCst),
+            "setup: every new request must be polled once while the drain is held, polled {}",
+            fresh_polled.load(Ordering::SeqCst)
+        );
+        assert_eq!(trigger, Ok(Some(1)));
+        for result in buffered {
+            assert_eq!(result.expect("task panicked"), Ok(Some(1)));
+        }
+        assert_eq!(fresh_results.len(), FRESH);
+        for result in fresh_results {
+            assert_eq!(result.expect("task panicked"), Ok(Some(1)));
+        }
+        let arrivals = arrivals.lock().unwrap();
+        assert_eq!(
+            arrivals.iter().filter(|a| **a == "buffered").count(),
+            QUEUED
+        );
+        // Every buffered request must have been sent by the event loop, from the recovery queue.
+        // One sent from its own task started too late to be buffered: the setup failed, not the
+        // order the test checks.
+        let trigger_senders = trigger_senders.lock().unwrap();
+        assert_eq!(
+            trigger_senders.len(),
+            2,
+            "setup: the MOVED request is sent once and retried once"
+        );
+        let event_loop = trigger_senders[1];
+        let not_buffered = buffered_senders
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|sender| **sender != event_loop)
+            .count();
+        assert_eq!(
+            not_buffered, 0,
+            "setup: {not_buffered} of the {QUEUED} buffered requests were not sent by the event \
+             loop ({event_loop:?}): their tasks started after the recovery"
+        );
+        let last_buffered = arrivals.iter().rposition(|a| *a == "buffered").unwrap();
+        let fresh_before = arrivals[..last_buffered]
+            .iter()
+            .filter(|a| **a == "fresh")
+            .count();
+        assert_eq!(
+            fresh_before, 0,
+            "{fresh_before} requests issued after recovery reached the node before the last of \
+             the {QUEUED} requests buffered during it"
+        );
+        assert!(
+            caller_task_sent_after,
+            "the fast path must open again once the drained requests are done"
+        );
+    }
+
     /// Sets up a single-node mock cluster whose node stays healthy (answers PING) but replies to
     /// SET with a circular MOVED until the client opens a new connection, as an old instance kept
     /// alive behind the same endpoint does after a failover (#7333). Returns the env and the
@@ -9667,6 +10594,564 @@ mod cluster_async {
 
         assert_eq!(second, Ok(Some("OK".to_string())));
         assert_eq!(set_calls.load(Ordering::SeqCst), 2);
+    }
+
+    /// Sends a SET whose fast-path attempt gets an error that the event loop answers without
+    /// retrying and then recovers from, and a second SET as soon as the caller has that error.
+    /// `set_reply(index, replaced, pings)` is the node's reply to the `index`th SET, where
+    /// `replaced` says whether the client has opened connections since the first SET and `pings`
+    /// is how many PINGs the node has received since then (a reconnect's health check sends one).
+    /// `ping_reply(index)` is the node's reply to the `index`th PING since the first SET; PINGs
+    /// before it get `OK`. Returns the caller's task, both results, and each SET's sender task
+    /// and whether `hold2` was holding the event loop when the node received it.
+    ///
+    /// The node keeps open the window between the error reaching the caller and the event loop
+    /// entering recovery. A by-address request (`hold1`) holds the event loop until it has been
+    /// handed, in this order, a by-address request from another task (`wake`), the caller's failed
+    /// attempt and a by-address request from the caller's task (`hold2`). The event loop then
+    /// polls them in one poll: the failed attempt first, so it answers the caller; then `wake`,
+    /// whose answer wakes the other task. Tokio puts the task a worker wakes in that worker's
+    /// LIFO slot and moves the one already there to its run queue, so the caller can run on
+    /// another worker while the event loop goes on; on a loaded client that is any caller
+    /// answered before the last one in a poll. `hold2` then holds the event loop until the caller
+    /// has received the error and polled its next SET once, which is when a fast-path send would
+    /// reach the node.
+    #[allow(clippy::type_complexity)]
+    fn next_command_after_unretried_error<S, P>(
+        name: &'static str,
+        retries: u32,
+        set_reply: S,
+        ping_reply: P,
+    ) -> (
+        tokio::task::Id,
+        RedisResult<Option<String>>,
+        RedisResult<Option<String>>,
+        Vec<(SenderTask, bool)>,
+    )
+    where
+        S: Fn(usize, bool, usize) -> Result<(), RedisResult<Value>> + Send + Sync + 'static,
+        P: Fn(usize) -> RedisResult<Value> + Send + Sync + 'static,
+    {
+        // Mock connections open when the node received the first SET.
+        let connections_at_first = Arc::new(atomic::AtomicUsize::new(usize::MAX));
+        let hold1_started = Arc::new(AtomicBool::new(false));
+        let wake_sent = Arc::new(AtomicBool::new(false));
+        let both_sent = Arc::new(AtomicBool::new(false));
+        let held_until_both_sent = Arc::new(AtomicBool::new(false));
+        let next_set_polled = Arc::new(AtomicBool::new(false));
+        let holding = Arc::new(AtomicBool::new(false));
+        let held_until_next_set = Arc::new(AtomicBool::new(false));
+        // Each SET: the task that sent it, and whether `hold2` was holding the event loop.
+        let sets: Recorded<Vec<(SenderTask, bool)>> = Default::default();
+        // PINGs received since the first SET.
+        let pings = Arc::new(atomic::AtomicUsize::new(0));
+
+        let wait_for = |flag: &AtomicBool| {
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while !flag.load(Ordering::SeqCst) {
+                if std::time::Instant::now() >= deadline {
+                    return false;
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            true
+        };
+        let _handler = MockConnectionBehavior::register_new(name, {
+            let connections_at_first = connections_at_first.clone();
+            let hold1_started = hold1_started.clone();
+            let both_sent = both_sent.clone();
+            let held_until_both_sent = held_until_both_sent.clone();
+            let next_set_polled = next_set_polled.clone();
+            let holding = holding.clone();
+            let held_until_next_set = held_until_next_set.clone();
+            let sets = sets.clone();
+            let pings = pings.clone();
+            Arc::new(move |cmd: &[u8], _port| {
+                if contains_slice(cmd, b"PING") {
+                    if sets.lock().unwrap().is_empty() {
+                        return Err(Ok(Value::SimpleString("OK".into())));
+                    }
+                    return Err(ping_reply(pings.fetch_add(1, Ordering::SeqCst)));
+                }
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    return Err(Ok(create_topology_from_config(
+                        name,
+                        vec![MockSlotRange {
+                            primary_port: 6379,
+                            replica_ports: vec![],
+                            slot_range: 0..16383,
+                        }],
+                    )));
+                }
+                if contains_slice(cmd, b"hold1") {
+                    // On the event loop's task.
+                    hold1_started.store(true, Ordering::SeqCst);
+                    held_until_both_sent.store(wait_for(&both_sent), Ordering::SeqCst);
+                    return Err(Ok(Value::BulkString(b"1".to_vec().into())));
+                }
+                if contains_slice(cmd, b"hold2") {
+                    // On the event loop's task, polled after the error was answered.
+                    holding.store(true, Ordering::SeqCst);
+                    held_until_next_set.store(wait_for(&next_set_polled), Ordering::SeqCst);
+                    holding.store(false, Ordering::SeqCst);
+                    return Err(Ok(Value::BulkString(b"2".to_vec().into())));
+                }
+                // Match the RESP-encoded command name, so that `SETNAME` doesn't match.
+                if !contains_slice(cmd, b"\r\nSET\r\n") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                let index = {
+                    let mut sets = sets.lock().unwrap();
+                    sets.push((tokio::task::try_id(), holding.load(Ordering::SeqCst)));
+                    sets.len() - 1
+                };
+                let connections = mock_connection_count(name);
+                let _ = connections_at_first.compare_exchange(
+                    usize::MAX,
+                    connections,
+                    Ordering::SeqCst,
+                    Ordering::SeqCst,
+                );
+                set_reply(
+                    index,
+                    connections > connections_at_first.load(Ordering::SeqCst),
+                    pings.load(Ordering::SeqCst),
+                )
+            })
+        });
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(4)
+            .enable_all()
+            .build()
+            .expect("failed to build runtime");
+        let client = ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .retries(retries)
+            .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            .build()
+            .expect("failed to build ClusterClient");
+        let connection: ClusterConnection<MockConnection> = runtime
+            .block_on(client.get_async_generic_connection())
+            .expect("failed to get async connection");
+
+        let by_address = |connection: &ClusterConnection<MockConnection>, key: &'static str| {
+            let mut connection = connection.clone();
+            async move {
+                connection
+                    .route_command(
+                        cmd("GET").arg(key),
+                        RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                            host: name.to_string(),
+                            port: 6379,
+                        }),
+                    )
+                    .await
+            }
+        };
+        let (caller, first, second, hold1, hold2) = runtime.block_on(async move {
+            let hold1 = tokio::spawn(by_address(&connection, "hold1"));
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while !hold1_started.load(Ordering::SeqCst) {
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+            })
+            .await
+            .expect("the event loop should send hold1");
+            let wake = tokio::spawn({
+                let wake_sent = wake_sent.clone();
+                let mut wake = Box::pin(by_address(&connection, "wake"));
+                async move {
+                    let polled = futures::poll!(&mut wake);
+                    assert!(polled.is_pending());
+                    wake_sent.store(true, Ordering::SeqCst);
+                    wake.await
+                }
+            });
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while !wake_sent.load(Ordering::SeqCst) {
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+            })
+            .await
+            .expect("wake should be handed to the event loop");
+
+            let caller = tokio::spawn({
+                let mut set_connection = connection.clone();
+                let hold2 = by_address(&connection, "hold2");
+                async move {
+                    let mut set = cmd("SET");
+                    set.arg("key").arg("value");
+                    let sets = async {
+                        let first = set
+                            .query_async::<_, Option<String>>(&mut set_connection)
+                            .await;
+                        // Send the next command at once, polling it once before telling the node.
+                        let mut second =
+                            Box::pin(set.query_async::<_, Option<String>>(&mut set_connection));
+                        let polled = futures::poll!(&mut second);
+                        next_set_polled.store(true, Ordering::SeqCst);
+                        let second = match polled {
+                            std::task::Poll::Ready(second) => second,
+                            std::task::Poll::Pending => second.await,
+                        };
+                        (first, second)
+                    };
+                    let mut sets = Box::pin(sets);
+                    let mut hold2 = Box::pin(hold2);
+                    // The first poll of each sends it: the SET from this task (the fast path), its
+                    // error to the event loop, then hold2 to the event loop.
+                    let sets_polled = futures::poll!(&mut sets);
+                    let hold2_polled = futures::poll!(&mut hold2);
+                    assert!(sets_polled.is_pending() && hold2_polled.is_pending());
+                    both_sent.store(true, Ordering::SeqCst);
+                    let ((first, second), hold2) = futures::join!(sets, hold2);
+                    (tokio::task::id(), first, second, hold2)
+                }
+            });
+            let (caller, first, second, hold2) =
+                tokio::time::timeout(Duration::from_secs(20), caller)
+                    .await
+                    .expect("the SETs timed out")
+                    .expect("task panicked");
+            let hold1 = tokio::time::timeout(Duration::from_secs(20), hold1)
+                .await
+                .expect("hold1 timed out")
+                .expect("task panicked");
+            let wake = tokio::time::timeout(Duration::from_secs(20), wake)
+                .await
+                .expect("wake timed out")
+                .expect("task panicked");
+            assert_eq!(wake, Ok(Value::SimpleString("OK".into())));
+            (caller, first, second, hold1, hold2)
+        });
+
+        assert_eq!(hold1, Ok(Value::BulkString(b"1".to_vec().into())));
+        assert_eq!(hold2, Ok(Value::BulkString(b"2".to_vec().into())));
+        assert!(
+            held_until_both_sent.load(Ordering::SeqCst),
+            "setup: hold1 must hold the event loop until the caller has sent its SET and hold2"
+        );
+        assert!(
+            held_until_next_set.load(Ordering::SeqCst),
+            "setup: hold2 must hold the event loop until the caller has polled its next SET"
+        );
+        let sets = std::mem::take(&mut *sets.lock().unwrap());
+        assert_eq!(
+            sets[0],
+            (Some(caller), false),
+            "the first SET takes the fast path"
+        );
+        (caller, first, second, sets)
+    }
+
+    /// With no retries left, the event loop answers a circular MOVED before it enters the
+    /// reconnect that replaces the connection. A command the caller sends as soon as it has that
+    /// reply must not take the fast path to the connection being replaced: like a request sent
+    /// through the event loop, it waits for the replacement.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fast_path_closes_before_a_terminal_moved_reply() {
+        let name = "fast_path_closes_before_moved_reply";
+        let (caller, first, second, sets) = next_command_after_unretried_error(
+            name,
+            0,
+            move |_, replaced, _| {
+                if replaced {
+                    Err(Ok(Value::SimpleString("OK".into())))
+                } else {
+                    Err(parse_redis_value(
+                        format!("-MOVED {} {name}:6379\r\n", get_slot(b"key")).as_bytes(),
+                    ))
+                }
+            },
+            |_| Ok(Value::SimpleString("OK".into())),
+        );
+
+        assert_eq!(first.unwrap_err().kind(), ErrorKind::Moved);
+        assert_eq!(
+            second,
+            Ok(Some("OK".to_string())),
+            "the next SET must wait for the replacement connection (SETs: {sets:?}, caller \
+             {caller:?})"
+        );
+        assert_eq!(sets.len(), 2, "SETs: {sets:?}");
+        assert!(
+            sets[1].0.is_some() && sets[1].0 != Some(caller) && !sets[1].1,
+            "the next SET must be sent by the event loop after the replacement, got {:?} (caller \
+             {caller:?})",
+            sets[1]
+        );
+    }
+
+    /// A Reconnect-class error is not retried (#7737): the event loop answers it, then reconnects
+    /// the node. As after a circular MOVED, the caller's next command must wait for that
+    /// reconnect instead of taking the fast path while it is being decided. Here the node passes
+    /// the reconnect's health check (`CheckExisting` PINGs the user connection and keeps it), so
+    /// the next SET is answered `OK` only once the node has seen that PING, and `-ERR early`
+    /// before it.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fast_path_closes_before_an_unretried_reconnect_error() {
+        let name = "fast_path_closes_before_reconnect_error";
+        let (caller, first, second, sets) = next_command_after_unretried_error(
+            name,
+            1,
+            move |index, _, pings| match index {
+                0 => Err(Err(RedisError::from(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionReset,
+                    "mock connection reset",
+                )))),
+                _ if pings > 0 => Err(Ok(Value::SimpleString("OK".into()))),
+                _ => Err(parse_redis_value(b"-ERR early\r\n")),
+            },
+            |_| Ok(Value::SimpleString("OK".into())),
+        );
+
+        assert_eq!(first.unwrap_err().kind(), ErrorKind::IoError);
+        assert_eq!(
+            second,
+            Ok(Some("OK".to_string())),
+            "the next SET must wait for the reconnect's health check (SETs: {sets:?}, caller \
+             {caller:?})"
+        );
+        assert_eq!(sets.len(), 2, "SETs: {sets:?}");
+        assert!(
+            sets[1].0.is_some() && sets[1].0 != Some(caller) && !sets[1].1,
+            "the next SET must be sent by the event loop after the reconnect, got {:?} (caller \
+             {caller:?})",
+            sets[1]
+        );
+    }
+
+    /// As `test_async_cluster_fast_path_closes_before_an_unretried_reconnect_error`, but the
+    /// user connection fails the reconnect's health check, so the reconnect replaces it. The next
+    /// SET must wait for the replacement and be answered on a different mock connection than the
+    /// first SET.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fast_path_closes_before_a_reconnect_that_replaces_the_connection() {
+        let name = "fast_path_closes_before_replacing_reconnect";
+        // The mock connection that received the first SET. Only another connection may answer
+        // the next SET: a new management connection alone would not do.
+        let first_set_connection = atomic::AtomicUsize::new(usize::MAX);
+        let (caller, first, second, sets) = next_command_after_unretried_error(
+            name,
+            1,
+            move |index, _, _| {
+                let connection =
+                    handler_connection_id().expect("the handler runs on a mock connection");
+                match index {
+                    0 => {
+                        first_set_connection.store(connection, Ordering::SeqCst);
+                        Err(Err(RedisError::from(std::io::Error::new(
+                            std::io::ErrorKind::ConnectionReset,
+                            "mock connection reset",
+                        ))))
+                    }
+                    _ if connection != first_set_connection.load(Ordering::SeqCst) => {
+                        Err(Ok(Value::SimpleString("OK".into())))
+                    }
+                    _ => Err(parse_redis_value(b"-ERR old connection\r\n")),
+                }
+            },
+            // The health check's PING fails; the new connection's own setup PINGs pass.
+            |index| {
+                if index == 0 {
+                    parse_redis_value(b"-ERR mock health check failed\r\n")
+                } else {
+                    Ok(Value::SimpleString("OK".into()))
+                }
+            },
+        );
+
+        assert_eq!(first.unwrap_err().kind(), ErrorKind::IoError);
+        assert_eq!(
+            second,
+            Ok(Some("OK".to_string())),
+            "the next SET must wait for the replacement connection (SETs: {sets:?}, caller \
+             {caller:?})"
+        );
+        assert_eq!(sets.len(), 2, "SETs: {sets:?}");
+        assert!(
+            sets[1].0.is_some() && sets[1].0 != Some(caller) && !sets[1].1,
+            "the next SET must be sent by the event loop after the replacement, got {:?} (caller \
+             {caller:?})",
+            sets[1]
+        );
+    }
+
+    /// A MOVED reply with a retry left starts a slot refresh when the event loop's poll of its
+    /// requests ends, but that poll goes on: it sends the retry to the redirect target and polls
+    /// the other requests. The fast path must be closed from the moment the MOVED result is
+    /// handled, so a command another caller sends meanwhile meets the refresh's queue, as it
+    /// would through the event loop, instead of taking the fast path. The node holds the event
+    /// loop in the retry's handler until the other caller has polled its SET once.
+    #[test]
+    #[serial_test::parallel(otel)]
+    fn test_async_cluster_fast_path_closes_when_a_result_starts_a_recovery() {
+        let name = "fast_path_closes_on_recovery_result";
+        let holding = Arc::new(AtomicBool::new(false));
+        let next_set_polled = Arc::new(AtomicBool::new(false));
+        let held_until_next_set = Arc::new(AtomicBool::new(false));
+        // Each SET: (key, port, the task that sent it, whether the retry was holding the loop).
+        let sets: Recorded<Vec<(&'static str, u16, SenderTask, bool)>> = Default::default();
+
+        let wait_for = |flag: &AtomicBool| {
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while !flag.load(Ordering::SeqCst) {
+                if std::time::Instant::now() >= deadline {
+                    return false;
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            true
+        };
+        let _handler = MockConnectionBehavior::register_new(name, {
+            let holding = holding.clone();
+            let next_set_polled = next_set_polled.clone();
+            let held_until_next_set = held_until_next_set.clone();
+            let sets = sets.clone();
+            Arc::new(move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    return Err(Ok(create_topology_from_config(
+                        name,
+                        vec![
+                            MockSlotRange {
+                                primary_port: 6379,
+                                replica_ports: vec![],
+                                slot_range: 0..8191,
+                            },
+                            MockSlotRange {
+                                primary_port: 6380,
+                                replica_ports: vec![],
+                                slot_range: 8192..16383,
+                            },
+                        ],
+                    )));
+                }
+                // Match the RESP-encoded command name, so that `SETNAME` doesn't match.
+                if !contains_slice(cmd, b"\r\nSET\r\n") {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+                // Both keys hash to 6379's slots.
+                let key = if contains_slice(cmd, b"moved_a") {
+                    "moved_a"
+                } else {
+                    "b"
+                };
+                sets.lock().unwrap().push((
+                    key,
+                    port,
+                    tokio::task::try_id(),
+                    holding.load(Ordering::SeqCst),
+                ));
+                match (key, port) {
+                    ("moved_a", 6379) => Err(parse_redis_value(
+                        format!("-MOVED {} {name}:6380\r\n", get_slot(b"moved_a")).as_bytes(),
+                    )),
+                    ("moved_a", _) => {
+                        // The retry, on the event loop's task, before the poll that handled the
+                        // MOVED has ended.
+                        holding.store(true, Ordering::SeqCst);
+                        held_until_next_set.store(wait_for(&next_set_polled), Ordering::SeqCst);
+                        holding.store(false, Ordering::SeqCst);
+                        Err(Ok(Value::SimpleString("OK".into())))
+                    }
+                    _ => Err(Ok(Value::SimpleString("OK".into()))),
+                }
+            })
+        });
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(4)
+            .enable_all()
+            .build()
+            .expect("failed to build runtime");
+        let client = ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .retries(1)
+            .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+            .build()
+            .expect("failed to build ClusterClient");
+        let connection: ClusterConnection<MockConnection> = runtime
+            .block_on(client.get_async_generic_connection())
+            .expect("failed to get async connection");
+
+        let ((first_caller, first), (next_caller, next)) = runtime.block_on(async move {
+            let first = tokio::spawn({
+                let mut connection = connection.clone();
+                async move {
+                    let result = cmd("SET")
+                        .arg("moved_a")
+                        .arg("value")
+                        .query_async::<_, Option<String>>(&mut connection)
+                        .await;
+                    (tokio::task::id(), result)
+                }
+            });
+            let next = tokio::spawn({
+                let mut connection = connection.clone();
+                let holding = holding.clone();
+                let next_set_polled = next_set_polled.clone();
+                async move {
+                    tokio::time::timeout(Duration::from_secs(5), async {
+                        while !holding.load(Ordering::SeqCst) {
+                            tokio::time::sleep(Duration::from_millis(1)).await;
+                        }
+                    })
+                    .await
+                    .expect("the MOVED retry should hold the event loop");
+                    let mut set = cmd("SET");
+                    set.arg("b").arg("value");
+                    let mut set = Box::pin(set.query_async::<_, Option<String>>(&mut connection));
+                    let polled = futures::poll!(&mut set);
+                    next_set_polled.store(true, Ordering::SeqCst);
+                    let result = match polled {
+                        std::task::Poll::Ready(result) => result,
+                        std::task::Poll::Pending => set.await,
+                    };
+                    (tokio::task::id(), result)
+                }
+            });
+            let first = tokio::time::timeout(Duration::from_secs(20), first)
+                .await
+                .expect("the MOVED SET timed out")
+                .expect("task panicked");
+            let next = tokio::time::timeout(Duration::from_secs(20), next)
+                .await
+                .expect("the next SET timed out")
+                .expect("task panicked");
+            (first, next)
+        });
+
+        assert_eq!(first, Ok(Some("OK".to_string())));
+        assert_eq!(next, Ok(Some("OK".to_string())));
+        assert!(
+            held_until_next_set.load(Ordering::SeqCst),
+            "setup: the retry must hold the event loop until the next SET has been polled"
+        );
+        let sets = std::mem::take(&mut *sets.lock().unwrap());
+        assert_eq!(sets.len(), 3, "SETs: {sets:?}");
+        assert_eq!(
+            (sets[0].0, sets[0].1, sets[0].2),
+            ("moved_a", 6379, Some(first_caller)),
+            "setup: the first SET takes the fast path (SETs: {sets:?})"
+        );
+        assert_eq!(
+            (sets[1].0, sets[1].1, sets[1].3),
+            ("moved_a", 6380, false),
+            "setup: the event loop sends the retry to the MOVED target (SETs: {sets:?})"
+        );
+        assert!(
+            sets[1].2.is_some() && sets[1].2 != Some(first_caller),
+            "setup: the retry is sent by the event loop (SETs: {sets:?})"
+        );
+        let (key, _, sender, during_hold) = sets[2];
+        assert_eq!(key, "b", "SETs: {sets:?}");
+        assert!(
+            sender.is_some() && sender != Some(next_caller) && !during_hold,
+            "the next SET must wait for the event loop's refresh, not take the fast path while \
+             the poll that handled the MOVED goes on (SETs: {sets:?}, caller {next_caller:?})"
+        );
     }
 
     /// Pipeline variant of `test_async_cluster_circular_moved_replaces_healthy_connection`.

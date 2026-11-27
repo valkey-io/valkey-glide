@@ -335,6 +335,7 @@ where
             .send(Message {
                 cmd: CmdArg::ClusterScan { cluster_scan_args },
                 sender,
+                first_attempt_error: None,
             })
             .await
             .map_err(|e| {
@@ -363,7 +364,14 @@ where
         cmd: &Cmd,
         routing: cluster_routing::RoutingInfo,
     ) -> RedisResult<Value> {
-        self.route_command_with_fan_out_deadline(Arc::new(cmd.clone()), routing, None)
+        log_trace_lazy!("cluster", "route_command");
+        // The fast path sends the caller's command as it is: only the event loop needs an `Arc`
+        // of it.
+        let first_attempt_error = match self.route_on_fast_path(cmd, &routing).await {
+            Ok(value) => return Ok(value),
+            Err(first_attempt_error) => first_attempt_error,
+        };
+        self.route_on_event_loop(Arc::new(cmd.clone()), routing, None, first_attempt_error)
             .await
     }
 
@@ -380,6 +388,91 @@ where
         fan_out_deadline: Option<std::time::Instant>,
     ) -> RedisResult<Value> {
         log_trace_lazy!("cluster", "route_command");
+        let first_attempt_error = match self.route_on_fast_path(&cmd, &routing).await {
+            Ok(value) => return Ok(value),
+            Err(first_attempt_error) => first_attempt_error,
+        };
+        self.route_on_event_loop(cmd, routing, fan_out_deadline, first_attempt_error)
+            .await
+    }
+
+    /// Sends `cmd` from the caller's task if the fast path below applies. Returns the reply, or
+    /// else the error to hand to the event loop as the request's first attempt: `None` if the
+    /// fast path did not apply. From `route_command_with_fan_out_deadline` the event loop gets
+    /// the caller's `Arc`, so the watchdog phase it marks is the caller's too.
+    async fn route_on_fast_path(
+        &mut self,
+        cmd: &Cmd,
+        routing: &cluster_routing::RoutingInfo,
+    ) -> Result<Value, Option<(OperationTarget, RedisError)>> {
+        // Fast path: a single-node command whose node is in the connection map is sent from the
+        // caller's task, exactly as the event loop's `try_cmd_request` would send it (see
+        // `InnerCore::fast_path_connection` for when it applies). This skips two task hops per
+        // request (caller -> event loop -> node connection, and back) and the event loop's boxed
+        // request future, `FuturesUnordered` node and reply oneshot, and, from `route_command`,
+        // the per-request `Arc<Cmd>` clone. An error from this attempt is handed to the event
+        // loop as the request's first attempt (`Message::first_attempt_error`): it joins the event
+        // loop's in-flight requests as an attempt the event loop had dispatched would, so retry
+        // counting, MOVED/ASK redirects, slot refresh and reconnects handle it the same way, after
+        // any recovery in progress. Everything else takes the event loop as before.
+        let mut first_attempt_error = None;
+        let fast_path = if self.sender.is_closed() {
+            None
+        } else {
+            self.inner_core.fast_path_connection(routing)
+        };
+        if let Some((address, conn)) = fast_path {
+            let conn = match conn.peek() {
+                // The usual case: the connection's shared future has been polled before.
+                Some(conn) => Some(conn.clone()),
+                // Not polled yet: every connection in the map until its first use. The map holds
+                // established connections wrapped in a ready future (see
+                // `ConnectionDetails::into_future`), so this await completes at once. The gate is
+                // read again after it, which only narrows the same advisory race as the first
+                // read; if recovery began, the event loop routes the request (its lookup is
+                // primary-only, so a second lookup changes no round-robin state).
+                None => {
+                    let conn = conn.await;
+                    (!self.inner_core.is_in_recovery()).then_some(conn)
+                }
+            };
+            if let Some(mut conn) = conn {
+                if let Some(span) = cmd.span() {
+                    set_routed_node_on_span(&span, &address);
+                }
+                // Mark command as sent for watchdog diagnostics, as `try_cmd_request` does. That
+                // marks the event loop's clone of the command, which the caller never reads; this
+                // marks the caller's command, so a timeout after this point is reported as Sent.
+                // "Sent" means handed to the connection: `req_packed_command` may still wait for
+                // room in the connection's pipeline channel. glide-core's standalone
+                // `send_request` marks it at the same point (before even getting the connection).
+                cmd.watchdog_phase
+                    .store(crate::cmd::PHASE_SENT, Ordering::Release);
+                match conn.req_packed_command(cmd).await {
+                    Ok(value) => return Ok(value),
+                    Err(err) => {
+                        // The request now waits for the event loop, which may hold it until a
+                        // recovery ends and then retry it on its own clone of the command: mark
+                        // the caller's command Queued again, as it is for every event-loop
+                        // request, so a timeout while it waits is not reported as Sent.
+                        cmd.watchdog_phase
+                            .store(crate::cmd::PHASE_QUEUED, Ordering::Release);
+                        first_attempt_error = Some((address.into(), err));
+                    }
+                }
+            }
+        }
+        Err(first_attempt_error)
+    }
+
+    /// Hands the request to the event loop and waits for its reply.
+    async fn route_on_event_loop(
+        &mut self,
+        cmd: Arc<Cmd>,
+        routing: cluster_routing::RoutingInfo,
+        fan_out_deadline: Option<std::time::Instant>,
+        first_attempt_error: Option<(OperationTarget, RedisError)>,
+    ) -> RedisResult<Value> {
         let (sender, receiver) = oneshot::channel();
         self.sender
             .send(Message {
@@ -389,6 +482,7 @@ where
                     fan_out_deadline,
                 },
                 sender,
+                first_attempt_error,
             })
             .await
             .map_err(|e| {
@@ -438,6 +532,7 @@ where
                     pipeline_retry_strategy: pipeline_retry_strategy.unwrap_or_default(),
                 },
                 sender,
+                first_attempt_error: None,
             })
             .await
             .map_err(|err| {
@@ -548,6 +643,7 @@ where
             .send(Message {
                 cmd: CmdArg::OperationRequest(operation_request),
                 sender,
+                first_attempt_error: None,
             })
             .await
             .map_err(|_| RedisError::from(io::Error::from(io::ErrorKind::BrokenPipe)))?;
@@ -642,6 +738,16 @@ impl<C> std::ops::DerefMut for Connections<C> {
 
 pub(crate) struct InnerCore<C> {
     pub(crate) conn_lock: ParkingLotRwLock<Connections<C>>,
+    /// Mirror of the event loop's `ConnectionState`, for the caller-task fast path in
+    /// [`ClusterConnection::route_on_fast_path`]: set when the event loop enters
+    /// `ConnectionState::Recover` (`ClusterConnInner::enter_recovery`, the only way in), or just
+    /// before (`InnerCore::close_fast_path`): by a request that answers its caller with the error
+    /// that makes the event loop enter it, and by `ClusterConnInner::poll_complete` as soon as a
+    /// request's result calls for one; cleared in `ClusterConnInner::poll_flush` once recovery
+    /// has ended and the requests drained from the recovery queue have been polled. While set,
+    /// every request goes through the event loop, so the recovery queue (buffering or fail-fast)
+    /// applies to it as before. A gate, not a lock: see `InnerCore::is_in_recovery`.
+    in_recovery: AtomicBool,
     cluster_params: ParkingLotRwLock<ClusterParams>,
     pending_requests_tx: mpsc::UnboundedSender<PendingRequest<C>>,
     pending_requests_rx: std::sync::Mutex<mpsc::UnboundedReceiver<PendingRequest<C>>>,
@@ -793,6 +899,60 @@ where
             .read()
             .slot_map
             .get_slots_of_node(node_address)
+    }
+
+    /// The connection the caller-task fast path in [`ClusterConnection::route_on_fast_path`] sends
+    /// `routing` on, or `None` to send it through the event loop.
+    ///
+    /// Only a [`SingleNodeRoutingInfo::SpecificNode`] route qualifies, and only when:
+    /// - the event loop is not in recovery (`in_recovery`);
+    /// - no writer (a slot refresh, a connection refresh, a MOVED slot update) holds the slot
+    ///   map's lock or waits for it;
+    /// - its lookup is primary-only (`route_uses_node_rotation`): read-from-replica round
+    ///   robin advances its index with one optimistic compare-exchange, exact only on the single
+    ///   event-loop task, so concurrent callers would skew the rotation;
+    /// - its node is in the connection map. This is the lookup the event loop's `get_connection`
+    ///   makes first for the same route. Everything `get_connection` does beyond it (waiting for
+    ///   a node's in-progress refresh, falling back to a random node, redirects) stays on the
+    ///   event loop.
+    fn fast_path_connection(
+        &self,
+        routing: &cluster_routing::RoutingInfo,
+    ) -> Option<(String, ConnectionFuture<C>)> {
+        let cluster_routing::RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route)) =
+            routing
+        else {
+            return None;
+        };
+        if self.is_in_recovery() {
+            return None;
+        }
+        // Never wait for the slot map's lock on the caller's task: while a writer (a slot
+        // refresh, a connection refresh, a MOVED slot update) holds it, or is waiting for it,
+        // `read()` would block the caller's worker thread. The event loop's `get_connection`
+        // waits for it instead, as for every request before the fast path. parking_lot's
+        // `try_read` fails only then, so an uncontended lookup is unchanged.
+        let conn_lock = self.conn_lock.try_read()?;
+        if conn_lock.route_uses_node_rotation(route) {
+            return None;
+        }
+        conn_lock.connection_for_route(route)
+    }
+
+    /// See [`InnerCore::in_recovery`]. Advisory: it orders no other memory, and a request that
+    /// read `false` just before recovery began is sent during it.
+    fn is_in_recovery(&self) -> bool {
+        self.in_recovery.load(Ordering::Relaxed)
+    }
+
+    /// Close the caller-task fast path ahead of a recovery. Called by
+    /// `ClusterConnInner::enter_recovery` and, before the event loop enters a recovery, by a
+    /// request that answers its caller with the error that triggers it and by
+    /// `ClusterConnInner::poll_complete` when a result calls for it. The caller's next command
+    /// then goes through the event loop, as before the fast path, so that recovery's queue
+    /// (buffering or fail-fast) applies to it.
+    fn close_fast_path(&self) {
+        self.in_recovery.store(true, Ordering::Relaxed);
     }
 }
 
@@ -1063,6 +1223,17 @@ impl RedirectNode {
 struct Message<C: Sized> {
     cmd: CmdArg<C>,
     sender: oneshot::Sender<RedisResult<Response>>,
+    /// The error of an attempt the caller already made on its own task (the single-node fast
+    /// path in [`ClusterConnection::route_on_fast_path`]). `start_send` puts the request into
+    /// `in_flight_requests` with this as its first attempt's result, where an attempt the event
+    /// loop had dispatched would be, so retries, redirects, slot refresh and reconnects run
+    /// exactly as if the event loop had made that attempt. The recovery queue (meant for new
+    /// requests) does not buffer, cap or fail this attempt; a retry that the event loop sends
+    /// back through `pending_requests_tx` (reconnects) meets the recovery queue like any retry.
+    /// Like any
+    /// in-flight request, it can also be the one `send_refresh_error` answers with a failed
+    /// slot refresh's error.
+    first_attempt_error: Option<(OperationTarget, RedisError)>,
 }
 
 enum RecoverFuture {
@@ -1362,6 +1533,7 @@ mod iam_token_refresh_tests {
 
         let (pending_requests_tx, pending_requests_rx) = tokio::sync::mpsc::unbounded_channel();
         Arc::new(InnerCore {
+            in_recovery: AtomicBool::new(false),
             conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::default())),
             cluster_params: ParkingLotRwLock::new(params),
             pending_requests_tx,
@@ -1619,6 +1791,14 @@ where
                     } else {
                         Next::Done.into()
                     };
+                    if !matches!(next, Poll::Ready(Next::Done)) {
+                        // `poll_flush` enters recovery for `next` when this poll of the requests
+                        // ends, but the caller can send its next command as soon as it has this
+                        // error. Close the fast path first, so that command goes through the
+                        // event loop and its recovery queue instead of a connection the
+                        // recovery may replace.
+                        this.core.close_fast_path();
+                    }
                     self.respond(Err(err));
                     return next;
                 }
@@ -1773,7 +1953,10 @@ where
                             request.info.reset_routing();
                             Some(request)
                         } else {
-                            // Not retried, so the caller must get this error instead of a dropped sender.
+                            // Not retried, so the caller must get this error instead of a dropped
+                            // sender. The reconnect starts when this poll ends: close the fast
+                            // path first, as for an error with no retries left.
+                            this.core.close_fast_path();
                             self.respond(Err(err));
                             None
                         };
@@ -1911,6 +2094,7 @@ where
         let slots_refresh_rate_limiter = cluster_params.slots_refresh_rate_limit;
         let (pending_tx, pending_rx) = mpsc::unbounded_channel();
         let inner = Arc::new(InnerCore {
+            in_recovery: AtomicBool::new(false),
             conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 Default::default(),
                 connections,
@@ -4117,6 +4301,14 @@ where
         Ok((address, conn))
     }
 
+    /// Switch to `ConnectionState::Recover` and stop the caller-task fast path, so requests
+    /// reach the event loop (and its recovery queue) until recovery ends. The fast path opens
+    /// again in `poll_flush`, after the requests buffered during recovery have been polled.
+    fn enter_recovery(&mut self, recover_future: RecoverFuture) {
+        self.inner.close_fast_path();
+        self.state = ConnectionState::Recover(recover_future);
+    }
+
     /// Buffer incoming requests into the recovery queue while recovery is in progress.
     /// This covers both fast reconnect and slot refresh (the `Reconnect` and
     /// `RefreshingSlots` states); the `ReconnectToInitialNodes` state fails fast instead.
@@ -4291,9 +4483,7 @@ where
                             let handle = tokio::spawn(async move {
                                 ClusterConnInner::reconnect_to_initial_nodes(inner).await
                             });
-                            self.state = ConnectionState::Recover(
-                                RecoverFuture::ReconnectToInitialNodes(handle),
-                            );
+                            self.enter_recovery(RecoverFuture::ReconnectToInitialNodes(handle));
                             Poll::Ready(Err(e))
                         } else {
                             // Retry refresh
@@ -4301,9 +4491,7 @@ where
                                 self.inner.clone(),
                                 &RefreshPolicy::Throttable,
                             );
-                            self.state = ConnectionState::Recover(RecoverFuture::RefreshingSlots(
-                                new_handle,
-                            ));
+                            self.enter_recovery(RecoverFuture::RefreshingSlots(new_handle));
                             cx.waker().wake_by_ref(); // ensure we are polled again to check the new handle
                             Poll::Pending // stay in recovery, do NOT drain the queue yet
                         }
@@ -4328,9 +4516,7 @@ where
                             let handle = tokio::spawn(async move {
                                 ClusterConnInner::reconnect_to_initial_nodes(inner).await
                             });
-                            self.state = ConnectionState::Recover(
-                                RecoverFuture::ReconnectToInitialNodes(handle),
-                            );
+                            self.enter_recovery(RecoverFuture::ReconnectToInitialNodes(handle));
 
                             // Report this critical error to clients
                             let err = RedisError::from((
@@ -4506,6 +4692,11 @@ where
                     sleep_duration,
                     moved_redirect,
                 } => {
+                    // `poll_flush` enters recovery for this when the poll ends. Close the fast
+                    // path now: this loop goes on polling other requests (a retry sent here can
+                    // wait for its connection), and a caller whose command arrives meanwhile must
+                    // meet that recovery's queue, as it would through the event loop.
+                    self.inner.close_fast_path();
                     poll_flush_action =
                         poll_flush_action.change_state(PollFlushAction::RebuildSlots);
                     let future: Option<
@@ -4547,6 +4738,8 @@ where
                     target,
                     mode,
                 } => {
+                    // As for `RefreshSlots`.
+                    self.inner.close_fast_path();
                     poll_flush_action = poll_flush_action
                         .change_state(PollFlushAction::Reconnect(HashMap::from([(target, mode)])));
                     if let Some(request) = request {
@@ -4554,6 +4747,8 @@ where
                     }
                 }
                 Next::ReconnectToInitialNodes { request } => {
+                    // As for `RefreshSlots`.
+                    self.inner.close_fast_path();
                     poll_flush_action = poll_flush_action
                         .change_state(PollFlushAction::ReconnectFromInitialConnections);
                     if let Some(request) = request {
@@ -4667,15 +4862,42 @@ where
     }
 
     fn start_send(self: Pin<&mut Self>, msg: Message<C>) -> Result<(), Self::Error> {
-        let Message { cmd, sender } = msg;
+        let Message {
+            cmd,
+            sender,
+            first_attempt_error,
+        } = msg;
 
         let info = RequestInfo { cmd };
-
-        let _ = self.inner.pending_requests_tx.send(PendingRequest {
+        let request = PendingRequest {
             retry: 0,
             sender,
             info,
-        });
+        };
+
+        match first_attempt_error {
+            // The caller already made this request's first attempt on its own task (the fast
+            // path in `ClusterConnection::route_on_fast_path`). The request joins
+            // `in_flight_requests` with that attempt's result, which is where an attempt the
+            // event loop had dispatched would be: `poll_complete` handles it with the normal
+            // retry machinery, after any recovery in progress. It is not a new request, so the
+            // recovery queue does not buffer, cap or fail it.
+            Some(error) => {
+                let retry_params = self.inner.cluster_params.read().retry_params.clone();
+                let core = self.inner.clone();
+                self.in_flight_requests.push(Request {
+                    retry_params,
+                    request: Some(request),
+                    core,
+                    future: RequestState::Future {
+                        future: futures::future::ready(Err(error)).boxed(),
+                    },
+                });
+            }
+            None => {
+                let _ = self.inner.pending_requests_tx.send(request);
+            }
+        }
         Ok(())
     }
 
@@ -4690,6 +4912,8 @@ where
 
         match self.as_mut().poll_recover(cx) {
             Poll::Pending => {
+                // Only `Recover` is pending, and every way into it closes the fast path.
+                debug_assert!(self.inner.is_in_recovery());
                 // Buffer during fast reconnects (circular MOVED) and slot refresh paths.
                 // For ReconnectToInitialNodes, fail fast to preserve throughput.
                 if matches!(
@@ -4723,7 +4947,25 @@ where
             }
         }
 
-        match ready!(self.poll_complete(cx)) {
+        let flush_action = self.poll_complete(cx);
+        // Any recovery has ended and the poll above has polled the requests drained from the
+        // recovery queue: open the caller-task fast path again, unless this flush is about to
+        // enter recovery anew. Clearing only now, not when `poll_recover` leaves `Recover`, lets
+        // the drained requests reach their connections first: `FuturesUnordered` polls each of
+        // them once in that poll (tokio defers the wake of a task out of cooperative budget, so
+        // running out does not end the poll early), and a request is written into its
+        // connection's pipeline channel when first polled if the channel has room. If a channel
+        // is full, a drained request polled after the budget ran out does not queue for room in
+        // that poll, so a new fast-path request may get it first. The drained and new requests
+        // come from different callers and are concurrent; nothing orders them beyond this.
+        let entering_recovery = matches!(
+            &flush_action,
+            Poll::Ready(action) if !matches!(action, PollFlushAction::None)
+        );
+        if !entering_recovery && self.inner.is_in_recovery() {
+            self.inner.in_recovery.store(false, Ordering::Relaxed);
+        }
+        match ready!(flush_action) {
             PollFlushAction::None => {
                 // Adaptive health snapshot
                 let now_secs = SystemTime::now()
@@ -4770,7 +5012,7 @@ where
                     self.inner.clone(),
                     &RefreshPolicy::Throttable,
                 );
-                self.state = ConnectionState::Recover(RecoverFuture::RefreshingSlots(task_handle));
+                self.enter_recovery(RecoverFuture::RefreshingSlots(task_handle));
                 cx.waker().wake_by_ref();
                 Poll::Pending
             }
@@ -4783,8 +5025,7 @@ where
                 let handle = tokio::spawn(async move {
                     ClusterConnInner::reconnect_to_initial_nodes(inner).await
                 });
-                self.state =
-                    ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(handle));
+                self.enter_recovery(RecoverFuture::ReconnectToInitialNodes(handle));
                 cx.waker().wake_by_ref();
                 Poll::Pending
             }
@@ -4817,7 +5058,7 @@ where
                         .await;
                     }
                 });
-                self.state = ConnectionState::Recover(RecoverFuture::Reconnect(handle));
+                self.enter_recovery(RecoverFuture::Reconnect(handle));
                 cx.waker().wake_by_ref();
                 Poll::Pending
             }
@@ -6185,6 +6426,7 @@ mod circular_moved_address_normalization_tests {
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
 
         Arc::new(InnerCore {
+            in_recovery: AtomicBool::new(false),
             conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
@@ -6281,6 +6523,7 @@ mod circular_moved_address_normalization_tests {
         let (tx, rx) =
             mpsc::unbounded_channel::<PendingRequest<crate::aio::MultiplexedConnection>>();
         let core = Arc::new(InnerCore {
+            in_recovery: AtomicBool::new(false),
             conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
@@ -6562,6 +6805,7 @@ pub(super) mod refresh_task_resolution_tests {
         );
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
         let core = Arc::new(InnerCore {
+            in_recovery: AtomicBool::new(false),
             conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 connection_map,
@@ -6734,6 +6978,7 @@ pub(super) mod refresh_task_resolution_tests {
         cluster_params.address_resolver = Some(resolver);
 
         Arc::new(InnerCore {
+            in_recovery: AtomicBool::new(false),
             conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
@@ -6787,6 +7032,7 @@ pub(super) mod refresh_task_resolution_tests {
         cluster_params.address_resolver = Some(Arc::new(SeedAddressResolver));
 
         Arc::new(InnerCore {
+            in_recovery: AtomicBool::new(false),
             conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
@@ -6912,6 +7158,7 @@ pub(super) mod refresh_task_resolution_tests {
         params.address_resolver = Some(Arc::new(SeedAddressResolver));
         let (pending_requests_tx, pending_requests_rx) = mpsc::unbounded_channel();
         Arc::new(InnerCore {
+            in_recovery: AtomicBool::new(false),
             conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 connections,
@@ -7627,6 +7874,7 @@ pub(super) mod refresh_task_resolution_tests {
         let mut cluster_params = ClusterParams::default_for_test(None);
         cluster_params.address_resolver = Some(Arc::new(InitialRecoveryResolver));
         let core = Arc::new(InnerCore {
+            in_recovery: AtomicBool::new(false),
             conn_lock: ParkingLotRwLock::new(Connections::new(ConnectionsContainer::new(
                 slot_map,
                 ConnectionsMap(DashMap::new()),
@@ -7753,5 +8001,161 @@ pub(super) mod refresh_task_resolution_tests {
             .expect("connection found after superseding refresh");
         assert_eq!(found_address, address);
         assert_eq!(connection.port, 6381);
+    }
+
+    /// A core whose single slot range is served by `address`, with no connection installed.
+    fn core_with_single_node_slot_map(address: &str) -> Arc<InnerCore<RecordingConnection>> {
+        let core = core_with_non_idempotent_resolver();
+        core.conn_lock.write().slot_map = SlotMap::new(
+            vec![Slot::new(0, 16383, address.to_owned(), vec![])],
+            HashMap::new(),
+            ReadFromReplicaStrategy::AlwaysFromPrimary,
+        );
+        core
+    }
+
+    fn specific_node_routing(slot: u16) -> cluster_routing::RoutingInfo {
+        use crate::cluster_routing::{Route, SlotAddr};
+        cluster_routing::RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+            slot,
+            SlotAddr::Master,
+        )))
+    }
+
+    #[tokio::test]
+    async fn fast_path_connection_takes_ready_specific_node_route() {
+        let address = "resolved-node:6381";
+        let core = core_with_single_node_slot_map(address);
+        complete_refresh(&core, address, 6381);
+
+        let (found_address, connection) = core
+            .fast_path_connection(&specific_node_routing(100))
+            .expect("a ready single-node route takes the fast path");
+        assert_eq!(found_address, address);
+        assert_eq!(connection.await.port, 6381);
+    }
+
+    #[tokio::test]
+    async fn fast_path_connection_stands_down_during_recovery() {
+        let address = "resolved-node:6381";
+        let core = core_with_single_node_slot_map(address);
+        complete_refresh(&core, address, 6381);
+        let routing = specific_node_routing(100);
+
+        // While the event loop is in recovery, requests must reach it (and its recovery
+        // queue) even though the route's connection is in the map.
+        core.in_recovery.store(true, Ordering::SeqCst);
+        assert!(core.fast_path_connection(&routing).is_none());
+
+        core.in_recovery.store(false, Ordering::SeqCst);
+        assert!(core.fast_path_connection(&routing).is_some());
+    }
+
+    /// While a writer holds the slot map's write lock, the fast path declines at once
+    /// instead of blocking the caller's thread; the request goes to the event loop.
+    #[tokio::test]
+    async fn fast_path_connection_declines_while_the_slot_map_is_write_locked() {
+        let address = "resolved-node:6381";
+        let core = core_with_single_node_slot_map(address);
+        complete_refresh(&core, address, 6381);
+        let routing = specific_node_routing(100);
+
+        let write_guard = core.conn_lock.write();
+        let (result_tx, result_rx) = std::sync::mpsc::channel();
+        let lookup_core = core.clone();
+        let lookup_routing = routing.clone();
+        let lookup_thread = std::thread::spawn(move || {
+            let found = lookup_core
+                .fast_path_connection(&lookup_routing)
+                .map(|(address, _)| address);
+            result_tx.send(found).unwrap();
+        });
+        let locked_result = result_rx.recv_timeout(Duration::from_secs(2));
+        drop(write_guard);
+        lookup_thread.join().unwrap();
+        assert_eq!(
+            locked_result,
+            Ok(None),
+            "the lookup must not wait for the write lock"
+        );
+
+        let (found_address, _) = core
+            .fast_path_connection(&routing)
+            .expect("an uncontended lookup takes the fast path");
+        assert_eq!(found_address, address);
+    }
+
+    #[tokio::test]
+    async fn fast_path_connection_leaves_other_routes_to_the_event_loop() {
+        use crate::cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo};
+
+        let address = "resolved-node:6381";
+        let core = core_with_single_node_slot_map(address);
+
+        // No connection for the route yet: the event loop's `get_connection` waits for the
+        // node's refresh or picks a random node, so the fast path must not take it.
+        assert!(core
+            .fast_path_connection(&specific_node_routing(100))
+            .is_none());
+
+        complete_refresh(&core, address, 6381);
+        for routing in [
+            RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
+            RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary),
+            RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                host: "resolved-node".to_owned(),
+                port: 6381,
+            }),
+            RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+        ] {
+            assert!(
+                core.fast_path_connection(&routing).is_none(),
+                "{routing:?} must take the event loop"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn fast_path_connection_leaves_replica_rotation_to_the_event_loop() {
+        use crate::cluster_routing::{Route, SlotAddr};
+
+        let primary = "resolved-node:6381";
+        let replica = "resolved-node:6382";
+        let core = core_with_non_idempotent_resolver();
+        core.conn_lock.write().container = ConnectionsContainer::new(
+            SlotMap::new(
+                vec![Slot::new(
+                    0,
+                    16383,
+                    primary.to_owned(),
+                    vec![replica.to_owned()],
+                )],
+                HashMap::new(),
+                ReadFromReplicaStrategy::RoundRobin,
+            ),
+            ConnectionsMap(DashMap::new()),
+            ReadFromReplicaStrategy::RoundRobin,
+            0,
+        );
+        complete_refresh(&core, primary, 6381);
+        complete_refresh(&core, replica, 6382);
+        let routing = |slot_addr| {
+            cluster_routing::RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+                Route::new(100, slot_addr),
+            ))
+        };
+
+        // Writes go to the primary: no rotation, fast path.
+        let (address, _) = core
+            .fast_path_connection(&routing(SlotAddr::Master))
+            .expect("a primary route takes the fast path");
+        assert_eq!(address, primary);
+        // Reads rotate over the replicas: the event loop keeps the rotation exact.
+        assert!(core
+            .fast_path_connection(&routing(SlotAddr::ReplicaOptional))
+            .is_none());
+        assert!(core
+            .fast_path_connection(&routing(SlotAddr::ReplicaRequired))
+            .is_none());
     }
 }

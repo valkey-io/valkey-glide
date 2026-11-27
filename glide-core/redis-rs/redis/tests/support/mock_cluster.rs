@@ -377,8 +377,23 @@ pub fn respond_startup_with_config(
 }
 
 #[cfg(feature = "cluster-async")]
+thread_local! {
+    static HANDLER_CONNECTION_ID: std::cell::Cell<Option<usize>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// The id of the mock connection whose handler is running on this thread, for a handler that
+/// must tell connections apart: a replaced connection gets a new id. Set only while an async
+/// `req_packed_command` runs the handler.
+#[cfg(feature = "cluster-async")]
+pub fn handler_connection_id() -> Option<usize> {
+    HANDLER_CONNECTION_ID.with(|id| id.get())
+}
+
+#[cfg(feature = "cluster-async")]
 impl aio::ConnectionLike for MockConnection {
     fn req_packed_command<'a>(&'a mut self, cmd: &'a redis::Cmd) -> RedisFuture<'a, Value> {
+        let previous = HANDLER_CONNECTION_ID.with(|id| id.replace(Some(self.id)));
         let packed = cmd.get_packed_command();
         // A command sent after `ASKING` in the same write: the handler answers `ASKING`, and
         // its reply is dropped as `MultiplexedConnection` does, then answers the command.
@@ -390,13 +405,21 @@ impl aio::ConnectionLike for MockConnection {
             }
             _ => packed,
         };
+        // The handler runs when the command is sent, as a real connection writes it into its
+        // pipeline channel. Waiting for the reply then takes a unit of the task's tokio
+        // cooperative budget, as a real connection's reply channel does: a request polled after
+        // about 128 others in one task poll sends its command, then returns Pending (tokio defers
+        // its wake to the end of the task poll).
         let result = (self.handler)(&packed, self.port);
         ASKED_IN_SAME_WRITE.with(|asked| asked.set(false));
-        Box::pin(future::ready(
+        let result = result
+            .map_err(|err| err.and_then(|v| v.extract_error()))
+            .expect_err("Handler did not specify a response");
+        HANDLER_CONNECTION_ID.with(|id| id.set(previous));
+        Box::pin(async move {
+            tokio::task::consume_budget().await;
             result
-                .map_err(|err| err.and_then(|v| v.extract_error()))
-                .expect_err("Handler did not specify a response"),
-        ))
+        })
     }
 
     fn req_packed_commands<'a>(
