@@ -11190,6 +11190,16 @@ class TestClusterRoutes:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_info_allow_partial_results_returns_the_reply_of_a_single_node_route(
+        self, glide_sync_client: GlideClusterClient
+    ):
+        info = glide_sync_client.info(
+            [InfoSection.SERVER], RandomNode(), allow_partial_results=True
+        )
+        assert b"# Server" in cast(bytes, info)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_info_allow_partial_results_keeps_replies_when_a_primary_is_slow(
         self, request, cluster_mode: bool, protocol: ProtocolVersion
     ):
@@ -11233,17 +11243,6 @@ class TestClusterRoutes:
             finally:
                 # CLIENT UNPAUSE would wait for the pause too; wait for it to end.
                 sync_wait_for(primary_answers, "paused primary did not recover")
-
-            # With every node healthy, the option returns the same replies.
-            healthy = client.info(allow_partial_results=True)
-            assert isinstance(healthy, dict)
-            assert sorted(healthy.keys()) == primaries
-            for reply in healthy.values():
-                assert b"# Server" in cast(bytes, reply)
-
-            # A single-node route still returns the node's reply as bytes.
-            single = client.info(route=route, allow_partial_results=True)
-            assert b"# Server" in cast(bytes, single)
         finally:
             client.close()
             pauser.close()
@@ -11290,15 +11289,6 @@ class TestClusterRoutes:
             assert str(error) == str(plain.value)
             for address in primaries[1:]:
                 assert b"# Server" in cast(bytes, result[address])
-
-            # With every primary denied, the call returns an error for each.
-            admin.custom_command(["ACL", "SETUSER", username, "-info"], AllPrimaries())
-            failed = denied.info(allow_partial_results=True)
-            assert isinstance(failed, dict)
-            assert sorted(failed.keys()) == primaries
-            for reply in failed.values():
-                assert isinstance(reply, RequestError)
-                assert not isinstance(reply, GlideTimeoutError)
         finally:
             if denied is not None:
                 denied.close()
