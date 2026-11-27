@@ -19,7 +19,12 @@ class ClientTrackingInfo:
     """Client ID receiving invalidation messages, or ``-1`` if not redirecting."""
 
     prefixes: Set[str]
-    """Set of key prefixes monitored for invalidation."""
+    """Set of key prefixes monitored for invalidation.
+
+    Prefixes are decoded as UTF-8 with ``surrogateescape``, so a prefix that is not
+    valid UTF-8 (a ``bytes`` ``tracking_prefix``) round-trips through
+    ``prefix.encode("utf-8", "surrogateescape")``.
+    """
 
 
 def _parse_client_tracking_info(response: Mapping[bytes, Any]) -> ClientTrackingInfo:
@@ -27,7 +32,7 @@ def _parse_client_tracking_info(response: Mapping[bytes, Any]) -> ClientTracking
     return ClientTrackingInfo(
         flags={f.decode() for f in response[b"flags"]},
         redirect=int(response[b"redirect"]),
-        prefixes={p.decode() for p in response[b"prefixes"]},
+        prefixes={p.decode("utf-8", "surrogateescape") for p in response[b"prefixes"]},
     )
 
 

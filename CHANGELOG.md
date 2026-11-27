@@ -13,6 +13,7 @@
 * Python: The sync client can register CUDA device memory, such as a CUDA `torch.Tensor` or CuPy array, for RDMA when `RdmaConfiguration.device_memory` is set ([#7812](https://github.com/valkey-io/valkey-glide/pull/7812))
 * All: Add support for `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
 * Core: use atomics for telemetry instead of shared lock ([#7497](https://github.com/valkey-io/valkey-glide/pull/7497))
+* Core, Java, Python, Node, Go: Add `tracking_prefix` to the client-side cache configuration. With `server_assisted` enabled, GLIDE registers `CLIENT TRACKING ON BCAST PREFIX <prefix>` so a client only receives invalidations for its own key namespace, and the local cache only stores keys under that prefix (keys outside it always go to the server). Clients sharing the same `ClientSideCache` instance must use the same prefix. ([#7503](https://github.com/valkey-io/valkey-glide/issues/7503))
 
 ### Fixes
 

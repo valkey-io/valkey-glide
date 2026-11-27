@@ -6,6 +6,8 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
+from glide_shared.cache import ClientSideCache
+from glide_shared.commands.client_tracking import _parse_client_tracking_info
 from glide_shared.config import (
     AdvancedBaseClientConfiguration,
     AdvancedGlideClientConfiguration,
@@ -1482,6 +1484,103 @@ def test_recovery_requests_queue_size_in_proto():
     )
     request_custom = config_custom._create_a_protobuf_conn_request(cluster_mode=True)
     assert request_custom.recovery_requests_queue_size == 500
+
+
+# Client-side cache tracking prefix tests
+def test_client_side_cache_in_protobuf_request_without_tracking_prefix():
+    """Without a prefix the protobuf field is left unset, not sent as empty."""
+    cache = ClientSideCache.create(
+        max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True
+    )
+    config = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")], client_side_cache=cache
+    )
+    request = config._create_a_protobuf_conn_request()
+
+    assert request.client_side_cache.cache_id == cache.cache_id
+    assert request.client_side_cache.server_assisted is True
+    assert request.client_side_cache.HasField("tracking_prefix") is False
+
+
+@pytest.mark.parametrize(
+    "prefix, encoded",
+    [
+        ("xxx:", b"xxx:"),
+        (b"xxx:", b"xxx:"),
+        ("é:", b"\xc3\xa9:"),
+        (b"\xff\xfe:", b"\xff\xfe:"),
+    ],
+    ids=["str", "bytes", "non_ascii_str", "non_utf8_bytes"],
+)
+def test_client_side_cache_tracking_prefix_in_protobuf_request(prefix, encoded):
+    """A str prefix is sent UTF-8 encoded and a bytes prefix is sent unchanged."""
+    cache = ClientSideCache.create(
+        max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True, tracking_prefix=prefix
+    )
+    config = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")], client_side_cache=cache
+    )
+    request = config._create_a_protobuf_conn_request()
+
+    assert request.client_side_cache.HasField("tracking_prefix")
+    assert request.client_side_cache.tracking_prefix == encoded
+
+
+def test_client_side_cache_tracking_prefix_rules_are_left_to_the_core():
+    """Python forwards an empty prefix, or one without ``server_assisted``, untouched:
+    the core owns those rules and rejects them when the client is created."""
+    empty = ClientSideCache.create(
+        max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True, tracking_prefix=""
+    )
+    request = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")], client_side_cache=empty
+    )._create_a_protobuf_conn_request()
+    assert request.client_side_cache.HasField("tracking_prefix")
+    assert request.client_side_cache.tracking_prefix == b""
+
+    unassisted = ClientSideCache.create(
+        max_cache_kb=1024, entry_ttl_ms=0, tracking_prefix="xxx:"
+    )
+    request = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")], client_side_cache=unassisted
+    )._create_a_protobuf_conn_request()
+    assert request.client_side_cache.server_assisted is False
+    assert request.client_side_cache.tracking_prefix == b"xxx:"
+
+
+def test_client_side_cache_tracking_prefix_rejects_other_types():
+    """Only str and bytes are accepted, on construction and when set afterwards."""
+    with pytest.raises(TypeError, match="tracking_prefix must be a str or bytes"):
+        ClientSideCache.create(
+            max_cache_kb=1024,
+            entry_ttl_ms=0,
+            server_assisted=True,
+            tracking_prefix=123,  # type: ignore[arg-type]
+        )
+
+    # The dataclass is mutable, so the type is checked again when the request is built.
+    cache = ClientSideCache.create(
+        max_cache_kb=1024, entry_ttl_ms=0, server_assisted=True
+    )
+    cache.tracking_prefix = bytearray(b"xxx:")  # type: ignore[assignment]
+    config = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")], client_side_cache=cache
+    )
+    with pytest.raises(TypeError, match="tracking_prefix must be a str or bytes"):
+        config._create_a_protobuf_conn_request()
+
+
+def test_client_tracking_info_parser_keeps_non_utf8_prefix():
+    """A non-UTF-8 prefix is decoded with surrogateescape and round-trips to bytes."""
+    prefix = b"\xff\xfe:"
+    info = _parse_client_tracking_info(
+        {b"flags": [b"on", b"bcast"], b"redirect": 0, b"prefixes": [prefix, b"xxx:"]}
+    )
+    assert info.flags == {"on", "bcast"}
+    assert info.redirect == 0
+    assert "xxx:" in info.prefixes
+    (raw,) = info.prefixes - {"xxx:"}
+    assert raw.encode("utf-8", "surrogateescape") == prefix
 
 
 def test_connection_error_class_maps_only_configuration_type():

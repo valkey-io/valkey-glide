@@ -2211,6 +2211,58 @@ func TestNewClientSideCache_ServerAssistedExplicitlyDisabled(t *testing.T) {
 	assert.False(t, cache.ServerAssisted)
 }
 
+// TestClientSideCache_TrackingPrefix_Serialization verifies the Go-specific part of the tracking prefix:
+// the string is serialized as its exact bytes and an empty string leaves the optional protobuf field unset.
+func TestClientSideCache_TrackingPrefix_Serialization(t *testing.T) {
+	tests := []struct {
+		name     string
+		prefixes []string // applied in order with WithTrackingPrefix
+		expected []byte   // nil means the optional field must be unset
+	}{
+		{name: "not set by default", prefixes: nil, expected: nil},
+		{name: "text prefix", prefixes: []string{"xxx:"}, expected: []byte("xxx:")},
+		{name: "non-ASCII prefix is sent as UTF-8 bytes", prefixes: []string{"ñ:"}, expected: []byte{0xc3, 0xb1, ':'}},
+		{name: "non-UTF-8 prefix is kept byte for byte", prefixes: []string{"\xff\x00:"}, expected: []byte{0xff, 0x00, ':'}},
+		{name: "empty string clears a previous prefix", prefixes: []string{"xxx:", ""}, expected: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cache, err := NewClientSideCache(1024, 60000)
+			require.NoError(t, err)
+			cache.WithServerAssisted(true)
+			for _, prefix := range tt.prefixes {
+				assert.Same(t, cache, cache.WithTrackingPrefix(prefix), "WithTrackingPrefix must return the same instance")
+			}
+
+			pb := cache.toProtobuf()
+			if tt.expected == nil {
+				assert.Nil(t, pb.TrackingPrefix, "the optional protobuf field must be unset")
+			} else {
+				assert.Equal(t, tt.expected, pb.TrackingPrefix)
+			}
+		})
+	}
+}
+
+// TestClientSideCache_TrackingPrefix_SemanticValidationLeftToCore verifies that Go does not validate the
+// prefix rules itself: a prefix without ServerAssisted is serialized unchanged into the connection request,
+// so the Rust core is the one that rejects it when the client is created.
+func TestClientSideCache_TrackingPrefix_SemanticValidationLeftToCore(t *testing.T) {
+	cache, err := NewClientSideCache(1024, 60000)
+	require.NoError(t, err)
+	cache.WithTrackingPrefix("xxx:")
+
+	request, err := NewClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithClientSideCache(cache).
+		ToProtobuf()
+	require.NoError(t, err)
+	require.NotNil(t, request.ClientSideCache)
+	assert.False(t, request.ClientSideCache.ServerAssisted)
+	assert.Equal(t, []byte("xxx:"), request.ClientSideCache.TrackingPrefix)
+}
+
 func TestClientConfiguration_WithInflightRequestsLimit(t *testing.T) {
 	config := NewClientConfiguration().
 		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).

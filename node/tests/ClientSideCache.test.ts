@@ -13,6 +13,8 @@ import {
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     ClientSideCache,
+    ClientTrackingInfo,
+    ConfigurationError,
     EvictionPolicy,
     GlideClient,
     GlideClusterClient,
@@ -724,6 +726,76 @@ describe("ClientSideCache", () => {
             },
             TIMEOUT,
         );
+
+        describe("tracking prefix", () => {
+            // The prefix rules belong to GLIDE core: Node sends the configuration
+            // as is and reports the core error when the client is created.
+            it(
+                "createClient fails with the core error for a prefix without serverAssisted",
+                async () => {
+                    // Building the configuration object is not an error by itself.
+                    const cache = ClientSideCache.create(1024, 0, {
+                        trackingPrefix: "xxx:",
+                    });
+
+                    const error = await createStandaloneClientWithCache(
+                        ProtocolVersion.RESP3,
+                        cache,
+                    ).then(
+                        () => undefined,
+                        (e: unknown) => e,
+                    );
+
+                    expect(error).toBeInstanceOf(ConfigurationError);
+                    expect((error as ConfigurationError).message).toContain(
+                        "tracking_prefix requires server_assisted to be enabled",
+                    );
+                },
+                TIMEOUT,
+            );
+
+            it(
+                "caches only the keys under the prefix",
+                async () => {
+                    client = await createStandaloneClientWithCache(
+                        ProtocolVersion.RESP3,
+                        ClientSideCache.create(1024, 0, {
+                            serverAssisted: true,
+                            enableMetrics: true,
+                            trackingPrefix: "xxx:",
+                        }),
+                    );
+
+                    const info =
+                        (await client.clientTrackingInfo()) as ClientTrackingInfo;
+                    expect([...info.prefixes]).toEqual(["xxx:"]);
+
+                    const suffix = `prefix_smoke_${Date.now()}`;
+                    const tracked = `xxx:${suffix}`;
+                    const untracked = `zzz:${suffix}`;
+                    expect(await client.set(tracked, "t1")).toBe("OK");
+                    expect(await client.set(untracked, "u1")).toBe("OK");
+                    // A replica, when there is one, also broadcasts the invalidation
+                    // of the tracked write; give it time to replicate so that it does
+                    // not drop the entry cached below. The reply is not asserted, so
+                    // the test also runs against a server without replicas.
+                    await client.customCommand(["WAIT", "1", "1000"]);
+
+                    await waitFor(
+                        async () =>
+                            (await client.get(tracked)) === "t1" &&
+                            (await client.getCacheEntryCount()) === 1,
+                        "the key under the prefix was not cached",
+                    );
+
+                    // A key outside the prefix is read from the server and never cached.
+                    expect(await client.get(untracked)).toBe("u1");
+                    expect(await client.get(untracked)).toBe("u1");
+                    expect(await client.getCacheEntryCount()).toBe(1);
+                },
+                TIMEOUT,
+            );
+        });
     });
 
     describe("Cluster Client-side Cache Tests", () => {

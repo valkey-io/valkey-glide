@@ -201,6 +201,7 @@ mod tests {
             max_memory_bytes: max_memory,
             ttl: None,
             enable_metrics: true,
+            tracking_prefix: None,
         }
     }
 
@@ -209,6 +210,7 @@ mod tests {
             max_memory_bytes: max_memory,
             ttl: Some(ttl),
             enable_metrics: true,
+            tracking_prefix: None,
         }
     }
 
@@ -525,6 +527,7 @@ mod tests {
             max_memory_bytes: 10_000,
             ttl: None,
             enable_metrics: false,
+            tracking_prefix: None,
         };
         let cache = new_lfu_cache(config);
 

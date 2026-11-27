@@ -1,6 +1,7 @@
+use glide_core::request_type::RequestType;
 use glide_ffi::*;
 use rstest::rstest;
-use std::ffi::{CStr, CString, c_char};
+use std::ffi::{CStr, CString, c_char, c_ulong};
 use std::net::TcpListener;
 use std::process::{Child, Command};
 use std::ptr;
@@ -1465,6 +1466,296 @@ fn test_create_client_from_uri_invalid_eviction_policy() {
         free_connection_response(response as *mut ConnectionResponse);
         drop(Box::from_raw(client_type));
     }
+}
+
+/// Copies the bytes of a string reply.
+///
+/// # Safety
+///
+/// `response` must point to a live node of a reply returned by `command`.
+unsafe fn string_bytes(response: *const CommandResponse) -> Vec<u8> {
+    let node = unsafe { &*response };
+    assert!(
+        matches!(node.response_type, ResponseType::String),
+        "expected a string reply"
+    );
+    if node.string_value_len == 0 {
+        return Vec::new();
+    }
+    unsafe {
+        std::slice::from_raw_parts(
+            node.string_value as *const u8,
+            node.string_value_len as usize,
+        )
+    }
+    .to_vec()
+}
+
+/// Copies the strings of an array or set reply.
+///
+/// # Safety
+///
+/// `response` must point to a live node of a reply returned by `command`.
+unsafe fn string_items(response: *const CommandResponse) -> Vec<Vec<u8>> {
+    let node = unsafe { &*response };
+    let (items, len) = match node.response_type {
+        ResponseType::Array => (node.array_value, node.array_value_len),
+        ResponseType::Sets => (node.sets_value, node.sets_value_len),
+        _ => panic!("expected an array or a set reply"),
+    };
+    (0..len as usize)
+        .map(|i| unsafe { string_bytes(items.add(i)) })
+        .collect()
+}
+
+/// Creates a sync client from `options_json` and returns the flags and prefixes that
+/// `CLIENT TRACKINGINFO` reports for its connection, which is the tracking state the server
+/// registered from the parsed options.
+fn registered_tracking_info(options_json: &str) -> (Vec<String>, Vec<Vec<u8>>) {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(options_json).unwrap();
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+    if !conn_response.connection_error_message.is_null() {
+        let error = parse_error_msg(conn_response.connection_error_message);
+        panic!("Failed to create client for options {options_json}: {error}");
+    }
+    let client_ptr = conn_response.conn_ptr;
+    assert!(!client_ptr.is_null());
+
+    let args: [&[u8]; 2] = [b"CLIENT", b"TRACKINGINFO"];
+    let arg_ptrs = args.map(|arg| arg.as_ptr() as usize);
+    let arg_lens = args.map(|arg| arg.len() as c_ulong);
+    let result = unsafe {
+        command(
+            client_ptr,
+            0,
+            RequestType::CustomCommand,
+            args.len() as c_ulong,
+            arg_ptrs.as_ptr(),
+            arg_lens.as_ptr(),
+            ptr::null(),
+            0,
+            0,
+        )
+    };
+    assert!(!result.is_null());
+
+    let mut flags = None;
+    let mut prefixes = None;
+    unsafe {
+        let command_result = &*result;
+        assert!(
+            command_result.command_error.is_null(),
+            "CLIENT TRACKINGINFO failed"
+        );
+        let reply = &*command_result.response;
+        assert!(
+            matches!(reply.response_type, ResponseType::Map),
+            "expected a map reply from CLIENT TRACKINGINFO"
+        );
+        for i in 0..reply.array_value_len as usize {
+            let entry = &*reply.array_value.add(i);
+            match string_bytes(entry.map_key).as_slice() {
+                b"flags" => {
+                    flags = Some(
+                        string_items(entry.map_value)
+                            .iter()
+                            .map(|flag| String::from_utf8_lossy(flag).into_owned())
+                            .collect::<Vec<_>>(),
+                    );
+                }
+                b"prefixes" => prefixes = Some(string_items(entry.map_value)),
+                _ => {}
+            }
+        }
+
+        free_command_result(result);
+        close_client(client_ptr);
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+
+    (
+        flags.expect("CLIENT TRACKINGINFO reports flags"),
+        prefixes.expect("CLIENT TRACKINGINFO reports prefixes"),
+    )
+}
+
+/// The `tracking_prefix` option of a server-assisted cache is registered with the server
+/// unchanged.
+#[test]
+fn test_create_client_from_uri_with_server_assisted_cache_and_tracking_prefix() {
+    let (flags, prefixes) = registered_tracking_info(
+        r#"{
+        "protocol": "RESP3",
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0,
+            "server_assisted": true,
+            "tracking_prefix": "user:"
+        }
+    }"#,
+    );
+    assert!(flags.iter().any(|flag| flag == "bcast"), "flags: {flags:?}");
+    assert_eq!(prefixes, vec![b"user:".to_vec()]);
+}
+
+/// A server-assisted cache without a tracking prefix tracks every key.
+#[test]
+fn test_create_client_from_uri_with_server_assisted_cache_without_prefix() {
+    let (flags, prefixes) = registered_tracking_info(
+        r#"{
+        "protocol": "RESP3",
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0,
+            "server_assisted": true
+        }
+    }"#,
+    );
+    assert!(flags.iter().any(|flag| flag == "bcast"), "flags: {flags:?}");
+    assert_eq!(prefixes, vec![Vec::<u8>::new()], "empty prefix = all keys");
+}
+
+/// Runs `create_client_from_uri` with the given JSON options and returns the error message.
+fn client_side_cache_error(options_json: &str) -> String {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(options_json).unwrap();
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+    assert!(
+        !conn_response.connection_error_message.is_null(),
+        "expected client creation to fail for options: {options_json}"
+    );
+    assert!(conn_response.conn_ptr.is_null());
+    let error = parse_error_msg(conn_response.connection_error_message);
+
+    unsafe {
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+    error
+}
+
+/// A tracking prefix is rejected unless the cache is server-assisted.
+#[test]
+fn test_create_client_from_uri_tracking_prefix_requires_server_assisted() {
+    let error = client_side_cache_error(
+        r#"{
+        "protocol": "RESP3",
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0,
+            "tracking_prefix": "user:"
+        }
+    }"#,
+    );
+    assert!(
+        error.contains("tracking_prefix requires server_assisted"),
+        "expected server_assisted error, got: {error}"
+    );
+}
+
+/// An empty tracking prefix is rejected.
+#[test]
+fn test_create_client_from_uri_tracking_prefix_must_not_be_empty() {
+    let error = client_side_cache_error(
+        r#"{
+        "protocol": "RESP3",
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0,
+            "server_assisted": true,
+            "tracking_prefix": ""
+        }
+    }"#,
+    );
+    assert!(
+        error.contains("tracking_prefix must not be empty"),
+        "expected empty prefix error, got: {error}"
+    );
+}
+
+/// A tracking prefix that is not a string is rejected.
+#[test]
+fn test_create_client_from_uri_tracking_prefix_must_be_a_string() {
+    let error = client_side_cache_error(
+        r#"{
+        "protocol": "RESP3",
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0,
+            "server_assisted": true,
+            "tracking_prefix": 42
+        }
+    }"#,
+    );
+    assert!(
+        error.contains("tracking_prefix must be a string"),
+        "expected type error, got: {error}"
+    );
+}
+
+/// A `server_assisted` option that is not a boolean is rejected.
+#[test]
+fn test_create_client_from_uri_server_assisted_must_be_a_boolean() {
+    let error = client_side_cache_error(
+        r#"{
+        "protocol": "RESP3",
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0,
+            "server_assisted": "yes"
+        }
+    }"#,
+    );
+    assert!(
+        error.contains("server_assisted must be a boolean"),
+        "expected type error, got: {error}"
+    );
+}
+
+/// A server-assisted cache is rejected when the protocol is not RESP3.
+#[test]
+fn test_create_client_from_uri_server_assisted_requires_resp3() {
+    let error = client_side_cache_error(
+        r#"{
+        "protocol": "RESP2",
+        "client_side_cache": {
+            "max_cache_kb": 1024,
+            "entry_ttl_ms": 0,
+            "server_assisted": true
+        }
+    }"#,
+    );
+    assert!(
+        error.contains("RESP3"),
+        "expected RESP3 requirement error, got: {error}"
+    );
 }
 
 #[test]

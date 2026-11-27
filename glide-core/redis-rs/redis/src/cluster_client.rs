@@ -53,6 +53,7 @@ struct BuilderParams {
     tcp_nodelay: bool,
     cache: Option<Arc<dyn GlideCache>>,
     server_assisted_cache: bool,
+    tracking_prefix: Option<Vec<u8>>,
     #[cfg(feature = "rdma")]
     rdma_fabric: Option<glide_rdma::RdmaFabric>,
     address_resolver: Option<Arc<dyn AddressResolver>>,
@@ -163,6 +164,7 @@ pub struct ClusterParams {
     pub(crate) tcp_nodelay: bool,
     pub(crate) cache: Option<Arc<dyn GlideCache>>,
     pub(crate) server_assisted_cache: bool,
+    pub(crate) tracking_prefix: Option<Vec<u8>>,
     #[cfg(feature = "rdma")]
     pub(crate) rdma_fabric: Option<glide_rdma::RdmaFabric>,
     /// Optional callback for resolving addresses before connection.
@@ -210,6 +212,7 @@ impl ClusterParams {
             tcp_nodelay: value.tcp_nodelay,
             cache: value.cache,
             server_assisted_cache: value.server_assisted_cache,
+            tracking_prefix: value.tracking_prefix,
             #[cfg(feature = "rdma")]
             rdma_fabric: value.rdma_fabric,
             address_resolver: value.address_resolver,
@@ -247,6 +250,7 @@ impl ClusterParams {
             tcp_nodelay: false,
             cache: None,
             server_assisted_cache: false,
+            tracking_prefix: None,
             #[cfg(feature = "rdma")]
             rdma_fabric: None,
             address_resolver: None,
@@ -659,6 +663,13 @@ impl ClusterClientBuilder {
     /// Sets whether server-assisted client-side caching (CLIENT TRACKING) is enabled.
     pub fn server_assisted_cache(mut self, enabled: bool) -> ClusterClientBuilder {
         self.builder_params.server_assisted_cache = enabled;
+        self
+    }
+
+    /// Sets the key prefix registered with `CLIENT TRACKING ON BCAST PREFIX` on every node
+    /// connection. `None` tracks all keys. Only used when `server_assisted_cache` is enabled.
+    pub fn tracking_prefix(mut self, prefix: Option<Vec<u8>>) -> ClusterClientBuilder {
+        self.builder_params.tracking_prefix = prefix;
         self
     }
 
