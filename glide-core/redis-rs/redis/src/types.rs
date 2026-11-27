@@ -411,11 +411,57 @@ impl From<RedisError> for ServerError {
 /// first word, so no reply from a server can carry it.
 pub const TIMEOUT_ERROR_CODE: &str = "Client timeout";
 
+/// Start of the extension code of a [`ServerError`] that holds a client-side
+/// connection error as a value, followed by the error kind and, for an I/O
+/// error, its `io::ErrorKind` (`Client IoError ConnectionReset`). Like
+/// [`TIMEOUT_ERROR_CODE`], no reply from a server can carry it.
+const CLIENT_ERROR_CODE_PREFIX: &str = "Client ";
+
+/// The client-side errors whose kind a [`ServerError`] keeps: those that say
+/// the connection to the node failed.
+const KEPT_CLIENT_ERROR_KINDS: [ErrorKind; 5] = [
+    ErrorKind::IoError,
+    ErrorKind::FatalSendError,
+    ErrorKind::FatalReceiveError,
+    ErrorKind::ProtocolDesync,
+    ErrorKind::ConnectionNotFoundForRoute,
+];
+
+/// Description of a connection error restored from a [`ServerError`].
+const CLIENT_ERROR_DESCRIPTION: &str = "Node request failed";
+
+/// The kind a [`ServerError`] code restores: an I/O error kind or an error kind.
+fn client_error_kind(code: &str) -> Option<Result<io::ErrorKind, ErrorKind>> {
+    if code == TIMEOUT_ERROR_CODE {
+        return Some(Ok(io::ErrorKind::TimedOut));
+    }
+    let name = code.strip_prefix(CLIENT_ERROR_CODE_PREFIX)?;
+    if let Some(io_kind) = name.strip_prefix("IoError ") {
+        return Some(Ok(match io_kind {
+            "ConnectionRefused" => io::ErrorKind::ConnectionRefused,
+            "NotFound" => io::ErrorKind::NotFound,
+            "ConnectionReset" => io::ErrorKind::ConnectionReset,
+            "ConnectionAborted" => io::ErrorKind::ConnectionAborted,
+            "NotConnected" => io::ErrorKind::NotConnected,
+            "BrokenPipe" => io::ErrorKind::BrokenPipe,
+            "UnexpectedEof" => io::ErrorKind::UnexpectedEof,
+            "PermissionDenied" => io::ErrorKind::PermissionDenied,
+            "Unsupported" => io::ErrorKind::Unsupported,
+            _ => io::ErrorKind::Other,
+        }));
+    }
+    KEPT_CLIENT_ERROR_KINDS
+        .into_iter()
+        .find(|kind| kind.to_string() == name)
+        .map(Err)
+}
+
 impl ServerError {
-    /// Same as `ServerError::from`, except that a timeout gets
-    /// [`TIMEOUT_ERROR_CODE`] so it is still a timeout after the round trip,
-    /// and a server's error reply keeps its message as the server sent it.
-    pub(crate) fn from_error_keeping_timeout(error: RedisError) -> Self {
+    /// Same as `ServerError::from`, except that a client-side timeout or
+    /// connection error gets a code that restores its kind when converted
+    /// back, and a server's error reply keeps its message as the server sent
+    /// it. This is how partial results hold a node's error.
+    pub fn from_error_keeping_kind(error: RedisError) -> Self {
         if error.is_timeout() {
             return ServerError::ExtensionError {
                 code: TIMEOUT_ERROR_CODE.into(),
@@ -431,8 +477,23 @@ impl ServerError {
                     detail: error.detail().map(str::to_string),
                 };
             }
+            return error.into();
         }
-        error.into()
+        if !KEPT_CLIENT_ERROR_KINDS.contains(&error.kind()) {
+            return error.into();
+        }
+        let (code, detail) = match error.repr {
+            ErrorRepr::IoError(err) => (format!("IoError {:?}", err.kind()), err.to_string()),
+            ErrorRepr::WithDescription(kind, desc) => (kind.to_string(), desc.to_string()),
+            ErrorRepr::WithDescriptionAndDetail(kind, desc, detail) => {
+                (kind.to_string(), format!("{desc}: {detail}"))
+            }
+            ErrorRepr::ExtensionError(code, detail) => (code, detail),
+        };
+        ServerError::ExtensionError {
+            code: format!("{CLIENT_ERROR_CODE_PREFIX}{code}"),
+            detail: Some(detail),
+        }
     }
 }
 
@@ -449,23 +510,25 @@ impl From<tokio::time::error::Elapsed> for RedisError {
 /// [`RedisError::command_not_sent`] rather than this description.
 pub const SERVER_ERROR_DESCRIPTION: &str = "An error was signalled by the server:";
 
-/// Only [`TIMEOUT_ERROR_CODE`] restores a client-side error. Any other
+/// A client-side timeout or connection error held by
+/// [`ServerError::from_error_keeping_kind`] gets its kind back. Any other
 /// client-side error held in a [`ServerError`] comes back as a server reply
 /// (`is_server_reply()` is true): an [`ErrorKind::ExtensionError`] whose code
-/// names the error (`IoError`, for example), or, for a kind that servers also
-/// send such as `ResponseError`, that kind with the server-error description.
+/// names the error, or, for a kind that servers also send such as
+/// `ResponseError`, that kind with the server-error description.
 impl From<ServerError> for RedisError {
     fn from(value: ServerError) -> Self {
         // TODO - Consider changing RedisError to explicitly represent whether an error came from the server or not. Today it is only implied.
         match value {
-            ServerError::ExtensionError { code, detail } if code == TIMEOUT_ERROR_CODE => {
-                io::Error::new(
-                    io::ErrorKind::TimedOut,
-                    detail.unwrap_or_else(|| "timed out".into()),
-                )
-                .into()
-            }
-            ServerError::ExtensionError { code, detail } => make_extension_error(code, detail),
+            ServerError::ExtensionError { code, detail } => match client_error_kind(&code) {
+                Some(Ok(kind)) => {
+                    io::Error::new(kind, detail.unwrap_or_else(|| kind.to_string())).into()
+                }
+                Some(Err(kind)) => {
+                    (kind, CLIENT_ERROR_DESCRIPTION, detail.unwrap_or_default()).into()
+                }
+                None => make_extension_error(code, detail),
+            },
             ServerError::KnownError { kind, detail } => {
                 let desc = SERVER_ERROR_DESCRIPTION;
                 let kind: ErrorKind = kind.into();

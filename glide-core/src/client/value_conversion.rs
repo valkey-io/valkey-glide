@@ -1459,7 +1459,10 @@ pub(crate) fn convert_to_expected_type(
         ExpectedReturnType::SingleOrMultiNode(value_type, value_checker) =>  match value {
             Value::Map(ref map) => match value_checker {
                     Some(func) => {
-                        if !map.is_empty() && func(map[0].clone().1) {
+                        // A partial result can hold a failed node's error, so
+                        // check the shape of the first node that replied.
+                        let reply = map.iter().map(|(_, v)| v).find(|v| !matches!(v, Value::ServerError(_)));
+                        if reply.is_some_and(|v| func(v.clone())) {
                             convert_to_expected_type(value, Some(ExpectedReturnType::Map { key_type: &None, value_type }))
                         } else {
                             Ok(value)
@@ -5889,6 +5892,29 @@ mod tests {
 
         let result = convert_to_expected_type(multi_node_input, conversion_type).unwrap();
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_memory_stats_multi_node_resp2_converts_past_a_failed_node() {
+        let cmd = redis::cmd("MEMORY STATS");
+        let node = |address: &[u8], value| (Value::BulkString(address.to_vec().into()), value);
+        let failed = Value::ServerError(redis::ServerError::ExtensionError {
+            code: redis::TIMEOUT_ERROR_CODE.into(),
+            detail: None,
+        });
+        let stat = || Value::BulkString(b"keys.count".to_vec().into());
+        let partial = Value::Map(vec![
+            node(b"node1:6379", failed.clone()),
+            node(b"node2:6379", Value::Array(vec![stat(), Value::Int(3)])),
+        ]);
+
+        assert_eq!(
+            convert_to_expected_type(partial, expected_type_for_cmd(&cmd)).unwrap(),
+            Value::Map(vec![
+                node(b"node1:6379", failed),
+                node(b"node2:6379", Value::Map(vec![(stat(), Value::Int(3))])),
+            ])
+        );
     }
 
     #[test]

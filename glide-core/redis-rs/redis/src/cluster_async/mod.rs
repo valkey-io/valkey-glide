@@ -2666,7 +2666,7 @@ where
     /// answered by then is reported as timed out and its receiver is dropped,
     /// so its sub-request is not retried; a reply already in flight still ends
     /// at the connection's response timeout. Errors are stored as
-    /// `Value::ServerError`, and timeouts keep [`crate::TIMEOUT_ERROR_CODE`].
+    /// `Value::ServerError` by [`ServerError::from_error_keeping_kind`].
     /// The map has an entry for every node even when all of them failed.
     ///
     /// Also returns whether any node was unreachable ([`is_node_unreachable`]).
@@ -2698,7 +2698,7 @@ where
                     Ok(Ok(_)) => unreachable!(
                         "collect_partial_results only handles `Response::Single` for multi-node commands"
                     ),
-                    Ok(Err(err)) => Value::ServerError(ServerError::from_error_keeping_timeout(err)),
+                    Ok(Err(err)) => Value::ServerError(ServerError::from_error_keeping_kind(err)),
                     Err(_) => Value::ServerError(
                         RedisError::from((
                             ErrorKind::ResponseError,
@@ -5496,6 +5496,41 @@ mod partial_results_tests {
                 .await
                 .unwrap();
             assert_eq!(any_unreachable, expected, "{label}");
+        }
+    }
+
+    #[tokio::test]
+    async fn connection_error_entries_keep_the_plain_error_kind() {
+        let plain_errors: Vec<RedisError> = vec![
+            std::io::Error::from(std::io::ErrorKind::ConnectionReset).into(),
+            (
+                ErrorKind::FatalReceiveError,
+                "Failed to receive",
+                "closed".into(),
+            )
+                .into(),
+            (ErrorKind::FatalSendError, "Connection dropped").into(),
+            (ErrorKind::ProtocolDesync, "Response synchronization lost").into(),
+            (
+                ErrorKind::ConnectionNotFoundForRoute,
+                "Connection not found",
+            )
+                .into(),
+        ];
+        for plain in plain_errors {
+            let class = |e: &RedisError| {
+                (
+                    e.kind(),
+                    e.is_io_error(),
+                    e.is_connection_dropped(),
+                    e.is_unrecoverable_error(),
+                    e.is_server_reply(),
+                )
+            };
+            let expected = class(&plain);
+            let entries = entries(collect(vec![ready("a:1", Err(plain))], None).await.unwrap());
+            let entry = error_of(&entries[0].1);
+            assert_eq!(class(&entry), expected, "{entry:?}");
         }
     }
 
