@@ -26,17 +26,47 @@ struct CommandResponse {
     arena_ptr: *mut std::ffi::c_void,
 }
 
-/// Cached reference to glide_shared.exceptions.RequestError class.
+/// Cached reference to an attribute of glide_shared.exceptions.
 /// Wrapped for Send+Sync safety — the pointer is valid for the process lifetime.
 struct PyClassPtr(*mut ffi::PyObject);
 unsafe impl Sync for PyClassPtr {}
 unsafe impl Send for PyClassPtr {}
 
 static REQUEST_ERROR_CLASS: std::sync::OnceLock<PyClassPtr> = std::sync::OnceLock::new();
+static GET_REQUEST_ERROR_CLASS: std::sync::OnceLock<PyClassPtr> = std::sync::OnceLock::new();
 
-/// Get (and cache) the RequestError class from glide_shared.exceptions.
-unsafe fn get_request_error_class() -> *mut ffi::PyObject {
-    REQUEST_ERROR_CLASS
+/// The exception class for glide-core's `RequestErrorType` `error_type` (an error node's
+/// `int_value`), from `glide_shared.exceptions.get_request_error_class`, the mapping top-level
+/// errors use. Returns a new reference, or null with no Python error set.
+unsafe fn request_error_class(error_type: i64) -> *mut ffi::PyObject {
+    unsafe {
+        // `Unspecified` (0), the type of every nested error outside partial results, maps to
+        // RequestError; the cached class saves a Python call for each of those errors.
+        if error_type == 0 {
+            let cls = get_exceptions_attr(&REQUEST_ERROR_CLASS, c"RequestError");
+            if !cls.is_null() {
+                ffi::Py_INCREF(cls);
+            }
+            return cls;
+        }
+        let lookup = get_exceptions_attr(&GET_REQUEST_ERROR_CLASS, c"get_request_error_class");
+        if lookup.is_null() {
+            return std::ptr::null_mut();
+        }
+        let cls = ffi::PyObject_CallFunction(lookup, c"L".as_ptr(), error_type);
+        if cls.is_null() {
+            ffi::PyErr_Clear();
+        }
+        cls
+    }
+}
+
+/// Get (and cache in `cache`) the attribute `name` of glide_shared.exceptions.
+unsafe fn get_exceptions_attr(
+    cache: &std::sync::OnceLock<PyClassPtr>,
+    name: &std::ffi::CStr,
+) -> *mut ffi::PyObject {
+    cache
         .get_or_init(|| unsafe {
             let mod_name =
                 ffi::PyUnicode_FromStringAndSize(c"glide_shared.exceptions".as_ptr(), 23);
@@ -50,14 +80,7 @@ unsafe fn get_request_error_class() -> *mut ffi::PyObject {
                 ffi::PyErr_Clear();
                 return PyClassPtr(std::ptr::null_mut());
             }
-            let attr = ffi::PyUnicode_FromStringAndSize(c"RequestError".as_ptr(), 12);
-            if attr.is_null() {
-                ffi::Py_DECREF(module);
-                ffi::PyErr_Clear();
-                return PyClassPtr(std::ptr::null_mut());
-            }
-            let cls = ffi::PyObject_GetAttr(module, attr);
-            ffi::Py_DECREF(attr);
+            let cls = ffi::PyObject_GetAttrString(module, name.as_ptr());
             ffi::Py_DECREF(module);
             if cls.is_null() {
                 ffi::PyErr_Clear();
@@ -165,14 +188,16 @@ unsafe fn convert(resp: *const CommandResponse) -> *mut ffi::PyObject {
             }
         },
         9 => unsafe {
-            // Error response: create a RequestError(message) instance
-            let cls = get_request_error_class();
+            // Error response: an instance of the class its error type maps to, such as
+            // TimeoutError(message) or ConnectionError(message), else RequestError(message)
+            let cls = request_error_class(r.int_value);
             if cls.is_null() {
                 // Fallback: return raw bytes if class not found
                 return ffi::PyBytes_FromStringAndSize(r.string_value, r.string_value_len as isize);
             }
             let msg = ffi::PyUnicode_FromStringAndSize(r.string_value, r.string_value_len as isize);
             if msg.is_null() {
+                ffi::Py_DECREF(cls);
                 ffi::PyErr_Clear();
                 return {
                     let n = ffi::Py_None();
@@ -183,6 +208,7 @@ unsafe fn convert(resp: *const CommandResponse) -> *mut ffi::PyObject {
             let args = ffi::PyTuple_New(1);
             if args.is_null() {
                 ffi::Py_DECREF(msg);
+                ffi::Py_DECREF(cls);
                 ffi::PyErr_Clear();
                 return {
                     let n = ffi::Py_None();
@@ -193,6 +219,7 @@ unsafe fn convert(resp: *const CommandResponse) -> *mut ffi::PyObject {
             ffi::PyTuple_SetItem(args, 0, msg); // steals ref to msg
             let obj = ffi::PyObject_CallObject(cls, args);
             ffi::Py_DECREF(args);
+            ffi::Py_DECREF(cls);
             if obj.is_null() {
                 ffi::PyErr_Clear();
                 return {

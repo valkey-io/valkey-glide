@@ -14,6 +14,7 @@
 * All: Add support for `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
 * Core: use atomics for telemetry instead of shared lock ([#7497](https://github.com/valkey-io/valkey-glide/pull/7497))
 * Core, Go: InfoWithPartialResults for the cluster client ([#7756](https://github.com/valkey-io/valkey-glide/pull/7756))
+* Python: allow_partial_results option for cluster info() ([#7757](https://github.com/valkey-io/valkey-glide/pull/7757))
 
 ### Fixes
 
