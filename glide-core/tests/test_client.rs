@@ -318,6 +318,135 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    async fn send_response_option_command(client: &mut Client, args: &[&str]) -> Value {
+        let mut command = redis::cmd(args[0]);
+        command.arg(&args[1..]);
+        client
+            .send_command(&mut command, None)
+            .await
+            .unwrap_or_else(|error| panic!("{args:?}: {error}"))
+    }
+
+    fn response_option_string(value: &str) -> Value {
+        Value::BulkString(value.as_bytes().to_vec().into())
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_response_option_keywords_as_data(
+        #[values(ProtocolVersion::RESP2, ProtocolVersion::RESP3)] protocol: ProtocolVersion,
+    ) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                false,
+                TestConfiguration {
+                    shared_server: false,
+                    protocol,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let client = &mut test_basics.client;
+            for args in [
+                &["SET", "IDX", "abc"][..],
+                &["SET", "other", "abc"],
+                &["HSET", "WITHVALUES", "field", "value"],
+                &["ZADD", "WITHSCORES", "1", "WITHSCORE"],
+                &["GEOADD", "geo", "0", "0", "WITHDIST"],
+                &["XADD", "FULL", "1-0", "field", "value"],
+                &["XGROUP", "CREATE", "FULL", "group", "0"],
+                &[
+                    "XREADGROUP",
+                    "GROUP",
+                    "group",
+                    "source",
+                    "STREAMS",
+                    "FULL",
+                    ">",
+                ],
+            ] {
+                send_response_option_command(client, args).await;
+            }
+            let fields = Value::Array(vec![Value::Array(vec![
+                response_option_string("field"),
+                response_option_string("value"),
+            ])]);
+            let is_7_0_or_newer = version_greater_or_equal(client, "7.0.0").await;
+            let mut autoclaim = vec![
+                response_option_string("0-0"),
+                Value::Map(vec![(response_option_string("1-0"), fields.clone())]),
+            ];
+            if is_7_0_or_newer {
+                autoclaim.push(Value::Array(vec![]));
+            }
+            // One regression per command in #7631; option order, case and NUL
+            // aliases are covered by the converter unit table.
+            let mut cases: Vec<(&[&str], Value)> = vec![
+                (
+                    &["XCLAIM", "FULL", "group", "JUSTID", "0", "1-0"],
+                    Value::Map(vec![(Value::SimpleString("1-0".into()), fields)]),
+                ),
+                (
+                    &["XAUTOCLAIM", "FULL", "group", "JUSTID", "0", "0-0"],
+                    Value::Array(autoclaim),
+                ),
+                (
+                    &[
+                        "GEOSEARCH",
+                        "geo",
+                        "FROMMEMBER",
+                        "WITHDIST",
+                        "BYRADIUS",
+                        "1",
+                        "km",
+                    ],
+                    Value::Array(vec![response_option_string("WITHDIST")]),
+                ),
+                (
+                    &["ZRANGE", "WITHSCORES", "0", "-1"],
+                    Value::Array(vec![response_option_string("WITHSCORE")]),
+                ),
+                (
+                    &["ZRANDMEMBER", "WITHSCORES", "1"],
+                    Value::Array(vec![response_option_string("WITHSCORE")]),
+                ),
+                (
+                    &["HRANDFIELD", "WITHVALUES", "1"],
+                    Value::Array(vec![response_option_string("field")]),
+                ),
+                (&["ZRANK", "WITHSCORES", "WITHSCORE"], Value::Int(0)),
+                (&["ZADD", "members", "1", "INCR"], Value::Int(1)),
+            ];
+            if is_7_0_or_newer {
+                cases.push((&["LCS", "IDX", "other"], response_option_string("abc")));
+            }
+            for (args, expected) in cases {
+                assert_eq!(
+                    send_response_option_command(client, args).await,
+                    expected,
+                    "{args:?}"
+                );
+            }
+            let value = send_response_option_command(client, &["XINFO", "STREAM", "FULL"]).await;
+            let Value::Map(entries) = value else {
+                panic!("Expected XINFO STREAM map, got {value:?}")
+            };
+            assert!(entries.contains(&(response_option_string("length"), Value::Int(1))));
+            assert!(entries.contains(&(response_option_string("groups"), Value::Int(1))));
+            assert!(entries.contains(&(
+                response_option_string("first-entry"),
+                Value::Array(vec![
+                    response_option_string("1-0"),
+                    Value::Array(vec![
+                        response_option_string("field"),
+                        response_option_string("value")
+                    ])
+                ])
+            )));
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -376,6 +505,38 @@ pub(crate) mod shared_client_tests {
 
     // TODO #7698: Add a test that a password updated during a reconnect is used by the next
     // reconnect attempt, for standalone and cluster.
+    #[rstest]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_update_connection_password_timeout_is_a_timeout_error() {
+        block_on_all(async {
+            // Accepts connections but never answers, so the lazy connect inside the
+            // password update outlasts the request timeout.
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = listener.local_addr().unwrap().port();
+            tokio::spawn(async move {
+                let mut held = Vec::new();
+                while let Ok((stream, _)) = listener.accept().await {
+                    held.push(stream);
+                }
+            });
+            let connection_request = create_connection_request(
+                &[redis::ConnectionAddr::Tcp("127.0.0.1".to_string(), port)],
+                &TestConfiguration {
+                    lazy_connect: true,
+                    request_timeout: Some(300),
+                    ..Default::default()
+                },
+            );
+            let mut client = Client::new(connection_request.into(), None).await.unwrap();
+
+            let err = client
+                .update_connection_password(Some("password".to_string()), false)
+                .await
+                .expect_err("the password update should time out");
+            assert!(err.is_timeout(), "expected a timeout error, got: {err}");
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
