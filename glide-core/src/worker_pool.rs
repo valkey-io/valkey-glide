@@ -23,6 +23,9 @@ const SOCKET_LISTENER_WORKERS_ENV: &str = "GLIDE_SOCKET_LISTENER_WORKERS";
 /// machines with up to eight CPUs and bounds the cost everywhere else.
 const DEFAULT_MAX_SOCKET_LISTENER_WORKERS: usize = 8;
 
+/// Upper bound on an explicit override, so a wrong value degrades to a bounded failure.
+const MAX_SOCKET_LISTENER_WORKERS: usize = 64;
+
 /// The size of the worker pool for the socket listener's client connections, and for
 /// every wrapper worker pool that shares this sizing (the Node client pool).
 pub fn socket_listener_pool_size() -> usize {
@@ -36,15 +39,13 @@ pub fn socket_listener_pool_size() -> usize {
 /// `GLIDE_TOKIO_WORKER_THREADS`, an unparsable value falls back to the default and `0` is
 /// raised to `1`, since `LocalPoolHandle::new` panics on an empty pool.
 ///
-/// An explicit value is not capped, like `GLIDE_TOKIO_WORKER_THREADS`: whoever can set the
-/// environment variable already controls the process configuration, and a value too large
-/// for the host fails a worker creation and is reported through the init callback (or, if
-/// a cgroup OOM kill lands first, kills the process).
+/// An explicit value may exceed the default cap but is clamped to
+/// [`MAX_SOCKET_LISTENER_WORKERS`].
 fn socket_listener_pool_size_from(override_value: Option<&str>, num_cpus: usize) -> usize {
     override_value
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or_else(|| num_cpus.clamp(1, DEFAULT_MAX_SOCKET_LISTENER_WORKERS))
-        .max(1)
+        .clamp(1, MAX_SOCKET_LISTENER_WORKERS)
 }
 
 #[cfg(test)]
@@ -66,9 +67,21 @@ mod tests {
     }
 
     #[test]
-    fn pool_size_override_is_not_capped() {
+    fn pool_size_override_under_the_cap_is_honored() {
         assert_eq!(socket_listener_pool_size_from(Some("2"), 288), 2);
         assert_eq!(socket_listener_pool_size_from(Some("32"), 4), 32);
+    }
+
+    #[test]
+    fn pool_size_override_is_capped_at_max_socket_listener_workers() {
+        assert_eq!(
+            socket_listener_pool_size_from(Some("64"), 4),
+            MAX_SOCKET_LISTENER_WORKERS
+        );
+        assert_eq!(
+            socket_listener_pool_size_from(Some("65"), 4),
+            MAX_SOCKET_LISTENER_WORKERS
+        );
     }
 
     #[test]
