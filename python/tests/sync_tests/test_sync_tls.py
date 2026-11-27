@@ -20,6 +20,7 @@ from tests.utils.utils import (
 )
 
 
+@pytest.mark.requires_tcp
 class TestSyncTls:
     """
     Integration tests for TLS with custom root certificates.

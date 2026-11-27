@@ -29,6 +29,18 @@ use tokio::runtime::Runtime;
 
 type Handler = Arc<dyn Fn(&[u8], u16) -> Result<(), RedisResult<Value>> + Send + Sync>;
 
+const ASKING_COMMAND: &[u8] = b"*1\r\n$6\r\nASKING\r\n";
+
+std::thread_local! {
+    static ASKED_IN_SAME_WRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Whether the command the handler is answering came in the same write as `ASKING`, right
+/// after it, as a node needs it to honour `ASKING` when other requests share the connection.
+pub fn asked_in_same_write() -> bool {
+    ASKED_IN_SAME_WRITE.with(|asked| asked.get())
+}
+
 pub struct MockConnectionBehavior {
     pub id: String,
     pub handler: Handler,
@@ -135,6 +147,16 @@ pub struct MockConnection {
 
 #[cfg(feature = "cluster-async")]
 impl cluster_async::Connect for MockConnection {
+    // `req_packed_command` splits off the `ASKING` prefix and drops its reply.
+    // `req_packed_commands` never sees `ASKING`: it hands the handler the pipeline's own
+    // commands from `offset`, and for an atomic pipeline `offset` is `len + 1`, so it answers
+    // nothing. The opt-in is therefore not exercised for transactions here: the transaction
+    // retried after ASK is covered by `test_async_cluster_ask_redirect_under_concurrent_load`
+    // and by MultiplexedConnection's unit tests.
+    fn sends_asking_with_command() -> bool {
+        true
+    }
+
     fn connect<'a, T>(
         info: T,
         _response_timeout: Duration,
@@ -357,8 +379,21 @@ pub fn respond_startup_with_config(
 #[cfg(feature = "cluster-async")]
 impl aio::ConnectionLike for MockConnection {
     fn req_packed_command<'a>(&'a mut self, cmd: &'a redis::Cmd) -> RedisFuture<'a, Value> {
+        let packed = cmd.get_packed_command();
+        // A command sent after `ASKING` in the same write: the handler answers `ASKING`, and
+        // its reply is dropped as `MultiplexedConnection` does, then answers the command.
+        let packed = match packed.strip_prefix(ASKING_COMMAND) {
+            Some(command) if !command.is_empty() => {
+                let _ = (self.handler)(ASKING_COMMAND, self.port);
+                ASKED_IN_SAME_WRITE.with(|asked| asked.set(true));
+                command.to_vec()
+            }
+            _ => packed,
+        };
+        let result = (self.handler)(&packed, self.port);
+        ASKED_IN_SAME_WRITE.with(|asked| asked.set(false));
         Box::pin(future::ready(
-            (self.handler)(&cmd.get_packed_command(), self.port)
+            result
                 .map_err(|err| err.and_then(|v| v.extract_error()))
                 .expect_err("Handler did not specify a response"),
         ))
@@ -376,9 +411,9 @@ impl aio::ConnectionLike for MockConnection {
         let port = self.port;
 
         Box::pin(future::ready({
-            // For atomic pipelines, we need to handle the MULTI/EXEC wrapper
-            // The packed pipeline contains all commands concatenated
-            // We'll process each command individually and collect results
+            // Answers each command from `offset` through the handler. `MULTI`, `EXEC` and
+            // `ASKING` are not modelled: for an atomic pipeline `offset` is `len + 1`, so this
+            // answers nothing and returns an empty result.
             let mut results = Vec::new();
 
             // Iterate through commands in the pipeline

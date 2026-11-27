@@ -16,7 +16,9 @@ use std::sync::{RwLock, RwLockWriteGuard};
 #[derive(Clone)]
 pub(crate) enum Redirect {
     Moved(String),
-    /// (addr, should_exec_asking) - if `should_exec_asking` is true,  the `ASKING` command would be executed as part of `get_connection`.
+    /// (addr, should_exec_asking) - if `should_exec_asking` is true, the request is preceded by `ASKING`.
+    /// The sync client sends it first. The async client writes it in the same write as the command,
+    /// or as a request of its own (see `cluster_async::Connect::sends_asking_with_command`).
     Ask(String, bool),
 }
 
@@ -117,6 +119,16 @@ pub enum MultipleNodeRoutingInfo {
     /// The `MultiSlotArgPattern` specifies the pattern of the command’s arguments, indicating how they are organized
     /// (e.g., only keys, key-value pairs, etc).
     MultiSlot((Vec<(Route, Vec<usize>)>, MultiSlotArgPattern)),
+}
+
+impl MultipleNodeRoutingInfo {
+    /// Whether [`crate::Cmd::set_allow_partial_results`] applies to a command
+    /// sent to these nodes with `response_policy`: all nodes or all primaries,
+    /// with the `Special` response policy or none.
+    pub fn allows_partial_results(&self, response_policy: Option<ResponsePolicy>) -> bool {
+        matches!(self, Self::AllNodes | Self::AllMasters)
+            && matches!(response_policy, None | Some(ResponsePolicy::Special))
+    }
 }
 
 /// Takes a routable and an iterator of indices, which is assued to be created from`MultipleNodeRoutingInfo::MultiSlot`,
@@ -875,69 +887,8 @@ impl RoutingInfo {
     {
         let cmd = &r.command()?[..];
 
-        // FT.CURSOR and FT.AGGREGATE/FT.HYBRID ...
-        // WITHCURSOR must land on the PRIMARY of the index-name slot,
-        // regardless of ReadFrom, because a cursor is a per-process,
-        // main-thread-only singleton on the server that created it
-        // (src/cursor.h "Main thread only") -- confirmed against the
-        // maintainers' own cluster test
-        // (valkey-search integration/test_cursor.py:305,
-        // TestCursorCluster.test_cursor_is_node_local), which runs a query
-        // on one primary, then shows FT.CURSOR READ succeeding there and
-        // failing on every other node in the shard. A read sent to a
-        // replica -- which PREFER_REPLICA/AZAffinity would otherwise do for
-        // any plain readonly command -- would reach a node that never
-        // created the cursor and get "Cursor not found" partway through
-        // paging. Pinning to the slot's primary deterministically keeps the
-        // query node and the read node the same, and is also the only
-        // option that survives a replica resync (which the server's own
-        // design note lists as an event that discards a replica's cursors;
-        // primaries are not subject to that).
-        //
-        // FT.CURSOR itself is in the READ ACL category and absent from the
-        // is_readonly_cmd() list below (it falls through to `_ =>
-        // RouteBy::FirstKey` with is_readonly_cmd returning false, so it
-        // already resolves to SlotAddr::Master today) -- routed explicitly
-        // here anyway so this stays correct and documented even if a future
-        // change adds it to that list without noticing the cursor
-        // implication. FT.HYBRID is handled the same way for the same
-        // reason, ahead of its own typed API landing.
-        //
-        // FT.AGGREGATE IS in the is_readonly_cmd() list (plain FT.AGGREGATE
-        // genuinely has no cursor-affinity requirement and benefits from
-        // replica routing like any other read), so only the WITHCURSOR case
-        // needs to be pulled out of that path -- detected with a plain
-        // position() scan rather than the full option-tail scanner
-        // value_conversion.rs uses for reply-type dispatch: a false
-        // positive here (e.g. an INKEYS/PARAMS/LOAD value happening to
-        // equal "WITHCURSOR") only ever means "routed to the primary when
-        // it didn't strictly need to be" -- a availability/distribution
-        // cost, not a correctness bug, unlike reply-shape dispatch mistakes
-        // (which can misparse the actual response). glide-core's own full scanner isn't reachable from
-        // this crate anyway (glide-core depends on this one, not the other
-        // way around), so duplicating that level of rigor here would cost
-        // more than it returns for a routing-only decision.
-        //
-        // FT.SEARCH WITHCURSOR is deliberately NOT covered: it is a
-        // Valkey-only extension, out of scope here, and GLIDE's typed
-        // API never emits it.
-        //
-        // This branch is not just a primary pin on top of what `_ =>
-        // RouteBy::FirstKey` would already compute correctly -- it also
-        // fixes the SLOT itself (affonsov review #7335). FirstKey reads
-        // `arg_idx(1)` as the key. For `FT.CURSOR READ index cursor_id` and
-        // `FT.CURSOR DEL index cursor_id`, argument 1 is the subcommand
-        // token (`READ`/`DEL`), not the index name -- the index name is
-        // argument 2. Routing on `arg_idx(1)` would have hashed the
-        // subcommand token's slot instead of the index's, sending the
-        // command to a shard that most likely isn't the one holding the
-        // cursor at all, not just skipping the primary pin above. FT.HYBRID
-        // has no subcommand token (`FT.HYBRID index ...`), so its index
-        // name genuinely is argument 1, same as FirstKey would already
-        // compute -- only FT.CURSOR needs the different offset. A future
-        // cleanup must not fold this branch away as redundant with
-        // FirstKey: FirstKey was never correct for FT.CURSOR to begin with.
         if cmd.eq_ignore_ascii_case(b"FT.CURSOR") || cmd.eq_ignore_ascii_case(b"FT.HYBRID") {
+            // FT.CURSOR: index name is arg 2 (arg 1 is READ/DEL), so FirstKey would hash the subcommand
             return r
                 .arg_idx(if cmd.eq_ignore_ascii_case(b"FT.CURSOR") {
                     2
@@ -1740,6 +1691,14 @@ mod tests_routing {
     }
 
     #[test]
+    fn allows_partial_results_only_with_a_per_node_response_policy() {
+        use MultipleNodeRoutingInfo::{AllMasters, AllNodes};
+        assert!(AllMasters.allows_partial_results(Some(ResponsePolicy::Special)));
+        assert!(AllNodes.allows_partial_results(None));
+        assert!(!AllNodes.allows_partial_results(Some(ResponsePolicy::AllSucceeded)));
+    }
+
+    #[test]
     fn test_routing_info_rdma_routes_by_its_key() {
         let mut plain = cmd("GET");
         plain.arg("foo");
@@ -2426,10 +2385,6 @@ mod tests_routing {
         ));
     }
 
-    /// Helper asserting a command resolves to SingleNode(SpecificNode(Route
-    /// { slot, SlotAddr::Master })), i.e. the primary of the slot the given
-    /// key would hash to -- the pinning this module adds for
-    /// FT.CURSOR/FT.HYBRID/FT.AGGREGATE WITHCURSOR.
     fn assert_routes_to_primary_of_key(cmd: &Cmd, key_arg: &str) {
         let routing = RoutingInfo::for_routable(cmd);
         let expected_slot = crate::cluster_topology::get_slot(key_arg.as_bytes());
@@ -2480,11 +2435,6 @@ mod tests_routing {
 
     #[test]
     fn test_ft_aggregate_without_withcursor_still_prefers_replica() {
-        // Plain FT.AGGREGATE (no WITHCURSOR) must NOT be forced to the
-        // primary -- it has no cursor-affinity requirement and should keep
-        // benefiting from replica routing like any other read, via the
-        // ordinary is_readonly_cmd() path this special case must not
-        // disturb.
         let mut cmd = cmd("FT.AGGREGATE");
         cmd.arg("myindex").arg("*");
         let routing = RoutingInfo::for_routable(&cmd);
@@ -2502,10 +2452,6 @@ mod tests_routing {
 
     #[test]
     fn test_ft_aggregate_withcursor_detection_is_not_fooled_by_other_commands() {
-        // A sibling command that merely contains "WITHCURSOR" as a
-        // substring of something else must not trip this -- position()
-        // matches whole arguments, not substrings, so this is really just
-        // confirming that property holds for this specific keyword too.
         let mut cmd = cmd("FT.AGGREGATE");
         cmd.arg("myindex")
             .arg("*")
@@ -2528,14 +2474,6 @@ mod tests_routing {
 
     #[test]
     fn test_ft_aggregate_withcursor_false_positive_from_exact_value_still_routes_to_primary() {
-        // The comment above this routing special-case concedes a
-        // false positive is possible when a caller-controlled VALUE (not
-        // just a substring) happens to equal "WITHCURSOR" exactly -- e.g. a
-        // LOAD field or an INKEYS key literally named that. This confirms
-        // that scenario really does happen (position() matches it) and that
-        // the only consequence is routing to the primary rather than any
-        // misdirection or data leak, exactly as documented: an
-        // availability/distribution cost, not a correctness bug.
         let mut cmd = cmd("FT.AGGREGATE");
         cmd.arg("myindex")
             .arg("*")

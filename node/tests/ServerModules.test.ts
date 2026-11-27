@@ -41,6 +41,7 @@ import {
     parseEndpoints,
     validateBatchResponse,
 } from "./TestUtilities";
+import { readMapField } from "./searchCapabilityHelpers";
 
 const TIMEOUT = 50000;
 /** Waiting interval to let server process the data before querying */
@@ -2619,13 +2620,16 @@ describe("Server Module Tests", () => {
 
                 expect(response["index_name"]).toEqual(index);
                 expect(response["index_definition"]).toEqual(
-                    expect.arrayContaining([
-                        "key_type",
-                        "JSON",
-                        "default_score",
-                        "1",
-                    ]),
+                    expect.arrayContaining(["key_type", "JSON"]),
                 );
+                expect(
+                    String(
+                        readMapField(
+                            response["index_definition"],
+                            "default_score",
+                        ),
+                    ),
+                ).toEqual("1");
                 const attrs = response["attributes"] as unknown as unknown[][];
                 expect(attrs).toEqual(
                     expect.arrayContaining([

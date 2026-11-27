@@ -165,6 +165,7 @@ fn create_pool_client(
         None, // no address resolver (uses the one in ConnectionRequest if any)
         None, // custom credential providers are rejected by glide_pool_create
         client_id,
+        client_id as u64,
     )
     .map_err(|err| err.message)?;
 

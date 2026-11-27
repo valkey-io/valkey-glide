@@ -996,6 +996,7 @@ dependencies = [
  "libc",
  "lz4",
  "nanoid",
+ "num_cpus",
  "once_cell",
  "protobuf",
  "protobuf-codegen",
@@ -1071,7 +1072,6 @@ name = "glide-telemetry"
 version = "0.1.2"
 dependencies = [
  "glide-logger",
- "lazy_static",
  "once_cell",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -3126,7 +3126,6 @@ dependencies = [
  "napi-derive",
  "num-bigint",
  "num-traits",
- "num_cpus",
  "parking_lot",
  "protobuf",
  "tikv-jemallocator",

@@ -1763,6 +1763,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             glide_core::compression::try_decompress_batch_response(
                                 value,
                                 client.compression_manager().as_deref(),
+                                raise_on_error_bool,
                             )
                             .map_err(redis::RedisError::from)
                         })
@@ -2295,13 +2296,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                             routing_info,
                         )
                         .await
-                        .map_err(|e| {
-                            redis::RedisError::from((
-                                redis::ErrorKind::ClientError,
-                                "Script execution failed",
-                                glide_core::errors::error_text(&e),
-                            ))
-                        });
+                        .map_err(|e| client_error_unless_timeout(e, "Script execution failed"));
 
                     // Refresh activity after script completes so the abandon monitor
                     // does not reclaim the client immediately after a long blocking script.
@@ -2362,13 +2357,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_updateConnectionPas
                         .update_connection_password(password_opt, do_immediate)
                         .await
                         .map(|_| redis::Value::Okay)
-                        .map_err(|e| {
-                            redis::RedisError::from((
-                                redis::ErrorKind::ClientError,
-                                "Password update failed",
-                                e.to_string(),
-                            ))
-                        });
+                        .map_err(|e| client_error_unless_timeout(e, "Password update failed"));
 
                     complete_callback(jvm, callback_id, result, false);
                 }
@@ -2411,13 +2400,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_refreshIamToken(
                         .refresh_iam_token()
                         .await
                         .map(|_| redis::Value::Okay)
-                        .map_err(|e| {
-                            redis::RedisError::from((
-                                redis::ErrorKind::ClientError,
-                                "IAM token refresh failed",
-                                e.to_string(),
-                            ))
-                        });
+                        .map_err(|e| client_error_unless_timeout(e, "IAM token refresh failed"));
                     complete_callback(jvm, callback_id, result, false);
                 }
                 Err(err) => {
@@ -2580,11 +2563,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                         .cluster_scan(&scan_state_cursor, scan_args)
                         .await
                         .map_err(|e| {
-                            redis::RedisError::from((
-                                redis::ErrorKind::ClientError,
-                                "Cluster scan execution failed",
-                                e.to_string(),
-                            ))
+                            client_error_unless_timeout(e, "Cluster scan execution failed")
                         });
 
                     // binary_mode = !expect_utf8

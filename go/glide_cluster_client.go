@@ -721,6 +721,11 @@ func (client *ClusterClient) clusterScan(
 // returning all keys the database has from when the scan started until the scan ends.
 // The same key can be returned in multiple scan iterations.
 //
+// Each iteration is bounded by the client's request timeout. If iterations keep timing out,
+// use [ClusterClient.ScanWithOptions] with a smaller count, or a longer request timeout.
+// Each call releases its cursor, so after an error, including a timeout, the scan must
+// start again from [models.NewClusterScanCursor].
+//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -761,6 +766,11 @@ func (client *ClusterClient) Scan(
 // Like the SCAN command, the method can be used to iterate over the keys in the database,
 // returning all keys the database has from when the scan started until the scan ends.
 // The same key can be returned in multiple scan iterations.
+//
+// Each iteration is bounded by the client's request timeout. If iterations keep timing out,
+// use a smaller count or a longer request timeout.
+// Each call releases its cursor, so after an error, including a timeout, the scan must
+// start again from [models.NewClusterScanCursor].
 //
 // See [valkey.io] for details.
 //

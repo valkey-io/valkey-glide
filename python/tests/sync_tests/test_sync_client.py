@@ -632,6 +632,7 @@ class TestGlideClients:
             os.WEXITSTATUS(status) == 0
         ), "Fork hook reconnected the failed client in the child"
 
+    @pytest.mark.requires_tcp
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("ip_address", [IP_ADDRESS_V4, IP_ADDRESS_V6])
     def test_connect_with_ip_address_succeeds(
@@ -13496,6 +13497,7 @@ class TestSyncScripts:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.requires_tcp
     def test_failover(self, glide_sync_client: GlideClient):
         # Spin up a dedicated standalone with 1 replica so the failover
         # doesn't destabilize the shared test server.
