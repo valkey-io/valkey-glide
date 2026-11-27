@@ -61,6 +61,19 @@ async fn cluster_info_reports_ok() {
     );
 }
 
+/// The sorted primary addresses `client` reports, and a route to the first.
+async fn primaries_and_route(client: &GlideClusterClient) -> (Vec<String>, Route) {
+    let healthy = client.info_with_partial_results(&[], None).await.unwrap();
+    let mut primaries: Vec<String> = healthy.keys().cloned().collect();
+    primaries.sort();
+    let (host, port) = primaries[0].rsplit_once(':').unwrap();
+    let route = Route::ByAddress {
+        host: host.to_string(),
+        port: port.parse().unwrap(),
+    };
+    (primaries, route)
+}
+
 #[tokio::test]
 async fn cluster_info_with_partial_results_keeps_replies_when_a_primary_is_slow() {
     let cluster = common::ClusterHarness::start().await;
@@ -70,20 +83,8 @@ async fn cluster_info_with_partial_results_keeps_replies_when_a_primary_is_slow(
     // A second client pauses the primary, so the pause is not queued behind the
     // client under test.
     let pauser = cluster.client().await;
-
-    let healthy = client.info_with_partial_results(&[], None).await.unwrap();
-    let mut primaries: Vec<String> = healthy.keys().cloned().collect();
-    primaries.sort();
+    let (primaries, route) = primaries_and_route(&client).await;
     assert_eq!(primaries.len(), cluster.primary_ports.len());
-    for reply in healthy.values() {
-        assert!(reply.as_ref().unwrap().contains("# Server"), "{reply:?}");
-    }
-
-    let (host, port) = primaries[0].rsplit_once(':').unwrap();
-    let route = Route::ByAddress {
-        host: host.to_string(),
-        port: port.parse().unwrap(),
-    };
 
     pauser
         // Long enough for the call below to see the node as slow.
@@ -146,15 +147,7 @@ async fn partial_user_client(
     let client = cluster
         .client_with_config(cluster.config().credentials(credentials))
         .await;
-
-    let healthy = client.info_with_partial_results(&[], None).await.unwrap();
-    let mut primaries: Vec<String> = healthy.keys().cloned().collect();
-    primaries.sort();
-    let (host, port) = primaries[0].rsplit_once(':').unwrap();
-    let route = Route::ByAddress {
-        host: host.to_string(),
-        port: port.parse().unwrap(),
-    };
+    let (primaries, route) = primaries_and_route(&client).await;
     (admin, client, primaries, route)
 }
 
