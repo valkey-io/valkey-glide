@@ -115,9 +115,10 @@ class ClusterCommands(CoreCommands):
                 node the client lost its connection to or cannot connect to gets a GLIDE `ConnectionError`,
                 the error a request gets when it loses its connection to a node (both `RequestError`
                 subclasses); other failures get a `RequestError`. The call itself raises a
-                `TimeoutError` if it has not finished by `request_timeout` plus the same margin, and still fails
-                when no target node can be reached. Has no effect when the command goes to a single node.
-                Keyword-only. Defaults to False.
+                `TimeoutError` if it has not finished by `request_timeout` plus the same margin. Node failures
+                fail the call only when the client has no connection to any target node; otherwise every target
+                node gets an entry, even when all of them fail. Has no effect when the command goes to a single
+                node. Keyword-only. Defaults to False.
 
         Returns:
             TClusterResponse[bytes]: If a single node route is requested, returns a bytes string containing the information for
