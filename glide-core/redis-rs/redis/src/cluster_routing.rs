@@ -648,6 +648,37 @@ impl ResponsePolicy {
     }
 }
 
+fn has_cursor_option<R>(r: &R) -> bool
+where
+    R: Routable + ?Sized,
+{
+    has_search_flag(r, b"WITHCURSOR")
+}
+
+fn has_search_flag<R>(r: &R, flag: &[u8]) -> bool
+where
+    R: Routable + ?Sized,
+{
+    let mut found = false;
+    r.visit_args_from(3, &mut |arg| {
+        found = arg.eq_ignore_ascii_case(flag);
+        !found
+    });
+    found
+}
+
+fn is_keyless_search_command<R>(cmd: &[u8], r: &R) -> bool
+where
+    R: Routable + ?Sized,
+{
+    if has_search_flag(r, b"LOCALONLY") {
+        return false;
+    }
+    cmd.eq_ignore_ascii_case(b"FT.PROFILE")
+        || ((cmd.eq_ignore_ascii_case(b"FT.SEARCH") || cmd.eq_ignore_ascii_case(b"FT.AGGREGATE"))
+            && !has_cursor_option(r))
+}
+
 enum RouteBy {
     AllNodes,
     AllPrimaries,
@@ -880,8 +911,30 @@ impl RoutingInfo {
         }
     }
 
+    /// Returns true when `r` is a search query that any shard can coordinate and that
+    /// is therefore routed to a random slot rather than the slot of its index name.
+    pub fn is_keyless_search_query<R>(r: &R) -> bool
+    where
+        R: Routable + ?Sized,
+    {
+        r.arg_idx(0)
+            .is_some_and(|cmd| is_keyless_search_command(cmd, r))
+    }
+
     /// Returns the routing info for `r`.
     pub fn for_routable<R>(r: &R) -> Option<RoutingInfo>
+    where
+        R: Routable + ?Sized,
+    {
+        Self::for_routable_with_search_coordinator(r, false)
+    }
+
+    /// Returns the routing info for `r`. When `search_coordinator` is true, keyless search
+    /// queries are routed to a random replica-eligible slot instead of the index-name slot.
+    pub fn for_routable_with_search_coordinator<R>(
+        r: &R,
+        search_coordinator: bool,
+    ) -> Option<RoutingInfo>
     where
         R: Routable + ?Sized,
     {
@@ -901,10 +954,21 @@ impl RoutingInfo {
                     )))
                 });
         }
-        if cmd.eq_ignore_ascii_case(b"FT.AGGREGATE") && r.position(b"WITHCURSOR").is_some() {
+        if (cmd.eq_ignore_ascii_case(b"FT.AGGREGATE") || cmd.eq_ignore_ascii_case(b"FT.SEARCH"))
+            && has_cursor_option(r)
+        {
             return r.arg_idx(1).map(|key| {
                 RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(get_route(false, key)))
             });
+        }
+
+        if search_coordinator && is_keyless_search_command(cmd, r) {
+            return Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    random_slot(),
+                    SlotAddr::ReplicaOptional,
+                )),
+            ));
         }
 
         match base_routing(cmd) {
@@ -1325,6 +1389,16 @@ pub trait Routable {
 
     /// Returns index of argument that matches `candidate`, if it exists
     fn position(&self, candidate: &[u8]) -> Option<usize>;
+
+    /// Calls `visit` with each argument from index `start` on, in order, until it
+    /// returns false. Arguments that are not plain data are visited as empty slices.
+    fn visit_args_from(&self, start: usize, visit: &mut dyn FnMut(&[u8]) -> bool) {
+        for arg in (start..).map_while(|idx| self.arg_idx(idx)) {
+            if !visit(arg) {
+                break;
+            }
+        }
+    }
 }
 
 impl Routable for Cmd {
@@ -1337,6 +1411,18 @@ impl Routable for Cmd {
             Arg::Simple(d) => d.eq_ignore_ascii_case(candidate),
             _ => false,
         })
+    }
+
+    fn visit_args_from(&self, start: usize, visit: &mut dyn FnMut(&[u8]) -> bool) {
+        for arg in self.args_iter().skip(start) {
+            let keep_going = match arg {
+                Arg::Simple(data) => visit(data),
+                _ => visit(&[]),
+            };
+            if !keep_going {
+                break;
+            }
+        }
     }
 }
 
@@ -1358,6 +1444,20 @@ impl Routable for Value {
                 _ => false,
             }),
             _ => None,
+        }
+    }
+
+    fn visit_args_from(&self, start: usize, visit: &mut dyn FnMut(&[u8]) -> bool) {
+        if let Value::Array(args) = self {
+            for arg in args.iter().skip(start) {
+                let keep_going = match arg {
+                    Value::BulkString(data) => visit(data),
+                    _ => visit(&[]),
+                };
+                if !keep_going {
+                    break;
+                }
+            }
         }
     }
 }
@@ -2378,7 +2478,11 @@ mod tests_routing {
     }
 
     fn assert_routes_to_primary_of_key(cmd: &Cmd, key_arg: &str) {
-        let routing = RoutingInfo::for_routable(cmd);
+        assert_routes_to_primary_of_key_with(cmd, key_arg, false);
+    }
+
+    fn assert_routes_to_primary_of_key_with(cmd: &Cmd, key_arg: &str, search_coordinator: bool) {
+        let routing = RoutingInfo::for_routable_with_search_coordinator(cmd, search_coordinator);
         let expected_slot = crate::cluster_topology::get_slot(key_arg.as_bytes());
         match routing {
             Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
@@ -2426,6 +2530,17 @@ mod tests_routing {
     }
 
     #[test]
+    fn test_ft_search_withcursor_routes_to_primary() {
+        let mut cmd = cmd("FT.SEARCH");
+        cmd.arg("myindex")
+            .arg("*")
+            .arg("WITHCURSOR")
+            .arg("COUNT")
+            .arg("10");
+        assert_routes_to_primary_of_key(&cmd, "myindex");
+    }
+
+    #[test]
     fn test_ft_aggregate_without_withcursor_still_prefers_replica() {
         let mut cmd = cmd("FT.AGGREGATE");
         cmd.arg("myindex").arg("*");
@@ -2440,6 +2555,241 @@ mod tests_routing {
             }
             other => panic!("expected SpecificNode(ReplicaOptional), got {other:?}"),
         }
+    }
+
+    fn assert_routes_to_random_replica_optional_slots(build: impl Fn() -> Cmd) {
+        let mut slots = std::collections::HashSet::new();
+        for _ in 0..200 {
+            match RoutingInfo::for_routable_with_search_coordinator(&build(), true) {
+                Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                    assert_eq!(route.slot_addr(), SlotAddr::ReplicaOptional);
+                    slots.insert(route.slot());
+                }
+                other => panic!("expected SpecificNode(ReplicaOptional), got {other:?}"),
+            }
+        }
+        assert!(
+            slots.len() > 1,
+            "routing must not be pinned to a single slot"
+        );
+    }
+
+    #[test]
+    fn test_ft_search_routes_to_random_slot() {
+        assert_routes_to_random_replica_optional_slots(|| {
+            let mut c = cmd("FT.SEARCH");
+            c.arg("myindex").arg("*");
+            c
+        });
+    }
+
+    #[test]
+    fn test_ft_profile_routes_to_random_slot() {
+        assert_routes_to_random_replica_optional_slots(|| {
+            let mut c = cmd("FT.PROFILE");
+            c.arg("myindex").arg("SEARCH").arg("QUERY").arg("*");
+            c
+        });
+    }
+
+    #[test]
+    fn test_ft_aggregate_without_withcursor_routes_to_random_slot() {
+        assert_routes_to_random_replica_optional_slots(|| {
+            let mut c = cmd("FT.AGGREGATE");
+            c.arg("myindex").arg("*");
+            c
+        });
+    }
+
+    #[test]
+    fn test_keyless_search_routes_by_index_slot_without_search_coordinator() {
+        for (name, args) in [
+            ("FT.SEARCH", vec!["myindex", "*"]),
+            ("FT.AGGREGATE", vec!["myindex", "*"]),
+            ("FT.PROFILE", vec!["myindex", "SEARCH", "QUERY", "*"]),
+        ] {
+            let mut c = cmd(name);
+            for arg in &args {
+                c.arg(*arg);
+            }
+            let expected_slot = crate::cluster_topology::get_slot(b"myindex");
+            for _ in 0..50 {
+                match RoutingInfo::for_routable(&c) {
+                    Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                        assert_eq!(route.slot(), expected_slot, "{name}");
+                        assert_eq!(route.slot_addr(), SlotAddr::ReplicaOptional, "{name}");
+                    }
+                    other => panic!("{name}: expected SpecificNode, got {other:?}"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_withcursor_as_query_text_is_not_a_cursor_option() {
+        for name in ["FT.SEARCH", "FT.AGGREGATE"] {
+            let mut c = cmd(name);
+            c.arg("myindex").arg("WITHCURSOR");
+            assert!(RoutingInfo::is_keyless_search_query(&c), "{name}");
+            assert_routes_to_random_replica_optional_slots(|| {
+                let mut c = cmd(name);
+                c.arg("myindex").arg("WITHCURSOR");
+                c
+            });
+        }
+    }
+
+    #[test]
+    fn test_withcursor_option_after_query_pins_to_index_primary() {
+        for name in ["FT.SEARCH", "FT.AGGREGATE"] {
+            let mut c = cmd(name);
+            c.arg("myindex").arg("WITHCURSOR").arg("WITHCURSOR");
+            assert!(!RoutingInfo::is_keyless_search_query(&c), "{name}");
+            assert_routes_to_primary_of_key(&c, "myindex");
+        }
+    }
+
+    #[test]
+    fn test_withcursor_option_pins_to_index_primary_with_search_coordinator() {
+        for name in ["FT.SEARCH", "FT.AGGREGATE"] {
+            let mut c = cmd(name);
+            c.arg("myindex")
+                .arg("*")
+                .arg("WITHCURSOR")
+                .arg("COUNT")
+                .arg("10");
+            assert_routes_to_primary_of_key_with(&c, "myindex", true);
+            let mut c = cmd(name);
+            c.arg("myindex").arg("*").arg("LOAD").arg("1");
+            c.arg(b"@f".as_slice());
+            c.arg("WITHCURSOR");
+            assert_routes_to_primary_of_key_with(&c, "myindex", true);
+        }
+    }
+
+    #[test]
+    fn test_withcursor_as_query_text_routes_by_index_slot_without_search_coordinator() {
+        for name in ["FT.SEARCH", "FT.AGGREGATE"] {
+            let mut c = cmd(name);
+            c.arg("myindex").arg("WITHCURSOR");
+            let expected_slot = crate::cluster_topology::get_slot(b"myindex");
+            match RoutingInfo::for_routable(&c) {
+                Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                    assert_eq!(route.slot(), expected_slot, "{name}");
+                    assert_eq!(route.slot_addr(), SlotAddr::ReplicaOptional, "{name}");
+                }
+                other => panic!("{name}: expected SpecificNode, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_withcursor_token_after_the_query_always_pins_to_index_primary() {
+        let cases: [(&str, &[&str]); 8] = [
+            ("FT.SEARCH", &["INKEYS", "1", "WITHCURSOR"]),
+            ("FT.SEARCH", &["SORTBY", "WITHCURSOR", "DESC"]),
+            ("FT.SEARCH", &["LIMIT", "WITHCURSOR", "10"]),
+            ("FT.SEARCH", &["PARAMS", "2", "p", "WITHCURSOR"]),
+            ("FT.AGGREGATE", &["LOAD", "1", "params", "WITHCURSOR"]),
+            (
+                "FT.AGGREGATE",
+                &[
+                    "GROUPBY",
+                    "0",
+                    "REDUCE",
+                    "COUNT",
+                    "0",
+                    "AS",
+                    "limit",
+                    "WITHCURSOR",
+                ],
+            ),
+            ("FT.AGGREGATE", &["SORTBY", "WITHCURSOR"]),
+            ("FT.AGGREGATE", &["WITHCURSOR", "COUNT", "1"]),
+        ];
+        for (name, tail) in cases {
+            let mut c = cmd(name);
+            c.arg("myindex").arg("*");
+            for a in tail {
+                c.arg(*a);
+            }
+            assert!(!RoutingInfo::is_keyless_search_query(&c), "{name} {tail:?}");
+            assert_routes_to_primary_of_key_with(&c, "myindex", true);
+            assert_routes_to_primary_of_key_with(&c, "myindex", false);
+        }
+    }
+    #[test]
+    fn test_localonly_search_keeps_index_slot_route_with_search_coordinator() {
+        let cases: [(&str, &[&str]); 4] = [
+            ("FT.SEARCH", &["myindex", "*", "LOCALONLY"]),
+            ("FT.AGGREGATE", &["myindex", "*", "LOCALONLY"]),
+            (
+                "FT.PROFILE",
+                &["myindex", "SEARCH", "QUERY", "*", "LOCALONLY"],
+            ),
+            ("FT.SEARCH", &["myindex", "*", "INKEYS", "1", "LOCALONLY"]),
+        ];
+        for (name, args) in cases {
+            let mut c = cmd(name);
+            for a in args {
+                c.arg(*a);
+            }
+            assert!(!RoutingInfo::is_keyless_search_query(&c), "{name} {args:?}");
+            let routing = RoutingInfo::for_routable_with_search_coordinator(&c, true);
+            let expected_slot = crate::cluster_topology::get_slot(b"myindex");
+            match routing {
+                Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                    assert_eq!(route.slot(), expected_slot, "{name} {args:?}");
+                }
+                other => panic!("{name} {args:?}: expected index slot route, got {other:?}"),
+            }
+        }
+        let mut c = cmd("FT.SEARCH");
+        c.arg("myindex").arg("@t:{LOCALONLY}");
+        assert!(RoutingInfo::is_keyless_search_query(&c));
+    }
+    #[test]
+    fn test_ft_info_still_routes_by_index_slot() {
+        let mut c = cmd("FT.INFO");
+        c.arg("myindex");
+        let expected_slot = crate::cluster_topology::get_slot(b"myindex");
+        match RoutingInfo::for_routable(&c) {
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(route))) => {
+                assert_eq!(route.slot(), expected_slot);
+            }
+            other => panic!("expected SpecificNode, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_ft_search_commands_route_case_insensitively() {
+        assert_routes_to_random_replica_optional_slots(|| {
+            let mut c = cmd("ft.search");
+            c.arg("myindex").arg("*");
+            c
+        });
+        let mut c = cmd("ft.search");
+        c.arg("myindex").arg("*").arg("withcursor");
+        assert_routes_to_primary_of_key(&c, "myindex");
+    }
+
+    #[test]
+    fn test_is_keyless_search_query_classification() {
+        let search = |name: &str, extra: &[&str]| {
+            let mut c = cmd(name);
+            c.arg("myindex").arg("*");
+            for a in extra {
+                c.arg(*a);
+            }
+            RoutingInfo::is_keyless_search_query(&c)
+        };
+        assert!(search("FT.SEARCH", &[]));
+        assert!(search("FT.AGGREGATE", &[]));
+        assert!(search("FT.PROFILE", &[]));
+        assert!(!search("FT.SEARCH", &["WITHCURSOR"]));
+        assert!(!search("FT.AGGREGATE", &["WITHCURSOR"]));
+        assert!(!search("FT.INFO", &[]));
+        assert!(!search("GET", &[]));
     }
 
     #[test]

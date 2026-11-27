@@ -135,6 +135,17 @@ pub enum ScopeSlot {
 /// cross-check the script's declared keys explicitly to keep it consistent with the
 /// multi-key `MultiSlot` commands above.
 pub fn scope_slot_for_command(cmd_name: &str, args: &[&[u8]]) -> ScopeSlot {
+    scope_slot_for_command_with_search_coordinator(cmd_name, args, false)
+}
+
+/// Same as [`scope_slot_for_command`]. When `search_coordinator` is true, keyless
+/// search queries leave the scope unconstrained instead of pinning it to the slot of
+/// their index name.
+pub fn scope_slot_for_command_with_search_coordinator(
+    cmd_name: &str,
+    args: &[&[u8]],
+    search_coordinator: bool,
+) -> ScopeSlot {
     use redis::cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo, SingleNodeRoutingInfo};
 
     // Scripts declare their keys explicitly (`EVAL script numkeys k1 k2 ...`); the
@@ -157,6 +168,10 @@ pub fn scope_slot_for_command(cmd_name: &str, args: &[&[u8]]) -> ScopeSlot {
     cmd.arg(cmd_name.as_bytes());
     for arg in args {
         cmd.arg(*arg);
+    }
+
+    if search_coordinator && RoutingInfo::is_keyless_search_query(&cmd) {
+        return ScopeSlot::Unconstrained;
     }
 
     match RoutingInfo::for_routable(&cmd) {
@@ -281,7 +296,12 @@ pub async fn execute_scope_command(
         None => false,
     };
     if is_cluster && !multi_active_before_command {
-        match scope_slot_for_command(cmd_name, &arg_refs) {
+        let search_coordinator = client.is_some_and(|c| c.search_coordinator());
+        match scope_slot_for_command_with_search_coordinator(
+            cmd_name,
+            &arg_refs,
+            search_coordinator,
+        ) {
             // No slot constraint (keyless, random/fan-out routing): nothing to check.
             ScopeSlot::Unconstrained => {}
             // The command's keys span slots; a single-connection scope cannot fan out.
@@ -4155,6 +4175,78 @@ mod tests {
     // A cluster scope acquired for slot A must reject its very first keyed command
     // if that command hashes to a different slot, locally and before dispatch —
     // rather than accepting it unconstrained and only failing as a server MOVED.
+
+    #[test]
+    fn scope_slot_for_keyless_search_is_unconstrained_only_with_search_coordinator() {
+        use super::{
+            ScopeSlot, scope_slot_for_command, scope_slot_for_command_with_search_coordinator,
+        };
+        use crate::pool::slot_for_key;
+
+        for name in ["FT.SEARCH", "ft.search", "FT.AGGREGATE", "FT.PROFILE"] {
+            assert_eq!(
+                scope_slot_for_command_with_search_coordinator(name, &[b"idx", b"*"], true),
+                ScopeSlot::Unconstrained
+            );
+            assert_eq!(
+                scope_slot_for_command(name, &[b"idx", b"*"]),
+                ScopeSlot::Slot(slot_for_key(b"idx"))
+            );
+        }
+        assert_eq!(
+            scope_slot_for_command_with_search_coordinator(
+                "FT.SEARCH",
+                &[b"idx", b"*", b"WITHCURSOR"],
+                true
+            ),
+            ScopeSlot::Slot(slot_for_key(b"idx"))
+        );
+        assert_eq!(
+            scope_slot_for_command_with_search_coordinator(
+                "FT.SEARCH",
+                &[b"idx", b"WITHCURSOR"],
+                true
+            ),
+            ScopeSlot::Unconstrained
+        );
+        assert_eq!(
+            scope_slot_for_command_with_search_coordinator(
+                "FT.SEARCH",
+                &[b"idx", b"*", b"INKEYS", b"1", b"WITHCURSOR"],
+                true
+            ),
+            ScopeSlot::Slot(slot_for_key(b"idx"))
+        );
+        assert_eq!(
+            scope_slot_for_command_with_search_coordinator(
+                "FT.SEARCH",
+                &[
+                    b"idx",
+                    b"@f:$p",
+                    b"PARAMS",
+                    b"2",
+                    b"p",
+                    b"WITHCURSOR",
+                    b"DIALECT",
+                    b"2"
+                ],
+                true
+            ),
+            ScopeSlot::Slot(slot_for_key(b"idx"))
+        );
+        assert_eq!(
+            scope_slot_for_command_with_search_coordinator(
+                "FT.SEARCH",
+                &[b"idx", b"@f:$p", b"PARAMS", b"2", b"p", b"v", b"WITHCURSOR"],
+                true
+            ),
+            ScopeSlot::Slot(slot_for_key(b"idx"))
+        );
+        assert_eq!(
+            scope_slot_for_command_with_search_coordinator("FT.INFO", &[b"idx"], true),
+            ScopeSlot::Slot(slot_for_key(b"idx"))
+        );
+    }
 
     #[test]
     fn scope_slot_for_command_classifies_via_router() {

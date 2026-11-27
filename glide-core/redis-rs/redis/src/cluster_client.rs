@@ -53,6 +53,7 @@ struct BuilderParams {
     tcp_nodelay: bool,
     cache: Option<Arc<dyn GlideCache>>,
     server_assisted_cache: bool,
+    search_coordinator: bool,
     #[cfg(feature = "rdma")]
     rdma_fabric: Option<glide_rdma::RdmaFabric>,
     address_resolver: Option<Arc<dyn AddressResolver>>,
@@ -163,6 +164,7 @@ pub struct ClusterParams {
     pub(crate) tcp_nodelay: bool,
     pub(crate) cache: Option<Arc<dyn GlideCache>>,
     pub(crate) server_assisted_cache: bool,
+    pub(crate) search_coordinator: bool,
     #[cfg(feature = "rdma")]
     pub(crate) rdma_fabric: Option<glide_rdma::RdmaFabric>,
     /// Optional callback for resolving addresses before connection.
@@ -210,6 +212,7 @@ impl ClusterParams {
             tcp_nodelay: value.tcp_nodelay,
             cache: value.cache,
             server_assisted_cache: value.server_assisted_cache,
+            search_coordinator: value.search_coordinator,
             #[cfg(feature = "rdma")]
             rdma_fabric: value.rdma_fabric,
             address_resolver: value.address_resolver,
@@ -247,6 +250,7 @@ impl ClusterParams {
             tcp_nodelay: false,
             cache: None,
             server_assisted_cache: false,
+            search_coordinator: false,
             #[cfg(feature = "rdma")]
             rdma_fabric: None,
             address_resolver: None,
@@ -653,6 +657,14 @@ impl ClusterClientBuilder {
         rdma_fabric: Option<glide_rdma::RdmaFabric>,
     ) -> ClusterClientBuilder {
         self.builder_params.rdma_fabric = rdma_fabric;
+        self
+    }
+
+    /// Declares that the search module on every shard runs with its coordinator, so any
+    /// shard can serve `FT.SEARCH`, `FT.AGGREGATE` and `FT.PROFILE`. When true, those
+    /// queries are routed to a random shard instead of the shard owning the index name.
+    pub fn search_coordinator(mut self, present: bool) -> ClusterClientBuilder {
+        self.builder_params.search_coordinator = present;
         self
     }
 

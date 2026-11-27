@@ -5253,9 +5253,16 @@ where
     C: ConnectionLike + Send + Clone + Unpin + Sync + Connect + 'static,
 {
     fn req_packed_command<'a>(&'a mut self, cmd: &'a Cmd) -> RedisFuture<'a, Value> {
-        let routing = cluster_routing::RoutingInfo::for_routable(cmd).unwrap_or(
-            cluster_routing::RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
-        );
+        let search_coordinator = self
+            .inner_core
+            .get_cluster_param(|params| params.search_coordinator);
+        let routing = cluster_routing::RoutingInfo::for_routable_with_search_coordinator(
+            cmd,
+            search_coordinator,
+        )
+        .unwrap_or(cluster_routing::RoutingInfo::SingleNode(
+            SingleNodeRoutingInfo::Random,
+        ));
         self.route_command(cmd, routing).boxed()
     }
 
@@ -5895,6 +5902,52 @@ mod pipeline_routing_tests {
         assert_eq!(
             route_for_pipeline(&pipeline),
             Ok(Some(Route::new(12182, SlotAddr::Master)))
+        );
+    }
+
+    fn keyless_search_pipeline() -> crate::Pipeline {
+        let mut pipeline = crate::Pipeline::new();
+        pipeline.atomic();
+        pipeline
+            .set("{foo}bar", "baz")
+            .cmd("FT.SEARCH")
+            .arg("idx")
+            .arg("*")
+            .cmd("FT.AGGREGATE")
+            .arg("idx")
+            .arg("*")
+            .cmd("FT.PROFILE")
+            .arg("idx")
+            .arg("SEARCH")
+            .arg("QUERY")
+            .arg("*");
+        pipeline
+    }
+
+    #[test]
+    fn search_queries_constrain_atomic_pipeline_route_by_index_slot() {
+        assert_eq!(
+            route_for_pipeline(&keyless_search_pipeline()),
+            Err((
+                crate::ErrorKind::CrossSlot,
+                "Received crossed slots in pipeline"
+            )
+                .into())
+        );
+    }
+
+    #[test]
+    fn search_queries_alone_route_atomic_pipeline_by_index_slot() {
+        let mut pipeline = crate::Pipeline::new();
+        pipeline.atomic();
+        pipeline.cmd("FT.SEARCH").arg("{idx}a").arg("*");
+
+        assert_eq!(
+            route_for_pipeline(&pipeline),
+            Ok(Some(Route::new(
+                crate::cluster_topology::get_slot(b"{idx}a"),
+                SlotAddr::ReplicaOptional
+            )))
         );
     }
 
