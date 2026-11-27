@@ -419,11 +419,12 @@ const CLIENT_ERROR_CODE_PREFIX: &str = "Client ";
 
 /// The client-side errors whose kind a [`ServerError`] keeps: those that say
 /// the connection to the node failed.
-const KEPT_CLIENT_ERROR_KINDS: [ErrorKind; 5] = [
+const KEPT_CLIENT_ERROR_KINDS: [ErrorKind; 6] = [
     ErrorKind::IoError,
     ErrorKind::FatalSendError,
     ErrorKind::FatalReceiveError,
     ErrorKind::ProtocolDesync,
+    ErrorKind::ParseError,
     ErrorKind::ConnectionNotFoundForRoute,
 ];
 

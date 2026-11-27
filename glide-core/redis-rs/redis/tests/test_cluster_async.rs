@@ -5886,6 +5886,34 @@ mod cluster_async {
 
     #[test]
     #[serial_test::parallel(otel)]
+    fn test_async_cluster_partial_results_keep_the_kind_of_a_reply_cut_short() {
+        let name = "test_async_cluster_partial_results_keep_the_kind_of_a_reply_cut_short";
+        let value = info_to_all_primaries(name, true, move |received_cmd, port| {
+            respond_startup_with_replica_using_config(name, received_cmd, None)?;
+            if port == 6381 {
+                // What a node's connection raises when it closes partway through a reply.
+                return Err(Err((
+                    ErrorKind::ParseError,
+                    "parse error",
+                    "unexpected end of input".to_string(),
+                )
+                    .into()));
+            }
+            Err(Ok(info_reply(port)))
+        })
+        .unwrap();
+
+        let pairs = sorted_map(value);
+        let Value::ServerError(err) = &pairs[1].1 else {
+            panic!("expected an error for 6381, got {pairs:?}");
+        };
+        let err: RedisError = err.clone().into();
+        assert_eq!(err.kind(), ErrorKind::ParseError, "{err:?}");
+        assert!(err.is_unrecoverable_error(), "{err:?}");
+    }
+
+    #[test]
+    #[serial_test::parallel(otel)]
     fn test_async_cluster_partial_results_stop_at_the_fan_out_deadline() {
         let name = "test_async_cluster_partial_results_stop_at_the_fan_out_deadline";
         // The deadline has passed before any node can answer.
