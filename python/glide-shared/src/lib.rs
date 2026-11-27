@@ -32,6 +32,7 @@ struct PyClassPtr(*mut ffi::PyObject);
 unsafe impl Sync for PyClassPtr {}
 unsafe impl Send for PyClassPtr {}
 
+static REQUEST_ERROR_CLASS: std::sync::OnceLock<PyClassPtr> = std::sync::OnceLock::new();
 static GET_REQUEST_ERROR_CLASS: std::sync::OnceLock<PyClassPtr> = std::sync::OnceLock::new();
 
 /// The exception class for glide-core's `RequestErrorType` `error_type` (an error node's
@@ -39,6 +40,15 @@ static GET_REQUEST_ERROR_CLASS: std::sync::OnceLock<PyClassPtr> = std::sync::Onc
 /// errors use. Returns a new reference, or null with no Python error set.
 unsafe fn request_error_class(error_type: i64) -> *mut ffi::PyObject {
     unsafe {
+        // `Unspecified` (0), the type of every nested error outside partial results, maps to
+        // RequestError; the cached class saves a Python call for each of those errors.
+        if error_type == 0 {
+            let cls = get_exceptions_attr(&REQUEST_ERROR_CLASS, c"RequestError");
+            if !cls.is_null() {
+                ffi::Py_INCREF(cls);
+            }
+            return cls;
+        }
         let lookup = get_exceptions_attr(&GET_REQUEST_ERROR_CLASS, c"get_request_error_class");
         if lookup.is_null() {
             return std::ptr::null_mut();
