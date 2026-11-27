@@ -294,15 +294,15 @@ jobs:
                     PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_arm64
 
                     echo "Downloading PyPy 3.11 for arm64"
-                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                    sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                    curl -Lo "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                    sudo tar -xf "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                   elif [[ "$ARCH" == "x86_64" ]]; then
                     PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
 
                     echo "Downloading PyPy 3.11 for x86_64"
-                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                    sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                    curl -Lo "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                    sudo tar -xf "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                   fi
 
                   echo "/opt/${PYPY_VERSION_3_11}/bin" >> "$GITHUB_PATH"
@@ -355,8 +355,8 @@ jobs:
                         PYPY_VERSION_3_11=pypy3.11-v7.3.19-linux64
 
                         echo "Downloading PyPy 3.11 for x86_64"
-                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                        tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                        curl -Lo "/tmp/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                        tar -xf "/tmp/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                         export PATH="/opt/${PYPY_VERSION_3_11}/bin:$PATH"
 
@@ -364,8 +364,8 @@ jobs:
                         PYPY_VERSION_3_11=pypy3.11-v7.3.19-aarch64
 
                         echo "Downloading PyPy 3.11 for aarch64"
-                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                        tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                        curl -Lo "/tmp/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                        tar -xf "/tmp/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                         export PATH="/opt/${PYPY_VERSION_3_11}/bin:$PATH"
                       else
@@ -549,9 +549,6 @@ jobs:
                     "python/glide-shared/glide_shared/protobuf/response_pb2.pyi"
                     "python/glide-async/.gitignore"
                     "python/glide-sync/.gitignore"
-                    # Downloads made by the macOS interpreter setup above.
-                    "pypy3.11-v7.3.19-macos_arm64.tar.bz2"
-                    "pypy3.11-v7.3.19-macos_x86_64.tar.bz2"
                   )
                   unexpected_paths=()
                   changed_paths_file="$(mktemp)"
@@ -879,14 +876,14 @@ jobs:
                     if [[ "$ARCH" == "x86_64" ]]; then
                       PYPY_VERSION_3_11=pypy3.11-v7.3.19-linux64
                       echo "Downloading PyPy 3.11 for x86_64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      curl -Lo "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                      sudo tar -xf "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                     elif [[ "$ARCH" == "aarch64" ]]; then
                       PYPY_VERSION_3_11=pypy3.11-v7.3.19-aarch64
                       echo "Downloading PyPy 3.11 for aarch64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      curl -Lo "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                      sudo tar -xf "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                     fi
 
                     sudo chmod -R a+rx "/opt/${PYPY_VERSION_3_11}/bin"
@@ -895,14 +892,14 @@ jobs:
                     if [[ "$ARCH" == "arm64" ]]; then
                       PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_arm64
                       echo "Downloading PyPy 3.11 for arm64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      curl -Lo "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                      sudo tar -xf "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                     else
                       PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
                       echo "Downloading PyPy 3.11 for x86_64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      curl -Lo "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                      sudo tar -xf "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                     fi
 
                     sudo chmod -R a+rx "/opt/${PYPY_VERSION_3_11}/bin"
