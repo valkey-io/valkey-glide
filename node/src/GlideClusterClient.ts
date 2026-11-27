@@ -1151,23 +1151,6 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
-     * Gets information and statistics about the server, keeping the replies of the nodes that
-     * answered when other nodes fail. See {@link PartialResultsOption} and the overload without
-     * `allowPartialResults`.
-     *
-     * @param options - The options of the overload without `allowPartialResults`, plus
-     *     `allowPartialResults`.
-     * @returns A string when the command goes to a single node. Otherwise a dictionary from each
-     *     node address to its reply, or to its error: a {@link TimeoutError} if the node did not
-     *     answer in time, a {@link ConnectionError} if the client lost or has no connection to it,
-     *     or a {@link RequestError} for any other failure.
-     */
-    public async info(
-        options: { sections?: InfoOptions[] } & RouteOption & {
-                allowPartialResults: boolean | undefined;
-            },
-    ): Promise<string | Record<string, string | RequestError>>;
-    /**
      * Gets information and statistics about the server.
      *
      * The command will be routed to all primary nodes, unless `route` is provided.
@@ -1201,6 +1184,32 @@ export class GlideClusterClient extends BaseClient {
      *     if (reply instanceof TimeoutError) console.log(`${address} timed out`);
      * }
      * ```
+     */
+    public async info(
+        options?: { sections?: InfoOptions[] } & RouteOption & {
+                allowPartialResults?: never;
+            },
+    ): Promise<ClusterResponse<string>>;
+    /**
+     * Gets information and statistics about the server, keeping the replies of the nodes that
+     * answered when other nodes fail. See {@link PartialResultsOption} and the overload without
+     * `allowPartialResults`.
+     *
+     * @param options - The options of the overload without `allowPartialResults`, plus
+     *     `allowPartialResults`.
+     * @returns A string when the command goes to a single node. Otherwise a dictionary from each
+     *     node address to its reply, or to its error: a {@link TimeoutError} if the node did not
+     *     answer in time, a {@link ConnectionError} if the client lost or has no connection to it,
+     *     or a {@link RequestError} for any other failure.
+     */
+    public async info(
+        options: { sections?: InfoOptions[] } & RouteOption &
+            PartialResultsOption,
+    ): Promise<string | Record<string, string | RequestError>>;
+    /**
+     * Gets information and statistics about the server, like the first overload. TypeScript reads
+     * `Parameters<>` and `ReturnType<>` from this last overload, so they give the type of the call
+     * without `allowPartialResults`.
      */
     public async info(
         options?: { sections?: InfoOptions[] } & RouteOption,
