@@ -666,9 +666,12 @@ public class CommandTests {
                             new String[] {"ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all"},
                             ALL_NODES)
                     .get();
+            // A request already sent on the killed connection takes about 2.5 s to fail with a
+            // connection error, so a short timeout would report the node as timed out.
             try (GlideClusterClient cutOff =
                     GlideClusterClient.createClient(
                                     commonClusterClientConfig()
+                                            .requestTimeout(5000)
                                             .credentials(
                                                     ServerCredentials.builder().username(username).password(password).build())
                                             .build())
