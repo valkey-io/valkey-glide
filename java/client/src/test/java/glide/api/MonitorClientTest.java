@@ -9,8 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import glide.api.models.configuration.AwsCredentials;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.IamAuthConfig;
+import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.ServiceType;
+import glide.api.models.exceptions.ConfigurationError;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -115,6 +117,20 @@ public class MonitorClientTest {
                         .build();
 
         assertDoesNotThrow(() -> MonitorClient.validateConfiguration(config));
+    }
+
+    @Test
+    void monitorRejectsUnixSocketMixedWithTcp() {
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().build())
+                        .address(NodeAddress.builder().unixSocketPath("/run/valkey/valkey.sock").build())
+                        .build();
+
+        ConfigurationError error =
+                assertThrows(ConfigurationError.class, () -> MonitorClient.create(config));
+
+        assertTrue(error.getMessage().contains("combined with TCP addresses"));
     }
 
     private static GlideClientConfiguration iamConfig(
