@@ -113,14 +113,15 @@ async function createClusterClient(
         clusterServer = await ValkeyCluster.createCluster(
             true,
             3,
-            2,
+            1,
             getServerVersion,
         );
     }, CLUSTER_CREATION_TIMEOUT);
 
     afterAll(async () => {
-        await standaloneServer.close();
-        await clusterServer.close();
+        // Either server is undefined if its creation failed in beforeAll.
+        await standaloneServer?.close();
+        await clusterServer?.close();
     });
 
     it(
@@ -197,7 +198,7 @@ async function createClusterClient(
         clusterServer = await ValkeyCluster.createCluster(
             true,
             3,
-            2,
+            1,
             getServerVersion,
             true,
             tlsConfig,
@@ -205,8 +206,9 @@ async function createClusterClient(
     }, CLUSTER_CREATION_TIMEOUT);
 
     afterAll(async () => {
-        await standaloneServer.close();
-        await clusterServer.close();
+        // Either server is undefined if its creation failed in beforeAll.
+        await standaloneServer?.close();
+        await clusterServer?.close();
     });
 
     it(
