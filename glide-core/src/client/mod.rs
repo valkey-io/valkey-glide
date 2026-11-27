@@ -3491,7 +3491,6 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     )
 }
 
-/// The error for a command refused because the client circuit breaker is open.
 /// Rejects a command with no arguments. The server sends no reply to it, which would
 /// shift every later reply on the connection to the wrong request.
 pub(crate) fn reject_empty_command(cmd: &Cmd) -> RedisResult<()> {
@@ -3504,6 +3503,7 @@ pub(crate) fn reject_empty_command(cmd: &Cmd) -> RedisResult<()> {
     Ok(())
 }
 
+/// The error for a command refused because the client circuit breaker is open.
 fn circuit_breaker_open() -> RedisError {
     RedisError::from((
         ErrorKind::CircuitBreakerOpen,
