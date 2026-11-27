@@ -47,6 +47,8 @@ macOS:
 | 3.11           |
 | 3.12           |
 | 3.13           |
+| 3.14           |
+| 3.15           |
 
 Valkey GLIDE transparently supports both the `asyncio` and `trio` concurrency frameworks.
 
@@ -469,10 +471,10 @@ Valkey GLIDE supports automatic compression and decompression of string values t
 
 **Incompatible Commands**: Compression is NOT compatible with commands that manipulate or compare string data on the server:
 
-- APPEND, GETRANGE, SETRANGE, STRLEN, LCS, SUBSTR
-- DELIFEQ and SET with IFEQ or IFNE
-- INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY
-- GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP
+- String manipulation: APPEND, GETRANGE, LCS, SETRANGE, STRLEN, SUBSTR
+- Value comparison: DELEX, DELIFEQ, and SET with IFEQ or IFNE
+- Numeric operations: DECR, DECRBY, INCR, INCRBY, INCRBYFLOAT
+- Bit operations: BITCOUNT, BITFIELD, BITFIELD_RO, BITOP, BITPOS, GETBIT, SETBIT
 
 Using these commands with compressed values will result in incorrect behavior or errors.
 
@@ -554,12 +556,13 @@ if not GlideClient.rdma_usable():
 
 client = GlideClient.create(GlideClientConfiguration(
     addresses=[NodeAddress("localhost", 6379)],
-    # EfaDirect() for EFA hardware. Tcp() emulates RDMA over TCP, for development only.
+    # EfaDirect() for EFA hardware. Tcp() emulates RDMA over TCP; only a development
+    # build honors it.
     rdma=RdmaConfiguration(provider=RdmaProvider.EfaDirect()),
 ))
 
 # Register memory once: it pins the pages, which is slow. Then transfer through windows of it.
-slab = bytearray(64 << 20)  # or an mmap, a NumPy array, a tensor's storage
+slab = bytearray(64 << 20)  # or an mmap, a NumPy array such as a CPU tensor's .numpy()
 with client.register_rdma_region(slab) as region:
     window = region.window(0, 11)
     window.memoryview()[:] = b"hello world"
@@ -576,10 +579,30 @@ client.close()
   stay pinned until then.
 - A region carries one transfer at a time. Threads that transfer at once each need their own
   region, for example one per non-overlapping slice of the same buffer.
-- `rdma_get` checks every value it reads against the CRC-32c the server reports. `rdma_set` checks
-  only if you pass a checksum: `Skip()` (the default), `Compute()`, or `Known(crc)`.
+- `rdma_get` checks every value it reads into host memory against the CRC-32c the server reports.
+  `rdma_set` checks only if you pass a checksum: `Skip()` (the default), `Compute()`, or
+  `Known(crc)`.
 - Transfers have no timeout. To cancel one, call `client.close()` from another thread; the blocked
   call raises `ClosingError`, and you need a new client.
+
+### GPU Memory
+
+With `RdmaConfiguration(provider=RdmaProvider.EfaDirect(), device_memory=True)`,
+`register_rdma_region` also takes a CUDA `torch.Tensor` or CuPy array, and the server moves the
+value straight into or out of GPU memory. libfabric must be built with CUDA support. A tensor from
+PyTorch's expandable segments can span more than one mapping. Registering one that does needs
+libfabric 2.7.0 or newer, and the dmabuf path libfabric takes by default. GLIDE cannot read GPU
+memory, so a GPU region has no `memoryview()`, `rdma_set` takes `Skip()` or `Known(crc)` but not
+`Compute()`, and `rdma_get` returns the server's checksum in the receipt without checking it.
+Finish the GPU work that writes a window, for example with `torch.cuda.synchronize()`, before you
+`rdma_set` it. Submit GPU work that reads a window only after `rdma_get` returns, since work already
+running can see stale data. If the device's `CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WRITES_ORDERING`
+does not cover that work, call `cuFlushGPUDirectRDMAWrites` first.
+A tensor that requires grad can be registered, but `rdma_get` writes it outside PyTorch, so
+autograd's version counter does not change. Do not `rdma_get` into storage, or an alias of it, that
+a pending backward pass saved. `torch.autograd.graph.increment_version()` lets PyTorch detect such
+an overwrite but does not make the old graph valid. `rdma_set` and loading weights between backward
+passes are safe.
 
 ### Handling a Failed Transfer
 

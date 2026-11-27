@@ -16,6 +16,7 @@ use types::RedisParity;
 
 // --- constants --------------------------------------------------------------------------------------
 
+// TODO #7641: Target redis-rs 2.0.0
 /// Constants for the redis-rs release that GLIDE targets for parity.
 const REDIS_RS_VERSION: &str = "1.7.0";
 

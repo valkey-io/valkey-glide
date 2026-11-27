@@ -42,7 +42,7 @@ Other NAPI entry points: `sendBatch`, `invokeScript`, `clusterScan`, `updateConn
 
 ### Worker Pool Architecture
 
-- A global `LocalPoolHandle` (from `tokio_util`) manages `num_cpus` worker threads
+- A global `LocalPoolHandle` (from `tokio_util`) manages worker threads, sized by `glide_core::worker_pool::socket_listener_pool_size()` — the CPU count clamped to 8 by default, overridable with `GLIDE_SOCKET_LISTENER_WORKERS`
 - Each client is pinned to a single worker thread via `spawn_pinned` for thread-local command execution
 - Commands within a client run concurrently via `task::spawn_local` on that thread
 - The pool is reference-counted: created on first client, dropped when last client closes (enables clean Node.js exit)
@@ -100,7 +100,7 @@ npm run prettier:format         # Format code automatically
 # Development utilities
 npm run repl                    # Interactive TypeScript REPL
 npm run clean:build             # Clean build artifacts only
-npm run clean                   # Full cleanup — WARNING: also deletes the committed lockfiles (package-lock.json, rust-client/{package-lock.json,Cargo.lock}) and node_modules; restore the lockfiles with git before committing
+npm run clean                   # Full cleanup — WARNING: also deletes the committed npm lockfiles (package-lock.json, rust-client/package-lock.json) and node_modules; restore the lockfiles with git before committing. rust-client/Cargo.lock is kept: the --locked builds need it
 ```
 
 ### Raw Equivalents

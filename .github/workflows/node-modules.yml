@@ -14,6 +14,8 @@ on:
             - glide-core/redis-rs/redis/src/**
             - node/src/server-modules/**
             - node/tests/ServerModules.test.ts
+            - node/tests/ServerModulesSearchQueryFeatures.test.ts
+            - node/tests/searchCapabilityHelpers.ts
             - .github/workflows/node-modules.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
@@ -24,6 +26,8 @@ on:
             - glide-core/redis-rs/redis/src/**
             - node/src/server-modules/**
             - node/tests/ServerModules.test.ts
+            - node/tests/ServerModulesSearchQueryFeatures.test.ts
+            - node/tests/searchCapabilityHelpers.ts
             - .github/workflows/node-modules.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
@@ -114,7 +118,7 @@ jobs:
 
         steps:
             - name: Setup self-hosted runner access
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+              run: sudo chown -R "$USER:$USER" /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

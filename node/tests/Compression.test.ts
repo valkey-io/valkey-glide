@@ -14,6 +14,8 @@ import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     BaseClient,
     BaseClientConfiguration,
+    Batch,
+    ClusterBatch,
     ClusterTransaction,
     CompressionBackend,
     CompressionConfiguration,
@@ -517,6 +519,16 @@ describe("Compression", () => {
 
     // --- Incompatible commands tests ---
 
+    const setIfEqual = { conditionalSet: "onlyIfEqual", comparisonValue: "10" };
+    const setIfNotEqual = {
+        conditionalSet: "onlyIfNotEqual",
+        comparisonValue: "20",
+    };
+    const delexIfEqual = {
+        condition: "onlyIfEqual",
+        value: "10",
+    };
+
     /** Commands that are incompatible with compression, with their arguments after the key. */
     const INCOMPATIBLE_COMMANDS: {
         id: string;
@@ -528,28 +540,15 @@ describe("Compression", () => {
         { id: "bitpos", method: "bitpos", args: [1] },
         { id: "decr", method: "decr", args: [] },
         { id: "decrby", method: "decrBy", args: [5] },
-        { id: "delifeq", method: "delifeq", args: ["value"] },
+        { id: "delex", method: "delex", args: [delexIfEqual] },
+        { id: "delifeq", method: "delifeq", args: ["10"] },
         { id: "getbit", method: "getbit", args: [0] },
         { id: "getrange", method: "getrange", args: [0, 0] },
         { id: "incr", method: "incr", args: [] },
         { id: "incrby", method: "incrBy", args: [5] },
         { id: "incrbyfloat", method: "incrByFloat", args: [0.5] },
-        {
-            id: "set_ifeq",
-            method: "set",
-            args: [
-                "20",
-                { conditionalSet: "onlyIfEqual", comparisonValue: "10" },
-            ],
-        },
-        {
-            id: "set_ifne",
-            method: "set",
-            args: [
-                "20",
-                { conditionalSet: "onlyIfNotEqual", comparisonValue: "20" },
-            ],
-        },
+        { id: "set_ifeq", method: "set", args: ["20", setIfEqual] },
+        { id: "set_ifne", method: "set", args: ["20", setIfNotEqual] },
         { id: "setbit", method: "setbit", args: [0, 1] },
         { id: "setrange", method: "setrange", args: [1, "5"] },
         { id: "strlen", method: "strlen", args: [] },
@@ -593,71 +592,99 @@ describe("Compression", () => {
             );
             const key = uniqueKey("no_compression_test");
 
-            // Set initial value
-            await client.set(key, "100");
-
-            // All these commands should work without compression
-            // INCR
-            expect(await client.incr(key)).toBe(101);
-
-            // INCRBY
-            expect(await client.incrBy(key, 10)).toBe(111);
-
-            // DECR
-            expect(await client.decr(key)).toBe(110);
-
-            // DECRBY
-            expect(await client.decrBy(key, 10)).toBe(100);
-
-            // STRLEN
-            await client.set(key, "hello");
-            expect(await client.strlen(key)).toBe(5);
+            // All these commands should work without compression.
+            // Each command runs against the key set to "10".
 
             // APPEND
-            expect(await client.append(key, " world")).toBe(11);
-
-            // GETRANGE
-            expect(await client.getrange(key, 0, 4)).toBe("hello");
-
-            // SETRANGE
-            expect(await client.setrange(key, 6, "WORLD")).toBe(11);
-
-            // DELIFEQ
-            if (!standaloneCluster.checkIfServerVersionLessThan("9.0.0")) {
-                await client.delifeq(key, "value");
-            }
-
-            // GETBIT
-            await client.set(key, "\x00");
-            expect(await client.getbit(key, 0)).toBe(0);
-
-            // SETBIT
-            expect(await client.setbit(key, 0, 1)).toBe(0);
+            await client.set(key, "10");
+            expect(await client.append(key, "0")).toBe(3);
 
             // BITCOUNT
-            expect(await client.bitcount(key)).toBeGreaterThanOrEqual(0);
+            await client.set(key, "10");
+            expect(await client.bitcount(key)).toBe(5);
 
-            // SET with IFEQ
+            // BITPOS
+            await client.set(key, "10");
+            expect(await client.bitpos(key, 1)).toBe(2);
+
+            // DECR
+            await client.set(key, "10");
+            expect(await client.decr(key)).toBe(9);
+
+            // DECRBY
+            await client.set(key, "10");
+            expect(await client.decrBy(key, 5)).toBe(5);
+
+            // GETBIT
+            await client.set(key, "10");
+            expect(await client.getbit(key, 0)).toBe(0);
+
+            // GETRANGE
+            await client.set(key, "10");
+            expect(await client.getrange(key, 0, 0)).toBe("1");
+
+            // INCR
+            await client.set(key, "10");
+            expect(await client.incr(key)).toBe(11);
+
+            // INCRBY
+            await client.set(key, "10");
+            expect(await client.incrBy(key, 5)).toBe(15);
+
+            // INCRBYFLOAT
+            await client.set(key, "10");
+            expect(await client.incrByFloat(key, 0.5)).toBe(10.5);
+
+            // SETBIT
+            await client.set(key, "10");
+            expect(await client.setbit(key, 0, 1)).toBe(0);
+
+            // SETRANGE
+            await client.set(key, "10");
+            expect(await client.setrange(key, 1, "5")).toBe(2);
+
+            // STRLEN
+            await client.set(key, "10");
+            expect(await client.strlen(key)).toBe(2);
+
             if (!standaloneCluster.checkIfServerVersionLessThan("8.1.0")) {
-                await client.set(key, "hello");
+                // SET with IFEQ
+                await client.set(key, "10");
                 expect(
-                    await client.set(key, "world", {
+                    await client.set(key, "20", {
                         conditionalSet: "onlyIfEqual",
-                        comparisonValue: "hello",
+                        comparisonValue: "10",
                     }),
                 ).toBe("OK");
             }
 
-            // SET with IFNE
+            if (!standaloneCluster.checkIfServerVersionLessThan("9.0.0")) {
+                // DELIFEQ
+                await client.set(key, "10");
+                expect(await client.delifeq(key, "10")).toBe(true);
+            }
+
             if (!standaloneCluster.checkIfServerVersionLessThan("9.2.0")) {
-                await client.set(key, "hello");
+                // DELEX
+                await client.set(key, "10");
                 expect(
-                    await client.set(key, "world", {
+                    await client.delex(key, {
+                        condition: "onlyIfEqual",
+                        value: "10",
+                    }),
+                ).toBe(true);
+
+                // SET with IFNE
+                await client.set(key, "10");
+                expect(
+                    await client.set(key, "20", {
                         conditionalSet: "onlyIfNotEqual",
-                        comparisonValue: "world",
+                        comparisonValue: "20",
                     }),
                 ).toBe("OK");
             }
+
+            await client.del([key]);
         },
         TIMEOUT,
     );
@@ -982,6 +1009,68 @@ describe("Compression", () => {
             expect(after.total_values_decompressed).toBe(
                 before.total_values_decompressed,
             );
+        },
+        TIMEOUT,
+    );
+
+    it.each([
+        [false, false],
+        [false, true],
+        [true, false],
+        [true, true],
+    ])(
+        "compression_batch_keeps_header_shaped_neighbour cluster_mode=%p atomic=%p",
+        async (clusterMode, atomic) => {
+            client = await createCompressedClient(clusterMode, {
+                enabled: true,
+            });
+            const plainClient = clusterMode
+                ? await GlideClusterClient.createClient(
+                      getClientConfigurationOption(
+                          getAddresses(true),
+                          ProtocolVersion.RESP3,
+                      ),
+                  )
+                : await GlideClient.createClient(
+                      getClientConfigurationOption(
+                          getAddresses(false),
+                          ProtocolVersion.RESP3,
+                      ),
+                  );
+
+            try {
+                const compressedKey = uniqueKey("{batch_collision}_compressed");
+                const plainKey = uniqueKey("{batch_collision}_plain");
+                // Names a real backend so the decoder runs, on a payload it rejects.
+                const headerShapedPlain = Buffer.from([
+                    0x00, 0x01, 0x02, 0x00, 0x01, 0x7a, 0x7a, 0x7a, 0x7a,
+                ]);
+
+                await client.set(compressedKey, TEXT_1K);
+                await plainClient.set(plainKey, headerShapedPlain);
+
+                const results = clusterMode
+                    ? await (client as GlideClusterClient).exec(
+                          new ClusterBatch(atomic)
+                              .get(compressedKey)
+                              .get(plainKey),
+                          true,
+                          { decoder: Decoder.Bytes },
+                      )
+                    : await (client as GlideClient).exec(
+                          new Batch(atomic).get(compressedKey).get(plainKey),
+                          true,
+                          { decoder: Decoder.Bytes },
+                      );
+
+                expect(results).not.toBeNull();
+                expect((results![0] as Buffer).toString()).toBe(TEXT_1K);
+                expect(results![1]).toEqual(headerShapedPlain);
+
+                await plainClient.del([compressedKey, plainKey]);
+            } finally {
+                plainClient.close();
+            }
         },
         TIMEOUT,
     );

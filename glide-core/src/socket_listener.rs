@@ -16,6 +16,7 @@ use crate::otel_db_semantics::{
 };
 use crate::response;
 use crate::response::Response;
+use crate::worker_pool::socket_listener_pool_size;
 use ClosingReason::*;
 use PipeListeningResult::*;
 use bytes::Bytes;
@@ -321,6 +322,7 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClientUsageError> {
         }
     };
 
+    // TODO #7666: Remove this check once `Client::send_command` rejects empty commands.
     if cmd.args_iter().next().is_none() {
         return Err(ClientUsageError::User(
             "Received command without a command name or arguments".into(),
@@ -370,34 +372,6 @@ async fn send_command(
 }
 
 /// Process a command for compression by extracting arguments and applying compression
-/// Process batch response for decompression
-///
-/// This function processes the response from a batch operation (pipeline or transaction)
-/// and decompresses individual response values using magic header detection.
-///
-/// # Arguments
-/// * `response` - The batch response value (typically an array)
-/// * `client` - The client instance containing the compression manager
-///
-/// # Returns
-/// * `Ok(Value)` - The processed response with decompressed values
-/// * `Err(CompressionError)` - If critical decompression errors occur
-fn process_batch_response_for_decompression(
-    response: redis::Value,
-    client: &Client,
-) -> Result<redis::Value, crate::compression::CompressionError> {
-    // Get compression manager from client
-    let compression_manager = client.compression_manager();
-    let compression_manager_ref = compression_manager.as_deref();
-
-    // If no compression manager, return response as-is
-    let Some(manager) = compression_manager_ref else {
-        return Ok(response);
-    };
-
-    crate::compression::decompress_batch_response(response, manager)
-}
-
 fn process_command_for_compression(
     cmd: &mut Cmd,
     client: &Client,
@@ -431,40 +405,19 @@ fn process_command_for_compression(
 
     // Extract command name to determine request type
     let command_name = &all_args[0];
-    let command_str = String::from_utf8_lossy(command_name).to_uppercase();
-    let request_type = match command_str.as_str() {
-        // Commands that support compression
-        "GETSET" => crate::request_type::RequestType::GetSet,
-        "MSET" => crate::request_type::RequestType::MSet,
-        "MSETNX" => crate::request_type::RequestType::MSetNX,
-        "PSETEX" => crate::request_type::RequestType::PSetEx,
-        "SET" => crate::request_type::RequestType::Set,
-        "SETEX" => crate::request_type::RequestType::SetEx,
-        "SETNX" => crate::request_type::RequestType::SetNX,
-        // Incompatible commands - string manipulation
-        "APPEND" => crate::request_type::RequestType::Append,
-        "DELIFEQ" => crate::request_type::RequestType::DelIfEq,
-        "GETRANGE" => crate::request_type::RequestType::GetRange,
-        "LCS" => crate::request_type::RequestType::LCS,
-        "SETRANGE" => crate::request_type::RequestType::SetRange,
-        "STRLEN" => crate::request_type::RequestType::Strlen,
-        "SUBSTR" => crate::request_type::RequestType::Substr,
-        // Incompatible commands - numeric operations
-        "DECR" => crate::request_type::RequestType::Decr,
-        "DECRBY" => crate::request_type::RequestType::DecrBy,
-        "INCR" => crate::request_type::RequestType::Incr,
-        "INCRBY" => crate::request_type::RequestType::IncrBy,
-        "INCRBYFLOAT" => crate::request_type::RequestType::IncrByFloat,
-        // Incompatible commands - bit operations
-        "BITCOUNT" => crate::request_type::RequestType::BitCount,
-        "BITFIELD" => crate::request_type::RequestType::BitField,
-        "BITFIELD_RO" => crate::request_type::RequestType::BitFieldReadOnly,
-        "BITOP" => crate::request_type::RequestType::BitOp,
-        "BITPOS" => crate::request_type::RequestType::BitPos,
-        "GETBIT" => crate::request_type::RequestType::GetBit,
-        "SETBIT" => crate::request_type::RequestType::SetBit,
-        _ => return Ok(()), // Unknown command, no compression processing needed
+    let command_str = String::from_utf8_lossy(command_name);
+    let request_type = match crate::request_type::RequestType::from_command_name(&command_str) {
+        Some(request_type) => request_type,
+        None => return Ok(()), // Unknown command, no compression processing needed
     };
+
+    // Reply-only commands need no argument processing; keep the original command.
+    if matches!(
+        request_type.compression_behavior(),
+        crate::compression::CommandCompressionBehavior::DecompressValues
+    ) {
+        return Ok(());
+    }
 
     // Get arguments excluding the command name
     let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
@@ -586,21 +539,17 @@ async fn send_batch(
         pipeline.add_command(redis_cmd);
     }
 
-    let res = match request.is_atomic {
+    let raise_on_error = request.raise_on_error.unwrap_or_default();
+    let res: ClientUsageResult<Value> = match request.is_atomic {
         true => client
-            .send_transaction(
-                &pipeline,
-                routing,
-                request.timeout,
-                request.raise_on_error.unwrap_or_default(),
-            )
+            .send_transaction(&pipeline, routing, request.timeout, raise_on_error)
             .await
             .map_err(|err| err.into()),
         false => client
             .send_pipeline(
                 &pipeline,
                 routing,
-                request.raise_on_error.unwrap_or_default(),
+                raise_on_error,
                 request.timeout,
                 PipelineRetryStrategy {
                     retry_server_error: request.retry_server_error.unwrap_or_default(),
@@ -611,23 +560,13 @@ async fn send_batch(
             .map_err(|err| err.into()),
     };
 
-    // Process response for decompression if needed
-    match res {
-        Ok(value) => {
-            match process_batch_response_for_decompression(value.clone(), client) {
-                Ok(processed_value) => Ok(processed_value),
-                Err(e) => {
-                    // Log decompression error but return original response
-                    log_warn(
-                        "batch_response_decompression",
-                        format!("Failed to decompress batch response: {}", e),
-                    );
-                    Ok(value)
-                }
-            }
-        }
-        Err(e) => Err(e),
-    }
+    let decompressed = crate::compression::try_decompress_batch_response(
+        res?,
+        client.compression_manager().as_deref(),
+        raise_on_error,
+    )
+    .map_err(RedisError::from)?;
+    Ok(decompressed)
 }
 
 fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageResult<SlotAddr> {
@@ -682,6 +621,8 @@ fn get_route(
         ))),
         Value::SlotIdRoute(slot_id_route) => Ok(Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
+                // TODO #7681: Use a checked conversion (`u16::try_from`) and reject out-of-range
+                // slots.
                 slot_id_route.slot_id as u16,
                 get_slot_addr(&slot_id_route.slot_type)?,
             )),
@@ -1268,6 +1209,41 @@ pub fn start_socket_listener_internal<InitCallback>(
         }
     };
 
+    // Build the worker pool on the caller's thread, before the listener task is spawned.
+    // `LocalPoolHandle::new` panics instead of returning an error when a worker thread
+    // cannot be created: a runtime `build()` failure (e.g. `EMFILE` under a low `nofile`
+    // limit) panics before any runtime exists, and a `std::thread::spawn` failure (e.g.
+    // `EAGAIN` under a `pids` limit) drops the already-built runtime during the unwind.
+    // Inside the async task below both panics would be lost: the error would land only
+    // on stderr from a task whose join handle is discarded, after the `Ok` readiness
+    // signal had already been sent — and the thread-spawn failure would additionally be
+    // masked by tokio's "Cannot drop a runtime in a context where blocking is not
+    // allowed". Here, on the caller's thread, the panic is caught and reported through
+    // the init callback before the `Ok` readiness signal is sent, so a failure is
+    // reported rather than appearing as a refused connection to a socket nobody listens
+    // on. Nothing is bound yet on this path, so there is no socket file to clean up.
+    let pool_size = socket_listener_pool_size();
+    let local_set_pool = match std::panic::catch_unwind(|| LocalPoolHandle::new(pool_size)) {
+        Ok(pool) => pool,
+        Err(panic) => {
+            let reason = panic
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| panic.downcast_ref::<&str>().copied())
+                .unwrap_or("unknown panic");
+            let message = format!(
+                "Failed to create the socket listener worker pool of {pool_size} workers: {reason}"
+            );
+            log_error("listen_on_socket", message.clone());
+            init_callback(Err(message));
+            return;
+        }
+    };
+    log_debug(
+        "listen_on_socket",
+        format!("Socket listener worker pool size: {pool_size}"),
+    );
+
     glide_rt.runtime.spawn(async move {
         let listener_socket = match UnixListener::bind(socket_path_cloned.clone()) {
             Err(err) => {
@@ -1298,6 +1274,11 @@ pub fn start_socket_listener_internal<InitCallback>(
                 "listen_on_socket",
                 format!("Failed to set socket path permissions: {err:?}"),
             );
+            // Drop the listener so the path is free, remove the socket file, and report
+            // the failure. The path has not been recorded in `INITIALIZED_SOCKETS` yet,
+            // so a retry starts a fresh listener.
+            drop(listener_socket);
+            let _ = std::fs::remove_file(&socket_path_cloned);
             let _ = tx.send(Err(err));
             return;
         }
@@ -1305,7 +1286,6 @@ pub fn start_socket_listener_internal<InitCallback>(
         // Signal initialization is successful.
         let _ = tx.send(Ok(socket_path_cloned.clone()));
 
-        let local_set_pool = LocalPoolHandle::new(num_cpus::get());
         loop {
             match listener_socket.accept().await {
                 Ok((stream, _addr)) => {

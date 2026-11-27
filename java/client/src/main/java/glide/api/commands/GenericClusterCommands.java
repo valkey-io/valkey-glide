@@ -181,6 +181,10 @@ public interface GenericClusterCommands {
      *
      * <p>Note that the same key may be returned in multiple scan iterations.
      *
+     * <p>Each iteration is bounded by the client's request timeout. After a timeout, retry with the
+     * same cursor to resume. If an iteration keeps timing out, use {@link #scan(ClusterScanCursor,
+     * ScanOptions)} with a smaller count, or a longer request timeout.
+     *
      * <p>How to use the {@link ClusterScanCursor}: <br>
      * For each iteration, the previous scan {@link ClusterScanCursor} object should be used to
      * continue the <code>SCAN</code> by passing it in the <code>cursor</code> argument. Using the
@@ -239,6 +243,10 @@ public interface GenericClusterCommands {
      *
      * <p>Note that the same key may be returned in multiple scan iterations.
      *
+     * <p>Each iteration is bounded by the client's request timeout. After a timeout, retry with the
+     * same cursor to resume. If an iteration keeps timing out, use {@link
+     * #scanBinary(ClusterScanCursor, ScanOptions)} with a smaller count, or a longer request timeout.
+     *
      * <p>How to use the {@link ClusterScanCursor}: <br>
      * For each iteration, the previous scan {@link ClusterScanCursor} object should be used to
      * continue the <code>SCAN</code> by passing it in the <code>cursor</code> argument. Using the
@@ -295,6 +303,10 @@ public interface GenericClusterCommands {
      * are not guaranteed to be scanned.
      *
      * <p>Note that the same key may be returned in multiple scan iterations.
+     *
+     * <p>Each iteration is bounded by the client's request timeout. After a timeout, retry with the
+     * same cursor to resume. If an iteration keeps timing out, use a smaller count or a longer
+     * request timeout.
      *
      * <p>How to use the {@link ClusterScanCursor}: <br>
      * For each iteration, the previous scan {@link ClusterScanCursor} object should be used to
@@ -355,6 +367,10 @@ public interface GenericClusterCommands {
      * are not guaranteed to be scanned.
      *
      * <p>Note that the same key may be returned in multiple scan iterations.
+     *
+     * <p>Each iteration is bounded by the client's request timeout. After a timeout, retry with the
+     * same cursor to resume. If an iteration keeps timing out, use a smaller count or a longer
+     * request timeout.
      *
      * <p>How to use the {@link ClusterScanCursor}: <br>
      * For each iteration, the previous scan {@link ClusterScanCursor} object should be used to

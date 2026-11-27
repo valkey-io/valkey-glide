@@ -61,8 +61,31 @@ pub fn process_command_args_for_compression(
 pub fn decompress_batch_response(
     value: redis::Value,
     _compression_manager: &CompressionManager,
+    _raise_on_error: bool,
 ) -> Result<redis::Value, String> {
     Ok(value)
+}
+
+/// Mock of the one error the decompression read path reports to the caller
+#[derive(Debug, Clone)]
+pub struct SizeLimitExceeded;
+
+impl std::fmt::Display for SizeLimitExceeded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Decompression size limit exceeded")
+    }
+}
+
+impl std::error::Error for SizeLimitExceeded {}
+
+impl From<SizeLimitExceeded> for redis::RedisError {
+    fn from(limit: SizeLimitExceeded) -> Self {
+        redis::RedisError::from((
+            redis::ErrorKind::IoError,
+            "Decompression error",
+            limit.to_string(),
+        ))
+    }
 }
 
 /// Mock function to try decompress batch response with optional manager
@@ -70,6 +93,7 @@ pub fn decompress_batch_response(
 pub fn try_decompress_batch_response(
     value: redis::Value,
     _manager: Option<&CompressionManager>,
-) -> CompressionResult<redis::Value> {
+    _raise_on_error: bool,
+) -> Result<redis::Value, SizeLimitExceeded> {
     Ok(value)
 }

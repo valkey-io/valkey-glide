@@ -289,6 +289,10 @@ class CoreCommands(Protocol):
         """
         Set the value of a key with the given options.
 
+        Since:
+            - Valkey 8.1.0 with `OnlyIfEqual`
+            - Valkey 9.2.0 with `OnlyIfNotEqual`
+
         See [valkey.io](https://valkey.io/commands/set/) for more details.
 
         Args:
@@ -489,21 +493,48 @@ class CoreCommands(Protocol):
 
         Args:
             key (TEncodable): The key to delete.
-            value (TEncodable): The comparison value. The key is only deleted if its current value
-                matches `value` exactly.
+            value (TEncodable): The value to compare against the key.
 
         Returns:
-            bool: True if `key` was deleted. False if `key` did not exist or its value did not match
-                `value`.
+            bool: True if `key` was deleted, False otherwise.
 
         Examples:
             >>> client.set("key", "value")
-            >>> client.delifeq("key", "wrong_value")
+            >>> client.delifeq("key", "other_value")
                 False
             >>> client.delifeq("key", "value")
                 True
         """
         return cast(bool, self._execute_command(RequestType.DelIfEq, [key, value]))
+
+    def delex(self, key: TEncodable, condition: ValueComparison) -> bool:
+        """
+        Deletes `key` if its value meets the given condition.
+
+        Since: Valkey 9.2.0.
+
+        See [valkey.io](https://valkey.io/commands/delex) for more details.
+
+        Args:
+            key (TEncodable): The key to delete.
+            condition (ValueComparison): The condition for deleting the key.
+
+        Returns:
+            bool: True if `key` was deleted, False otherwise.
+
+        Examples:
+            >>> client.set("key", "value")
+            >>> client.delex("key", OnlyIfEqual("other_value"))
+                False
+            >>> client.delex("key", OnlyIfNotEqual("value"))
+                False
+            >>> client.delex("key", OnlyIfEqual("value"))
+                True
+        """
+        return cast(
+            bool,
+            self._execute_command(RequestType.DelEx, [key, *condition._to_args()]),
+        )
 
     def strlen(self, key: TEncodable) -> int:
         """
@@ -4956,8 +4987,12 @@ class CoreCommands(Protocol):
                     f"Cannot choose both {update_condition.value} and NX."
                 )
 
-        members_scores_list = [
-            str(item) for pair in members_scores.items() for item in pair[::-1]
+        # Only scores are stringified; members are passed through as TEncodable so
+        # bytes and memoryview members are not turned into their Python repr.
+        members_scores_list: List[TEncodable] = [
+            item
+            for member, score in members_scores.items()
+            for item in (str(score), member)
         ]
         args += members_scores_list
 
@@ -5166,7 +5201,7 @@ class CoreCommands(Protocol):
         return cast(
             Mapping[bytes, float],
             self._execute_command(
-                RequestType.ZPopMax, [key, str(count)] if count else [key]
+                RequestType.ZPopMax, [key, str(count)] if count is not None else [key]
             ),
         )
 
@@ -5237,7 +5272,7 @@ class CoreCommands(Protocol):
                 {b'member3': 7.5 , b'member2': 8.0}  # Indicates that 'member3' with a score of 7.5 and 'member2' with a score
                                                      # of 8.0 have been removed from the sorted set.
         """
-        args: List[TEncodable] = [key, str(count)] if count else [key]
+        args: List[TEncodable] = [key, str(count)] if count is not None else [key]
         return cast(
             Mapping[bytes, float],
             self._execute_command(RequestType.ZPopMin, args),

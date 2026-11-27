@@ -242,6 +242,8 @@ struct InFlight {
     response_aggregate: ResponseAggregate,
     is_fenced: bool,
     fenced_result: Option<RedisResult<Value>>,
+    /// The request was written after `ASKING`, whose reply comes first and is discarded.
+    asking: bool,
 }
 
 // A single message sent through the pipeline
@@ -252,6 +254,7 @@ struct PipelineMessage<S> {
     pipeline_response_count: Option<usize>,
     is_transaction: bool,
     is_fenced: bool,
+    asking: bool,
 }
 
 /// Wrapper around a `Stream + Sink` where each item sent through the `Sink` results in one or more
@@ -275,6 +278,10 @@ pub(crate) struct Pipeline<SinkItem> {
     progress: Arc<AtomicU64>,
     /// Aborts the driver task that owns the socket. See [`Pipeline::kill`].
     abort_handle: AbortHandle,
+    /// Set once the server tracks keys for the client-side cache on this connection
+    /// (`CLIENT TRACKING ON`). Shared with the `PipelineSink`, which flushes the cache
+    /// when the connection closes.
+    tracking_on: Arc<AtomicBool>,
 }
 
 impl<SinkItem> Debug for Pipeline<SinkItem>
@@ -283,6 +290,26 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Pipeline").field(&self.sender).finish()
+    }
+}
+
+/// Flushes the server-assisted cache when a connection that turned on tracking closes.
+/// Invalidations for it stop when it closes, and the ones the server sends before the client
+/// reconnects are lost, so anything cached until now may already be stale. This runs for any
+/// closed tracking connection, including one glide replaces on purpose, and the cache may be
+/// shared with other clients. Skipping it while another tracking connection to the node is
+/// open isn't safe: that one only has the invalidations sent since it turned tracking on, and
+/// glide can connect a replacement before the old connection is dropped.
+///
+/// It clears the flag, so it flushes once per connection. The read loop calls it on EOF,
+/// before glide is told the connection is gone and reconnects, and the drop then leaves alone
+/// what the new connection has cached since. The drop covers a connection that closes without
+/// an EOF: killed, or its last handle dropped.
+fn flush_if_tracking(tracking_on: &AtomicBool, cache: Option<&dyn GlideCache>) {
+    if tracking_on.swap(false, Ordering::AcqRel) {
+        if let Some(cache) = cache {
+            cache.flush_all_server_assisted();
+        }
     }
 }
 
@@ -297,12 +324,18 @@ pin_project! {
         is_stream_closed: Arc<AtomicBool>,
         response_sync_lost: bool,
         cache: Option<Arc<dyn GlideCache>>,
+        tracking_on: Arc<AtomicBool>,
         progress: Arc<AtomicU64>,
     }
 
         impl<T> PinnedDrop for PipelineSink<T> {
         fn drop(this: Pin<&mut Self>) {
             let this = this.project();
+
+            // The read loop flushes on EOF. This covers a connection that closes without one:
+            // killed, or its last handle dropped.
+            flush_if_tracking(this.tracking_on, this.cache.as_deref());
+
             let push_manager = this.push_manager.load();
             let address = push_manager.get_address();
 
@@ -326,6 +359,7 @@ where
         disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
         is_stream_closed: Arc<AtomicBool>,
         cache: Option<Arc<dyn GlideCache>>,
+        tracking_on: Arc<AtomicBool>,
         progress: Arc<AtomicU64>,
     ) -> Self
     where
@@ -340,6 +374,7 @@ where
             is_stream_closed,
             response_sync_lost: false,
             cache,
+            tracking_on,
             progress,
         }
     }
@@ -352,6 +387,9 @@ where
                 // The redis response stream is not going to produce any more items so we `Err`
                 // to break out of the `forward` combinator and stop handling requests
                 None => {
+                    // Flush before glide hears about the disconnect and reconnects.
+                    let this = self.as_mut().project();
+                    flush_if_tracking(this.tracking_on, this.cache.as_deref());
                     // this is the right place to notify about the passive TCP disconnect
                     // In other places we cannot distinguish between the active destruction of MultiplexedConnection and passive disconnect
                     if let Some(disconnect_notifier) = self.as_mut().project().disconnect_notifier {
@@ -417,6 +455,15 @@ where
             None => return,
         };
 
+        // The first reply of a request (a command or a pipeline) sent after `ASKING` answers
+        // `ASKING`; drop it before any aggregation, also when it is an error, as the request's
+        // own replies follow.
+        if entry.asking {
+            entry.asking = false;
+            self_.in_flight.push_front(entry);
+            return;
+        }
+
         // Handle fenced commands
         if entry.is_fenced {
             Self::handle_fenced_command(entry, result, self_.in_flight, self_.response_sync_lost);
@@ -443,6 +490,8 @@ where
                         // If we receive a `ServerError` here, it means the error occurred between `MULTI` and `EXEC`.
                         // After `EXEC`, the response is always a single array of results, so any error at this stage must have happened before `EXEC` was sent.
                         // As a result, the entire transaction will be discarded (and can be retried).
+
+                        // TODO #7654: Return an `ExecAbortError` with this error in its message.
                         if first_err.is_none() {
                             *first_err = Some(err.into());
                         }
@@ -612,6 +661,7 @@ where
             pipeline_response_count,
             is_transaction,
             is_fenced,
+            asking,
         }: PipelineMessage<SinkItem>,
     ) -> Result<(), Self::Error> {
         // A message was pulled from the channel into the sink, so a channel slot
@@ -659,8 +709,12 @@ where
                     response_aggregate,
                     is_fenced,
                     fenced_result: None,
+                    asking,
                 };
 
+                // TODO #7666: Stop a request that never gets a reply (e.g. an empty command)
+                // from shifting every later reply, e.g. by closing the connection when a request
+                // times out.
                 self_.in_flight.push_back(entry);
                 Ok(())
             }
@@ -712,7 +766,12 @@ where
         // No new requests will come in after the first call to `close` but we need to complete any
         // in progress requests before closing
         if !self.in_flight.is_empty() {
-            ready!(self.as_mut().poll_flush(cx))?;
+            // `poll_flush` reads replies until the socket has nothing more to give, so it
+            // returns Pending right after the last owed reply arrives, and nothing wakes
+            // this task again. Only wait while replies are still owed.
+            if self.as_mut().poll_flush(cx)?.is_pending() && !self.in_flight.is_empty() {
+                return Poll::Pending;
+            }
         }
         let this = self.as_mut().project();
         this.sink_stream.poll_close(cx).map_err(|err| {
@@ -780,12 +839,14 @@ where
             Arc::new(ArcSwap::new(Arc::new(PushManager::default())));
         let is_stream_closed = Arc::new(AtomicBool::new(false));
         let progress = Arc::new(AtomicU64::new(0));
+        let tracking_on = Arc::new(AtomicBool::new(false));
         let sink = PipelineSink::new::<SinkItem>(
             sink_stream,
             push_manager.clone(),
             disconnect_notifier,
             is_stream_closed.clone(),
             cache,
+            tracking_on.clone(),
             progress.clone(),
         );
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
@@ -800,12 +861,15 @@ where
                 is_stream_closed,
                 progress,
                 abort_handle,
+                tracking_on,
             },
             f,
         )
     }
 
     // `None` means that the stream was out of items causing that poll loop to shut down.
+    // `send_packed_command` calls `send_recv` directly, to pass the command's `asking` flag.
+    #[cfg(test)]
     async fn send_single(
         &mut self,
         item: SinkItem,
@@ -813,10 +877,11 @@ where
         is_fenced: bool,
         is_blocking: bool,
     ) -> RedisResult<Value> {
-        self.send_recv(item, None, timeout, true, is_fenced, is_blocking)
+        self.send_recv(item, None, timeout, true, is_fenced, is_blocking, false)
             .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn send_recv(
         &mut self,
         input: SinkItem,
@@ -826,6 +891,8 @@ where
         is_atomic: bool,
         is_fenced: bool,
         is_blocking: bool,
+        // The input starts with `ASKING`, whose reply is discarded.
+        asking: bool,
     ) -> Result<Value, RedisError> {
         let (sender, receiver) = oneshot::channel();
 
@@ -910,6 +977,7 @@ where
             output: sender,
             is_transaction: is_atomic,
             is_fenced,
+            asking,
         });
         let send_elapsed = send_start.elapsed();
         let send_warn_threshold = std::cmp::min(timeout / 4, std::time::Duration::from_millis(500));
@@ -979,6 +1047,11 @@ where
     pub fn kill(&self) {
         self.is_stream_closed.store(true, Ordering::Relaxed);
         self.abort_handle.abort();
+    }
+
+    /// Records that the server tracks keys for the client-side cache on this connection.
+    fn set_tracking_on(&self) {
+        self.tracking_on.store(true, Ordering::Release);
     }
 }
 
@@ -1090,6 +1163,12 @@ impl MultiplexedConnection {
                 }
             }
         };
+        // Setup succeeded, so it turned tracking on. A failed setup may have turned tracking
+        // on too (it can fail later, on the AZ `INFO`), but that connection was never handed
+        // out, so nothing in the cache came from it and closing it needn't flush.
+        if connection_info.redis.server_assisted_cache {
+            con.pipeline.set_tracking_on();
+        }
 
         Ok((con, driver))
     }
@@ -1126,6 +1205,7 @@ impl MultiplexedConnection {
                 misses_cmd
                     .set_span(cmd.span())
                     .set_fenced(cmd.is_fenced())
+                    .set_asking(cmd.is_asking())
                     .set_is_blocking(cmd.is_blocking());
                 misses_cmd.set_response_timeout(cmd.response_timeout());
 
@@ -1164,7 +1244,7 @@ impl MultiplexedConnection {
         let timeout = cmd.response_timeout().unwrap_or(self.response_timeout);
         let result = self
             .pipeline
-            .send_single(
+            .send_recv(
                 // Commands with no out-of-line payloads skip the segmented
                 // representation entirely (see SendBuf::Contiguous).
                 if cmd.has_out_of_line_args() {
@@ -1172,9 +1252,12 @@ impl MultiplexedConnection {
                 } else {
                     crate::cmd::SendBuf::Contiguous(cmd.get_packed_command())
                 },
+                None,
                 timeout,
+                true,
                 cmd.is_fenced(),
                 cmd.is_blocking(),
+                cmd.is_asking(),
             )
             .await;
         if self.protocol != ProtocolVersion::RESP2 {
@@ -1194,6 +1277,11 @@ impl MultiplexedConnection {
     /// Sends multiple already encoded (packed) command into the TCP socket
     /// and reads `count` responses from it.  This is used to implement
     /// pipelining.
+    ///
+    /// A pipeline that starts with `ASKING` (`Pipeline::with_asking`) gets the reply to
+    /// `ASKING` discarded before its replies are aggregated, as a single command sent after
+    /// `ASKING` does, so `offset` and `count` do not count it and an `ASKING` error does not
+    /// become the pipeline's error.
     pub async fn send_packed_commands(
         &mut self,
         cmd: &crate::Pipeline,
@@ -1209,6 +1297,7 @@ impl MultiplexedConnection {
                 cmd.is_atomic(),
                 false,
                 false,
+                cmd.is_asking(),
             )
             .await;
 
@@ -1634,6 +1723,425 @@ mod tests {
         driver.abort();
     }
 
+    fn sent_bytes(buf: crate::cmd::SendBuf) -> Vec<u8> {
+        match buf {
+            crate::cmd::SendBuf::Contiguous(bytes) => bytes,
+            crate::cmd::SendBuf::Segmented(segments) => segments.to_contiguous(),
+        }
+    }
+
+    /// A connection over `ResponseSink`, with the channels that see its writes and feed it
+    /// replies.
+    async fn connection_over_response_sink(
+        response_timeout: Duration,
+    ) -> (
+        MultiplexedConnection,
+        mpsc::UnboundedReceiver<crate::cmd::SendBuf>,
+        futures_mpsc::Sender<RedisResult<Value>>,
+        tokio::task::JoinHandle<()>,
+    ) {
+        let (command_tx, command_rx) = mpsc::unbounded_channel();
+        let (response_tx, response_rx) = futures_mpsc::channel(8);
+        let sink = ResponseSink {
+            command_tx,
+            response_rx,
+        };
+        let (pipeline, driver) = Pipeline::new(sink, None, None);
+        let driver = tokio::spawn(driver);
+        let connection = MultiplexedConnection::builder(pipeline)
+            .with_response_timeout(response_timeout)
+            .build()
+            .await
+            .unwrap();
+        (connection, command_rx, response_tx, driver)
+    }
+
+    fn asking_get(key: &str, fenced: bool) -> Cmd {
+        let mut command = crate::cmd("GET");
+        command.arg(key).set_fenced(fenced).set_asking(true);
+        command
+    }
+
+    /// A command sent with `ASKING` is one write; the reply to `ASKING` (and the fence's
+    /// `PONG`) are discarded, and the next request gets the next reply.
+    #[tokio::test]
+    async fn test_asking_command_discards_exactly_the_asking_reply() {
+        let asking_replies = [
+            Ok(Value::Okay),
+            Err(RedisError::from((
+                crate::ErrorKind::ResponseError,
+                "asking failed",
+            ))),
+            Ok(Value::ServerError(
+                crate::types::ServerError::ExtensionError {
+                    code: "ERR".to_string(),
+                    detail: Some("asking failed".to_string()),
+                },
+            )),
+        ];
+        for (fenced, asking_reply) in [false, true]
+            .into_iter()
+            .flat_map(|fenced| asking_replies.iter().map(move |reply| (fenced, reply)))
+        {
+            let (connection, mut command_rx, mut response_tx, driver) =
+                connection_over_response_sink(Duration::from_secs(5)).await;
+
+            let mut asked = connection.clone();
+            let first = tokio::spawn(async move {
+                asked
+                    .send_packed_command(&asking_get("asked", fenced))
+                    .await
+            });
+            let sent = sent_bytes(command_rx.recv().await.expect("first write"));
+            assert_eq!(sent, asking_get("asked", fenced).get_packed_command());
+            assert!(sent.starts_with(b"*1\r\n$6\r\nASKING\r\n*2\r\n$3\r\nGET\r\n"));
+
+            let mut plain = connection.clone();
+            let second = tokio::spawn(async move {
+                let mut command = crate::cmd("GET");
+                command.arg("plain");
+                plain.send_packed_command(&command).await
+            });
+            let sent = sent_bytes(command_rx.recv().await.expect("second write"));
+            assert!(sent.starts_with(b"*2\r\n$3\r\nGET\r\n"));
+
+            response_tx
+                .try_send(match asking_reply {
+                    Ok(value) => Ok(value.clone()),
+                    Err(error) => Err(error.clone_mostly("asking failed")),
+                })
+                .unwrap();
+            response_tx
+                .try_send(Ok(Value::BulkString(b"asked".to_vec().into())))
+                .unwrap();
+            if fenced {
+                response_tx
+                    .try_send(Ok(Value::SimpleString("PONG".into())))
+                    .unwrap();
+            }
+            response_tx
+                .try_send(Ok(Value::BulkString(b"plain".to_vec().into())))
+                .unwrap();
+
+            assert_eq!(
+                first.await.unwrap(),
+                Ok(Value::BulkString(b"asked".to_vec().into())),
+                "fenced={fenced} asking_reply={asking_reply:?}"
+            );
+            assert_eq!(
+                second.await.unwrap(),
+                Ok(Value::BulkString(b"plain".to_vec().into())),
+                "fenced={fenced} asking_reply={asking_reply:?}"
+            );
+            driver.abort();
+        }
+    }
+
+    /// The replies `ASKING` may get: OK, an error, or a server error (e.g. `NOPERM`).
+    #[cfg(feature = "cluster-async")]
+    const ASKING_REPLY_KINDS: usize = 3;
+
+    #[cfg(feature = "cluster-async")]
+    fn asking_reply(index: usize) -> RedisResult<Value> {
+        match index {
+            0 => Ok(Value::Okay),
+            1 => Err(RedisError::from((
+                crate::ErrorKind::ResponseError,
+                "asking failed",
+            ))),
+            _ => Ok(Value::ServerError(crate::types::ServerError::KnownError {
+                kind: crate::types::ServerErrorKind::PermissionDenied,
+                detail: Some("asking failed".to_string()),
+            })),
+        }
+    }
+
+    /// `MULTI`, `SET k v`, `GET k`, `EXEC`, with `ASKING` packed first; the caller reads the
+    /// `EXEC` reply at `offset` 3, as without `ASKING`.
+    #[cfg(feature = "cluster-async")]
+    fn asking_transaction() -> crate::Pipeline {
+        let mut pipeline = crate::pipe();
+        pipeline.atomic().set("k", "v").get("k");
+        pipeline.with_asking()
+    }
+
+    #[cfg(feature = "cluster-async")]
+    fn queued() -> RedisResult<Value> {
+        Ok(Value::SimpleString("QUEUED".into()))
+    }
+
+    /// A transaction sent with `ASKING` is one write. The reply to `ASKING` is discarded
+    /// before aggregation, whether it is OK, an error or a server error, with a push frame
+    /// after it or not, and also when the caller has gone away; the caller gets the `EXEC`
+    /// reply, and the next request gets the next reply.
+    #[cfg(feature = "cluster-async")]
+    #[tokio::test]
+    async fn test_asking_transaction_discards_exactly_the_asking_reply() {
+        for index in 0..ASKING_REPLY_KINDS {
+            for (push, caller_gone) in [(false, false), (true, false), (false, true)] {
+                let case = format!("asking_reply={index} push={push} caller_gone={caller_gone}");
+                let (connection, mut command_rx, mut response_tx, driver) =
+                    connection_over_response_sink(Duration::from_secs(5)).await;
+
+                let mut asked = connection.clone();
+                let first = tokio::spawn(async move {
+                    asked
+                        .send_packed_commands(&asking_transaction(), 3, 1)
+                        .await
+                });
+                let sent = sent_bytes(command_rx.recv().await.expect("first write"));
+                assert_eq!(sent, asking_transaction().get_packed_pipeline(), "{case}");
+                assert!(
+                    sent.starts_with(b"*1\r\n$6\r\nASKING\r\n*1\r\n$5\r\nMULTI\r\n"),
+                    "{case}"
+                );
+
+                let mut plain = connection.clone();
+                let second = tokio::spawn(async move {
+                    let mut command = crate::cmd("GET");
+                    command.arg("plain");
+                    plain.send_packed_command(&command).await
+                });
+                let sent = sent_bytes(command_rx.recv().await.expect("second write"));
+                assert!(sent.starts_with(b"*2\r\n$3\r\nGET\r\n"), "{case}");
+
+                // The caller of the transaction goes away after the write, before any reply.
+                let first = if caller_gone {
+                    first.abort();
+                    assert!(first.await.unwrap_err().is_cancelled(), "{case}");
+                    None
+                } else {
+                    Some(first)
+                };
+
+                let exec = Value::Array(vec![Value::Okay, Value::BulkString(b"v".to_vec().into())]);
+                let mut replies = vec![asking_reply(index)];
+                if push {
+                    replies.push(Ok(Value::Push {
+                        kind: PushKind::Invalidate,
+                        data: vec![Value::Array(vec![Value::BulkString(b"x".to_vec().into())])],
+                    }));
+                }
+                replies.extend([
+                    Ok(Value::Okay),
+                    queued(),
+                    queued(),
+                    Ok(exec.clone()),
+                    Ok(Value::BulkString(b"plain".to_vec().into())),
+                ]);
+                for reply in replies {
+                    response_tx.try_send(reply).unwrap();
+                }
+
+                if let Some(first) = first {
+                    assert_eq!(first.await.unwrap(), Ok(vec![exec]), "{case}");
+                }
+                assert_eq!(
+                    second.await.unwrap(),
+                    Ok(Value::BulkString(b"plain".to_vec().into())),
+                    "{case}"
+                );
+                driver.abort();
+            }
+        }
+    }
+
+    /// Sends a plain `GET` on `connection` after a transaction has ended, feeds it one reply,
+    /// and checks it gets that reply, so the transaction consumed exactly its own replies.
+    #[cfg(feature = "cluster-async")]
+    async fn assert_next_request_gets_its_own_reply(
+        connection: &mut MultiplexedConnection,
+        command_rx: &mut mpsc::UnboundedReceiver<crate::cmd::SendBuf>,
+        response_tx: &mut futures_mpsc::Sender<RedisResult<Value>>,
+        case: &str,
+    ) {
+        let mut next = connection.clone();
+        let request = tokio::spawn(async move {
+            let mut command = crate::cmd("GET");
+            command.arg("next");
+            next.send_packed_command(&command).await
+        });
+        let sent = sent_bytes(command_rx.recv().await.expect("next write"));
+        assert!(sent.starts_with(b"*2\r\n$3\r\nGET\r\n"), "{case}");
+        response_tx
+            .try_send(Ok(Value::BulkString(b"next".to_vec().into())))
+            .unwrap();
+        assert_eq!(
+            request.await.unwrap(),
+            Ok(Value::BulkString(b"next".to_vec().into())),
+            "{case}"
+        );
+    }
+
+    /// With the reply to `ASKING` discarded, an error between `MULTI` and `EXEC` (including
+    /// a `-ASK` or `-MOVED` redirect, which the cluster client acts on), or `EXECABORT`,
+    /// still reaches the caller, rather than the `ASKING` reply, and the next request on the
+    /// connection gets its own reply.
+    #[cfg(feature = "cluster-async")]
+    #[tokio::test]
+    async fn test_asking_transaction_still_reports_the_transaction_error() {
+        use crate::types::ServerErrorKind;
+        fn server_error(kind: ServerErrorKind, detail: &str) -> RedisResult<Value> {
+            Ok(Value::ServerError(crate::types::ServerError::KnownError {
+                kind,
+                detail: Some(detail.to_string()),
+            }))
+        }
+        fn execabort() -> RedisResult<Value> {
+            server_error(
+                ServerErrorKind::ExecAbortError,
+                "Transaction discarded because of previous errors.",
+            )
+        }
+        // The first queued command answers `error`; the transaction is aborted.
+        fn queued_error(error: RedisResult<Value>) -> Vec<RedisResult<Value>> {
+            vec![Ok(Value::Okay), error, queued(), execabort()]
+        }
+        // The replies after `ASKING`'s, the error the caller must get, and the redirect it
+        // carries, if any.
+        type ErrorCase = (
+            Vec<RedisResult<Value>>,
+            crate::ErrorKind,
+            &'static str,
+            Option<(&'static str, u16)>,
+        );
+        let cases: [ErrorCase; 4] = [
+            // An error between `MULTI` and `EXEC`: the first error is returned.
+            (
+                queued_error(server_error(
+                    ServerErrorKind::ResponseError,
+                    "unknown command",
+                )),
+                crate::ErrorKind::ResponseError,
+                "unknown command",
+                None,
+            ),
+            // A redirect between `MULTI` and `EXEC`.
+            (
+                queued_error(server_error(ServerErrorKind::Ask, "3999 127.0.0.1:6381")),
+                crate::ErrorKind::Ask,
+                "3999 127.0.0.1:6381",
+                Some(("127.0.0.1:6381", 3999)),
+            ),
+            (
+                queued_error(server_error(ServerErrorKind::Moved, "3999 127.0.0.1:6380")),
+                crate::ErrorKind::Moved,
+                "3999 127.0.0.1:6380",
+                Some(("127.0.0.1:6380", 3999)),
+            ),
+            // `EXEC` itself answers `EXECABORT`.
+            (
+                vec![Ok(Value::Okay), queued(), queued(), execabort()],
+                crate::ErrorKind::ExecAbortError,
+                "Transaction discarded",
+                None,
+            ),
+        ];
+        for index in 0..ASKING_REPLY_KINDS {
+            for (replies, kind, detail, redirect) in &cases {
+                let case = format!("asking_reply={index} expected={kind:?}");
+                let (connection, mut command_rx, mut response_tx, driver) =
+                    connection_over_response_sink(Duration::from_secs(5)).await;
+                let mut asked = connection.clone();
+                let request = tokio::spawn(async move {
+                    asked
+                        .send_packed_commands(&asking_transaction(), 3, 1)
+                        .await
+                });
+                command_rx.recv().await.expect("write");
+                response_tx.try_send(asking_reply(index)).unwrap();
+                for reply in replies {
+                    response_tx
+                        .try_send(match reply {
+                            Ok(value) => Ok(value.clone()),
+                            Err(error) => Err(error.clone_mostly("reply")),
+                        })
+                        .unwrap();
+                }
+                let error = request.await.unwrap().unwrap_err();
+                assert_eq!(error.kind(), *kind, "{case}: {error:?}");
+                assert!(error.to_string().contains(detail), "{case}: {error:?}");
+                assert_eq!(error.redirect_node(), *redirect, "{case}: {error:?}");
+                assert!(
+                    !error.to_string().contains("asking failed"),
+                    "{case}: {error:?}"
+                );
+                let mut connection = connection;
+                assert_next_request_gets_its_own_reply(
+                    &mut connection,
+                    &mut command_rx,
+                    &mut response_tx,
+                    &case,
+                )
+                .await;
+                driver.abort();
+            }
+        }
+    }
+
+    /// With the reply to `ASKING` discarded, an `EXEC` that returns Nil (a `WATCH` abort)
+    /// reaches the caller as Nil, whatever `ASKING` was answered, and the next request on
+    /// the connection gets its own reply.
+    #[cfg(feature = "cluster-async")]
+    #[tokio::test]
+    async fn test_asking_transaction_returns_a_watch_abort() {
+        for index in 0..ASKING_REPLY_KINDS {
+            let case = format!("asking_reply={index}");
+            let (mut connection, mut command_rx, mut response_tx, driver) =
+                connection_over_response_sink(Duration::from_secs(5)).await;
+            let mut asked = connection.clone();
+            let request = tokio::spawn(async move {
+                asked
+                    .send_packed_commands(&asking_transaction(), 3, 1)
+                    .await
+            });
+            command_rx.recv().await.expect("write");
+            for reply in [
+                asking_reply(index),
+                Ok(Value::Okay),
+                queued(),
+                queued(),
+                Ok(Value::Nil),
+            ] {
+                response_tx.try_send(reply).unwrap();
+            }
+            assert_eq!(request.await.unwrap(), Ok(vec![Value::Nil]), "{case}");
+            assert_next_request_gets_its_own_reply(
+                &mut connection,
+                &mut command_rx,
+                &mut response_tx,
+                &case,
+            )
+            .await;
+            driver.abort();
+        }
+    }
+
+    /// A blocking command sent with `ASKING` keeps its own response timeout rather than the
+    /// connection's.
+    #[tokio::test]
+    async fn test_asking_blocking_command_keeps_its_response_timeout() {
+        let (mut connection, mut command_rx, _response_tx, driver) =
+            connection_over_response_sink(Duration::from_secs(60)).await;
+        let mut command = crate::cmd("BLPOP");
+        command.arg("list").arg(1).set_asking(true);
+        command.set_is_blocking(true);
+        command.set_response_timeout(Some(Duration::from_millis(200)));
+
+        let started = std::time::Instant::now();
+        let request = tokio::spawn(async move { connection.send_packed_command(&command).await });
+        let sent = sent_bytes(command_rx.recv().await.expect("write"));
+        assert!(sent.starts_with(b"*1\r\n$6\r\nASKING\r\n*3\r\n$5\r\nBLPOP\r\n"));
+        let error = tokio::time::timeout(Duration::from_secs(10), request)
+            .await
+            .expect("the command's own timeout applies")
+            .unwrap()
+            .unwrap_err();
+        assert!(error.is_timeout(), "{error:?}");
+        assert!(started.elapsed() < Duration::from_secs(10));
+        driver.abort();
+    }
+
     #[tokio::test]
     async fn test_get_response_followed_by_invalidation_does_not_cache_stale_value() {
         let mut command = crate::cmd("GET");
@@ -1684,6 +2192,190 @@ mod tests {
             1,
         )
         .await;
+    }
+
+    /// How a test connection closes.
+    enum Close {
+        /// The server closes it, so the read loop gets an EOF.
+        Server,
+        /// `Pipeline::kill` aborts the driver, with no EOF.
+        Kill,
+        /// Its last handle is dropped, so the driver closes the sink and ends, with no EOF.
+        LastHandle,
+    }
+
+    /// Closes a connection under a cache holding one entry, and returns how many entries
+    /// are left once the driver has stopped.
+    async fn entries_left_after_connection_closes(tracking_on: bool, close: Close) -> u64 {
+        let cache = new_lru_cache(CacheConfig {
+            max_memory_bytes: 10_000,
+            ttl: None,
+            enable_metrics: false,
+        });
+        let mut cached = crate::cmd("GET");
+        cached.arg("key");
+        cache.set_cached_cmd(&cached, Value::BulkString(b"value".to_vec().into()));
+        assert_eq!(cache.entry_count(), 1);
+
+        let (command_tx, _command_rx) = mpsc::unbounded_channel();
+        let (response_tx, response_rx) = futures_mpsc::channel(1);
+        let sink = ResponseSink {
+            command_tx,
+            response_rx,
+        };
+        let (pipeline, driver) = Pipeline::new(sink, None, Some(cache.clone()));
+        if tracking_on {
+            pipeline.set_tracking_on();
+        }
+        let driver = tokio::spawn(driver);
+
+        match close {
+            Close::Server => drop(response_tx),
+            Close::Kill => pipeline.kill(),
+            Close::LastHandle => drop(pipeline),
+        }
+        driver.await.unwrap();
+        cache.entry_count()
+    }
+
+    #[tokio::test]
+    async fn test_cache_flushed_when_tracking_connection_closes() {
+        assert_eq!(
+            entries_left_after_connection_closes(true, Close::Server).await,
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cache_kept_when_connection_without_tracking_closes() {
+        // A TTL-only cache, or a connection whose setup failed before tracking was on.
+        assert_eq!(
+            entries_left_after_connection_closes(false, Close::Server).await,
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cache_flushed_when_tracking_connection_is_killed() {
+        assert_eq!(
+            entries_left_after_connection_closes(true, Close::Kill).await,
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cache_flushed_when_last_handle_of_tracking_connection_is_dropped() {
+        assert_eq!(
+            entries_left_after_connection_closes(true, Close::LastHandle).await,
+            0
+        );
+    }
+
+    /// Records how many entries the cache holds when the disconnect is notified, then caches a
+    /// new entry, as the reconnected connection would.
+    #[derive(Clone)]
+    struct RefillOnDisconnect {
+        cache: Arc<dyn GlideCache>,
+        entries_at_notify: Arc<std::sync::Mutex<Option<u64>>>,
+    }
+
+    #[async_trait::async_trait]
+    impl DisconnectNotifier for RefillOnDisconnect {
+        fn notify_disconnect(&mut self) {
+            *self.entries_at_notify.lock().unwrap() = Some(self.cache.entry_count());
+            let mut cmd = crate::cmd("GET");
+            cmd.arg("new-key");
+            self.cache
+                .set_cached_cmd(&cmd, Value::BulkString(b"new".to_vec().into()));
+        }
+
+        async fn wait_for_disconnect_with_timeout(&self, _max_wait: &Duration) {}
+
+        fn clone_box(&self) -> Box<dyn DisconnectNotifier> {
+            Box::new(self.clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_cache_flushed_before_disconnect_is_notified() {
+        let cache = new_lru_cache(CacheConfig {
+            max_memory_bytes: 10_000,
+            ttl: None,
+            enable_metrics: false,
+        });
+        let mut cached = crate::cmd("GET");
+        cached.arg("key");
+        cache.set_cached_cmd(&cached, Value::BulkString(b"old".to_vec().into()));
+
+        let entries_at_notify = Arc::new(std::sync::Mutex::new(None));
+        let notifier: Box<dyn DisconnectNotifier> = Box::new(RefillOnDisconnect {
+            cache: cache.clone(),
+            entries_at_notify: entries_at_notify.clone(),
+        });
+        let (command_tx, _command_rx) = mpsc::unbounded_channel();
+        let (response_tx, response_rx) = futures_mpsc::channel(1);
+        let sink = ResponseSink {
+            command_tx,
+            response_rx,
+        };
+        let (pipeline, driver) = Pipeline::new(sink, Some(notifier), Some(cache.clone()));
+        pipeline.set_tracking_on();
+        let driver = tokio::spawn(driver);
+
+        // The server closes the connection.
+        drop(response_tx);
+        driver.await.unwrap();
+
+        // The notification starts glide's reconnect, so the entry the closed connection can
+        // no longer invalidate must be gone by then.
+        assert_eq!(*entries_at_notify.lock().unwrap(), Some(0));
+        // The drop doesn't flush again, so what the reconnected connection cached stays.
+        assert_eq!(cache.entry_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_response_read_before_tracking_connection_closes_is_not_cached() {
+        let cache = new_lru_cache(CacheConfig {
+            max_memory_bytes: 10_000,
+            ttl: None,
+            enable_metrics: false,
+        });
+        let (command_tx, mut command_rx) = mpsc::unbounded_channel();
+        let (mut response_tx, response_rx) = futures_mpsc::channel(1);
+        let sink = ResponseSink {
+            command_tx,
+            response_rx,
+        };
+        let (pipeline, driver) = Pipeline::new(sink, None, Some(cache.clone()));
+        pipeline.set_tracking_on();
+        let driver = tokio::spawn(driver);
+        let connection = MultiplexedConnection::builder(pipeline)
+            .with_cache(Some(cache.clone()))
+            .build()
+            .await
+            .unwrap();
+
+        let request = tokio::spawn(async move {
+            let mut connection = connection;
+            let mut command = crate::cmd("GET");
+            command.arg("key");
+            connection.send_packed_command(&command).await
+        });
+        command_rx.recv().await.expect("command must be sent");
+
+        // The reply and the close reach the driver together. Whichever runs first, the
+        // fill or the flush, no entry may be left.
+        response_tx
+            .try_send(Ok(Value::BulkString(b"value".to_vec().into())))
+            .unwrap();
+        drop(response_tx);
+
+        assert_eq!(
+            request.await.unwrap().unwrap(),
+            Value::BulkString(b"value".to_vec().into())
+        );
+        driver.await.unwrap();
+        assert_eq!(cache.entry_count(), 0);
     }
 
     /// A mock connection used to benchmark the pipeline buffer in isolation,
@@ -2309,6 +3001,43 @@ mod tests {
             "closed channel must fail immediately, not via the ~200ms no-progress \
              path; took {elapsed:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn test_driver_stops_when_last_owed_reply_arrives_after_close() {
+        // With every handle gone the driver waits for the replies it still owes. It must
+        // stop once the last one is read, while the server keeps the connection open.
+        let (command_tx, mut command_rx) = mpsc::unbounded_channel();
+        let (mut response_tx, response_rx) = futures_mpsc::channel(1);
+        let sink = ResponseSink {
+            command_tx,
+            response_rx,
+        };
+        let (pipeline, driver) = Pipeline::new(sink, None, None);
+        let driver = tokio::spawn(driver);
+        let connection = MultiplexedConnection::builder(pipeline)
+            .build()
+            .await
+            .unwrap();
+
+        // The caller gives up before the reply arrives, like a timed-out request.
+        let request = tokio::spawn(async move {
+            let mut connection = connection;
+            let mut command = crate::cmd("GET");
+            command.arg("key");
+            connection.send_packed_command(&command).await
+        });
+        command_rx.recv().await.expect("command must be sent");
+        request.abort();
+        let _ = request.await;
+
+        response_tx
+            .try_send(Ok(Value::BulkString(b"value".to_vec().into())))
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(1), driver)
+            .await
+            .expect("the driver must stop once the last owed reply arrives")
+            .unwrap();
     }
 
     /// Runs `total` concurrent commands of `payload` bytes through a pipeline with

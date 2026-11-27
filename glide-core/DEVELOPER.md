@@ -61,6 +61,18 @@ To run [DNS tests](tests/test_dns.rs) locally:
 
 If the environment variable is not set, DNS tests will be skipped.
 
+### Unix Socket Tests
+
+To run the standalone tests over a Unix domain socket, set `GLIDE_TEST_UNIX_SOCKET=1`.
+The non-TLS standalone test servers then listen only on a socket, with no TCP port:
+
+```bash
+GLIDE_TEST_UNIX_SOCKET=1 cargo test --features "proto,socket-layer,standalone_heartbeat"
+```
+
+Unset it or use any other value to keep the default TCP transport.
+Tests that start a TCP server of their own still use TCP. CI runs this in the nightly full matrix.
+
 ### RDMA Tests
 
 RDMA is opt-in at build time through the `rdma` feature. `libfabric` 2.4 or newer is
@@ -73,7 +85,7 @@ opens a fabric over the `tcp` provider and runs mostly against mock servers, plu
 the test suite starts:
 
 ```bash
-cargo test --features rdma --test test_rdma
+cargo test --features rdma-tcp-dev --test test_rdma
 ```
 
 [`tests/test_rdma_remote.rs`](tests/test_rdma_remote.rs) performs real transfers and is
@@ -83,10 +95,12 @@ and pick the provider:
 ```bash
 export GLIDE_RDMA_SERVER=<host>:<port>
 export GLIDE_RDMA_PROVIDER=efa-direct  # on a machine with an EFA device, or tcp
-cargo test --features rdma --test test_rdma_remote -- --ignored --nocapture
+cargo test --features rdma-tcp-dev --test test_rdma_remote -- --ignored --nocapture
 ```
 
-For `tcp`, load the module with `fabric-provider Emulated`; its default is `EfaDirect`. Set
+`rdma-tcp-dev` is `rdma` plus the `tcp` provider, which a release build does not carry (see
+`glide_rdma::Provider::Tcp`). For `tcp`, load the module with `fabric-provider Emulated`; its
+default is `EfaDirect`. Set
 `GLIDE_RDMA_INTERFACE` to choose a network interface when the machine has more than one.
 
 ## Timeout Watchdog Diagnostics

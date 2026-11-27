@@ -340,7 +340,7 @@ export class GlideClient extends BaseClient {
     ): Promise<GlideClient> {
         return super.createClientInternal<GlideClient>(
             options,
-            (options?: GlideClientConfiguration) => new GlideClient(options),
+            (options: GlideClientConfiguration) => new GlideClient(options),
         );
     }
 
@@ -389,8 +389,7 @@ export class GlideClient extends BaseClient {
     } {
         return super.serializeConnectionRequest(
             options,
-            (opts?: BaseClientConfiguration) =>
-                new GlideClient(opts as GlideClientConfiguration),
+            (opts: GlideClientConfiguration) => new GlideClient(opts),
         );
     }
 

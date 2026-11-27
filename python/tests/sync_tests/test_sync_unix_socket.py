@@ -2,93 +2,76 @@
 
 """
 Tests for sync client connections over a Unix domain socket.
-Each test starts its own server that listens only on the socket (`--port 0`).
+The server is started through cluster_manager.py with TCP disabled (`--port 0`).
 """
 
 import sys
-from typing import Iterator, List
+from typing import List
 
 import pytest
 from glide_shared.commands.core_options import MonitorMsg
 from glide_shared.config import (
+    AdvancedGlideClientConfiguration,
     GlideClientConfiguration,
     NodeAddress,
+    NodeDiscoveryMode,
 )
 from glide_shared.constants import OK
+from glide_shared.exceptions import ClosingError, ConfigurationError
 from glide_sync import MonitorClient
 from glide_sync.glide_client import GlideClient
 
-from tests.utils.unix_socket_server import UnixSocketServer
-from tests.utils.utils import sync_wait_for
+from tests.utils.utils import assert_unix_socket_client, sync_wait_for
 
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32", reason="Unix domain sockets are not supported on Windows"
 )
 
 
-@pytest.fixture
-def unix_socket_server() -> Iterator[UnixSocketServer]:
-    server = UnixSocketServer()
-    yield server
-    server.stop()
-
-
-def unix_socket_config(server: UnixSocketServer, **kwargs) -> GlideClientConfiguration:
+def unix_socket_config(path: str, **kwargs) -> GlideClientConfiguration:
     return GlideClientConfiguration(
-        [NodeAddress(unix_socket_path=server.socket_path)],
+        [NodeAddress(unix_socket_path=path)],
         request_timeout=2000,
         **kwargs,
     )
 
 
-def assert_uses_socket(client: GlideClient) -> bytes:
-    """Asserts that the server flags this client's connection as a Unix socket (`U`)."""
-    info = client.custom_command(["CLIENT", "INFO"])
-    assert isinstance(info, bytes)
-    flags = next(f for f in info.split() if f.startswith(b"flags="))
-    assert b"U" in flags[len(b"flags=") :], info
-    return info
-
-
 class TestSyncUnixSocket:
-    def test_connect_over_unix_socket(self, unix_socket_server: UnixSocketServer):
-        client = GlideClient.create(
-            unix_socket_config(unix_socket_server, database_id=2)
-        )
+    def test_connect_over_unix_socket(self, unix_socket_path: str):
+        client = GlideClient.create(unix_socket_config(unix_socket_path, database_id=2))
         try:
             assert client.set("uds-key", "uds-value") == OK
             assert client.get("uds-key") == b"uds-value"
-            info = assert_uses_socket(client)
-            assert b" db=2 " in info, info
+            info = assert_unix_socket_client(client.custom_command(["CLIENT", "INFO"]))
+            assert " db=2 " in info, info
         finally:
             client.close()
 
-    def test_scoped_connection_over_unix_socket(
-        self, unix_socket_server: UnixSocketServer
-    ):
-        client = GlideClient.create(unix_socket_config(unix_socket_server))
+    def test_scoped_connection_over_unix_socket(self, unix_socket_path: str):
+        client = GlideClient.create(unix_socket_config(unix_socket_path))
         try:
             with client.scoped_connection() as scope:
+                assert_unix_socket_client(scope.execute_command("CLIENT", "INFO"))
                 scope.set("uds-scope-key", "scoped")
                 assert scope.get("uds-scope-key") == "scoped"
             assert client.get("uds-scope-key") == b"scoped"
         finally:
             client.close()
 
-    def test_monitor_over_unix_socket(self, unix_socket_server: UnixSocketServer):
+    def test_monitor_over_unix_socket(self, unix_socket_path: str):
         received: List[MonitorMsg] = []
         monitor = MonitorClient.create(
-            unix_socket_config(unix_socket_server), callback=received.append
+            unix_socket_config(unix_socket_path), callback=received.append
         )
         try:
-            client = GlideClient.create(unix_socket_config(unix_socket_server))
+            client = GlideClient.create(unix_socket_config(unix_socket_path))
             try:
                 client.set("uds-monitor-key", "value")
 
                 def seen() -> bool:
                     return any(
                         m.command.upper() == "SET"
-                        and m.client_addr == f"unix:{unix_socket_server.socket_path}"
+                        and m.client_addr == f"unix:{unix_socket_path}"
                         for m in received
                     )
 
@@ -97,3 +80,57 @@ class TestSyncUnixSocket:
                 client.close()
         finally:
             monitor.stop()
+
+
+SOCKET = "/tmp/glide-uds-config-error.sock"
+
+
+class TestSyncUnixSocketErrors:
+    """
+    Requests the core rejects before connecting raise ConfigurationError, the same type the
+    client's own Unix socket checks raise. No server is needed.
+    """
+
+    @pytest.mark.parametrize(
+        "addresses, kwargs, match",
+        [
+            pytest.param(
+                [NodeAddress(unix_socket_path="relative.sock")],
+                {},
+                "must be absolute",
+                id="relative_path",
+            ),
+            pytest.param(
+                [NodeAddress(unix_socket_path=SOCKET), NodeAddress("localhost", 6379)],
+                {},
+                "cannot be combined with TCP addresses",
+                id="mixed_addresses",
+            ),
+            pytest.param(
+                [NodeAddress(unix_socket_path=SOCKET)],
+                {"node_discovery_mode": NodeDiscoveryMode.DISCOVER_ALL},
+                "DiscoverAll",
+                id="discover_all",
+            ),
+        ],
+    )
+    def test_core_rejection_raises_configuration_error(self, addresses, kwargs, match):
+        config = GlideClientConfiguration(addresses, **kwargs)
+        with pytest.raises(ConfigurationError, match=match):
+            GlideClient.create(config)
+
+    def test_monitor_core_rejection_raises_configuration_error(self):
+        config = GlideClientConfiguration(
+            [NodeAddress(unix_socket_path="relative.sock")]
+        )
+        with pytest.raises(ConfigurationError, match="must be absolute"):
+            MonitorClient.create(config, callback=lambda _: None)
+
+    def test_unreachable_socket_still_raises_closing_error(self):
+        # Failing to connect is not a configuration error, so its type is unchanged.
+        config = GlideClientConfiguration(
+            [NodeAddress(unix_socket_path="/nonexistent-dir/glide.sock")],
+            advanced_config=AdvancedGlideClientConfiguration(connection_timeout=500),
+        )
+        with pytest.raises(ClosingError):
+            GlideClient.create(config)

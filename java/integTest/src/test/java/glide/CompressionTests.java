@@ -5,6 +5,7 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -13,6 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.GlideString;
+import glide.api.models.commands.DelexOptions;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.CompressionBackend;
@@ -541,31 +544,25 @@ public class CompressionTests {
      * Commands that are incompatible with compression, called on a key that does not need to exist.
      */
     static Stream<Arguments> getIncompatibleCommands() {
+        DelexOptions delexIfEqualTo = DelexOptions.onlyIfEqualTo("10");
+        SetOptions setIfEqualTo = SetOptions.builder().conditionalSetOnlyIfEqualTo("10").build();
+        SetOptions setIfNotEqualTo = SetOptions.builder().conditionalSetOnlyIfNotEqualTo("20").build();
+
         return Stream.of(
                         incompatible("append", c -> c.append("key", "0")),
                         incompatible("bitcount", c -> c.bitcount("key")),
                         incompatible("bitpos", c -> c.bitpos("key", 1)),
                         incompatible("decr", c -> c.decr("key")),
                         incompatible("decrby", c -> c.decrBy("key", 5)),
+                        incompatible("delex", c -> c.delex("key", delexIfEqualTo)),
+                        incompatible("delifeq", c -> c.delifeq("key", "10")),
                         incompatible("getbit", c -> c.getbit("key", 0)),
                         incompatible("getrange", c -> c.getrange("key", 0, 0)),
                         incompatible("incr", c -> c.incr("key")),
                         incompatible("incrby", c -> c.incrBy("key", 5)),
                         incompatible("incrbyfloat", c -> c.incrByFloat("key", 0.5)),
-                        incompatible(
-                                "set_ifeq",
-                                c ->
-                                        c.set(
-                                                "key",
-                                                "20",
-                                                SetOptions.builder().conditionalSetOnlyIfEqualTo("10").build())),
-                        incompatible(
-                                "set_ifne",
-                                c ->
-                                        c.set(
-                                                "key",
-                                                "20",
-                                                SetOptions.builder().conditionalSetOnlyIfNotEqualTo("20").build())),
+                        incompatible("set_ifeq", c -> c.set("key", "20", setIfEqualTo)),
+                        incompatible("set_ifne", c -> c.set("key", "20", setIfNotEqualTo)),
                         incompatible("setbit", c -> c.setbit("key", 0, 1)),
                         incompatible("setrange", c -> c.setrange("key", 1, "5")),
                         incompatible("strlen", c -> c.strlen("key")))
@@ -601,57 +598,83 @@ public class CompressionTests {
         try (GlideClient client = GlideClient.createClient(commonClientConfig().build()).get()) {
             String key = randomKey("no_compression_test");
 
-            // Set initial value
-            assertEquals(OK, client.set(key, "100").get());
-
-            // All these commands should work without compression
-            // INCR
-            assertEquals(101L, client.incr(key).get());
-
-            // INCRBY
-            assertEquals(111L, client.incrBy(key, 10).get());
-
-            // DECR
-            assertEquals(110L, client.decr(key).get());
-
-            // DECRBY
-            assertEquals(100L, client.decrBy(key, 10).get());
-
-            // STRLEN
-            assertEquals(OK, client.set(key, "hello").get());
-            assertEquals(5L, client.strlen(key).get());
+            // All these commands should work without compression.
+            // Each command runs against the key set to "10".
 
             // APPEND
-            assertEquals(11L, client.append(key, " world").get());
-
-            // GETRANGE
-            assertEquals("hello", client.getrange(key, 0, 4).get());
-
-            // SETRANGE
-            assertEquals(11L, client.setrange(key, 6, "WORLD").get());
-
-            // GETBIT
-            assertEquals(OK, client.set(key, "\u0000").get());
-            assertEquals(0L, client.getbit(key, 0).get());
-
-            // SETBIT
-            assertEquals(0L, client.setbit(key, 0, 1).get());
+            assertEquals(OK, client.set(key, "10").get());
+            assertEquals(3L, client.append(key, "0").get());
 
             // BITCOUNT
-            assertTrue(client.bitcount(key).get() >= 0);
+            assertEquals(OK, client.set(key, "10").get());
+            assertEquals(5L, client.bitcount(key).get());
 
-            // SET with IFEQ
+            // BITPOS
+            assertEquals(OK, client.set(key, "10").get());
+            assertEquals(2L, client.bitpos(key, 1).get());
+
+            // DECR
+            assertEquals(OK, client.set(key, "10").get());
+            assertEquals(9L, client.decr(key).get());
+
+            // DECRBY
+            assertEquals(OK, client.set(key, "10").get());
+            assertEquals(5L, client.decrBy(key, 5).get());
+
+            // GETBIT
+            assertEquals(OK, client.set(key, "10").get());
+            assertEquals(0L, client.getbit(key, 0).get());
+
+            // GETRANGE
+            assertEquals(OK, client.set(key, "10").get());
+            assertEquals("1", client.getrange(key, 0, 0).get());
+
+            // INCR
+            assertEquals(OK, client.set(key, "10").get());
+            assertEquals(11L, client.incr(key).get());
+
+            // INCRBY
+            assertEquals(OK, client.set(key, "10").get());
+            assertEquals(15L, client.incrBy(key, 5).get());
+
+            // INCRBYFLOAT
+            assertEquals(OK, client.set(key, "10").get());
+            assertEquals(10.5, client.incrByFloat(key, 0.5).get());
+
+            // SETBIT
+            assertEquals(OK, client.set(key, "10").get());
+            assertEquals(0L, client.setbit(key, 0, 1).get());
+
+            // SETRANGE
+            assertEquals(OK, client.set(key, "10").get());
+            assertEquals(2L, client.setrange(key, 1, "5").get());
+
+            // STRLEN
+            assertEquals(OK, client.set(key, "10").get());
+            assertEquals(2L, client.strlen(key).get());
+
             if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
-                assertEquals(OK, client.set(key, "hello").get());
-                SetOptions options = SetOptions.builder().conditionalSetOnlyIfEqualTo("hello").build();
-                assertEquals(OK, client.set(key, "world", options).get());
+                // SET with IFEQ
+                assertEquals(OK, client.set(key, "10").get());
+                SetOptions options = SetOptions.builder().conditionalSetOnlyIfEqualTo("10").build();
+                assertEquals(OK, client.set(key, "20", options).get());
             }
 
-            // SET with IFNE
+            if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+                // DELIFEQ
+                assertEquals(OK, client.set(key, "10").get());
+                assertTrue(client.delifeq(key, "10").get());
+            }
+
             if (SERVER_VERSION.isGreaterThanOrEqualTo("9.2.0")) {
-                assertEquals(OK, client.set(key, "hello").get());
-                SetOptions options = SetOptions.builder().conditionalSetOnlyIfNotEqualTo("world").build();
-                assertEquals(OK, client.set(key, "world", options).get());
+                // DELEX
+                assertEquals(OK, client.set(key, "10").get());
+                assertTrue(client.delex(key, DelexOptions.onlyIfEqualTo("10")).get());
+
+                // SET with IFNE
+                assertEquals(OK, client.set(key, "10").get());
+                SetOptions options = SetOptions.builder().conditionalSetOnlyIfNotEqualTo("20").build();
+                assertEquals(OK, client.set(key, "20", options).get());
             }
 
             client.del(new String[] {key}).get();
@@ -1048,6 +1071,151 @@ public class CompressionTests {
 
             // Cleanup
             client.del(new String[] {key1, key2, key3}).get();
+        }
+    }
+
+    // ============================================================================
+    // Batch Decompression Per Element Tests
+    // ============================================================================
+
+    private static Stream<Arguments> batchModes() {
+        return Stream.of(false, true)
+                .flatMap(
+                        clusterMode -> Stream.of(false, true).map(atomic -> Arguments.of(clusterMode, atomic)));
+    }
+
+    @SneakyThrows
+    private static BaseClient clientWithCompression(
+            boolean clusterMode, CompressionConfiguration compression) {
+        return clusterMode
+                ? GlideClusterClient.createClient(
+                                commonClusterClientConfig().compressionConfiguration(compression).build())
+                        .get()
+                : GlideClient.createClient(
+                                commonClientConfig().compressionConfiguration(compression).build())
+                        .get();
+    }
+
+    @SneakyThrows
+    private static BaseClient plainClient(boolean clusterMode) {
+        return clusterMode
+                ? GlideClusterClient.createClient(commonClusterClientConfig().build()).get()
+                : GlideClient.createClient(commonClientConfig().build()).get();
+    }
+
+    @SneakyThrows
+    private static Object[] execGets(BaseClient client, boolean atomic, GlideString... keys) {
+        if (client instanceof GlideClusterClient) {
+            glide.api.models.ClusterBatch batch =
+                    new glide.api.models.ClusterBatch(atomic).withBinaryOutput();
+            for (GlideString key : keys) batch.get(key);
+            return ((GlideClusterClient) client).exec(batch, true).get();
+        }
+        glide.api.models.Batch batch = new glide.api.models.Batch(atomic).withBinaryOutput();
+        for (GlideString key : keys) batch.get(key);
+        return ((GlideClient) client).exec(batch, true).get();
+    }
+
+    /** Names a real backend so the decoder runs, on a payload it rejects. */
+    private static final byte[] HEADER_SHAPED_PLAIN = {
+        0x00, 0x01, 0x02, 0x00, 0x01, 'z', 'z', 'z', 'z'
+    };
+
+    @SneakyThrows
+    @ParameterizedTest(name = "clusterMode={0} atomic={1}")
+    @MethodSource("batchModes")
+    public void compression_batch_surfaces_size_limit(boolean clusterMode, boolean atomic) {
+        CompressionConfiguration unlimited = CompressionConfiguration.builder().enabled(true).build();
+        CompressionConfiguration limited =
+                CompressionConfiguration.builder().enabled(true).maxDecompressedSize(100L).build();
+        try (BaseClient writer = clientWithCompression(clusterMode, unlimited);
+                BaseClient reader = clientWithCompression(clusterMode, limited)) {
+            String key = randomKey("{batch_limit}");
+            assertEquals(OK, writer.set(key, generateCompressibleText(10_000)).get());
+
+            Throwable cause =
+                    assertThrows(ExecutionException.class, () -> execGets(reader, atomic, gs(key)))
+                            .getCause();
+            assertTrue(cause instanceof RequestException, "Should throw RequestException, got " + cause);
+            assertTrue(
+                    cause.getMessage().toLowerCase().contains("size limit exceeded"),
+                    "Error should name the size limit: " + cause.getMessage());
+
+            writer.del(new String[] {key}).get();
+        }
+    }
+
+    private static void assertSizeLimitException(Object result) {
+        assertTrue(
+                result instanceof RequestException,
+                "Expected the size-limit error in place, got " + result);
+        String message = ((RequestException) result).getMessage();
+        assertTrue(
+                message.toLowerCase().contains("size limit exceeded"),
+                "Error should name the size limit: " + message);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "clusterMode={0} atomic={1}")
+    @MethodSource("batchModes")
+    public void compression_batch_without_raise_on_error_returns_size_limit_in_place(
+            boolean clusterMode, boolean atomic) {
+        CompressionConfiguration unlimited = CompressionConfiguration.builder().enabled(true).build();
+        CompressionConfiguration limited =
+                CompressionConfiguration.builder().enabled(true).maxDecompressedSize(100L).build();
+        try (BaseClient writer = clientWithCompression(clusterMode, unlimited);
+                BaseClient reader = clientWithCompression(clusterMode, limited)) {
+            String tag = randomKey("{batch_no_raise") + "}";
+            String bigKey = tag + "big";
+            String markerKey = tag + "marker";
+            assertEquals(OK, writer.set(bigKey, generateCompressibleText(10_000)).get());
+
+            Object[] results;
+            if (clusterMode) {
+                glide.api.models.ClusterBatch batch = new glide.api.models.ClusterBatch(atomic);
+                batch.set(markerKey, "written");
+                batch.get(bigKey);
+                batch.get(markerKey);
+                batch.mget(new String[] {markerKey, bigKey});
+                results = ((GlideClusterClient) reader).exec(batch, false).get();
+            } else {
+                glide.api.models.Batch batch = new glide.api.models.Batch(atomic);
+                batch.set(markerKey, "written");
+                batch.get(bigKey);
+                batch.get(markerKey);
+                batch.mget(new String[] {markerKey, bigKey});
+                results = ((GlideClient) reader).exec(batch, false).get();
+            }
+
+            assertEquals(4, results.length);
+            assertEquals(OK, results[0]);
+            assertSizeLimitException(results[1]);
+            assertEquals("written", results[2]);
+            // An MGET reply fails as a whole, as the same MGET does outside a batch.
+            assertSizeLimitException(results[3]);
+
+            writer.del(new String[] {bigKey, markerKey}).get();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "clusterMode={0} atomic={1}")
+    @MethodSource("batchModes")
+    public void compression_batch_keeps_header_shaped_neighbour(boolean clusterMode, boolean atomic) {
+        CompressionConfiguration enabled = CompressionConfiguration.builder().enabled(true).build();
+        try (BaseClient compressed = clientWithCompression(clusterMode, enabled);
+                BaseClient plain = plainClient(clusterMode)) {
+            String compressedKey = randomKey("{batch_collision}_compressed");
+            String plainKey = randomKey("{batch_collision}_plain");
+            String value = generateCompressibleText(1024);
+            assertEquals(OK, compressed.set(compressedKey, value).get());
+            assertEquals(OK, plain.set(gs(plainKey), gs(HEADER_SHAPED_PLAIN)).get());
+
+            Object[] results = execGets(compressed, atomic, gs(compressedKey), gs(plainKey));
+            assertEquals(gs(value), results[0]);
+            assertEquals(gs(HEADER_SHAPED_PLAIN), results[1]);
+
+            plain.del(new String[] {compressedKey, plainKey}).get();
         }
     }
 

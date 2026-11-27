@@ -221,7 +221,7 @@ After installing prerequisites and cloning the repository, you can build the asy
 # Build the async client in release mode
 python3 dev.py build --client async --mode release
 
-# Build the sync client with RDMA support
+# Build the sync client with RDMA support (debug mode also has the tcp provider)
 python3 dev.py build --client sync --rdma
 ```
 
@@ -330,12 +330,32 @@ To run [async](tests/async_tests/test_dns.py) and [sync](tests/sync_tests/test_s
 
 If the environment variable is not set, DNS tests will be skipped.
 
+### Unix Socket Tests
+
+To run the standalone tests over a Unix domain socket (Linux and macOS), pass `--unix-socket`:
+
+```bash
+python3 dev.py test --args --unix-socket
+```
+
+The standalone server starts with `--port 0`, disabling TCP, so a test that drops the socket
+path fails instead of passing over TCP. Replicas are disabled because replication requires TCP.
+Cluster mode tests and tests marked `requires_tcp` are skipped, and the session does not
+start the TCP cluster, auth cluster or TLS servers. Tests that explicitly start TCP servers
+still use TCP. `--unix-socket` can't be combined with `--tls` or existing endpoints.
+CI runs it in the nightly full matrix.
+
+Mark a test `@pytest.mark.requires_tcp` when it needs TCP: an IP address, a hostname, an
+address resolver, TLS or replication. Otherwise pass the cluster's `NodeAddress` through
+instead of rebuilding it from `host` and `port`, which drops the socket path.
+
 ### RDMA Tests
 
-RDMA is only in the sync client, and only when it is built with `--rdma`. `libfabric` 2.4 or
-newer is loaded when a client first opens a fabric, so it only has to be installed where the
-tests run. Set `GLIDE_LIBFABRIC_PATH` to the library file to use a copy the default search does
-not find.
+RDMA is only in the sync client, and only when it is built with `--rdma`. The tcp tests
+need a debug-mode build; a `--mode release` build has no tcp provider and they skip.
+`libfabric` 2.4 or newer is loaded when a client first opens a fabric, so it only has to be
+installed where the tests run. Set `GLIDE_LIBFABRIC_PATH` to the library file to use a copy
+the default search does not find.
 
 [`tests/sync_tests/test_sync_rdma.py`](tests/sync_tests/test_sync_rdma.py) and
 [`tests/test_rdma_config.py`](tests/test_rdma_config.py) run without fabric hardware, including

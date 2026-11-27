@@ -18,7 +18,10 @@ import {
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     BaseClientConfiguration,
+    Batch,
+    ClusterBatch,
     CompressionConfiguration,
+    Decoder,
     GlideClient,
     GlideClusterClient,
     ProtocolVersion,
@@ -198,6 +201,137 @@ describe("Compression MaxDecompressedSize", () => {
 
                 // Cleanup
                 await unlimitedClient.del(keys);
+            } finally {
+                unlimitedClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([
+        [false, false],
+        [false, true],
+        [true, false],
+        [true, true],
+    ])(
+        "maxDecompressedSize_enforced_on_batch cluster_mode=%p atomic=%p",
+        async (clusterMode, atomic) => {
+            const unlimitedClient = await createCompressedClient(clusterMode, {
+                enabled: true,
+            });
+
+            try {
+                const key = uniqueKey("batch_max_test");
+                await unlimitedClient.set(key, generateCompressibleText(10000));
+
+                const limitedClient = await createCompressedClient(
+                    clusterMode,
+                    {
+                        enabled: true,
+                        maxDecompressedSize: 100,
+                    },
+                );
+
+                try {
+                    const execGet = () =>
+                        clusterMode
+                            ? (limitedClient as GlideClusterClient).exec(
+                                  new ClusterBatch(atomic).get(key),
+                                  true,
+                                  { decoder: Decoder.Bytes },
+                              )
+                            : (limitedClient as GlideClient).exec(
+                                  new Batch(atomic).get(key),
+                                  true,
+                                  { decoder: Decoder.Bytes },
+                              );
+
+                    await expect(execGet()).rejects.toThrow(RequestError);
+                    await expect(execGet()).rejects.toThrow(
+                        /size limit exceeded/i,
+                    );
+                } finally {
+                    limitedClient.close();
+                }
+
+                await unlimitedClient.del([key]);
+            } finally {
+                unlimitedClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * With raiseOnError=false, an oversized reply is returned as a RequestError in its
+     * position and the other results of the batch are kept.
+     */
+    it.each([
+        [false, false],
+        [false, true],
+        [true, false],
+        [true, true],
+    ])(
+        "maxDecompressedSize_batch_without_raise_on_error_returns_error_in_place cluster_mode=%p atomic=%p",
+        async (clusterMode, atomic) => {
+            const unlimitedClient = await createCompressedClient(clusterMode, {
+                enabled: true,
+            });
+
+            try {
+                const tag = `{${uniqueKey("batch_no_raise")}}`;
+                const bigKey = `${tag}big`;
+                const markerKey = `${tag}marker`;
+                await unlimitedClient.set(
+                    bigKey,
+                    generateCompressibleText(10000),
+                );
+
+                const limitedClient = await createCompressedClient(
+                    clusterMode,
+                    {
+                        enabled: true,
+                        maxDecompressedSize: 100,
+                    },
+                );
+
+                try {
+                    const batch = (
+                        clusterMode
+                            ? new ClusterBatch(atomic)
+                            : new Batch(atomic)
+                    )
+                        .set(markerKey, "written")
+                        .get(bigKey)
+                        .get(markerKey)
+                        .mget([markerKey, bigKey]);
+                    const result = clusterMode
+                        ? await (limitedClient as GlideClusterClient).exec(
+                              batch as ClusterBatch,
+                              false,
+                          )
+                        : await (limitedClient as GlideClient).exec(
+                              batch as Batch,
+                              false,
+                          );
+
+                    expect(result).toHaveLength(4);
+                    expect(result?.[0]).toEqual("OK");
+                    expect(result?.[1]).toBeInstanceOf(RequestError);
+                    expect((result?.[1] as RequestError).message).toMatch(
+                        /size limit exceeded/i,
+                    );
+                    expect(result?.[2]).toEqual("written");
+                    // An MGET reply fails as a whole, as the same MGET does outside a batch.
+                    expect(result?.[3]).toBeInstanceOf(RequestError);
+                    expect((result?.[3] as RequestError).message).toMatch(
+                        /size limit exceeded/i,
+                    );
+                } finally {
+                    limitedClient.close();
+                }
+
+                await unlimitedClient.del([bigKey, markerKey]);
             } finally {
                 unlimitedClient.close();
             }

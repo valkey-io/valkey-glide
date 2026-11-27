@@ -109,7 +109,7 @@ fn build_cdylib(manifest_dir: &Path) -> PathBuf {
 }
 
 #[test]
-fn generated_header_preserves_legacy_abi_and_adds_provider_suffix() {
+fn generated_header_preserves_legacy_abi_and_adds_provider_suffixes() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let temp_dir = TempDir::new("glide-ffi-abi");
     let library = build_cdylib(&manifest_dir);
@@ -223,7 +223,8 @@ static uint8_t provider(
 }}
 
 static int expect_client(const ConnectionResponse *response) {{
-    if (response == NULL || response->conn_ptr == NULL || response->connection_error_message != NULL) {{
+    if (response == NULL || response->conn_ptr == NULL || response->connection_error_message != NULL
+            || response->connection_error_type != ConnectionErrorType_Unspecified) {{
         return 0;
     }}
     const void *client = response->conn_ptr;
@@ -254,10 +255,36 @@ int main(void) {{
     if (strstr(failed->connection_error_message, "no IAM configuration") == NULL) {{
         return 13;
     }}
+    if (failed->connection_error_type != ConnectionErrorType_Unspecified) {{
+        return 15;
+    }}
     if (provider_calls != 0) {{
         return 14;
     }}
     free_connection_response((ConnectionResponse *)failed);
+
+    const char *uri = "valkey://127.0.0.1:1";
+    const char *lazy = "{{\"lazy_connect\": true}}";
+    if (!expect_client(create_client_from_uri(uri, lazy, &client_type, pubsub, 0x45678, NULL))) {{
+        return 20;
+    }}
+
+    const ConnectionResponse *uri_failed = create_client_from_uri(
+        uri, NULL, &client_type, NULL, 0x56789, provider);
+    if (uri_failed == NULL || uri_failed->conn_ptr != NULL
+            || uri_failed->connection_error_message == NULL) {{
+        return 22;
+    }}
+    if (strstr(uri_failed->connection_error_message, "no IAM configuration") == NULL) {{
+        return 23;
+    }}
+    if (uri_failed->connection_error_type != ConnectionErrorType_Unspecified) {{
+        return 24;
+    }}
+    if (provider_calls != 0) {{
+        return 25;
+    }}
+    free_connection_response((ConnectionResponse *)uri_failed);
     return 0;
 }}
 "#

@@ -110,11 +110,6 @@ func ClusterFtHybridWithCursor(
 	return parseCursorWrappedAggregateResponse(result, execErr)
 }
 
-// buildHybridArgs assembles the FT.HYBRID argv in the server's required tail order: SEARCH arm,
-// VSIM arm, COMBINE (if any), then the FtHybridOptions tail (LOCALONLY, LOAD, TIMEOUT, PARAMS,
-// clauses, WITHCURSOR, DIALECT). If vsimArm was given raw Vector bytes rather than VectorParam,
-// a $-prefixed parameter name is generated here and merged into the PARAMS list by
-// FtHybridOptions.ToArgs.
 func buildHybridArgs(
 	indexName string,
 	searchArm options.FtHybridSearchArm,
@@ -133,10 +128,6 @@ func buildHybridArgs(
 		}
 		args = append(args, vsimArgs...)
 	} else {
-		// Dashes stripped to match Python's uuid4().hex / Node's
-		// randomUUID().replace(/-/g, "") -- the server rejects a PARAMS
-		// name containing a dash ("contains an invalid character"),
-		// confirmed live.
 		generatedParamName = "$" + strings.ReplaceAll(uuid.New().String(), "-", "")
 		generatedParamValue = string(vsimArm.Vector)
 		vsimArgs, err := vsimArm.ToArgs(generatedParamName)

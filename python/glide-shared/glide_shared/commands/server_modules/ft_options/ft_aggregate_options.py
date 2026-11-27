@@ -31,14 +31,11 @@ class FtAggregateLimit(FtAggregateClause):
     """
     A clause for limiting the number of retained records.
 
-    An adjacent SORTBY clause's retained-row window widens to match this LIMIT's offset + count
-    on valkey-search 1.3.0 and above (``sortby_max_follows_limit`` compatibility flag,
-    ``src/commands/ft_aggregate_parser.cc`` `ResolveSortByBounds()`) -- below that
-    `search.emulate-release` level, SORTBY still truncates to its own default (10 rows) or
-    explicit MAX regardless of a LIMIT past that point. "Adjacent" means immediately before or
-    after SORTBY in the clause list; a stage such as GROUPBY in between blocks the widening on
-    both branches. Requires `search.emulate-release` >= 1.3.0 for the widened behavior -- see
-    upstream COMPATIBILITY.md's "Sunsetting of Incompatible Behavior" section.
+    On valkey-search 1.3.0 and above, an adjacent SORTBY clause's retained-row window widens to
+    match this LIMIT's offset plus count. Below `search.emulate-release` 1.3.0, SORTBY keeps its
+    own default of 10 rows or its explicit MAX, regardless of this LIMIT. "Adjacent" means
+    immediately before or after SORTBY in the clause list; a stage such as GROUPBY in between
+    blocks the widening.
     """
 
     def __init__(self, offset: int, count: int):
@@ -148,6 +145,8 @@ class FtAggregateReducer:
         Examples:
             >>> FtAggregateReducer.to_list("@color", name="colors")
             # Collects the unique set of "color" values seen in each group into "colors".
+
+        Since: Valkey 9.1.0 and Valkey Search 1.3.0.
         """
         return cls(FtAggregateReducerKeywords.TOLIST, [field], name)
 
@@ -186,6 +185,8 @@ class FtAggregateReducer:
 
             >>> FtAggregateReducer.first_value("@title", by="@price", order=OrderBy.DESC, name="most_expensive_title")
             # Returns the "title" of the record with the highest "price" in each group.
+
+        Since: Valkey 9.1.0 and Valkey Search 1.3.0.
         """
         if order is not None and by is None:
             raise ValueError("first_value: order requires by to be set.")
@@ -217,6 +218,8 @@ class FtAggregateReducer:
         Examples:
             >>> FtAggregateReducer.random_sample("@score", 5, name="score_sample")
             # Returns up to 5 randomly sampled "score" values from each group.
+
+        Since: Valkey 9.1.0 and Valkey Search 1.3.0.
         """
         return cls(FtAggregateReducerKeywords.RANDOM_SAMPLE, [field, str(size)], name)
 
@@ -225,17 +228,9 @@ class FtAggregateGroupBy(FtAggregateClause):
     """
     A clause for grouping the results in the pipeline based on one or more properties.
 
-    valkey-search 1.3.0's ``src/commands/ft_aggregate_exec.cc`` (``ExpandGroupKeys()``) has code
-    that treats an array-valued group key as a multi-value field -- the record would join one
-    group per element, matching RediSearch's documented semantics -- and this is exercised by the
-    engine's own unit tests using synthetic array-valued records. However, no end-to-end
-    FT.CREATE + FT.AGGREGATE path that produces a genuinely array-typed group key was found during
-    this investigation (a JSON array stored in a TAG field, and a HASH TAG field with a
-    comma-separated value, both grouped as a single scalar string rather than expanding -- the
-    attribute reference GROUPBY resolves field values through does not appear to construct an
-    array `Value` for either shape). This needs further investigation before being documented as
-    a usable feature; treat it as present-in-source but not yet confirmed reachable from GLIDE
-    Python, rather than as parity with RediSearch.
+    Multi-value (array-valued) group keys are not documented for GLIDE callers. The server code
+    that expands them has not been shown to be reachable through FT.AGGREGATE from this client, so
+    do not rely on one record joining several groups.
     """
 
     def __init__(
@@ -304,8 +299,7 @@ class FtAggregateSortBy(FtAggregateClause):
             properties (List[FtAggregateSortProperty]): A list of sorting parameters for the sort operation.
             max: (Optional[int]): The MAX value for optimizing the sorting, by sorting only for the n-largest
                 elements. Omitting this falls back to a default of 10 retained rows unless an adjacent
-                `FtAggregateLimit` widens it (valkey-search 1.3.0 and above only -- see `FtAggregateLimit`'s
-                docstring for the `sortby_max_follows_limit` gate and `search.emulate-release` requirement).
+                `FtAggregateLimit` widens it (valkey-search 1.3.0 and above).
         """
         self.properties = properties
         self.max = max
@@ -323,7 +317,7 @@ class FtAggregateSortBy(FtAggregateClause):
         ]
         for property in self.properties:
             args.extend(property.to_args())
-        if self.max:
+        if self.max is not None:
             args.extend([FtAggregateKeywords.MAX, str(self.max)])
         return args
 
@@ -333,17 +327,11 @@ class LoadField:
     A single entry in the LOAD clause of FT.AGGREGATE, optionally renaming the loaded field via
     AS. Modelled on `ReturnField` (the equivalent concept for FT.SEARCH's RETURN option).
 
-    ``AS <alias>`` in the LOAD clause is a compatibility fix introduced in valkey-search 1.3.0
-    (``src/commands/ft_aggregate_parser.cc``, gated by the ``ft_aggregate_load_as`` compatibility
-    flag -- see ``COMPATIBILITY.md``). Below ``search.emulate-release 1.3.0``, the legacy branch
-    does not recognise ``AS`` as a rename keyword at all: it is consumed as just another LOAD
-    field token rather than a rename directive. GLIDE does not validate this client-side; against
-    a pre-1.3.0 emulate-release the server rejects the command outright with a `RequestError`
-    reading "Index: field `AS` does not exist" (confirmed live against 1.3.0-rc1, and asserted in
-    `tests/async_tests/tests_server_modules/test_ft.py`'s `test_ft_aggregate_load_as`). Use the
-    `requires_search_1_3` marker (or equivalent capability check) around any code path that relies
-    on the alias actually renaming the column. Requires `search.emulate-release` >= 1.3.0 -- see
-    upstream COMPATIBILITY.md's "Sunsetting of Incompatible Behavior" section.
+    The ``AS`` rename needs `search.emulate-release` 1.3.0 or later. Below that level the server
+    does not treat ``AS`` as a rename keyword and rejects the command with "Index: field `AS` does
+    not exist". GLIDE does not check this client-side.
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
 
     def __init__(
@@ -377,12 +365,12 @@ class LoadField:
 def load_fields_to_args(
     load_fields: Optional[List[Union[TEncodable, "LoadField"]]],
 ) -> List[TEncodable]:
-    """Serialize a LOAD clause's field list for FT.AGGREGATE and FT.HYBRID (shared,
-    since the two commands' LOAD clause grammar is byte-identical, confirmed in source -- see
-    `LoadField`'s docstring). The count is a token budget, not an entry count -- each `LoadField`
-    with an alias contributes 3 tokens (field, AS, alias) rather than 1, matching the parser's own
-    accounting (src/commands/ft_aggregate_parser.cc: "`cnt` is a token budget...the `AS` keyword
-    and its alias count against the budget")."""
+    """Serialize a LOAD clause's field list for FT.AGGREGATE and FT.HYBRID.
+
+    The two commands share the same LOAD grammar. The count is a token budget rather than an entry
+    count: a `LoadField` with an alias contributes three tokens (field, AS, alias), and a plain field
+    contributes one.
+    """
     if not load_fields:
         return []
     load_field_args: List[TEncodable] = []
@@ -401,10 +389,10 @@ def params_to_args(
     params: Optional[Mapping[TEncodable, TEncodable]],
     params_keyword: TEncodable = FtAggregateKeywords.PARAMS,
 ) -> List[TEncodable]:
-    """Serialize a PARAMS option for FT.AGGREGATE and FT.HYBRID (shared, since the two
-    commands' PARAMS grammar is byte-identical). `params_keyword` lets a caller (e.g.
-    `FtHybridOptions`) pass its own command-specific keyword constant rather than this module's
-    FT.AGGREGATE one, even though the two currently serialize to the same literal text.
+    """Serialize a PARAMS option for FT.AGGREGATE and FT.HYBRID.
+
+    The two commands share the same PARAMS grammar. `params_keyword` lets `FtHybridOptions` pass
+    its own keyword constant, which serializes to the same literal text.
     """
     if not params:
         return []
@@ -453,15 +441,14 @@ class FtAggregateApply(FtAggregateClause):
 class FtWithCursor:
     """
     The WITHCURSOR option, requesting a paged reply instead of the whole result set at once.
-    Shared verbatim between FT.AGGREGATE and FT.HYBRID -- confirmed in
-    ``src/commands/ft_hybrid_parser.cc``: WITHCURSOR is handled by the exact same aggregate-suffix
-    parser both commands drive, so the option's own grammar (``WITHCURSOR [COUNT n] [MAXIDLE
-    ms]``) and reply shape are identical regardless of which command opened the cursor. A paged
-    query, and every subsequent `glide.async_commands.ft.
-    cursor_read`/`cursor_del` (or `glide_sync.sync_commands.ft.cursor_read`/`cursor_del`) against
-    the cursor it opens, is pinned to the PRIMARY of the index's slot regardless of ``ReadFrom``
-    -- a cursor is a per-process, node-local resource, and this is a deliberate, documented
-    exception to GLIDE's normal read routing.
+    FT.AGGREGATE and FT.HYBRID accept the same WITHCURSOR grammar and return the same reply shape.
+
+    A paged query, and each later `glide.async_commands.ft.cursor_read`/`cursor_del` (or
+    `glide_sync.sync_commands.ft.cursor_read`/`cursor_del`) against the cursor it opens, always goes
+    to the primary of the index's slot, regardless of ``ReadFrom``. A cursor lives on the node that
+    created it.
+
+    Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
 
     def __init__(self, count: Optional[int] = None, maxidle: Optional[int] = None):
@@ -518,7 +505,7 @@ class FtAggregateOptions:
             loadAll (Optional[bool]): An option to load all fields declared in the index.
             loadFields (Optional[List[Union[TEncodable, LoadField]]]): An option to load only the fields passed in
                 this list. Each entry is either a plain field identifier (loaded under its own name, as before) or a
-                `LoadField` to additionally rename it via ``AS`` (valkey-search 1.3.0; see `LoadField`'s docstring
+                `LoadField` to additionally rename it via ``AS`` (see `LoadField`'s docstring
                 for the compatibility gate). The two forms can be freely mixed in the same list.
             timeout (Optional[int]): Overrides the timeout parameter of the module.
             params (Optional[Mapping[TEncodable, TEncodable]]): The key/value pairs can be referenced from within the
@@ -530,31 +517,29 @@ class FtAggregateOptions:
             inorder (Optional[bool]): If set, proximity matching of terms must be in order.
             slop (Optional[int]): Specifies a slop value for proximity matching of terms.
             dialect (Optional[int]): The query dialect version to use. The only supported dialect is ``2``.
-            add_scores (Optional[bool]): If set, exposes the relevance score as a pipeline field named
-                ``__score`` (valkey-search 1.3.0, ``src/commands/ft_aggregate_parser.cc`` ``kAddScoresParam``,
-                ``src/commands/ft_aggregate_exec.cc``). Confirmed live: ``__score`` can then be referenced like any
-                other pipeline field in a `LoadField`, `FtAggregateApply` expression, or an
-                `FtAggregateSortProperty` (e.g. ``FtAggregateSortProperty("@__score", OrderBy.DESC)``) placed in
-                `clauses`.
-            scorer (Optional[TEncodable]): The scoring function used to compute ``__score`` and rank results
-                (valkey-search 1.3.0, ``src/indexes/scoring/scorer.h``). ``"BM25STD"`` is the only value currently
-                registered and selectable; any other value is rejected by the server. Has no visible effect unless
-                combined with ``add_scores=True`` (or inspected indirectly via a SORTBY on ``__score``).
+            add_scores (Optional[bool]): If set, exposes the relevance score as a pipeline field
+                named ``__score``. The field can then be referenced like any other pipeline field, for
+                example in a `LoadField`, an `FtAggregateApply` expression, or an `FtAggregateSortProperty`
+                placed in `clauses` (e.g. ``FtAggregateSortProperty("@__score", OrderBy.DESC)``).
+                Available since Valkey 9.1.0 and Valkey Search 1.3.0.
+            scorer (Optional[TEncodable]): The scoring function used to compute ``__score`` and rank
+                results. ``"BM25STD"`` is the only value currently registered and selectable; any other
+                value is rejected by the server. Has no visible effect unless combined with
+                ``add_scores=True`` (or inspected indirectly via a SORTBY on ``__score``).
+                Available since Valkey 9.1.0 and Valkey Search 1.3.0.
             with_cursor (Optional[FtWithCursor]): Requests a paged reply instead of the whole result set at once.
                 See `FtWithCursor`. The reply shape becomes a two-element array of ``[rows, cursor_id]``, where
                 ``rows`` is this same aggregate response shape and ``cursor_id`` is passed to a subsequent
                 `glide.async_commands.ft.cursor_read`/`glide_sync.sync_commands.ft.cursor_read` call to fetch the
-                next page (``0`` once exhausted).
+                next page (``0`` once exhausted). Available since Valkey 9.1.0 and Valkey Search 1.3.0.
 
         Note:
-            A paged (``with_cursor``) query, and every subsequent FT.CURSOR READ/DEL against the cursor it opens,
-            always reads from the PRIMARY of the index's slot, regardless of the client's ``ReadFrom``
-            configuration. This is because a cursor is a per-process, node-local
-            resource on the server that opened it -- it is not shared or forwarded between nodes, so a read that
-            lands on a different node (a replica a ``PREFER_REPLICA``/AZ-affinity client would otherwise have
-            used) fails with "Cursor not found". A failover of the primary that was holding an open cursor loses
-            that cursor, the same as any other cursor-discarding event on that node. A plain aggregate without
-            ``with_cursor`` is unaffected and still prefers replicas as normal.
+            A paged (``with_cursor``) query, and every later FT.CURSOR READ/DEL against the cursor it
+            opens, always goes to the PRIMARY of the index's slot, regardless of the client's
+            ``ReadFrom`` configuration. A cursor is a node-local resource that is not forwarded
+            between nodes, so a read sent to a replica fails with "Cursor not found". A failover of
+            the primary that held the cursor loses it. A plain aggregate without ``with_cursor`` is
+            unaffected and still prefers replicas.
         """
         self.loadAll = loadAll
         self.loadFields = loadFields
@@ -570,7 +555,6 @@ class FtAggregateOptions:
         self.with_cursor = with_cursor
 
     def _query_flags_to_args(self) -> List[TEncodable]:
-        """Serialize the query-parsing flags (VERBATIM/INORDER/SLOP)."""
         args: List[TEncodable] = []
         if self.verbatim:
             args.append(FtAggregateKeywords.VERBATIM)
@@ -581,7 +565,6 @@ class FtAggregateOptions:
         return args
 
     def _scoring_to_args(self) -> List[TEncodable]:
-        """Serialize the ADDSCORES and SCORER options."""
         args: List[TEncodable] = []
         if self.add_scores:
             args.append(FtAggregateKeywords.ADDSCORES)
@@ -601,7 +584,7 @@ class FtAggregateOptions:
             args.extend([FtAggregateKeywords.LOAD, "*"])
         else:
             args.extend(load_fields_to_args(self.loadFields))
-        if self.timeout:
+        if self.timeout is not None:
             args.extend([FtAggregateKeywords.TIMEOUT, str(self.timeout)])
         args.extend(params_to_args(self.params))
         if self.clauses:

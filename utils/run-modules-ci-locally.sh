@@ -19,9 +19,8 @@
 # actually exercise CI's startup code -- fixed by giving the shared script
 # a SEARCH_MODULE_ARGS hook instead of forking the bring-up logic).
 #
-# Usage: three image/release combinations are used across this file's
-# proof runs, named in BUILD-MODULES-1.3.md and PR-DRAFT-PYTHON-VS13.md's
-# Testing table as "1.", "2." and "3." below. (A fourth combination --
+# Usage: three image/release combinations, numbered "1.", "2." and "3."
+# below. (A fourth combination --
 # 9.1.3 at its own default -- isn't listed as its own config: that image's
 # module predates the `--emulate-release` arg and aborts boot if given one,
 # so EMULATE_RELEASE="" is mandatory whenever IMAGE=9.1.3, not an
@@ -33,22 +32,24 @@
 # MODULES_TEST_LANG selects which language's test tail runs (default
 # "python", preserving every existing caller's behaviour byte-for-byte):
 #   MODULES_TEST_LANG=python utils/run-modules-ci-locally.sh   # default
+#   MODULES_TEST_LANG=node utils/run-modules-ci-locally.sh
 #   MODULES_TEST_LANG=go utils/run-modules-ci-locally.sh
 #
-# See BUILD-MODULES-1.3.md for narrated example runs and Mac-vs-CI-runner
-# differences (notably: Docker Desktop on macOS shares /Users by default,
+# Mac-vs-CI-runner difference: Docker Desktop on macOS shares /Users by default,
 # not /tmp -- any file this script bind-mounts into a container MUST live
 # under a /Users path or the mount silently becomes an empty directory
-# instead of the file, with no error).
+# instead of the file, with no error.
 #
 # Requires, per MODULES_TEST_LANG:
 #   python (default): docker, valkey-cli (Homebrew: `brew install
 #     valkey`), and the Python client already built (python3 dev.py build
 #     --client async && --client sync) -- this script does not rebuild
 #     the wrapper, matching the CI job's "Build Python wrapper" step only
-#     in effect, not in mechanism (see BUILD-MODULES-1.3.md for why: the
-#     CI step runs on a fresh runner and must build from scratch, this
-#     script assumes a dev checkout that's already built).
+#     in effect, not in mechanism (the CI step runs on a fresh runner and
+#     must build from scratch, this script assumes a dev checkout that's
+#     already built).
+#   node: docker, valkey-cli, and the Node client already built (npm ci &&
+#     npm run build).
 #   go: docker, valkey-cli, the Rust toolchain + cbindgen (`cargo install
 #     cbindgen`), and `protoc-gen-go` (`go install
 #     google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0`). This script
@@ -140,55 +141,52 @@ case "$MODULES_TEST_LANG" in
             --self-contained-html \
             -rs
         ;;
+    java)
+        cd "${REPO_ROOT}/java"
+        # Single-sourced from .github/workflows/java-modules.yml's "Build and run
+        # modules tests" step -- these must not drift independently; see
+        # integTest/src/test/java/.../JavaModulesCiSyncTest.java, which parses the
+        # workflow file for this exact gradle target + flags and fails the suite if
+        # it ever changes there without a matching update here. protoc 29.1 must be
+        # first on PATH -- a newer system protoc generates code the pinned
+        # protobuf-java runtime can't compile. protoc 29.1 is pinned under the
+        # shared Glide root (one level above every per-language worktree,
+        # including this one), not inside this worktree.
+        PROTOC_29_1_DIR="${REPO_ROOT}/../tools/protoc-29.1/bin"
+        if [ ! -d "$PROTOC_29_1_DIR" ]; then
+            echo "ERROR: pinned protoc 29.1 not found at ${PROTOC_29_1_DIR}." >&2
+            echo "       Install it there before running the java modules tests -- falling" >&2
+            echo "       back to whatever protoc is on PATH would silently risk generating" >&2
+            echo "       code the pinned protobuf-java runtime can't compile." >&2
+            exit 1
+        fi
+        if [ ! -x "${PROTOC_29_1_DIR}/protoc" ] \
+            || ! "${PROTOC_29_1_DIR}/protoc" --version 2>/dev/null | grep -Eq '^libprotoc 29\.1$'; then
+            echo "ERROR: ${PROTOC_29_1_DIR}/protoc is missing, not executable, or not version 29.1." >&2
+            echo "       Gradle invokes protoc by name, so a broken pinned directory would let it" >&2
+            echo "       fall back to whatever protoc is on PATH." >&2
+            exit 1
+        fi
+        export PATH="${PROTOC_29_1_DIR}:${PATH}"
+        # --rerun-tasks: modulesTest's inputs don't include the -D endpoint
+        # properties, so Gradle's up-to-date check doesn't notice when this
+        # script runs it a second time against a different image/level -- it
+        # would otherwise report a stale UP-TO-DATE pass instead of actually
+        # re-testing against the new server.
+        GLIDE_DOCKER_SERVERS=true ./gradlew --no-daemon --rerun-tasks :integTest:modulesTest \
+            -Dstandalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
+            -Dcluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"
+        ;;
+    node)
+        cd "${REPO_ROOT}/node"
+        npm run test:modules -- \
+            --standalone-endpoints="${MODULES_STANDALONE_ENDPOINT}" \
+            --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"
+        ;;
     go)
         cd "${REPO_ROOT}/go"
         export PATH="${HOME}/.cargo/bin:$(go env GOPATH)/bin:${PATH}"
-        # Fresh native artifact + protobuf before every run (the stale-build trap
-        # every language's dev tooling can hit).
         make build-glide-client generate-protobuf
-        # Local linker workaround (this machine's Go 1.26.5 + Apple clang 21 pair,
-        # not a code issue): the Makefile's build-glide-client strips the Rust
-        # static lib (`strip -x`), and `go test`'s test-binary link step on this
-        # toolchain combination can't resolve some of aws-lc-rs's stripped
-        # assembly object sections ("address=... not in any section"), while a
-        # plain `go build` of the same lib links fine. Re-building without the
-        # strip step and overwriting the already-stripped copy fixes `go test`
-        # specifically; `go build`/the shipped library are unaffected either way.
-        # Confirmed pre-existing on main (unrelated to this port) and confined to
-        # this specific toolchain pairing -- not a fix for the shared Makefile.
-        GO_ARCH="$(uname -m)"
-        case "$(uname)-$GO_ARCH" in
-            Darwin-arm64) GO_TARGET_TRIPLET="aarch64-apple-darwin" ;;
-            Darwin-x86_64) GO_TARGET_TRIPLET="x86_64-apple-darwin" ;;
-            *) GO_TARGET_TRIPLET="" ;;
-        esac
-        if [ -n "$GO_TARGET_TRIPLET" ]; then
-            # `cargo clean -p` forces this unit dirty so the following `cargo rustc` actually
-            # rebuilds and re-emits libglide_ffi.a: Cargo's own fingerprint check otherwise finds
-            # make build-glide-client's prior build still fresh (same flags, no source changes)
-            # and skips rebuilding entirely, so the `cp` below would just re-copy that build's
-            # output -- already run through the Makefile's `strip -x`, which is what this whole
-            # block exists to avoid.
-            ( cd "${REPO_ROOT}/ffi" && cargo clean -p glide-ffi --release && cargo rustc --crate-type staticlib --release )
-            cp "${REPO_ROOT}/ffi/target/release/libglide_ffi.a" \
-                "${REPO_ROOT}/go/rustbin/${GO_TARGET_TRIPLET}/libglide_ffi.a"
-        fi
-        # Single-sourced from .github/workflows/go-modules.yml's "Build and run
-        # modules tests" step -- these must not drift independently; see
-        # integTest/go_modules_ci_sync_test.go, which parses the workflow file for
-        # this exact make target + flags and fails the suite if it ever changes
-        # there without a matching update here. Bypasses the Makefile's
-        # `make install-tools build modules-test` wrapper's HTML-report pipe
-        # (go-test-report), which depends on a flaky third-party module fetch
-        # unrelated to test correctness; this runs the same underlying `go test`
-        # invocation the Makefile's modules-test target does, directly.
-        # -run TestGlideTestSuite scopes `go test` to the one top-level function
-        # that hosts every TestModule* method (glide_test_suite_test.go). Without
-        # it, `go test ./integTest/...` also runs every OTHER top-level Test*
-        # function in the package (for example pool_scope_test.go's pool/scope
-        # tests), which need their own standalone server bring-up this script
-        # doesn't do and fail with connection-refused -- a false top-level FAIL
-        # unrelated to the modules this script actually proves out.
         CC="gcc -fsanitize=address" go test -v ./integTest/... \
             -run TestGlideTestSuite \
             -testify.m "^TestModule" \
@@ -196,7 +194,7 @@ case "$MODULES_TEST_LANG" in
             --cluster-endpoints="${MODULES_CLUSTER_ENDPOINTS}"
         ;;
     *)
-        echo "ERROR: unknown MODULES_TEST_LANG '${MODULES_TEST_LANG}' (expected python or go)" >&2
+        echo "ERROR: unknown MODULES_TEST_LANG '${MODULES_TEST_LANG}' (expected python, java, node, or go)" >&2
         exit 1
         ;;
 esac

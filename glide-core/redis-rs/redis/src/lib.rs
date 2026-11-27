@@ -333,7 +333,6 @@ assert_eq!(result, Ok(("foo".to_string(), b"bar".to_vec())));
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, warn(rustdoc::broken_intra_doc_links))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![allow(unknown_lints, dependency_on_unit_never_type_fallback)]
 
 // public api
 pub use crate::client::CertParamsProvider;
@@ -389,6 +388,8 @@ pub use crate::types::{
     RedisWrite,
     ToRedisArgs,
     SERVER_ERROR_DESCRIPTION,
+    ServerError,
+    TIMEOUT_ERROR_CODE,
 
     // low level values
     Value,
@@ -397,6 +398,11 @@ pub use crate::types::{
     ProtocolVersion,
     AddressResolver,
 };
+
+/// Creates an extension error with the supplied code and detail.
+pub fn make_extension_error(code: String, detail: Option<String>) -> RedisError {
+    crate::types::make_extension_error(code, detail)
+}
 
 #[cfg(feature = "aio")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aio")))]

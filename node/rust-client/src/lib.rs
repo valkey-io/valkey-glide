@@ -8,6 +8,7 @@ use glide_core::compression::process_command_args_for_compression;
 use glide_core::connection_request;
 use glide_core::errors::{error_message, error_type};
 use glide_core::otel_db_semantics::{set_db_attributes, set_db_batch_attributes};
+use glide_core::worker_pool::socket_listener_pool_size;
 use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
     GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
@@ -267,7 +268,11 @@ fn acquire_worker_pool() -> LocalPoolHandle {
     let mut state = get_worker_pool_state().lock();
     state.client_count += 1;
     if state.pool.is_none() {
-        let num_workers = num_cpus::get();
+        // The shared sizing (glide-core::worker_pool) caps the default at 8: on many-core
+        // hosts the raw CPU count costs file descriptors proportional to it before any
+        // connection exists, and this build aborts (`panic = "abort"`) if a worker cannot
+        // be created.
+        let num_workers = socket_listener_pool_size();
         state.pool = Some(LocalPoolHandle::new(num_workers));
     }
     state.pool.as_ref().unwrap().clone()
@@ -490,18 +495,6 @@ fn compression_error_to_redis(err: glide_core::compression::CompressionError) ->
     RedisError::from((ErrorKind::ClientError, "Compression error", err.to_string()))
 }
 
-fn process_batch_response_for_decompression(
-    response: Value,
-    client: &Client,
-) -> std::result::Result<Value, glide_core::compression::CompressionError> {
-    let compression_manager = client.compression_manager();
-    let Some(manager) = compression_manager.as_deref() else {
-        return Ok(response);
-    };
-
-    glide_core::compression::decompress_batch_response(response, manager)
-}
-
 fn process_command_for_compression(
     cmd: &mut Cmd,
     client: &Client,
@@ -539,6 +532,7 @@ fn process_command_for_compression(
         "BITPOS" => RequestType::BitPos,
         "DECR" => RequestType::Decr,
         "DECRBY" => RequestType::DecrBy,
+        "DELEX" => RequestType::DelEx,
         "DELIFEQ" => RequestType::DelIfEq,
         "GETBIT" => RequestType::GetBit,
         "GETRANGE" => RequestType::GetRange,
@@ -754,19 +748,12 @@ async fn execute_batch(
             .await
     };
 
-    match result {
-        Ok(value) => match process_batch_response_for_decompression(value.clone(), client) {
-            Ok(processed_value) => Ok(processed_value),
-            Err(err) => {
-                log_warn(
-                    "batch_response_decompression",
-                    format!("Failed to decompress batch response: {err}"),
-                );
-                Ok(value)
-            }
-        },
-        Err(err) => Err(err),
-    }
+    let decompressed = glide_core::compression::try_decompress_batch_response(
+        result?,
+        client.compression_manager().as_deref(),
+        raise_on_error,
+    )?;
+    Ok(decompressed)
 }
 
 // ============================================================================
@@ -1137,7 +1124,7 @@ fn run_worker_message(
             task::spawn_local(async move {
                 // RAII guard: refreshes activity and clears the blocking flag on all exit
                 // paths (normal completion, early return, and task cancellation/drop).
-                let _unmark_guard = pool_blocking_ids
+                let unmark_guard = pool_blocking_ids
                     .and_then(|cid| glide_core::pool::get_blocking_flag(cid).map(|arc| (cid, arc)))
                     .map(|(cid, arc)| UnmarkOnDrop(Some(arc), Some(cid)));
                 if let Some(ref span) = cmd.span() {
@@ -1149,6 +1136,9 @@ fn run_worker_message(
                         Err(err) => Err(err),
                     };
                 let response = build_response(callback_idx, result, cmd.span());
+                // Clear before delivering: the caller may release the client as soon as
+                // the promise settles, and release discards a client still marked blocking.
+                drop(unmark_guard);
                 inflight.fetch_add(1, Ordering::Release);
                 if buffer.push(response)
                     && let Some(wake_callback) = wake.upgrade()
@@ -1168,7 +1158,7 @@ fn run_worker_message(
             task::spawn_local(async move {
                 // RAII guard: refreshes activity and clears the blocking flag on all exit
                 // paths (normal completion, early return, and task cancellation/drop).
-                let _unmark_guard = pool_ids
+                let unmark_guard = pool_ids
                     .and_then(|cid| glide_core::pool::get_blocking_flag(cid).map(|arc| (cid, arc)))
                     .map(|(cid, arc)| UnmarkOnDrop(Some(arc), Some(cid)));
                 let command_span = batch_msg.command_span.clone();
@@ -1185,6 +1175,8 @@ fn run_worker_message(
                 )
                 .await;
                 let response = build_response(callback_idx, result, command_span);
+                // Clear before delivering (see the command task).
+                drop(unmark_guard);
                 inflight.fetch_add(1, Ordering::Release);
                 if buffer.push(response)
                     && let Some(wake_callback) = wake.upgrade()
@@ -1204,7 +1196,7 @@ fn run_worker_message(
             task::spawn_local(async move {
                 // RAII guard: refreshes activity and clears the blocking flag on all exit
                 // paths (normal completion, early return, and task cancellation/drop).
-                let _unmark_guard = pool_ids
+                let unmark_guard = pool_ids
                     .and_then(|cid| glide_core::pool::get_blocking_flag(cid).map(|arc| (cid, arc)))
                     .map(|(cid, arc)| UnmarkOnDrop(Some(arc), Some(cid)));
                 let keys: Vec<&[u8]> = script_msg.keys.iter().map(|k| k.as_ref()).collect();
@@ -1213,6 +1205,8 @@ fn run_worker_message(
                     .invoke_script(&script_msg.hash, &keys, &args, script_msg.routing)
                     .await;
                 let response = build_response(callback_idx, result, None);
+                // Clear before delivering (see the command task).
+                drop(unmark_guard);
                 inflight.fetch_add(1, Ordering::Release);
                 if buffer.push(response)
                     && let Some(wake_callback) = wake.upgrade()
@@ -1470,6 +1464,16 @@ pub fn get_provider_direct_open_handle_count() -> u32 {
     PROVIDER_DIRECT_OPEN_HANDLE_COUNT.load(Ordering::SeqCst) as u32
 }
 
+/// napi status for a failed `Client::new`: `InvalidArg` if `is_configuration()` (as for the parse
+/// and `credential_provider_key` errors), else `Unknown`. TS: `ConfigurationError` / `ClosingError`.
+pub(crate) fn client_creation_status(error: &ConnectionError) -> Status {
+    if error.is_configuration() {
+        Status::InvalidArg
+    } else {
+        Status::Unknown
+    }
+}
+
 /// Creates a new direct NAPI client connection with response buffering.
 ///
 /// This function creates a Client using the glide-core library and wraps it
@@ -1595,7 +1599,7 @@ pub fn create_direct_client<'a>(
                 // deferred settlement is queued.
                 drop(credential_provider_claim);
                 deferred.reject(napi::Error::new(
-                    Status::Unknown,
+                    client_creation_status(&err),
                     format!("Failed to create client: {err}"),
                 ));
                 // Release pool reference since client creation failed

@@ -1,6 +1,6 @@
 [package]
 name = "glide-core"
-version = "0.1.1"
+version = "0.3.0"
 
 # About
 description = "Core for Valkey GLIDE. This crate isn't intended to be used directly."
@@ -18,10 +18,10 @@ edition = "2024"
 [dependencies]
 
 # GLIDE dependencies
-glide-logger = { path = "../glide-logger", version = "0.1" }
-glide-telemetry = { path = "../glide-telemetry", version = "0.1" }
-glide-core-engine = { path = "./redis-rs/redis", version = "0.1", features = ["aio", "keep-alive", "tokio-comp", "tokio-rustls-comp", "connection-manager", "cluster", "cluster-async"] }
-glide-rdma = { path = "../glide-rdma", version = "0.1", optional = true }
+glide-logger = { path = "../glide-logger", version = "0.1.1" }
+glide-telemetry = { path = "../glide-telemetry", version = "0.1.1" }
+glide-core-engine = { path = "./redis-rs/redis", version = "0.2.0", features = ["aio", "keep-alive", "tokio-comp", "tokio-rustls-comp", "connection-manager", "cluster", "cluster-async"] }
+glide-rdma = { path = "../glide-rdma", version = "0.2.0", optional = true }
 
 # External dependencies
 async-trait = { version = "0.1" }
@@ -38,7 +38,7 @@ integer-encoding = { version = "4", optional = true }
 libc = "0.2.186"
 lz4 = { version = "1.28" }
 nanoid = "0.4"
-num_cpus = { version = "^1", optional = true }
+num_cpus = { version = "^1" }
 once_cell = "1"
 protobuf = { version = "3", features = ["bytes", "with-bytes"], optional = true }
 rand = { version = "0.8" }
@@ -65,11 +65,13 @@ proto = ["protobuf"]
 # RDMA transfers through glide-rdma.
 # Needs libfabric at run time (see DEVELOPER.md).
 rdma = ["dep:glide-rdma", "glide-rdma/libfabric", "glide-core-engine/rdma"]
+# `rdma` plus glide-rdma's `tcp` provider (see `glide_rdma::Provider::Tcp`), for the
+# tests and for a development client; never a release build.
+rdma-tcp-dev = ["rdma", "glide-rdma/tcp-dev"]
 socket-layer = [
     "proto",
     "directories",
     "integer-encoding",
-    "num_cpus",
     "tokio-util",
 ]
 standalone_heartbeat = []
@@ -80,7 +82,7 @@ test-util = []
 [dev-dependencies]
 
 # GLIDE dependencies
-glide-core-engine = { path = "./redis-rs/redis", version = "0.1", features = ["tls-rustls-insecure"] }
+glide-core-engine = { path = "./redis-rs/redis", version = "0.2.0", features = ["tls-rustls-insecure"] }
 glide-core = { path = ".", features = ["socket-layer", "test-util"] }
 
 # External dependencies
@@ -93,7 +95,7 @@ rustls = { version = "0.23", features = ["aws-lc-rs"]}
 serial_test = "4"
 socket2 = "0.6"
 tempfile = "3.3.0"
-tokio = { version = "1", features = ["rt-multi-thread"] }
+tokio = { version = "1", features = ["rt-multi-thread", "test-util"] }
 which = "8"
 
 [lints.rust]

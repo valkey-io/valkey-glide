@@ -2,6 +2,7 @@
 
 import pytest
 from glide.glide_client import GlideClient
+from glide_shared.commands.batch import Batch
 from glide_shared.config import (
     GlideClientConfiguration,
     NodeAddress,
@@ -11,6 +12,7 @@ from glide_shared.config import (
 from glide_shared.exceptions import RequestError
 
 from tests.async_tests.conftest import create_client
+from tests.utils.utils import get_random_string
 
 
 @pytest.mark.anyio
@@ -180,6 +182,7 @@ class TestReadOnlyMode:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.requires_tcp
     async def test_read_only_connects_to_primary_and_replica_separately(
         self,
         request,
@@ -255,3 +258,53 @@ class TestReadOnlyMode:
         finally:
             await client_node_0.close()
             await client_node_1.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_read_only_mode_blocks_write_in_batch(
+        self, request, cluster_mode: bool
+    ):
+        """Test that a batch containing a write raises RequestError."""
+        client = await create_client(
+            request,
+            cluster_mode,
+            request_timeout=2000,
+            read_only=True,
+        )
+        assert type(client) is GlideClient
+        key = get_random_string(10)
+
+        try:
+            batch = Batch(is_atomic=False).get(key).set(key, "value")
+            with pytest.raises(RequestError) as exc_info:
+                await client.exec(batch, raise_on_error=True)
+            assert (
+                "write commands are not allowed in read-only mode"
+                in str(exc_info.value).lower()
+            )
+        finally:
+            await client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_read_only_mode_blocks_write_in_scope(
+        self, request, cluster_mode: bool
+    ):
+        """Test that a write on a read-only client's scope raises RuntimeError."""
+        client = await create_client(
+            request,
+            cluster_mode,
+            request_timeout=2000,
+            read_only=True,
+        )
+        assert type(client) is GlideClient
+        key = get_random_string(10)
+
+        try:
+            async with await client.scoped_connection() as scope:
+                with pytest.raises(RuntimeError) as exc_info:
+                    await scope.set(key, "value")
+                assert (
+                    "write commands are not allowed in read-only mode"
+                    in str(exc_info.value).lower()
+                )
+        finally:
+            await client.close()
