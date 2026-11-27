@@ -12,7 +12,7 @@ while IFS= read -r path; do
             unexpected_paths+=("$path")
             ;;
     esac
-done < <(git diff --name-only HEAD; git ls-files --others --exclude-standard)
+done < <(git diff --name-only --no-renames HEAD; git ls-files --others --exclude-standard)
 if (( ${#unexpected_paths[@]} > 0 )); then
     echo "Unexpected worktree changes after Python Windows wheel build and tests:"
     echo "Worktree status (first 200 entries):"

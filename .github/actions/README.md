@@ -331,7 +331,7 @@ Good fits:
 
 Poor fits:
 
-- Steps that intentionally modify tracked files as part of a release (version bumps, generated manifests). For those, use a scoped allowlist check (`git diff --name-only HEAD` against expected paths) instead of this action.
+- Steps that intentionally modify tracked files as part of a release (version bumps, generated manifests). For those, use a scoped allowlist check (`git diff --name-only --no-renames HEAD` against expected paths) instead of this action.
 - Jobs where `actions/download-artifact` or similar writes into the repository without a matching `.gitignore` entry. Either ignore the path or download outside the workspace.
 
 #### Example Usage

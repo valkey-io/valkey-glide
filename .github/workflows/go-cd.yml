@@ -253,7 +253,7 @@ jobs:
                         unexpected_paths+=("$path")
                         ;;
                     esac
-                  done < <(git diff --name-only HEAD)
+                  done < <(git diff --name-only --no-renames HEAD)
                   if (( ${#unexpected_paths[@]} > 0 )); then
                     echo "Unexpected tracked changes in Go generated release files:"
                     echo "Tracked status (first 200 entries):"
