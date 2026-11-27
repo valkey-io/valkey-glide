@@ -960,8 +960,9 @@ type NonNullCredentialProviderCallback = unsafe extern "C-unwind" fn(
     expires_at_epoch_millis: *mut i64,
 ) -> u8;
 
-/// Nullable custom AWS credential-provider callback accepted by [`create_client`]. Pass
-/// `None`/`NULL` to use the default AWS credential chain.
+/// Nullable custom AWS credential-provider callback accepted by
+/// [`create_client_with_credential_provider`] and [`create_client_from_uri`]. Pass `None`/`NULL`
+/// to use the default AWS credential chain.
 ///
 /// The Rust core invokes the callback whenever it needs fresh credentials to generate an IAM
 /// token, possibly many times while the client is active. All string outputs must be UTF-8. The
@@ -989,7 +990,7 @@ type NonNullCredentialProviderCallback = unsafe extern "C-unwind" fn(
 /// All other status values are invalid.
 ///
 /// # Parameters
-/// * `client_id` - The client identifier passed to `create_client`.
+/// * `client_id` - The client identifier passed to the client creation function.
 /// * `access_key_id_buf` - Buffer to write the AWS Access Key ID into.
 /// * `access_key_id_buf_len` - Capacity of `access_key_id_buf`.
 /// * `access_key_id_len` - Output: actual or required byte length of the AWS Access Key ID.
@@ -2060,6 +2061,8 @@ fn create_pipe_writer(pipe_write_fd: i32) -> &'static SharedPipeWriter {
 pub struct ClientAdapter {
     runtime: ManuallyDrop<Runtime>,
     pipe_client_id: std::sync::atomic::AtomicU64,
+    /// How an async client's push handler delivers pushes, fixed at creation.
+    async_push_delivery: AsyncPushDeliveryMode,
     /// Provider callbacks may outlive their timeout and must not block runtime destruction.
     has_external_blocking_provider: bool,
     /// Background runtime for spawned tasks (connection drivers, reconnection, cluster manager).
@@ -3006,7 +3009,7 @@ mod tests_block_on_worker {
         let in_task = dispatch.clone();
         let error = block_on_worker(&runtime(), Some(&dispatch), async move {
             in_task.run(|| {
-                create_client_internal(&[], ClientType::SyncClient, None, None, None, 0)
+                create_client_internal(&[], ClientType::SyncClient, None, None, None, 0, 0)
                     .err()
                     .map(|error| error.message)
             })
@@ -3025,7 +3028,7 @@ mod tests_block_on_worker {
         address.port = 1;
         request.addresses.push(address);
         let bytes = request.write_to_bytes().unwrap();
-        create_client_internal(&bytes, ClientType::SyncClient, None, None, None, 0)
+        create_client_internal(&bytes, ClientType::SyncClient, None, None, None, 0, 0)
             .unwrap_or_else(|error| panic!("{}", error.message))
             .cast()
     }
@@ -3130,6 +3133,8 @@ mod tests_block_on_worker {
     }
 }
 
+/// `client_id` is passed to the address resolver and credential provider callbacks.
+/// `pipe_client_id` routes an async client's results and pushes through the async pipe; 0 opts out.
 fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
@@ -3137,6 +3142,7 @@ fn create_client_internal(
     address_resolver: AddressResolverCallback,
     credential_provider: Option<NonNullCredentialProviderCallback>,
     client_id: usize,
+    pipe_client_id: u64,
 ) -> Result<*const ClientAdapter, CreateClientError> {
     // Checked before any runtime is built: dropping one here would panic.
     if CallerDispatch::is_pumping() {
@@ -3285,7 +3291,8 @@ fn create_client_internal(
     let pubsub_callback_store = Arc::new(std::sync::RwLock::new(pubsub_callback));
     let client_adapter = Arc::new(ClientAdapter {
         runtime: ManuallyDrop::new(runtime),
-        pipe_client_id: std::sync::atomic::AtomicU64::new(client_id as u64),
+        pipe_client_id: std::sync::atomic::AtomicU64::new(pipe_client_id),
+        async_push_delivery: async_push_delivery_mode(pubsub_callback, pipe_client_id),
         has_external_blocking_provider,
         background_runtime: ManuallyDrop::new(background_runtime),
         core,
@@ -3301,7 +3308,7 @@ fn create_client_internal(
         .as_ref()
         .unwrap_or(&client_adapter.runtime);
     let callback_store = pubsub_callback_store.clone();
-    let async_push_delivery = async_push_delivery_mode(pubsub_callback, client_id as u64);
+    let async_push_delivery = client_adapter.async_push_delivery;
     if is_sync {
         // Sync clients: direct callback (CFFI acquires GIL automatically).
         spawn_runtime.spawn(async move {
@@ -3361,14 +3368,22 @@ unsafe fn create_client_response(
     let request_bytes =
         unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
     let client_type = unsafe { &*client_type };
-    let response = match create_client_internal(
+    connection_response(create_client_internal(
         request_bytes,
         client_type.clone(),
         pubsub_callback,
         address_resolver,
         credential_provider,
         client_id,
-    ) {
+        client_id as u64,
+    ))
+}
+
+/// Boxes a client creation result as the `ConnectionResponse` returned across the C ABI.
+fn connection_response(
+    result: Result<*const ClientAdapter, CreateClientError>,
+) -> *const ConnectionResponse {
+    let response = match result {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
@@ -3494,6 +3509,13 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///
 /// * `pubsub_callback`: Optional callback function for pub/sub messages (0 for none).
 ///
+/// * `client_id`: Passed to `credential_provider`. Allocate it with [`glide_allocate_client_id`]
+///   (cast to `usize`); pass 0 when there is no provider.
+///
+/// * `credential_provider`: Optional custom AWS credential provider. Pass `NULL` to use the default
+///   AWS credential chain. A non-null provider requires `iam_credentials` in `extra_options_json`
+///   and must satisfy the [`CredentialProviderCallback`] contract.
+///
 /// # Returns
 ///
 /// A pointer to a `ConnectionResponse`. The caller must call [`free_connection_response`] when done.
@@ -3502,11 +3524,11 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///
 /// ```c
 /// // Simple URI
-/// create_client_from_uri("valkey://localhost:6379", NULL, &client_type, 0);
+/// create_client_from_uri("valkey://localhost:6379", NULL, &client_type, 0, 0, NULL);
 ///
 /// // URI with basic options
 /// const char* basic_opts = "{\"request_timeout\": 5000, \"client_name\": \"myapp\"}";
-/// create_client_from_uri("valkey://localhost:6379", basic_opts, &client_type, 0);
+/// create_client_from_uri("valkey://localhost:6379", basic_opts, &client_type, 0, 0, NULL);
 ///
 /// // URI with advanced options
 /// const char* advanced_opts = "{"
@@ -3520,7 +3542,7 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///     "},"
 ///     "\"client_az\": \"us-west-2a\""
 /// "}";
-/// create_client_from_uri("valkey://localhost:6379", advanced_opts, &client_type, 0);
+/// create_client_from_uri("valkey://localhost:6379", advanced_opts, &client_type, 0, 0, NULL);
 ///
 /// // TLS with custom CA certificates
 /// const char* tls_opts = "{"
@@ -3528,7 +3550,7 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///     "\"client_cert\": \"-----BEGIN CERTIFICATE-----\\n...\","
 ///     "\"client_key\": \"-----BEGIN PRIVATE KEY-----\\n...\""
 /// "}";
-/// create_client_from_uri("valkeys://secure.example.com:6380", tls_opts, &client_type, 0);
+/// create_client_from_uri("valkeys://secure.example.com:6380", tls_opts, &client_type, 0, 0, NULL);
 ///
 /// // Compression and periodic checks
 /// const char* compression_opts = "{"
@@ -3542,7 +3564,7 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///         "\"manual_interval\": {\"duration_in_sec\": 30}"
 ///     "}"
 /// "}";
-/// create_client_from_uri("valkey://localhost:6379", compression_opts, &client_type, 0);
+/// create_client_from_uri("valkey://localhost:6379", compression_opts, &client_type, 0, 0, NULL);
 ///
 /// // AWS IAM authentication
 /// const char* iam_opts = "{"
@@ -3553,7 +3575,7 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///         "\"refresh_interval_seconds\": 900"
 ///     "}"
 /// "}";
-/// create_client_from_uri("valkey://my-cluster.aws.com:6379", iam_opts, &client_type, 0);
+/// create_client_from_uri("valkey://my-cluster.aws.com:6379", iam_opts, &client_type, 0, 0, NULL);
 ///
 /// // Pre-subscribe to pub/sub channels
 /// const char* pubsub_opts = "{"
@@ -3563,7 +3585,7 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///         "\"2\": [\"shard-channel\"]"      // Sharded
 ///     "}"
 /// "}";
-/// create_client_from_uri("valkey://localhost:6379", pubsub_opts, &client_type, 0);
+/// create_client_from_uri("valkey://localhost:6379", pubsub_opts, &client_type, 0, 0, NULL);
 ///
 /// // Client-side caching
 /// const char* cache_opts = "{"
@@ -3574,7 +3596,7 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 ///         "\"enable_metrics\": true"
 ///     "}"
 /// "}";
-/// create_client_from_uri("valkey://localhost:6379", cache_opts, &client_type, 0);
+/// create_client_from_uri("valkey://localhost:6379", cache_opts, &client_type, 0, 0, NULL);
 /// ```
 ///
 /// # Safety
@@ -3583,66 +3605,38 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 /// * If `extra_options_json` is non-null, it must be a valid null-terminated C string containing valid JSON.
 /// * `client_type` must be a valid pointer to a `ClientType`.
 /// * If `pubsub_callback` is non-zero, it must be a valid function pointer that lives while the client is open/active.
+/// * If `credential_provider` is non-null, the [`CredentialProviderCallback`] safety contract applies.
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn create_client_from_uri(
     uri_str: *const c_char,
     extra_options_json: *const c_char,
     client_type: *const ClientType,
     pubsub_callback: PubSubCallback,
+    client_id: usize,
+    credential_provider: CredentialProviderCallback,
 ) -> *const ConnectionResponse {
     assert!(!uri_str.is_null());
     let client_type = unsafe { &*client_type };
-
-    let response = match create_client_from_uri_internal(uri_str, extra_options_json) {
-        Err(err) => ConnectionResponse {
-            conn_ptr: std::ptr::null(),
-            connection_error_message: CString::into_raw(
-                CString::new(err).expect("Couldn't convert error message to CString"),
-            ),
-            connection_error_type: ConnectionErrorType::Unspecified,
-        },
-        Ok(connection_request) => {
-            // Convert ConnectionRequest to protobuf bytes to reuse existing logic
-            let request_bytes = connection_request
+    let result = create_client_from_uri_internal(uri_str, extra_options_json)
+        .and_then(|request| {
+            // Serialize to protobuf bytes to reuse the protobuf client creation path.
+            request
                 .write_to_bytes()
-                .map_err(|err| format!("Failed to serialize connection request: {}", err));
-
-            match request_bytes {
-                Err(err) => ConnectionResponse {
-                    conn_ptr: std::ptr::null(),
-                    connection_error_message: CString::into_raw(
-                        CString::new(err).expect("Couldn't convert error message to CString"),
-                    ),
-                    connection_error_type: ConnectionErrorType::Unspecified,
-                },
-                Ok(bytes) => {
-                    match create_client_internal(
-                        &bytes,
-                        client_type.clone(),
-                        pubsub_callback,
-                        None,
-                        None,
-                        0,
-                    ) {
-                        Err(err) => ConnectionResponse {
-                            conn_ptr: std::ptr::null(),
-                            connection_error_message: CString::into_raw(
-                                CString::new(err.message)
-                                    .expect("Couldn't convert error message to CString"),
-                            ),
-                            connection_error_type: err.error_type,
-                        },
-                        Ok(client) => ConnectionResponse {
-                            conn_ptr: client as *const c_void,
-                            connection_error_message: std::ptr::null(),
-                            connection_error_type: ConnectionErrorType::Unspecified,
-                        },
-                    }
-                }
-            }
-        }
-    };
-    Box::into_raw(Box::new(response))
+                .map_err(|err| format!("Failed to serialize connection request: {err}"))
+        })
+        .map_err(CreateClientError::from)
+        .and_then(|bytes| {
+            create_client_internal(
+                &bytes,
+                client_type.clone(),
+                pubsub_callback,
+                None,
+                credential_provider,
+                client_id,
+                0, // URI clients never use the async pipe.
+            )
+        });
+    connection_response(result)
 }
 
 /// Normalizes Valkey URI schemes to their Redis equivalents understood by `parse_redis_url`.
@@ -3830,6 +3824,97 @@ fn create_client_from_uri_internal(
     }
 
     Ok(request)
+}
+
+#[cfg(test)]
+mod tests_pipe_client_id {
+    //! Only the protobuf entry points set a nonzero pipe ID.
+    use super::*;
+    use std::ffi::CString;
+
+    const CLIENT_ID: usize = 0x1234;
+
+    unsafe extern "C-unwind" fn ignore_success(_: usize, _: *const CommandResponse) {}
+
+    unsafe extern "C-unwind" fn ignore_failure(_: usize, _: *const c_char, _: RequestErrorType) {}
+
+    fn async_client() -> ClientType {
+        ClientType::AsyncClient {
+            success_callback: ignore_success,
+            failure_callback: ignore_failure,
+            allow_stack_response: false,
+        }
+    }
+
+    /// Returns the pipe ID and push delivery mode of the created client, then closes it.
+    unsafe fn pipe_routing(response: *const ConnectionResponse) -> (u64, AsyncPushDeliveryMode) {
+        unsafe {
+            let adapter = (*response).conn_ptr as *const ClientAdapter;
+            assert!(
+                !adapter.is_null(),
+                "{:?}",
+                CStr::from_ptr((*response).connection_error_message)
+            );
+            let routing = (
+                (*adapter).pipe_client_id.load(Ordering::Relaxed),
+                (*adapter).async_push_delivery,
+            );
+            close_client((*response).conn_ptr);
+            free_connection_response(response as *mut ConnectionResponse);
+            routing
+        }
+    }
+
+    #[test]
+    fn uri_client_never_uses_the_async_pipe() {
+        let uri = CString::new("valkey://127.0.0.1:1").unwrap();
+        let options = CString::new(r#"{"lazy_connect": true}"#).unwrap();
+        let client_type = async_client();
+        let response = unsafe {
+            create_client_from_uri(
+                uri.as_ptr(),
+                options.as_ptr(),
+                &client_type,
+                None,
+                CLIENT_ID,
+                None,
+            )
+        };
+        assert_eq!(
+            unsafe { pipe_routing(response) },
+            (0, AsyncPushDeliveryMode::Disabled)
+        );
+    }
+
+    #[test]
+    fn protobuf_client_uses_its_client_id_as_pipe_id() {
+        let mut request = connection_request::ConnectionRequest::new();
+        request.lazy_connect = true;
+        let mut address = connection_request::NodeAddress::new();
+        address.host = "127.0.0.1".into();
+        address.port = 1;
+        request.addresses.push(address);
+        let request = request.write_to_bytes().unwrap();
+        let client_type = async_client();
+        let response = unsafe {
+            create_client_with_credential_provider(
+                request.as_ptr(),
+                request.len(),
+                &client_type,
+                None,
+                None,
+                CLIENT_ID,
+                None,
+            )
+        };
+        assert_eq!(
+            unsafe { pipe_routing(response) },
+            (
+                CLIENT_ID as u64,
+                AsyncPushDeliveryMode::Pipe(CLIENT_ID as u64)
+            )
+        );
+    }
 }
 
 #[cfg(test)]
