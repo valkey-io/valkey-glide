@@ -51,6 +51,10 @@
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 * Python, Go: a whitespace-only client AZ is now rejected for AZ-affinity read strategies, like an empty one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))
 
+### Changes
+
+* Core: Cheaper request timeouts. Standalone requests arm only the timeout watchdog (no second per-request tokio timer); the watchdog takes registrations through a per-thread sharded inbox with pooled timer slots and fires from 1 ms tick buckets instead of waking per registration. A timeout now fires less than 1 ms (one tick) after its deadline, plus the watchdog thread's wake-up latency, never before it. ([#7530](https://github.com/valkey-io/valkey-glide/pull/7530))
+
 ## 2.6
 
 ### Features

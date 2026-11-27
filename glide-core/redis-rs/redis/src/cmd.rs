@@ -70,6 +70,11 @@ pub struct Cmd {
     response_timeout: Option<std::time::Duration>,
     /// See [`Cmd::set_allow_partial_results`].
     allow_partial_results: bool,
+    /// When true, the caller enforces the response deadline itself (glide-core's timeout
+    /// watchdog on the standalone path), so the multiplexed connection does not arm its own
+    /// per-request tokio timer for this command. `response_timeout` is still used for the
+    /// send-side backpressure budget and the slow-response warning thresholds.
+    deadline_enforced_by_caller: bool,
     /// Inflight slot tracker. When set, the slot is released when the last
     /// clone of this Cmd (or its Arc) is dropped. Used to decouple user-facing
     /// timeout from internal pipeline cleanup.
@@ -98,6 +103,7 @@ impl Clone for Cmd {
             is_blocking: self.is_blocking,
             response_timeout: self.response_timeout,
             allow_partial_results: self.allow_partial_results,
+            deadline_enforced_by_caller: self.deadline_enforced_by_caller,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: self.inflight_tracker.clone(),
             // Reset watchdog fields — each clone is a fresh command attempt
@@ -556,6 +562,7 @@ impl Cmd {
             is_blocking: false,
             response_timeout: None,
             allow_partial_results: false,
+            deadline_enforced_by_caller: false,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: None,
             watchdog_phase: AtomicU8::new(PHASE_QUEUED),
@@ -576,6 +583,7 @@ impl Cmd {
             is_blocking: false,
             response_timeout: None,
             allow_partial_results: false,
+            deadline_enforced_by_caller: false,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: None,
             watchdog_phase: AtomicU8::new(PHASE_QUEUED),
@@ -1021,6 +1029,19 @@ impl Cmd {
         self.response_timeout = timeout;
     }
 
+    /// Mark that the caller enforces this command's response deadline itself, so the
+    /// multiplexed connection skips its own per-request receive timer.
+    #[inline]
+    pub fn set_deadline_enforced_by_caller(&mut self, enforced: bool) {
+        self.deadline_enforced_by_caller = enforced;
+    }
+
+    /// Whether the caller enforces this command's response deadline itself.
+    #[inline]
+    pub fn deadline_enforced_by_caller(&self) -> bool {
+        self.deadline_enforced_by_caller
+    }
+
     /// Get the per-command response timeout, if set.
     #[inline]
     pub fn response_timeout(&self) -> Option<std::time::Duration> {
@@ -1225,6 +1246,23 @@ mod tests {
 
         let cloned = cmd.clone();
         assert!(cloned.is_blocking(), "clone must preserve is_blocking=true");
+    }
+
+    #[test]
+    fn test_deadline_enforced_by_caller_defaults_off_and_survives_clone() {
+        let mut cmd = Cmd::new();
+        cmd.arg("GET").arg("k");
+        assert!(
+            !cmd.deadline_enforced_by_caller(),
+            "a new Cmd must keep the connection's own receive timer"
+        );
+        assert!(!crate::cmd("GET").deadline_enforced_by_caller());
+
+        cmd.set_deadline_enforced_by_caller(true);
+        assert!(
+            cmd.clone().deadline_enforced_by_caller(),
+            "clone must preserve deadline_enforced_by_caller=true"
+        );
     }
 
     mod segmented_packing {
