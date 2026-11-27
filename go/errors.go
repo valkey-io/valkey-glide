@@ -116,6 +116,8 @@ func GoError(cErrorType uint32, errorMessage string) error {
 		return &DisconnectError{errorMessage}
 	case C.CircuitBreakerOpen:
 		return &CircuitBreakerError{errorMessage}
+	case C.Closing:
+		return &ClosingError{errorMessage}
 	default:
 		return errors.New(errorMessage)
 	}

@@ -10,6 +10,7 @@ pub enum RequestErrorType {
     Timeout = 2,
     Disconnect = 3,
     CircuitBreakerOpen = 4,
+    Closing = 5,
 }
 
 pub fn error_type(error: &RedisError) -> RequestErrorType {
@@ -21,6 +22,8 @@ pub fn error_type(error: &RedisError) -> RequestErrorType {
         RequestErrorType::ExecAbort
     } else if matches!(error.kind(), redis::ErrorKind::CircuitBreakerOpen) {
         RequestErrorType::CircuitBreakerOpen
+    } else if matches!(error.kind(), redis::ErrorKind::ClientClosed) {
+        RequestErrorType::Closing
     } else {
         RequestErrorType::Unspecified
     }

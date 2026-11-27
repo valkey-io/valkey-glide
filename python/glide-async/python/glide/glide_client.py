@@ -12,6 +12,7 @@ import weakref
 from typing import (
     TYPE_CHECKING,
     Any,
+    Callable,
     Dict,
     List,
     Optional,
@@ -750,6 +751,8 @@ class _ProviderNativeCreate:
 class BaseClient(CoreCommands):
     # Class default: ClientPool builds its adapters without __init__ and owns their lifetime.
     _core_client_finalizer: Optional["weakref.finalize"] = None
+    # Set by ClientPool on a borrowed client: close() ends the borrow instead.
+    _pool_release: Optional[Callable[[], None]] = None
 
     def __init__(self, config: BaseClientConfiguration):
         """To create a new client, use the `create` classmethod"""
@@ -1503,6 +1506,9 @@ class BaseClient(CoreCommands):
             raise RuntimeError(
                 "Cannot close a client from its own credential provider callback"
             )
+        if self._pool_release is not None:
+            self._pool_release()
+            return
         with self._lock:
             if self._is_closed:
                 return

@@ -1527,6 +1527,10 @@ function getRequestErrorClass(
         return CircuitBreakerError;
     }
 
+    if (type === response.RequestErrorType.Closing) {
+        return ClosingError;
+    }
+
     if (type === response.RequestErrorType.Unspecified) {
         return RequestError;
     }

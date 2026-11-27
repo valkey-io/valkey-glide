@@ -92,7 +92,7 @@ class LoggerError(GlideError):
 
 def get_request_error_class(
     error_type: Optional[RequestErrorType.ValueType],
-) -> Type[RequestError]:
+) -> Type[GlideError]:
     if error_type == RequestErrorType.Disconnect:
         return ConnectionError
     if error_type == RequestErrorType.ExecAbort:
@@ -101,6 +101,8 @@ def get_request_error_class(
         return TimeoutError
     if error_type == RequestErrorType.CircuitBreakerOpen:
         return CircuitBreakerError
+    if error_type == RequestErrorType.Closing:
+        return ClosingError
     if error_type == RequestErrorType.Unspecified:
         return RequestError
     return RequestError

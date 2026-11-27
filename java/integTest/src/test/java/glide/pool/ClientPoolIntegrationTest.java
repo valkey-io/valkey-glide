@@ -16,6 +16,7 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.pool.ClientPool;
 import glide.api.models.pool.ClientPoolConfig;
+import glide.ffi.resolvers.GlidePoolResolver;
 import glide.internal.GlideNativeBridge;
 import java.time.Duration;
 import java.util.Map;
@@ -130,6 +131,15 @@ public class ClientPoolIntegrationTest {
                                     .build())
                     .get(10, TimeUnit.SECONDS);
         }
+    }
+
+    /** The pooled client (native handle) a current borrow uses; its lease id changes per borrow. */
+    private static long pooledClientId(
+            ClientPool pool, glide.api.models.pool.PooledGlideClient borrowed) {
+        long clientId =
+                GlidePoolResolver.glidePoolLeaseClient(pool.getPoolId(), borrowed.getClientId());
+        assertTrue(clientId > 0, "the borrow is current");
+        return clientId;
     }
 
     /** Poll until pool has at least minIdle clients ready. */
@@ -346,13 +356,14 @@ public class ClientPoolIntegrationTest {
         waitForPoolReady(pool, 1);
 
         glide.api.models.pool.PooledGlideClient c1 = pool.acquire().get(10, TimeUnit.SECONDS);
-        long id1 = c1.getClientId();
+        long id1 = pooledClientId(pool, c1);
         c1.close(); // returns to pool
         Thread.sleep(50);
 
         glide.api.models.pool.PooledGlideClient c2 = pool.acquire().get(10, TimeUnit.SECONDS);
-        long id2 = c2.getClientId();
-        assertEquals(id1, id2, "LIFO: same client_id returned after release");
+        long id2 = pooledClientId(pool, c2);
+        assertEquals(id1, id2, "LIFO: same client returned after release");
+        assertNotEquals(c1.getClientId(), c2.getClientId(), "each borrow gets its own lease");
         c2.close();
 
         pool.close();
@@ -931,7 +942,7 @@ public class ClientPoolIntegrationTest {
 
         // Acquire a client for BLPOP and dispatch it WITHOUT awaiting (fire-and-forget future).
         glide.api.models.pool.PooledGlideClient blpopClient = pool.acquire().get(10, TimeUnit.SECONDS);
-        long blpopClientId = blpopClient.getClientId();
+        long blpopClientId = pooledClientId(pool, blpopClient);
         java.util.concurrent.CompletableFuture<Object> blpopFuture =
                 blpopClient.unwrap().customCommand(new String[] {"BLPOP", blpopKey, "30"});
 
@@ -1157,6 +1168,161 @@ public class ClientPoolIntegrationTest {
             pooled.close();
         } finally {
             pool.close();
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // Stale handles: a handle is bound to one borrow
+    // ═══════════════════════════════════════════════════════════════════════════════
+
+    private ClientPoolConfig singleClientPoolConfig() {
+        assumeMode(false);
+        return ClientPoolConfig.builder()
+                .maxSize(1)
+                .minIdle(1)
+                .acquireTimeout(Duration.ofSeconds(10))
+                .clientConfig(clientConfig(false))
+                .build();
+    }
+
+    private static void assertClosing(java.util.concurrent.CompletableFuture<?> call) {
+        java.util.concurrent.ExecutionException e =
+                assertThrows(
+                        java.util.concurrent.ExecutionException.class, () -> call.get(5, TimeUnit.SECONDS));
+        assertInstanceOf(glide.api.models.exceptions.ClosingException.class, e.getCause());
+    }
+
+    @Test
+    public void testUnwrappedClientFailsAfterTheBorrowEnds() throws Exception {
+        try (ClientPool pool = ClientPool.create(singleClientPoolConfig())) {
+            waitForPoolReady(pool, 1);
+            glide.api.models.pool.PooledGlideClient first = pool.acquire().get(10, TimeUnit.SECONDS);
+            long connection = pooledClientId(pool, first);
+            GlideClient escaped = first.unwrap();
+            first.close();
+
+            try (glide.api.models.pool.PooledGlideClient second =
+                    pool.acquire().get(10, TimeUnit.SECONDS)) {
+                assertEquals(connection, pooledClientId(pool, second), "the same connection is lent on");
+                assertClosing(escaped.customCommand(new String[] {"SELECT", "10"}));
+                assertClosing(escaped.scopedConnection(Duration.ofSeconds(1), null));
+                assertThrows(
+                        glide.api.models.exceptions.ClosingException.class,
+                        () -> pool.getClient(first.getClientId()));
+                String info =
+                        second
+                                .unwrap()
+                                .customCommand(new String[] {"CLIENT", "INFO"})
+                                .get(5, TimeUnit.SECONDS)
+                                .toString();
+                assertTrue(info.contains(" db=0 "), "the stale handle moved the borrow's db: " + info);
+            }
+        }
+    }
+
+    @Test
+    public void testCloseRemovesTheHandleOfAClientStillResetting() throws Exception {
+        ClientPool pool = ClientPool.create(singleClientPoolConfig());
+        waitForPoolReady(pool, 1);
+        glide.api.models.pool.PooledGlideClient client = pool.acquire().get(10, TimeUnit.SECONDS);
+        long connection = pooledClientId(pool, client);
+        // Dirty, so the release's reset needs a round trip that close() can land inside.
+        client.unwrap().customCommand(new String[] {"SELECT", "1"}).get(5, TimeUnit.SECONDS);
+        client.close();
+        pool.close();
+        assertFalse(
+                GlideNativeBridge.isConnected(connection),
+                "pool close left the native handle of a client whose release was resetting");
+    }
+
+    @Test
+    public void testDetachFromPoolIgnoresDirectClients() throws Exception {
+        try (GlideClient direct = (GlideClient) createOrdinaryClient(false)) {
+            direct.detachFromPool();
+            assertEquals("PONG", direct.ping().get(5, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
+    public void testStaleReleaseLeavesTheNextBorrowAlone() throws Exception {
+        try (ClientPool pool = ClientPool.create(singleClientPoolConfig())) {
+            waitForPoolReady(pool, 1);
+            glide.api.models.pool.PooledGlideClient first = pool.acquire().get(10, TimeUnit.SECONDS);
+            long staleLease = first.getClientId();
+            first.close();
+
+            try (glide.api.models.pool.PooledGlideClient second =
+                    pool.acquire().get(10, TimeUnit.SECONDS)) {
+                pool.release(staleLease);
+                first.close();
+
+                java.util.concurrent.ExecutionException exhausted =
+                        assertThrows(
+                                java.util.concurrent.ExecutionException.class,
+                                () -> pool.acquire(Duration.ofMillis(500)).get(5, TimeUnit.SECONDS));
+                assertInstanceOf(
+                        java.util.concurrent.TimeoutException.class, exhausted.getCause().getCause());
+                assertEquals("PONG", second.ping().get(5, TimeUnit.SECONDS));
+            }
+        }
+    }
+
+    @Test
+    public void testCancelledAcquireReturnsItsSlot() throws Exception {
+        assumeMode(false);
+        ClientPoolConfig cfg =
+                ClientPoolConfig.builder()
+                        .maxSize(2)
+                        .minIdle(1)
+                        .acquireTimeout(Duration.ofSeconds(10))
+                        .clientConfig(clientConfig(false))
+                        .build();
+        try (ClientPool pool = ClientPool.create(cfg)) {
+            waitForPoolReady(pool, 1);
+            glide.api.models.pool.PooledGlideClient a = pool.acquire().get(10, TimeUnit.SECONDS);
+            glide.api.models.pool.PooledGlideClient b = pool.acquire().get(10, TimeUnit.SECONDS);
+
+            java.util.concurrent.CompletableFuture<glide.api.models.pool.PooledGlideClient> pending =
+                    pool.acquire(Duration.ofSeconds(30));
+            Thread.sleep(300);
+            assertTrue(pending.cancel(true), "the acquire was still pending");
+            a.close();
+            b.close();
+
+            // Settles at 0 only if the cancelled waiter never kept a client.
+            Thread.sleep(1000);
+            assertEquals(0, waitForActiveCount(pool, 0, 5000));
+            try (glide.api.models.pool.PooledGlideClient c = pool.acquire().get(10, TimeUnit.SECONDS);
+                    glide.api.models.pool.PooledGlideClient d =
+                            pool.acquire(Duration.ofSeconds(3)).get(10, TimeUnit.SECONDS)) {
+                assertNotEquals(pooledClientId(pool, c), pooledClientId(pool, d));
+            }
+        }
+    }
+
+    @Test
+    public void testReclaimedBorrowFailsWithClosingException() throws Exception {
+        assumeMode(false);
+        ClientPoolConfig cfg =
+                ClientPoolConfig.builder()
+                        .maxSize(1)
+                        .minIdle(1)
+                        .abandonTimeout(Duration.ofMillis(300))
+                        .acquireTimeout(Duration.ofSeconds(10))
+                        .clientConfig(clientConfig(false))
+                        .build();
+        try (ClientPool pool = ClientPool.create(cfg)) {
+            waitForPoolReady(pool, 1);
+            glide.api.models.pool.PooledGlideClient held = pool.acquire().get(10, TimeUnit.SECONDS);
+            assertEquals("PONG", held.ping().get(5, TimeUnit.SECONDS));
+
+            long deadline = System.currentTimeMillis() + 5000;
+            while (pool.getTotalCount() != 0 && System.currentTimeMillis() < deadline) {
+                Thread.sleep(50);
+            }
+            assertEquals(0, pool.getTotalCount(), "the abandon monitor reclaimed the borrow");
+            assertClosing(held.ping());
+            held.close();
         }
     }
 }

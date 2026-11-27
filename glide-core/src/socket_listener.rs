@@ -257,6 +257,7 @@ async fn write_result(
                     RequestErrorType::CircuitBreakerOpen => {
                         response::RequestErrorType::CircuitBreakerOpen
                     }
+                    RequestErrorType::Closing => response::RequestErrorType::Closing,
                 }
                 .into(),
                 message: error_message.into(),

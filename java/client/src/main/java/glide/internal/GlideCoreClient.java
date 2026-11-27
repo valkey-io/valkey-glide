@@ -535,6 +535,15 @@ public class GlideCoreClient implements AutoCloseable {
 
     // ==================== RESOURCE MANAGEMENT ====================
 
+    /**
+     * Stop using a pooled handle without closing it: the pool lends the native client to its next
+     * borrower, so later calls fail as on a closed client and garbage collection never closes it.
+     */
+    public void detachFromPool() {
+        nativeClientHandle.set(0);
+        nativeState.nativePtr = 0;
+    }
+
     /** Close the client and cleanup all resources */
     @Override
     public void close() {

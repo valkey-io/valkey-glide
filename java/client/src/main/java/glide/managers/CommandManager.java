@@ -63,6 +63,11 @@ public class CommandManager {
     /** Core client connection. */
     private final GlideCoreClient coreClient;
 
+    /** See {@link GlideCoreClient#detachFromPool()}. */
+    public void detachFromPool() {
+        coreClient.detachFromPool();
+    }
+
     public CommandManager(GlideCoreClient coreClient) {
         this.coreClient = coreClient;
     }

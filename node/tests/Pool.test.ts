@@ -510,6 +510,56 @@ describe("ClientPool", () => {
         );
 
         it(
+            "a reclaimed borrow fails with ClosingError and its connection closes",
+            async () => {
+                const pool = await ClientPool.create(standaloneConfig, {
+                    maxSize: 1,
+                    minIdle: 1,
+                    abandonTimeoutMs: 300,
+                });
+                await waitForIdle(pool, 1);
+                const observer =
+                    await GlideClient.createClient(standaloneConfig);
+
+                try {
+                    const client = (await pool.acquire()) as GlideClient;
+                    const connection = String(
+                        await client.customCommand(["CLIENT", "ID"]),
+                    );
+                    const listed = async () =>
+                        String(
+                            await observer.customCommand([
+                                "CLIENT",
+                                "LIST",
+                                "ID",
+                                connection,
+                            ]),
+                        );
+
+                    const deadline = Date.now() + 5000;
+
+                    while (pool.totalCount > 0 && Date.now() < deadline) {
+                        await new Promise((r) => setTimeout(r, 100));
+                    }
+
+                    expect(pool.totalCount).toBe(0);
+                    await expect(client.ping()).rejects.toThrow(ClosingError);
+
+                    while ((await listed()) && Date.now() < deadline) {
+                        await new Promise((r) => setTimeout(r, 100));
+                    }
+
+                    expect(await listed()).toBe("");
+                    await pool.release(client);
+                } finally {
+                    observer.close();
+                    pool.close();
+                }
+            },
+            TIMEOUT,
+        );
+
+        it(
             "does not exceed maxSize during concurrent acquire while release is resetting",
             async () => {
                 const pool = await ClientPool.create(standaloneConfig, {

@@ -118,7 +118,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
     pool_id as jlong
 }
 
-/// Non-blocking acquire. Returns client_id >= 0, -1 if exhausted, -2 if invalid.
+/// Non-blocking acquire. Returns the borrow's lease id >= 0 (see
+/// `glidePoolLeaseClient`), -1 if closed, -3 if exhausted, -2 if invalid.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAcquire(
     _env: JNIEnv,
@@ -139,12 +140,15 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
         get_pool_client_map().remove(&cid);
     }
 
-    let result = pool.try_acquire();
-    if result >= 0 {
+    let result = pool.try_acquire_lease();
+    if let Some(client_id) = u64::try_from(result)
+        .ok()
+        .and_then(|lease| pool.client_for_lease(lease))
+    {
         // Register in CLIENT_TO_POOL and pool_client_map so activity refresh
         // fires at command dispatch time for this borrowed client.
-        glide_core::pool::register_pool_client(pool_id as u64, result as u64);
-        get_pool_client_map().insert(result as u64, pool_id as u64);
+        glide_core::pool::register_pool_client(pool_id as u64, client_id);
+        get_pool_client_map().insert(client_id, pool_id as u64);
     }
     if result < 0 && pool.should_create() {
         pool.total_count += 1;
@@ -176,13 +180,27 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
     result
 }
 
-/// Release a client back to the pool.
+/// The pooled client id (the JNI handle) a current lease borrows, or -1 once
+/// that borrow has ended.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolLeaseClient(
+    _env: JNIEnv,
+    _class: JClass,
+    pool_id: jlong,
+    lease_id: jlong,
+) -> jlong {
+    pool::get_pool(pool_id as u64)
+        .and_then(|pool_arc| pool_arc.lock().client_for_lease(lease_id as u64))
+        .map_or(-1, |client_id| client_id as jlong)
+}
+
+/// Release a borrow back to the pool. A lease whose borrow already ended is ignored.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolRelease(
     _env: JNIEnv,
     _class: JClass,
     pool_id: jlong,
-    client_id: jlong,
+    lease_id: jlong,
 ) -> jint {
     let pool_arc = match pool::get_pool(pool_id as u64) {
         Some(arc) => arc,
@@ -197,7 +215,9 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolRelea
     // entry and cannot set the flag. Cleanup happens only on permanent discard:
     // in glidePoolDestroy, in the discard loop inside glidePoolTryAcquire, and in
     // release_client_async's discard (failed reset) path.
-    runtime.spawn(pool::release_client_async(pool_arc, client_id as u64));
+    if let Some(release) = pool::release_lease(pool_arc, lease_id as u64) {
+        runtime.spawn(release);
+    }
     0
 }
 
@@ -214,25 +234,24 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolDestr
     };
     let handle_table = get_handle_table();
     let mut pool = pool_arc.lock();
-    // Clean up JNI handle table entries for all pooled clients
-    // (includes clients core has discarded)
-    let discarded = pool.drain_discarded_ids();
-    for entry in pool.idle.iter() {
-        handle_table.remove(&entry.client_id);
-        glide_core::scope::unregister_client(entry.client_id);
-        get_pool_client_map().remove(&entry.client_id);
-        glide_core::pool::unregister_blocking_flag(entry.client_id);
-    }
-    for &client_id in pool.in_use.keys() {
-        handle_table.remove(&client_id);
-        glide_core::scope::unregister_client(client_id);
-        get_pool_client_map().remove(&client_id);
-        glide_core::pool::unregister_blocking_flag(client_id);
-    }
-    for cid in discarded {
+    // Every client of this pool: idle, borrowed, discarded, and any ever-borrowed
+    // client whose release is mid-reset (in no pool collection, but still in
+    // pool_client_map, which keeps an entry until discard or destroy).
+    let mut client_ids: std::collections::HashSet<u64> =
+        pool.drain_discarded_ids().into_iter().collect();
+    client_ids.extend(pool.idle.iter().map(|e| e.client_id));
+    client_ids.extend(pool.in_use.keys().copied());
+    client_ids.extend(
+        get_pool_client_map()
+            .iter()
+            .filter(|e| *e.value() == pool_id as u64)
+            .map(|e| *e.key()),
+    );
+    for cid in client_ids {
         handle_table.remove(&cid);
         glide_core::scope::unregister_client(cid);
         get_pool_client_map().remove(&cid);
+        glide_core::pool::unregister_blocking_flag(cid);
     }
     ClientPool::destroy(pool);
     0
