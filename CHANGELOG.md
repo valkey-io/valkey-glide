@@ -36,6 +36,7 @@
 * Rust: `telemetry::init` rejects a configuration with no exporter ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Rust: `telemetry::init` runs the HTTP and gRPC exporters on GLIDE's runtime ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core: reject writes in read-only standalone pipelines, transactions and scopes ([#7761](https://github.com/valkey-io/valkey-glide/pull/7761))
+* Core: send multi-node cluster requests while another request is pending ([#7855](https://github.com/valkey-io/valkey-glide/pull/7855))
 * Core: Cap the socket listener worker pool at 8 by default (override with `GLIDE_SOCKET_LISTENER_WORKERS`) and report pool-creation failures through the init callback ([#7586](https://github.com/valkey-io/valkey-glide/issues/7586))
 * Core/Node: Apply the same worker-pool cap to the Node client's pool ([#7586](https://github.com/valkey-io/valkey-glide/issues/7586))
 * Core: send ASKING in the same write as the redirected command ([#7778](https://github.com/valkey-io/valkey-glide/pull/7778))
