@@ -242,7 +242,7 @@ impl SubscriptionState {
                 let channels = self
                     .held
                     .get(kind)
-                    .map(|counts| counts.keys().cloned().collect())
+                    .map(|holders| holders.keys().cloned().collect())
                     .unwrap_or_default();
                 (*kind, channels)
             })
@@ -297,7 +297,7 @@ impl SubscriptionState {
                 self.held
                     .get(kind)
                     .into_iter()
-                    .flat_map(|counts| counts.keys())
+                    .flat_map(|holders| holders.keys())
                     .filter(|ch| !self.is_desired(*kind, ch))
                     .cloned(),
             );
@@ -326,6 +326,65 @@ impl SubscriptionState {
             addrs.sort();
         }
         held
+    }
+
+    /// Whether `held` and `out_of_sync` match a full recomputation, checked without
+    /// allocating so it can run under the read lock.
+    fn is_consistent(&self) -> bool {
+        let mut memberships = 0;
+        for (addr, subs) in &self.by_address {
+            for (kind, channels) in subs {
+                for channel in channels {
+                    memberships += 1;
+                    if !self.holders(*kind, channel).contains(addr) {
+                        return false;
+                    }
+                }
+            }
+        }
+        let indexed: usize = self
+            .held
+            .values()
+            .flat_map(|h| h.values())
+            .map(Vec::len)
+            .sum();
+        if indexed != memberships {
+            return false;
+        }
+
+        if self
+            .out_of_sync
+            .keys()
+            .any(|kind| !self.kinds.contains(kind))
+        {
+            return false;
+        }
+        for kind in self.kinds {
+            let recorded = self.out_of_sync.get(kind);
+            let mut mismatches = 0;
+            let unheld = self
+                .desired
+                .get(kind)
+                .into_iter()
+                .flatten()
+                .filter(|ch| !self.is_held(*kind, ch));
+            let undesired = self
+                .held
+                .get(kind)
+                .into_iter()
+                .flat_map(|holders| holders.keys())
+                .filter(|ch| !self.is_desired(*kind, ch));
+            for channel in unheld.chain(undesired) {
+                mismatches += 1;
+                if !recorded.is_some_and(|set| set.contains(channel)) {
+                    return false;
+                }
+            }
+            if recorded.map_or(0, HashSet::len) != mismatches {
+                return false;
+            }
+        }
+        true
     }
 
     /// Recompute the derived state from scratch; returns whether it had drifted.
@@ -520,7 +579,8 @@ impl GlidePubSubSynchronizer {
         // We need to process them first in order to get a correct view of our sync state during reconciliation
         self.process_pending_unsubscribes().await;
 
-        let diff = if full {
+        // Check under the read lock so the message fast path isn't blocked; rebuild only on drift
+        if full && !self.state.read().expect(LOCK_ERR).is_consistent() {
             let mut state = self.state.write().expect(LOCK_ERR);
             if state.repair() {
                 log_warn(
@@ -528,10 +588,8 @@ impl GlidePubSubSynchronizer {
                     "Subscription state drifted from incremental tracking; repaired",
                 );
             }
-            state.diff()
-        } else {
-            self.state.read().expect(LOCK_ERR).diff()
-        };
+        }
+        let diff = self.state.read().expect(LOCK_ERR).diff();
 
         if diff.is_synchronized {
             return Ok(());
@@ -1258,6 +1316,7 @@ mod tests {
 
     fn assert_matches_full_recompute(state: &SubscriptionState, step: usize) {
         assert_eq!(state.held, state.full_held(), "held drifted at step {step}");
+        assert!(state.is_consistent(), "is_consistent false at step {step}");
         assert_eq!(
             state.out_of_sync,
             state.full_out_of_sync(),
@@ -1358,7 +1417,7 @@ mod tests {
     }
 
     #[test]
-    fn test_held_counts_every_address() {
+    fn test_held_tracks_every_holder() {
         let mut state = SubscriptionState::new(CLUSTER_SUBSCRIPTION_KINDS, HashMap::new());
         state.add_current(ADDRS[0], Exact, &ch(1));
         state.add_current(ADDRS[1], Exact, &ch(1));
@@ -1369,15 +1428,49 @@ mod tests {
         assert!(state.held.is_empty() && state.by_address.is_empty());
     }
 
+    fn clone_state(state: &SubscriptionState) -> SubscriptionState {
+        SubscriptionState {
+            kinds: state.kinds,
+            desired: state.desired.clone(),
+            by_address: state.by_address.clone(),
+            held: state.held.clone(),
+            out_of_sync: state.out_of_sync.clone(),
+        }
+    }
+
     #[test]
     fn test_repair_fixes_drift() {
         let mut state = SubscriptionState::new(CLUSTER_SUBSCRIPTION_KINDS, HashMap::new());
         state.add_desired(Exact, HashSet::from([ch(1)]));
         state.add_current(ADDRS[0], Pattern, &ch(2));
+        assert!(state.is_consistent());
         assert!(!state.repair(), "consistent state must not report drift");
+
+        // Each kind of drift is caught on its own
+        let mut missing_holder = clone_state(&state);
+        missing_holder.held.clear();
+        assert!(!missing_holder.is_consistent());
+        let mut extra_holder = clone_state(&state);
+        extra_holder
+            .held
+            .entry(Pattern)
+            .or_default()
+            .insert(ch(2), vec![ADDRS[0].to_string(), ADDRS[1].to_string()]);
+        assert!(!extra_holder.is_consistent());
+        let mut missing_mismatch = clone_state(&state);
+        missing_mismatch.out_of_sync.clear();
+        assert!(!missing_mismatch.is_consistent());
+        let mut extra_mismatch = clone_state(&state);
+        extra_mismatch
+            .out_of_sync
+            .entry(Exact)
+            .or_default()
+            .insert(ch(9));
+        assert!(!extra_mismatch.is_consistent());
 
         state.out_of_sync.clear();
         state.held.clear();
+        assert!(!state.is_consistent());
         assert!(state.repair());
         assert_eq!(state.held, state.full_held());
         assert_eq!(state.out_of_sync, state.full_out_of_sync());

@@ -317,7 +317,8 @@ mod tests {
         assert_eq!(received_sum, expected_sum);
     }
 
-    /// Records `add_current_subscriptions` calls; reports Exact "ch-known" as already current.
+    /// Records `add_current_subscriptions` calls; reports Exact "ch-known" and Pattern
+    /// "pat-known.*" as already current.
     #[derive(Default)]
     struct RecordingSync {
         added: std::sync::Mutex<Vec<(PubSubSubscriptionKind, Vec<u8>)>>,
@@ -347,9 +348,12 @@ mod tests {
             channel: &[u8],
             address: &str,
         ) -> bool {
-            kind == PubSubSubscriptionKind::Exact
-                && channel == b"ch-known"
-                && address == "node-a:6379"
+            let known = match kind {
+                PubSubSubscriptionKind::Exact => b"ch-known".as_slice(),
+                PubSubSubscriptionKind::Pattern => b"pat-known.*".as_slice(),
+                PubSubSubscriptionKind::Sharded => return false,
+            };
+            channel == known && address == "node-a:6379"
         }
         fn remove_current_subscriptions(
             &self,
@@ -390,8 +394,22 @@ mod tests {
             });
         };
 
+        // A PMessage push is [pattern, channel, payload]; the pattern is what's tracked
+        let pmessage = |pattern: &str| {
+            push_manager.try_send_raw(&Value::Push {
+                kind: PushKind::PMessage,
+                data: vec![
+                    Value::BulkString(pattern.as_bytes().to_vec().into()),
+                    Value::BulkString(b"pat-known.1".to_vec().into()),
+                    Value::BulkString(b"payload".to_vec().into()),
+                ],
+            });
+        };
+
         push(PushKind::Message, "ch-known");
         push(PushKind::SMessage, "ch-known");
+        pmessage("pat-known.*");
+        pmessage("pat-new.*");
         push(PushKind::Message, "ch-new");
         push(PushKind::Subscribe, "ch-known");
 
@@ -401,6 +419,7 @@ mod tests {
             vec![
                 // Same bytes, but current only as Exact, so the SMessage still records
                 (PubSubSubscriptionKind::Sharded, b"ch-known".to_vec()),
+                (PubSubSubscriptionKind::Pattern, b"pat-new.*".to_vec()),
                 (PubSubSubscriptionKind::Exact, b"ch-new".to_vec()),
                 (PubSubSubscriptionKind::Exact, b"ch-known".to_vec()),
             ]
