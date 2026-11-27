@@ -12,6 +12,8 @@ state = json.loads(state_path.read_text())
 if args[:2] == ["ec2", "describe-instances"]:
     print("i-host 10.0.0.1")
 elif args[:2] == ["ssm", "send-command"]:
+    state["parameters"] = json.loads(args[args.index("--parameters") + 1])
+    state_path.write_text(json.dumps(state))
     print("command-test")
 elif args[:2] == ["ssm", "get-command-invocation"]:
     query = args[args.index("--query") + 1]

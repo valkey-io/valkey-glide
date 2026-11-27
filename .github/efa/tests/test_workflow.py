@@ -163,7 +163,7 @@ class WorkflowTests(unittest.TestCase):
             "instance-profile/missing) for parameter iamInstanceProfile.arn is invalid."
         ),
         "stack: CREATE_FAILED",
-        "EFA build failed: Command '['bin/rdma-pair.sh', 'apply']' returned non-zero exit status 1.",
+        "EFA build failed: Command '['bin/rdma-pair.sh', 'apply', 'MaxHostLifetimeMinutes=120']' returned non-zero exit status 1.",
     )
 
     def log_page(self, lines):
@@ -199,7 +199,7 @@ class WorkflowTests(unittest.TestCase):
         result, summary = self.report_build(
             self.failed_build(), self.log_page(self.PROVISIONING_FAILURE_LOG)
         )
-        self.assertIn("bin/rdma-pair.sh apply", summary)
+        self.assertIn("bin/rdma-pair.sh apply MaxHostLifetimeMinutes=120", summary)
         self.assertIn("No pytest summary", summary)
         self.assertNotIn("CREATE_FAILED", summary + result.stdout)
         self.assert_no_identifiers(summary, result.stdout)
@@ -215,6 +215,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_near_miss_step_arguments_are_rejected(self):
         for args in (
+            "'bin/rdma-pair.sh', 'apply', 'MaxHostLifetimeMinutes=120-secret'",
             "'bin/run-on.sh.evil', 'client'",
             "'bin/run-on.sh', 'client', 'host/31-x.sh', 'GLIDE_SOURCE=abc'",
             "'bin/run-on.sh', 'client, i-0123456789abcdef0'",

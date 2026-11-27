@@ -77,7 +77,13 @@ def orchestrate(environ, runner=run, clock=time.monotonic):
     deadline = clock() + 65 * 60
     failed = True
     try:
-        runner(["bin/rdma-pair.sh", "apply"], env, deadline - clock())
+        # Bound host lifetime independently of teardown, including KEEP_HOSTS.
+        # Two hours leaves 30 minutes beyond CodeBuild's 90-minute build limit.
+        runner(
+            ["bin/rdma-pair.sh", "apply", "MaxHostLifetimeMinutes=120"],
+            env,
+            deadline - clock(),
+        )
         for host, script in STEPS:
             command = ["bin/run-on.sh", host, f"host/{script}"]
             if script == "30-client-setup.sh":

@@ -63,7 +63,7 @@ print(json.dumps({"commands": sys.argv[2:], "executionTimeout": [sys.argv[1]]}))
   "$TIMEOUT" \
   "mkdir -p /var/log/rdma && echo '$payload' | base64 -d | gunzip > /var/log/rdma/$name" \
   ${ship_cmds[@]+"${ship_cmds[@]}"} \
-  "cd /root && set -o pipefail && env $env_pairs bash /var/log/rdma/$name 2>&1 | tee /var/log/rdma/${name%.sh}.log")
+  "cd /root && set -o pipefail && env $env_pairs bash /var/log/rdma/$name 2>&1 | tee /var/log/rdma/${name%.sh}.log | tail -c 24000")
 
 echo "== $role ($instance): $name"
 command_id=$(aws ssm send-command --instance-ids "$instance" --document-name AWS-RunShellScript \
@@ -78,7 +78,7 @@ max_poll_errors=12
 while [ "$status" = Pending ] || [ "$status" = InProgress ] || [ "$status" = Delayed ]; do
   sleep 5
   # SSM can take time to expose a new invocation. Retry that and transient
-  # service failures, but never turn an authorization/configuration error into
+  # service/network failures, but never turn an authorization/configuration error into
   # an indefinitely pending command. Bound each request and consecutive errors.
   if poll_output=$(AWS_MAX_ATTEMPTS=1 aws ssm get-command-invocation \
     --command-id "$command_id" --instance-id "$instance" \
@@ -90,7 +90,7 @@ while [ "$status" = Pending ] || [ "$status" = InProgress ] || [ "$status" = Del
     poll_exit=$?
     echo "SSM poll failed for command $command_id on $instance: $poll_output" >&2
     case "$poll_output" in
-      *'(InvocationDoesNotExist)'*|*'(ThrottlingException)'*|*'(Throttling)'*|*'(InternalServerError)'*|*'(ServiceUnavailable)'*) ;;
+      *'(InvocationDoesNotExist)'*|*'(ThrottlingException)'*|*'(Throttling)'*|*'(InternalServerError)'*|*'(ServiceUnavailable)'*|*'Read timeout on endpoint URL:'*|*'Could not connect to the endpoint URL:'*) ;;
       *) exit "$poll_exit" ;;
     esac
     poll_errors=$((poll_errors + 1))
@@ -101,8 +101,9 @@ while [ "$status" = Pending ] || [ "$status" = InProgress ] || [ "$status" = Del
   fi
 done
 
-# StandardOutputContent is capped at 24 000 characters; the full log stays on
-# the host at /var/log/rdma/<script>.log.
+# StandardOutputContent keeps only the first 24 000 characters. The remote
+# pipeline sends the final 24 000 bytes so pytest summaries survive truncation;
+# tee retains the full log on the host at /var/log/rdma/<script>.log.
 aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
   --query StandardOutputContent --output text
 aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \

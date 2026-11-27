@@ -34,7 +34,9 @@ class OrchestrationTests(unittest.TestCase):
         self.env["KEEP_HOSTS"] = "true"
         module.orchestrate(self.env, self.record)
         commands = [call[0] for call in self.calls]
-        self.assertEqual(commands[0], ["bin/rdma-pair.sh", "apply"])
+        self.assertEqual(
+            commands[0], ["bin/rdma-pair.sh", "apply", "MaxHostLifetimeMinutes=120"]
+        )
         self.assertEqual(commands[-1], ["bin/rdma-pair.sh", "down"])
         setup = next(cmd for cmd in commands if "host/30-client-setup.sh" in cmd)
         self.assertEqual(setup[-1], "GLIDE_SOURCE=" + "a" * 40)
@@ -71,6 +73,10 @@ class OrchestrationTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             module.orchestrate(self.env, fail)
         self.assertEqual(len(self.calls), 1)
+        self.assertEqual(
+            self.calls[0][0],
+            ["bin/rdma-pair.sh", "apply", "MaxHostLifetimeMinutes=120"],
+        )
 
     def test_cleanup_failure_fails_build(self):
         def fail(command, env, timeout):

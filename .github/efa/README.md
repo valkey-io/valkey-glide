@@ -20,7 +20,9 @@ Wait for that build to finish before dispatching again.
 - `tests/` exercises orchestration and GitHub dispatch without AWS access.
   `.github/workflows/efa-orchestration.yml` runs these checks for tooling changes.
 
-CodeBuild owns teardown. `KEEP_HOSTS=true` retains hosts only on failure.
+CodeBuild owns teardown. It explicitly requests a 120-minute host lifetime, including
+when `KEEP_HOSTS=true` retains hosts after failure. Retention does not restart that
+lifetime; inspect the hosts before it expires and delete the stack afterward.
 Cancelling GitHub monitoring leaves CodeBuild running. A hard CodeBuild stop can
 skip teardown and leave the stack behind.
 

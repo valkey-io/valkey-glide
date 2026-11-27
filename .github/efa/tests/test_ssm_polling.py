@@ -117,3 +117,50 @@ class SsmPollingTests(unittest.TestCase):
         self.assertIn("host output", result.stdout)
         self.assertIn("stderr: host diagnostic", result.stdout)
         self.assertIn("== Failed", result.stdout)
+
+    def test_network_errors_recover(self):
+        for message in (
+            'Read timeout on endpoint URL: "https://ssm.us-east-1.amazonaws.com/"',
+            'Could not connect to the endpoint URL: "https://ssm.us-east-1.amazonaws.com/"',
+        ):
+            with self.subTest(message=message):
+                result, state = self.execute([{"error": message}, "Success"])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(state["polls"], 2)
+                self.assertIn(message, result.stderr)
+
+    def test_persistent_network_error_is_bounded(self):
+        result, state = self.execute(
+            [{"error": 'Read timeout on endpoint URL: "https://ssm.example/"'}]
+        )
+        self.assertEqual(result.returncode, 254)
+        self.assertEqual(state["polls"], 12)
+        self.assertIn("12 consecutive errors", result.stderr)
+
+    def test_remote_pipeline_retains_tail_and_exit_status(self):
+        _, state = self.execute(["Success"])
+        command = state["parameters"]["commands"][-1]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            host = root / "host.sh"
+            summary = "=== 2 failed, 6 passed in 1.00s ==="
+            output = "early output\n" + "x" * 30000 + "\n" + summary + "\n"
+            (root / "output").write_text(output)
+            # Execute the actual remote pipeline, redirecting only host paths to
+            # a sandbox. Check both success and failure, not just command text.
+            command = command.replace("cd /root", f"cd {root}").replace(
+                "/var/log/rdma/", f"{root}/"
+            )
+            for exit_code in (0, 7):
+                with self.subTest(exit_code=exit_code):
+                    host.write_text(f"cat {root}/output\nexit {exit_code}\n")
+                    result = subprocess.run(
+                        ["bash", "-c", command],
+                        capture_output=True,
+                        check=False,
+                        timeout=5,
+                    )
+                    self.assertEqual(result.returncode, exit_code)
+                    self.assertEqual(result.stdout, output.encode()[-24000:])
+                    self.assertEqual((root / "host.log").read_text(), output)
+                    self.assertIn(summary.encode(), result.stdout[:24000])

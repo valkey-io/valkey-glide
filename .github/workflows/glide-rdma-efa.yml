@@ -121,7 +121,7 @@ jobs:
                   # identifiers, so only lines with a fixed, identifier-free shape are
                   # printed from it.
                   STEP_ARG = re.compile(r"bin/(?:rdma-pair|run-on)\.sh|apply|down|server|client"
-                                        r"|host/\d{2}-[a-z0-9-]+\.sh|GLIDE_SOURCE=[0-9a-f]{40}")
+                                        r"|host/\d{2}-[a-z0-9-]+\.sh|GLIDE_SOURCE=[0-9a-f]{40}|MaxHostLifetimeMinutes=120")
                   # Python 3.15 dropped the quotes around the list in CalledProcessError.
                   FAILED_COMMAND = re.compile(
                       r"EFA build failed: Command '?\[(.*)\]'? (returned non-zero exit status \d+\."
