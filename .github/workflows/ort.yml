@@ -275,6 +275,7 @@ jobs:
 
             - name: Ensure ORT analysis leaves the worktree clean
               id: clean-tree
+              if: ${{ !cancelled() }}
               uses: ./.github/actions/ensure-clean-tree
               with:
                   context: ORT analysis, package builds, and source generation
@@ -302,6 +303,7 @@ jobs:
 
             - name: Validate attribution changes stay within declared scope
               id: attribution-scope
+              if: ${{ !cancelled() }}
               shell: bash
               run: |
                   set -euo pipefail
