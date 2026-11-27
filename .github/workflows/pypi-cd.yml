@@ -790,16 +790,51 @@ jobs:
                   if [[ "$RELEASE_VERSION" == *"rc"* ]]
                   then
                     echo "This is a release candidate"
-                    echo "PIP_PRE=true" >> "$GITHUB_ENV"
                   else
                     echo "This is a stable release"
-                    echo "PIP_PRE=false" >> "$GITHUB_ENV"
                   fi
 
                   # Format the version for PyPI (remove leading 'v' and convert '-rc' to 'rc')
                   PYPI_VERSION="${RELEASE_VERSION#v}"
                   PYPI_VERSION="${PYPI_VERSION//-rc/rc}"
                   echo "PYPI_VERSION=${PYPI_VERSION}" >> "$GITHUB_ENV"
+
+            - name: Wait for PyPI index propagation
+              shell: bash
+              env:
+                  IS_PUSH: ${{ github.event_name == 'push' }}
+                  PUBLISH_ASYNC: ${{ inputs.publish_async == true }}
+                  PUBLISH_SYNC: ${{ inputs.publish_sync == true }}
+              run: |
+                  wait_for_pypi() {
+                      local pkg="$1"
+                      local max_attempts=8
+                      local delay=15
+                      local probe_dir="$RUNNER_TEMP/pypi-probe"
+                      mkdir -p "$probe_dir"
+                      for attempt in $(seq 1 $max_attempts); do
+                          echo "Attempt $attempt to resolve $pkg==${PYPI_VERSION} on PyPI..."
+                          if python -m pip download --no-deps --only-binary=:all: -d "$probe_dir" "${pkg}==${PYPI_VERSION}"; then
+                              echo "Successfully resolved ${pkg}==${PYPI_VERSION}"
+                              return 0
+                          fi
+                          if [[ $attempt -lt $max_attempts ]]; then
+                              echo "Package not yet available on PyPI index, waiting ${delay}s..."
+                              sleep $delay
+                              delay=$((delay * 2))
+                              if [[ $delay -gt 60 ]]; then delay=60; fi
+                          fi
+                      done
+                      echo "::error::Failed to resolve $pkg==${PYPI_VERSION} after $max_attempts attempts."
+                      return 1
+                  }
+
+                  if [[ "$IS_PUSH" == "true" || "$PUBLISH_ASYNC" == "true" ]]; then
+                      wait_for_pypi "valkey-glide"
+                  fi
+                  if [[ "$IS_PUSH" == "true" || "$PUBLISH_SYNC" == "true" ]]; then
+                      wait_for_pypi "valkey-glide-sync"
+                  fi
 
             - name: Run the Async Client tests
               if: ${{ github.event_name == 'push' || inputs.publish_async == true }}
@@ -809,11 +844,7 @@ jobs:
                   python -m venv venv
                   source venv/bin/activate
                   pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide
-                  fi
+                  pip install "valkey-glide==${PYPI_VERSION}"
                   python async_rc_test.py
 
             - name: Run the Async Clients tests with PyPy
@@ -824,11 +855,7 @@ jobs:
                   pypy3 -m venv pypy_venv
                   source pypy_venv/bin/activate
                   pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide
-                  fi
+                  pip install "valkey-glide==${PYPI_VERSION}"
                   pypy3 async_rc_test.py
 
             - name: Run the Sync Client tests
@@ -839,11 +866,7 @@ jobs:
                   python -m venv venv
                   source venv/bin/activate
                   pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide-sync==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide-sync
-                  fi
+                  pip install "valkey-glide-sync==${PYPI_VERSION}"
                   python sync_rc_test.py
 
             - name: Run the Sync Client tests with PyPy
@@ -854,11 +877,7 @@ jobs:
                   pypy3 -m venv pypy_venv
                   source pypy_venv/bin/activate
                   pip install -U pip
-                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
-                    pip install "valkey-glide-sync==${{ env.PYPI_VERSION }}"
-                  else
-                    pip install valkey-glide-sync
-                  fi
+                  pip install "valkey-glide-sync==${PYPI_VERSION}"
                   pypy3 sync_rc_test.py
 
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.

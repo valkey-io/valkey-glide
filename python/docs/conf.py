@@ -123,6 +123,7 @@ def avoid_duplicate(app, what, name, obj, skip, options):
         # RdmaConfiguration
         "provider",
         "interface",
+        "device_memory",
         # RdmaProvider.Tcp
         "bind",
         # RdmaSetChecksum.Known
