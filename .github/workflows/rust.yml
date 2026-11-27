@@ -22,6 +22,7 @@ on:
 
             # GitHub workflows
             - .github/workflows/rust.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-engine/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
@@ -51,6 +52,7 @@ on:
 
             # GitHub workflows
             - .github/workflows/rust.yml
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-engine/action.yml
             - .github/actions/install-protoc/action.yml
             - .github/actions/install-rust/action.yml
@@ -150,3 +152,8 @@ jobs:
             - name: Run integration tests
               working-directory: ./rust
               run: cargo integration-tests --locked -- --show-output
+
+            - name: Ensure Rust client tests leave the worktree clean
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Rust client unit, documentation, and integration tests

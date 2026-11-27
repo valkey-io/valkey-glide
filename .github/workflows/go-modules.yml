@@ -18,6 +18,8 @@ on:
             - go/servermodules/**
             - go/options/json_options.go
             - .github/workflows/go-modules.yml
+            - .github/scripts/validate-go-rc-changes.sh
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/actions/start-valkey-docker/action.yml
@@ -31,6 +33,8 @@ on:
             - go/servermodules/**
             - go/options/json_options.go
             - .github/workflows/go-modules.yml
+            - .github/scripts/validate-go-rc-changes.sh
+            - .github/actions/ensure-clean-tree/action.yml
             - .github/actions/install-shared-dependencies/action.yml
             - .github/actions/install-engine/action.yml
             - .github/actions/start-valkey-docker/action.yml
@@ -103,6 +107,11 @@ jobs:
                     standalone-endpoints=${{ env.MODULES_STANDALONE_ENDPOINT }} \
                     cluster-endpoints=${{ env.MODULES_CLUSTER_ENDPOINTS }}
 
+            - name: Ensure module build and tests leave the worktree clean
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go module build and tests on Linux
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -142,6 +151,16 @@ jobs:
             - name: Install zig
               uses: ./.github/actions/install-zig
 
+            - name: Ensure worktree is clean before RC changes
+              if: ${{ inputs.rc-version }}
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go module RC pre-script baseline
+
+            - name: Record declared RC import edit paths
+              if: ${{ inputs.rc-version }}
+              run: bash .github/scripts/validate-go-rc-changes.sh --record-import-paths
+
             - name: Run patch to test with RC
               working-directory: go
               if: ${{ inputs.rc-version }}
@@ -149,6 +168,12 @@ jobs:
                   RC_VERSION: ${{ inputs.rc-version }}
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
+
+            - name: Validate RC worktree changes
+              if: ${{ inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ inputs.rc-version }}
+              run: bash .github/scripts/validate-go-rc-changes.sh "Go RC script"
 
             - name: Build and test
               working-directory: ./go
@@ -160,6 +185,18 @@ jobs:
                   else
                       make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
                   fi
+
+            - name: Validate final RC worktree changes
+              if: ${{ inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ inputs.rc-version }}
+              run: bash .github/scripts/validate-go-rc-changes.sh "Go RC workload"
+
+            - name: Ensure module build and tests leave the worktree clean
+              if: ${{ !inputs.rc-version }}
+              uses: ./.github/actions/ensure-clean-tree
+              with:
+                  context: Go module build and tests on persistent ARM64 runner
 
             - name: Upload test reports
               if: always()

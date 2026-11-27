@@ -294,15 +294,15 @@ jobs:
                     PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_arm64
 
                     echo "Downloading PyPy 3.11 for arm64"
-                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                    sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                    curl -Lo "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                    sudo tar -xf "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                   elif [[ "$ARCH" == "x86_64" ]]; then
                     PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
 
                     echo "Downloading PyPy 3.11 for x86_64"
-                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                    sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                    curl -Lo "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                    sudo tar -xf "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                   fi
 
                   echo "/opt/${PYPY_VERSION_3_11}/bin" >> "$GITHUB_PATH"
@@ -355,8 +355,8 @@ jobs:
                         PYPY_VERSION_3_11=pypy3.11-v7.3.19-linux64
 
                         echo "Downloading PyPy 3.11 for x86_64"
-                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                        tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                        curl -Lo "/tmp/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                        tar -xf "/tmp/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                         export PATH="/opt/${PYPY_VERSION_3_11}/bin:$PATH"
 
@@ -364,8 +364,8 @@ jobs:
                         PYPY_VERSION_3_11=pypy3.11-v7.3.19-aarch64
 
                         echo "Downloading PyPy 3.11 for aarch64"
-                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                        tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                        curl -Lo "/tmp/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                        tar -xf "/tmp/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                         export PATH="/opt/${PYPY_VERSION_3_11}/bin:$PATH"
                       else
@@ -528,6 +528,60 @@ jobs:
                   print("Async and sync smoke test passed")
                   PYEOF
 
+            - name: Validate worktree changes from PyPI binary build
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  allowed_paths=(
+                    "ffi/.cargo/config.toml"
+                    "python/.gitignore"
+                    "python/glide-async/.cargo/config.toml"
+                    "python/glide-async/pyproject.toml"
+                    "python/glide-shared/pyproject.toml"
+                    "python/glide-sync/pyproject.toml"
+                    # Packaging exposes these generated files by editing python/.gitignore.
+                    "python/glide-shared/glide_shared/protobuf/command_request_pb2.py"
+                    "python/glide-shared/glide_shared/protobuf/command_request_pb2.pyi"
+                    "python/glide-shared/glide_shared/protobuf/connection_request_pb2.py"
+                    "python/glide-shared/glide_shared/protobuf/connection_request_pb2.pyi"
+                    "python/glide-shared/glide_shared/protobuf/response_pb2.py"
+                    "python/glide-shared/glide_shared/protobuf/response_pb2.pyi"
+                    "python/glide-async/.gitignore"
+                    "python/glide-sync/.gitignore"
+                  )
+                  unexpected_paths=()
+                  changed_paths_file="$(mktemp)"
+                  trap 'rm -f "$changed_paths_file"' EXIT
+                  {
+                    git diff --name-only -z --no-renames --ita-visible-in-index HEAD --
+                    git ls-files --others --exclude-standard -z
+                  } > "$changed_paths_file"
+
+                  while IFS= read -r -d '' path; do
+                    allowed=false
+                    for allowed_path in "${allowed_paths[@]}"; do
+                      if [[ "$path" == "$allowed_path" ]]; then
+                        allowed=true
+                        break
+                      fi
+                    done
+                    if [[ "$allowed" == false ]]; then
+                      unexpected_paths+=("$path")
+                    fi
+                  done < "$changed_paths_file"
+
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "::error::PyPI binary build changed paths outside its declared release scope"
+                    echo "::group::Worktree status (first 200 entries)"
+                    git status --short --untracked-files=all | sed -n '1,200p'
+                    echo "::endgroup::"
+                    echo "::group::Unexpected paths (first 200 entries)"
+                    printf 'Unexpected path: %q\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    echo "::endgroup::"
+                    exit 1
+                  fi
+
             ### UPLOAD WHEELS ###
 
             - name: Upload Python Async client wheels
@@ -608,6 +662,48 @@ jobs:
                   cp python/glide-async/wheels/*.whl python/glide-async/dist/
                   cp python/glide-async/sdist/*.tar.gz python/glide-async/dist/
 
+            - name: Validate worktree changes from async PyPI packaging
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  allowed_paths=(
+                    "python/glide-async/pyproject.toml"
+                    "python/glide-shared/pyproject.toml"
+                    "python/glide-sync/pyproject.toml"
+                  )
+                  unexpected_paths=()
+                  changed_paths_file="$(mktemp)"
+                  trap 'rm -f "$changed_paths_file"' EXIT
+                  {
+                    git diff --name-only -z --no-renames --ita-visible-in-index HEAD --
+                    git ls-files --others --exclude-standard -z
+                  } > "$changed_paths_file"
+
+                  while IFS= read -r -d '' path; do
+                    allowed=false
+                    for allowed_path in "${allowed_paths[@]}"; do
+                      if [[ "$path" == "$allowed_path" ]]; then
+                        allowed=true
+                        break
+                      fi
+                    done
+                    if [[ "$allowed" == false ]]; then
+                      unexpected_paths+=("$path")
+                    fi
+                  done < "$changed_paths_file"
+
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "::error::Async PyPI packaging changed paths outside its declared release scope"
+                    echo "::group::Worktree status (first 200 entries)"
+                    git status --short --untracked-files=all | sed -n '1,200p'
+                    echo "::endgroup::"
+                    echo "::group::Unexpected paths (first 200 entries)"
+                    printf 'Unexpected path: %q\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    echo "::endgroup::"
+                    exit 1
+                  fi
+
             - name: Async client - Publish binaries and source to PyPI
               # Trusted Publishing (OIDC) with PEP 740 attestations; requires the
               # top-level `id-token: write` permission and a GitHub-hosted runner.
@@ -685,6 +781,48 @@ jobs:
                   # add the wheels alongside it so a single directory is published.
                   cp python/glide-sync/wheels/*.whl python/glide-sync/dist/
 
+            - name: Validate worktree changes from sync PyPI packaging
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  allowed_paths=(
+                    "python/glide-async/pyproject.toml"
+                    "python/glide-shared/pyproject.toml"
+                    "python/glide-sync/pyproject.toml"
+                  )
+                  unexpected_paths=()
+                  changed_paths_file="$(mktemp)"
+                  trap 'rm -f "$changed_paths_file"' EXIT
+                  {
+                    git diff --name-only -z --no-renames --ita-visible-in-index HEAD --
+                    git ls-files --others --exclude-standard -z
+                  } > "$changed_paths_file"
+
+                  while IFS= read -r -d '' path; do
+                    allowed=false
+                    for allowed_path in "${allowed_paths[@]}"; do
+                      if [[ "$path" == "$allowed_path" ]]; then
+                        allowed=true
+                        break
+                      fi
+                    done
+                    if [[ "$allowed" == false ]]; then
+                      unexpected_paths+=("$path")
+                    fi
+                  done < "$changed_paths_file"
+
+                  if (( ${#unexpected_paths[@]} > 0 )); then
+                    echo "::error::Sync PyPI packaging changed paths outside its declared release scope"
+                    echo "::group::Worktree status (first 200 entries)"
+                    git status --short --untracked-files=all | sed -n '1,200p'
+                    echo "::endgroup::"
+                    echo "::group::Unexpected paths (first 200 entries)"
+                    printf 'Unexpected path: %q\n' "${unexpected_paths[@]}" | sed -n '1,200p'
+                    echo "::endgroup::"
+                    exit 1
+                  fi
+
             - name: Sync client - Publish binaries and source to PyPI
               # Trusted Publishing (OIDC) with PEP 740 attestations; requires the
               # top-level `id-token: write` permission and a GitHub-hosted runner.
@@ -738,14 +876,14 @@ jobs:
                     if [[ "$ARCH" == "x86_64" ]]; then
                       PYPY_VERSION_3_11=pypy3.11-v7.3.19-linux64
                       echo "Downloading PyPy 3.11 for x86_64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      curl -Lo "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                      sudo tar -xf "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                     elif [[ "$ARCH" == "aarch64" ]]; then
                       PYPY_VERSION_3_11=pypy3.11-v7.3.19-aarch64
                       echo "Downloading PyPy 3.11 for aarch64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      curl -Lo "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                      sudo tar -xf "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                     fi
 
                     sudo chmod -R a+rx "/opt/${PYPY_VERSION_3_11}/bin"
@@ -754,14 +892,14 @@ jobs:
                     if [[ "$ARCH" == "arm64" ]]; then
                       PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_arm64
                       echo "Downloading PyPy 3.11 for arm64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      curl -Lo "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                      sudo tar -xf "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
                     else
                       PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
                       echo "Downloading PyPy 3.11 for x86_64"
-                      curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-                      sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      curl -Lo "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                      sudo tar -xf "${RUNNER_TEMP}/${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                     fi
 
                     sudo chmod -R a+rx "/opt/${PYPY_VERSION_3_11}/bin"
