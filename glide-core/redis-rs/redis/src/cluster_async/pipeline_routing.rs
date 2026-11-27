@@ -206,9 +206,15 @@ where
     if let Some(route) = route {
         // If we have a route, we will use it to route the commands to the given route, instead of finding the route for each command
 
-        let (addr, conn) = ClusterConnInner::get_connection(route, core, None)
+        // Only a non-atomic pipeline is mapped here. `ASKING` in the same write would cover only
+        // its first command, so a route that requires it gets a standalone `ASKING`, as before.
+        let asking = route.requires_asking();
+        let (addr, mut conn) = ClusterConnInner::get_connection(route, core, None)
             .await
             .map_err(|err| (OperationTarget::NotFound, err))?;
+        if asking {
+            let _ = conn.req_packed_command(&crate::cmd::cmd("ASKING")).await;
+        }
 
         let entry = pipelines_per_node
             .entry(addr)

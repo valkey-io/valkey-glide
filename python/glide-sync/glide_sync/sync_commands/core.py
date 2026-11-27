@@ -493,16 +493,14 @@ class CoreCommands(Protocol):
 
         Args:
             key (TEncodable): The key to delete.
-            value (TEncodable): The comparison value. The key is only deleted if its current value
-                matches `value` exactly.
+            value (TEncodable): The value to compare against the key.
 
         Returns:
-            bool: True if `key` was deleted. False if `key` did not exist or its value did not match
-                `value`.
+            bool: True if `key` was deleted, False otherwise.
 
         Examples:
             >>> client.set("key", "value")
-            >>> client.delifeq("key", "wrong_value")
+            >>> client.delifeq("key", "other_value")
                 False
             >>> client.delifeq("key", "value")
                 True
@@ -511,7 +509,7 @@ class CoreCommands(Protocol):
 
     def delex(self, key: TEncodable, condition: ValueComparison) -> bool:
         """
-        Deletes `key` if its value meets `condition`.
+        Deletes `key` if its value meets the given condition.
 
         Since: Valkey 9.2.0.
 
@@ -519,15 +517,14 @@ class CoreCommands(Protocol):
 
         Args:
             key (TEncodable): The key to delete.
-            condition (ValueComparison): The comparison condition. The key is only deleted if its
-                current value meets `condition`.
+            condition (ValueComparison): The condition for deleting the key.
 
         Returns:
-            bool: True if `key` was deleted. False if `key` did not exist or `condition` was not met.
+            bool: True if `key` was deleted, False otherwise.
 
         Examples:
             >>> client.set("key", "value")
-            >>> client.delex("key", OnlyIfEqual("wrong_value"))
+            >>> client.delex("key", OnlyIfEqual("other_value"))
                 False
             >>> client.delex("key", OnlyIfNotEqual("value"))
                 False

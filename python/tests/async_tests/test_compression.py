@@ -1532,18 +1532,18 @@ class TestCompressionIncompatibleCommands:
         param("bitpos", [1], 2, None, id="bitpos"),
         param("decr", [], 9, None, id="decr"),
         param("decrby", [5], 5, None, id="decrby"),
-        param("delex", [OnlyIfEqual("10")], True, "9.2.0", id="delex_ifeq"),
-        param("delifeq", ["10"], True, "9.0.0", id="delifeq"),
         param("getbit", [0], 0, None, id="getbit"),
         param("getrange", [0, 0], b"1", None, id="getrange"),
         param("incr", [], 11, None, id="incr"),
         param("incrby", [5], 15, None, id="incrby"),
         param("incrbyfloat", [0.5], 10.5, None, id="incrbyfloat"),
-        param("set", ["20", OnlyIfEqual("10")], OK, "8.1.0", id="set_ifeq"),
-        param("set", ["20", OnlyIfNotEqual("20")], OK, "9.2.0", id="set_ifne"),
         param("setbit", [0, 1], 0, None, id="setbit"),
         param("setrange", [1, "5"], 2, None, id="setrange"),
         param("strlen", [], 2, None, id="strlen"),
+        param("set", ["20", OnlyIfEqual("10")], OK, "8.1.0", id="set_ifeq"),
+        param("delifeq", ["10"], True, "9.0.0", id="delifeq"),
+        param("delex", [OnlyIfEqual("10")], True, "9.2.0", id="delex_ifeq"),
+        param("set", ["20", OnlyIfNotEqual("20")], OK, "9.2.0", id="set_ifne"),
     ]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])

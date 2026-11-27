@@ -12,9 +12,6 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
-// fakeStandaloneClient is a minimal standaloneClient double that records the argv it was
-// called with and returns a canned reply/error, so the standalone wrapper functions below can
-// be exercised without a live server.
 type fakeStandaloneClient struct {
 	lastArgs []string
 	reply    any
@@ -25,11 +22,6 @@ func (f *fakeStandaloneClient) CustomCommand(ctx context.Context, args []string)
 	f.lastArgs = args
 	return f.reply, f.err
 }
-
-// Unit tests for the five standalone-only wrapper functions (FtHybrid, FtHybridWithCursor,
-// FtAggregateWithCursor, FtCursorRead, FtCursorDel), which have a distinct exec path
-// (execStandalone, via the standaloneClient interface) from their Cluster* counterparts. These
-// use a fake standaloneClient directly rather than the defaultClusterClient() live tests use.
 
 func TestFtHybrid_Standalone(t *testing.T) {
 	fake := &fakeStandaloneClient{
@@ -99,9 +91,6 @@ func TestFtCursorDel_Standalone(t *testing.T) {
 	assert.Equal(t, []string{"FT.CURSOR", "DEL", "idx", "42"}, fake.lastArgs)
 }
 
-// TestFtCursorDel_Standalone_PropagatesError mirrors Python's cluster_mode=[True, False]
-// parametrization intent: the standalone exec path must propagate upstream errors the same way
-// the cluster path does.
 func TestFtCursorDel_Standalone_PropagatesError(t *testing.T) {
 	fake := &fakeStandaloneClient{err: assert.AnError}
 	_, err := FtCursorDel(context.Background(), fake, "idx", 42)

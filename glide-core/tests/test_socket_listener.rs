@@ -465,9 +465,7 @@ mod socket_listener {
     ) -> ServerTestBasics {
         let server = match shared_server {
             TestServer::Shared => None,
-            TestServer::Unique => Some(RedisServer::new(ServerType::Tcp {
-                tls: use_tls.to_bool(),
-            })),
+            TestServer::Unique => Some(RedisServer::new(standalone_server_type(use_tls.to_bool()))),
         };
         setup_server_test_basics_with_server_and_socket_path(use_tls, socket_path, server)
     }
@@ -567,7 +565,7 @@ mod socket_listener {
             std::process::id()
         ));
         close_socket(&socket_path);
-        let server = Arc::new(RedisServer::new(ServerType::Tcp { tls: false }));
+        let server = Arc::new(RedisServer::new(standalone_server_type(false)));
 
         thread::scope(|scope| {
             for i in 0..20 {

@@ -369,9 +369,18 @@ mod tests {
             window_size: Duration::from_secs(10),
             failure_rate_threshold: 0.5,
             min_errors: 5,
-            open_timeout: Duration::from_millis(100),
+            // Long enough that a slow log write in trip() cannot expire it.
+            open_timeout: Duration::from_secs(60),
             count_timeouts: false,
             consecutive_successes: 2,
+        }
+    }
+
+    /// For tests that wait out open_timeout to reach HalfOpen.
+    fn short_open_config() -> ClientCircuitBreakerConfig {
+        ClientCircuitBreakerConfig {
+            open_timeout: Duration::from_millis(100),
+            ..default_config()
         }
     }
 
@@ -435,7 +444,7 @@ mod tests {
 
     #[test]
     fn transitions_to_half_open_after_timeout() {
-        let cb = ClientCircuitBreaker::new(default_config());
+        let cb = ClientCircuitBreaker::new(short_open_config());
 
         // Trip it
         for _ in 0..10 {
@@ -452,7 +461,7 @@ mod tests {
 
     #[test]
     fn closes_after_consecutive_successes() {
-        let cb = ClientCircuitBreaker::new(default_config());
+        let cb = ClientCircuitBreaker::new(short_open_config());
 
         // Trip it
         for _ in 0..10 {
@@ -477,7 +486,7 @@ mod tests {
 
     #[test]
     fn probe_failure_returns_to_open() {
-        let cb = ClientCircuitBreaker::new(default_config());
+        let cb = ClientCircuitBreaker::new(short_open_config());
 
         // Trip it
         for _ in 0..10 {
@@ -491,10 +500,15 @@ mod tests {
         assert!(cb.is_healthy());
 
         // Probe fails
+        let probe_failed_at = Instant::now();
         cb.on_result(true, Some("IoError"), 0);
 
         assert_eq!(cb.state(), CircuitState::Open);
-        assert!(!cb.is_healthy());
+        // Read the flag directly: is_healthy() would reach HalfOpen again if 100 ms passed.
+        assert!(!cb.healthy.load(Ordering::Acquire));
+        // Reopening restarts the open timeout.
+        let opened_at = cb.state.read().unwrap().opened_at;
+        assert!(opened_at.is_some_and(|t| t >= probe_failed_at));
     }
 
     #[test]
@@ -555,7 +569,7 @@ mod tests {
 
     #[test]
     fn draining_inflight_forgives_halfopen_failure() {
-        let cb = ClientCircuitBreaker::new(default_config());
+        let cb = ClientCircuitBreaker::new(short_open_config());
 
         // Trip it with high inflight (simulates saturated state)
         for _ in 0..10 {

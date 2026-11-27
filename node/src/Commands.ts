@@ -4744,6 +4744,50 @@ export function createDelIfEq(
 }
 
 /**
+ * Arguments for the DELEX command.
+ */
+export interface DelexOptions {
+    /**
+     * The condition that the key must meet to be deleted.
+     *
+     * `onlyIfEqual` - Only delete the key if its value equals `value` (`IFEQ`).
+     *
+     * `onlyIfNotEqual` - Only delete the key if its value does not equal `value` (`IFNE`).
+     */
+    condition: "onlyIfEqual" | "onlyIfNotEqual";
+    /**
+     * Value to compare against the key.
+     */
+    value: GlideString;
+}
+
+/** @internal */
+export function createDelEx(
+    key: GlideString,
+    options: DelexOptions,
+): command_request.Command {
+    let condition: string;
+
+    if (options.condition === "onlyIfEqual") {
+        condition = "IFEQ";
+    } else if (options.condition === "onlyIfNotEqual") {
+        condition = "IFNE";
+    } else {
+        throw new Error(
+            `Received invalid DELEX condition '${options.condition}'`,
+        );
+    }
+
+    if (options.value == null) {
+        throw new Error(
+            `Received DELEX condition '${options.condition}' without a value`,
+        );
+    }
+
+    return createCommand(RequestType.DelEx, [key, condition, options.value]);
+}
+
+/**
  * @internal
  */
 export function createLMPop(

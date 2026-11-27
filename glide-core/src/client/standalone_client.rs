@@ -272,7 +272,7 @@ impl StandaloneClient {
     /// As [`Self::create_client`], with every node connection able to open an RDMA
     /// session over `rdma_fabric`. `None` behaves exactly like `create_client`.
     pub(crate) async fn create_client_with_rdma(
-        connection_request: ConnectionRequest,
+        mut connection_request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
@@ -281,6 +281,11 @@ impl StandaloneClient {
         if connection_request.addresses.is_empty() {
             return Err(StandaloneClientConnectionError::NoAddressesProvided);
         }
+
+        // `Client::new` already did this; it is repeated for direct callers of `create_client`.
+        connection_request.read_from = connection_request
+            .read_from
+            .map(ClientReadFrom::with_trimmed_client_az);
 
         super::validate_unix_socket_addresses(&connection_request).map_err(|message| {
             StandaloneClientConnectionError::FailedConnection(vec![(
