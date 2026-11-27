@@ -389,11 +389,15 @@ impl GlideClusterClient {
     /// itself fails with [`GlideError::Timeout`] if it has not finished by the
     /// request timeout plus the same margin. A node the client lost or cannot
     /// connect to holds [`GlideError::Connection`], the same variant a call
-    /// fails with when it loses its connection. The call still fails when no
-    /// target node can be reached. `route` must be [`Route::AllNodes`] or
-    /// [`Route::AllPrimaries`], since a single node's reply has no address to
-    /// key it by; for a single node, send `INFO` with
-    /// [`GlideClusterClient::route_command`] instead.
+    /// fails with when it loses its connection. The map is returned even when
+    /// every target node failed, but the call fails when the client has no
+    /// connection to any target node.
+    ///
+    /// `route` must be [`Route::AllNodes`] or [`Route::AllPrimaries`]; any
+    /// other route fails with [`GlideError::Request`] without sending the
+    /// command, since a single node's reply has no address to key it by. For a
+    /// single node, send `INFO` with [`GlideClusterClient::route_command`]
+    /// instead.
     pub async fn info_with_partial_results(
         &self,
         sections: &[crate::commands::options::InfoSection],
