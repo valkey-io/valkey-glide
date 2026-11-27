@@ -2,6 +2,7 @@
 
 import asyncio
 import gc
+import os
 import struct
 import threading
 import weakref
@@ -35,12 +36,30 @@ def pipe_client(monkeypatch):
     return client
 
 
+@pytest.fixture
+def pipe_read(monkeypatch):
+    reader_os = SimpleNamespace(**vars(os))
+    reader_os.read = Mock()
+    monkeypatch.setattr(pipe, "os", reader_os)
+    return reader_os.read
+
+
+def test_pipe_read_mock_leaves_other_reads_alone(pipe_read, tmp_path):
+    assert pipe.os.getpid() == os.getpid()
+    pipe_read.side_effect = [b"frame"]
+    path = tmp_path / "data"
+    path.write_bytes(b"real")
+    with path.open("rb") as stream:
+        assert os.read(stream.fileno(), 4) == b"real"
+    assert pipe.os.read(123, 5) == b"frame"
+
+
 @pytest.mark.parametrize("workers", [False, True])
 @pytest.mark.parametrize("require_lock", [False, True])
 @pytest.mark.parametrize("split_frame", [False, True])
 @pytest.mark.parametrize("failure", ["parse", "arena", "error_string", "error_type"])
 def test_response_failure_preserves_later_frames(
-    monkeypatch, pipe_client, failure, split_frame, require_lock, workers
+    monkeypatch, pipe_client, pipe_read, failure, split_frame, require_lock, workers
 ):
     client = pipe_client
     first, second = client._pending_futures.values()
@@ -66,11 +85,7 @@ def test_response_failure_preserves_later_frames(
         if split_frame
         else [first_frame + second_frame]
     )
-    monkeypatch.setattr(
-        pipe.os,
-        "read",
-        Mock(side_effect=reads),
-    )
+    pipe_read.side_effect = reads
     monkeypatch.setattr(pipe, "_PENDING_FUTURES_REQUIRE_LOCK", require_lock)
     with ThreadPoolExecutor(max_workers=1) as pool:
         monkeypatch.setattr(pipe, "_FREE_THREADED", workers)
@@ -89,7 +104,7 @@ def test_response_failure_preserves_later_frames(
 
 @pytest.mark.parametrize("pointer_mode", [False, True])
 def test_push_failure_preserves_following_response(
-    monkeypatch, pipe_client, pointer_mode
+    monkeypatch, pipe_client, pipe_read, pointer_mode
 ):
     first = pipe_client._pending_futures[1]
     payload = b"payload"
@@ -105,11 +120,7 @@ def test_push_failure_preserves_following_response(
         monkeypatch.setattr(
             pipe, "_handle_inline_pubsub", Mock(side_effect=RuntimeError("push failed"))
         )
-    monkeypatch.setattr(
-        pipe.os,
-        "read",
-        Mock(return_value=frame + pipe._FRAME_STRUCT.pack(7, 1, 200, 201)),
-    )
+    pipe_read.return_value = frame + pipe._FRAME_STRUCT.pack(7, 1, 200, 201)
     assert pipe._on_async_pipe_readable()
     assert first.result(timeout=1) == "OK"
     if pointer_mode:
@@ -118,12 +129,12 @@ def test_push_failure_preserves_following_response(
     pipe.ClientLogger.log.assert_called()
 
 
-def test_incomplete_inline_payload_is_retained(monkeypatch, pipe_client):
+def test_incomplete_inline_payload_is_retained(monkeypatch, pipe_client, pipe_read):
     payload = b"payload"
     frame = pipe._FRAME_STRUCT.pack(7, pipe._PUBSUB_SENTINEL, len(payload), 0) + payload
     handler = Mock()
     monkeypatch.setattr(pipe, "_handle_inline_pubsub", handler)
-    monkeypatch.setattr(pipe.os, "read", Mock(side_effect=[frame[:-3], frame[-3:]]))
+    pipe_read.side_effect = [frame[:-3], frame[-3:]]
     assert pipe._on_async_pipe_readable()
     assert pipe._pipe_remainder == frame[:-3]
     handler.assert_not_called()
@@ -132,7 +143,9 @@ def test_incomplete_inline_payload_is_retained(monkeypatch, pipe_client):
     assert pipe._pipe_remainder == b""
 
 
-def test_worker_submission_failure_handles_frame_inline(monkeypatch, pipe_client):
+def test_worker_submission_failure_handles_frame_inline(
+    monkeypatch, pipe_client, pipe_read
+):
     first = pipe_client._pending_futures[1]
     monkeypatch.setattr(pipe, "_FREE_THREADED", True)
     monkeypatch.setattr(
@@ -140,16 +153,16 @@ def test_worker_submission_failure_handles_frame_inline(monkeypatch, pipe_client
         "_response_thread_pool",
         Mock(submit=Mock(side_effect=RuntimeError("closed pool"))),
     )
-    monkeypatch.setattr(
-        pipe.os, "read", Mock(return_value=pipe._FRAME_STRUCT.pack(7, 1, 100, 101))
-    )
+    pipe_read.return_value = pipe._FRAME_STRUCT.pack(7, 1, 100, 101)
     assert pipe._on_async_pipe_readable()
     assert first.result(timeout=1) == "OK"
     pipe_client._lib.free_response_arena.assert_called_once()
     pipe.ClientLogger.log.assert_called_once()
 
 
-def test_failed_worker_start_does_not_process_frame_twice(monkeypatch, pipe_client):
+def test_failed_worker_start_does_not_process_frame_twice(
+    monkeypatch, pipe_client, pipe_read
+):
     first, second = pipe_client._pending_futures.values()
     start_thread = threading.Thread.start
     attempts = 0
@@ -165,7 +178,7 @@ def test_failed_worker_start_does_not_process_frame_twice(monkeypatch, pipe_clie
     frames = pipe._FRAME_STRUCT.pack(7, 1, 100, 101) + pipe._FRAME_STRUCT.pack(
         7, 2, 200, 201
     )
-    monkeypatch.setattr(pipe.os, "read", Mock(return_value=frames))
+    pipe_read.return_value = frames
     with ThreadPoolExecutor(max_workers=1) as pool:
         monkeypatch.setattr(pipe, "_FREE_THREADED", True)
         monkeypatch.setattr(pipe, "_response_thread_pool", pool)
@@ -178,7 +191,7 @@ def test_failed_worker_start_does_not_process_frame_twice(monkeypatch, pipe_clie
     pipe.ClientLogger.log.assert_called_once()
 
 
-def test_failed_future_dispatch_does_not_block_other_clients(monkeypatch, pipe_client):
+def test_failed_future_dispatch_does_not_block_other_clients(pipe_client, pipe_read):
     closed_client = SimpleNamespace(
         **{**vars(pipe_client), "_pending_futures": {1: Future()}, "_loop": Mock()}
     )
@@ -188,7 +201,7 @@ def test_failed_future_dispatch_does_not_block_other_clients(monkeypatch, pipe_c
     frames = pipe._FRAME_STRUCT.pack(8, 1, 100, 101) + pipe._FRAME_STRUCT.pack(
         7, 2, 200, 201
     )
-    monkeypatch.setattr(pipe.os, "read", Mock(return_value=frames))
+    pipe_read.return_value = frames
     assert pipe._on_async_pipe_readable()
     assert closed_client._pending_futures == {}
     assert second.result(timeout=1) == "OK"
@@ -209,7 +222,7 @@ def test_completed_requests_still_free_native_response(pipe_client, closed):
 @pytest.mark.parametrize("empty_registry", [False, True])
 @pytest.mark.parametrize("split_frame", [False, True])
 def test_orphaned_frames_free_native_memory(
-    monkeypatch, pipe_client, frame_kind, empty_registry, split_frame
+    monkeypatch, pipe_client, pipe_read, frame_kind, empty_registry, split_frame
 ):
     monkeypatch.setattr(
         pipe, "_ASYNC_FFI", SimpleNamespace(ffi=pipe_client._ffi, lib=pipe_client._lib)
@@ -224,8 +237,7 @@ def test_orphaned_frames_free_native_memory(
         response_ptr = 100 if frame_kind == "success" else 0
         arena_or_err = 101 if frame_kind == "success" else (1 << 56) | 101
         frame = pipe._FRAME_STRUCT.pack(8, 1, response_ptr, arena_or_err)
-    reads = [frame[:-3], frame[-3:]] if split_frame else [frame]
-    monkeypatch.setattr(pipe.os, "read", Mock(side_effect=reads))
+    pipe_read.side_effect = [frame[:-3], frame[-3:]] if split_frame else [frame]
 
     assert pipe._on_async_pipe_readable()
     if split_frame:
