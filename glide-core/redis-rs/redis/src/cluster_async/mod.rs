@@ -4431,8 +4431,19 @@ where
             .pending_requests_rx
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        while let Ok(request) = rx_guard.try_recv() {
-            pending_requests.push(request);
+        // Drain with `try_recv`, which does not spend tokio's coop budget, so a burst is
+        // never left in the channel. Then `poll_recv` on the empty channel makes sure that a
+        // request queued while the in-flight requests are polled below (a multi-node command
+        // or pipeline queues one per node) wakes the driver: it registers this task's waker,
+        // or, if the coop budget is spent, schedules the task to run again.
+        loop {
+            while let Ok(request) = rx_guard.try_recv() {
+                pending_requests.push(request);
+            }
+            match rx_guard.poll_recv(cx) {
+                Poll::Ready(Some(request)) => pending_requests.push(request),
+                _ => break,
+            }
         }
         drop(rx_guard);
 
