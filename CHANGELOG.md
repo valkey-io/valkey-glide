@@ -43,6 +43,7 @@
 * Core/Node: Apply the same worker-pool cap to the Node client's pool ([#7586](https://github.com/valkey-io/valkey-glide/issues/7586))
 * Core: send ASKING in the same write as the redirected command ([#7778](https://github.com/valkey-io/valkey-glide/pull/7778))
 * Python: correct the `FtHybridOptions.params` documentation: parameters apply to the VSIM arm's vector and to FILTER and APPLY expressions, not to the SEARCH arm ([#7867](https://github.com/valkey-io/valkey-glide/pull/7867))
+* Core: With `maxDecompressedSize` set and `raiseOnError` false, batches return a size-limit error for each oversized reply and preserve the other replies ([#7601](https://github.com/valkey-io/valkey-glide/issues/7601))
 
 ### Breaking Changes
 
