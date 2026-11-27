@@ -1552,14 +1552,7 @@ impl Client {
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
-            // The server sends no reply to an empty command, which would shift every later
-            // reply on the connection to the wrong request.
-            if cmd.args_iter().next().is_none() {
-                return Err(RedisError::from((
-                    ErrorKind::ClientError,
-                    "Received command without a command name or arguments",
-                )));
-            }
+            reject_empty_command(cmd)?;
             // `BLOB.*` transfers lend a buffer, so only the rdma methods send them.
             crate::rdma::refuse_direct_command(cmd)?;
             // Refresh IAM auth before the command (see `reconcile_iam_before_dispatch`).
@@ -1944,6 +1937,7 @@ impl Client {
         last_auth_generation: &mut AuthGeneration,
         defer_reauth: bool,
     ) -> RedisResult<Value> {
+        reject_empty_command(cmd)?;
         // Re-authenticate when the credential rotated (generation advanced since
         // this connection last applied one). `defer_reauth` skips it where AUTH
         // can't run — an open transaction (queued, corrupting the EXEC reply) or
@@ -2362,6 +2356,7 @@ impl Client {
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             // Before the tracking below, so a rejected batch leaves no state.
             for cmd in pipeline.cmd_iter() {
+                reject_empty_command(cmd)?;
                 self.reject_write_in_read_only(cmd)?;
             }
             self.reconcile_iam_before_dispatch().await?;
@@ -2466,6 +2461,7 @@ impl Client {
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             // Before the tracking below, so a rejected batch leaves no state.
             for cmd in pipeline.cmd_iter() {
+                reject_empty_command(cmd)?;
                 self.reject_write_in_read_only(cmd)?;
             }
             self.reconcile_iam_before_dispatch().await?;
@@ -3496,6 +3492,18 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
 }
 
 /// The error for a command refused because the client circuit breaker is open.
+/// Rejects a command with no arguments. The server sends no reply to it, which would
+/// shift every later reply on the connection to the wrong request.
+pub(crate) fn reject_empty_command(cmd: &Cmd) -> RedisResult<()> {
+    if cmd.args_iter().next().is_none() {
+        return Err(RedisError::from((
+            ErrorKind::ClientError,
+            "Received command without a command name or arguments",
+        )));
+    }
+    Ok(())
+}
+
 fn circuit_breaker_open() -> RedisError {
     RedisError::from((
         ErrorKind::CircuitBreakerOpen,

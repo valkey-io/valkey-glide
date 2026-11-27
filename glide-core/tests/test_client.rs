@@ -181,6 +181,34 @@ pub(crate) mod shared_client_tests {
                 .expect_err("empty command must fail");
             assert_eq!(err.kind(), redis::ErrorKind::ClientError);
 
+            for atomic in [false, true] {
+                let mut pipeline = redis::Pipeline::new();
+                if atomic {
+                    pipeline.atomic();
+                }
+                pipeline.add_command(redis::cmd("PING"));
+                pipeline.add_command(redis::Cmd::new());
+                let result = if atomic {
+                    test_basics
+                        .client
+                        .send_transaction(&pipeline, None, None, true)
+                        .await
+                } else {
+                    test_basics
+                        .client
+                        .send_pipeline(
+                            &pipeline,
+                            None,
+                            true,
+                            None,
+                            redis::PipelineRetryStrategy::default(),
+                        )
+                        .await
+                };
+                let err = result.expect_err("batch with an empty command must fail");
+                assert_eq!(err.kind(), redis::ErrorKind::ClientError);
+            }
+
             let prefix = generate_random_string(6);
             for i in 0..30 {
                 let key = format!("{prefix}{i}");
