@@ -5489,6 +5489,36 @@ mod client_pool_tests {
         drop(blackhole);
     }
 
+    /// Release takes the client out of `in_use` before the reset runs, so the
+    /// active count is exact when release returns; and a reset that never runs
+    /// (dropped before its first poll) still gives the slot back.
+    #[test]
+    fn release_frees_the_slot_before_the_reset_runs() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let _enter = rt.enter();
+        let pool_arc = Arc::new(PoolMutex::new(
+            ClientPool::new(test_pool_config(Duration::from_secs(5))).unwrap(),
+        ));
+        let client_id = add_idle_client(
+            &mut pool_arc.lock(),
+            crate::client::create_test_glide_client(),
+        );
+        let lease = pool_arc.lock().try_acquire_lease() as u64;
+        assert_eq!(pool_arc.lock().active_count(), 1);
+
+        let release = release_lease(pool_arc.clone(), lease).expect("current lease");
+        assert_eq!(
+            pool_arc.lock().active_count(),
+            0,
+            "the client still counted as borrowed once release returned"
+        );
+
+        drop(release);
+        let mut pool = pool_arc.lock();
+        assert_eq!(pool.total_count, 0, "an unrun reset leaked the slot");
+        assert_eq!(pool.drain_discarded_ids(), vec![client_id]);
+    }
+
     /// Each borrow gets its own lease, and a lease ends with its borrow: a
     /// repeated release, arriving after the client was lent again, must leave
     /// the new borrow alone.
