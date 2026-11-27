@@ -18,7 +18,9 @@ elif args[:2] == ["ssm", "send-command"]:
 elif args[:2] == ["ssm", "get-command-invocation"]:
     query = args[args.index("--query") + 1]
     if query == "Status":
-        assert os.environ["AWS_MAX_ATTEMPTS"] == "1"
+        state.setdefault("retry_settings", []).append(
+            {key: os.environ.get(key) for key in ("AWS_RETRY_MODE", "AWS_MAX_ATTEMPTS")}
+        )
         assert args[args.index("--cli-connect-timeout") + 1] == "10"
         assert args[args.index("--cli-read-timeout") + 1] == "30"
         index = state.get("polls", 0)

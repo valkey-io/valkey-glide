@@ -41,6 +41,9 @@ class SsmPollingTests(unittest.TestCase):
                     os.environ,
                     PATH=f"{root}:{os.environ['PATH']}",
                     FAKE_STATE=str(state_path),
+                    # Polling must bound retries even with different caller settings.
+                    AWS_RETRY_MODE="adaptive",
+                    AWS_MAX_ATTEMPTS="99",
                 ),
                 capture_output=True,
                 text=True,
@@ -56,20 +59,20 @@ class SsmPollingTests(unittest.TestCase):
         self.assertIn("host output", result.stdout)
         self.assertIn("stderr: host diagnostic", result.stdout)
 
-    def test_retryable_errors_recover(self):
-        for code in (
-            "InvocationDoesNotExist",
-            "ThrottlingException",
-            "Throttling",
-            "InternalServerError",
-            "ServiceUnavailable",
-        ):
-            with self.subTest(code=code):
-                result, state = self.execute([error(code), "Success"])
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(state["polls"], 2)
-                self.assertIn(code, result.stderr)
-                self.assertIn("command-test on i-host", result.stderr)
+    def test_polling_delegates_to_bounded_standard_cli_retries(self):
+        result, state = self.execute(["Pending", "Success"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            state["retry_settings"],
+            [{"AWS_RETRY_MODE": "standard", "AWS_MAX_ATTEMPTS": "3"}] * 2,
+        )
+
+    def test_invocation_visibility_error_recovers(self):
+        result, state = self.execute([error("InvocationDoesNotExist"), "Success"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(state["polls"], 2)
+        self.assertIn("InvocationDoesNotExist", result.stderr)
+        self.assertIn("command-test on i-host", result.stderr)
 
     def test_persistent_errors_are_bounded(self):
         result, state = self.execute([error("InvocationDoesNotExist")])
@@ -80,9 +83,9 @@ class SsmPollingTests(unittest.TestCase):
 
     def test_successful_poll_resets_error_budget(self):
         result, state = self.execute(
-            [error("ThrottlingException")] * 11
+            [error("InvocationDoesNotExist")] * 11
             + ["InProgress"]
-            + [error("InternalServerError")] * 11
+            + [error("InvocationDoesNotExist")] * 11
             + ["Success"]
         )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -95,6 +98,7 @@ class SsmPollingTests(unittest.TestCase):
             "InvalidInstanceId",
             "InvalidPluginName",
             "ExpiredToken",
+            "ExpiredTokenException",
             "UnknownError",
         ):
             with self.subTest(code=code):
@@ -118,24 +122,38 @@ class SsmPollingTests(unittest.TestCase):
         self.assertIn("stderr: host diagnostic", result.stdout)
         self.assertIn("== Failed", result.stdout)
 
-    def test_network_errors_recover(self):
-        for message in (
-            'Read timeout on endpoint URL: "https://ssm.us-east-1.amazonaws.com/"',
-            'Could not connect to the endpoint URL: "https://ssm.us-east-1.amazonaws.com/"',
-        ):
-            with self.subTest(message=message):
-                result, state = self.execute([{"error": message}, "Success"])
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(state["polls"], 2)
-                self.assertIn(message, result.stderr)
-
-    def test_persistent_network_error_is_bounded(self):
-        result, state = self.execute(
-            [{"error": 'Read timeout on endpoint URL: "https://ssm.example/"'}]
-        )
-        self.assertEqual(result.returncode, 254)
-        self.assertEqual(state["polls"], 12)
-        self.assertIn("12 consecutive errors", result.stderr)
+    def test_exhausted_cli_errors_do_not_start_another_retry_budget(self):
+        # Each fixture response is a completed CLI invocation, after its own
+        # retries. Do not reimplement AWS's transport retry policy in this fake.
+        responses = [
+            error(code)
+            for code in (
+                "ThrottlingException",
+                "Throttling",
+                "InternalServerError",
+                "ServiceUnavailable",
+                "500",
+                "502",
+                "503",
+                "504",
+            )
+        ] + [
+            {"error": message}
+            for message in (
+                'Read timeout on endpoint URL: "https://ssm.example/"',
+                'Could not connect to the endpoint URL: "https://ssm.example/"',
+                'Connect timeout on endpoint URL: "https://ssm.example/"',
+                'Connection was closed before we received a valid response from endpoint URL: "https://ssm.example/"',
+            )
+        ]
+        for response in responses:
+            with self.subTest(response=response):
+                result, state = self.execute([response, "Success"])
+                self.assertEqual(result.returncode, 254)
+                self.assertEqual(state["polls"], 1)
+                self.assertIn(response["error"], result.stderr)
+                self.assertIn("command-test on i-host", result.stderr)
+                self.assertNotIn("output_queries", state)
 
     def test_remote_pipeline_retains_tail_and_exit_status(self):
         _, state = self.execute(["Success"])

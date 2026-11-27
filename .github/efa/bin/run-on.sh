@@ -72,15 +72,16 @@ command_id=$(aws ssm send-command --instance-ids "$instance" --document-name AWS
 
 status=Pending
 poll_errors=0
-# Twelve failed polls allow roughly one minute of retry delays, plus AWS CLI
-# request time. Any successful status poll resets this consecutive-error budget.
+# Twelve consecutive InvocationDoesNotExist responses allow roughly one minute
+# of visibility retry delays, plus CLI request/retry time. A successful status
+# poll resets this budget; other errors do not receive another shell retry.
 max_poll_errors=12
 while [ "$status" = Pending ] || [ "$status" = InProgress ] || [ "$status" = Delayed ]; do
   sleep 5
-  # SSM can take time to expose a new invocation. Retry that and transient
-  # service/network failures, but never turn an authorization/configuration error into
-  # an indefinitely pending command. Bound each request and consecutive errors.
-  if poll_output=$(AWS_MAX_ATTEMPTS=1 aws ssm get-command-invocation \
+  # Let the CLI classify transient transport/service failures, with at most
+  # three attempts total (including the initial request). Only SSM invocation
+  # visibility needs a separate retry here; propagate all other CLI failures.
+  if poll_output=$(AWS_RETRY_MODE=standard AWS_MAX_ATTEMPTS=3 aws ssm get-command-invocation \
     --command-id "$command_id" --instance-id "$instance" \
     --cli-connect-timeout 10 --cli-read-timeout 30 \
     --query Status --output text 2>&1); then
@@ -90,7 +91,7 @@ while [ "$status" = Pending ] || [ "$status" = InProgress ] || [ "$status" = Del
     poll_exit=$?
     echo "SSM poll failed for command $command_id on $instance: $poll_output" >&2
     case "$poll_output" in
-      *'(InvocationDoesNotExist)'*|*'(ThrottlingException)'*|*'(Throttling)'*|*'(InternalServerError)'*|*'(ServiceUnavailable)'*|*'Read timeout on endpoint URL:'*|*'Could not connect to the endpoint URL:'*) ;;
+      *'(InvocationDoesNotExist)'*) ;;
       *) exit "$poll_exit" ;;
     esac
     poll_errors=$((poll_errors + 1))
