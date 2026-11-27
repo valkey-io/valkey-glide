@@ -336,8 +336,9 @@ func (client *ClusterClient) InfoWithOptions(
 // Unlike [ClusterClient.InfoWithOptions], a node that fails does not fail the call: its entry holds the error for that
 // node instead of its reply. A node that has not answered by the request timeout minus a margin of a tenth of it, kept
 // between 2 ms and 100 ms (a quarter of it under 8 ms), gets a [TimeoutError], and the call itself fails with a
-// [TimeoutError] if it has not finished by the request timeout plus the same margin. The call still fails when no target
-// node can be reached.
+// [TimeoutError] if it has not finished by the request timeout plus the same margin. A node the client lost its
+// connection to or cannot connect to gets a [DisconnectError], the error a plain call fails with in that case. The call
+// still fails when no target node can be reached.
 //
 // See [valkey.io] for details.
 //

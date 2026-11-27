@@ -195,7 +195,8 @@ pub struct CommandResponse {
     /// The integer of an `Int` response. For an `Error` response (an error
     /// nested in a reply, such as a failed node in a partial-results map),
     /// [`RequestErrorType::Timeout`] for a node that did not answer in time,
-    /// else 0.
+    /// [`RequestErrorType::Disconnect`] for a node the client lost or could not
+    /// connect to, else 0.
     pub int_value: i64,
     pub float_value: c_double,
     pub bool_value: bool,
@@ -5283,10 +5284,15 @@ impl ResponseArena {
                 let error = server_error.into();
                 let msg = error_message(&error).into_bytes();
                 let (ptr, len) = self.store_string(msg);
-                // Only a node that did not answer in time is marked, so a nested
-                // error without partial results keeps `int_value` 0.
-                if matches!(errors::error_type(&error), RequestErrorType::Timeout) {
-                    self.nodes[idx].int_value = RequestErrorType::Timeout as i64;
+                // Only a node that did not answer in time or that the client has
+                // no connection to is marked, so a nested error without partial
+                // results keeps `int_value` 0.
+                let error_type = errors::error_type(&error);
+                if matches!(
+                    error_type,
+                    RequestErrorType::Timeout | RequestErrorType::Disconnect
+                ) {
+                    self.nodes[idx].int_value = error_type as i64;
                 }
                 self.nodes[idx].response_type = ResponseType::Error;
                 self.nodes[idx].string_value = ptr;
@@ -5411,18 +5417,24 @@ mod tests_response_arena {
                 code: redis::TIMEOUT_ERROR_CODE.into(),
                 detail: Some("timed out".into()),
             }),
+            // A node the client has no connection to.
+            Value::ServerError(redis::ServerError::from_error_keeping_kind(
+                std::io::Error::from(std::io::ErrorKind::ConnectionRefused).into(),
+            )),
         ]);
 
         let (root, arena_ptr) =
             valkey_value_to_arena_response(value, &[]).expect("arena build failed");
         unsafe {
             let root = &*root;
-            // Only a client timeout is marked; other nested errors keep 0.
+            // Only a client timeout or connection error is marked; other
+            // nested errors keep 0.
             let expected = [
                 RequestErrorType::Unspecified,
                 RequestErrorType::Unspecified,
                 RequestErrorType::Unspecified,
                 RequestErrorType::Timeout,
+                RequestErrorType::Disconnect,
             ];
             for (i, error_type) in expected.into_iter().enumerate() {
                 let node = &*root.array_value.add(i);
@@ -5633,12 +5645,13 @@ pub unsafe extern "C-unwind" fn command(
 /// reply is a map keyed by node address (such as `INFO`) returns an entry for
 /// every target node instead of failing on the first node error. A failed
 /// node's entry is an `Error` response whose `int_value` is `Timeout` if the
-/// node did not answer in time and `Unspecified` otherwise. A node has not
-/// answered in time when it has not answered by the request timeout minus a
-/// margin of a tenth of it, kept between 2 ms and 100 ms (a quarter of it under
-/// 8 ms), and the call itself fails with a timeout if it has not finished by the
-/// request timeout plus the same margin. The call still fails when no target
-/// node can be reached. Other routes behave as with [`command`].
+/// node did not answer in time, `Disconnect` if the client lost its connection
+/// to the node or could not connect to it, and `Unspecified` otherwise. A node
+/// has not answered in time when it has not answered by the request timeout
+/// minus a margin of a tenth of it, kept between 2 ms and 100 ms (a quarter of
+/// it under 8 ms), and the call itself fails with a timeout if it has not
+/// finished by the request timeout plus the same margin. The call still fails
+/// when no target node can be reached. Other routes behave as with [`command`].
 ///
 /// # Safety
 ///

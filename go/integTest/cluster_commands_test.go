@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
@@ -150,6 +151,20 @@ func (suite *GlideTestSuite) TestInfoCluster() {
 	}
 }
 
+// sortedPrimaries returns the addresses of an INFO reply in order and a route to the first one.
+func sortedPrimaries(t *testing.T, infos map[string]string) ([]string, config.Route) {
+	primaries := make([]string, 0, len(infos))
+	for address := range infos {
+		primaries = append(primaries, address)
+	}
+	sort.Strings(primaries)
+	host, portText, err := net.SplitHostPort(primaries[0])
+	require.NoError(t, err)
+	port, err := strconv.Atoi(portText)
+	require.NoError(t, err)
+	return primaries, config.NewByAddressRoute(host, int32(port))
+}
+
 func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsRepliesWhenAPrimaryIsSlow() {
 	t := suite.T()
 	ctx := context.Background()
@@ -161,16 +176,7 @@ func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsRepliesWhenAPrimaryI
 
 	infos, err := client.Info(ctx)
 	require.NoError(t, err)
-	primaries := make([]string, 0, len(infos))
-	for address := range infos {
-		primaries = append(primaries, address)
-	}
-	sort.Strings(primaries)
-	host, portText, err := net.SplitHostPort(primaries[0])
-	require.NoError(t, err)
-	port, err := strconv.Atoi(portText)
-	require.NoError(t, err)
-	route := config.NewByAddressRoute(host, int32(port))
+	primaries, route := sortedPrimaries(t, infos)
 
 	// Long enough for both calls below to see the node as slow.
 	_, err = pauser.CustomCommandWithRoute(ctx, []string{"CLIENT", "PAUSE", "4500", "ALL"}, route)
@@ -233,20 +239,8 @@ func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsTheErrorReplyOfADeni
 
 	infos, err := denied.Info(ctx)
 	require.NoError(t, err)
-	primaries := make([]string, 0, len(infos))
-	for address := range infos {
-		primaries = append(primaries, address)
-	}
-	sort.Strings(primaries)
-	host, portText, err := net.SplitHostPort(primaries[0])
-	require.NoError(t, err)
-	port, err := strconv.Atoi(portText)
-	require.NoError(t, err)
-	_, err = admin.CustomCommandWithRoute(
-		ctx,
-		[]string{"ACL", "SETUSER", username, "-info"},
-		config.NewByAddressRoute(host, int32(port)),
-	)
+	primaries, route := sortedPrimaries(t, infos)
+	_, err = admin.CustomCommandWithRoute(ctx, []string{"ACL", "SETUSER", username, "-info"}, route)
 	require.NoError(t, err)
 
 	// Without partial results, the denied primary fails the whole call.
@@ -277,6 +271,43 @@ func (suite *GlideTestSuite) TestInfoWithPartialResultsKeepsTheErrorReplyOfADeni
 		_, isTimeout := reply.(*glide.TimeoutError)
 		assert.False(t, isTimeout)
 	}
+}
+
+func (suite *GlideTestSuite) TestInfoWithPartialResultsReturnsADisconnectErrorForAPrimaryItCannotReach() {
+	t := suite.T()
+	ctx := context.Background()
+	admin := suite.defaultClusterClient()
+	username := "partial-" + uuid.NewString()
+	password := "password"
+	_, err := admin.CustomCommandWithRoute(
+		ctx,
+		[]string{"ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all"},
+		config.AllNodes,
+	)
+	require.NoError(t, err)
+	defer func() {
+		_, err := admin.CustomCommandWithRoute(ctx, []string{"ACL", "DELUSER", username}, config.AllNodes)
+		assert.NoError(t, err)
+	}()
+	cutOff, err := suite.clusterClient(
+		suite.defaultClusterClientConfig().WithCredentials(config.NewServerCredentials(username, password)),
+	)
+	require.NoError(t, err)
+	defer cutOff.Close()
+
+	infos, err := cutOff.Info(ctx)
+	require.NoError(t, err)
+	primaries, route := sortedPrimaries(t, infos)
+
+	// Drop the client's connection to one primary and keep it from reconnecting.
+	_, err = admin.CustomCommandWithRoute(ctx, []string{"ACL", "SETUSER", username, "off"}, route)
+	require.NoError(t, err)
+	_, err = admin.CustomCommandWithRoute(ctx, []string{"CLIENT", "KILL", "USER", username}, route)
+	require.NoError(t, err)
+
+	result, err := cutOff.InfoWithPartialResults(ctx, options.ClusterInfoOptions{})
+	require.NoError(t, err)
+	assert.IsType(t, &glide.DisconnectError{}, result.MultiValue()[primaries[0]])
 }
 
 func (suite *GlideTestSuite) TestClusterRegisterCustomClientInfoTag() {
