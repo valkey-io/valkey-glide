@@ -161,6 +161,7 @@ class SsmPollingTests(unittest.TestCase):
                         timeout=5,
                     )
                     self.assertEqual(result.returncode, exit_code)
-                    self.assertEqual(result.stdout, output.encode()[-24000:])
+                    self.assertEqual(result.stdout, output.encode()[-23999:])
                     self.assertEqual((root / "host.log").read_text(), output)
-                    self.assertIn(summary.encode(), result.stdout[:24000])
+                    self.assertLess(len(result.stdout), 24000)
+                    self.assertTrue(result.stdout.endswith(summary.encode() + b"\n"))

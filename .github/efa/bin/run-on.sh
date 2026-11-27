@@ -63,7 +63,7 @@ print(json.dumps({"commands": sys.argv[2:], "executionTimeout": [sys.argv[1]]}))
   "$TIMEOUT" \
   "mkdir -p /var/log/rdma && echo '$payload' | base64 -d | gunzip > /var/log/rdma/$name" \
   ${ship_cmds[@]+"${ship_cmds[@]}"} \
-  "cd /root && set -o pipefail && env $env_pairs bash /var/log/rdma/$name 2>&1 | tee /var/log/rdma/${name%.sh}.log | tail -c 24000")
+  "cd /root && set -o pipefail && env $env_pairs bash /var/log/rdma/$name 2>&1 | tee /var/log/rdma/${name%.sh}.log | tail -c 23999")
 
 echo "== $role ($instance): $name"
 command_id=$(aws ssm send-command --instance-ids "$instance" --document-name AWS-RunShellScript \
@@ -101,9 +101,11 @@ while [ "$status" = Pending ] || [ "$status" = InProgress ] || [ "$status" = Del
   fi
 done
 
-# StandardOutputContent keeps only the first 24 000 characters. The remote
-# pipeline sends the final 24 000 bytes so pytest summaries survive truncation;
-# tee retains the full log on the host at /var/log/rdma/<script>.log.
+# StandardOutputContent returns fewer than 24 000 characters unchanged; at
+# 24 000 or more it ends in "--output truncated--", which overwrites the last
+# line. The remote pipeline sends the final 23 999 bytes so the pytest summary
+# arrives intact; tee retains the full log on the host at
+# /var/log/rdma/<script>.log.
 aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
   --query StandardOutputContent --output text
 aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
