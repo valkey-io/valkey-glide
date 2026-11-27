@@ -625,8 +625,8 @@ pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
 }
 
 /// The `ClientAdapter` of a current borrow, for `command()` dispatch, or null
-/// once that borrow has ended. Writes the pooled client's id to
-/// `client_id_out` (for [`glide_pool_set_pipe_client_id`]).
+/// once that borrow has ended. Writes the pooled client's id (its pipe
+/// client id) to `client_id_out`.
 ///
 /// The pointer carries its own reference, so the adapter outlives a pool
 /// discard while the binding still holds it; give it back once with
@@ -669,23 +669,6 @@ pub unsafe extern "C" fn glide_pool_release_client_ref(adapter_ptr: *const c_voi
     if !adapter_ptr.is_null() {
         unsafe { drop(Arc::from_raw(adapter_ptr as *const ClientAdapter)) };
     }
-}
-
-/// Set the pipe_client_id on a pooled client adapter.
-/// Required for async clients (Python async, Node) that use the shared pipe
-/// for response delivery. Call this after acquire, before sending commands.
-#[unsafe(no_mangle)]
-pub extern "C" fn glide_pool_set_pipe_client_id(client_id: u64, pipe_client_id: u64) -> i32 {
-    let Some(entry) = get_pool_clients().get(&client_id) else {
-        return -1;
-    };
-    // SAFETY: the pool's reference keeps the adapter alive while the entry is
-    // in the map, and a drain must take this entry's shard to remove it.
-    let adapter = unsafe { &*(entry.adapter_ptr as *const ClientAdapter) };
-    adapter
-        .pipe_client_id
-        .store(pipe_client_id, std::sync::atomic::Ordering::Release);
-    0
 }
 
 /// Whether the counts in a [`PoolMetrics`] were read.
@@ -884,71 +867,6 @@ pub unsafe extern "C" fn glide_scope_execute_async(
     });
 
     0 // success — callback will fire later
-}
-
-/// Pre-warm scope connections for a client.
-///
-/// Creates the scope pool (if not exists) and spawns min_idle background
-/// connection creation tasks. Call this after client creation to ensure
-/// the first scoped_connection() has a ready connection.
-///
-/// # Safety
-/// `connection_request_ptr` must point to `connection_request_len` valid bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn glide_scope_prewarm(
-    client_id: u64,
-    connection_request_ptr: *const u8,
-    connection_request_len: usize,
-    min_idle: u32,
-) {
-    let conn_bytes = if connection_request_ptr.is_null() || connection_request_len == 0 {
-        Vec::new()
-    } else {
-        unsafe { std::slice::from_raw_parts(connection_request_ptr, connection_request_len) }
-            .to_vec()
-    };
-
-    let runtime = get_pool_runtime();
-
-    // Create the scope pool (registers it if not exists)
-    let pool = glide_core::pool::get_or_create_scope_pool(client_id, conn_bytes.clone()).pool;
-
-    // Spawn min_idle background creation tasks. Each resolves slot 0 through the
-    // parent client's current topology before reserving a slot against max_total,
-    // so an unresolvable target never holds a slot; that case is expected for a
-    // lazily connected cluster client (no slot map until its first command) and
-    // is logged at debug rather than warn. The reservation guard gives the slot
-    // back if the prewarm fails or is cancelled.
-    for _ in 0..min_idle {
-        let pool_clone = pool.clone();
-        let bytes = conn_bytes.clone();
-        let cid = client_id;
-        runtime.spawn(async move {
-            let client = scope::get_parent_client(cid);
-            let target = match scope::resolve_scope_target(client.as_ref(), 0).await {
-                Ok(target) => target,
-                Err(cause) => {
-                    glide_logger::log_debug(
-                        "glide_scope_prewarm",
-                        format!("client {cid}: prewarm skipped, target unresolved: {cause}"),
-                    );
-                    return;
-                }
-            };
-            let reservation = match pool_clone.lock().reserve_slot() {
-                Some(reservation) => reservation,
-                None => return,
-            };
-            let _ = scope::create_scope_connection(
-                pool_clone,
-                client.as_ref(),
-                &bytes,
-                target,
-                reservation,
-            )
-            .await;
-        });
-    }
 }
 
 /// `CommandResponse` carrying a scope id, the success value of both acquire entry

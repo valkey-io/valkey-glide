@@ -526,7 +526,6 @@ class _GlideFFI:
             int32_t glide_pool_destroy(uint64_t pool_id);
             size_t glide_pool_lease_client(uint64_t pool_id, uint64_t lease_id, uint64_t *client_id_out);
             void glide_pool_release_client_ref(size_t adapter_ptr);
-            int32_t glide_pool_set_pipe_client_id(uint64_t client_id, uint64_t pipe_client_id);
             typedef enum {
                 Read = 0,
                 UnknownPool = 1
@@ -563,12 +562,6 @@ class _GlideFFI:
                 uint64_t scope_id,
                 const uint8_t* command_ptr,
                 size_t command_len
-            );
-            void glide_scope_prewarm(
-                uint64_t client_id,
-                const uint8_t* connection_request_ptr,
-                size_t connection_request_len,
-                uint32_t min_idle
             );
             """)
 

@@ -1118,7 +1118,6 @@ pub fn update_state_for_command(state: &mut ConnectionState, cmd: &str, args: &[
 /// Configuration for per-client scope pool.
 pub struct ScopePoolConfig {
     pub max_total: u32,
-    pub min_idle: u32,
     pub idle_timeout: Duration,
     pub request_timeout: Duration,
     /// If true, send PING on borrow to verify connection health.
@@ -1130,7 +1129,6 @@ impl Default for ScopePoolConfig {
     fn default() -> Self {
         Self {
             max_total: 64,
-            min_idle: 1,
             idle_timeout: Duration::from_secs(30),
             request_timeout: Duration::from_secs(5),
             test_on_borrow: false,
@@ -1532,8 +1530,7 @@ impl ScopePool {
     }
 
     /// Reserve one slot against `max_total` without consulting idle connections.
-    /// Returns `None` if closed or at capacity. Used by the prewarm path, which
-    /// wants `min_idle` distinct dials regardless of what is idle.
+    /// Returns `None` if closed or at capacity.
     pub fn reserve_slot(&mut self) -> Option<ScopeReservation> {
         self.reserve_slot_inner()
     }
@@ -1992,7 +1989,7 @@ pub fn destroy_client_scope_pool(client_id: u64) {
 }
 
 /// Get or create a scope pool for a client (atomic via DashMap entry API).
-/// On first creation, spawns `min_idle` background connection tasks.
+/// Connections are dialed on demand by acquire.
 pub fn get_or_create_scope_pool(
     client_id: u64,
     connection_request_bytes: Vec<u8>,
