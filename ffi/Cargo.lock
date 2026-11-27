@@ -1059,6 +1059,7 @@ dependencies = [
  "opentelemetry_sdk",
  "percent-encoding",
  "protobuf",
+ "protobuf-json-mapping",
  "rstest",
  "serde_json",
  "serial_test",
@@ -1958,6 +1959,17 @@ dependencies = [
  "protobuf-parse",
  "regex",
  "tempfile",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "protobuf-json-mapping"
+version = "3.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0d6e4be637b310d8a5c02fa195243328e2d97fa7df1127a27281ef1187fcb1d"
+dependencies = [
+ "protobuf",
+ "protobuf-support",
  "thiserror 1.0.69",
 ]
 

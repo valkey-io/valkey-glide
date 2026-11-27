@@ -3445,7 +3445,342 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
     }
 }
 
+/// Builds a heap-allocated error [`ConnectionResponse`] for a failure that occurred
+/// before any connection was attempted.
+fn connection_error_response(
+    message: String,
+    error_type: ConnectionErrorType,
+) -> *const ConnectionResponse {
+    // NUL bytes would make CString::new panic (issue #7848); escape them instead.
+    let sanitized = message.replace('\0', "\\0");
+    Box::into_raw(Box::new(ConnectionResponse {
+        conn_ptr: std::ptr::null(),
+        connection_error_message: CString::into_raw(
+            CString::new(sanitized).expect("NUL bytes already escaped"),
+        ),
+        connection_error_type: error_type,
+    }))
+}
+
+/// Applies the post-parse rules shared by every creation encoding.
+///
+/// Only rules that must hold regardless of how the request was encoded belong here;
+/// everything else is validated by `create_client_internal` / `GlideClient::new`.
+fn finalize_connection_request(
+    request: &mut connection_request::ConnectionRequest,
+) -> Result<(), String> {
+    if let Some(cache) = request.client_side_cache.as_mut() {
+        if !cache.cache_id.is_empty() {
+            return Err(
+                "client_side_cache.cache_id is not accepted; it is generated internally"
+                    .to_string(),
+            );
+        }
+        cache.cache_id = Uuid::new_v4().to_string().into();
+    }
+    Ok(())
+}
+
+/// Parses a ProtoJSON-encoded `ConnectionRequest`.
+///
+/// Parsing is strict: unknown fields are rejected, so a misspelled or not-yet-supported
+/// field fails loudly instead of being silently dropped. Field names may be either the
+/// original proto snake_case names or the canonical lowerCamelCase JSON names, per the
+/// ProtoJSON specification.
+fn parse_proto_json_request(
+    json_bytes: &[u8],
+) -> Result<connection_request::ConnectionRequest, String> {
+    let json = std::str::from_utf8(json_bytes)
+        .map_err(|err| format!("Invalid UTF-8 in ProtoJSON connection request: {err}"))?;
+    let mut request: connection_request::ConnectionRequest =
+        protobuf_json_mapping::parse_from_str(json)
+            .map_err(|err| format!("Invalid ProtoJSON connection request: {err}"))?;
+    finalize_connection_request(&mut request)?;
+    Ok(request)
+}
+
+/// Creates a new client from a ProtoJSON-encoded `ConnectionRequest`.
+///
+/// This is the schema-drift-free alternative to [`create_client_from_uri`]
+/// (valkey-io/valkey-glide#7157): the JSON mapping is derived by reflection from the same
+/// `connection_request.proto` the protobuf-bytes path uses, so a new field is available to
+/// callers the moment the proto is regenerated, with no hand-written mapping to update.
+///
+/// The document is standard [ProtoJSON](https://protobuf.dev/programming-guides/json/):
+/// field names in lowerCamelCase or the original snake_case, `bytes` fields (certificates)
+/// Base64-encoded, enums by value name (e.g. `"RESP3"`). Unknown fields are rejected.
+/// `client_side_cache.cache_id` is generated internally and must not be set.
+///
+/// Accepts the full [`create_client`] parameter set — including `address_resolver` and
+/// `client_id` — which the URI path does not support.
+///
+/// # Safety
+/// * `json_ptr` must not be null and must point to `json_len` readable bytes that remain
+///   valid for the duration of the call. The buffer is not retained.
+/// * `client_type` must be a valid, aligned pointer to a [`ClientType`].
+/// * The [`create_client`] contract applies to `pubsub_callback` and `address_resolver`.
+/// * The returned [`ConnectionResponse`] must be freed with `free_connection_response`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn create_client_from_proto_json(
+    json_ptr: *const u8,
+    json_len: usize,
+    client_type: *const ClientType,
+    pubsub_callback: PubSubCallback,
+    address_resolver: AddressResolverCallback,
+    client_id: usize,
+) -> *const ConnectionResponse {
+    assert!(!json_ptr.is_null());
+    let json_bytes = unsafe { std::slice::from_raw_parts(json_ptr, json_len) };
+    let request = match parse_proto_json_request(json_bytes) {
+        Ok(request) => request,
+        Err(err) => return connection_error_response(err, ConnectionErrorType::Configuration),
+    };
+    let request_bytes = match request.write_to_bytes() {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            return connection_error_response(
+                format!("Failed to serialize connection request: {err}"),
+                ConnectionErrorType::Unspecified,
+            );
+        }
+    };
+    let client_type = unsafe { &*client_type };
+    match create_client_internal(
+        &request_bytes,
+        client_type.clone(),
+        pubsub_callback,
+        address_resolver,
+        None,
+        client_id,
+    ) {
+        Err(err) => connection_error_response(err.message, err.error_type),
+        Ok(client) => Box::into_raw(Box::new(ConnectionResponse {
+            conn_ptr: client as *const c_void,
+            connection_error_message: std::ptr::null(),
+            connection_error_type: ConnectionErrorType::Unspecified,
+        })),
+    }
+}
+
+#[cfg(test)]
+mod tests_parse_proto_json_request {
+    //! Unit tests for `parse_proto_json_request`, scoped to what this crate owns: the UTF-8
+    //! guard, the shared post-parse rules, and the ProtoJSON contract advertised to bindings
+    //! (strict parsing, both naming styles, one anchor per value encoding). Library failure
+    //! modes with no contract attached are not retested here; downstream validation and
+    //! defaulting belong to glide-core.
+    use super::*;
+
+    fn parse(json: &str) -> Result<connection_request::ConnectionRequest, String> {
+        parse_proto_json_request(json.as_bytes())
+    }
+
+    /// Every scalar kind, both enum styles, bytes, a map, a nested message, and one oneof arm.
+    const FULL_CAMEL_CASE: &str = r#"{
+        "addresses": [
+            {"host": "primary.example.com", "port": 6380},
+            {"host": "replica.example.com", "port": 6381}
+        ],
+        "tlsMode": "SecureTls",
+        "clusterModeEnabled": true,
+        "requestTimeout": 2500,
+        "readFrom": "AZAffinity",
+        "clientAz": "us-east-1a",
+        "connectionRetryStrategy": {
+            "numberOfRetries": 5, "factor": 100, "exponentBase": 2, "jitterPercent": 20
+        },
+        "authenticationInfo": {"username": "user name", "password": "p@ss/wo?rd näï"},
+        "databaseId": 4,
+        "protocol": "RESP2",
+        "clientName": "my-client",
+        "libName": "GlideRuby",
+        "periodicChecksManualInterval": {"durationInSec": 30},
+        "pubsubSubscriptions": {
+            "channelsOrPatternsByType": {"0": {"channelsOrPatterns": ["bmV3cw=="]}}
+        },
+        "inflightRequestsLimit": 500,
+        "connectionTimeout": 800,
+        "lazyConnect": true,
+        "nodeDiscoveryMode": "Static",
+        "rootCerts": ["cm9vdA=="],
+        "clientCert": "Y2VydA==",
+        "clientKey": "a2V5"
+    }"#;
+
+    /// The same logical document spelled with the original proto field names.
+    const FULL_SNAKE_CASE: &str = r#"{
+        "addresses": [
+            {"host": "primary.example.com", "port": 6380},
+            {"host": "replica.example.com", "port": 6381}
+        ],
+        "tls_mode": "SecureTls",
+        "cluster_mode_enabled": true,
+        "request_timeout": 2500,
+        "read_from": "AZAffinity",
+        "client_az": "us-east-1a",
+        "connection_retry_strategy": {
+            "number_of_retries": 5, "factor": 100, "exponent_base": 2, "jitter_percent": 20
+        },
+        "authentication_info": {"username": "user name", "password": "p@ss/wo?rd näï"},
+        "database_id": 4,
+        "protocol": "RESP2",
+        "client_name": "my-client",
+        "lib_name": "GlideRuby",
+        "periodic_checks_manual_interval": {"duration_in_sec": 30},
+        "pubsub_subscriptions": {
+            "channels_or_patterns_by_type": {"0": {"channels_or_patterns": ["bmV3cw=="]}}
+        },
+        "inflight_requests_limit": 500,
+        "connection_timeout": 800,
+        "lazy_connect": true,
+        "node_discovery_mode": "Static",
+        "root_certs": ["cm9vdA=="],
+        "client_cert": "Y2VydA==",
+        "client_key": "a2V5"
+    }"#;
+
+    /// One hand-computed expectation per ProtoJSON value encoding: the external anchor
+    /// for the floating `protobuf-json-mapping` dependency.
+    #[test]
+    fn value_encodings_map_to_expected_proto_values() {
+        let request = parse(FULL_CAMEL_CASE).unwrap();
+        // Repeated message
+        assert_eq!(request.addresses.len(), 2);
+        assert_eq!(&*request.addresses[1].host, "replica.example.com");
+        assert_eq!(request.addresses[1].port, 6381);
+        // Scalars
+        assert!(request.cluster_mode_enabled);
+        assert_eq!(request.request_timeout, 2500);
+        assert_eq!(&*request.client_az, "us-east-1a");
+        // Enum by value name
+        assert_eq!(
+            request.tls_mode.enum_value_or_default(),
+            connection_request::TlsMode::SecureTls
+        );
+        // Nested message with an optional scalar
+        let retry = request.connection_retry_strategy.as_ref().unwrap();
+        assert_eq!(retry.number_of_retries, 5);
+        assert_eq!(retry.jitter_percent, Some(20));
+        // Oneof arm selection
+        assert!(request.has_periodic_checks_manual_interval());
+        assert_eq!(
+            request.periodic_checks_manual_interval().duration_in_sec,
+            30
+        );
+        // Map with stringified integer key, Base64 bytes values
+        let subscriptions = &request.pubsub_subscriptions.channels_or_patterns_by_type;
+        assert_eq!(
+            subscriptions.get(&0).unwrap().channels_or_patterns[0].as_ref(),
+            b"news"
+        );
+        // Base64 bytes field
+        assert_eq!(request.client_cert.as_ref(), b"cert");
+    }
+
+    #[test]
+    fn snake_case_names_parse_identically_to_camel_case() {
+        assert_eq!(
+            parse(FULL_CAMEL_CASE).unwrap(),
+            parse(FULL_SNAKE_CASE).unwrap()
+        );
+    }
+
+    #[test]
+    fn cache_id_is_generated_when_cache_configured() {
+        let request =
+            parse(r#"{"addresses": [], "clientSideCache": {"maxCacheKb": 1024, "entryTtlMs": 0}}"#)
+                .unwrap();
+        let cache = request.client_side_cache.as_ref().unwrap();
+        assert!(!cache.cache_id.is_empty());
+        assert_eq!(cache.max_cache_kb, 1024);
+    }
+
+    #[test]
+    fn preset_cache_id_is_rejected() {
+        let err =
+            parse(r#"{"addresses": [], "clientSideCache": {"cacheId": "mine", "maxCacheKb": 1}}"#)
+                .unwrap_err();
+        assert!(
+            err.contains("generated internally"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn invalid_utf8_is_rejected() {
+        let err = parse_proto_json_request(&[0xff, 0xfe, 0x7b]).unwrap_err();
+        assert!(err.contains("UTF-8"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn unknown_field_is_rejected() {
+        // Strictness is the drift guard: a misspelled or unsupported field must fail
+        // loudly, never be silently dropped.
+        assert!(parse(r#"{"addresses": [], "notARealField": 1}"#).is_err());
+    }
+}
+
+#[cfg(test)]
+mod tests_create_client_from_proto_json_errors {
+    //! Tests for the extern `create_client_from_proto_json` error surface: a document that
+    //! fails parsing must come back as a `Configuration` error with a safe C-string message,
+    //! before any connection is attempted — no server needed.
+    use super::*;
+
+    /// Calls the extern with a document that must fail before connecting, asserts the
+    /// error-response invariants, and returns the error type and message with the
+    /// response freed.
+    fn error_response_for(json: &str) -> (ConnectionErrorType, String) {
+        let client_type_ptr = Box::into_raw(Box::new(ClientType::SyncClient));
+        let response_ptr = unsafe {
+            create_client_from_proto_json(json.as_ptr(), json.len(), client_type_ptr, None, None, 0)
+        };
+        let response = unsafe { &*response_ptr };
+        assert!(response.conn_ptr.is_null());
+        assert!(!response.connection_error_message.is_null());
+        let error_type = response.connection_error_type;
+        let message = unsafe { CStr::from_ptr(response.connection_error_message) }
+            .to_str()
+            .expect("error message must be valid UTF-8")
+            .to_owned();
+        unsafe {
+            free_connection_response(response_ptr as *mut ConnectionResponse);
+            drop(Box::from_raw(client_type_ptr));
+        }
+        (error_type, message)
+    }
+
+    #[test]
+    fn invalid_json_returns_configuration_error() {
+        let (error_type, message) = error_response_for("{not json");
+        assert_eq!(error_type, ConnectionErrorType::Configuration);
+        assert!(
+            message.contains("Invalid ProtoJSON"),
+            "unexpected message: {message}"
+        );
+    }
+
+    #[test]
+    fn nul_byte_in_error_detail_is_escaped() {
+        // The parse error echoes the invalid enum value, which contains a real NUL byte;
+        // without the escape in `connection_error_response`, `CString::new` would panic
+        // (issue #7848) instead of returning an error response.
+        let (error_type, message) =
+            error_response_for(r#"{"addresses": [], "tlsMode": "Su\u0000per"}"#);
+        assert_eq!(error_type, ConnectionErrorType::Configuration);
+        assert!(
+            message.contains("\\0"),
+            "NUL byte should be escaped as \\0: {message}"
+        );
+    }
+}
+
 /// Creates a new client from a URI string and optional JSON configuration.
+///
+/// **Deprecated** in favor of [`create_client_from_proto_json`]: the URI and JSON-options
+/// schema below is a hand-maintained copy of `connection_request.proto` and has drifted
+/// from it (valkey-io/valkey-glide#7157). It is frozen — new connection options are not
+/// added here — and it will be removed once the remaining bindings have migrated.
 ///
 /// This is an alternative to [`create_client`] that accepts a connection URI instead of protobuf bytes.
 /// The URI parsing and configuration building happens in Rust, making it easier to add new connection
@@ -3583,6 +3918,10 @@ pub unsafe extern "C-unwind" fn create_client_with_credential_provider(
 /// * If `extra_options_json` is non-null, it must be a valid null-terminated C string containing valid JSON.
 /// * `client_type` must be a valid pointer to a `ClientType`.
 /// * If `pubsub_callback` is non-zero, it must be a valid function pointer that lives while the client is open/active.
+#[deprecated(
+    since = "2.7.0",
+    note = "use create_client_from_proto_json; the URI/JSON-options schema drifts from connection_request.proto (#7157)"
+)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn create_client_from_uri(
     uri_str: *const c_char,

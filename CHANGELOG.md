@@ -12,6 +12,8 @@
 * Python: Add CPython 3.15 wheels for the async and sync clients ([#7321](https://github.com/valkey-io/valkey-glide/issues/7321))
 * All: Add support for `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
 * Core: use atomics for telemetry instead of shared lock ([#7497](https://github.com/valkey-io/valkey-glide/pull/7497))
+* Core/FFI: Add `create_client_from_proto_json`, creating a client from a ProtoJSON `ConnectionRequest` ([#7157](https://github.com/valkey-io/valkey-glide/issues/7157))
+* Core/FFI: Deprecate `create_client_from_uri` in favor of `create_client_from_proto_json` ([#7157](https://github.com/valkey-io/valkey-glide/issues/7157))
 
 ### Fixes
 

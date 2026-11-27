@@ -1,3 +1,6 @@
+// The deprecated URI entry point stays fully covered until it is removed (#7157).
+#![allow(deprecated)]
+
 use glide_ffi::*;
 use rstest::rstest;
 use std::ffi::{CStr, CString, c_char};
