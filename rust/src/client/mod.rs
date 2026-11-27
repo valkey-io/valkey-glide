@@ -387,7 +387,9 @@ impl GlideClusterClient {
     /// minus a margin of a tenth of it, kept between 2 ms and 100 ms (a
     /// quarter of it under 8 ms), holds [`GlideError::Timeout`], and the call
     /// itself fails with [`GlideError::Timeout`] if it has not finished by the
-    /// request timeout plus the same margin. The call still fails when no
+    /// request timeout plus the same margin. A node the client lost or cannot
+    /// connect to holds [`GlideError::Connection`], the same variant a call
+    /// fails with when it loses its connection. The call still fails when no
     /// target node can be reached. `route` must be [`Route::AllNodes`] or
     /// [`Route::AllPrimaries`], since a single node's reply has no address to
     /// key it by; for a single node, send `INFO` with
