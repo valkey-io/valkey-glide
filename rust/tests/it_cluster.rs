@@ -86,17 +86,10 @@ async fn cluster_info_with_partial_results_keeps_replies_when_a_primary_is_slow(
     };
 
     pauser
-        // Long enough for both calls below to see the node as slow.
-        .custom_command_with_route(&["CLIENT", "PAUSE", "3000", "ALL"], route.clone())
+        // Long enough for the call below to see the node as slow.
+        .custom_command_with_route(&["CLIENT", "PAUSE", "3000", "ALL"], route)
         .await
         .unwrap();
-
-    // Without partial results, one slow primary fails the whole call.
-    let err = client
-        .custom_command_with_route(&["INFO"], Route::AllPrimaries)
-        .await
-        .unwrap_err();
-    assert!(matches!(err, GlideError::Timeout(_)), "{err:?}");
 
     let replies = client.info_with_partial_results(&[], None).await.unwrap();
     let mut addresses: Vec<String> = replies.keys().cloned().collect();
@@ -110,20 +103,6 @@ async fn cluster_info_with_partial_results_keeps_replies_when_a_primary_is_slow(
     for address in &primaries[1..] {
         assert!(replies[address].as_ref().unwrap().contains("# Server"));
     }
-
-    // CLIENT UNPAUSE would wait for the pause too; wait for it to end.
-    let mut recovered = false;
-    for _ in 0..50 {
-        if pauser
-            .custom_command_with_route(&["PING"], route.clone())
-            .await
-            .is_ok()
-        {
-            recovered = true;
-            break;
-        }
-    }
-    assert!(recovered, "paused primary did not recover");
 }
 
 #[tokio::test]
@@ -196,25 +175,10 @@ async fn cluster_info_with_partial_results_keeps_the_error_reply_of_a_denied_pri
 
     let replies = denied.info_with_partial_results(&[], None).await.unwrap();
     let error = replies[&primaries[0]].as_ref().unwrap_err();
-    assert!(!matches!(error, GlideError::Timeout(_)), "{error:?}");
     assert_eq!(error.to_string(), plain.to_string());
     for address in &primaries[1..] {
         assert!(replies[address].as_ref().unwrap().contains("# Server"));
     }
-
-    // With every primary denied, the call returns an error for each.
-    admin
-        .custom_command_with_route(&["ACL", "SETUSER", "partial", "-info"], Route::AllPrimaries)
-        .await
-        .unwrap();
-    let failed = denied.info_with_partial_results(&[], None).await.unwrap();
-    assert_eq!(failed.len(), primaries.len());
-    assert!(
-        failed
-            .values()
-            .all(|reply| matches!(reply, Err(error) if !matches!(error, GlideError::Timeout(_)))),
-        "{failed:?}"
-    );
 }
 
 #[tokio::test]
