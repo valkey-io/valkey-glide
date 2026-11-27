@@ -81,12 +81,10 @@ class VectorType(Enum):
     FLOAT16 = "FLOAT16"
     """
     FLOAT16 type of vector: 2 bytes per element, IEEE 754 half precision.
-    Defined in ``src/indexes/vector_base.h``. Callers must pass
-    already-encoded bytes, the same way ``FLOAT32`` works today -- GLIDE does
-    not encode vectors on the client's behalf. Python has no built-in float16
-    packer; ``numpy.float16`` (``numpy.array(values,
-    dtype=numpy.float16).tobytes()``) or the ``struct`` module's ``e`` format
-    code both produce the correct byte layout.
+    Callers must pass already-encoded bytes, the same way ``FLOAT32`` works today. GLIDE does not
+    encode vectors on the client's behalf. Python has no built-in float16 packer;
+    ``numpy.float16`` (``numpy.array(values, dtype=numpy.float16).tobytes()``) or the ``struct``
+    module's ``e`` format code both produce the correct byte layout.
 
     Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
@@ -94,17 +92,15 @@ class VectorType(Enum):
     """
     BFLOAT16 type of vector: 2 bytes per element, truncated IEEE 754 single
     precision (the top 16 bits of a FLOAT32 -- sign, 8-bit exponent, 7-bit
-    mantissa), defined in ``src/indexes/vector_base.h``.
+    mantissa).
     Callers must pass already-encoded bytes; there is no built-in Python
     packer for this format. Encode by taking the high 16 bits of each
     FLOAT32 element's big-endian representation, e.g. for a little-endian
     FLOAT32 ``struct.pack("<f", value)``, the BFLOAT16 bytes are
     ``struct.pack("<f", value)[2:4]``.
 
-    The engine may refuse to create or load a BFLOAT16 index on a host
-    whose CPU lacks a SIMD BF16 code path (``CheckSimsimdBf16Capability()``
-    in ``src/indexes/vector_base.h``); this is a server-side capability
-    check, not a GLIDE-side restriction.
+    The server may refuse to create or load a BFLOAT16 index on a host whose CPU lacks a SIMD BF16
+    code path. This is a server-side capability check, not a GLIDE-side restriction.
 
     Since: Valkey 9.1.0 and Valkey Search 1.3.0.
     """
@@ -155,12 +151,6 @@ class Field(ABC):
 def _append_sortable_unf_args(
     args: List[TEncodable], sortable: bool, unf: bool
 ) -> None:
-    """Append SORTABLE and, immediately after it, UNF -- the only position
-    valkey-search recognises UNF in (``src/commands/ft_create_parser.cc``:
-    ``// UNF is only recognized directly after SORTABLE, as in Redis``).
-    Shared by the TEXT/TAG/NUMERIC field classes (the field types the
-    ``Field`` base class's own docstring says SORTABLE applies to).
-    """
     if sortable:
         args.append(FtCreateKeywords.SORTABLE)
         if unf:
@@ -197,10 +187,10 @@ class TextField(Field):
             nosuffixtrie (bool): If set, disables the suffix trie for the field.
                 Mutually exclusive with ``withsuffixtrie``.
             sortable (bool): If set, the field value can be used for sorting.
-            unf (bool): If set, keeps the sorted value in its original (un-normalized) form, e.g. preserving case
-                for TEXT/TAG fields that would otherwise be lowercased for sorting
-                (``src/commands/ft_create_parser.cc``). Requires ``sortable=True``; raises ``ValueError`` otherwise.
-                Available since Valkey 9.1.0 and Valkey Search 1.3.0.
+            unf (bool): If set, keeps the sorted value in its original (un-normalized) form, e.g.
+                preserving case for TEXT/TAG fields that would otherwise be lowercased for sorting.
+                Requires ``sortable=True``; raises ``ValueError`` otherwise. Available since Valkey 9.1.0
+                and Valkey Search 1.3.0.
         """
         if unf and not sortable:
             raise ValueError("unf requires sortable=True.")
@@ -254,10 +244,10 @@ class TagField(Field):
             case_sensitive (bool): Preserve the original letter cases of tags. If set to False, characters are converted to
                 lowercase by default.
             sortable (bool): If set, the field value can be used for sorting.
-            unf (bool): If set, keeps the sorted value in its original (un-normalized) form, e.g. preserving case
-                for TEXT/TAG fields that would otherwise be lowercased for sorting
-                (``src/commands/ft_create_parser.cc``). Requires ``sortable=True``; raises ``ValueError`` otherwise.
-                Available since Valkey 9.1.0 and Valkey Search 1.3.0.
+            unf (bool): If set, keeps the sorted value in its original (un-normalized) form, e.g.
+                preserving case for TEXT/TAG fields that would otherwise be lowercased for sorting.
+                Requires ``sortable=True``; raises ``ValueError`` otherwise. Available since Valkey 9.1.0
+                and Valkey Search 1.3.0.
         """
         if unf and not sortable:
             raise ValueError("unf requires sortable=True.")
@@ -295,11 +285,11 @@ class NumericField(Field):
             name (TEncodable): The name of the numeric field.
             alias (Optional[TEncodable]): An alias for the field.
             sortable (bool): If set, the field value can be used for sorting.
-            unf (bool): If set, keeps the sorted value in its original (un-normalized) form
-                (``src/commands/ft_create_parser.cc``). NUMERIC fields are never normalized for sorting, so this has
-                no observable effect beyond emitting the keyword, but it's accepted here for API symmetry with
-                TEXT/TAG. Requires ``sortable=True``; raises ``ValueError`` otherwise.
-                Available since Valkey 9.1.0 and Valkey Search 1.3.0.
+            unf (bool): If set, keeps the sorted value in its original (un-normalized) form. NUMERIC
+                fields are never normalized for sorting, so this has no observable effect beyond
+                emitting the keyword. It is accepted here for API symmetry with TEXT/TAG. Requires
+                ``sortable=True``; raises ``ValueError`` otherwise. Available since Valkey 9.1.0 and
+                Valkey Search 1.3.0.
         """
         if unf and not sortable:
             raise ValueError("unf requires sortable=True.")
@@ -530,11 +520,11 @@ class FtCreateOptions:
             data_type (Optional[DataType]): The index data type. If not defined a ``HASH`` index is created.
             prefixes (Optional[List[TEncodable]]): A list of prefixes of index definitions.
             score (Optional[float]): Default score for documents in the index. Default is 1.0.
-            language (Optional[TEncodable]): Default language for documents in the index, used for stemming. Passed
-                through verbatim -- GLIDE does not validate it client-side. valkey-search 1.3.0-rc1 recognises 12
-                values (``src/indexes/text/languages/``): ``arabic``, ``dutch``, ``english``, ``french``, ``german``,
-                ``indonesian``, ``italian``, ``portuguese``, ``russian``, ``spanish``, ``swedish``, ``turkish``. An
-                unrecognised value is rejected by the server, not by GLIDE.
+            language (Optional[TEncodable]): Default language for documents in the index, used for
+                stemming. Passed through verbatim; GLIDE does not validate it client-side. valkey-search
+                1.3.0-rc1 recognises 12 values: ``arabic``, ``dutch``, ``english``, ``french``,
+                ``german``, ``indonesian``, ``italian``, ``portuguese``, ``russian``, ``spanish``,
+                ``swedish``, ``turkish``. An unrecognised value is rejected by the server.
             skipinitialscan (bool): If set, does not scan and index existing documents on index creation.
             minstemsize (Optional[int]): Minimum word length to stem. Words shorter than this are not stemmed.
             withoffsets (bool): If set, stores term offsets for document fields. Mutually exclusive with ``nooffsets``.
@@ -542,28 +532,22 @@ class FtCreateOptions:
             nostopwords (bool): If set, disables stop-word filtering. Mutually exclusive with ``stopwords``.
             stopwords (Optional[List[TEncodable]]): Custom list of stop words. Mutually exclusive with ``nostopwords``.
             punctuation (Optional[TEncodable]): Custom punctuation characters to use during tokenization.
-            filter (Optional[TEncodable]): A filter expression limiting which documents the index applies to
-                (``src/commands/ft_create_parser.cc``). A document that doesn't match this
-                expression is excluded from the index even if its key matches a configured prefix. The expression
-                cannot be empty. Available since Valkey 9.1.0 and Valkey Search 1.3.0.
-            score_field (Optional[TEncodable]): The name of a document field whose numeric value is used as the
-                document's custom score, multiplying into the final relevance score
-                (``src/commands/ft_create_parser.cc``: "the name of the document field whose numeric value is used
-                as the document's custom score. Only one per index."). The field must already exist in the
-                document; it is not itself a schema definition. Confirmed live: a document with a higher value in
-                this field ranks correspondingly higher under the same query. Separately, FT.INFO only reports this
-                option back under `index_definition`'s `score_field` key when `search.emulate-release` is at least
-                1.3.0 (``ft_info_score_field`` compatibility flag, ``src/index_schema.cc`` `RespondWithInfo()`) --
-                below that level the pair is omitted entirely and `default_score` reports the literal string "1"
-                regardless of this option. The scoring behavior itself (above) is unaffected by this flag; only
-                FT.INFO's reporting of it is gated. See upstream COMPATIBILITY.md's "Sunsetting of Incompatible
-                Behavior" section. Available since Valkey 9.1.0 and Valkey Search 1.3.0.
-            no_highlight (bool): Emits NOHL. valkey-search does not support highlighting at all, so this is a
-                genuine no-op on this engine (confirmed live and in source: ``src/commands/ft_create_parser.cc``
-                "Highlighting is not supported, so NOHL is accepted and the match result deliberately discarded" --
-                the token is accepted but not even stored for FT.INFO to report, unlike SORTABLE UNF which IS
-                stored and reported despite also being a no-op). Implemented for wire compatibility with
-                RediSearch clients. Available since Valkey 9.1.0 and Valkey Search 1.3.0.
+            filter (Optional[TEncodable]): A filter expression limiting which documents the index
+                applies to. A document that does not match is excluded from the index even if its key
+                matches a configured prefix. The expression cannot be empty. Available since Valkey 9.1.0
+                and Valkey Search 1.3.0.
+            score_field (Optional[TEncodable]): The name of a document field whose numeric value is
+                used as the document's custom score, multiplied into the final relevance score. Only one
+                per index. The field must already exist in the document; it is not a schema definition.
+                A document with a higher value in this field ranks correspondingly higher under the same
+                query. FT.INFO reports this option under `index_definition`'s `score_field` key only when
+                `search.emulate-release` is 1.3.0 or later. Below that level the pair is omitted and
+                `default_score` reports the literal string "1". The scoring behavior is unaffected; only
+                FT.INFO's reporting is gated. Available since Valkey 9.1.0 and Valkey Search 1.3.0.
+            no_highlight (bool): Emits NOHL. valkey-search does not support highlighting, so the token
+                is accepted and the match result is discarded. The token is not stored for FT.INFO to
+                report. Implemented for wire compatibility with RediSearch clients. Available since Valkey
+                9.1.0 and Valkey Search 1.3.0.
         """
         self.data_type = data_type
         self.prefixes = prefixes

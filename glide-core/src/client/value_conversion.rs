@@ -32,19 +32,6 @@ pub(crate) enum ExpectedReturnType<'a> {
     FTSearchWithScoresReturnType,
     FTSearchWithScoresAndSortKeysReturnType,
     FTProfileReturnType(&'a Option<ExpectedReturnType<'a>>),
-    /// WITHCURSOR on FT.AGGREGATE/FT.HYBRID and FT.CURSOR READ all share
-    /// this shape (confirmed live against valkey-search 1.3.0-rc1):
-    /// `[<inner-rows>, <cursor_id>]`, a 2-element array where element 0 is
-    /// converted with the wrapped type (FTAggregateReturnType for all
-    /// three commands, since FT.HYBRID reuses the aggregate pipeline's
-    /// own reply shape) and element 1 (the cursor
-    /// id) is passed through unchanged -- it is always a plain Int, never
-    /// something that needs its own conversion. NOT used for FT.SEARCH
-    /// WITHCURSOR, which has a different, Valkey-only 3-element shape
-    /// (`[total, rows, cursor_id]`) that is out of scope here (it is
-    /// not a RediSearch feature) -- the option-tail scanner must still
-    /// recognise WITHCURSOR's own argument shape so this flag is never
-    /// confused with a different clause's keyword either way.
     FTCursorWrappedReturnType(&'a Option<ExpectedReturnType<'a>>),
     FTInfoReturnType,
     Lolwut,
@@ -109,8 +96,8 @@ pub(crate) fn convert_to_expected_type(
                 let result = map
                     .into_iter()
                     .map(|(key, inner_value)| {
-                        let key_str = convert_to_expected_type(key, Some(ExpectedReturnType::BulkString)).unwrap();
-                        let value_converted = convert_to_expected_type(inner_value, Some(ExpectedReturnType::Double)).unwrap();
+                        let key_str = convert_to_expected_type(key, Some(ExpectedReturnType::BulkString))?;
+                        let value_converted = convert_to_expected_type(inner_value, Some(ExpectedReturnType::Double))?;
                         Ok((key_str, value_converted))
                     })
                     .collect::<RedisResult<_>>();
@@ -955,10 +942,6 @@ pub(crate) fn convert_to_expected_type(
             Very first element in the response is meaningless and should be ignored.
             */
             Value::Array(array) => {
-                // array.len() - 1 underflows on a genuinely
-                // empty top-level array; saturating_sub avoids the panic
-                // (the skip(1) below is then a no-op, yielding an empty
-                // Vec, which is the correct result for an empty reply).
                 let mut res = Vec::with_capacity(array.len().saturating_sub(1));
                 for aggregation in array.into_iter().skip(1) {
                     let Value::Array(fields) = aggregation else {
@@ -1164,73 +1147,19 @@ pub(crate) fn convert_to_expected_type(
                 .into())
         },
         ExpectedReturnType::FTSearchWithScoresReturnType => match value {
-            /*
-            WITHSCORES response (with field content):
-                1) (integer) 2
-                2) "key1"
-                3) "0.5"
-                4) 1) "field1"
-                   2) "value1"
-                5) "key2"
-                6) "0.25"
-                7) 1) "field2"
-                   2) "value2"
-
-            Converting response to:
-                1) (integer) 2
-                2) 1# "key1" =>
-                      1) "0.5"
-                      2) 1# "field1" => "value1"
-                   2# "key2" =>
-                      1) "0.25"
-                      2) 1# "field2" => "value2"
-
-            WITHSCORES + NOCONTENT response:
-                1) (integer) 2
-                2) "key1"
-                3) "0.5"
-                4) "key2"
-                5) "0.25"
-
-            Converting to:
-                1) (integer) 2
-                2) 1# "key1" =>
-                      1) "0.5"
-                      2) (empty map)
-                   2# "key2" =>
-                      1) "0.25"
-                      2) (empty map)
-
-            Same wrapper shape as FTSearchWithSortKeysReturnType -- a score is
-            just another "extra value between key and fields" the way a sort
-            key is, so the two share this conversion structure deliberately.
-
-            Response may contain only 1 element (COUNT option), no conversion
-            in that case.
-            */
-            // A zero-length array has no count element to
-            // remove either -- guard `<= 1`, not just `== 1`, so a
-            // malformed/empty reply is passed through unchanged instead of
-            // panicking on `array.remove(0)` below.
             Value::Array(ref array) if array.len() <= 1 => Ok(value),
             Value::Array(mut array) => {
                 let count = array.remove(0);
                 if array.is_empty() {
-                    // Empty result set — return count with an empty map.
                     return Ok(Value::Array(vec![count, Value::Map(vec![])]));
                 }
 
-                // Determine if this is a NOCONTENT response (no field arrays).
-                // With WITHSCORES + NOCONTENT, the layout is:
-                //   key1, score1, key2, score2, ...
-                // All elements are strings (no Array elements).
                 let has_field_arrays = array.iter().any(|v| matches!(v, Value::Array(_)));
 
                 let mut pairs: Vec<(Value, Value)> = Vec::new();
                 let mut iter = array.into_iter();
 
                 if has_field_arrays {
-                    // Normal WITHSCORES: triplets of (key, score, fields_array)
                     while let Some(key) = iter.next() {
                         let Some(score) = iter.next() else {
                             return Err((
@@ -1246,7 +1175,6 @@ pub(crate) fn convert_to_expected_type(
                             )
                                 .into());
                         };
-                        // Convert the flat field array into a map of field name → value.
                         let field_map = convert_to_expected_type(
                             fields,
                             Some(ExpectedReturnType::Map {
@@ -1257,7 +1185,6 @@ pub(crate) fn convert_to_expected_type(
                         pairs.push((key, Value::Array(vec![score, field_map])));
                     }
                 } else {
-                    // NOCONTENT + WITHSCORES: pairs of (key, score)
                     while let Some(key) = iter.next() {
                         let Some(score) = iter.next() else {
                             return Err((
@@ -1280,61 +1207,10 @@ pub(crate) fn convert_to_expected_type(
                 .into())
         },
         ExpectedReturnType::FTSearchWithScoresAndSortKeysReturnType => match value {
-            /*
-            WITHSCORES + WITHSORTKEYS response (with field content):
-                1) (integer) 2
-                2) "key1"
-                3) "0.5"
-                4) "#sortval1"
-                5) 1) "field1"
-                   2) "value1"
-                6) "key2"
-                7) "0.25"
-                8) "#sortval2"
-                9) 1) "field2"
-                   2) "value2"
-
-            Converting response to:
-                1) (integer) 2
-                2) 1# "key1" =>
-                      1) "0.5"
-                      2) "#sortval1"
-                      3) 1# "field1" => "value1"
-                   2# "key2" =>
-                      1) "0.25"
-                      2) "#sortval2"
-                      3) 1# "field2" => "value2"
-
-            WITHSCORES + WITHSORTKEYS + NOCONTENT response: confirmed live
-            that the sort key is DROPPED entirely in this combination (not
-            emitted as an empty/nil value) -- the layout reverts to the same
-            plain (key, score) pairs WITHSCORES-only + NOCONTENT produces:
-                1) (integer) 2
-                2) "key1"
-                3) "0.5"
-                4) "key2"
-                5) "0.25"
-
-            Converting to:
-                1) (integer) 2
-                2) 1# "key1" => 1) "0.5"
-                                2) (empty map)
-                   2# "key2" => 1) "0.25"
-                                2) (empty map)
-            (the sort key slot is omitted, not nil, matching the wire shape)
-
-            Response may contain only 1 element (COUNT option), no conversion
-            in that case.
-            */
-            // A zero-length array has no count element to
-            // remove either -- guard `<= 1`, not just `== 1`, so a
-            // malformed/empty reply is passed through unchanged instead of
-            // panicking on `array.remove(0)` below.
             Value::Array(ref array) if array.len() <= 1 => Ok(value),
             Value::Array(mut array) => {
                 let count = array.remove(0);
                 if array.is_empty() {
-                    // Empty result set — return count with an empty map.
                     return Ok(Value::Array(vec![count, Value::Map(vec![])]));
                 }
 
@@ -1344,7 +1220,6 @@ pub(crate) fn convert_to_expected_type(
                 let mut iter = array.into_iter();
 
                 if has_field_arrays {
-                    // Normal: quadruplets of (key, score, sortkey, fields_array)
                     while let Some(key) = iter.next() {
                         let Some(score) = iter.next() else {
                             return Err((
@@ -1377,10 +1252,6 @@ pub(crate) fn convert_to_expected_type(
                         pairs.push((key, Value::Array(vec![score, sort_key, field_map])));
                     }
                 } else {
-                    // NOCONTENT: the sort key slot is dropped entirely on
-                    // this engine build (confirmed live), reverting to
-                    // plain (key, score) pairs -- same shape as
-                    // WITHSCORES-only + NOCONTENT.
                     while let Some(key) = iter.next() {
                         let Some(score) = iter.next() else {
                             return Err((
@@ -1573,8 +1444,6 @@ pub(crate) fn convert_to_expected_type(
                 .into())
         }
         ExpectedReturnType::FTCursorWrappedReturnType(inner_type) => match value {
-            // [<inner-rows>, <cursor_id>] -- convert element 0 with the
-            // wrapped type, pass element 1 (cursor id) through unchanged.
             Value::Array(mut array) if array.len() == 2 => {
                 let cursor_id = array.remove(1);
                 let rows = convert_to_expected_type(array.remove(0), *inner_type)?;
@@ -1668,8 +1537,6 @@ fn convert_lolwut_string(data: &str) -> String {
     }
 }
 
-// TODO #7631: Propagate conversion errors instead of calling `unwrap()`, which panics on a
-// mismatched reply.
 /// Converts elements in an array to the specified type.
 ///
 /// `array` is an array of values.
@@ -1679,9 +1546,9 @@ fn convert_array_elements(
     element_type: ExpectedReturnType,
 ) -> RedisResult<Value> {
     let converted_array = array
-        .iter()
-        .map(|v| convert_to_expected_type(v.clone(), Some(element_type)).unwrap())
-        .collect();
+        .into_iter()
+        .map(|v| convert_to_expected_type(v, Some(element_type)))
+        .collect::<RedisResult<Vec<_>>>()?;
     Ok(Value::Array(converted_array))
 }
 
@@ -1881,40 +1748,14 @@ fn is_array(val: Value) -> bool {
     matches!(val, Value::Array(_))
 }
 
-/// A single argument from a command, as a lowercase-comparable byte slice.
-/// Shorthand used throughout `ft_search_option_tail_contains_flag` to keep
-/// the clause-skip table readable.
 fn arg_eq_ignore_case(arg: &[u8], candidate: &[u8]) -> bool {
     arg.eq_ignore_ascii_case(candidate)
 }
 
-/// Parses an unsigned integer argument. Returns `None` on anything that
-/// isn't a valid count, which the caller treats as "stop scanning" rather
-/// than panicking -- a malformed command is a parse error the server will
-/// report on its own, not something this scanner needs to diagnose.
 fn parse_count_arg(arg: &[u8]) -> Option<usize> {
     std::str::from_utf8(arg).ok()?.parse::<usize>().ok()
 }
 
-/// Walks the FT.SEARCH option tail starting at `start`, correctly
-/// skipping each clause's own argument count instead of scanning every byte
-/// in the command for a literal match (which is what `Routable::position`
-/// in `cluster_routing.rs` does, and which a value inside INKEYS, PARAMS or
-/// RETURN can collide with -- confirmed empirically: an INKEYS key literally
-/// named "withsortkeys" previously flipped the parser). Returns true the
-/// moment `flag` (expected pre-uppercased, e.g. b"WITHSORTKEYS") is seen as
-/// a genuine top-level clause keyword, false if the tail is exhausted
-/// without seeing it.
-///
-/// Mirrors valkey-search 1.3.0-rc1's FT.SEARCH grammar
-/// (src/commands/ft_search_parser.cc `CreateSearchParser()`): every clause
-/// that clause table registers must have an entry here, or a value
-/// belonging to that clause (e.g. a RETURN field name) risks being
-/// misidentified as the next clause's keyword once this scanner no longer
-/// recognises it as consumed. Clauses are tried in the order the real
-/// parser doesn't care about (FT.SEARCH's clauses may appear in any order),
-/// so this list's order has no grammar significance -- it only has to be
-/// complete.
 fn ft_search_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> bool {
     let mut i = start;
     let total = cmd.args_iter().len();
@@ -1925,7 +1766,6 @@ fn ft_search_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> 
         if arg_eq_ignore_case(tok, flag) {
             return true;
         }
-        // Pure flags: consume only the keyword itself.
         const PURE_FLAGS: &[&[u8]] = &[
             b"NOCONTENT",
             b"WITHSORTKEYS",
@@ -1942,7 +1782,6 @@ fn ft_search_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> 
             i += 1;
             continue;
         }
-        // Single-value clauses: keyword + exactly one value token.
         const SINGLE_VALUE_CLAUSES: &[&[u8]] = &[b"DIALECT", b"TIMEOUT", b"SLOP", b"SCORER"];
         if SINGLE_VALUE_CLAUSES
             .iter()
@@ -1951,14 +1790,10 @@ fn ft_search_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> 
             i += 2;
             continue;
         }
-        // LIMIT offset num: keyword + exactly two value tokens.
         if arg_eq_ignore_case(tok, b"LIMIT") {
             i += 3;
             continue;
         }
-        // SORTBY field [ASC|DESC]: keyword + field, optionally + one more
-        // token if it's ASC or DESC (anything else is the NEXT clause's
-        // keyword and must not be consumed).
         if arg_eq_ignore_case(tok, b"SORTBY") {
             i += 2;
             if let Some(maybe_dir) = cmd.arg_idx(i)
@@ -1968,10 +1803,6 @@ fn ft_search_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> 
             }
             continue;
         }
-        // WITHCURSOR [COUNT n] [MAXIDLE n]: zero or more of two optional
-        // single-value sub-clauses, loosely ordered (src/cursor.cc
-        // ParseCursorOptions). Consumed here as a unit so a COUNT/MAXIDLE
-        // value can never be mistaken for a top-level keyword either.
         if arg_eq_ignore_case(tok, b"WITHCURSOR") {
             i += 1;
             while let Some(sub) = cmd.arg_idx(i) {
@@ -1983,10 +1814,6 @@ fn ft_search_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> 
             }
             continue;
         }
-        // INKEYS n key1 key2 ... keyN: keyword + count + exactly n keys.
-        // This is the clause the misdetection hazard above is actually about
-        // -- a key name is caller-controlled and only became reachable as of
-        // 1.3 (PR #967).
         if arg_eq_ignore_case(tok, b"INKEYS") {
             i += 1;
             let Some(count_arg) = cmd.arg_idx(i) else {
@@ -1998,8 +1825,6 @@ fn ft_search_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> 
             i = i.saturating_add(1).saturating_add(n);
             continue;
         }
-        // PARAMS n name1 value1 name2 value2 ...: keyword + count + exactly
-        // n further tokens (always an even number of name/value pairs).
         if arg_eq_ignore_case(tok, b"PARAMS") {
             i += 1;
             let Some(count_arg) = cmd.arg_idx(i) else {
@@ -2011,14 +1836,6 @@ fn ft_search_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> 
             i = i.saturating_add(1).saturating_add(n);
             continue;
         }
-        // RETURN n field1 [AS alias1] field2 [AS alias2] ... : keyword +
-        // count + up to n TOKENS total (a token budget, not a field count --
-        // confirmed in src/commands/ft_search_parser.cc
-        // ConstructReturnParser: each field consumes 1 against `cnt`, and a
-        // following `AS alias` consumes 2 more via `i += 2; if (i > cnt)
-        // return error`, so an alias genuinely counts against the budget).
-        // Walk field-by-field rather than jumping straight to start+n, since
-        // AS/alias pairs change how many wire tokens n actually spans.
         if arg_eq_ignore_case(tok, b"RETURN") {
             i += 1;
             let Some(count_arg) = cmd.arg_idx(i) else {
@@ -2029,18 +1846,9 @@ fn ft_search_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> 
             };
             i += 1;
             let mut consumed = 0usize;
-            // i < total bounds this against a server-controlled n with no
-            // upper limit (parse_count_arg parses to usize): without it, a
-            // malformed/adversarial n keeps this loop running past the
-            // command's real argument count, since cmd.arg_idx(i) returning
-            // None never breaks the loop on its own -- only consumed < n
-            // does, and consumed is driven by n, not by i (CodeRabbit review
-            // #7335, value_conversion.rs:2037).
             while consumed < n && i < total {
-                // The field name itself.
                 i += 1;
                 consumed += 1;
-                // An optional "AS alias" pair -- both tokens count against n.
                 if let Some(maybe_as) = cmd.arg_idx(i)
                     && arg_eq_ignore_case(maybe_as, b"AS")
                 {
@@ -2050,24 +1858,11 @@ fn ft_search_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> 
             }
             continue;
         }
-        // Unrecognised token: not a clause this scanner knows about (e.g.
-        // the index name or query string at the very start of the tail, or
-        // a genuinely unexpected argument the server will itself reject).
-        // Skip exactly one token and keep scanning rather than stopping
-        // outright, so a leading index/query argument doesn't abort the
-        // whole scan before it reaches the real option tail.
         i += 1;
     }
     false
 }
 
-/// Mirrors [`ft_search_option_tail_contains_flag`] for FT.AGGREGATE's option
-/// tail (`src/commands/ft_aggregate_parser.cc` `CreateAggregateParser()`),
-/// which is a materially different (and larger) grammar than FT.SEARCH's --
-/// LOAD/APPLY/FILTER/GROUPBY/SORTBY are all variable-length sub-clauses with
-/// their own expression text, so none of FT.SEARCH's clause table applies
-/// here. Currently only used to detect WITHCURSOR, so only the skip-shape
-/// of each clause needs to be right, not its semantic contents.
 fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) -> bool {
     let mut i = start;
     let total = cmd.args_iter().len();
@@ -2078,13 +1873,11 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
         if arg_eq_ignore_case(tok, flag) {
             return true;
         }
-        // Pure flags: consume only the keyword itself.
         const PURE_FLAGS: &[&[u8]] = &[b"ADDSCORES", b"INORDER", b"VERBATIM"];
         if PURE_FLAGS.iter().any(|f| arg_eq_ignore_case(tok, f)) {
             i += 1;
             continue;
         }
-        // Single-value clauses: keyword + exactly one value token.
         const SINGLE_VALUE_CLAUSES: &[&[u8]] = &[b"DIALECT", b"TIMEOUT", b"SLOP", b"SCORER"];
         if SINGLE_VALUE_CLAUSES
             .iter()
@@ -2093,24 +1886,18 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
             i += 2;
             continue;
         }
-        // LIMIT offset num: keyword + exactly two value tokens.
         if arg_eq_ignore_case(tok, b"LIMIT") {
             i += 3;
             continue;
         }
-        // FILTER expr: keyword + exactly one expression token (the
-        // expression is a single argument, however complex its text).
         if arg_eq_ignore_case(tok, b"FILTER") {
             i += 2;
             continue;
         }
-        // APPLY expr AS alias: keyword + expression + AS + alias, all
-        // mandatory (ConstructApplyParser rejects a missing AS outright).
         if arg_eq_ignore_case(tok, b"APPLY") {
             i += 4;
             continue;
         }
-        // PARAMS n name1 value1 ...: identical shape to FT.SEARCH's.
         if arg_eq_ignore_case(tok, b"PARAMS") {
             i += 1;
             let Some(count_arg) = cmd.arg_idx(i) else {
@@ -2122,14 +1909,6 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
             i = i.saturating_add(1).saturating_add(n);
             continue;
         }
-        // SORTBY n field1 [ASC|DESC] field2 [ASC|DESC] ... [MAX m]: keyword
-        // + count + up to n TOKENS total (a token budget, not a field count
-        // -- confirmed in src/commands/ft_aggregate_parser.cc
-        // ConstructSortByParser: the clause is parsed with `for (i = 0; i <
-        // cnt; ++i)`, and matching ASC/DESC does an EXTRA `i++` inside that
-        // same loop, consuming one of the `cnt` budget slots per direction
-        // token -- not a separate uncounted suffix the way RediSearch's own
-        // single-field SORTBY on FT.SEARCH works).
         if arg_eq_ignore_case(tok, b"SORTBY") {
             i += 1;
             let Some(count_arg) = cmd.arg_idx(i) else {
@@ -2140,9 +1919,6 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
             };
             i += 1;
             let mut consumed = 0usize;
-            // i < total bounds this against a server-controlled n with no
-            // upper limit, same hazard and fix as the RETURN loop above
-            // (CodeRabbit review #7335, value_conversion.rs:2037).
             while consumed < n && i < total {
                 i += 1;
                 consumed += 1;
@@ -2161,15 +1937,6 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
             }
             continue;
         }
-        // LOAD n field1 [AS alias1] ... | LOAD *: keyword + either a bare
-        // `*` (loadall, no further tokens) or a count + up to n TOKENS
-        // total (a token budget, not a field count -- confirmed in
-        // src/commands/ft_aggregate_parser.cc ConstructLoadParser's own
-        // comment: "`cnt` is a token budget. Each LOAD entry is a field/
-        // path, optionally followed by `AS <alias>`; the `AS` keyword and
-        // its alias count against the budget" -- `++consumed` fires once
-        // for the field and ONCE EACH for `AS` and the alias, i.e. 3 total
-        // per aliased entry, not 1).
         if arg_eq_ignore_case(tok, b"LOAD") {
             i += 1;
             let Some(count_arg) = cmd.arg_idx(i) else {
@@ -2184,9 +1951,6 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
             };
             i += 1;
             let mut consumed = 0usize;
-            // i < total bounds this against a server-controlled n with no
-            // upper limit, same hazard and fix as the RETURN loop above
-            // (CodeRabbit review #7335, value_conversion.rs:2037).
             while consumed < n && i < total {
                 i += 1;
                 consumed += 1;
@@ -2199,13 +1963,6 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
             }
             continue;
         }
-        // GROUPBY n group1 ... groupN [REDUCE func m arg1...argM [AS
-        // alias]]*: keyword + count + n group fields, then zero or more
-        // REDUCE sub-clauses, each itself keyword + func-name + its own arg
-        // count + that many args, with an optional uncounted "AS alias"
-        // pair (BasicReducerParser -- every reducer has an explicit nargs
-        // token on the wire regardless of its specific function, so this
-        // skips correctly without knowing which reducer it is).
         if arg_eq_ignore_case(tok, b"GROUPBY") {
             i += 1;
             let Some(count_arg) = cmd.arg_idx(i) else {
@@ -2219,7 +1976,6 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
                 if !arg_eq_ignore_case(maybe_reduce, b"REDUCE") {
                     break;
                 }
-                // REDUCE + func name + nargs count.
                 i += 2;
                 let Some(reduce_count_arg) = cmd.arg_idx(i) else {
                     break;
@@ -2236,7 +1992,6 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
             }
             continue;
         }
-        // WITHCURSOR [COUNT n] [MAXIDLE n]: identical shape to FT.SEARCH's.
         if arg_eq_ignore_case(tok, b"WITHCURSOR") {
             i += 1;
             while let Some(sub) = cmd.arg_idx(i) {
@@ -2248,64 +2003,38 @@ fn ft_aggregate_option_tail_contains_flag(cmd: &Cmd, start: usize, flag: &[u8]) 
             }
             continue;
         }
-        // Unrecognised token: the index name/query string at the start of
-        // the tail, or an argument the server will itself reject.
         i += 1;
     }
     false
 }
 
-/// Walks FT.HYBRID's SEARCH/VSIM/\[COMBINE\] prefix (`src/commands/
-/// ft_hybrid_parser.cc`), returning the index of the first token belonging
-/// to the shared aggregate-suffix tail (LOAD/APPLY/FILTER/GROUPBY/SORTBY/
-/// LIMIT/PARAMS/TIMEOUT/DIALECT/WITHCURSOR/LOCALONLY), or `cmd.args_iter()
-/// .len()` if the command ends before that tail starts (e.g. a bare
-/// `FT.HYBRID idx SEARCH q VSIM @f $p`).
-///
-/// This cannot be folded into [`ft_aggregate_option_tail_contains_flag`]
-/// starting at a fixed offset: SEARCH's query string, VSIM's own nested
-/// KNN/RANGE block, and VSIM's own counted FILTER sub-clause (which reuses
-/// the keyword `FILTER`, but with POLICY/BATCH_SIZE sub-args the aggregate
-/// scanner's FILTER case does not know about) are all variable-length and
-/// specific to FT.HYBRID. Getting any of their skip-shapes wrong here would
-/// land the aggregate scanner's `start` index mid-clause, which is exactly
-/// the kind of misdetection the option-tail-scanning approach exists to
-/// avoid in the first place. Only the skip-shape of each clause matters, not its semantic
-/// contents, mirroring the aggregate scanner's own comment.
 fn ft_hybrid_prefix_tail_start(cmd: &Cmd) -> usize {
     let total = cmd.args_iter().len();
-    let mut i = 2; // FT.HYBRID <index> SEARCH ...
-    // SEARCH <query> [SCORER s] [YIELD_SCORE_AS name]: the clause itself
-    // never contains NOCONTENT (ft_hybrid_parser.cc rejects it outright),
-    // so it is not in this clause's own sub-arg set.
+    let mut i = 2;
     if !cmd
         .arg_idx(i)
         .is_some_and(|a| arg_eq_ignore_case(a, b"SEARCH"))
     {
         return total;
     }
-    i += 2; // SEARCH + its query string.
+    i += 2;
     loop {
         let Some(tok) = cmd.arg_idx(i) else {
             return total;
         };
-        // Both are single-value sub-clauses (keyword + exactly one value
-        // token), so they share the same skip.
         if arg_eq_ignore_case(tok, b"SCORER") || arg_eq_ignore_case(tok, b"YIELD_SCORE_AS") {
             i += 2;
         } else {
             break;
         }
     }
-    // VSIM @field $param [KNN <n> ... | RANGE <n> ...] [YIELD_SCORE_AS
-    // name] [FILTER [n] expr [POLICY p] [BATCH_SIZE n]].
     if !cmd
         .arg_idx(i)
         .is_some_and(|a| arg_eq_ignore_case(a, b"VSIM"))
     {
         return total;
     }
-    i += 3; // VSIM + field + $param.
+    i += 3;
     if let Some(mode) = cmd.arg_idx(i)
         && (arg_eq_ignore_case(mode, b"KNN") || arg_eq_ignore_case(mode, b"RANGE"))
     {
@@ -2326,24 +2055,14 @@ fn ft_hybrid_prefix_tail_start(cmd: &Cmd) -> usize {
             i += 2;
         } else if arg_eq_ignore_case(tok, b"FILTER") {
             i += 1;
-            // VSIM's FILTER keeps valkey-search's existing count-optional
-            // extension: a bare `FILTER <expr>` with no leading count is
-            // still accepted (ft_hybrid_parser.cc ParseVsimClause), so the
-            // next token is a count only when it parses as one.
             let Some(first) = cmd.arg_idx(i) else {
                 return total;
             };
             match parse_count_arg(first) {
                 Some(n) if n > 0 => {
-                    // Counted form: the budget covers the expression plus
-                    // any POLICY/BATCH_SIZE sub-args, exactly as LIMIT's
-                    // count covers its own sub-args.
                     i = i.saturating_add(1).saturating_add(n);
                 }
                 _ => {
-                    // Uncounted extension: a single expression token, no
-                    // POLICY/BATCH_SIZE possible (those require the counted
-                    // form in this grammar).
                     i += 1;
                 }
             }
@@ -2351,13 +2070,11 @@ fn ft_hybrid_prefix_tail_start(cmd: &Cmd) -> usize {
             break;
         }
     }
-    // [COMBINE RRF|LINEAR|FUNCTION <n> ...]: optional, same token-budget
-    // convention as every other counted block here.
     if cmd
         .arg_idx(i)
         .is_some_and(|a| arg_eq_ignore_case(a, b"COMBINE"))
     {
-        i += 2; // COMBINE + method keyword.
+        i += 2;
         let Some(count_arg) = cmd.arg_idx(i) else {
             return total;
         };
@@ -2369,27 +2086,132 @@ fn ft_hybrid_prefix_tail_start(cmd: &Cmd) -> usize {
     i
 }
 
-/// Mirrors [`ft_aggregate_option_tail_contains_flag`] for FT.HYBRID: walks
-/// the SEARCH/VSIM/\[COMBINE\] prefix first via
-/// [`ft_hybrid_prefix_tail_start`], then hands off to the shared
-/// aggregate-suffix scanner for the remainder, since FT.HYBRID forwards
-/// that whole tail (LOAD/APPLY/FILTER/GROUPBY/SORTBY/LIMIT/PARAMS/TIMEOUT/
-/// WITHCURSOR) to the exact same `aggregate::CreateAggregateParser()` table
-/// FT.AGGREGATE uses (confirmed in `src/commands/ft_hybrid_parser.cc`:
-/// `ParseFtHybridCommand` builds an embedded `AggregateParameters` and
-/// drives the same parser over everything after the optional COMBINE
-/// clause). FT.HYBRID's own top-level-only keywords (LOCALONLY, DIALECT,
-/// the NOCONTENT rejection) are bare or single-value and never contain
-/// WITHCURSOR as their own argument, so they do not need special handling
-/// beyond what the aggregate scanner's unrecognised-token fallback already
-/// does (skip one token and keep going).
 fn ft_hybrid_option_tail_contains_flag(cmd: &Cmd, flag: &[u8]) -> bool {
     let tail_start = ft_hybrid_prefix_tail_start(cmd);
     ft_aggregate_option_tail_contains_flag(cmd, tail_start, flag)
 }
 
-// TODO #7631: Match option keywords (`JUSTID`, `IDX`, `WITHSCORES`, ...) only among each command's
-// option arguments, not every argument (as `ft_search_option_tail_contains_flag` does).
+/// These core command parsers compare option names with C string semantics:
+/// an embedded NUL terminates the option token. Apply this only to options,
+/// never to keys, members, counts, or the FT command parsers above.
+fn core_option_eq_ignore_case(arg: &[u8], candidate: &[u8]) -> bool {
+    arg.get(..candidate.len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(candidate))
+        && arg.get(candidate.len()).is_none_or(|byte| *byte == 0)
+}
+
+/// Finds a reply flag only at option boundaries. Unknown tokens stop the scan:
+/// the server remains responsible for validating malformed commands.
+fn option_tail_contains_flag(
+    cmd: &Cmd,
+    start: usize,
+    flag: &[u8],
+    options: &[(&[u8], usize)],
+) -> bool {
+    let mut args = cmd.args_iter().skip(start);
+    while let Some(redis::Arg::Simple(arg)) = args.next() {
+        if core_option_eq_ignore_case(arg, flag) {
+            return true;
+        }
+        let Some((_, values)) = options
+            .iter()
+            .find(|(name, _)| core_option_eq_ignore_case(arg, name))
+        else {
+            return false;
+        };
+        if *values > 0 {
+            // nth consumes the values without inspecting them as keywords.
+            args.nth(*values - 1);
+        }
+    }
+    false
+}
+
+fn sorted_set_operation_has_withscores(cmd: &Cmd) -> bool {
+    let Some(numkeys) = cmd.arg_idx(1).and_then(parse_count_arg) else {
+        return false;
+    };
+    let Some(start) = numkeys.checked_add(2) else {
+        return false;
+    };
+    option_tail_contains_flag(
+        cmd,
+        start,
+        b"WITHSCORES",
+        &[(b"WEIGHTS", numkeys), (b"AGGREGATE", 1)],
+    )
+}
+
+fn xclaim_has_justid(cmd: &Cmd) -> bool {
+    const OPTIONS: &[(&[u8], usize)] = &[
+        (b"IDLE", 1),
+        (b"TIME", 1),
+        (b"RETRYCOUNT", 1),
+        (b"FORCE", 0),
+        (b"JUSTID", 0),
+        (b"LASTID", 1),
+    ];
+    // IDs follow the four fixed data arguments. The server also accepts an
+    // option here with no IDs (e.g. JUSTID returns an empty array).
+    // After the first option, consume each option's own values.
+    let start = cmd.args_iter().enumerate().skip(5).find_map(|(i, arg)| {
+        let redis::Arg::Simple(arg) = arg else {
+            return None;
+        };
+        OPTIONS
+            .iter()
+            .any(|(name, _)| core_option_eq_ignore_case(arg, name))
+            .then_some(i)
+    });
+    start.is_some_and(|start| option_tail_contains_flag(cmd, start, b"JUSTID", OPTIONS))
+}
+
+fn geosearch_has_reply_options(cmd: &Cmd) -> bool {
+    // The key is data, even when it is WITHDIST. Clauses may be reordered.
+    let mut args = cmd.args_iter().skip(2);
+    while let Some(redis::Arg::Simple(arg)) = args.next() {
+        if [b"WITHDIST".as_slice(), b"WITHHASH", b"WITHCOORD"]
+            .iter()
+            .any(|flag| core_option_eq_ignore_case(arg, flag))
+        {
+            return true;
+        }
+        let values = if core_option_eq_ignore_case(arg, b"FROMMEMBER")
+            || core_option_eq_ignore_case(arg, b"COUNT")
+        {
+            1
+        } else if core_option_eq_ignore_case(arg, b"FROMLONLAT")
+            || core_option_eq_ignore_case(arg, b"BYRADIUS")
+        {
+            2
+        } else if core_option_eq_ignore_case(arg, b"BYBOX") {
+            3
+        } else if core_option_eq_ignore_case(arg, b"BYPOLYGON") {
+            let Some(redis::Arg::Simple(count)) = args.next() else {
+                return false;
+            };
+            let Some(vertices) = parse_count_arg(count) else {
+                return false;
+            };
+            let Some(values) = vertices.checked_mul(2) else {
+                return false;
+            };
+            values
+        } else if [b"ASC".as_slice(), b"DESC", b"ANY"]
+            .iter()
+            .any(|flag| core_option_eq_ignore_case(arg, flag))
+        {
+            0
+        } else {
+            return false;
+        };
+        if values > 0 {
+            args.nth(values - 1);
+        }
+    }
+    false
+}
+
 pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>> {
     let command = cmd.command()?;
 
@@ -2413,7 +2235,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             Some(&is_array),
         )),
         b"XCLAIM" => {
-            if cmd.position(b"JUSTID").is_some() {
+            if xclaim_has_justid(cmd) {
                 Some(ExpectedReturnType::ArrayOfStrings)
             } else {
                 Some(ExpectedReturnType::Map {
@@ -2423,7 +2245,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             }
         }
         b"XAUTOCLAIM" => {
-            if cmd.position(b"JUSTID").is_some() {
+            if option_tail_contains_flag(cmd, 6, b"JUSTID", &[(b"COUNT", 1)]) {
                 // Value conversion is not needed if the JUSTID arg was passed.
                 None
             } else {
@@ -2442,7 +2264,13 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
                 value_type: &Some(ExpectedReturnType::ArrayOfPairs),
             }),
         }),
-        b"LCS" => cmd.position(b"IDX").map(|_| ExpectedReturnType::Map {
+        b"LCS" => option_tail_contains_flag(
+            cmd,
+            3,
+            b"IDX",
+            &[(b"LEN", 0), (b"MINMATCHLEN", 1), (b"WITHMATCHLEN", 0)],
+        )
+        .then_some(ExpectedReturnType::Map {
             key_type: &Some(ExpectedReturnType::SimpleString),
             value_type: &None,
         }),
@@ -2475,19 +2303,38 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
         b"LMPOP" => Some(ExpectedReturnType::ArrayOfStringAndArrays),
         b"BLMPOP" => Some(ExpectedReturnType::ArrayOfStringAndArrays),
         b"HRANDFIELD" => cmd
-            .position(b"WITHVALUES")
+            .arg_idx(3)
+            .filter(|arg| core_option_eq_ignore_case(arg, b"WITHVALUES"))
             .map(|_| ExpectedReturnType::ArrayOfPairs),
         b"ZRANDMEMBER" => cmd
-            .position(b"WITHSCORES")
+            .arg_idx(3)
+            .filter(|arg| core_option_eq_ignore_case(arg, b"WITHSCORES"))
             .map(|_| ExpectedReturnType::ArrayOfMemberScorePairs),
-        b"ZADD" => cmd
-            .position(b"INCR")
-            .map(|_| ExpectedReturnType::DoubleOrNull),
-        b"ZRANGE" | b"ZDIFF" | b"ZUNION" | b"ZINTER" => cmd
-            .position(b"WITHSCORES")
-            .map(|_| ExpectedReturnType::MapOfStringToDouble),
+        b"ZADD" => option_tail_contains_flag(
+            cmd,
+            2,
+            b"INCR",
+            &[(b"NX", 0), (b"XX", 0), (b"GT", 0), (b"LT", 0), (b"CH", 0)],
+        )
+        .then_some(ExpectedReturnType::DoubleOrNull),
+        b"ZRANGE" => option_tail_contains_flag(
+            cmd,
+            4,
+            b"WITHSCORES",
+            &[
+                (b"BYSCORE", 0),
+                (b"BYLEX", 0),
+                (b"REV", 0),
+                (b"LIMIT", 2),
+                (b"XX", 0),
+            ],
+        )
+        .then_some(ExpectedReturnType::MapOfStringToDouble),
+        b"ZDIFF" | b"ZUNION" | b"ZINTER" => sorted_set_operation_has_withscores(cmd)
+            .then_some(ExpectedReturnType::MapOfStringToDouble),
         b"ZRANK" | b"ZREVRANK" => cmd
-            .position(b"WITHSCORE")
+            .arg_idx(3)
+            .filter(|arg| core_option_eq_ignore_case(arg, b"WITHSCORE"))
             .map(|_| ExpectedReturnType::ZRankReturnType),
         b"BZPOPMIN" | b"BZPOPMAX" => Some(ExpectedReturnType::KeyWithMemberAndScore),
         b"SPOP" => {
@@ -2520,17 +2367,13 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             Some(&is_array),
         )),
         b"GEOSEARCH" => {
-            if cmd.position(b"WITHDIST").is_some()
-                || cmd.position(b"WITHHASH").is_some()
-                || cmd.position(b"WITHCOORD").is_some()
-            {
-                Some(ExpectedReturnType::GeoSearchReturnType)
-            } else {
-                None
-            }
+            geosearch_has_reply_options(cmd).then_some(ExpectedReturnType::GeoSearchReturnType)
         }
         b"XINFO STREAM" => {
-            if cmd.position(b"FULL").is_some() {
+            if cmd
+                .arg_idx(3)
+                .is_some_and(|arg| core_option_eq_ignore_case(arg, b"FULL"))
+            {
                 Some(ExpectedReturnType::XInfoStreamFullReturnType)
             } else {
                 Some(ExpectedReturnType::Map {
@@ -2548,15 +2391,6 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             Some(&is_array),
         )),
         b"FT.AGGREGATE" => {
-            // WITHCURSOR wraps the normal FTAggregateReturnType shape:
-            // [[count, row...], cursor_id] (confirmed live). Index name
-            // starts the tail at arg_idx(1), the query itself is at
-            // arg_idx(2), so the option tail itself starts at arg_idx(3)
-            // (FT.AGGREGATE <index> <query> <...opts>) -- the scan must
-            // start here, not at arg_idx(2): starting at arg_idx(2) would
-            // compare the query argument itself against WITHCURSOR,
-            // so a query literally equal to "WITHCURSOR" picked the
-            // cursor converter even with no WITHCURSOR option present.
             if ft_aggregate_option_tail_contains_flag(cmd, 3, b"WITHCURSOR") {
                 Some(ExpectedReturnType::FTCursorWrappedReturnType(&Some(
                     ExpectedReturnType::FTAggregateReturnType,
@@ -2565,14 +2399,6 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
                 Some(ExpectedReturnType::FTAggregateReturnType)
             }
         }
-        // FT.HYBRID's default reply (no WITHCURSOR, no LOAD) is the
-        // document key and the fused score -- the same FTAggregateReturnType
-        // shape FT.AGGREGATE's own default projection produces (confirmed
-        // live and in src/commands/ft_hybrid_parser.cc: FT.HYBRID builds an
-        // embedded AggregateParameters and reuses the aggregate pipeline's
-        // own record-population and reply-serialisation code wholesale, it
-        // does not have a reply format of its own). WITHCURSOR wraps it the
-        // same way it wraps FT.AGGREGATE's.
         b"FT.HYBRID" => {
             if ft_hybrid_option_tail_contains_flag(cmd, b"WITHCURSOR") {
                 Some(ExpectedReturnType::FTCursorWrappedReturnType(&Some(
@@ -2582,13 +2408,6 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
                 Some(ExpectedReturnType::FTAggregateReturnType)
             }
         }
-        // FT.CURSOR READ <index> <cursor_id> [COUNT n] always returns the
-        // same cursor-wrapped shape as FT.AGGREGATE ... WITHCURSOR
-        // (confirmed live, and per src/commands/ft_cursor.cc -- a READ
-        // replays the same aggregate pipeline that created the cursor).
-        // FT.CURSOR DEL needs no conversion (plain OK/error), so only READ
-        // is special-cased here; an unrecognised FT.CURSOR subcommand (DEL,
-        // or anything else) falls through to None.
         b"FT.CURSOR"
             if cmd
                 .arg_idx(1)
@@ -2599,16 +2418,6 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             )))
         }
         b"FT.SEARCH" => {
-            // Scan the option tail (starting after <index> <query>)
-            // rather than the whole command, so an INKEYS/PARAMS/RETURN
-            // value named "withsortkeys" or "withscores" is never
-            // misdetected as the flag itself. WITHSCORES and WITHSORTKEYS
-            // combine into a genuinely different (4-tuple-per-row) shape,
-            // not either single-flag shape, so that combination is checked
-            // first (confirmed live: WITHSCORES+WITHSORTKEYS together
-            // yields [key, score, sortkey, fields] per row with content, or
-            // the plain WITHSCORES-only [key, score] pair with NOCONTENT --
-            // the sort key is dropped entirely in that case, not blank).
             let has_sort_keys = ft_search_option_tail_contains_flag(cmd, 3, b"WITHSORTKEYS");
             let has_scores = ft_search_option_tail_contains_flag(cmd, 3, b"WITHSCORES");
             if has_sort_keys && has_scores {
@@ -2621,15 +2430,8 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
                 Some(ExpectedReturnType::FTSearchReturnType)
             }
         }
-        // TODO replace with tuple
         b"FT.PROFILE" => Some(ExpectedReturnType::FTProfileReturnType(
             if cmd.arg_idx(2).is_some_and(|a| a == b"SEARCH") {
-                // The embedded FT.SEARCH option tail starts after "QUERY
-                // <query>", not at a fixed offset -- LIMITED is optional
-                // before it (src/commands/ft_profile_options.py to_args:
-                // [SEARCH|AGGREGATE] [LIMITED] QUERY <query> <...options>).
-                // Find the QUERY keyword itself rather than assuming a
-                // position, so this stays correct regardless of LIMITED.
                 let query_kw_idx = (0..cmd.args_iter().len()).find(|&i| {
                     cmd.arg_idx(i)
                         .is_some_and(|a| arg_eq_ignore_case(a, b"QUERY"))
@@ -2649,10 +2451,6 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
                     &Some(ExpectedReturnType::FTSearchReturnType)
                 }
             } else {
-                // Embedded FT.AGGREGATE: same QUERY-keyword-based tail
-                // start as the SEARCH case above, so WITHCURSOR detection
-                // (and the resulting cursor-wrapped shape) still applies
-                // when profiling a cursored aggregate.
                 let query_kw_idx = (0..cmd.args_iter().len()).find(|&i| {
                     cmd.arg_idx(i)
                         .is_some_and(|a| arg_eq_ignore_case(a, b"QUERY"))
@@ -2696,6 +2494,246 @@ pub(crate) fn get_value_type<'a>(value: &Value) -> &'a str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn regression_reply_option_boundaries() {
+        use ExpectedReturnType::*;
+
+        let lcs_indices = Some(Map {
+            key_type: &Some(SimpleString),
+            value_type: &None,
+        });
+        let stream_entries = Some(Map {
+            key_type: &Some(SimpleString),
+            value_type: &Some(ArrayOfPairs),
+        });
+        let stream_info = Some(Map {
+            key_type: &Some(BulkString),
+            value_type: &None,
+        });
+        let scores = Some(MapOfStringToDouble);
+        let pairs = Some(ArrayOfPairs);
+        let member_scores = Some(ArrayOfMemberScorePairs);
+        let rank = Some(ZRankReturnType);
+        let increment = Some(DoubleOrNull);
+        let geo = Some(GeoSearchReturnType);
+        let full_stream = Some(XInfoStreamFullReturnType);
+        let ids = Some(ArrayOfStrings);
+        let autoclaim = Some(XAutoClaimReturnType);
+        // Space-separated arguments keep the option grammar visible. NUL and
+        // non-UTF8 bytes remain part of their argument, including numeric data.
+        let cases: &[(&[u8], Option<ExpectedReturnType>)] = &[
+            (b"LCS IDX other", None),
+            (b"LCS other iDx", None),
+            (b"LCS \xffIDX other", None),
+            (b"HRANDFIELD WITHVALUES 1", None),
+            (b"ZRANDMEMBER WITHSCORES 1", None),
+            (b"ZADD INCR 1 member", None),
+            (b"ZADD key 1 iNcR 2 other", None),
+            (b"ZRANGE WITHSCORES 0 -1", None),
+            (b"ZRANK WITHSCORE member", None),
+            (b"ZREVRANK key WiThScOrE", None),
+            (b"ZDIFF 1 WITHSCORES", None),
+            (b"ZUNION 2 other WiThScOrEs", None),
+            (b"ZINTER 2 WITHSCORES other", None),
+            (
+                b"GEOSEARCH WITHDIST FROMMEMBER WITHHASH BYRADIUS 1 km",
+                None,
+            ),
+            (b"GEOSEARCH key FROMMEMBER WiThCoOrD BYBOX 1 2 km", None),
+            (b"XCLAIM jUsTiD group consumer 0 1-0", stream_entries),
+            (b"XCLAIM key jUsTiD consumer 0 1-0", stream_entries),
+            (b"XCLAIM key group jUsTiD 0 1-0", stream_entries),
+            (b"XAUTOCLAIM jUsTiD group consumer 0 1-0", autoclaim),
+            (b"XAUTOCLAIM key jUsTiD consumer 0 1-0", autoclaim),
+            (b"XAUTOCLAIM key group jUsTiD 0 1-0", autoclaim),
+            (b"XINFO STREAM fUlL", stream_info),
+            (b"LCS IDX IDX LEN iDx", lcs_indices),
+            (b"LCS IDX IDX MINMATCHLEN 1 iDx", lcs_indices),
+            (b"LCS IDX IDX WITHMATCHLEN iDx", lcs_indices),
+            (b"LCS IDX IDX MINMATCHLEN\0suffix 1 iDx", lcs_indices),
+            (b"HRANDFIELD WITHVALUES 1 wItHvAlUeS", pairs),
+            (b"ZRANDMEMBER WITHSCORES 1 wItHsCoReS", member_scores),
+            (b"ZRANK WITHSCORE WITHSCORE wItHsCoRe", rank),
+            (b"ZREVRANK WITHSCORE WITHSCORE wItHsCoRe", rank),
+            (b"ZADD INCR NX iNcR 1 INCR", increment),
+            (b"ZADD INCR XX iNcR 1 INCR", increment),
+            (b"ZADD INCR GT iNcR 1 INCR", increment),
+            (b"ZADD INCR LT iNcR 1 INCR", increment),
+            (b"ZADD INCR CH iNcR 1 INCR", increment),
+            (b"ZADD INCR NX\0suffix iNcR 1 INCR", increment),
+            (b"ZRANGE WITHSCORES 0 10 BYSCORE wItHsCoReS", scores),
+            (b"ZRANGE WITHSCORES - + BYLEX wItHsCoReS", scores),
+            (b"ZRANGE WITHSCORES 0 10 REV wItHsCoReS", scores),
+            (
+                b"ZRANGE WITHSCORES 0 10 BYSCORE LIMIT 0 5 wItHsCoReS",
+                scores,
+            ),
+            (b"ZRANGE WITHSCORES 0 10 XX wItHsCoReS", scores),
+            (b"ZRANGE WITHSCORES 0 10 xX\0suffix wItHsCoReS", scores),
+            (b"ZRANGE WITHSCORES 0 10 REV\0suffix wItHsCoReS", scores),
+            (b"ZRANGE k 0 10 BYSCORE LIMIT 0 5 WITHSCORES", scores),
+            (b"ZDIFF 1 WITHSCORES wItHsCoReS", scores),
+            (b"ZUNION 2 WITHSCORES other WEIGHTS 1 2 wItHsCoReS", scores),
+            (
+                b"ZUNION 2 WITHSCORES other AGGREGATE MAX wItHsCoReS",
+                scores,
+            ),
+            (b"ZINTER 1 WITHSCORES WEIGHTS 2 wItHsCoReS", scores),
+            (b"ZINTER 1 WITHSCORES AGGREGATE MIN wItHsCoReS", scores),
+            (b"ZUNION 1 key WEIGHTS\0suffix 2 WITHSCORES", scores),
+            (b"ZINTER 1 key AGGREGATE\0suffix MAX WITHSCORES", scores),
+            (
+                b"GEOSEARCH k FROMMEMBER WITHHASH BYRADIUS 1 km wItHdIsT",
+                geo,
+            ),
+            (b"GEOSEARCH k FROMLONLAT 0 0 BYRADIUS 1 km wItHdIsT", geo),
+            (b"GEOSEARCH k FROMMEMBER m BYRADIUS 1 km wItHhAsH", geo),
+            (b"GEOSEARCH k FROMMEMBER m BYBOX 1 2 km wItHdIsT", geo),
+            (
+                b"GEOSEARCH k FROMMEMBER m BYPOLYGON 3 0 0 1 0 1 1 wItHdIsT",
+                geo,
+            ),
+            (
+                b"GEOSEARCH k FROMMEMBER m BYRADIUS 1 km COUNT 1 wItHdIsT",
+                geo,
+            ),
+            (b"GEOSEARCH k FROMMEMBER m BYRADIUS 1 km ASC wItHdIsT", geo),
+            (b"GEOSEARCH k FROMMEMBER m BYRADIUS 1 km DESC wItHdIsT", geo),
+            (
+                b"GEOSEARCH k FROMMEMBER m BYRADIUS 1 km COUNT 1 ANY wItHdIsT",
+                geo,
+            ),
+            (
+                b"GEOSEARCH k FROMMEMBER\0suffix m BYRADIUS 1 km wItHdIsT",
+                geo,
+            ),
+            (
+                b"GEOSEARCH key wItHdIsT FROMMEMBER WITHHASH BYRADIUS 1 km",
+                geo,
+            ),
+            (b"GEOSEARCH key FROMLONLAT 0 0 BYBOX 1 2 km WITHCOORD", geo),
+            (b"XINFO STREAM FULL fUlL COUNT 1", full_stream),
+            (b"XCLAIM JUSTID JUSTID JUSTID 0 1-0 IDLE 0 jUsTiD", ids),
+            (b"XCLAIM JUSTID JUSTID JUSTID 0 1-0 TIME 0 jUsTiD", ids),
+            (
+                b"XCLAIM JUSTID JUSTID JUSTID 0 1-0 RETRYCOUNT 1 jUsTiD",
+                ids,
+            ),
+            (
+                b"XCLAIM JUSTID JUSTID JUSTID 0 1-0 IDLE 0 FORCE jUsTiD",
+                ids,
+            ),
+            (b"XCLAIM JUSTID JUSTID JUSTID 0 1-0 LASTID 0-0 jUsTiD", ids),
+            (
+                b"XCLAIM JUSTID JUSTID JUSTID 0 1-0 IDLE\0suffix 0 jUsTiD",
+                ids,
+            ),
+            (
+                b"XAUTOCLAIM JUSTID JUSTID JUSTID 0 0-0 COUNT 1 jUsTiD",
+                None,
+            ),
+            (
+                b"XAUTOCLAIM key group consumer 0 0-0 COUNT\0suffix 1 JUSTID",
+                None,
+            ),
+            (b"LCS a b MINMATCHLEN IDX", None),
+            (b"ZRANGE key 0 -1 LIMIT WITHSCORES 1", None),
+            (b"ZUNION 1 key WEIGHTS WITHSCORES", None),
+            (b"ZINTER 1 key AGGREGATE WITHSCORES", None),
+            (b"GEOSEARCH key FROMMEMBER member COUNT WITHDIST", None),
+            (
+                b"GEOSEARCH key BYPOLYGON 18446744073709551615 WITHDIST",
+                None,
+            ),
+            (b"GEOSEARCH key BYPOLYGON invalid WITHDIST", None),
+            (b"ZDIFF 18446744073709551615 WITHSCORES", None),
+            (b"ZUNION invalid WITHSCORES", None),
+            (b"ZADD INCR\0suffix 1 INCR\0suffix", None),
+            (b"LCS IDX\0suffix other", None),
+            (b"ZDIFF 1\0suffix key WITHSCORES", None),
+            (
+                b"GEOSEARCH key FROMMEMBER WITHDIST\0suffix BYRADIUS 1 km",
+                None,
+            ),
+            (b"ZRANGE key 0 -1 UNKNOWN WITHSCORES", None),
+            (
+                b"XCLAIM key group consumer 0 1-0 IDLE JUSTID",
+                stream_entries,
+            ),
+            (
+                b"XCLAIM key group consumer 0 1-0 TIME JUSTID",
+                stream_entries,
+            ),
+            (
+                b"XCLAIM key group consumer 0 1-0 RETRYCOUNT JUSTID",
+                stream_entries,
+            ),
+            (
+                b"XCLAIM key group consumer 0 1-0 LASTID JUSTID",
+                stream_entries,
+            ),
+            (
+                b"XAUTOCLAIM key group consumer 0 0-0 COUNT JUSTID",
+                autoclaim,
+            ),
+            (b"HRANDFIELD WITHVALUES 1 WITHVALUES\0suffix", pairs),
+            (
+                b"ZRANDMEMBER WITHSCORES 1 WITHSCORES\0suffix",
+                member_scores,
+            ),
+            (b"ZRANK WITHSCORE member WITHSCORE\0suffix", rank),
+            (b"ZREVRANK WITHSCORE member WITHSCORE\0suffix", rank),
+            (b"ZADD INCR INCR\0suffix 1 member", increment),
+            (b"ZRANGE WITHSCORES 0 -1 WITHSCORES\0suffix", scores),
+            (b"ZDIFF 1 WITHSCORES WITHSCORES\0suffix", scores),
+            (b"ZUNION 1 WITHSCORES WITHSCORES\0suffix", scores),
+            (b"ZINTER 1 WITHSCORES WITHSCORES\0suffix", scores),
+            (
+                b"GEOSEARCH WITHDIST FROMMEMBER member BYRADIUS 1 km WITHDIST\0suffix",
+                geo,
+            ),
+            (b"XINFO STREAM FULL FULL\0suffix", full_stream),
+            (b"LCS IDX other IDX\0suffix", lcs_indices),
+            (
+                b"XAUTOCLAIM JUSTID group consumer 0 0-0 JUSTID\0suffix",
+                None,
+            ),
+            (b"XCLAIM key group consumer 0 JUSTID", ids),
+            (b"XCLAIM key group consumer 0 FORCE JUSTID", ids),
+            (b"XCLAIM key group consumer 0 jUsTiD\0suffix", ids),
+            (b"XCLAIM key group consumer 0 1-0 2-0 IDLE 0 JUSTID", ids),
+            (
+                b"XCLAIM key group consumer 0 1-0 IDLE\0suffix 0 JUSTID",
+                ids,
+            ),
+        ];
+        for (args, expected) in cases {
+            let mut words = args.split(|byte| *byte == b' ');
+            let mut cmd = redis::cmd(std::str::from_utf8(words.next().unwrap()).unwrap());
+            for word in words {
+                cmd.arg(word);
+            }
+            let actual = expected_type_for_cmd(&cmd);
+            assert_eq!(
+                actual.as_ref().map(std::mem::discriminant),
+                expected.as_ref().map(std::mem::discriminant),
+                "{args:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn regression_array_conversion_returns_error() {
+        for expected in [
+            ExpectedReturnType::ArrayOfStrings,
+            ExpectedReturnType::ArrayOfBools,
+            ExpectedReturnType::ArrayOfDoubleOrNull,
+        ] {
+            let invalid = Value::Array(vec![Value::Map(vec![])]);
+            assert!(convert_to_expected_type(invalid, Some(expected)).is_err());
+        }
+    }
 
     #[test]
     fn xinfo_stream_expected_return_type() {
@@ -3166,7 +3204,6 @@ mod tests {
         assert!(converted_4.is_err());
     }
 
-    // TODO #7631: Add cases where a key, member, group or consumer equals an option keyword.
     #[test]
     fn convert_xclaim() {
         assert!(matches!(
@@ -4086,14 +4123,20 @@ mod tests {
     #[test]
     fn convert_zrange_zdiff_only_if_withsocres_is_included() {
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("zrange").arg("0").arg("-1").arg("withscores")),
+            expected_type_for_cmd(
+                redis::cmd("zrange")
+                    .arg("key")
+                    .arg("0")
+                    .arg("-1")
+                    .arg("withscores")
+            ),
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
 
         assert!(expected_type_for_cmd(redis::cmd("ZRANGE").arg("0").arg("-1")).is_none());
 
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("ZDIFF").arg("1").arg("withscores")),
+            expected_type_for_cmd(redis::cmd("ZDIFF").arg("1").arg("key").arg("withscores")),
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
 
@@ -4453,6 +4496,20 @@ mod tests {
         );
     }
 
+    #[rstest::rstest]
+    #[case(Value::Array(vec![]), Value::Double(1.0))]
+    #[case(Value::BulkString(b"key".to_vec().into()), Value::BulkString(b"not-a-number".to_vec().into()))]
+    fn test_convert_to_map_of_string_to_double_propagates_errors(
+        #[case] key: Value,
+        #[case] value: Value,
+    ) {
+        let result = convert_to_expected_type(
+            Value::Map(vec![(key, value)]),
+            Some(ExpectedReturnType::MapOfStringToDouble),
+        );
+        assert!(result.is_err());
+    }
+
     #[test]
     fn test_convert_to_zrank_return_type() {
         assert_eq!(
@@ -4626,6 +4683,12 @@ mod tests {
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("GEOSEARCH")
+                    .arg("key")
+                    .arg("FROMMEMBER")
+                    .arg("member")
+                    .arg("BYRADIUS")
+                    .arg("1")
+                    .arg("km")
                     .arg("WITHDIST")
                     .arg("WITHHASH")
                     .arg("WITHCOORD")
@@ -4634,12 +4697,31 @@ mod tests {
         ));
 
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("GEOSEARCH").arg("WITHDIST").arg("WITHHASH")),
+            expected_type_for_cmd(
+                redis::cmd("GEOSEARCH")
+                    .arg("key")
+                    .arg("FROMMEMBER")
+                    .arg("member")
+                    .arg("BYRADIUS")
+                    .arg("1")
+                    .arg("km")
+                    .arg("WITHDIST")
+                    .arg("WITHHASH")
+            ),
             Some(ExpectedReturnType::GeoSearchReturnType)
         ));
 
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("GEOSEARCH").arg("WITHDIST")),
+            expected_type_for_cmd(
+                redis::cmd("GEOSEARCH")
+                    .arg("key")
+                    .arg("FROMMEMBER")
+                    .arg("member")
+                    .arg("BYRADIUS")
+                    .arg("1")
+                    .arg("km")
+                    .arg("WITHDIST")
+            ),
             Some(ExpectedReturnType::GeoSearchReturnType)
         ));
 
@@ -4826,24 +4908,6 @@ mod tests {
 
     #[test]
     fn convert_ft_search_option_tail_scanner_guards_clause_values_and_withscores() {
-        // Fixed: expected_type_for_cmd's FT.SEARCH/FT.PROFILE branches
-        // used to detect WITHSORTKEYS via cmd.position(b"WITHSORTKEYS"),
-        // which scans every argument in the command -- not just the
-        // trailing options -- via redis::Cmd's Routable::position
-        // (cluster_routing.rs), matching case-insensitively. INKEYS (1.3,
-        // PR #967) made this reachable with caller-controlled key names for
-        // the first time: a key literally named "withsortkeys" inside
-        // INKEYS triggered the same misdetection a query term would.
-        //
-        // Fixed by ft_search_option_tail_contains_flag(), which walks the
-        // option tail clause-by-clause (mirroring
-        // src/commands/ft_search_parser.cc's CreateSearchParser() grammar)
-        // instead of scanning every byte in the command. These are now
-        // guard tests: a regression back to whole-command scanning would
-        // fail these, not just document the old behaviour.
-
-        // An INKEYS key literally named "withsortkeys" must NOT flip the
-        // parser -- the real flag is absent here.
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("FT.SEARCH")
@@ -4856,9 +4920,6 @@ mod tests {
             Some(ExpectedReturnType::FTSearchReturnType)
         ));
 
-        // Case-insensitivity of the (correctly scoped) flag match is still
-        // honoured for the real flag -- this isn't a blanket case-sensitive
-        // fix, only a position-scoped one.
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("FT.SEARCH")
@@ -4869,9 +4930,6 @@ mod tests {
             Some(ExpectedReturnType::FTSearchWithSortKeysReturnType)
         ));
 
-        // A PARAMS value literally named "withscores" must not flip the
-        // parser either -- PARAMS values are exactly as caller-controlled
-        // as INKEYS keys.
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("FT.SEARCH")
@@ -4885,9 +4943,6 @@ mod tests {
             Some(ExpectedReturnType::FTSearchReturnType)
         ));
 
-        // A RETURN field literally named "withscores" must not flip the
-        // parser, and the real WITHSCORES flag after it must still be
-        // detected correctly.
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("FT.SEARCH")
@@ -4901,9 +4956,6 @@ mod tests {
             Some(ExpectedReturnType::FTSearchWithScoresReturnType)
         ));
 
-        // A RETURN field's AS alias named "withsortkeys" must likewise not
-        // be mistaken for the flag -- the AS/alias pair is correctly
-        // skipped as part of the RETURN clause's own tokens.
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("FT.SEARCH")
@@ -4918,8 +4970,6 @@ mod tests {
             Some(ExpectedReturnType::FTSearchReturnType)
         ));
 
-        // Confirms a genuinely ordinary query term containing the flag text
-        // is still unaffected (same case the old test covered).
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("FT.SEARCH")
@@ -4929,8 +4979,6 @@ mod tests {
             Some(ExpectedReturnType::FTSearchReturnType)
         ));
 
-        // Both flags together are detected as the combined type, not either
-        // single-flag type.
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("FT.SEARCH")
@@ -4942,9 +4990,6 @@ mod tests {
             Some(ExpectedReturnType::FTSearchWithScoresAndSortKeysReturnType)
         ));
 
-        // FT.PROFILE embeds a FT.SEARCH-shaped option tail after "QUERY
-        // <query>" -- a PARAMS value named "withscores" there must not flip
-        // the embedded detection either.
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("FT.PROFILE")
@@ -4962,8 +5007,6 @@ mod tests {
             )))
         ));
 
-        // FT.PROFILE with LIMITED before QUERY still finds the right tail
-        // start (LIMITED shifts QUERY's position by one).
         assert!(matches!(
             expected_type_for_cmd(
                 redis::cmd("FT.PROFILE")
@@ -4982,13 +5025,6 @@ mod tests {
 
     #[test]
     fn convert_ft_search_withscores_reply_shapes() {
-        // WITHSCORES (confirmed live against valkey-search 1.3.0-rc1):
-        // a bare score (BulkString) is inserted between the key and the
-        // fields array -- [count, key, score, fields, key, score, fields,
-        // ...]. Confirmed identical for RESP2 and RESP3 on this engine
-        // build (neither protocol gets a richer shape here).
-
-        // Normal case: key, score, fields triplets.
         let normal = Value::Array(vec![
             Value::Int(2),
             Value::BulkString(b"d1".to_vec().into()),
@@ -5025,11 +5061,6 @@ mod tests {
         assert_eq!(row0[0], Value::BulkString(b"0.5".to_vec().into()));
         assert!(matches!(row0[1], Value::Map(_)));
 
-        // WITHSCORES + NOCONTENT: plain (key, score) pairs, no field
-        // arrays anywhere in the response -- the scanner must distinguish
-        // this from the normal case by content shape, not by command args
-        // (NOCONTENT itself was already correctly detected upstream of
-        // this conversion; this exercises the reply-shape branch).
         let nocontent = Value::Array(vec![
             Value::Int(2),
             Value::BulkString(b"d1".to_vec().into()),
@@ -5057,13 +5088,6 @@ mod tests {
         assert_eq!(row0[0], Value::BulkString(b"0.5".to_vec().into()));
         assert_eq!(row0[1], Value::Map(vec![]));
 
-        // Zero-match response: a bare count with no further elements
-        // (confirmed live: FT.SEARCH idx "nonexistentterm" WITHSCORES
-        // replies with a single-element array, just the count). This is
-        // indistinguishable by shape alone from the COUNT-only case right
-        // below, which is why both are intentionally passed through
-        // unchanged -- same convention FTSearchReturnType and
-        // FTSearchWithSortKeysReturnType already use.
         let empty = Value::Array(vec![Value::Int(0)]);
         let converted = convert_to_expected_type(
             empty.clone(),
@@ -5072,7 +5096,6 @@ mod tests {
         .unwrap();
         assert_eq!(converted, empty);
 
-        // COUNT-only response (single element): passed through unchanged.
         let count_only = Value::Array(vec![Value::Int(5)]);
         let converted = convert_to_expected_type(
             count_only.clone(),
@@ -5081,14 +5104,6 @@ mod tests {
         .unwrap();
         assert_eq!(converted, count_only);
 
-        // The normal case above is RESP2's wire shape (count,
-        // then flat key/score/fields-array triplets). Confirmed live and
-        // in source (src/commands/ft_search.cc's reply writer has no
-        // RESP3-specific branch for FT.SEARCH) that RESP3 produces the
-        // IDENTICAL Value::Array shape here, not a Value::Map -- this
-        // repeats the normal case's exact input/assertions a second time
-        // under its own name so that claim is actually verified by a
-        // test, not merely asserted in the comment above.
         let resp3_normal = Value::Array(vec![
             Value::Int(2),
             Value::BulkString(b"d1".to_vec().into()),
@@ -5118,11 +5133,6 @@ mod tests {
 
     #[test]
     fn ft_aggregate_withcursor_detected_and_converted() {
-        // [[count, row...], cursor_id] -- confirmed live for
-        // FT.AGGREGATE ... WITHCURSOR and FT.CURSOR READ on valkey-search
-        // 1.3.0-rc1. Detection must land on FTCursorWrappedReturnType, and
-        // conversion must apply FTAggregateReturnType to element 0 while
-        // leaving the cursor id untouched.
         let mut cmd = redis::cmd("FT.AGGREGATE");
         cmd.arg("idx")
             .arg("*")
@@ -5162,15 +5172,12 @@ mod tests {
             panic!("expected a 2-element array, got a different shape");
         };
         assert_eq!(top.len(), 2);
-        // Element 0 went through FTAggregateReturnType: the leading count is
-        // dropped and each row became a map.
         let Value::Array(ref rows) = top[0] else {
             panic!("expected an array of row maps, got {:?}", top[0]);
         };
         assert_eq!(rows.len(), 2);
         assert!(matches!(rows[0], Value::Map(_)));
         assert!(matches!(rows[1], Value::Map(_)));
-        // Element 1 (cursor id) passed through completely unchanged.
         assert_eq!(top[1], Value::Int(14058138254));
     }
 
@@ -5186,9 +5193,6 @@ mod tests {
 
     #[test]
     fn ft_aggregate_option_tail_scanner_does_not_misdetect_withcursor_in_clause_values() {
-        // A PARAMS value, a LOAD alias and a GROUPBY/REDUCE alias each
-        // literally named "withcursor" must not flip detection -- mirrors
-        // the equivalent guard for FT.SEARCH's scanner.
         let mut cmd_params = redis::cmd("FT.AGGREGATE");
         cmd_params
             .arg("idx")
@@ -5233,7 +5237,6 @@ mod tests {
             Some(ExpectedReturnType::FTAggregateReturnType)
         ));
 
-        // The real flag, after a GROUPBY/REDUCE clause, is still detected.
         let mut cmd_real = redis::cmd("FT.AGGREGATE");
         cmd_real
             .arg("idx")
@@ -5255,10 +5258,6 @@ mod tests {
 
     #[test]
     fn ft_aggregate_query_literally_named_withcursor_is_not_misdetected() {
-        // Regression test: the scanner previously started at arg_idx(2),
-        // which is the <query> argument itself, not the first real option
-        // token. A query literally equal to "WITHCURSOR" therefore flipped
-        // detection even with no WITHCURSOR option anywhere in the command.
         let mut cmd = redis::cmd("FT.AGGREGATE");
         cmd.arg("idx")
             .arg("WITHCURSOR")
@@ -5270,8 +5269,6 @@ mod tests {
             Some(ExpectedReturnType::FTAggregateReturnType)
         ));
 
-        // The real option, once the scan correctly starts after the query,
-        // is still detected.
         let mut cmd_real = redis::cmd("FT.AGGREGATE");
         cmd_real
             .arg("idx")
@@ -5288,11 +5285,6 @@ mod tests {
 
     #[test]
     fn ft_aggregate_empty_array_reply_does_not_panic() {
-        // Regression test: Vec::with_capacity(array.len() - 1)
-        // underflowed on a genuinely empty top-level array. The new cursor
-        // and hybrid converters (which both delegate to FTAggregateReturnType
-        // for their inner element) made this reachable in more places than
-        // when it was FT.AGGREGATE-only.
         let converted = convert_to_expected_type(
             Value::Array(vec![]),
             Some(ExpectedReturnType::FTAggregateReturnType),
@@ -5314,8 +5306,6 @@ mod tests {
         cmd_del.arg("DEL").arg("idx").arg("14058138254");
         assert!(expected_type_for_cmd(&cmd_del).is_none());
 
-        // Case-insensitive subcommand match, mirroring the server's own
-        // case-insensitive keyword matching.
         let mut cmd_read_lower = redis::cmd("FT.CURSOR");
         cmd_read_lower.arg("read").arg("idx").arg("14058138254");
         assert!(matches!(
@@ -5345,10 +5335,6 @@ mod tests {
 
     #[test]
     fn ft_hybrid_withcursor_after_combine_detected() {
-        // SEARCH query VSIM @field $param COMBINE RRF <n> ... WITHCURSOR:
-        // the scanner must walk past the query string, the VSIM clause
-        // (no KNN/RANGE block here) and the whole COMBINE block before it
-        // can see WITHCURSOR as a top-level token in the aggregate tail.
         let mut cmd = redis::cmd("FT.HYBRID");
         cmd.arg("idx")
             .arg("SEARCH")
@@ -5376,11 +5362,6 @@ mod tests {
 
     #[test]
     fn ft_hybrid_withcursor_with_knn_block_and_load_detected() {
-        // SEARCH query VSIM @field $param KNN <n> K k ... LOAD n field
-        // WITHCURSOR: the scanner must correctly skip the VSIM clause's own
-        // nested KNN sub-block (which has its own token-count budget, not
-        // VSIM's) before reaching the aggregate-suffix LOAD clause and then
-        // WITHCURSOR.
         let mut cmd = redis::cmd("FT.HYBRID");
         cmd.arg("idx")
             .arg("SEARCH")
@@ -5412,9 +5393,6 @@ mod tests {
 
     #[test]
     fn ft_hybrid_withcursor_not_fooled_by_vsim_filter_or_params_value() {
-        // Neither a counted VSIM FILTER's own token budget nor a PARAMS
-        // value that happens to equal "WITHCURSOR" should cause a false
-        // positive or a wrong skip. Mirrors the FT.AGGREGATE guard above.
         let mut cmd = redis::cmd("FT.HYBRID");
         cmd.arg("idx")
             .arg("SEARCH")
@@ -5431,11 +5409,6 @@ mod tests {
             .arg("2")
             .arg("q")
             .arg("WITHCURSOR");
-        // No real WITHCURSOR anywhere -- the PARAMS value's text must not
-        // trigger it, and the counted VSIM FILTER block must be skipped by
-        // its own budget rather than leaking POLICY/ADHOC into the
-        // aggregate scanner as unrecognised tokens that happen to still
-        // skip harmlessly.
         assert!(matches!(
             expected_type_for_cmd(&cmd),
             Some(ExpectedReturnType::FTAggregateReturnType)
@@ -5444,10 +5417,6 @@ mod tests {
 
     #[test]
     fn ft_hybrid_withcursor_conversion_matches_aggregate_shape() {
-        // Reply shape is identical to FT.AGGREGATE's WITHCURSOR wrapping --
-        // [[count, row...], cursor_id] -- since FT.HYBRID reuses the same
-        // aggregate pipeline's record-population code (confirmed live and
-        // in src/commands/ft_hybrid_parser.cc).
         let reply = Value::Array(vec![
             Value::Array(vec![
                 Value::Int(1),
@@ -5479,13 +5448,6 @@ mod tests {
 
     #[test]
     fn ft_search_with_scores_empty_array_does_not_panic() {
-        // The WITHSCORES and WITHSCORES+WITHSORTKEYS converters
-        // guarded only `len() == 1` before calling `array.remove(0)`
-        // unconditionally, so a genuinely empty (zero-length) top-level
-        // array would panic instead of erroring gracefully. A client must
-        // not crash on an unexpected server reply shape, however narrow the
-        // reachability. Confirms both converters now pass an empty array
-        // through unchanged (via the `<= 1` guard) rather than panicking.
         let empty = Value::Array(vec![]);
         assert_eq!(
             convert_to_expected_type(
@@ -5507,16 +5469,6 @@ mod tests {
 
     #[test]
     fn ft_search_return_with_alias_and_withscores_still_detects_withscores() {
-        // Regression test: RETURN's `cnt` is a token budget where an `AS
-        // alias` pair counts 2 against it (src/commands/ft_search_parser.cc
-        // ConstructReturnParser: `i += 2; if (i > cnt) return error`), not
-        // an uncounted suffix. Before the fix, the scanner only advanced its
-        // own `consumed` counter by 1 per field regardless of an AS/alias
-        // pair, so it UNDER-counted relative to `n` and kept consuming
-        // extra wire tokens past the real end of the RETURN clause -- here,
-        // that would walk straight into WITHSCORES itself and skip over it
-        // as if it were just another RETURN field, missing the flag
-        // entirely.
         let mut cmd = redis::cmd("FT.SEARCH");
         cmd.arg("idx")
             .arg("*")
@@ -5535,17 +5487,6 @@ mod tests {
 
     #[test]
     fn ft_search_return_two_aliases_then_sortby_withsortkeys_regression() {
-        // Regression test against 046685fba (the base commit the whole
-        // option-tail-scanner approach was built on): two RETURN fields,
-        // BOTH aliased via AS, followed by SORTBY and WITHSORTKEYS. RETURN's
-        // token budget here is 6 (title, AS, t, price, AS, p), i.e. 2 fields
-        // + 2 full AS/alias pairs = 2 + 2*2 = 6, not 2. Before the fix the
-        // scanner's `consumed` only reached 2 after walking both fields
-        // (never crediting the AS/alias pairs), so it kept "consuming"
-        // wire tokens one at a time past n=6 -- here that means it would
-        // walk straight through SORTBY's own field/count tokens as if they
-        // were still part of RETURN, corrupting the position WITHSORTKEYS
-        // detection resumes from.
         let mut cmd = redis::cmd("FT.SEARCH");
         cmd.arg("idx")
             .arg("*")
@@ -5568,18 +5509,6 @@ mod tests {
 
     #[test]
     fn ft_search_return_with_oversized_count_does_not_hang() {
-        // CodeRabbit review #7335 (value_conversion.rs:2037): RETURN's
-        // token-budget loop incremented `i` and `consumed` in lockstep from
-        // a server-supplied `n` (parse_count_arg parses to usize with no
-        // upper bound) without ever checking `i` against the command's
-        // real argument count. A malformed/adversarial huge n -- here,
-        // deliberately larger than usize::MAX / 2 so stepping by 1 could
-        // never organically reach it -- used to spin past the end of the
-        // command's real arguments; cmd.arg_idx returning None doesn't
-        // break the loop on its own, only `consumed < n` does. The fix adds
-        // `&& i < total`. This test completing at all (not hanging) is the
-        // assertion; the specific return value only confirms the scanner
-        // still produces a sane result once bounded.
         let mut cmd = redis::cmd("FT.SEARCH");
         cmd.arg("idx")
             .arg("*")
@@ -5591,8 +5520,6 @@ mod tests {
 
     #[test]
     fn ft_aggregate_sortby_with_oversized_count_does_not_hang() {
-        // Same hazard and fix as the RETURN test above, for the aggregate
-        // scanner's SORTBY loop (CodeRabbit review #7335).
         let mut cmd = redis::cmd("FT.AGGREGATE");
         cmd.arg("idx")
             .arg("*")
@@ -5604,8 +5531,6 @@ mod tests {
 
     #[test]
     fn ft_aggregate_load_with_oversized_count_does_not_hang() {
-        // Same hazard and fix as the RETURN test above, for the aggregate
-        // scanner's LOAD loop (CodeRabbit review #7335).
         let mut cmd = redis::cmd("FT.AGGREGATE");
         cmd.arg("idx")
             .arg("*")
@@ -5617,19 +5542,6 @@ mod tests {
 
     #[test]
     fn ft_search_inkeys_with_oversized_count_does_not_overflow_or_wrap() {
-        // CodeRabbit review #7335 follow-up (value_conversion.rs:1991): the
-        // i < total loop-bound fix only covers the RETURN/SORTBY/LOAD
-        // step-loops. INKEYS, PARAMS, GROUPBY and REDUCE instead jump
-        // directly via `i += 1 + n`, which is unchecked arithmetic on an
-        // n that parse_count_arg reads straight off the wire with no upper
-        // bound. n = usize::MAX - 1 makes 1 + n wrap to usize::MAX in a
-        // release build; adding that to i wraps back to i - 1 (the INKEYS
-        // keyword itself), so the scanner re-reads INKEYS forever instead
-        // of terminating -- a hang, not a panic, and in a debug build the
-        // same n instead panics outright on the overflowing add. Fixed
-        // with i.saturating_add(1).saturating_add(n), which this test
-        // completing at all (not panicking, not hanging) is the assertion
-        // for.
         let mut cmd = redis::cmd("FT.SEARCH");
         cmd.arg("idx")
             .arg("*")
@@ -5641,8 +5553,6 @@ mod tests {
 
     #[test]
     fn ft_search_params_with_oversized_count_does_not_overflow_or_wrap() {
-        // Same hazard and fix as the INKEYS test above (CodeRabbit review
-        // #7335 follow-up).
         let mut cmd = redis::cmd("FT.SEARCH");
         cmd.arg("idx")
             .arg("*")
@@ -5655,8 +5565,6 @@ mod tests {
 
     #[test]
     fn ft_aggregate_groupby_with_oversized_count_does_not_overflow_or_wrap() {
-        // Same hazard and fix as the INKEYS test above, for GROUPBY's own
-        // count (CodeRabbit review #7335 follow-up).
         let mut cmd = redis::cmd("FT.AGGREGATE");
         cmd.arg("idx")
             .arg("*")
@@ -5668,8 +5576,6 @@ mod tests {
 
     #[test]
     fn ft_aggregate_groupby_reduce_with_oversized_count_does_not_overflow_or_wrap() {
-        // Same hazard and fix as the INKEYS test above, for the REDUCE
-        // sub-clause's own nested count (CodeRabbit review #7335 follow-up).
         let mut cmd = redis::cmd("FT.AGGREGATE");
         cmd.arg("idx")
             .arg("*")
@@ -5684,9 +5590,6 @@ mod tests {
 
     #[test]
     fn ft_hybrid_knn_block_with_oversized_count_does_not_overflow_or_wrap() {
-        // Same hazard and fix as the INKEYS test above, for FT.HYBRID's
-        // VSIM KNN sub-block count, inside ft_hybrid_prefix_tail_start
-        // (CodeRabbit review #7335 follow-up).
         let mut cmd = redis::cmd("FT.HYBRID");
         cmd.arg("idx")
             .arg("SEARCH")
@@ -5703,8 +5606,6 @@ mod tests {
 
     #[test]
     fn ft_hybrid_filter_counted_form_with_oversized_count_does_not_overflow_or_wrap() {
-        // Same hazard and fix as the INKEYS test above, for FT.HYBRID's
-        // VSIM FILTER counted form (CodeRabbit review #7335 follow-up).
         let mut cmd = redis::cmd("FT.HYBRID");
         cmd.arg("idx")
             .arg("SEARCH")
@@ -5720,8 +5621,6 @@ mod tests {
 
     #[test]
     fn ft_hybrid_combine_with_oversized_count_does_not_overflow_or_wrap() {
-        // Same hazard and fix as the INKEYS test above, for FT.HYBRID's
-        // COMBINE block count (CodeRabbit review #7335 follow-up).
         let mut cmd = redis::cmd("FT.HYBRID");
         cmd.arg("idx")
             .arg("SEARCH")
@@ -5739,15 +5638,6 @@ mod tests {
 
     #[test]
     fn ft_aggregate_cursored_with_sortby_desc_detects_withcursor() {
-        // Regression test: aggregate SORTBY's `cnt` is also a token
-        // budget where ASC/DESC counts against it (src/commands/
-        // ft_aggregate_parser.cc ConstructSortByParser: `for (i = 0; i <
-        // cnt; ++i)` with an EXTRA `i++` inside the loop body on a
-        // direction match). Before the fix the scanner's `consumed` only
-        // credited the field token, so with n=2 (one field + one DESC) it
-        // would read one more "field" token past the clause's real end --
-        // here, that's WITHCURSOR's own keyword, swallowed as if it were
-        // just another SORTBY field and never detected as the flag at all.
         let mut cmd = redis::cmd("FT.AGGREGATE");
         cmd.arg("idx")
             .arg("*")
@@ -5764,15 +5654,6 @@ mod tests {
 
     #[test]
     fn ft_aggregate_cursored_with_load_as_detects_withcursor() {
-        // Regression test: aggregate LOAD's `cnt` is a token budget where
-        // `AS <alias>` counts 2 against it (src/commands/
-        // ft_aggregate_parser.cc ConstructLoadParser's own comment: "`cnt`
-        // is a token budget... the `AS` keyword and its alias count against
-        // the budget" -- confirmed by two separate `++consumed` calls, one
-        // for AS and one for the alias). Before the fix the scanner only
-        // credited 1 (not 2) per AS/alias pair, so with n=3 (one field + one
-        // full AS/alias pair) it would read one more "field" token past the
-        // clause's real end -- here, that's WITHCURSOR's own keyword.
         let mut cmd = redis::cmd("FT.AGGREGATE");
         cmd.arg("idx")
             .arg("*")
@@ -5790,30 +5671,6 @@ mod tests {
 
     #[test]
     fn convert_ft_search_withsortkeys_reply_shapes_pass_through_sort_key_value() {
-        // Pins that convert_to_expected_type's
-        // FTSearchWithSortKeysReturnType branch passes the sort key VALUE
-        // through completely unchanged -- it only reshapes the surrounding
-        // array into key -> (sort_key, fields) pairs, never inspecting or
-        // rewriting the sort key's content. This holds for every shape
-        // valkey-search 1.3.0-rc1 can send, confirmed against a live module:
-        //
-        //   * legacy (search.emulate-release default, 1.0.0):
-        //     sort key is always "#"-prefixed regardless of field type
-        //     (confirmed: TEXT field SORTBY -> "#zebra"), and a document
-        //     missing the sort field renders as "#" (an empty string after
-        //     the prefix), never nil.
-        //   * 1.3.0-emulation (search.emulate-release >= 1.3.0):
-        //     sort key is "$"-prefixed for non-numeric fields, "#"-prefixed
-        //     for numeric fields (confirmed: TEXT -> "$zebra", NUMERIC ->
-        //     "#10"), and a document missing the sort field is a genuine
-        //     RESP nil.
-        //
-        // Source: ft_search.cc GetRowFormat(), both gated by
-        // VALKEY_SEARCH_COMPATIBILITY_FIX(1, 3, 0, ...): sort_key_prefix
-        // ("ft_search_sortkey_type_prefix") and nil_absent_sort_key
-        // ("ft_search_sortkey_nil").
-
-        // Legacy shape: "#"-prefixed sort key even for a non-numeric field.
         let legacy_response = Value::Array(vec![
             Value::Int(1),
             Value::BulkString(b"l5-1".to_vec().into()),
@@ -5835,7 +5692,6 @@ mod tests {
                 Value::Map(vec![(
                     Value::BulkString(b"l5-1".to_vec().into()),
                     Value::Array(vec![
-                        // Passed through byte-identical, "#" prefix intact.
                         Value::BulkString(b"#zebra".to_vec().into()),
                         Value::Map(vec![(
                             Value::BulkString(b"title".to_vec().into()),
@@ -5846,8 +5702,6 @@ mod tests {
             ])
         );
 
-        // Legacy shape, NOCONTENT: a document missing the sort field is an
-        // empty string with the "#" prefix retained, not nil.
         let legacy_missing_response = Value::Array(vec![
             Value::Int(1),
             Value::BulkString(b"l5-2".to_vec().into()),
@@ -5872,8 +5726,6 @@ mod tests {
             ])
         );
 
-        // 1.3.0-emulation shape: "$"-prefixed sort key for a non-numeric
-        // field.
         let fixed_response = Value::Array(vec![
             Value::Int(1),
             Value::BulkString(b"l5-1".to_vec().into()),
@@ -5895,8 +5747,6 @@ mod tests {
                 Value::Map(vec![(
                     Value::BulkString(b"l5-1".to_vec().into()),
                     Value::Array(vec![
-                        // "$" prefix intact, not normalised to "#" or
-                        // stripped.
                         Value::BulkString(b"$zebra".to_vec().into()),
                         Value::Map(vec![(
                             Value::BulkString(b"title".to_vec().into()),
@@ -5907,8 +5757,6 @@ mod tests {
             ])
         );
 
-        // 1.3.0-emulation shape, NOCONTENT: a document missing the sort
-        // field is a genuine nil, not an empty/prefixed string.
         let fixed_missing_response = Value::Array(vec![
             Value::Int(1),
             Value::BulkString(b"l5-2".to_vec().into()),
@@ -6069,12 +5917,6 @@ mod tests {
         );
     }
 
-    // valkey-search 1.3 added array-valued FT.AGGREGATE reducers (TOLIST, RANDOM_SAMPLE),
-    // which serialize their result as a nested RESP array in the aggregated row. This test
-    // pins that FTAggregateReturnType passes such nested arrays through unchanged: the
-    // conversion only wraps each row's flat field list into a map and does not recurse into
-    // field values (`convert_array_to_map_by_type` is called with `None, None` for the
-    // key/value types), so a `Value::Array` field value is unaffected by this conversion.
     #[test]
     fn test_ft_aggregate_return_type_preserves_nested_array_field_value() {
         let tolist_values = Value::Array(vec![
@@ -6082,7 +5924,6 @@ mod tests {
             Value::BulkString(b"blue".to_vec().into()),
         ]);
         let response = Value::Array(vec![
-            // First element is a meaningless row count and is skipped by the conversion.
             Value::BulkString(b"1".to_vec().into()),
             Value::Array(vec![
                 Value::BulkString(b"category".to_vec().into()),

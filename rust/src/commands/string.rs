@@ -56,8 +56,7 @@ pub trait StringCommands: CommandExecutor {
     ///
     /// Since Valkey 9.0.0.
     ///
-    /// Returns `true` if `key` was deleted, or `false` if `key` did not exist or
-    /// its value did not match `value`.
+    /// Returns `true` if `key` was deleted, `false` otherwise.
     async fn del_if_eq<K: ToValkeyArgs + Send, V: ToValkeyArgs + Send>(
         &self,
         key: K,
