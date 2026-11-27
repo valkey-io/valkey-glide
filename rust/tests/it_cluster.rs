@@ -4,7 +4,8 @@
 mod common;
 
 use glide::{
-    AsyncTypedCommands, CustomCommand, FromValkeyValue, GlideError, Route, ServerCredentials,
+    AsyncTypedCommands, CustomCommand, FromValkeyValue, GlideClusterClient, GlideError, Route,
+    ServerCredentials,
 };
 use std::time::Duration;
 
@@ -130,9 +131,11 @@ async fn cluster_info_with_partial_results_keeps_replies_when_a_primary_is_slow(
     assert!(recovered, "paused primary did not recover");
 }
 
-#[tokio::test]
-async fn cluster_info_with_partial_results_keeps_the_error_reply_of_a_denied_primary() {
-    let cluster = common::ClusterHarness::start().await;
+/// Admin client, a client logged in as the ACL user `partial`, the sorted
+/// primary addresses, and a route to the first primary.
+async fn partial_user_client(
+    cluster: &common::ClusterHarness,
+) -> (GlideClusterClient, GlideClusterClient, Vec<String>, Route) {
     let admin = cluster.client().await;
     admin
         .custom_command_with_route(
@@ -151,11 +154,11 @@ async fn cluster_info_with_partial_results_keeps_the_error_reply_of_a_denied_pri
         .await
         .unwrap();
     let credentials = ServerCredentials::username_password("partial", "password");
-    let denied = cluster
+    let client = cluster
         .client_with_config(cluster.config().credentials(credentials))
         .await;
 
-    let healthy = denied.info_with_partial_results(&[], None).await.unwrap();
+    let healthy = client.info_with_partial_results(&[], None).await.unwrap();
     let mut primaries: Vec<String> = healthy.keys().cloned().collect();
     primaries.sort();
     let (host, port) = primaries[0].rsplit_once(':').unwrap();
@@ -163,6 +166,13 @@ async fn cluster_info_with_partial_results_keeps_the_error_reply_of_a_denied_pri
         host: host.to_string(),
         port: port.parse().unwrap(),
     };
+    (admin, client, primaries, route)
+}
+
+#[tokio::test]
+async fn cluster_info_with_partial_results_keeps_the_error_reply_of_a_denied_primary() {
+    let cluster = common::ClusterHarness::start().await;
+    let (admin, denied, primaries, route) = partial_user_client(&cluster).await;
     admin
         .custom_command_with_route(&["ACL", "SETUSER", "partial", "-info"], route)
         .await
@@ -202,36 +212,7 @@ async fn cluster_info_with_partial_results_returns_a_connection_error_for_a_lost
     // The harness stops the cluster on drop, which also removes the user when
     // the test fails.
     let cluster = common::ClusterHarness::start().await;
-    let admin = cluster.client().await;
-    admin
-        .custom_command_with_route(
-            &[
-                "ACL",
-                "SETUSER",
-                "partial",
-                "on",
-                ">password",
-                "~*",
-                "&*",
-                "+@all",
-            ],
-            Route::AllNodes,
-        )
-        .await
-        .unwrap();
-    let credentials = ServerCredentials::username_password("partial", "password");
-    let cut_off = cluster
-        .client_with_config(cluster.config().credentials(credentials))
-        .await;
-
-    let healthy = cut_off.info_with_partial_results(&[], None).await.unwrap();
-    let mut primaries: Vec<String> = healthy.keys().cloned().collect();
-    primaries.sort();
-    let (host, port) = primaries[0].rsplit_once(':').unwrap();
-    let route = Route::ByAddress {
-        host: host.to_string(),
-        port: port.parse().unwrap(),
-    };
+    let (admin, cut_off, primaries, route) = partial_user_client(&cluster).await;
 
     // Drop the client's connection to one primary and keep it from reconnecting.
     admin
