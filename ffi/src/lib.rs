@@ -192,6 +192,11 @@ pub unsafe extern "C" fn free_drop_script_error(error: *mut c_char) {
 #[derive(Debug, Clone)]
 pub struct CommandResponse {
     pub response_type: ResponseType,
+    /// The integer of an `Int` response. For an `Error` response (an error
+    /// nested in a reply, such as a failed node in a partial-results map),
+    /// [`RequestErrorType::Timeout`] for a node that did not answer in time,
+    /// [`RequestErrorType::Disconnect`] for a node the client lost or could not
+    /// connect to, else 0.
     pub int_value: i64,
     pub float_value: c_double,
     pub bool_value: bool,
@@ -5276,8 +5281,19 @@ impl ResponseArena {
                 self.nodes[idx].sets_value = child_start as *mut CommandResponse;
             }
             Value::ServerError(server_error) => {
-                let msg = error_message(&server_error.into()).into_bytes();
+                let error = server_error.into();
+                let msg = error_message(&error).into_bytes();
                 let (ptr, len) = self.store_string(msg);
+                // Only a node that did not answer in time or that the client has
+                // no connection to is marked, so a nested error without partial
+                // results keeps `int_value` 0.
+                let error_type = errors::error_type(&error);
+                if matches!(
+                    error_type,
+                    RequestErrorType::Timeout | RequestErrorType::Disconnect
+                ) {
+                    self.nodes[idx].int_value = error_type as i64;
+                }
                 self.nodes[idx].response_type = ResponseType::Error;
                 self.nodes[idx].string_value = ptr;
                 self.nodes[idx].string_value_len = len;
@@ -5388,6 +5404,50 @@ mod tests_response_arena {
     use super::*;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[test]
+    fn error_nodes_carry_their_request_error_type() {
+        let value = Value::Array(vec![
+            redis::parse_redis_value(b"-EXECABORT aborted\r\n").unwrap(),
+            redis::parse_redis_value(b"-ERR boom\r\n").unwrap(),
+            // A server reply coded `Timeout` is not a client timeout.
+            redis::parse_redis_value(b"-Timeout limit was reached\r\n").unwrap(),
+            // A node that did not answer in a partial-results reply.
+            Value::ServerError(redis::ServerError::ExtensionError {
+                code: redis::TIMEOUT_ERROR_CODE.into(),
+                detail: Some("timed out".into()),
+            }),
+            // A node the client has no connection to.
+            Value::ServerError(redis::ServerError::from_error_keeping_kind(
+                std::io::Error::from(std::io::ErrorKind::ConnectionRefused).into(),
+            )),
+        ]);
+
+        let (root, arena_ptr) =
+            valkey_value_to_arena_response(value, &[]).expect("arena build failed");
+        unsafe {
+            let root = &*root;
+            // Only a client timeout or connection error is marked; other
+            // nested errors keep 0.
+            let expected = [
+                RequestErrorType::Unspecified,
+                RequestErrorType::Unspecified,
+                RequestErrorType::Unspecified,
+                RequestErrorType::Timeout,
+                RequestErrorType::Disconnect,
+            ];
+            for (i, error_type) in expected.into_iter().enumerate() {
+                let node = &*root.array_value.add(i);
+                assert!(matches!(node.response_type, ResponseType::Error));
+                // MIRI links a stub `glide_core::errors::error_type` that always
+                // returns `Unspecified`; the classification is only real here.
+                if !cfg!(miri) {
+                    assert_eq!(node.int_value, error_type as i64, "node {i}");
+                }
+            }
+            free_response_arena(arena_ptr);
+        }
+    }
 
     /// Owner for `Bytes::from_owner` that records when the allocation is
     /// released, so tests can observe whether a `Bytes` slice is still
@@ -5581,6 +5641,54 @@ pub unsafe extern "C-unwind" fn command(
     }
 }
 
+/// Same as [`command`], but a command sent to all nodes or all primaries whose
+/// reply is a map keyed by node address (such as `INFO`) returns an entry for
+/// every target node instead of failing on the first node error. A failed
+/// node's entry is an `Error` response whose `int_value` is `Timeout` if the
+/// node did not answer in time, `Disconnect` if the client lost its connection
+/// to the node or could not connect to it, and `Unspecified` otherwise. A node
+/// has not answered in time when it has not answered by the request timeout
+/// minus a margin of a tenth of it, kept between 2 ms and 100 ms (a quarter of
+/// it under 8 ms), and the call itself fails with a timeout if it has not
+/// finished by the request timeout plus the same margin. Node failures fail the
+/// call only when the client has no connection to any target node; otherwise
+/// every target node gets an entry, even when all of them fail. Other routes
+/// behave as with [`command`].
+///
+/// # Safety
+///
+/// Same contract as [`command`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn command_with_partial_results(
+    client_adapter_ptr: *const c_void,
+    request_id: usize,
+    command_type: RequestType,
+    arg_count: c_ulong,
+    args: *const usize,
+    args_len: *const c_ulong,
+    route_bytes: *const u8,
+    route_bytes_len: usize,
+    span_ptr: u64,
+) -> *mut CommandResult {
+    unsafe {
+        execute_command(
+            client_adapter_ptr,
+            request_id,
+            command_type,
+            arg_count,
+            args,
+            args_len,
+            RouteInput::ProtobufBytes {
+                route_bytes,
+                route_bytes_len,
+            },
+            None,
+            span_ptr,
+            true,
+        )
+    }
+}
+
 /// Where routing info came from across the FFI boundary: legacy protobuf
 /// bytes ([`command_with_buffer`]) or a [`RouteInfo`] C-struct
 /// ([`command_with_route_info`]).
@@ -5751,6 +5859,7 @@ unsafe fn execute_command(
     route_input: RouteInput,
     response_buffer: Option<ResponseBuffer>,
     span_ptr: u64,
+    allow_partial_results: bool,
 ) -> *mut CommandResult {
     let client_adapter = unsafe {
         // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
@@ -5830,6 +5939,7 @@ unsafe fn execute_command(
     if span_ptr != 0 {
         cmd.set_span(unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) });
     }
+    cmd.set_allow_partial_results(allow_partial_results);
 
     if let Some(ref span) = cmd.span() {
         set_db_attributes(span, &cmd, &client_adapter.core.client);
@@ -5958,6 +6068,7 @@ unsafe fn execute_command_with_buffer(
             },
             response_buffer,
             span_ptr,
+            false,
         )
     }
 }
@@ -8553,6 +8664,7 @@ pub unsafe extern "C-unwind" fn command_with_route_info(
             RouteInput::RouteInfo(route_info),
             buf_option,
             span_ptr,
+            false,
         )
     }
 }

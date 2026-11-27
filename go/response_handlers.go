@@ -172,7 +172,8 @@ func parseInterface(response *C.struct_CommandResponse) (any, error) {
 		if !ok {
 			return nil, errors.New("error message isn't a string")
 		}
-		return errors.New(errStrString), nil
+		// An error node carries its error type in int_value.
+		return GoError(uint32(response.int_value), errStrString), nil
 	}
 
 	return nil, errors.New("unexpected return type from Valkey")
