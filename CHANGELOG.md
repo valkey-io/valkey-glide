@@ -14,6 +14,7 @@
 
 ### Fixes
 
+* Core: respect command option boundaries in reply conversion ([#7748](https://github.com/valkey-io/valkey-glide/pull/7748))
 * Core, Rust: reject an OpenTelemetry config with no exporter ([#7718](https://github.com/valkey-io/valkey-glide/pull/7718))
 * Core, Java: bound cluster_scan by the client's request timeout and retries ([#6892](https://github.com/valkey-io/valkey-glide/pull/6892))
 * Python: avoid deprecation warning on legacy module introspection ([#7452](https://github.com/valkey-io/valkey-glide/pull/7452))
