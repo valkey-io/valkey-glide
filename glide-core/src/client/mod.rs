@@ -1416,7 +1416,7 @@ impl Client {
                 // TODO #7653: Return a connection error, not a request error.
                 .map_err(|e| {
                     RedisError::from((
-                        ErrorKind::IoError,
+                        ErrorKind::AllConnectionsUnavailable,
                         "Standalone connect failed",
                         format!("{e:?}"),
                     ))
