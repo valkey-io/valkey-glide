@@ -43,9 +43,14 @@ runs:
           working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash
 
-        - run: |
-              cargo install --locked cargo-deny
-              cargo deny --config "${GITHUB_WORKSPACE}/deny.toml" check
+        - uses: ./.github/actions/install-cargo-tool
+          with:
+              repo: EmbarkStudios/cargo-deny
+              tag: "0.20.2"
+              asset: cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz
+              binary: cargo-deny
+
+        - run: cargo deny --config "${GITHUB_WORKSPACE}/deny.toml" check
           working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash
 
