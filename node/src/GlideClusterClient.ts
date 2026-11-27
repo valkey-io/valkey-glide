@@ -1218,14 +1218,16 @@ export class GlideClusterClient extends BaseClient {
         options?: { sections?: InfoOptions[] } & RouteOption &
             PartialResultsOption,
     ): Promise<string | Record<string, string | RequestError>> {
+        // A non-boolean from plain JS would throw in NAPI and leak the
+        // callback slot and the args vector.
+        const allowPartialResults = !!options?.allowPartialResults;
+
         return this.createWritePromise<ClusterGlideRecord<string>>(
             createInfo(options?.sections),
             { decoder: Decoder.String, ...options },
             false,
             false,
-            // A non-boolean from plain JS would throw in NAPI and leak the
-            // callback slot and the args vector.
-            !!options?.allowPartialResults,
+            allowPartialResults,
         ).then((res) => {
             const result = convertClusterGlideRecord(
                 res,
@@ -1233,7 +1235,7 @@ export class GlideClusterClient extends BaseClient {
                 options?.route,
             );
 
-            if (options?.allowPartialResults && typeof result === "object") {
+            if (allowPartialResults && typeof result === "object") {
                 Object.values(result).forEach(restoreErrorPrototype);
             }
 
