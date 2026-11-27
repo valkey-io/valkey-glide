@@ -87,6 +87,7 @@ import {
     TimeUnit,
     TimeoutError,
     ValkeyError,
+    DelexOptions,
     ZAddOptions,
     ZScanOptions,
     convertFieldsAndValuesToHashDataType,
@@ -107,6 +108,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDelEx,
     createDelIfEq,
     createDump,
     createExists,
@@ -9720,7 +9722,31 @@ export class BaseClient {
         return this.createWritePromise(createAppend(key, value));
     }
 
-    // TODO #7238: Add DELEX command support.
+    /**
+     * Deletes `key` if its value meets the given condition.
+     *
+     * @see {@link https://valkey.io/commands/delex/|valkey.io} for more details.
+     *
+     * @param key - The key to delete.
+     * @param options - The condition for deleting the key.
+     * @returns `true` if `key` was deleted, `false` otherwise.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key", "value");
+     * console.log(await client.delex("key", { condition: "onlyIfEqual", value: "other_value" })); // Output: false
+     * console.log(await client.delex("key", { condition: "onlyIfNotEqual", value: "value" })); // Output: false
+     * console.log(await client.delex("key", { condition: "onlyIfEqual", value: "value" })); // Output: true
+     * ```
+     *
+     * @since Valkey 9.2.0
+     */
+    public async delex(
+        key: GlideString,
+        options: DelexOptions,
+    ): Promise<boolean> {
+        return this.createWritePromise(createDelEx(key, options));
+    }
 
     /**
      * Deletes `key` if its value equals `value`.
@@ -9728,10 +9754,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/delifeq/|valkey.io} for more details.
      *
      * @param key - The key to delete.
-     * @param value - The comparison value. The key is only deleted if its current value matches
-     *     exactly.
-     * @returns `true` if `key` was deleted, or `false` if `key` did not exist or its value did
-     *     not match `value`.
+     * @param value - The value to compare against the key.
+     * @returns `true` if `key` was deleted, `false` otherwise.
      *
      * @example
      * ```typescript

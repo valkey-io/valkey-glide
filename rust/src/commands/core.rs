@@ -49,6 +49,7 @@ use crate::commands::options::FlushDbOptions;
 use crate::commands::options::HashFieldExpirationOptions;
 use crate::commands::options::LposOptions;
 use crate::commands::options::SetOptions;
+use crate::commands::options::ValueComparison;
 use crate::commands::stream::StreamAddOptions;
 use crate::commands::stream::StreamAutoClaimOptions;
 use crate::commands::stream::StreamAutoClaimReply;
@@ -635,6 +636,11 @@ implement_commands! {
     /// `DEL`.
     fn del<K: ToValkeyArgs>(key: K) -> (usize) {
         build_cmd!("DEL", key)
+    }
+
+    /// `DELEX`.
+    fn del_ex<K: ToSingleValkeyArg>(key: K, value_comparison: ValueComparison) -> (usize) {
+        build_cmd!("DELEX", key, value_comparison)
     }
 
     /// `EXISTS`.

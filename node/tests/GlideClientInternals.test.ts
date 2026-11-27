@@ -34,9 +34,11 @@ import {
     connection_request,
 } from "../build-ts/ProtobufMessage";
 import {
+    createDelEx,
     createHSetEx,
     createMigrate,
     createSet,
+    DelexOptions,
     SetOptions,
     TimeUnit,
 } from "../build-ts/Commands";
@@ -667,6 +669,45 @@ describe("createHSetEx option arguments", () => {
         ).toEqual(
             convertStringArrayToBuffer(["key", "KEEPTTL", ...fieldsArgs]),
         );
+    });
+});
+
+describe("createDelEx", () => {
+    it("builds command with IFEQ and IFNE", () => {
+        for (const [condition, keyword] of [
+            ["onlyIfEqual", "IFEQ"],
+            ["onlyIfNotEqual", "IFNE"],
+        ] as const) {
+            const cmd = createDelEx("key", { condition, value: "value" });
+            expect(cmd.requestType).toEqual(RequestType.DelEx);
+            expect(cmd.argsArray?.args).toEqual(
+                convertStringArrayToBuffer(["key", keyword, "value"]),
+            );
+        }
+    });
+
+    it("throws when the condition is invalid", () => {
+        expect(() =>
+            createDelEx("key", {
+                condition: "onlyIfEquals",
+                value: "value",
+            } as unknown as DelexOptions),
+        ).toThrow("Received invalid DELEX condition 'onlyIfEquals'");
+    });
+
+    it("throws when the value is missing", () => {
+        for (const condition of ["onlyIfEqual", "onlyIfNotEqual"]) {
+            for (const value of [null, undefined]) {
+                expect(() =>
+                    createDelEx("key", {
+                        condition,
+                        value,
+                    } as unknown as DelexOptions),
+                ).toThrow(
+                    `Received DELEX condition '${condition}' without a value`,
+                );
+            }
+        }
     });
 });
 
