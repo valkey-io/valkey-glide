@@ -144,6 +144,7 @@ from tests.utils.utils import (
     convert_string_to_bytes_object,
     create_long_running_lua_script,
     create_lua_lib_with_long_running_function,
+    delete_acl_username_and_password,
     flatten_cluster_response_lists,
     generate_lua_lib_code,
     get_first_result,
@@ -154,6 +155,7 @@ from tests.utils.utils import (
     low_busy_reply_threshold,
     parse_int,
     round_values,
+    set_new_acl_username_with_password,
     trigger_latency_spike,
     wait_for,
     wait_for_save_not_in_progress,
@@ -11199,10 +11201,7 @@ class TestClusterRoutes:
         password = "password"
         denied: Optional[GlideClusterClient] = None
         try:
-            await admin.custom_command(
-                ["ACL", "SETUSER", username, "on", f">{password}", "~*", "&*", "+@all"],
-                AllNodes(),
-            )
+            await set_new_acl_username_with_password(admin, username, password)
             denied = cast(
                 GlideClusterClient,
                 await create_client(
@@ -11246,7 +11245,7 @@ class TestClusterRoutes:
             if denied is not None:
                 await denied.close()
             try:
-                await admin.custom_command(["ACL", "DELUSER", username], AllNodes())
+                await delete_acl_username_and_password(admin, username)
             finally:
                 await admin.close()
 
@@ -11263,10 +11262,7 @@ class TestClusterRoutes:
         password = "password"
         cut_off: Optional[GlideClusterClient] = None
         try:
-            await admin.custom_command(
-                ["ACL", "SETUSER", username, "on", f">{password}", "~*", "&*", "+@all"],
-                AllNodes(),
-            )
+            await set_new_acl_username_with_password(admin, username, password)
             cut_off = cast(
                 GlideClusterClient,
                 await create_client(
@@ -11295,7 +11291,7 @@ class TestClusterRoutes:
             if cut_off is not None:
                 await cut_off.close()
             try:
-                await admin.custom_command(["ACL", "DELUSER", username], AllNodes())
+                await delete_acl_username_and_password(admin, username)
             finally:
                 await admin.close()
 

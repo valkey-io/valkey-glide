@@ -140,6 +140,7 @@ from tests.utils.utils import (
     convert_string_to_bytes_object,
     create_long_running_lua_script,
     create_lua_lib_with_long_running_function,
+    delete_acl_username_and_password,
     flatten_cluster_response_lists,
     generate_lua_lib_code,
     get_first_result,
@@ -148,6 +149,7 @@ from tests.utils.utils import (
     parse_int,
     round_values,
     run_sync_func_with_timeout_in_thread,
+    set_new_acl_username_with_password,
     sync_check_if_server_version_lt,
     sync_get_info,
     sync_get_version,
@@ -11259,10 +11261,7 @@ class TestClusterRoutes:
         password = "password"
         denied: Optional[GlideClusterClient] = None
         try:
-            admin.custom_command(
-                ["ACL", "SETUSER", username, "on", f">{password}", "~*", "&*", "+@all"],
-                AllNodes(),
-            )
+            set_new_acl_username_with_password(admin, username, password)
             denied = cast(
                 GlideClusterClient,
                 create_sync_client(
@@ -11304,7 +11303,7 @@ class TestClusterRoutes:
             if denied is not None:
                 denied.close()
             try:
-                admin.custom_command(["ACL", "DELUSER", username], AllNodes())
+                delete_acl_username_and_password(admin, username)
             finally:
                 admin.close()
 
@@ -11321,10 +11320,7 @@ class TestClusterRoutes:
         password = "password"
         cut_off: Optional[GlideClusterClient] = None
         try:
-            admin.custom_command(
-                ["ACL", "SETUSER", username, "on", f">{password}", "~*", "&*", "+@all"],
-                AllNodes(),
-            )
+            set_new_acl_username_with_password(admin, username, password)
             cut_off = cast(
                 GlideClusterClient,
                 create_sync_client(
@@ -11353,7 +11349,7 @@ class TestClusterRoutes:
             if cut_off is not None:
                 cut_off.close()
             try:
-                admin.custom_command(["ACL", "DELUSER", username], AllNodes())
+                delete_acl_username_and_password(admin, username)
             finally:
                 admin.close()
 
