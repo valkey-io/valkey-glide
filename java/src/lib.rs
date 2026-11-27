@@ -1495,8 +1495,25 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
     span_ptr: jlong,
 ) {
     run_ffi(|| {
+        // Rust owns the span once Java passes it in. The spawned task ends and frees it;
+        // every synchronous error return below must do the same.
+        let release_span = move || {
+            if span_ptr != 0
+                && let Ok(span) =
+                    unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(span_ptr as u64) }
+            {
+                span.end();
+                unsafe {
+                    drop(std::sync::Arc::from_raw(
+                        span_ptr as *const glide_core::GlideSpan,
+                    ));
+                }
+            }
+        };
+
         let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeBatchAsync")
         else {
+            release_span();
             return Some(());
         };
 
@@ -1514,6 +1531,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                     &format!("Failed to get request types length: {e}"),
                     0,
                 );
+                release_span();
                 return Some(());
             }
         };
@@ -1525,36 +1543,82 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                 &format!("Failed to read request types: {e}"),
                 0,
             );
+            release_span();
             return Some(());
         }
 
-        // Extract args: byte[][][] -> Vec<Vec<Vec<u8>>>
-        let all_args: Result<Vec<Vec<Vec<u8>>>, FFIError> = (|| {
-            let mut result = Vec::with_capacity(cmd_count);
-            for i in 0..cmd_count {
-                let cmd_args_obj = env.get_object_array_element(&args, i as i32)?;
-                let cmd_args_array = JObjectArray::from(cmd_args_obj);
-                let arg_count = env.get_array_length(&cmd_args_array)? as usize;
-                let mut cmd_args = Vec::with_capacity(arg_count);
-                for j in 0..arg_count {
-                    let arg_obj = env.get_object_array_element(&cmd_args_array, j as i32)?;
-                    let arg_bytes = env.convert_byte_array(JByteArray::from(arg_obj))?;
-                    cmd_args.push(arg_bytes);
-                }
-                result.push(cmd_args);
+        // Build every Cmd once, directly from the JNI arrays.
+        let built_cmds: Result<Vec<redis::Cmd>, String> = (|| {
+            // The raw loop below indexes `args` by request-type position, so check its
+            // shape first: a null or short array would otherwise be undefined behaviour
+            // or a misleading error.
+            if args.is_null() {
+                return Err("batch args array is null".to_string());
             }
-            Ok(result)
+            let args_len = env.get_array_length(&args).map_err(|e| e.to_string())? as usize;
+            if args_len != cmd_count {
+                return Err(format!(
+                    "batch has {cmd_count} request types but {args_len} argument arrays"
+                ));
+            }
+            let raw = env.get_raw();
+            let mut cmds = Vec::with_capacity(cmd_count);
+            let mut scratch: Vec<u8> = Vec::new();
+            unsafe {
+                let fns = &**raw;
+                let get_elem = fns.GetObjectArrayElement.unwrap();
+                let get_len = fns.GetArrayLength.unwrap();
+                let get_region = fns.GetByteArrayRegion.unwrap();
+                let delete_ref = fns.DeleteLocalRef.unwrap();
+                let exception_check = fns.ExceptionCheck.unwrap();
+                for (i, rt) in req_types.iter().enumerate() {
+                    let proto_rt = protobuf::EnumOrUnknown::<
+                        glide_core::command_request::RequestType,
+                    >::from_i32(*rt);
+                    let request_type: glide_core::request_type::RequestType = proto_rt.into();
+                    let Some(mut cmd) = request_type.get_command() else {
+                        return Err(format!("Invalid request type in batch: request_type={rt}"));
+                    };
+                    let cmd_args = get_elem(raw, args.as_raw(), i as jint);
+                    if cmd_args.is_null() {
+                        return Err(format!("null args for batch command {i}"));
+                    }
+                    let arg_count = get_len(raw, cmd_args);
+                    for j in 0..arg_count {
+                        let arg = get_elem(raw, cmd_args, j);
+                        if arg.is_null() {
+                            delete_ref(raw, cmd_args);
+                            return Err(format!("null arg {j} for batch command {i}"));
+                        }
+                        let len = get_len(raw, arg) as usize;
+                        scratch.clear();
+                        scratch.reserve(len);
+                        get_region(raw, arg, 0, len as jint, scratch.as_mut_ptr() as *mut i8);
+                        scratch.set_len(len);
+                        delete_ref(raw, arg);
+                        cmd.arg(scratch.as_slice());
+                    }
+                    delete_ref(raw, cmd_args);
+                    cmds.push(cmd);
+                }
+                if exception_check(raw) != 0 {
+                    return Err("Java exception while reading batch args".to_string());
+                }
+            }
+            Ok(cmds)
         })();
 
-        let all_args = match all_args {
-            Ok(a) => a,
+        let built_cmds = match built_cmds {
+            Ok(c) => c,
             Err(e) => {
+                let _ = env.exception_clear();
                 jni_client::complete_error_sync(
                     &mut env,
                     callback_id,
                     &format!("Failed to extract batch args: {e}"),
                     0,
                 );
+                release_span();
                 return Some(());
             }
         };
@@ -1586,47 +1650,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
         // raise the counter BEFORE spawning, so the abandon monitor cannot observe
         // is_blocking=0 in the window between spawn() and task execution.
         let batch_pre_blocking_arc: Option<Arc<AtomicU32>> = {
-            let has_blocking = req_types.iter().enumerate().any(|(i, rt_int)| {
-                let proto_rt =
-                    protobuf::EnumOrUnknown::<glide_core::command_request::RequestType>::from_i32(
-                        *rt_int,
-                    );
-                let rt: glide_core::request_type::RequestType = proto_rt.into();
-                if matches!(rt, glide_core::request_type::RequestType::CustomCommand) {
-                    // For CustomCommand the actual command name is all_args[i][0].
-                    all_args
-                        .get(i)
-                        .and_then(|args| {
-                            args.first().map(|name| {
-                                let cmd_args = args.as_slice();
-                                glide_core::client::is_blocking_command_name(
-                                    name.as_slice(),
-                                    if cmd_args.len() > 1 {
-                                        &cmd_args[1..]
-                                    } else {
-                                        &[]
-                                    },
-                                )
-                            })
-                        })
-                        .unwrap_or(false)
-                } else {
-                    // Build the full Cmd with arguments so that XREAD BLOCK and
-                    // XREADGROUP BLOCK are detected correctly — they are only
-                    // identifiable by the presence of the BLOCK keyword in the
-                    // args, not by command name alone.
-                    rt.get_command()
-                        .map(|mut cmd| {
-                            if let Some(args) = all_args.get(i) {
-                                for arg in args {
-                                    cmd.arg(arg.as_slice());
-                                }
-                            }
-                            glide_core::client::is_blocking_command(&cmd)
-                        })
-                        .unwrap_or(false)
-                }
-            });
+            let has_blocking = built_cmds
+                .iter()
+                .any(glide_core::client::is_blocking_command);
             if has_blocking {
                 let arc = if crate::jni_pool::get_pool_client_map().contains_key(&handle_id) {
                     glide_core::pool::get_blocking_flag(handle_id)
@@ -1664,7 +1690,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                     }
 
                     let result: Result<redis::Value, redis::RedisError> = async {
-                        // Build pipeline directly from arrays
+                        // Build the pipeline from the commands built above
                         let mut pipeline = redis::Pipeline::with_capacity(cmd_count);
                         if is_atomic_bool {
                             pipeline.atomic();
@@ -1673,23 +1699,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             pipeline.set_pipeline_span(Some(child.clone()));
                         }
 
-                        for (i, rt) in req_types.iter().enumerate() {
-                            let proto_rt = protobuf::EnumOrUnknown::<
-                                glide_core::command_request::RequestType,
-                            >::from_i32(*rt);
-                            let request_type: glide_core::request_type::RequestType =
-                                proto_rt.into();
-                            let Some(mut cmd) = request_type.get_command() else {
-                                return Err(redis::RedisError::from((
-                                    redis::ErrorKind::ClientError,
-                                    "Invalid request type in batch",
-                                    format!("request_type={}", rt),
-                                )));
-                            };
-                            for arg in &all_args[i] {
-                                cmd.arg(arg.as_slice());
-                            }
-                            // Apply compression
+                        for mut cmd in built_cmds {
                             #[allow(clippy::collapsible_if)]
                             if client.is_compression_enabled() {
                                 if let Err(e) = process_command_for_compression(&mut cmd, &client) {

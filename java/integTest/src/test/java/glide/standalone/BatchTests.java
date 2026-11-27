@@ -258,6 +258,39 @@ public class BatchTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
+    public void test_batch_many_arguments(GlideClient client, boolean isAtomic) {
+        // ~52k arguments in one batch: far past the JNI default local reference capacity, and
+        // every argument goes through the native per-argument copy. Value lengths vary and
+        // include an empty value, so bytes left over in a reused native buffer would show up.
+        String key = UUID.randomUUID().toString();
+        int fieldCount = 50;
+        int commandCount = 1_000;
+        String[] fields = new String[fieldCount];
+        String[] expectedValues = new String[fieldCount];
+        Map<String, String> fieldValues = new LinkedHashMap<>();
+        for (int i = 0; i < fieldCount; i++) {
+            fields[i] = "field" + i;
+            expectedValues[i] = repeat("v", (i * 37) % 200);
+            fieldValues.put(fields[i], expectedValues[i]);
+        }
+
+        Batch batch = new Batch(isAtomic);
+        batch.hset(key, fieldValues);
+        for (int i = 0; i < commandCount; i++) {
+            batch.hmget(key, fields);
+        }
+
+        Object[] result = client.exec(batch, true).get();
+        assertEquals(commandCount + 1, result.length);
+        assertEquals((long) fieldCount, result[0]);
+        for (int i = 1; i <= commandCount; i++) {
+            assertArrayEquals(expectedValues, (Object[]) result[i]);
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsWithAtomic")
     public void test_standalone_batch(GlideClient client, boolean isAtomic) {
         String key = UUID.randomUUID().toString();
         String value = UUID.randomUUID().toString();
