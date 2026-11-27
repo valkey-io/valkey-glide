@@ -8,6 +8,7 @@ use glide_core::compression::process_command_args_for_compression;
 use glide_core::connection_request;
 use glide_core::errors::{error_message, error_type};
 use glide_core::otel_db_semantics::{set_db_attributes, set_db_batch_attributes};
+use glide_core::worker_pool::socket_listener_pool_size;
 use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
     GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
@@ -267,7 +268,11 @@ fn acquire_worker_pool() -> LocalPoolHandle {
     let mut state = get_worker_pool_state().lock();
     state.client_count += 1;
     if state.pool.is_none() {
-        let num_workers = num_cpus::get();
+        // The shared sizing (glide-core::worker_pool) caps the default at 8: on many-core
+        // hosts the raw CPU count costs file descriptors proportional to it before any
+        // connection exists, and this build aborts (`panic = "abort"`) if a worker cannot
+        // be created.
+        let num_workers = socket_listener_pool_size();
         state.pool = Some(LocalPoolHandle::new(num_workers));
     }
     state.pool.as_ref().unwrap().clone()
@@ -527,6 +532,7 @@ fn process_command_for_compression(
         "BITPOS" => RequestType::BitPos,
         "DECR" => RequestType::Decr,
         "DECRBY" => RequestType::DecrBy,
+        "DELEX" => RequestType::DelEx,
         "DELIFEQ" => RequestType::DelIfEq,
         "GETBIT" => RequestType::GetBit,
         "GETRANGE" => RequestType::GetRange,
@@ -745,6 +751,7 @@ async fn execute_batch(
     let decompressed = glide_core::compression::try_decompress_batch_response(
         result?,
         client.compression_manager().as_deref(),
+        raise_on_error,
     )?;
     Ok(decompressed)
 }
@@ -1117,7 +1124,7 @@ fn run_worker_message(
             task::spawn_local(async move {
                 // RAII guard: refreshes activity and clears the blocking flag on all exit
                 // paths (normal completion, early return, and task cancellation/drop).
-                let _unmark_guard = pool_blocking_ids
+                let unmark_guard = pool_blocking_ids
                     .and_then(|cid| glide_core::pool::get_blocking_flag(cid).map(|arc| (cid, arc)))
                     .map(|(cid, arc)| UnmarkOnDrop(Some(arc), Some(cid)));
                 if let Some(ref span) = cmd.span() {
@@ -1129,6 +1136,9 @@ fn run_worker_message(
                         Err(err) => Err(err),
                     };
                 let response = build_response(callback_idx, result, cmd.span());
+                // Clear before delivering: the caller may release the client as soon as
+                // the promise settles, and release discards a client still marked blocking.
+                drop(unmark_guard);
                 inflight.fetch_add(1, Ordering::Release);
                 if buffer.push(response)
                     && let Some(wake_callback) = wake.upgrade()
@@ -1148,7 +1158,7 @@ fn run_worker_message(
             task::spawn_local(async move {
                 // RAII guard: refreshes activity and clears the blocking flag on all exit
                 // paths (normal completion, early return, and task cancellation/drop).
-                let _unmark_guard = pool_ids
+                let unmark_guard = pool_ids
                     .and_then(|cid| glide_core::pool::get_blocking_flag(cid).map(|arc| (cid, arc)))
                     .map(|(cid, arc)| UnmarkOnDrop(Some(arc), Some(cid)));
                 let command_span = batch_msg.command_span.clone();
@@ -1165,6 +1175,8 @@ fn run_worker_message(
                 )
                 .await;
                 let response = build_response(callback_idx, result, command_span);
+                // Clear before delivering (see the command task).
+                drop(unmark_guard);
                 inflight.fetch_add(1, Ordering::Release);
                 if buffer.push(response)
                     && let Some(wake_callback) = wake.upgrade()
@@ -1184,7 +1196,7 @@ fn run_worker_message(
             task::spawn_local(async move {
                 // RAII guard: refreshes activity and clears the blocking flag on all exit
                 // paths (normal completion, early return, and task cancellation/drop).
-                let _unmark_guard = pool_ids
+                let unmark_guard = pool_ids
                     .and_then(|cid| glide_core::pool::get_blocking_flag(cid).map(|arc| (cid, arc)))
                     .map(|(cid, arc)| UnmarkOnDrop(Some(arc), Some(cid)));
                 let keys: Vec<&[u8]> = script_msg.keys.iter().map(|k| k.as_ref()).collect();
@@ -1193,6 +1205,8 @@ fn run_worker_message(
                     .invoke_script(&script_msg.hash, &keys, &args, script_msg.routing)
                     .await;
                 let response = build_response(callback_idx, result, None);
+                // Clear before delivering (see the command task).
+                drop(unmark_guard);
                 inflight.fetch_add(1, Ordering::Release);
                 if buffer.push(response)
                     && let Some(wake_callback) = wake.upgrade()

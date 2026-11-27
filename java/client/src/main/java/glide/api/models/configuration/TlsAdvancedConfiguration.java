@@ -67,6 +67,8 @@ public class TlsAdvancedConfiguration {
      */
     public static final long MAX_UINT32 = 4294967295L;
 
+    // TODO #7707: Document that root certificates or IAM authentication with useInsecureTLS is
+    // rejected.
     /**
      * Whether to bypass TLS certificate verification.
      *

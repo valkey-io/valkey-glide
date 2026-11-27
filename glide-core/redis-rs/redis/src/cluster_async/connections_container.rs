@@ -720,38 +720,46 @@ where
     }
 
     /// The connections of all nodes (only primaries if `primaries_only`), and
-    /// the addresses of the slot-map nodes among them that have no connection,
-    /// which `all_node_connections` and `all_primary_connections` skip. Each
-    /// address is in exactly one of the two, even while nodes connect or leave.
+    /// the slot-map nodes among them with no connection, which
+    /// `all_node_connections` and `all_primary_connections` skip. Each address
+    /// is in exactly one of the two, even while nodes connect or leave.
     pub(crate) fn connections_and_unconnected_nodes(
         &self,
         primaries_only: bool,
     ) -> (Vec<ConnectionAndAddress<Connection>>, Vec<String>) {
-        if primaries_only {
-            let (mut connections, mut unconnected) = (Vec::new(), Vec::new());
-            for address in self.slot_map.addresses_for_all_primaries() {
-                match self.connection_for_address(&address) {
-                    Some(connection) => connections.push(connection),
-                    None => unconnected.push(address.to_string()),
-                }
-            }
-            return (connections, unconnected);
-        }
-        // All nodes also covers connected nodes the slot map does not list, as
-        // `all_node_connections` does.
-        let connections: Vec<_> = self.all_node_connections().collect();
+        // All nodes also covers connected nodes the slot map does not list.
+        let (connections, nodes): (Vec<_>, _) = if primaries_only {
+            let nodes = self.slot_map.addresses_for_all_primaries();
+            let connections = nodes
+                .iter()
+                .filter_map(|address| self.connection_for_address(address))
+                .collect();
+            (connections, nodes)
+        } else {
+            let connections = self.all_node_connections().collect();
+            (connections, self.slot_map.all_node_addresses())
+        };
         let connected: HashSet<&str> = connections
             .iter()
             .map(|(address, _)| address.as_str())
             .collect();
-        let unconnected = self
-            .slot_map
-            .all_node_addresses()
+        let unconnected = nodes
             .into_iter()
             .filter(|address| !connected.contains(address.as_str()))
             .map(|address| address.to_string())
             .collect();
         (connections, unconnected)
+    }
+
+    /// Takes over the reconnect tasks of slot-map nodes that have no connection here, so a
+    /// node that is still down is reconnected when it comes back. The other tasks are
+    /// dropped, which aborts them.
+    pub(crate) fn adopt_reconnect_tasks(&mut self, mut tasks: HashMap<String, RefreshTaskState>) {
+        let slot_map_nodes = self.slot_map.all_node_addresses();
+        tasks.retain(|address, _| {
+            slot_map_nodes.contains(address) && !self.connection_map.contains_key(address)
+        });
+        self.refresh_conn_state.refresh_address_in_progress = tasks;
     }
 
     pub(crate) fn node_for_address(&self, address: &str) -> Option<ClusterNode<Connection>> {
@@ -1775,6 +1783,36 @@ mod tests {
         connections.sort();
 
         assert_eq!(vec![2, 3], connections);
+    }
+
+    #[tokio::test]
+    async fn adopt_reconnect_tasks_keeps_only_unconnected_slot_map_nodes() {
+        let mut container = create_container();
+        remove_nodes(&container, &["primary1"]);
+        let task = || {
+            RefreshTaskState::new(
+                tokio::spawn(futures::future::pending()),
+                RefreshTaskNotifier::new(),
+                Arc::new(()),
+                false,
+            )
+        };
+
+        container.adopt_reconnect_tasks(HashMap::from([
+            // In the slot map with no connection: kept.
+            ("primary1".to_owned(), task()),
+            // Connected: dropped.
+            ("primary2".to_owned(), task()),
+            // Not in the slot map: dropped.
+            ("removed".to_owned(), task()),
+        ]));
+
+        let kept: Vec<_> = container
+            .refresh_conn_state
+            .refresh_address_in_progress
+            .keys()
+            .collect();
+        assert_eq!(kept, vec!["primary1"]);
     }
 
     #[test]

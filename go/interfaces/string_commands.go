@@ -51,6 +51,8 @@ type StringCommands interface {
 
 	DelIfEq(ctx context.Context, key string, value string) (bool, error)
 
+	DelEx(ctx context.Context, key string, options options.DelexOptions) (bool, error)
+
 	LCS(ctx context.Context, key1 string, key2 string) (*models.LCSMatch, error)
 
 	LCSLen(ctx context.Context, key1 string, key2 string) (*models.LCSMatch, error)

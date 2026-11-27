@@ -103,6 +103,8 @@ fn create_client_from_uri_test() {
             ptr::null(),
             client_type_ptr,
             Some(pubsub_callback),
+            0,
+            None,
         );
         let conn_ptr = (*connection_response_ptr).conn_ptr;
         close_client(conn_ptr);

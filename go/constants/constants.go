@@ -78,7 +78,9 @@ const (
 
 	// OnlyIfEquals only sets the key if it already exists and the value is equal to the given value.
 	// Equivalent to "IFEQ" in the Valkey API.
+	//
 	// Since Valkey 8.1.0.
+	//
 	// Not supported when compression is enabled. See [Valkey GLIDE – Data Compression].
 	//
 	// [Valkey GLIDE – Data Compression]: https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands
@@ -86,7 +88,9 @@ const (
 
 	// OnlyIfNotEquals only sets the key if it does not exist or if the value is not equal to the given value.
 	// Equivalent to "IFNE" in the Valkey API.
+	//
 	// Since Valkey 9.2.0.
+	//
 	// Not supported when compression is enabled. See [Valkey GLIDE – Data Compression].
 	//
 	// [Valkey GLIDE – Data Compression]: https://glide.valkey.io/concepts/client-features/compression/#incompatible-commands

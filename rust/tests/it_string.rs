@@ -286,6 +286,54 @@ matrix_test!(set_ifne_only_if_value_differs, c, {
     assert_eq!(v.as_deref(), Some("value"));
 });
 
+matrix_test!(del_ex_ifeq, c, {
+    skip_if_version_below!(c, 9, 2, 0);
+
+    let k = common::key("del_ex_ifeq");
+
+    // Key does not exist
+    let deleted: usize = c.del_ex(&k, ValueComparison::ifeq("value")).await.unwrap();
+    assert_eq!(deleted, 0);
+
+    let _: () = c.set(&k, "value").await.unwrap();
+
+    // Value not equal, key is not deleted
+    let deleted: usize = c.del_ex(&k, ValueComparison::ifeq("other")).await.unwrap();
+    assert_eq!(deleted, 0);
+    let v: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(v.as_deref(), Some("value"));
+
+    // Value equal, key is deleted
+    let deleted: usize = c.del_ex(&k, ValueComparison::ifeq("value")).await.unwrap();
+    assert_eq!(deleted, 1);
+    let v: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(v, None);
+});
+
+matrix_test!(del_ex_ifne, c, {
+    skip_if_version_below!(c, 9, 2, 0);
+
+    let k = common::key("del_ex_ifne");
+
+    // Key does not exist
+    let deleted: usize = c.del_ex(&k, ValueComparison::ifne("value")).await.unwrap();
+    assert_eq!(deleted, 0);
+
+    let _: () = c.set(&k, "value").await.unwrap();
+
+    // Value equal, key is not deleted
+    let deleted: usize = c.del_ex(&k, ValueComparison::ifne("value")).await.unwrap();
+    assert_eq!(deleted, 0);
+    let v: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(v.as_deref(), Some("value"));
+
+    // Value not equal, key is deleted
+    let deleted: usize = c.del_ex(&k, ValueComparison::ifne("other")).await.unwrap();
+    assert_eq!(deleted, 1);
+    let v: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(v, None);
+});
+
 matrix_test!(set_with_expiry, c, {
     let k = common::key("ex");
     let opts = SetOptions::default().with_expiration(SetExpiry::EX(100));
@@ -326,4 +374,26 @@ matrix_test!(lcs_len, c, {
     let _: () = c.set(&k1, "ohmytext").await.unwrap();
     let _: () = c.set(&k2, "mynewtext").await.unwrap();
     assert_eq!(c.lcs_len(&k1, &k2).await.unwrap(), 6);
+});
+
+matrix_test!(del_if_eq, c, {
+    skip_if_version_below!(c, 9, 0, 0);
+
+    let k = common::key("delifeq");
+    let v = "value";
+
+    // Key does not exist yet.
+    assert!(!c.del_if_eq(&k, v).await.unwrap());
+
+    let _: () = c.set(&k, v).await.unwrap();
+
+    // Value does not match - key remains.
+    assert!(!c.del_if_eq(&k, "wrong_value").await.unwrap());
+    let got: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(got.as_deref(), Some(v));
+
+    // Value matches - key is deleted.
+    assert!(c.del_if_eq(&k, v).await.unwrap());
+    let got: Option<String> = c.get(&k).await.unwrap();
+    assert_eq!(got, None);
 });

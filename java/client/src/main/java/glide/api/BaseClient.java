@@ -31,6 +31,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Copy;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
 import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.DelEx;
 import static command_request.CommandRequestOuterClass.RequestType.DelIfEq;
 import static command_request.CommandRequestOuterClass.RequestType.Dump;
 import static command_request.CommandRequestOuterClass.RequestType.EvalReadOnly;
@@ -259,6 +260,7 @@ import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
+import glide.api.models.commands.DelexOptions;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
@@ -534,6 +536,7 @@ public abstract class BaseClient
     protected static <T extends BaseClient> CompletableFuture<T> createClient(
             @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
         // Validate protocol compatibility for PubSub subscriptions
+        // TODO #7683: Remove if redundant once glide-core rejects Pub/Sub with RESP2.
         if (config.getSubscriptionConfiguration() != null
                 && config.getProtocol() == glide.api.models.configuration.ProtocolVersion.RESP2) {
             throw new ConfigurationError("PubSub subscriptions require RESP3 protocol");
@@ -1415,6 +1418,17 @@ public abstract class BaseClient
     public CompletableFuture<Long> append(@NonNull GlideString key, @NonNull GlideString value) {
         return commandManager.submitNewCommand(
                 Append, new GlideString[] {key, value}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> delex(@NonNull String key, @NonNull DelexOptions options) {
+        return delex(gs(key), options);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> delex(@NonNull GlideString key, @NonNull DelexOptions options) {
+        GlideString[] arguments = new ArgsBuilder().add(key).add(options.toArgs()).toArray();
+        return commandManager.submitNewCommand(DelEx, arguments, this::handleBooleanResponse);
     }
 
     @Override
