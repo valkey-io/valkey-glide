@@ -111,8 +111,10 @@ class ClusterCommands(CoreCommands):
             allow_partial_results (bool): When True, a command sent to several nodes returns an entry for every
                 target node, holding that node's reply or the error for that node, instead of raising the first
                 node error. A node that has not answered by `request_timeout` minus a margin of a tenth of it,
-                kept between 2 ms and 100 ms (a quarter of it under 8 ms), gets a GLIDE `TimeoutError` (a
-                `RequestError` subclass); other failures get a `RequestError`. The call itself raises a
+                kept between 2 ms and 100 ms (a quarter of it under 8 ms), gets a GLIDE `TimeoutError`, and a
+                node the client lost its connection to or cannot connect to gets a GLIDE `ConnectionError`,
+                the error a request gets when it loses its connection to a node (both `RequestError`
+                subclasses); other failures get a `RequestError`. The call itself raises a
                 `TimeoutError` if it has not finished by `request_timeout` plus the same margin, and still fails
                 when no target node can be reached. Has no effect when the command goes to a single node.
                 Keyword-only. Defaults to False.

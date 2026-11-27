@@ -94,7 +94,9 @@ from glide_shared.constants import (
     TFunctionStatsSingleNodeResponse,
     TResult,
 )
-from glide_shared.exceptions import ClosingError, RequestError
+from glide_shared.exceptions import ClosingError
+from glide_shared.exceptions import ConnectionError as GlideConnectionError
+from glide_shared.exceptions import RequestError
 from glide_shared.exceptions import TimeoutError as GlideTimeoutError
 from glide_shared.routes import (
     AllNodes,
@@ -11301,6 +11303,55 @@ class TestClusterRoutes:
         finally:
             if denied is not None:
                 denied.close()
+            try:
+                admin.custom_command(["ACL", "DELUSER", username], AllNodes())
+            finally:
+                admin.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_info_allow_partial_results_returns_a_connection_error_for_a_primary_it_cannot_reach(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        admin = cast(
+            GlideClusterClient,
+            create_sync_client(request, cluster_mode, protocol=protocol),
+        )
+        username = f"partial-{get_random_string(10)}"
+        password = "password"
+        cut_off: Optional[GlideClusterClient] = None
+        try:
+            admin.custom_command(
+                ["ACL", "SETUSER", username, "on", f">{password}", "~*", "&*", "+@all"],
+                AllNodes(),
+            )
+            cut_off = cast(
+                GlideClusterClient,
+                create_sync_client(
+                    request,
+                    cluster_mode,
+                    protocol=protocol,
+                    credentials=ServerCredentials(password=password, username=username),
+                    # A request already sent on the killed connection takes about
+                    # 2.5 s to fail as a connection error; under 1 s it times out.
+                    request_timeout=5000,
+                ),
+            )
+            primaries = sorted(cast(Dict[bytes, bytes], cut_off.info()).keys())
+            host, port = primaries[0].decode().rsplit(":", 1)
+            route = ByAddressRoute(host, int(port))
+
+            # Drop the client's connection to one primary and keep it from
+            # reconnecting.
+            admin.custom_command(["ACL", "SETUSER", username, "off"], route)
+            admin.custom_command(["CLIENT", "KILL", "USER", username], route)
+
+            result = cut_off.info(allow_partial_results=True)
+            assert isinstance(result, dict)
+            assert isinstance(result[primaries[0]], GlideConnectionError)
+        finally:
+            if cut_off is not None:
+                cut_off.close()
             try:
                 admin.custom_command(["ACL", "DELUSER", username], AllNodes())
             finally:

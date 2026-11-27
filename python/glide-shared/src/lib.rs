@@ -26,30 +26,33 @@ struct CommandResponse {
     arena_ptr: *mut std::ffi::c_void,
 }
 
-/// Cached reference to glide_shared.exceptions.RequestError class.
+/// Cached reference to an attribute of glide_shared.exceptions.
 /// Wrapped for Send+Sync safety — the pointer is valid for the process lifetime.
 struct PyClassPtr(*mut ffi::PyObject);
 unsafe impl Sync for PyClassPtr {}
 unsafe impl Send for PyClassPtr {}
 
-static REQUEST_ERROR_CLASS: std::sync::OnceLock<PyClassPtr> = std::sync::OnceLock::new();
-static TIMEOUT_ERROR_CLASS: std::sync::OnceLock<PyClassPtr> = std::sync::OnceLock::new();
+static GET_REQUEST_ERROR_CLASS: std::sync::OnceLock<PyClassPtr> = std::sync::OnceLock::new();
 
-/// `RequestErrorType::Timeout` from glide-core, as carried in an error node's `int_value`.
-const TIMEOUT_ERROR_TYPE: i64 = 2;
-
-/// Get (and cache) the RequestError class from glide_shared.exceptions.
-unsafe fn get_request_error_class() -> *mut ffi::PyObject {
-    unsafe { get_exception_class(&REQUEST_ERROR_CLASS, c"RequestError") }
+/// The exception class for glide-core's `RequestErrorType` `error_type` (an error node's
+/// `int_value`), from `glide_shared.exceptions.get_request_error_class`, the mapping top-level
+/// errors use. Returns a new reference, or null with no Python error set.
+unsafe fn request_error_class(error_type: i64) -> *mut ffi::PyObject {
+    unsafe {
+        let lookup = get_exceptions_attr(&GET_REQUEST_ERROR_CLASS, c"get_request_error_class");
+        if lookup.is_null() {
+            return std::ptr::null_mut();
+        }
+        let cls = ffi::PyObject_CallFunction(lookup, c"L".as_ptr(), error_type);
+        if cls.is_null() {
+            ffi::PyErr_Clear();
+        }
+        cls
+    }
 }
 
-/// Get (and cache) the TimeoutError class from glide_shared.exceptions.
-unsafe fn get_timeout_error_class() -> *mut ffi::PyObject {
-    unsafe { get_exception_class(&TIMEOUT_ERROR_CLASS, c"TimeoutError") }
-}
-
-/// Get (and cache in `cache`) the class `name` from glide_shared.exceptions.
-unsafe fn get_exception_class(
+/// Get (and cache in `cache`) the attribute `name` of glide_shared.exceptions.
+unsafe fn get_exceptions_attr(
     cache: &std::sync::OnceLock<PyClassPtr>,
     name: &std::ffi::CStr,
 ) -> *mut ffi::PyObject {
@@ -175,18 +178,16 @@ unsafe fn convert(resp: *const CommandResponse) -> *mut ffi::PyObject {
             }
         },
         9 => unsafe {
-            // Error response: a TimeoutError(message) for a timeout, else RequestError(message)
-            let cls = if r.int_value == TIMEOUT_ERROR_TYPE {
-                get_timeout_error_class()
-            } else {
-                get_request_error_class()
-            };
+            // Error response: an instance of the class its error type maps to, such as
+            // TimeoutError(message) or ConnectionError(message), else RequestError(message)
+            let cls = request_error_class(r.int_value);
             if cls.is_null() {
                 // Fallback: return raw bytes if class not found
                 return ffi::PyBytes_FromStringAndSize(r.string_value, r.string_value_len as isize);
             }
             let msg = ffi::PyUnicode_FromStringAndSize(r.string_value, r.string_value_len as isize);
             if msg.is_null() {
+                ffi::Py_DECREF(cls);
                 ffi::PyErr_Clear();
                 return {
                     let n = ffi::Py_None();
@@ -197,6 +198,7 @@ unsafe fn convert(resp: *const CommandResponse) -> *mut ffi::PyObject {
             let args = ffi::PyTuple_New(1);
             if args.is_null() {
                 ffi::Py_DECREF(msg);
+                ffi::Py_DECREF(cls);
                 ffi::PyErr_Clear();
                 return {
                     let n = ffi::Py_None();
@@ -207,6 +209,7 @@ unsafe fn convert(resp: *const CommandResponse) -> *mut ffi::PyObject {
             ffi::PyTuple_SetItem(args, 0, msg); // steals ref to msg
             let obj = ffi::PyObject_CallObject(cls, args);
             ffi::Py_DECREF(args);
+            ffi::Py_DECREF(cls);
             if obj.is_null() {
                 ffi::PyErr_Clear();
                 return {
