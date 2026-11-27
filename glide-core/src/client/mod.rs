@@ -555,6 +555,7 @@ pub struct ClientShared {
     is_cluster: bool,
     // Whether this client is in read-only mode (immutable).
     read_only: bool,
+    search_coordinator: bool,
     // TLS certificate material the live connection was built with. Scope
     // connections read it to inherit the parent's mTLS identity and trust roots.
     // A shared write-once cell because the connection is built after
@@ -1481,7 +1482,12 @@ impl Client {
                     }
                 } else {
                     routing
-                        .or_else(|| RoutingInfo::for_routable(cmd.as_ref()))
+                        .or_else(|| {
+                            RoutingInfo::for_routable_with_search_coordinator(
+                                cmd.as_ref(),
+                                self_clone.shared.search_coordinator,
+                            )
+                        })
                         .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
                 };
                 match fan_out_deadline {
@@ -2115,6 +2121,12 @@ impl Client {
     /// Used by scope connections to determine whether slot validation is needed.
     pub fn is_cluster_mode(&self) -> bool {
         self.shared.is_cluster
+    }
+
+    /// Returns true when the connection request declared that the search module's
+    /// coordinator runs on every shard.
+    pub fn search_coordinator(&self) -> bool {
+        self.shared.search_coordinator
     }
 
     /// Errors when this is a read-only standalone client and `cmd` can write.
@@ -3203,6 +3215,8 @@ async fn create_cluster_client(
 
     builder = builder.tcp_nodelay(request.tcp_nodelay);
 
+    builder = builder.search_coordinator(request.search_coordinator);
+
     // Pass the address resolver to the builder for use during topology refresh
     if let Some(resolver) = address_resolver.clone() {
         builder = builder.address_resolver(resolver);
@@ -3704,6 +3718,7 @@ impl Client {
                     multi_active: Arc::new(AtomicBool::new(false)),
                     is_cluster: request.cluster_mode_enabled,
                     read_only: request.read_only,
+                    search_coordinator: request.search_coordinator,
                     cert_material: cert_material_cell.clone(),
                     address_resolver: request.address_resolver.clone(),
                     configures_cert_material: request_configures_cert_material(&request),
@@ -4530,6 +4545,7 @@ impl Client {
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
                 read_only: false,
+                search_coordinator: false,
                 cert_material: Arc::default(),
                 address_resolver: None,
                 configures_cert_material: false,
@@ -4616,6 +4632,7 @@ pub fn create_test_glide_client() -> Client {
             multi_active: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             is_cluster: false,
             read_only: false,
+            search_coordinator: false,
             cert_material: Arc::default(),
             address_resolver: None,
             configures_cert_material: false,
@@ -5773,6 +5790,7 @@ mod tests {
                 multi_active: Arc::new(AtomicBool::new(false)),
                 is_cluster: false,
                 read_only: false,
+                search_coordinator: false,
                 cert_material: Arc::default(),
                 address_resolver: None,
                 configures_cert_material: false,

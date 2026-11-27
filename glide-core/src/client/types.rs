@@ -65,6 +65,7 @@ pub struct ConnectionRequest {
     pub node_discovery_mode: NodeDiscoveryMode,
     pub address_resolver: Option<Arc<dyn AddressResolver>>,
     pub client_circuit_breaker: Option<ClientCircuitBreakerConfig>,
+    pub search_coordinator: bool,
 }
 
 /// Default connection timeout used when not specified in the request.
@@ -667,6 +668,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             tcp_nodelay,
             pubsub_reconciliation_interval_ms,
             read_only,
+            search_coordinator: value.search_coordinator,
             node_discovery_mode,
             // Address resolver is not set from protobuf - it's set programmatically
             address_resolver: None,
@@ -734,6 +736,14 @@ mod tests {
                     "device_memory = {asked:?}"
                 );
             }
+        }
+
+        #[test]
+        fn search_coordinator_is_off_unless_requested() {
+            let mut proto_request = protobuf::ConnectionRequest::new();
+            assert!(!ConnectionRequest::from(proto_request.clone()).search_coordinator);
+            proto_request.search_coordinator = true;
+            assert!(ConnectionRequest::from(proto_request).search_coordinator);
         }
 
         #[test]

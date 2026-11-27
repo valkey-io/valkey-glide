@@ -488,7 +488,10 @@ where
             Ok(slot_addr.to_string())
         };
 
-        match RoutingInfo::for_routable(cmd) {
+        match RoutingInfo::for_routable_with_search_coordinator(
+            cmd,
+            self.cluster_params.search_coordinator,
+        ) {
             Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
             | Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)) => {
                 Ok(addr_for_slot(Route::new_random_primary())?)
@@ -722,8 +725,14 @@ where
     #[allow(clippy::unnecessary_unwrap)]
     fn request(&self, input: Input) -> RedisResult<Output> {
         let route_option = match &input {
-            Input::Slice { cmd: _, routable } => RoutingInfo::for_routable(routable),
-            Input::Cmd(cmd) => RoutingInfo::for_routable(*cmd),
+            Input::Slice { cmd: _, routable } => RoutingInfo::for_routable_with_search_coordinator(
+                routable,
+                self.cluster_params.search_coordinator,
+            ),
+            Input::Cmd(cmd) => RoutingInfo::for_routable_with_search_coordinator(
+                *cmd,
+                self.cluster_params.search_coordinator,
+            ),
             Input::Commands {
                 cmd: _,
                 route,

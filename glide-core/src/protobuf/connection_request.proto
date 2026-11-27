@@ -186,6 +186,7 @@ message ConnectionRequest {
     // to create_client and do not set this field.
     optional string credential_provider_key = 35;
     optional RdmaConfig rdma_config = 36;
+    bool search_coordinator = 37;
 }
 
 // Configuration for automatic reloading of the mTLS client certificate and key

@@ -1687,7 +1687,7 @@ fn requires_primary_pipeline_routing(command: &redis::Cmd, command_name: &[u8]) 
         // round-robin strategy may pick another replica.
         || matches!(command_name, b"SCAN" | b"HSCAN" | b"SSCAN" | b"ZSCAN")
         // `FT.AGGREGATE ... WITHCURSOR`, which cluster routing sends to a primary.
-        || (command_name == b"FT.AGGREGATE"
+        || (matches!(command_name, b"FT.AGGREGATE" | b"FT.SEARCH")
             && matches!(
                 RoutingInfo::for_routable(command),
                 Some(RoutingInfo::SingleNode(
@@ -1871,6 +1871,12 @@ mod tests {
         assert!(is_readonly_nonatomic_pipeline(&aggregate));
         aggregate.arg("WITHCURSOR");
         assert!(!is_readonly_nonatomic_pipeline(&aggregate));
+
+        let mut search = redis::Pipeline::new();
+        search.cmd("FT.SEARCH").arg("index").arg("*");
+        assert!(is_readonly_nonatomic_pipeline(&search));
+        search.arg("WITHCURSOR");
+        assert!(!is_readonly_nonatomic_pipeline(&search));
 
         readonly.atomic();
         assert!(!is_readonly_nonatomic_pipeline(&readonly));

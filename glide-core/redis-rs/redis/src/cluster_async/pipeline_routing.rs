@@ -224,9 +224,13 @@ where
             entry.add_command(cmd.clone(), index, None, false);
         }
     } else {
+        let search_coordinator = core.get_cluster_param(|params| params.search_coordinator);
         for (index, cmd) in pipeline.cmd_iter().enumerate() {
-            match RoutingInfo::for_routable(cmd.as_ref())
-                .unwrap_or(SingleNode(SingleNodeRoutingInfo::Random))
+            match RoutingInfo::for_routable_with_search_coordinator(
+                cmd.as_ref(),
+                search_coordinator,
+            )
+            .unwrap_or(SingleNode(SingleNodeRoutingInfo::Random))
             {
                 SingleNode(route) => {
                     handle_pipeline_single_node_routing(
