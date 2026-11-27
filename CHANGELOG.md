@@ -17,6 +17,7 @@
 ### Fixes
 
 * Core: reject empty commands, including inside batches, so they no longer shift later replies to the wrong request ([#7666](https://github.com/valkey-io/valkey-glide/issues/7666))
+* Core: handle groups named consumers in XINFO STREAM FULL ([#7781](https://github.com/valkey-io/valkey-glide/pull/7781))
 * Core: respect command option boundaries in reply conversion ([#7748](https://github.com/valkey-io/valkey-glide/pull/7748))
 * Core, Rust: reject an OpenTelemetry config with no exporter ([#7718](https://github.com/valkey-io/valkey-glide/pull/7718))
 * Core, Java: bound cluster_scan by the client's request timeout and retries ([#6892](https://github.com/valkey-io/valkey-glide/pull/6892))
@@ -31,6 +32,7 @@
 * Python: register the sync client's fork hook only after it connects ([#7660](https://github.com/valkey-io/valkey-glide/pull/7660))
 * Core: flush server-assisted cache when its connection closes ([#7493](https://github.com/valkey-io/valkey-glide/pull/7493))
 * Core: deliver reconnect errors to cluster callers instead of dropping them ([#7737](https://github.com/valkey-io/valkey-glide/pull/7737))
+* Core: make pub/sub subscribe cost independent of channels held ([#7872](https://github.com/valkey-io/valkey-glide/pull/7872))
 * Core/FFI: run a lazy sync client's first connect on the runtime worker ([#7671](https://github.com/valkey-io/valkey-glide/pull/7671))
 * Core/FFI: run address resolver callbacks on the blocked caller thread ([#7818](https://github.com/valkey-io/valkey-glide/pull/7818))
 * Core/FFI, Python: pools and scopes work in forked children, and Python raises `ClosingError` for an inherited pool or async scope ([#7630](https://github.com/valkey-io/valkey-glide/issues/7630))
@@ -42,6 +44,7 @@
 * Core: reject writes in read-only standalone pipelines, transactions and scopes ([#7761](https://github.com/valkey-io/valkey-glide/pull/7761))
 * Core: send multi-node cluster requests while another request is pending ([#7855](https://github.com/valkey-io/valkey-glide/pull/7855))
 * Core: Cap the socket listener worker pool at 8 by default (override with `GLIDE_SOCKET_LISTENER_WORKERS`) and report pool-creation failures through the init callback ([#7586](https://github.com/valkey-io/valkey-glide/issues/7586))
+* Core: Bound the explicit `GLIDE_SOCKET_LISTENER_WORKERS` override at 64 workers, so a wrong value degrades to a bounded failure instead of an env-gated stall/OOM ([#7710](https://github.com/valkey-io/valkey-glide/issues/7710))
 * Core/Node: Apply the same worker-pool cap to the Node client's pool ([#7586](https://github.com/valkey-io/valkey-glide/issues/7586))
 * Core: send ASKING in the same write as the redirected command ([#7778](https://github.com/valkey-io/valkey-glide/pull/7778))
 * Python: correct the `FtHybridOptions.params` documentation: parameters apply to the VSIM arm's vector and to FILTER and APPLY expressions, not to the SEARCH arm ([#7867](https://github.com/valkey-io/valkey-glide/pull/7867))
