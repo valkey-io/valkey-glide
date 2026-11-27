@@ -1123,6 +1123,113 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createLeak
     .unwrap_or(0)
 }
 
+/// Validate the context at the JNI boundary before calling the shared telemetry implementation.
+fn new_span_with_trace_context(
+    name: &str,
+    trace_id: Option<&str>,
+    span_id: Option<&str>,
+    trace_flags: jint,
+    trace_state: Option<&str>,
+) -> Result<glide_core::GlideSpan, String> {
+    let valid_id = |id: &str, length| {
+        id.len() == length
+            && id
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            && id.bytes().any(|b| b != b'0')
+    };
+    let trace_id = trace_id
+        .filter(|id| valid_id(id, 32))
+        .ok_or("Invalid parent trace ID")?;
+    let span_id = span_id
+        .filter(|id| valid_id(id, 16))
+        .ok_or("Invalid parent span ID")?;
+    let flags = u8::try_from(trace_flags).map_err(|_| "Invalid parent trace flags")?;
+    // W3C permits SP/HTAB around members (and empty members), but the SDK parser does not.
+    let normalized_trace_state = trace_state.map(|state| {
+        if state
+            .split(',')
+            .all(|member| !member.is_empty() && member.trim_matches([' ', '\t']) == member)
+        {
+            std::borrow::Cow::Borrowed(state)
+        } else {
+            std::borrow::Cow::Owned(
+                state
+                    .split(',')
+                    .map(|member| member.trim_matches([' ', '\t']))
+                    .filter(|member| !member.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(","),
+            )
+        }
+    });
+    glide_core::GlideSpan::new_with_remote_context(
+        name,
+        trace_id,
+        span_id,
+        flags,
+        normalized_trace_state
+            .as_deref()
+            .filter(|state| !state.is_empty()),
+    )
+    .map_err(|_| "Invalid parent tracestate".to_string())
+}
+
+fn warn_invalid_trace_context(reason: &str) {
+    glide_logger::log_warn_rate_limited!(
+        "OpenTelemetry",
+        5,
+        format!("{reason}; falling back to a standalone span")
+    );
+}
+
+/// Creates a GLIDE span from serialized application context, falling back on invalid input.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createLeakedOtelSpanWithTraceContextNative<
+    'local,
+>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    name: JString<'local>,
+    trace_id: JString<'local>,
+    span_id: JString<'local>,
+    trace_flags: jint,
+    trace_state: JString<'local>,
+) -> jlong {
+    run_ffi(|| {
+        fn optional_string(
+            env: &mut JNIEnv<'_>,
+            value: &JString<'_>,
+        ) -> Result<Option<String>, FFIError> {
+            if value.is_null() {
+                Ok(None)
+            } else {
+                Ok(Some(env.get_string(value)?.into()))
+            }
+        }
+        let result = (|| -> Result<jlong, FFIError> {
+            let name: String = env.get_string(&name)?.into();
+            let trace_id = optional_string(&mut env, &trace_id)?;
+            let span_id = optional_string(&mut env, &span_id)?;
+            let trace_state = optional_string(&mut env, &trace_state)?;
+            let span = new_span_with_trace_context(
+                &name,
+                trace_id.as_deref(),
+                span_id.as_deref(),
+                trace_flags,
+                trace_state.as_deref(),
+            )
+            .unwrap_or_else(|reason| {
+                warn_invalid_trace_context(&reason);
+                glide_core::GlideOpenTelemetry::new_span(&name)
+            });
+            Ok(Arc::into_raw(Arc::new(span)) as jlong)
+        })();
+        handle_errors(&mut env, result)
+    })
+    .unwrap_or(0)
+}
+
 /// Drops an OpenTelemetry span given its pointer
 /// # Safety
 /// * `span_ptr` must not be `null`.
@@ -3006,4 +3113,153 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_getCacheMetrics(
         Some(())
     })
     .unwrap_or(())
+}
+
+#[cfg(test)]
+mod trace_context_tests {
+    use super::{new_span_with_trace_context, warn_invalid_trace_context};
+    use opentelemetry::{
+        global,
+        trace::{SpanId, TraceFlags, TraceId},
+    };
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use tracing_subscriber::{Layer, prelude::*};
+
+    const TRACE_ID: &str = "0af7651916cd43dd8448eb211c80319c";
+    const SPAN_ID: &str = "b7ad6b7169203331";
+
+    // GlideSpan uses global::tracer, which has no thread-local provider override.
+    // Serialize the span-creating tests here; no other native unit tests install
+    // an SDK provider. Restore the original provider even if an assertion panics.
+    static TRACER_PROVIDER_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn accepts_valid_context_and_unsigned_flags() {
+        let _lock = TRACER_PROVIDER_LOCK.lock().unwrap();
+        for flags in [0, 1, 255] {
+            for state in [None, Some(""), Some("vendor=value,other=state")] {
+                let span =
+                    new_span_with_trace_context("Get", Some(TRACE_ID), Some(SPAN_ID), flags, state)
+                        .unwrap();
+                span.end();
+            }
+        }
+    }
+
+    #[test]
+    fn exports_span_with_remote_parent_ids_and_tracestate() {
+        let _lock = TRACER_PROVIDER_LOCK.lock().unwrap();
+        let exporter = InMemorySpanExporter::default();
+        let provider = SdkTracerProvider::builder()
+            .with_simple_exporter(exporter.clone())
+            .build();
+        let original_provider = global::tracer_provider();
+        let _restore = scopeguard::guard(original_provider, global::set_tracer_provider);
+        global::set_tracer_provider(provider.clone());
+
+        const NAME: &str = "java-native-remote-parent-preservation";
+        let cases = [
+            ("vendor=value,other=state", "vendor=value,other=state"),
+            ("vendor=value, other=ok", "vendor=value,other=ok"),
+            (" \tvendor=value \t,\t other=ok\t ", "vendor=value,other=ok"),
+            (
+                "vendor=two words, other= leading value",
+                "vendor=two words,other= leading value",
+            ),
+            (", \t,vendor=value,, other=ok,", "vendor=value,other=ok"),
+            (" \t", ""),
+        ];
+        for (input, _) in &cases {
+            let span =
+                new_span_with_trace_context(NAME, Some(TRACE_ID), Some(SPAN_ID), 1, Some(input))
+                    .unwrap();
+            span.end();
+        }
+        provider.force_flush().unwrap();
+
+        // Ignore unrelated spans if other native tests create spans in parallel.
+        let spans = exporter.get_finished_spans().unwrap();
+        let spans: Vec<_> = spans.iter().filter(|span| span.name == NAME).collect();
+        assert_eq!(spans.len(), cases.len());
+        for (exported, (_, expected_state)) in spans.iter().zip(cases) {
+            assert_eq!(
+                exported.span_context.trace_id(),
+                TraceId::from_hex(TRACE_ID).unwrap()
+            );
+            assert_eq!(exported.parent_span_id, SpanId::from_hex(SPAN_ID).unwrap());
+            assert!(exported.parent_span_is_remote);
+            assert!(exported.span_context.is_valid());
+            assert_ne!(exported.span_context.span_id(), exported.parent_span_id);
+            assert_eq!(exported.span_context.trace_flags(), TraceFlags::SAMPLED);
+            assert_eq!(exported.span_context.trace_state().header(), expected_state);
+        }
+    }
+
+    #[test]
+    fn rate_limits_invalid_context_warning_burst() {
+        struct WarningCounter(Arc<AtomicUsize>);
+
+        impl<S: tracing::Subscriber> Layer<S> for WarningCounter {
+            fn on_event(
+                &self,
+                event: &tracing::Event<'_>,
+                _: tracing_subscriber::layer::Context<'_, S>,
+            ) {
+                if event.metadata().level() == &tracing::Level::WARN
+                    && event.metadata().target() == "glide_logger"
+                {
+                    self.0.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
+
+        let warnings = Arc::new(AtomicUsize::new(0));
+        let subscriber = tracing_subscriber::registry().with(WarningCounter(warnings.clone()));
+        tracing::subscriber::with_default(subscriber, || {
+            for _ in 0..100 {
+                warn_invalid_trace_context("Invalid parent trace ID");
+            }
+        });
+        assert_eq!(warnings.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn rejects_invalid_context_before_span_creation() {
+        for id in [
+            None,
+            Some("bad"),
+            Some("00000000000000000000000000000000"),
+            Some("0AF7651916CD43DD8448EB211C80319C"),
+        ] {
+            assert!(new_span_with_trace_context("Get", id, Some(SPAN_ID), 1, None).is_err());
+        }
+        for id in [
+            None,
+            Some("bad"),
+            Some("0000000000000000"),
+            Some("B7AD6B7169203331"),
+        ] {
+            assert!(new_span_with_trace_context("Get", Some(TRACE_ID), id, 1, None).is_err());
+        }
+        for flags in [-1, 256, i32::MAX] {
+            assert!(
+                new_span_with_trace_context("Get", Some(TRACE_ID), Some(SPAN_ID), flags, None)
+                    .is_err()
+            );
+        }
+        for state in [
+            "missing-equals",
+            "vendor=value, bad key=ok",
+            "vendor=value,\u{00a0}other=ok",
+        ] {
+            assert!(
+                new_span_with_trace_context("Get", Some(TRACE_ID), Some(SPAN_ID), 1, Some(state),)
+                    .is_err()
+            );
+        }
+    }
 }

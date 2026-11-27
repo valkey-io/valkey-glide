@@ -702,10 +702,7 @@ public class CommandManager {
         try {
             DirectRouteArgs routeArgs = computeRouteArgs(route);
 
-            long spanPtr = 0;
-            if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
-                spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
-            }
+            long spanPtr = createSpan(requestType.name());
 
             CompletableFuture<Object> jniFuture =
                     coreClient.executeCommandAsync(
@@ -747,10 +744,7 @@ public class CommandManager {
         try {
             DirectRouteArgs routeArgs = computeRouteArgs(route);
 
-            long spanPtr = 0;
-            if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
-                spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
-            }
+            long spanPtr = createSpan(requestType.name());
 
             CompletableFuture<Object> jniFuture =
                     coreClient.executeCommandAsync(
@@ -835,10 +829,7 @@ public class CommandManager {
             DirectRouteArgs routeArgs = computeRouteArgs(route);
             long timeoutMs = timeout > 0 ? timeout : coreClient.getRequestTimeoutMillis();
 
-            long spanPtr = 0;
-            if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
-                spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("Batch");
-            }
+            long spanPtr = createSpan("Batch");
 
             return coreClient
                     .executeBatchAsync(
@@ -863,6 +854,23 @@ public class CommandManager {
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
+    }
+
+    /** Capture context on the submitting thread, only for operations selected by GLIDE sampling. */
+    private static long createSpan(String name) {
+        if (!OpenTelemetry.shouldSample()) {
+            return 0;
+        }
+        OpenTelemetry.GlideSpanContext parent = OpenTelemetry.getParentSpanContext();
+        if (parent == null) {
+            return OpenTelemetryResolver.createLeakedOtelSpan(name);
+        }
+        return OpenTelemetryResolver.createLeakedOtelSpanWithTraceContext(
+                name,
+                parent.getTraceId(),
+                parent.getSpanId(),
+                parent.getTraceFlags(),
+                parent.getTraceState());
     }
 
     /** Extract cursor ID from ClusterScanCursor. */
