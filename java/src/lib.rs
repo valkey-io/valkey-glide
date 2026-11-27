@@ -475,6 +475,10 @@ fn resp_value_to_java<'local>(
                 RequestErrorType::Timeout => {
                     (&cache.timeout_exception_class, cache.timeout_exception_ctor)
                 }
+                RequestErrorType::Disconnect => (
+                    &cache.connection_exception_class,
+                    cache.connection_exception_ctor,
+                ),
                 _ => (&cache.request_exception_class, cache.request_exception_ctor),
             };
             let cls = to_local_jclass(env, class)?;
@@ -2614,6 +2618,8 @@ pub struct JavaValueConversionCache {
     request_exception_ctor: JMethodID,
     timeout_exception_class: GlobalRef,
     timeout_exception_ctor: JMethodID,
+    connection_exception_class: GlobalRef,
+    connection_exception_ctor: JMethodID,
 }
 
 static JAVA_VALUE_CONVERSION_CACHE: OnceLock<Mutex<Option<JavaValueConversionCache>>> =
@@ -2682,6 +2688,11 @@ fn get_java_value_conversion_cache(
         env.get_method_id(&timeout_exc_cls, "<init>", "(Ljava/lang/String;)V")?;
     let timeout_exception_class = env.new_global_ref(&timeout_exc_cls)?;
 
+    let connection_exc_cls = env.find_class("glide/api/models/exceptions/ConnectionException")?;
+    let connection_exc_ctor =
+        env.get_method_id(&connection_exc_cls, "<init>", "(Ljava/lang/String;)V")?;
+    let connection_exception_class = env.new_global_ref(&connection_exc_cls)?;
+
     let cache = JavaValueConversionCache {
         long_class,
         long_ctor,
@@ -2704,6 +2715,8 @@ fn get_java_value_conversion_cache(
         request_exception_ctor: req_exc_ctor,
         timeout_exception_class,
         timeout_exception_ctor: timeout_exc_ctor,
+        connection_exception_class,
+        connection_exception_ctor: connection_exc_ctor,
     };
 
     // Prefer existing value if concurrently initialized

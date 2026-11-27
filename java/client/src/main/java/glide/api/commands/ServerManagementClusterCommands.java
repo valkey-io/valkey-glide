@@ -150,7 +150,9 @@ public interface ServerManagementClusterCommands {
      * @return A <code>Map{@literal <String, Object>}</code> with each primary address as the key. The
      *     value is the node's reply as a <code>String</code>, or a {@link
      *     glide.api.models.exceptions.TimeoutException} if the node did not answer in time, or a
-     *     {@link glide.api.models.exceptions.RequestException} for any other failure.
+     *     {@link glide.api.models.exceptions.ConnectionException} if the client lost or has no
+     *     connection to it, or a {@link glide.api.models.exceptions.RequestException} for any other
+     *     failure.
      * @example
      *     <pre>{@code
      * ClusterValue<Object> payload = clusterClient.infoWithPartialResults(new Section[0]).get();
@@ -184,7 +186,9 @@ public interface ServerManagementClusterCommands {
      *     route</code> is a single node. Otherwise a <code>Map{@literal <String, Object>}</code> with
      *     each address as the key. The value is the node's reply as a <code>String</code>, or a
      *     {@link glide.api.models.exceptions.TimeoutException} if the node did not answer in time, or
-     *     a {@link glide.api.models.exceptions.RequestException} for any other failure.
+     *     a {@link glide.api.models.exceptions.ConnectionException} if the client lost or has no
+     *     connection to it, or a {@link glide.api.models.exceptions.RequestException} for any other
+     *     failure.
      * @example
      *     <pre>{@code
      * ClusterValue<Object> payload =

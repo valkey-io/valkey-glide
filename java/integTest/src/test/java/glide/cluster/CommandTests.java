@@ -106,6 +106,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.configuration.ServerCredentials;
+import glide.api.models.exceptions.ConnectionException;
 import glide.api.models.exceptions.GlideException;
 import glide.api.models.exceptions.RequestException;
 import glide.api.models.exceptions.TimeoutException;
@@ -651,6 +652,45 @@ public class CommandTests {
                 for (Object reply : failed.values()) {
                     assertInstanceOf(RequestException.class, reply);
                 }
+            } finally {
+                admin.customCommand(new String[] {"ACL", "DELUSER", username}, ALL_NODES).get();
+            }
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void infoWithPartialResults_returns_a_connection_exception_for_a_lost_primary() {
+        String username = "partial-" + UUID.randomUUID();
+        String password = "password";
+        try (GlideClusterClient admin =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+            admin
+                    .customCommand(
+                            new String[] {"ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all"},
+                            ALL_NODES)
+                    .get();
+            try (GlideClusterClient cutOff =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig()
+                                            .credentials(
+                                                    ServerCredentials.builder().username(username).password(password).build())
+                                            .build())
+                            .get()) {
+                List<String> primaries = new ArrayList<>(cutOff.info().get().getMultiValue().keySet());
+                Collections.sort(primaries);
+                String lost = primaries.get(0);
+                int portIndex = lost.lastIndexOf(':');
+                ByAddressRoute route =
+                        new ByAddressRoute(
+                                lost.substring(0, portIndex), Integer.parseInt(lost.substring(portIndex + 1)));
+
+                // Drop the client's connection to one primary and keep it from reconnecting.
+                admin.customCommand(new String[] {"ACL", "SETUSER", username, "off"}, route).get();
+                admin.customCommand(new String[] {"CLIENT", "KILL", "USER", username}, route).get();
+
+                Map<String, Object> replies = cutOff.infoWithPartialResults().get().getMultiValue();
+                assertInstanceOf(ConnectionException.class, replies.get(lost));
             } finally {
                 admin.customCommand(new String[] {"ACL", "DELUSER", username}, ALL_NODES).get();
             }
