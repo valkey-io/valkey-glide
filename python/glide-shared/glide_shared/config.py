@@ -401,10 +401,10 @@ class RdmaConfiguration:
     The configuration for enabling remote direct memory access (RDMA) transfers.
 
     RDMA moves values straight between server memory and host memory the caller
-    registered instead of through the RESP reply. Only the synchronous client
-    supports it and only on a machine with libfabric installed — check
-    :meth:`BaseClient.rdma_usable` first. Leaving this unset means that
-    no fabric is opened and libfabric is never loaded.
+    registered, or GPU memory with ``device_memory``, instead of through the RESP
+    reply. Only the synchronous client supports it and only on a machine with
+    libfabric installed — check :meth:`BaseClient.rdma_usable` first. Leaving
+    this unset means that no fabric is opened and libfabric is never loaded.
 
     Creating a client fails if RDMA is combined with enabled compression,
     ``lazy_connect``, read-only mode, or static node discovery.
@@ -415,6 +415,11 @@ class RdmaConfiguration:
         interface (Optional[str]): Fabric domain to pin to when a host has more
             than one card. If not set, the first domain the provider returns is
             used.
+        device_memory (bool): Open the fabric so it can also register GPU
+            memory, such as a CUDA ``torch.Tensor``. The provider must offer GPU
+            memory (``FI_HMEM``) on this host: efa-direct does on a GPU host whose
+            libfabric was built with CUDA. Creating the client fails otherwise,
+            for example with ``RdmaProvider.Tcp()``. Defaults to False.
 
     Example::
 
@@ -426,6 +431,7 @@ class RdmaConfiguration:
 
     provider: Union["RdmaProvider.EfaDirect", "RdmaProvider.Tcp"]
     interface: Optional[str] = None
+    device_memory: bool = False
 
     def __post_init__(self) -> None:
         """Validate the RDMA configuration parameters."""
@@ -470,6 +476,9 @@ class RdmaConfiguration:
 
         if self.interface is not None:
             config.interface = self.interface
+
+        if self.device_memory:
+            config.device_memory = True
 
         return config
 
