@@ -158,6 +158,84 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_empty_command_is_rejected_and_later_replies_are_correct(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut empty = redis::Cmd::new();
+            let err = test_basics
+                .client
+                .send_command(&mut empty, None)
+                .await
+                .expect_err("empty command must fail");
+            assert_eq!(err.kind(), redis::ErrorKind::ClientError);
+
+            for atomic in [false, true] {
+                let mut pipeline = redis::Pipeline::new();
+                if atomic {
+                    pipeline.atomic();
+                }
+                pipeline.add_command(redis::cmd("PING"));
+                pipeline.add_command(redis::Cmd::new());
+                let result = if atomic {
+                    test_basics
+                        .client
+                        .send_transaction(&pipeline, None, None, true)
+                        .await
+                } else {
+                    test_basics
+                        .client
+                        .send_pipeline(
+                            &pipeline,
+                            None,
+                            true,
+                            None,
+                            redis::PipelineRetryStrategy::default(),
+                        )
+                        .await
+                };
+                let err = result.expect_err("batch with an empty command must fail");
+                assert_eq!(err.kind(), redis::ErrorKind::ClientError);
+            }
+
+            let prefix = generate_random_string(6);
+            for i in 0..30 {
+                let key = format!("{prefix}{i}");
+                let mut set = redis::cmd("SET");
+                set.arg(&key).arg(i.to_string());
+                test_basics
+                    .client
+                    .send_command(&mut set, None)
+                    .await
+                    .unwrap();
+            }
+            for i in 0..30 {
+                let mut get = redis::cmd("GET");
+                get.arg(format!("{prefix}{i}"));
+                let v = test_basics
+                    .client
+                    .send_command(&mut get, None)
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    v,
+                    redis::Value::BulkString(i.to_string().into_bytes().into())
+                );
+            }
+        });
+    }
+
     // TODO #7673: Add a test that a batch with a multi-node route returns an error.
     #[rstest]
     #[serial_test::serial]
