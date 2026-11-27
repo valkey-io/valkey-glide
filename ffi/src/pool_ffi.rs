@@ -7,6 +7,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 use super::*;
+use glide_core::fork_slot::ForkSlot;
 use glide_core::pool::{self, ClientPool, ClientState, PoolConfig, PoolState, PooledClient};
 use glide_core::scope;
 
@@ -68,12 +69,24 @@ const POOL_ERROR_UNSUPPORTED_CONFIG: i64 = -3;
 
 /// Shared Tokio runtime for pool background operations (client creation, eviction).
 /// All pooled clients share this runtime rather than each getting their own.
-static POOL_RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+/// A forked child gets a fresh one: the inherited runtime has no worker threads.
+static POOL_RUNTIME: ForkSlot<PoolRuntime> = ForkSlot::new();
+
+/// Shuts the runtime down without waiting when dropped, as a runtime built by a
+/// losing racer is.
+struct PoolRuntime(Option<tokio::runtime::Runtime>);
+
+impl Drop for PoolRuntime {
+    fn drop(&mut self) {
+        if let Some(runtime) = self.0.take() {
+            runtime.shutdown_background();
+        }
+    }
+}
 
 /// Maps client_id → (ClientAdapter raw pointer, PooledClient).
 /// When a client is acquired, the entry moves here. On release, it moves back to pool.idle.
-static POOL_CLIENTS: std::sync::OnceLock<dashmap::DashMap<u64, PoolClientEntry>> =
-    std::sync::OnceLock::new();
+static POOL_CLIENTS: ForkSlot<dashmap::DashMap<u64, PoolClientEntry>> = ForkSlot::new();
 
 /// Reverse lookup: adapter_ptr → (pool_id, client_id).
 /// Populated at client creation, used by command dispatch to detect pool-borrowed clients
@@ -85,13 +98,18 @@ static POOL_CLIENTS: std::sync::OnceLock<dashmap::DashMap<u64, PoolClientEntry>>
 /// The is_pool_client() and refresh_activity_by_client() glide-core APIs therefore
 /// do not apply to FFI clients; activity refresh happens directly via
 /// refresh_client_activity(pool_id, client_id) at dispatch time.
-static POOL_ADAPTER_MAP: std::sync::OnceLock<dashmap::DashMap<usize, (u64, u64)>> =
-    std::sync::OnceLock::new();
+static POOL_ADAPTER_MAP: ForkSlot<dashmap::DashMap<usize, (u64, u64)>> = ForkSlot::new();
 
 fn get_pool_runtime() -> &'static tokio::runtime::Runtime {
-    POOL_RUNTIME.get_or_init(|| {
-        worker_runtime("glide-pool", Some(2)).expect("Failed to create pool runtime")
-    })
+    POOL_RUNTIME
+        .get_or_init(|| {
+            PoolRuntime(Some(
+                worker_runtime("glide-pool", Some(2)).expect("Failed to create pool runtime"),
+            ))
+        })
+        .0
+        .as_ref()
+        .expect("runtime is present until drop")
 }
 
 #[allow(dead_code)]
@@ -122,8 +140,7 @@ fn track_scope_command(
 }
 
 /// Maps pool_id → ClientType for background client creation.
-static POOL_CLIENT_TYPES: std::sync::OnceLock<dashmap::DashMap<u64, ClientType>> =
-    std::sync::OnceLock::new();
+static POOL_CLIENT_TYPES: ForkSlot<dashmap::DashMap<u64, ClientType>> = ForkSlot::new();
 
 fn get_pool_client_types() -> &'static dashmap::DashMap<u64, ClientType> {
     POOL_CLIENT_TYPES.get_or_init(dashmap::DashMap::new)
@@ -148,6 +165,7 @@ fn create_pool_client(
         None, // no address resolver (uses the one in ConnectionRequest if any)
         None, // custom credential providers are rejected by glide_pool_create
         client_id,
+        client_id as u64,
     )
     .map_err(|err| err.message)?;
 
@@ -1642,5 +1660,106 @@ mod watchdog_gating_tests {
             "XREADGROUP",
             &["GROUP", "g", "c", "BLOCK", "0", "STREAMS", "s", ">"]
         ));
+    }
+}
+
+#[cfg(all(test, unix))]
+mod fork_tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn wait_for_clean_exit(pid: libc::pid_t, what: &str) {
+        let mut status = 0;
+        assert_eq!(unsafe { libc::waitpid(pid, &mut status, 0) }, pid);
+        assert!(
+            libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+            "{what} (wait status {status})"
+        );
+    }
+
+    /// A forked child inherits the pool runtime without its worker threads, so
+    /// a task spawned on it would never run.
+    #[test]
+    fn child_spawns_work_on_a_live_pool_runtime() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        get_pool_runtime().spawn(async move { tx.send(()).unwrap() });
+        rx.recv_timeout(Duration::from_secs(5)).unwrap();
+
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0, "fork failed");
+        if pid == 0 {
+            let (tx, rx) = std::sync::mpsc::channel();
+            get_pool_runtime().spawn(async move { tx.send(()).unwrap() });
+            // Poll instead of parking: on macOS the parker is a libdispatch
+            // semaphore this thread created before the fork, and libdispatch
+            // crashes the child if it is used again.
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            let mut ran = false;
+            while std::time::Instant::now() < deadline {
+                if rx.try_recv().is_ok() {
+                    ran = true;
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            unsafe { libc::_exit(if ran { 0 } else { 1 }) };
+        }
+        wait_for_clean_exit(pid, "pool runtime did not run work in the forked child");
+    }
+
+    /// A pool or scope pool the parent registered is unknown in the child, so
+    /// every binding gets an error code instead of a hang.
+    #[test]
+    fn inherited_pool_and_scope_ids_are_unknown_in_a_child() {
+        let pool_id = pool::register_pool(
+            ClientPool::new(PoolConfig {
+                max_size: 2,
+                min_idle: 0,
+                idle_timeout: Duration::from_secs(300),
+                request_timeout: Duration::from_secs(5),
+                test_on_borrow: false,
+                connection_request: vec![],
+                is_async: false,
+                configured_database_id: 0,
+                abandon_timeout: Duration::ZERO,
+            })
+            .unwrap(),
+        );
+        let scope_client_id = 0xF0_0000_u64;
+        pool::get_client_scope_pools().insert(
+            scope_client_id,
+            pool::ScopePoolHandle::new(pool::ScopePool::new(
+                Default::default(),
+                vec![],
+                scope_client_id,
+            )),
+        );
+        assert_eq!(glide_scope_release(1, scope_client_id), 0, "control");
+        assert!(matches!(
+            glide_pool_metrics(pool_id).status,
+            PoolMetricsStatus::Read
+        ));
+
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0, "fork failed");
+        if pid == 0 {
+            let ok = glide_pool_try_acquire(pool_id) == -2
+                && glide_pool_acquire_blocking(pool_id, 100) == -2
+                && glide_pool_release(pool_id, 1) == -1
+                && glide_pool_destroy(pool_id) == -1
+                && !matches!(glide_pool_metrics(pool_id).status, PoolMetricsStatus::Read)
+                && glide_scope_release(1, scope_client_id) == -1;
+            unsafe { libc::_exit(if ok { 0 } else { 1 }) };
+        }
+        wait_for_clean_exit(pid, "inherited ids were not rejected in the child");
+
+        // The child's calls must not have touched the parent's registrations.
+        assert!(matches!(
+            glide_pool_metrics(pool_id).status,
+            PoolMetricsStatus::Read
+        ));
+        assert_eq!(glide_scope_release(1, scope_client_id), 0);
+        glide_pool_destroy(pool_id);
+        pool::get_client_scope_pools().remove(&scope_client_id);
     }
 }

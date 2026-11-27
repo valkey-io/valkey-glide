@@ -65,7 +65,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     pin::Pin,
     sync::{
-        atomic::{self, AtomicIsize, AtomicUsize, Ordering},
+        atomic::{self, AtomicBool, AtomicIsize, AtomicUsize, Ordering},
         Arc,
     },
     task::{self, Poll},
@@ -133,6 +133,28 @@ fn parse_node_address(address: &str) -> Option<(&str, i64)> {
     let (host, port_str) = address.rsplit_once(':')?;
     let port = port_str.parse::<i64>().ok()?;
     Some((host, port))
+}
+
+// No receivers means we reached no node for this fan-out. Either a
+// concurrent remove_node drained the connection map after the outer
+// is_empty check, or the slot map lists primaries or routes that the
+// connection map does not have, which can persist outside any race.
+// Both are connectivity failures, so classify as retryable to trigger
+// RefreshSlots and a retry (#6759).
+fn no_fan_out_connections_error() -> RedisError {
+    RedisError::from((
+        ErrorKind::ConnectionNotFoundForRoute,
+        "Connection not found for route",
+        "No connections available for multi-node fan-out".to_string(),
+    ))
+}
+
+/// Whether a node's `error` means the client could not reach it: an I/O error
+/// other than a timeout, a dropped connection, or no connection to it.
+fn is_node_unreachable(error: &RedisError) -> bool {
+    (error.is_io_error() && !error.is_timeout())
+        || error.is_connection_dropped()
+        || error.kind() == ErrorKind::ConnectionNotFoundForRoute
 }
 
 /// Sets the routed node's address on the command span for OTel reporting.
@@ -341,13 +363,30 @@ where
         cmd: &Cmd,
         routing: cluster_routing::RoutingInfo,
     ) -> RedisResult<Value> {
+        self.route_command_with_fan_out_deadline(Arc::new(cmd.clone()), routing, None)
+            .await
+    }
+
+    /// Same as [`Self::route_command`], and a partial-results fan-out (see
+    /// [`Cmd::set_allow_partial_results`]) stops waiting at `fan_out_deadline`:
+    /// nodes that have not answered by then are reported as timed out, and with
+    /// `None` it waits for every node. Takes the command as an `Arc`, so a caller
+    /// that already holds one does not clone it; that shared command's watchdog
+    /// fields then record its phase and retries.
+    pub async fn route_command_with_fan_out_deadline(
+        &mut self,
+        cmd: Arc<Cmd>,
+        routing: cluster_routing::RoutingInfo,
+        fan_out_deadline: Option<std::time::Instant>,
+    ) -> RedisResult<Value> {
         log_trace_lazy!("cluster", "route_command");
         let (sender, receiver) = oneshot::channel();
         self.sender
             .send(Message {
                 cmd: CmdArg::Cmd {
-                    cmd: Arc::new(cmd.clone()),
+                    cmd,
                     routing: routing.into(),
+                    fan_out_deadline,
                 },
                 sender,
             })
@@ -572,6 +611,8 @@ type ConnectionsContainer<C> =
 pub(crate) struct Connections<C> {
     /// Set by `dispose`.
     closed: bool,
+    /// The slot refresh a partial-results fan-out started; `dispose` aborts it.
+    background_refresh: Option<JoinHandle<RedisResult<()>>>,
     container: ConnectionsContainer<C>,
 }
 
@@ -579,6 +620,7 @@ impl<C> Connections<C> {
     fn new(container: ConnectionsContainer<C>) -> Self {
         Connections {
             closed: false,
+            background_refresh: None,
             container,
         }
     }
@@ -619,7 +661,7 @@ impl<C> InnerCore<C>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    fn get_cluster_param<T, F>(&self, f: F) -> T
+    pub(crate) fn get_cluster_param<T, F>(&self, f: F) -> T
     where
         F: FnOnce(&ClusterParams) -> T,
         T: Clone,
@@ -752,17 +794,6 @@ where
             .slot_map
             .get_slots_of_node(node_address)
     }
-
-    /// Get connection for address
-    pub(crate) async fn connection_for_address(
-        &self,
-        address: &str,
-    ) -> Option<ConnectionFuture<C>> {
-        self.conn_lock
-            .read()
-            .connection_for_address(address)
-            .map(|(_, conn)| conn)
-    }
 }
 
 pub(crate) struct ClusterConnInner<C> {
@@ -817,6 +848,9 @@ impl<C> Dispose for ClusterConnInner<C> {
         // A task that is mid-poll on another thread may still ask for a reconnect;
         // `closed` makes that a no-op.
         conn_lock.closed = true;
+        if let Some(refresh) = conn_lock.background_refresh.take() {
+            refresh.abort();
+        }
         conn_lock.refresh_conn_state.clear_refresh_state();
         drop(conn_lock);
 
@@ -889,6 +923,23 @@ pub(crate) enum InternalSingleNodeRouting<C> {
     },
 }
 
+impl<C> InternalSingleNodeRouting<C> {
+    /// Whether a request on this route must be sent right after `ASKING`.
+    ///
+    /// The node honours `ASKING` only for the next command it reads from the connection,
+    /// and other requests share the connection, so the caller packs `ASKING` and the
+    /// request in one write. [`ClusterConnInner::get_connection`] does not send it.
+    pub(crate) fn requires_asking(&self) -> bool {
+        matches!(
+            self,
+            InternalSingleNodeRouting::Redirect {
+                redirect: Redirect::Ask(_, true),
+                ..
+            }
+        )
+    }
+}
+
 impl<C> From<SingleNodeRoutingInfo> for InternalSingleNodeRouting<C> {
     fn from(value: SingleNodeRoutingInfo) -> Self {
         match value {
@@ -920,6 +971,8 @@ enum CmdArg<C> {
     Cmd {
         cmd: Arc<Cmd>,
         routing: InternalRoutingInfo<C>,
+        /// See [`ClusterConnection::route_command_with_fan_out_deadline`].
+        fan_out_deadline: Option<std::time::Instant>,
     },
     Pipeline {
         pipeline: Arc<crate::Pipeline>,
@@ -1791,6 +1844,18 @@ fn fail_queued_senders<C>(
     failed
 }
 
+/// Clears `SlotRefreshState::in_progress` on drop, so a refresh future cancelled
+/// mid-flight (e.g. by a `cluster_scan` timeout) cannot block all later refreshes.
+struct SlotRefreshInProgressGuard<'a> {
+    in_progress: &'a AtomicBool,
+}
+
+impl Drop for SlotRefreshInProgressGuard<'_> {
+    fn drop(&mut self) {
+        self.in_progress.store(false, Ordering::Relaxed);
+    }
+}
+
 impl<C> ClusterConnInner<C>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
@@ -2488,18 +2553,8 @@ where
             convert_result(receiver.await)
         };
 
-        // No receivers means we reached no node for this fan-out. Either a
-        // concurrent remove_node drained the connection map after the outer
-        // is_empty check, or the slot map lists primaries or routes that the
-        // connection map does not have, which can persist outside any race.
-        // Both are connectivity failures, so classify as retryable to trigger
-        // RefreshSlots and a retry (#6759).
         if receivers.is_empty() {
-            return Err(RedisError::from((
-                ErrorKind::ConnectionNotFoundForRoute,
-                "Connection not found for route",
-                "No connections available for multi-node fan-out".to_string(),
-            )));
+            return Err(no_fan_out_connections_error());
         }
 
         match response_policy {
@@ -2602,6 +2657,68 @@ where
                 Self::aggregate_resolved_results(collected, routing, response_policy)
             }
         }
+    }
+
+    /// Collects a fan-out with partial results (see [`Cmd::set_allow_partial_results`])
+    /// into a map of node address to that node's reply or error.
+    ///
+    /// Waits for every node, but no later than `deadline`. A node that has not
+    /// answered by then is reported as timed out and its receiver is dropped,
+    /// so its sub-request is not retried; a reply already in flight still ends
+    /// at the connection's response timeout. Errors are stored as
+    /// `Value::ServerError` by [`ServerError::from_error_keeping_kind`].
+    /// The map has an entry for every node even when all of them failed.
+    ///
+    /// Also returns whether any node was unreachable ([`is_node_unreachable`]).
+    async fn collect_partial_results(
+        receivers: Vec<(Option<String>, oneshot::Receiver<RedisResult<Response>>)>,
+        deadline: Option<std::time::Instant>,
+    ) -> RedisResult<(Value, bool)> {
+        let entries = future::try_join_all(receivers.into_iter().map(
+            |(address, receiver)| async move {
+                let address = address.ok_or_else(|| {
+                    RedisError::from((
+                        ErrorKind::ResponseError,
+                        "No address provided for response in partial results",
+                    ))
+                })?;
+                let result = match deadline {
+                    Some(deadline) => {
+                        tokio::time::timeout_at(deadline.into(), receiver)
+                            .await
+                            .unwrap_or_else(|_| {
+                                Ok(Err(io::Error::from(io::ErrorKind::TimedOut).into()))
+                            })
+                    }
+                    None => receiver.await,
+                };
+                let node_unreachable = matches!(&result, Ok(Err(err)) if is_node_unreachable(err));
+                let value = match result {
+                    Ok(Ok(Response::Single(value))) => value,
+                    Ok(Ok(_)) => unreachable!(
+                        "collect_partial_results only handles `Response::Single` for multi-node commands"
+                    ),
+                    Ok(Err(err)) => Value::ServerError(ServerError::from_error_keeping_kind(err)),
+                    Err(_) => Value::ServerError(
+                        RedisError::from((
+                            ErrorKind::ResponseError,
+                            "Internal failure: receiver was dropped before delivering a response",
+                        ))
+                        .into(),
+                    ),
+                };
+                Ok::<_, RedisError>((
+                    (Value::BulkString(address.into_bytes().into()), value),
+                    node_unreachable,
+                ))
+            },
+        ))
+        .await?;
+        let any_unreachable = entries
+            .iter()
+            .any(|(_, node_unreachable)| *node_unreachable);
+        let pairs = entries.into_iter().map(|(pair, _)| pair).collect();
+        Ok((Value::Map(pairs), any_unreachable))
     }
 
     /// Synchronously folds a fully‐collected `Vec<(Option<String>, Value)>` according to `response_policy`.
@@ -2844,6 +2961,7 @@ where
             log_warn_lazy!("topology_refresh", "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)");
             return Ok(());
         }
+        let _in_progress_guard = SlotRefreshInProgressGuard { in_progress };
         let acquire_elapsed = acquire_start.elapsed();
         if acquire_elapsed > Duration::from_millis(100) {
             log_warn_lazy!(
@@ -2910,7 +3028,6 @@ where
             })
             .await;
         }
-        in_progress.store(false, Ordering::Relaxed);
         res
     }
 
@@ -3156,9 +3273,8 @@ where
         // Reset the current slot map and connection vector with the new ones
         let mut write_guard = inner.conn_lock.write();
         let old_topology_hash = write_guard.get_current_topology_hash();
-        // Clear the refresh tasks of the prev instance
-        // TODO - Maybe we can take the running refresh tasks and use them instead of running new connection creation
-        write_guard.refresh_conn_state.clear_refresh_state();
+        let reconnecting =
+            std::mem::take(&mut write_guard.refresh_conn_state.refresh_address_in_progress);
         new_slots.carry_over_ips_from(&write_guard.slot_map);
         let read_from_replicas =
             inner.get_cluster_param(|params| params.read_from_replicas.clone());
@@ -3168,6 +3284,7 @@ where
             read_from_replicas,
             topology_hash,
         );
+        write_guard.adopt_reconnect_tasks(reconnecting);
 
         // Notify the PubSub synchronizer about the new topology (using same lock)
         // Since handle_topology_refresh is sync, no other task can benefit from us
@@ -3284,25 +3401,28 @@ where
         routing: &'a MultipleNodeRoutingInfo,
         core: Core<C>,
         response_policy: Option<ResponsePolicy>,
+        fan_out_deadline: Option<std::time::Instant>,
     ) -> OperationResult {
         log_trace_lazy!("cluster", "execute_on_multiple_nodes");
 
+        // An `Err` item is a target with no connection, keyed by its address when known.
         #[allow(clippy::type_complexity)]
         fn into_channels<C>(
             iterator: impl Iterator<
-                Item = Option<(Arc<Cmd>, ConnectionAndAddress<ConnectionFuture<C>>)>,
+                Item = Result<
+                    (Arc<Cmd>, ConnectionAndAddress<ConnectionFuture<C>>),
+                    Option<String>,
+                >,
             >,
         ) -> (
             Vec<(Option<String>, Receiver<Result<Response, RedisError>>)>,
             Vec<Option<PendingRequest<C>>>,
         ) {
             iterator
-                .map(|tuple_opt| {
+                .map(|item| {
                     let (sender, receiver) = oneshot::channel();
-                    if let Some((cmd, conn, address)) =
-                        tuple_opt.map(|(cmd, (address, conn))| (cmd, conn, address))
-                    {
-                        (
+                    match item {
+                        Ok((cmd, (address, conn))) => (
                             (Some(address.clone()), receiver),
                             Some(PendingRequest {
                                 retry: 0,
@@ -3315,21 +3435,25 @@ where
                                             conn,
                                         }
                                         .into(),
+                                        fan_out_deadline: None,
                                     },
                                 },
                             }),
-                        )
-                    } else {
-                        let _ = sender.send(Err((
-                            ErrorKind::ConnectionNotFoundForRoute,
-                            "Connection not found",
-                        )
-                            .into()));
-                        ((None, receiver), None)
+                        ),
+                        Err(address) => {
+                            let _ = sender.send(Err((
+                                ErrorKind::ConnectionNotFoundForRoute,
+                                "Connection not found",
+                            )
+                                .into()));
+                            ((address, receiver), None)
+                        }
                     }
                 })
                 .unzip()
         }
+        let partial_results =
+            cmd.allow_partial_results() && routing.allows_partial_results(response_policy);
         let (receivers, requests): (Vec<_>, Vec<_>);
         {
             let connections_container = core.conn_lock.read();
@@ -3345,15 +3469,38 @@ where
             }
 
             (receivers, requests) = match routing {
+                // Partial results also report the slot-map nodes that have no
+                // connection, which the default path skips.
+                MultipleNodeRoutingInfo::AllNodes | MultipleNodeRoutingInfo::AllMasters
+                    if partial_results =>
+                {
+                    let primaries_only = matches!(routing, MultipleNodeRoutingInfo::AllMasters);
+                    let (connections, unconnected) =
+                        connections_container.connections_and_unconnected_nodes(primaries_only);
+                    // With no node reachable, fail as the default path does, so
+                    // the request refreshes slots and retries.
+                    if connections.is_empty() {
+                        return OperationResult::Err((
+                            OperationTarget::FanOut,
+                            no_fan_out_connections_error(),
+                        ));
+                    }
+                    into_channels(
+                        connections
+                            .into_iter()
+                            .map(|tuple| Ok((cmd.clone(), tuple)))
+                            .chain(unconnected.into_iter().map(|address| Err(Some(address)))),
+                    )
+                }
                 MultipleNodeRoutingInfo::AllNodes => into_channels(
                     connections_container
                         .all_node_connections()
-                        .map(|tuple| Some((cmd.clone(), tuple))),
+                        .map(|tuple| Ok((cmd.clone(), tuple))),
                 ),
                 MultipleNodeRoutingInfo::AllMasters => into_channels(
                     connections_container
                         .all_primary_connections()
-                        .map(|tuple| Some((cmd.clone(), tuple))),
+                        .map(|tuple| Ok((cmd.clone(), tuple))),
                 ),
                 MultipleNodeRoutingInfo::MultiSlot((slots, _)) => {
                     // multi_shard never emits an empty slots vec, so an empty
@@ -3381,6 +3528,7 @@ where
                                     );
                                 (Arc::new(new_cmd), tuple)
                             })
+                            .ok_or(None)
                     }))
                 }
             };
@@ -3389,8 +3537,29 @@ where
             let _ = core.pending_requests_tx.send(request);
         }
 
-        Self::aggregate_results(receivers, routing, response_policy)
-            .await
+        let result = if partial_results {
+            let collected = Self::collect_partial_results(receivers, fan_out_deadline).await;
+            if matches!(collected, Ok((_, true))) {
+                // The node may have failed over, so ask for a throttled slot
+                // refresh in the background. The command is not retried.
+                let mut connections = core.conn_lock.write();
+                if !connections.closed
+                    && connections
+                        .background_refresh
+                        .as_ref()
+                        .map_or(true, JoinHandle::is_finished)
+                {
+                    connections.background_refresh = Some(Self::spawn_refresh_slots_task(
+                        core.clone(),
+                        &RefreshPolicy::Throttable,
+                    ));
+                }
+            }
+            collected.map(|(value, _)| value)
+        } else {
+            Self::aggregate_results(receivers, routing, response_policy).await
+        };
+        result
             .map(Response::Single)
             .map_err(|err| (OperationTarget::FanOut, err))
     }
@@ -3398,6 +3567,7 @@ where
     pub(crate) async fn try_cmd_request(
         cmd: Arc<Cmd>,
         routing: InternalRoutingInfo<C>,
+        fan_out_deadline: Option<std::time::Instant>,
         core: Core<C>,
     ) -> OperationResult {
         let routing = match routing {
@@ -3407,6 +3577,7 @@ where
                     &multi_node_routing,
                     core,
                     response_policy,
+                    fan_out_deadline,
                 )
                 .await;
             }
@@ -3415,9 +3586,15 @@ where
         };
         log_trace_lazy!("cluster", "route request to single node");
 
+        let asking = routing.requires_asking();
+        let asking_in_same_write = asking && C::sends_asking_with_command();
         let (address, mut conn) = Self::get_connection(routing, core, Some(cmd.clone()))
             .await
             .map_err(|err| (OperationTarget::NotFound, err))?;
+        if asking && !asking_in_same_write {
+            // A connection that has not opted in gets `ASKING` as a request of its own.
+            let _ = conn.req_packed_command(&crate::cmd::cmd("ASKING")).await;
+        }
         if let Some(span) = cmd.span() {
             set_routed_node_on_span(&span, &address);
         }
@@ -3426,8 +3603,18 @@ where
         cmd.watchdog_phase
             .store(crate::cmd::PHASE_SENT, std::sync::atomic::Ordering::Release);
 
-        conn.req_packed_command(&cmd)
-            .await
+        let result = if asking_in_same_write {
+            // Pack `ASKING` before the command, in the same write: a separate `ASKING` can be
+            // consumed by another request on this shared connection, and the node then
+            // answers the command with MOVED back to the slot's owner. The copy keeps the
+            // command's timeout, blocking and fencing flags.
+            let mut asking_cmd = Cmd::clone(&cmd);
+            asking_cmd.set_asking(true);
+            conn.req_packed_command(&asking_cmd).await
+        } else {
+            conn.req_packed_command(&cmd).await
+        };
+        result
             .map(Response::Single)
             .map_err(|err| (address.into(), err))
     }
@@ -3458,7 +3645,11 @@ where
 
     async fn try_request(info: RequestInfo<C>, core: Core<C>) -> OperationResult {
         match info.cmd {
-            CmdArg::Cmd { cmd, routing } => Self::try_cmd_request(cmd, routing, core).await,
+            CmdArg::Cmd {
+                cmd,
+                routing,
+                fan_out_deadline,
+            } => Self::try_cmd_request(cmd, routing, fan_out_deadline, core).await,
             CmdArg::Pipeline {
                 pipeline,
                 offset,
@@ -3468,16 +3659,34 @@ where
                 pipeline_retry_strategy,
             } => {
                 if pipeline.is_atomic() || sub_pipeline {
-                    Self::try_pipeline_request(
-                        pipeline,
-                        offset,
-                        count,
-                        Self::get_connection(
-                            route.unwrap_or(InternalSingleNodeRouting::Random),
-                            core,
-                            None,
-                        ),
-                    )
+                    let asking = route
+                        .as_ref()
+                        .is_some_and(InternalSingleNodeRouting::requires_asking);
+                    // Only an atomic pipeline gets `ASKING` in the same write (before `MULTI`), as
+                    // single commands do; the connection discards its reply, so `offset` stays
+                    // as it is. In a non-atomic sub-pipeline it would cover only the first
+                    // command, so that keeps the standalone `ASKING`.
+                    let asking_in_same_write =
+                        asking && pipeline.is_atomic() && C::sends_asking_with_command();
+                    let pipeline = if asking_in_same_write {
+                        Arc::new(pipeline.with_asking())
+                    } else {
+                        pipeline
+                    };
+                    let connection = Self::get_connection(
+                        route.unwrap_or(InternalSingleNodeRouting::Random),
+                        core,
+                        None,
+                    );
+                    Self::try_pipeline_request(pipeline, offset, count, async move {
+                        let (address, mut conn) = connection.await?;
+                        if asking && !asking_in_same_write {
+                            // A connection that has not opted in gets `ASKING` as a request
+                            // of its own.
+                            let _ = conn.req_packed_command(&crate::cmd::cmd("ASKING")).await;
+                        }
+                        Ok((address, conn))
+                    })
                     .await
                 } else {
                     // The pipeline is not atomic and not already splitted, we need to split it into sub-pipelines and send them separately.
@@ -3500,9 +3709,9 @@ where
                     Ok((scan_state_ref, values)) => {
                         Ok(Response::ClusterScanResult(scan_state_ref, values))
                     }
-                    // TODO: After routing issues with sending to random node on not-key based commands are resolved,
-                    // this error should be handled in the same way as other errors and not fan-out.
-                    Err(err) => Err((OperationTarget::FanOut, err)),
+                    // `try_scan` already retried with the client's `retries`, so don't retry
+                    // again here.
+                    Err(err) => Err((OperationTarget::FatalError, err)),
                 }
             }
             CmdArg::OperationRequest(operation_request) => match operation_request {
@@ -3677,13 +3886,11 @@ where
         final_responses
     }
 
-    async fn get_connection(
+    pub(crate) async fn get_connection(
         routing: InternalSingleNodeRouting<C>,
         core: Core<C>,
         cmd: Option<Arc<Cmd>>,
     ) -> RedisResult<(String, C)> {
-        let mut asking = false;
-
         let conn_check = match routing {
             InternalSingleNodeRouting::Redirect {
                 redirect: Redirect::Moved(moved_addr),
@@ -3697,18 +3904,16 @@ where
                     ConnectionCheck::Found,
                 ),
             InternalSingleNodeRouting::Redirect {
-                redirect: Redirect::Ask(ask_addr, should_exec_asking),
+                redirect: Redirect::Ask(ask_addr, _),
                 ..
-            } => {
-                asking = should_exec_asking;
-                core.conn_lock
-                    .read()
-                    .connection_for_address(ask_addr.as_str())
-                    .map_or(
-                        ConnectionCheck::OnlyAddress(ask_addr),
-                        ConnectionCheck::Found,
-                    )
-            }
+            } => core
+                .conn_lock
+                .read()
+                .connection_for_address(ask_addr.as_str())
+                .map_or(
+                    ConnectionCheck::OnlyAddress(ask_addr),
+                    ConnectionCheck::Found,
+                ),
             InternalSingleNodeRouting::SpecificNode(route) => {
                 // Step 1: Attempt to get the connection directly using the route.
                 let conn_check = {
@@ -3828,7 +4033,7 @@ where
             }
         };
 
-        let (address, mut conn) = match conn_check {
+        let (address, conn) = match conn_check {
             ConnectionCheck::Found((address, connection)) => (address, connection.await),
             ConnectionCheck::OnlyAddress(address) => {
                 log_warn_rate_limited!("moved_error", 10, format!(
@@ -3909,9 +4114,6 @@ where
             }
         };
 
-        if asking {
-            let _ = conn.req_packed_command(&crate::cmd::cmd("ASKING")).await;
-        }
         Ok((address, conn))
     }
 
@@ -4229,8 +4431,19 @@ where
             .pending_requests_rx
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        while let Ok(request) = rx_guard.try_recv() {
-            pending_requests.push(request);
+        // Drain with `try_recv`, which does not spend tokio's coop budget, so a burst is
+        // never left in the channel. Then `poll_recv` on the empty channel makes sure that a
+        // request queued while the in-flight requests are polled below (a multi-node command
+        // or pipeline queues one per node) wakes the driver: it registers this task's waker,
+        // or, if the coop budget is spent, schedules the task to run again.
+        loop {
+            while let Ok(request) = rx_guard.try_recv() {
+                pending_requests.push(request);
+            }
+            match rx_guard.poll_recv(cx) {
+                Poll::Ready(Some(request)) => pending_requests.push(request),
+                _ => break,
+            }
         }
         drop(rx_guard);
 
@@ -5091,9 +5304,35 @@ pub trait Connect: Sized {
     ) -> RedisFuture<'a, (Self, Option<IpAddr>)>
     where
         T: IntoConnectionInfo + Send + 'a;
+
+    /// Whether the client may hand this connection a command that is to be sent after
+    /// `ASKING` as one command, with `ASKING` packed in front of it in the same write.
+    ///
+    /// The node honours `ASKING` only for the next command it reads from the connection, so
+    /// on a connection that other requests share, `ASKING` and the command must not be
+    /// separate requests. A connection that returns `true` must write the command's packed
+    /// bytes as they are (they start with `ASKING`) and discard the first reply, returning
+    /// the command's own reply; [`MultiplexedConnection`] does both, and a wrapper that
+    /// passes the command to it unchanged may return `true` as well. The default, `false`,
+    /// keeps sending `ASKING` as a request of its own before the command.
+    ///
+    /// The contract is the same for atomic pipelines retried after ASK: the client sends
+    /// `Pipeline::with_asking` (`ASKING` before `MULTI`, in the same write) with the same
+    /// `offset` and `count` as without `ASKING`. The connection must write the pipeline's
+    /// packed bytes as they are and discard the first reply (`ASKING`'s, also when it is an
+    /// error) before it aggregates the pipeline's replies, as
+    /// [`MultiplexedConnection::send_packed_commands`] does. Otherwise an `ASKING` error
+    /// would be reported as the pipeline's, although the transaction may have run.
+    fn sends_asking_with_command() -> bool {
+        false
+    }
 }
 
 impl Connect for MultiplexedConnection {
+    fn sends_asking_with_command() -> bool {
+        true
+    }
+
     fn connect<'a, T>(
         info: T,
         response_timeout: Duration,
@@ -5124,6 +5363,217 @@ impl Connect for MultiplexedConnection {
             }
         }
         .boxed()
+    }
+}
+
+#[cfg(test)]
+mod partial_results_tests {
+    use super::{ClusterConnInner, Response};
+    use crate::{aio::MultiplexedConnection, ErrorKind, RedisError, RedisResult, Value};
+    use std::time::{Duration, Instant};
+    use tokio::sync::oneshot;
+
+    type Receivers = Vec<(Option<String>, oneshot::Receiver<RedisResult<Response>>)>;
+
+    fn ready(
+        address: &str,
+        result: RedisResult<Value>,
+    ) -> (Option<String>, oneshot::Receiver<RedisResult<Response>>) {
+        let (sender, receiver) = oneshot::channel();
+        let _ = sender.send(result.map(Response::Single));
+        (Some(address.to_string()), receiver)
+    }
+
+    async fn collect_with_flag(
+        receivers: Receivers,
+        deadline: Option<Instant>,
+    ) -> RedisResult<(Value, bool)> {
+        ClusterConnInner::<MultiplexedConnection>::collect_partial_results(receivers, deadline)
+            .await
+    }
+
+    async fn collect(receivers: Receivers, deadline: Option<Instant>) -> RedisResult<Value> {
+        collect_with_flag(receivers, deadline)
+            .await
+            .map(|(value, _)| value)
+    }
+
+    fn entries(value: Value) -> Vec<(String, Value)> {
+        let Value::Map(pairs) = value else {
+            panic!("expected a map, got {value:?}");
+        };
+        pairs
+            .into_iter()
+            .map(|(k, v)| match k {
+                Value::BulkString(k) => (String::from_utf8(k.to_vec()).unwrap(), v),
+                other => panic!("unexpected key {other:?}"),
+            })
+            .collect()
+    }
+
+    fn error_of(value: &Value) -> RedisError {
+        match value {
+            Value::ServerError(err) => err.clone().into(),
+            other => panic!("expected an error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn keeps_replies_and_errors_per_node() {
+        let receivers = vec![
+            ready("a:1", Ok(Value::BulkString(b"info a".to_vec().into()))),
+            ready(
+                "b:1",
+                Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into()),
+            ),
+        ];
+        let entries = entries(collect(receivers, None).await.unwrap());
+
+        assert_eq!(
+            entries[0],
+            ("a:1".into(), Value::BulkString(b"info a".to_vec().into()))
+        );
+        let b = error_of(&entries[1].1);
+        assert!(b.is_timeout(), "timeout kind must survive: {b:?}");
+    }
+
+    #[tokio::test]
+    async fn reports_unanswered_nodes_as_timed_out_at_the_deadline() {
+        let (silent_sender, silent_receiver) = oneshot::channel();
+        let receivers = vec![
+            ready("a:1", Ok(Value::Okay)),
+            (Some("b:1".to_string()), silent_receiver),
+        ];
+        let start = Instant::now();
+        let entries = entries(
+            collect(receivers, Some(start + Duration::from_millis(50)))
+                .await
+                .unwrap(),
+        );
+
+        assert!(start.elapsed() >= Duration::from_millis(50));
+        assert!(start.elapsed() < Duration::from_secs(5));
+        assert_eq!(entries[0], ("a:1".into(), Value::Okay));
+        assert!(error_of(&entries[1].1).is_timeout());
+        // Dropping the receiver is what stops the node's sub-request.
+        assert!(silent_sender.is_closed());
+    }
+
+    #[tokio::test]
+    async fn flags_only_nodes_the_client_could_not_reach() {
+        let Value::ServerError(server) =
+            crate::parse_redis_value(b"-NOPERM no permissions\r\n").unwrap()
+        else {
+            panic!("expected a server error");
+        };
+        let cases: Vec<(RedisResult<Value>, bool)> = vec![
+            (
+                Err(std::io::Error::from(std::io::ErrorKind::ConnectionRefused).into()),
+                true,
+            ),
+            (
+                Err((
+                    ErrorKind::ConnectionNotFoundForRoute,
+                    "Connection not found",
+                )
+                    .into()),
+                true,
+            ),
+            (
+                Err((ErrorKind::FatalSendError, "Connection dropped").into()),
+                true,
+            ),
+            (
+                Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into()),
+                false,
+            ),
+            (Err(server.into()), false),
+            (Ok(Value::Okay), false),
+        ];
+        for (result, expected) in cases {
+            let label = format!("{result:?}");
+            let (_, any_unreachable) = collect_with_flag(vec![ready("a:1", result)], None)
+                .await
+                .unwrap();
+            assert_eq!(any_unreachable, expected, "{label}");
+        }
+    }
+
+    #[tokio::test]
+    async fn connection_error_entries_keep_the_plain_error_kind() {
+        let plain_errors: Vec<RedisError> = vec![
+            std::io::Error::from(std::io::ErrorKind::ConnectionReset).into(),
+            (
+                ErrorKind::FatalReceiveError,
+                "Failed to receive",
+                "closed".into(),
+            )
+                .into(),
+            (ErrorKind::FatalSendError, "Connection dropped").into(),
+            (ErrorKind::ProtocolDesync, "Response synchronization lost").into(),
+            (
+                ErrorKind::ConnectionNotFoundForRoute,
+                "Connection not found",
+            )
+                .into(),
+        ];
+        for plain in plain_errors {
+            let class = |e: &RedisError| {
+                (
+                    e.kind(),
+                    e.is_io_error(),
+                    e.is_connection_dropped(),
+                    e.is_unrecoverable_error(),
+                    e.is_server_reply(),
+                )
+            };
+            let expected = class(&plain);
+            let entries = entries(collect(vec![ready("a:1", Err(plain))], None).await.unwrap());
+            let entry = error_of(&entries[0].1);
+            assert_eq!(class(&entry), expected, "{entry:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn dropped_sender_becomes_an_error_entry() {
+        let (sender, receiver) = oneshot::channel::<RedisResult<Response>>();
+        drop(sender);
+        let entries = entries(
+            collect(vec![(Some("a:1".into()), receiver)], None)
+                .await
+                .unwrap(),
+        );
+        assert!(error_of(&entries[0].1)
+            .to_string()
+            .contains("receiver was dropped"));
+    }
+
+    #[test]
+    fn server_reply_coded_timeout_is_not_a_client_timeout() {
+        let Value::ServerError(err) =
+            crate::parse_redis_value(b"-Timeout limit was reached\r\n").unwrap()
+        else {
+            panic!("expected a server error");
+        };
+        let err: RedisError = err.into();
+        assert!(!err.is_timeout(), "{err:?}");
+        assert!(err.to_string().contains("Timeout"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn server_error_entry_has_the_plain_error_message() {
+        let Value::ServerError(server) = crate::parse_redis_value(
+            b"-NOPERM User rv has no permissions to run the 'info' command\r\n",
+        )
+        .unwrap() else {
+            panic!("expected a server error");
+        };
+        let plain: RedisError = server.into();
+        let expected = plain.to_string();
+        let entries = entries(collect(vec![ready("a:1", Err(plain))], None).await.unwrap());
+        let entry = error_of(&entries[0].1);
+        assert_eq!(entry.to_string(), expected);
+        assert_eq!(entry.kind(), ErrorKind::PermissionDenied);
     }
 }
 
@@ -6077,7 +6527,7 @@ pub(super) mod refresh_task_resolution_tests {
     }
 
     #[derive(Clone, Debug)]
-    pub(super) struct RecordingConnection {
+    pub(crate) struct RecordingConnection {
         port: u16,
     }
 
@@ -6311,7 +6761,7 @@ pub(super) mod refresh_task_resolution_tests {
         )
     }
 
-    pub(super) fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
+    pub(crate) fn core_with_non_idempotent_resolver() -> Arc<InnerCore<RecordingConnection>> {
         core_with_resolver(Arc::new(NonIdempotentResolver))
     }
 
@@ -6653,6 +7103,38 @@ pub(super) mod refresh_task_resolution_tests {
     }
 
     #[tokio::test]
+    async fn dispose_aborts_the_partial_results_refresh() {
+        let core = core_with_non_idempotent_resolver();
+        let refresh = tokio::spawn({
+            let core = core.clone();
+            async move {
+                std::future::pending::<()>().await;
+                drop(core);
+                Ok(())
+            }
+        });
+        core.conn_lock.write().background_refresh = Some(refresh);
+        let weak_core = Arc::downgrade(&core);
+        drop(Disposable::new(ClusterConnInner {
+            inner: core,
+            in_flight_requests: Default::default(),
+            refresh_error: None,
+            state: ConnectionState::PollComplete,
+            periodic_checks_handler: None,
+            connections_validation_handler: None,
+            recovery_queue: std::collections::VecDeque::new(),
+        }));
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while weak_core.strong_count() > 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("disposing the connection must stop the partial results refresh");
+    }
+
+    #[tokio::test]
     async fn no_reconnect_starts_after_dispose() {
         let _guard = gated_test_guard().await;
         let core = core_with_non_idempotent_resolver();
@@ -6903,7 +7385,7 @@ pub(super) mod refresh_task_resolution_tests {
     }
 
     /// Inserts an in-progress refresh task for `address` and returns its identity.
-    fn insert_in_progress_refresh(
+    pub(crate) fn insert_in_progress_refresh(
         core: &Arc<InnerCore<RecordingConnection>>,
         address: &str,
         may_keep_existing_conn: bool,
@@ -6972,7 +7454,11 @@ pub(super) mod refresh_task_resolution_tests {
 
     /// Completes an in-progress refresh: installs the connection, then drops the task state,
     /// which wakes the waiters.
-    fn complete_refresh(core: &Arc<InnerCore<RecordingConnection>>, address: &str, port: u16) {
+    pub(crate) fn complete_refresh(
+        core: &Arc<InnerCore<RecordingConnection>>,
+        address: &str,
+        port: u16,
+    ) {
         core.conn_lock
             .read()
             .replace_or_add_connection_for_address(address, recording_node(port));

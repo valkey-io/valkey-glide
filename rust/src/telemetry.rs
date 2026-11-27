@@ -94,13 +94,11 @@ impl TelemetryExporter {
 
 /// An OpenTelemetry configuration.
 ///
-/// At least one of a trace or a metrics exporter must be configured.
+/// Construct one with [`OpenTelemetryConfig::builder`]. At least one of traces or
+/// metrics must be provided, otherwise initialisation fails.
 #[derive(Clone)]
 pub struct OpenTelemetryConfig {
     inner: GlideOpenTelemetryConfigBuilder,
-    // TODO #7706: Remove once glide-telemetry's `validate_config` rejects a config
-    // with no exporter.
-    has_exporter: bool,
 }
 
 impl OpenTelemetryConfig {
@@ -108,7 +106,6 @@ impl OpenTelemetryConfig {
     pub fn builder() -> OpenTelemetryConfigBuilder {
         OpenTelemetryConfigBuilder {
             inner: GlideOpenTelemetryConfigBuilder::default(),
-            has_exporter: false,
         }
     }
 }
@@ -117,9 +114,6 @@ impl OpenTelemetryConfig {
 #[derive(Clone)]
 pub struct OpenTelemetryConfigBuilder {
     inner: GlideOpenTelemetryConfigBuilder,
-    // TODO #7706: Remove once glide-telemetry's `validate_config` rejects a config
-    // with no exporter.
-    has_exporter: bool,
 }
 
 impl OpenTelemetryConfigBuilder {
@@ -146,7 +140,6 @@ impl OpenTelemetryConfigBuilder {
         self.inner = self
             .inner
             .with_trace_exporter(exporter.to_core(), sample_percentage);
-        self.has_exporter = true;
         self
     }
 
@@ -155,16 +148,12 @@ impl OpenTelemetryConfigBuilder {
     // TODO #7701: Replace with `with_metrics(MetricsConfig)`.
     pub fn with_metrics_exporter(mut self, exporter: TelemetryExporter) -> Self {
         self.inner = self.inner.with_metrics_exporter(exporter.to_core());
-        self.has_exporter = true;
         self
     }
 
     /// Finish building the configuration.
     pub fn build(self) -> OpenTelemetryConfig {
-        OpenTelemetryConfig {
-            inner: self.inner,
-            has_exporter: self.has_exporter,
-        }
+        OpenTelemetryConfig { inner: self.inner }
     }
 }
 
@@ -174,19 +163,12 @@ impl OpenTelemetryConfigBuilder {
 /// (returning `Ok`).
 ///
 /// # Errors
-/// Returns [`GlideError::Configuration`] if the configuration is invalid
-/// or an exporter fails to initialise.
+/// Returns [`GlideError::Configuration`] if the configuration is invalid (zero
+/// flush interval, trace sample percentage > 100, neither traces nor metrics
+/// configured) or an exporter fails to initialise.
 pub fn init(config: OpenTelemetryConfig) -> ValkeyResult<()> {
     if is_initialized() {
         return Ok(());
-    }
-
-    // TODO #7706: Drop once glide-telemetry's `validate_config` rejects a config with no exporter.
-    if !config.has_exporter {
-        return Err(GlideError::Configuration(
-            "At least one of traces or metrics must be provided for OpenTelemetry configuration"
-                .to_string(),
-        ));
     }
 
     // The HTTP and gRPC exporters spawn their batch workers with `tokio::spawn`. Run them on

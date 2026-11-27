@@ -4,33 +4,55 @@
 
 ### Features
 
+* Core: opt-in per-node results for multi-node commands ([#7751](https://github.com/valkey-io/valkey-glide/pull/7751))
+* Core: per-node partial results in the redis-rs cluster fan-out ([#7819](https://github.com/valkey-io/valkey-glide/pull/7819))
+* Node: valkey-search 1.3 stable surface ([#7378](https://github.com/valkey-io/valkey-glide/pull/7378))
+* Java: Add valkey-search 1.3 support, including scoring, cursors, and `FT.HYBRID` ([#7379](https://github.com/valkey-io/valkey-glide/pull/7379))
 * Rust: Add `HGETDEL` and `DELIFEQ` commands ([#6145](https://github.com/valkey-io/valkey-glide/issues/6145), [#6146](https://github.com/valkey-io/valkey-glide/issues/6146))
 * Python: Add CPython 3.15 wheels for the async and sync clients ([#7321](https://github.com/valkey-io/valkey-glide/issues/7321))
-* Core, Python: Add support for Valkey 9.2 commands:
-  * `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
+* Python: The sync client can register CUDA device memory, such as a CUDA `torch.Tensor` or CuPy array, for RDMA when `RdmaConfiguration.device_memory` is set ([#7812](https://github.com/valkey-io/valkey-glide/pull/7812))
+* All: Add support for `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
+* Core: use atomics for telemetry instead of shared lock ([#7497](https://github.com/valkey-io/valkey-glide/pull/7497))
 
 ### Fixes
 
+* Core: respect command option boundaries in reply conversion ([#7748](https://github.com/valkey-io/valkey-glide/pull/7748))
+* Core, Rust: reject an OpenTelemetry config with no exporter ([#7718](https://github.com/valkey-io/valkey-glide/pull/7718))
+* Core, Java: bound cluster_scan by the client's request timeout and retries ([#6892](https://github.com/valkey-io/valkey-glide/pull/6892))
+* Python: avoid deprecation warning on legacy module introspection ([#7452](https://github.com/valkey-io/valkey-glide/pull/7452))
+* Node: validate cursor in GlideClusterClient.scan ([#7610](https://github.com/valkey-io/valkey-glide/pull/7610))
 * Core: keep timeout watchdog pending counts isolated from retired workers and losing singleton initialization candidates ([#7762](https://github.com/valkey-io/valkey-glide/pull/7762))
 * Core: prevent missed refresh completion notifications ([#7766](https://github.com/valkey-io/valkey-glide/pull/7766))
 * Core: reinit the global timeout watchdog in forked children ([#7569](https://github.com/valkey-io/valkey-glide/pull/7569))
+* Core, Python, Go: trim the client availability zone and reject a whitespace-only one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))
 * Core: release connections when a reconnecting client closes ([#7492](https://github.com/valkey-io/valkey-glide/pull/7492))
 * Core/FFI: create clients on a runtime worker so the connect does not use the caller's stack ([#7644](https://github.com/valkey-io/valkey-glide/pull/7644))
 * Python: register the sync client's fork hook only after it connects ([#7660](https://github.com/valkey-io/valkey-glide/pull/7660))
 * Core: flush server-assisted cache when its connection closes ([#7493](https://github.com/valkey-io/valkey-glide/pull/7493))
 * Core: deliver reconnect errors to cluster callers instead of dropping them ([#7737](https://github.com/valkey-io/valkey-glide/pull/7737))
+* Core: make pub/sub subscribe cost independent of channels held ([#7872](https://github.com/valkey-io/valkey-glide/pull/7872))
 * Core/FFI: run a lazy sync client's first connect on the runtime worker ([#7671](https://github.com/valkey-io/valkey-glide/pull/7671))
+* Core/FFI: run address resolver callbacks on the blocked caller thread ([#7818](https://github.com/valkey-io/valkey-glide/pull/7818))
+* Core/FFI, Python: pools and scopes work in forked children, and Python raises `ClosingError` for an inherited pool or async scope ([#7630](https://github.com/valkey-io/valkey-glide/issues/7630))
 * Go: strip LLVM bitcode from the prebuilt `libglide_ffi.a` so Go 1.26.11+ / 1.27.4+ no longer reject it with `disallowed LTO section` ([#7739](https://github.com/valkey-io/valkey-glide/pull/7739))
 * Go: link CoreFoundation on macOS arm64 so programs that do not import `crypto/x509` link with Go 1.27 ([#7784](https://github.com/valkey-io/valkey-glide/issues/7784))
 * Python: `AsyncClientPool` borrowing and async `IsolatedScope` commands work under trio ([#7513](https://github.com/valkey-io/valkey-glide/issues/7513), [#7651](https://github.com/valkey-io/valkey-glide/issues/7651))
 * Rust: `telemetry::init` rejects a configuration with no exporter ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Rust: `telemetry::init` runs the HTTP and gRPC exporters on GLIDE's runtime ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core: reject writes in read-only standalone pipelines, transactions and scopes ([#7761](https://github.com/valkey-io/valkey-glide/pull/7761))
+* Core: send multi-node cluster requests while another request is pending ([#7855](https://github.com/valkey-io/valkey-glide/pull/7855))
+* Core: Cap the socket listener worker pool at 8 by default (override with `GLIDE_SOCKET_LISTENER_WORKERS`) and report pool-creation failures through the init callback ([#7586](https://github.com/valkey-io/valkey-glide/issues/7586))
+* Core/Node: Apply the same worker-pool cap to the Node client's pool ([#7586](https://github.com/valkey-io/valkey-glide/issues/7586))
+* Core: send ASKING in the same write as the redirected command ([#7778](https://github.com/valkey-io/valkey-glide/pull/7778))
+* Python: correct the `FtHybridOptions.params` documentation: parameters apply to the VSIM arm's vector and to FILTER and APPLY expressions, not to the SEARCH arm ([#7867](https://github.com/valkey-io/valkey-glide/pull/7867))
+* Core: With `maxDecompressedSize` set and `raiseOnError` false, batches return a size-limit error for each oversized reply and preserve the other replies ([#7601](https://github.com/valkey-io/valkey-glide/issues/7601))
 
 ### Breaking Changes
 
+* FFI: `create_client_from_uri` takes `client_id` and `credential_provider` arguments, so URI-based bindings can supply a custom IAM credential provider ([#7847](https://github.com/valkey-io/valkey-glide/pull/7847))
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
+* Python, Go: a whitespace-only client AZ is now rejected for AZ-affinity read strategies, like an empty one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))
 
 ## 2.6
 

@@ -784,3 +784,64 @@ fn test_reset_does_not_resubscribe_after_reconnect() {
         );
     });
 }
+
+/// Many concurrent blocking subscribes on a client that already holds many channels
+/// must each cost O(their own channels). When each waiter rescanned every held
+/// channel per reconciliation pass, most of these calls timed out.
+#[rstest]
+#[serial_test::serial]
+#[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+fn test_concurrent_blocking_subscribes_with_many_held_channels() {
+    const HELD: usize = 50_000;
+    const FILL_BATCH: usize = 5_000;
+    const CONCURRENT_CALLS: usize = 200;
+    const CALL_TIMEOUT_MS: u64 = 2_000;
+
+    block_on_all(async {
+        let cluster = RedisCluster::new(false, &None, Some(3), Some(0));
+        let addresses = cluster.get_server_addresses();
+        let mut setup = PubSubTestSetup::new(&addresses).await;
+
+        skip_if_version_below!(setup, "7.0.0");
+
+        let mut held = HashSet::new();
+        for start in (0..HELD).step_by(FILL_BATCH) {
+            let batch: HashSet<Vec<u8>> = (start..start + FILL_BATCH)
+                // One hash slot, so each fill batch is a single SSUBSCRIBE
+                .map(|i| format!("{{held}}:{i}").into_bytes())
+                .collect();
+            held.extend(batch.iter().cloned());
+            setup
+                .synchronizer
+                .add_desired_subscriptions(batch, PubSubSubscriptionKind::Sharded);
+            assert!(
+                wait_for_pubsub_state(
+                    &setup.synchronizer,
+                    PubSubSubscriptionKind::Sharded,
+                    &held,
+                    true,
+                    RESUBSCRIPTION_TIMEOUT,
+                )
+                .await,
+                "Failed to hold {} channels",
+                held.len()
+            );
+        }
+
+        let calls = (0..CONCURRENT_CALLS).map(|i| {
+            let synchronizer = setup.synchronizer.clone();
+            async move {
+                let mut cmd = redis::cmd("SSUBSCRIBE_BLOCKING");
+                cmd.arg(format!("new:{i}")).arg(CALL_TIMEOUT_MS);
+                synchronizer.intercept_pubsub_command(&cmd).await
+            }
+        });
+        let results = futures::future::join_all(calls).await;
+
+        let failed = results.iter().filter(|r| !matches!(r, Some(Ok(_)))).count();
+        assert_eq!(
+            failed, 0,
+            "{failed} of {CONCURRENT_CALLS} blocking subscribes failed with {HELD} channels held"
+        );
+    });
+}
