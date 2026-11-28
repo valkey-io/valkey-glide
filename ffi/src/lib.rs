@@ -5607,7 +5607,7 @@ impl RouteInput {
                 route_bytes,
                 route_bytes_len,
             } => unsafe { Self::resolve_protobuf_bytes(route_bytes, route_bytes_len, cmd) },
-            RouteInput::RouteInfo(route_info) => unsafe { Ok(create_route(route_info, Some(cmd))) },
+            RouteInput::RouteInfo(route_info) => unsafe { create_route(route_info, Some(cmd)) },
         }
     }
 
@@ -6168,14 +6168,27 @@ fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo
                 get_slot_addr(&slot_key_route.slot_type)?,
             )),
         ))),
-        Value::SlotIdRoute(slot_id_route) => Ok(Some(RoutingInfo::SingleNode(
-            SingleNodeRoutingInfo::SpecificNode(Route::new(
-                // TODO #7681: Use a checked conversion (`u16::try_from`) and reject out-of-range
-                // slots.
-                slot_id_route.slot_id as u16,
-                get_slot_addr(&slot_id_route.slot_type)?,
-            )),
-        ))),
+        Value::SlotIdRoute(slot_id_route) => {
+            let slot = match u16::try_from(slot_id_route.slot_id) {
+                Ok(slot) if slot < redis::cluster_topology::SLOT_SIZE => slot,
+                _ => {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "Invalid slot ID",
+                        format!(
+                            "Invalid slot ID: {}. Slot ID must be between 0 and 16383",
+                            slot_id_route.slot_id
+                        ),
+                    )));
+                }
+            };
+            Ok(Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    slot,
+                    get_slot_addr(&slot_id_route.slot_type)?,
+                )),
+            )))
+        }
         Value::ByAddressRoute(by_address_route) => match u16::try_from(by_address_route.port) {
             Ok(port) => Ok(Some(RoutingInfo::SingleNode(
                 SingleNodeRoutingInfo::ByAddress {
@@ -6870,7 +6883,13 @@ pub unsafe extern "C" fn batch(
         set_db_batch_attributes(span, pipeline.commands(), &client_adapter.core.client);
     }
 
-    let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
+    let (routing, timeout, pipeline_retry_strategy) =
+        match unsafe { get_pipeline_options(options_ptr) } {
+            Ok(options) => options,
+            Err(err) => {
+                return unsafe { client_adapter.handle_redis_error(err, callback_index) };
+            }
+        };
 
     // Increment the blocking counter BEFORE spawning — on the synchronous caller's thread — so the
     // abandon monitor cannot observe a window where the task is in-flight but the counter
@@ -6950,39 +6969,51 @@ unsafe fn ptr_to_str(ptr: *const c_char) -> String {
 pub(crate) unsafe fn create_route(
     route_ptr: *const RouteInfo,
     cmd: Option<&Cmd>,
-) -> Option<RoutingInfo> {
+) -> RedisResult<Option<RoutingInfo>> {
     if route_ptr.is_null() {
-        return None;
+        return Ok(None);
     }
     let route = unsafe { *route_ptr };
     match route.route_type {
-        RouteType::Random => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
-        RouteType::AllNodes => Some(RoutingInfo::MultiNode((
+        RouteType::Random => Ok(Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))),
+        RouteType::AllNodes => Ok(Some(RoutingInfo::MultiNode((
             MultipleNodeRoutingInfo::AllNodes,
             cmd.and_then(|c| ResponsePolicy::for_command(&c.command().unwrap())),
-        ))),
-        RouteType::AllPrimaries => Some(RoutingInfo::MultiNode((
+        )))),
+        RouteType::AllPrimaries => Ok(Some(RoutingInfo::MultiNode((
             MultipleNodeRoutingInfo::AllMasters,
             cmd.and_then(|c| ResponsePolicy::for_command(&c.command().unwrap())),
-        ))),
-        RouteType::SlotId => Some(RoutingInfo::SingleNode(
-            SingleNodeRoutingInfo::SpecificNode(Route::new(
-                // TODO #7681: Use a checked conversion (`u16::try_from`) and reject out-of-range
-                // slots.
-                route.slot_id as u16,
-                (&route.slot_type).into(),
-            )),
-        )),
-        RouteType::SlotKey => Some(RoutingInfo::SingleNode(
+        )))),
+        RouteType::SlotId => {
+            let slot = match u16::try_from(route.slot_id) {
+                Ok(slot) if slot < redis::cluster_topology::SLOT_SIZE => slot,
+                _ => {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "Invalid slot ID",
+                        format!(
+                            "Invalid slot ID: {}. Slot ID must be between 0 and 16383",
+                            route.slot_id
+                        ),
+                    )));
+                }
+            };
+            Ok(Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::SpecificNode(Route::new(slot, (&route.slot_type).into())),
+            )))
+        }
+        RouteType::SlotKey => Ok(Some(RoutingInfo::SingleNode(
             SingleNodeRoutingInfo::SpecificNode(Route::new(
                 redis::cluster_topology::get_slot(unsafe { ptr_to_str(route.slot_key) }.as_bytes()),
                 (&route.slot_type).into(),
             )),
-        )),
-        RouteType::ByAddress => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
-            host: unsafe { ptr_to_str(route.hostname) },
-            port: route.port as u16,
-        })),
+        ))),
+        RouteType::ByAddress => Ok(Some(RoutingInfo::SingleNode(
+            SingleNodeRoutingInfo::ByAddress {
+                host: unsafe { ptr_to_str(route.hostname) },
+                port: route.port as u16,
+            },
+        ))),
     }
 }
 
@@ -7099,9 +7130,9 @@ pub(crate) unsafe fn create_pipeline(
 ///   See description of [`RouteInfo`] and the safety documentation of [`create_route`].
 pub(crate) unsafe fn get_pipeline_options(
     ptr: *const BatchOptionsInfo,
-) -> (Option<RoutingInfo>, Option<u32>, PipelineRetryStrategy) {
+) -> RedisResult<(Option<RoutingInfo>, Option<u32>, PipelineRetryStrategy)> {
     if ptr.is_null() {
-        return (None, None, PipelineRetryStrategy::new(false, false));
+        return Ok((None, None, PipelineRetryStrategy::new(false, false)));
     }
     let info = unsafe { *ptr };
     let timeout = if info.has_timeout {
@@ -7109,13 +7140,13 @@ pub(crate) unsafe fn get_pipeline_options(
     } else {
         None
     };
-    let route = unsafe { create_route(info.route_info, None) };
+    let route = unsafe { create_route(info.route_info, None)? };
 
-    (
+    Ok((
         route,
         timeout,
         PipelineRetryStrategy::new(info.retry_server_error, info.retry_connection_error),
-    )
+    ))
 }
 
 /// Helper function to extract and validate command name from RequestType.

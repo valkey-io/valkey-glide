@@ -4182,4 +4182,32 @@ describe("GlideClusterClient", () => {
         },
         TIMEOUT,
     );
+
+    it.each([16384, 70000, -1])(
+        "rejects out-of-range slot ID %p for command and batch",
+        async (invalidSlot) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+
+            await expect(
+                client.customCommand(["PING"], {
+                    route: { type: "primarySlotId", id: invalidSlot },
+                }),
+            ).rejects.toThrow(RequestError);
+
+            for (const isAtomic of [false, true]) {
+                const batch = new ClusterBatch(isAtomic).ping();
+                await expect(
+                    client.exec(batch, true, {
+                        route: { type: "primarySlotId", id: invalidSlot },
+                    }),
+                ).rejects.toThrow(RequestError);
+            }
+        },
+        TIMEOUT,
+    );
 });

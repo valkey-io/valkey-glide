@@ -15,7 +15,9 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleS
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -31,6 +33,7 @@ import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
+import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -38,6 +41,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
@@ -621,5 +625,31 @@ public class ClusterBatchTests {
                     OK, gs(bytes),
                 },
                 responses);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsWithAtomic")
+    public void slot_id_route_out_of_range_rejected(GlideClusterClient clusterClient, boolean isAtomic) {
+        for (int invalidSlot : new int[] {16384, 70000, -1}) {
+            SingleNodeRoute route = new SlotIdRoute(invalidSlot, SlotType.PRIMARY);
+
+            // Command test
+            ExecutionException cmdException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> clusterClient.customCommand(new String[] {"PING"}, route).get());
+            assertInstanceOf(RequestException.class, cmdException.getCause());
+            assertTrue(cmdException.getCause().getMessage().contains("Invalid slot ID"));
+
+            // Batch test
+            ClusterBatch batch = new ClusterBatch(isAtomic).ping();
+            ClusterBatchOptions options = ClusterBatchOptions.builder().route(route).build();
+            ExecutionException batchException =
+                    assertThrows(
+                            ExecutionException.class, () -> clusterClient.exec(batch, true, options).get());
+            assertInstanceOf(RequestException.class, batchException.getCause());
+            assertTrue(batchException.getCause().getMessage().contains("Invalid slot ID"));
+        }
     }
 }
