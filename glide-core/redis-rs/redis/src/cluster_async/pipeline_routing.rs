@@ -204,7 +204,8 @@ where
     let mut response_policies = HashMap::new();
 
     if let Some(route) = route {
-        // If we have a route, we will use it to route the commands to the given route, instead of finding the route for each command
+        // If we have a route, we will use it to route the commands to the given route, instead of finding the route for each command.
+        // It takes precedence over per-command routes; glide-core's `Client` rejects a pipeline with both.
 
         // Only a non-atomic pipeline is mapped here. `ASKING` in the same write would cover only
         // its first command, so a route that requires it gets a standalone `ASKING`, as before.
@@ -225,9 +226,14 @@ where
         }
     } else {
         for (index, cmd) in pipeline.cmd_iter().enumerate() {
-            match RoutingInfo::for_routable(cmd.as_ref())
-                .unwrap_or(SingleNode(SingleNodeRoutingInfo::Random))
-            {
+            // A command added with its own route goes there; any other command goes where its
+            // keys or default routing send it
+            let routing = match pipeline.command_route(index) {
+                Some(route) => SingleNode(route.clone()),
+                None => RoutingInfo::for_routable(cmd.as_ref())
+                    .unwrap_or(SingleNode(SingleNodeRoutingInfo::Random)),
+            };
+            match routing {
                 SingleNode(route) => {
                     handle_pipeline_single_node_routing(
                         &mut pipelines_per_node,

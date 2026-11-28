@@ -13,6 +13,7 @@
 * Python: The sync client can register CUDA device memory, such as a CUDA `torch.Tensor` or CuPy array, for RDMA when `RdmaConfiguration.device_memory` is set ([#7812](https://github.com/valkey-io/valkey-glide/pull/7812))
 * All: Add support for `DELEX` ([#7238](https://github.com/valkey-io/valkey-glide/issues/7238))
 * Core: use atomics for telemetry instead of shared lock ([#7497](https://github.com/valkey-io/valkey-glide/pull/7497))
+* Core, FFI: a command in a non-atomic cluster batch can have its own single-node route, through `Pipeline::add_command_with_route` in the core and `CmdInfo.route_info` in the FFI ([#7697](https://github.com/valkey-io/valkey-glide/issues/7697))
 
 ### Fixes
 
@@ -56,6 +57,7 @@
 * Rust: Remove `telemetry::shutdown` ([#7708](https://github.com/valkey-io/valkey-glide/pull/7708)).
 * Core, Go, Java, Node, Python, Rust: return the server's NOSCRIPT text in every client ([#7528](https://github.com/valkey-io/valkey-glide/pull/7528))
 * Python, Go: a whitespace-only client AZ is now rejected for AZ-affinity read strategies, like an empty one ([#7788](https://github.com/valkey-io/valkey-glide/pull/7788))
+* FFI: `CmdInfo` gains a trailing `route_info` pointer; bindings that build `CmdInfo` must add it and set it to null for an unrouted command ([#7697](https://github.com/valkey-io/valkey-glide/issues/7697))
 
 ## 2.6
 

@@ -2353,6 +2353,13 @@ impl Client {
         raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            // An atomic batch runs on one node, so its commands can't have their own routes
+            if pipeline.has_command_routes() {
+                return Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "per-command routes are not supported in atomic batches",
+                )));
+            }
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             // Before the tracking below, so a rejected batch leaves no state.
             for cmd in pipeline.cmd_iter() {
@@ -2457,6 +2464,14 @@ impl Client {
         pipeline_retry_strategy: PipelineRetryStrategy,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            // A batch-level route sends every command to one node, which per-command routes
+            // would contradict
+            if routing.is_some() && pipeline.has_command_routes() {
+                return Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "a batch can't have both a batch-level route and per-command routes",
+                )));
+            }
             crate::rdma::refuse_direct_in_batch(pipeline)?;
             // Before the tracking below, so a rejected batch leaves no state.
             for cmd in pipeline.cmd_iter() {
@@ -2469,7 +2484,7 @@ impl Client {
             // earlier (as a command or in a batch) and not yet closed must queue this
             // batch, so it also pins this batch to the primary.
             let multi_open = self.multi_active.load(Ordering::Acquire);
-            for cmd in pipeline.cmd_iter() {
+            for (index, cmd) in pipeline.cmd_iter().enumerate() {
                 self.track_transaction_state(cmd);
                 self.track_unresettable(cmd);
                 // A batch may split across nodes, so its WATCH target is unknown,
@@ -2479,12 +2494,11 @@ impl Client {
                     && self.is_pool_managed.load(Ordering::Acquire)
                     && Self::is_watch(cmd)
                 {
-                    let maybe_replica = matches!(
-                        routing,
-                        Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
-                    ) || Self::classify_watch(cmd, routing.as_ref())
-                        == WatchTarget::MaybeReplica;
-                    if maybe_replica {
+                    if Self::batch_watch_maybe_replica(
+                        cmd,
+                        pipeline.command_route(index),
+                        routing.as_ref(),
+                    ) {
                         self.unresettable.store(true, Ordering::Release);
                     } else {
                         self.watch_routes
@@ -4134,6 +4148,22 @@ impl Client {
     fn is_watch(cmd: &Cmd) -> bool {
         cmd.arg_idx(0)
             .is_some_and(|name| name.eq_ignore_ascii_case(b"WATCH"))
+    }
+
+    /// Whether a WATCH in a non-atomic batch may reach a replica. A WATCH with its own
+    /// route goes to that route's node; otherwise the batch-level route applies. Unlike a
+    /// single command, a `Random` route is not narrowed to a primary.
+    fn batch_watch_maybe_replica(
+        cmd: &Cmd,
+        command_route: Option<&SingleNodeRoutingInfo>,
+        routing: Option<&RoutingInfo>,
+    ) -> bool {
+        let command_routing = command_route.cloned().map(RoutingInfo::SingleNode);
+        let watch_routing = command_routing.as_ref().or(routing);
+        matches!(
+            watch_routing,
+            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
+        ) || Self::classify_watch(cmd, watch_routing) == WatchTarget::MaybeReplica
     }
 
     /// Where a WATCH will land, from the routing the cluster client would use for it.
@@ -6120,6 +6150,46 @@ mod tests {
                 "{routing:?}"
             );
         }
+    }
+
+    /// A WATCH's own route in a batch decides its target over the batch-level route (#7697).
+    #[test]
+    fn batch_watch_uses_the_command_route() {
+        use redis::cluster_routing::{Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr};
+        let watch = redis::cmd("WATCH").arg("k").clone();
+        let random = SingleNodeRoutingInfo::Random;
+        let by_address = SingleNodeRoutingInfo::ByAddress {
+            host: "127.0.0.1".to_string(),
+            port: 6379,
+        };
+        let primary = SingleNodeRoutingInfo::SpecificNode(Route::new(1, SlotAddr::Master));
+        let batch_random = RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random);
+
+        // No routes: the WATCH's key decides, and a key goes to its primary
+        assert!(!Client::batch_watch_maybe_replica(&watch, None, None));
+        // A Random or ByAddress command route may reach a replica
+        assert!(Client::batch_watch_maybe_replica(
+            &watch,
+            Some(&random),
+            None
+        ));
+        assert!(Client::batch_watch_maybe_replica(
+            &watch,
+            Some(&by_address),
+            None
+        ));
+        // A primary slot route is a primary, even when the batch-level route is Random
+        assert!(!Client::batch_watch_maybe_replica(
+            &watch,
+            Some(&primary),
+            Some(&batch_random)
+        ));
+        // Without a command route, the batch-level route applies
+        assert!(Client::batch_watch_maybe_replica(
+            &watch,
+            None,
+            Some(&batch_random)
+        ));
     }
 
     /// Repeated WATCHes on a slot keep one entry; a slot seen under a new owner, or

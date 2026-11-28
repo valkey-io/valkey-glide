@@ -653,6 +653,8 @@ func createCmdInfo(pinner *pinner, cmd internal.Cmd) C.CmdInfo {
 		info.args = (**C.uchar)(pinner.Pin(unsafe.Pointer(&cArgsPtr[0])))
 		info.args_len = (*C.ulong)(pinner.Pin(unsafe.Pointer(&argLengthsPtr[0])))
 	}
+	// No per-command route
+	info.route_info = nil
 	return info
 }
 

@@ -310,6 +310,7 @@ class _GlideFFI:
                 const uint8_t** args;
                 size_t arg_count;
                 const size_t* args_len;
+                const RouteInfo* route_info;
             } CmdInfo;
 
             typedef struct {

@@ -336,6 +336,8 @@ def convert_commands_to_c_batch_info(ffi, commands, is_atomic):
                 "args": c_arg_array,
                 "arg_count": len(args),
                 "args_len": c_lengths,
+                # No per-command route
+                "route_info": ffi.NULL,
             },
         )
 

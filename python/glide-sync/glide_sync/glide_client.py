@@ -1691,6 +1691,8 @@ class BaseClient(CoreCommands):
                     "args": c_arg_array,
                     "arg_count": len(args),
                     "args_len": c_lengths,
+                    # No per-command route
+                    "route_info": self._ffi.NULL,
                 },
             )
 
